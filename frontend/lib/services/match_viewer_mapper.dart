@@ -480,21 +480,41 @@ class MatchViewerMapper {
           matchId: matchId,
           timeSeconds: event.timeSeconds,
           clockMinute: event.minute.toDouble(),
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
+          homeScore: event.type == MatchViewerEventType.goal
+              ? previousEvent?.homeScore ?? 0
+              : event.homeScore,
+          awayScore: event.type == MatchViewerEventType.goal
+              ? previousEvent?.awayScore ?? 0
+              : event.awayScore,
           phase: _phaseForEvent(event.type),
           event: event,
           homePlayers: homePlayers,
           awayPlayers: awayPlayers,
-          stage: event.type == MatchViewerEventType.goal
-              ? 'event'
-              : event.type == MatchViewerEventType.fulltime
-                  ? 'post'
-                  : 'event',
+          stage: switch (event.type) {
+            MatchViewerEventType.goal => 'review',
+            MatchViewerEventType.offside => 'review',
+            MatchViewerEventType.fulltime => 'post',
+            _ => 'event',
+          },
         ),
       );
 
       if (event.type == MatchViewerEventType.goal) {
+        frames.add(
+          _buildFallbackFrame(
+            matchId: matchId,
+            timeSeconds:
+                min(durationSeconds.toDouble(), event.timeSeconds + 0.35),
+            clockMinute: event.minute + 0.1,
+            homeScore: event.homeScore,
+            awayScore: event.awayScore,
+            phase: MatchViewerPhase.openPlay,
+            event: event,
+            homePlayers: homePlayers,
+            awayPlayers: awayPlayers,
+            stage: 'decision',
+          ),
+        );
         frames.add(
           _buildFallbackFrame(
             matchId: matchId,
@@ -508,6 +528,22 @@ class MatchViewerMapper {
             homePlayers: homePlayers,
             awayPlayers: awayPlayers,
             stage: 'reset',
+          ),
+        );
+      } else if (event.type == MatchViewerEventType.offside) {
+        frames.add(
+          _buildFallbackFrame(
+            matchId: matchId,
+            timeSeconds:
+                min(durationSeconds.toDouble(), event.timeSeconds + 0.35),
+            clockMinute: event.minute + 0.08,
+            homeScore: event.homeScore,
+            awayScore: event.awayScore,
+            phase: MatchViewerPhase.openPlay,
+            event: event,
+            homePlayers: homePlayers,
+            awayPlayers: awayPlayers,
+            stage: 'post',
           ),
         );
       } else if (event.type != MatchViewerEventType.fulltime) {
@@ -608,6 +644,36 @@ class MatchViewerMapper {
       homeAttacksRight: homeAttacksRight,
       stage: stage,
     );
+    final MatchPlaybackStage playbackStage = switch (stage) {
+      'pre' => MatchPlaybackStage.pre,
+      'review' => MatchPlaybackStage.review,
+      'decision' => MatchPlaybackStage.decision,
+      'post' => MatchPlaybackStage.post,
+      'reset' => MatchPlaybackStage.reset,
+      _ => MatchPlaybackStage.event,
+    };
+    final String? overlayText = switch (event?.type) {
+      MatchViewerEventType.goal when stage == 'review' => 'Checking...',
+      MatchViewerEventType.goal when stage == 'decision' => 'Confirmed',
+      MatchViewerEventType.offside when stage == 'review' => 'OFFSIDE',
+      _ => null,
+    };
+    final bool pausePlayback = switch (event?.type) {
+      MatchViewerEventType.goal => stage == 'review',
+      MatchViewerEventType.offside => stage == 'review',
+      _ => false,
+    };
+    final MatchCameraPreset cameraPreset = switch (event?.type) {
+      MatchViewerEventType.goal when stage == 'review' =>
+        MatchCameraPreset.varReplay,
+      MatchViewerEventType.goal when stage == 'decision' =>
+        MatchCameraPreset.goalCelebration,
+      MatchViewerEventType.goal when stage == 'reset' =>
+        MatchCameraPreset.broadcast,
+      MatchViewerEventType.offside when stage == 'review' =>
+        MatchCameraPreset.assistantFlag,
+      _ => MatchCameraPreset.broadcast,
+    };
     return MatchTimelineFrame(
       id: '$matchId:${(timeSeconds * 100).round()}:$stage',
       timeSeconds: timeSeconds,
@@ -619,6 +685,16 @@ class MatchViewerMapper {
       possessionSide: possessionSide,
       activeEventId: stage == 'pre' ? null : event?.id,
       eventBanner: stage == 'pre' ? null : event?.bannerText,
+      stage: playbackStage,
+      cameraPreset: cameraPreset,
+      overlayText: overlayText,
+      pausePlayback: pausePlayback,
+      flagAnimation:
+          event?.type == MatchViewerEventType.offside && stage == 'review',
+      playbackRate:
+          event?.type == MatchViewerEventType.goal && stage == 'review'
+              ? 0.75
+              : 1,
       players: resolvedPlayers,
       ball: ball,
     );

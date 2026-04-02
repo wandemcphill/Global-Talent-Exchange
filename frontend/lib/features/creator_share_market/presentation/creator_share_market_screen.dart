@@ -92,7 +92,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
               title: Text(
                 widget.clubId == null
                     ? 'Club Ownership Economy'
-                    : '${widget.clubName ?? widget.clubId} club shares',
+                    : '${widget.clubName ?? widget.clubId} creator shares',
               ),
               actions: <Widget>[
                 IconButton(

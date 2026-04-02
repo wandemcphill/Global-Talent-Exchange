@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../core/app_feedback.dart';
 import '../../../data/gte_api_repository.dart';
@@ -52,7 +52,8 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         ClubSaleMarketController.standard(
           baseUrl: widget.baseUrl,
           backendMode: widget.backendMode,
@@ -99,8 +100,9 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
         _controller.publicListing?.sellerUserId == currentUserId) {
       return true;
     }
-    return _controller.myListings.items
-        .any((ClubSaleListing item) => item.clubId == clubId);
+    return _controller.myListings.items.any(
+      (ClubSaleListing item) => item.clubId == clubId,
+    );
   }
 
   bool _isCurrentClubScope(String clubId) => widget.currentClubId == clubId;
@@ -118,16 +120,17 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
             appBar: AppBar(
               title: Text(
                 clubId == null
-                    ? 'Club Market'
+                    ? 'Club sale market'
                     : widget.forceOwnerWorkspace
-                        ? '${widget.clubName ?? clubId} club offers'
-                        : '${widget.clubName ?? clubId} club market',
+                    ? '${widget.clubName ?? clubId} club offers'
+                    : '${widget.clubName ?? clubId} club market',
               ),
               actions: <Widget>[
                 IconButton(
-                  onPressed: clubId == null
-                      ? _controller.loadPublicListings
-                      : () => _loadClub(
+                  onPressed:
+                      clubId == null
+                          ? _controller.loadPublicListings
+                          : () => _loadClub(
                             clubId,
                             forceOwnerWorkspace: widget.forceOwnerWorkspace,
                           ),
@@ -135,9 +138,10 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                 ),
               ],
             ),
-            body: clubId == null
-                ? _buildBrowseView(context)
-                : _buildClubView(context, clubId),
+            body:
+                clubId == null
+                    ? _buildBrowseView(context)
+                    : _buildClubView(context, clubId),
           ),
         );
       },
@@ -153,10 +157,9 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
         children: <Widget>[
           GtexHeroBanner(
             eyebrow: 'CLUB SALE MARKET',
-            title:
-                'Clubs on the move, prices in play.',
+            title: 'Clubs on the move, prices in play.',
             description:
-                'See club value, asking price, and recent sale history in one market view.',
+                'Public valuations, asking prices, and live deal posture stay readable.',
             accent: const Color(0xFFF5C65B),
             chips: <Widget>[
               GteMetricChip(
@@ -170,11 +173,11 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
               ),
             ],
             actions: <Widget>[
-                FilledButton.tonalIcon(
-                  onPressed: _controller.loadPublicListings,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh'),
-                ),
+              FilledButton.tonalIcon(
+                onPressed: _controller.loadPublicListings,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh market'),
+              ),
               if (widget.currentClubId?.isNotEmpty == true)
                 FilledButton.icon(
                   onPressed: () => _openClub(context, widget.currentClubId!),
@@ -193,12 +196,11 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: () => _openClub(
-                    context,
-                    _clubLookupController.text.trim(),
-                  ),
+                  onPressed:
+                      () =>
+                          _openClub(context, _clubLookupController.text.trim()),
                   icon: const Icon(Icons.open_in_new),
-                  label: const Text('Open club'),
+                  label: const Text('Open club market'),
                 ),
               ],
             ),
@@ -217,8 +219,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
             const GteStatePanel(
               eyebrow: 'TRANSFER MARKET',
               title: 'Loading listings',
-              message:
-                  'Club prices and asking tags are loading.',
+              message: 'Club prices and asking tags are loading.',
               icon: Icons.storefront_outlined,
               isLoading: true,
             )
@@ -268,20 +269,22 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
           title: 'Club sale market unavailable',
           message: _controller.publicError!,
           actionLabel: 'Retry',
-          onAction: () => _loadClub(
-            clubId,
-            forceOwnerWorkspace: widget.forceOwnerWorkspace,
-          ),
+          onAction:
+              () => _loadClub(
+                clubId,
+                forceOwnerWorkspace: widget.forceOwnerWorkspace,
+              ),
           icon: Icons.shield_outlined,
         ),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: () => _loadClub(
-        clubId,
-        forceOwnerWorkspace: widget.forceOwnerWorkspace,
-      ),
+      onRefresh:
+          () => _loadClub(
+            clubId,
+            forceOwnerWorkspace: widget.forceOwnerWorkspace,
+          ),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
         children: <Widget>[
@@ -296,9 +299,10 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                   runSpacing: 10,
                   children: <Widget>[
                     _MarketTag(
-                      label: listing?.isActive == true
-                          ? 'Live listing'
-                          : 'Transfer desk',
+                      label:
+                          listing?.isActive == true
+                              ? 'Live listing'
+                              : 'Transfer desk',
                       color: const Color(0xFFF5C65B),
                     ),
                     if (ownerView)
@@ -328,19 +332,23 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                   children: <Widget>[
                     GteMetricChip(
                       label: 'Valuation',
-                      value: valuation == null
-                          ? '--'
-                          : _formatAmount(
-                              valuation.systemValuation,
-                              valuation.currency,
-                            ),
+                      value:
+                          valuation == null
+                              ? '--'
+                              : _formatAmount(
+                                valuation.systemValuation,
+                                valuation.currency,
+                              ),
                     ),
                     GteMetricChip(
                       label: 'Asking price',
-                      value: listing == null
-                          ? 'No listing'
-                          : _formatAmount(
-                              listing.askingPrice, listing.currency),
+                      value:
+                          listing == null
+                              ? 'No listing'
+                              : _formatAmount(
+                                listing.askingPrice,
+                                listing.currency,
+                              ),
                     ),
                     if (listing != null)
                       GteMetricChip(
@@ -364,18 +372,20 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                   runSpacing: 12,
                   children: <Widget>[
                     FilledButton.icon(
-                      onPressed: listing == null
-                          ? null
-                          : !_hasAuth
+                      onPressed:
+                          listing == null
+                              ? null
+                              : !_hasAuth
                               ? widget.onOpenLogin
                               : () => _showOfferDialog(context, clubId),
                       icon: const Icon(Icons.local_offer_outlined),
                       label: const Text('Make offer'),
                     ),
                     FilledButton.tonalIcon(
-                      onPressed: listing == null
-                          ? null
-                          : !_hasAuth
+                      onPressed:
+                          listing == null
+                              ? null
+                              : !_hasAuth
                               ? widget.onOpenLogin
                               : () => _showInquiryDialog(context, clubId),
                       icon: const Icon(Icons.question_answer_outlined),
@@ -383,11 +393,12 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                     ),
                     if (canManageListing)
                       OutlinedButton.icon(
-                        onPressed: () => _showListingEditor(
-                          context,
-                          clubId,
-                          existing: listing,
-                        ),
+                        onPressed:
+                            () => _showListingEditor(
+                              context,
+                              clubId,
+                              existing: listing,
+                            ),
                         icon: Icon(
                           listing == null
                               ? Icons.add_circle_outline
@@ -399,8 +410,8 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                       ),
                     if (canManageListing && listing != null)
                       OutlinedButton.icon(
-                        onPressed: () =>
-                            _showCancelListingDialog(context, clubId),
+                        onPressed:
+                            () => _showCancelListingDialog(context, clubId),
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('Cancel listing'),
                       ),
@@ -434,44 +445,49 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
               offers: _controller.clubOffers.items,
               myOffers: _controller.myOffers.items,
               onRetry: () => _controller.loadOwnerWorkspace(clubId),
-              onRespondInquiry: (ClubSaleInquiry inquiry) =>
-                  _showInquiryResponseDialog(context, clubId, inquiry),
-              onCounterOffer: (ClubSaleOffer offer) =>
-                  _showCounterOfferDialog(context, clubId, offer),
-              onAcceptOffer: (ClubSaleOffer offer) => _showOfferResponseDialog(
-                context,
-                title: 'Accept offer',
-                submitLabel: 'Accept',
-                onSubmit: (String? message) async {
-                  await _controller.acceptOffer(
-                    clubId,
-                    offer.offerId,
-                    ClubSaleOfferRespondRequest(message: message),
-                  );
-                  if (!mounted || _controller.actionError != null) {
-                    return;
-                  }
-                  AppFeedback.showSuccess(context, 'Offer accepted.');
-                },
-              ),
-              onRejectOffer: (ClubSaleOffer offer) => _showOfferResponseDialog(
-                context,
-                title: 'Reject offer',
-                submitLabel: 'Reject',
-                onSubmit: (String? message) async {
-                  await _controller.rejectOffer(
-                    clubId,
-                    offer.offerId,
-                    ClubSaleOfferRespondRequest(message: message),
-                  );
-                  if (!mounted || _controller.actionError != null) {
-                    return;
-                  }
-                  AppFeedback.showSuccess(context, 'Offer rejected.');
-                },
-              ),
-              onExecuteTransfer: (ClubSaleOffer offer) =>
-                  _showExecuteTransferDialog(context, clubId, offer),
+              onRespondInquiry:
+                  (ClubSaleInquiry inquiry) =>
+                      _showInquiryResponseDialog(context, clubId, inquiry),
+              onCounterOffer:
+                  (ClubSaleOffer offer) =>
+                      _showCounterOfferDialog(context, clubId, offer),
+              onAcceptOffer:
+                  (ClubSaleOffer offer) => _showOfferResponseDialog(
+                    context,
+                    title: 'Accept offer',
+                    submitLabel: 'Accept',
+                    onSubmit: (String? message) async {
+                      await _controller.acceptOffer(
+                        clubId,
+                        offer.offerId,
+                        ClubSaleOfferRespondRequest(message: message),
+                      );
+                      if (!mounted || _controller.actionError != null) {
+                        return;
+                      }
+                      AppFeedback.showSuccess(context, 'Offer accepted.');
+                    },
+                  ),
+              onRejectOffer:
+                  (ClubSaleOffer offer) => _showOfferResponseDialog(
+                    context,
+                    title: 'Reject offer',
+                    submitLabel: 'Reject',
+                    onSubmit: (String? message) async {
+                      await _controller.rejectOffer(
+                        clubId,
+                        offer.offerId,
+                        ClubSaleOfferRespondRequest(message: message),
+                      );
+                      if (!mounted || _controller.actionError != null) {
+                        return;
+                      }
+                      AppFeedback.showSuccess(context, 'Offer rejected.');
+                    },
+                  ),
+              onExecuteTransfer:
+                  (ClubSaleOffer offer) =>
+                      _showExecuteTransferDialog(context, clubId, offer),
             ),
           ],
           const SizedBox(height: 18),
@@ -497,15 +513,17 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
             const SizedBox(height: 18),
             GteStatePanel(
               title: _hasAuth ? 'Owner access required' : 'Sign in required',
-              message: _hasAuth
-                  ? 'This route only exposes the owner offer inbox when the signed-in account matches the canonical club owner or sale-listing seller.'
-                  : 'Sign in with the club owner account to access the offer inbox, counteroffers, accepts, and rejects.',
+              message:
+                  _hasAuth
+                      ? 'This route only exposes the owner offer inbox when the signed-in account matches the canonical club owner or sale-listing seller.'
+                      : 'Sign in with the club owner account to access the offer inbox, counteroffers, accepts, and rejects.',
               actionLabel:
                   !_hasAuth && widget.onOpenLogin != null ? 'Sign in' : null,
               onAction: !_hasAuth ? widget.onOpenLogin : null,
-              icon: _hasAuth
-                  ? Icons.admin_panel_settings_outlined
-                  : Icons.lock_outline,
+              icon:
+                  _hasAuth
+                      ? Icons.admin_panel_settings_outlined
+                      : Icons.lock_outline,
               accentColor: GteShellTheme.accentArena,
             ),
           ],
@@ -518,44 +536,49 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
               offers: _controller.clubOffers.items,
               myOffers: _controller.myOffers.items,
               onRetry: () => _controller.loadOwnerWorkspace(clubId),
-              onRespondInquiry: (ClubSaleInquiry inquiry) =>
-                  _showInquiryResponseDialog(context, clubId, inquiry),
-              onCounterOffer: (ClubSaleOffer offer) =>
-                  _showCounterOfferDialog(context, clubId, offer),
-              onAcceptOffer: (ClubSaleOffer offer) => _showOfferResponseDialog(
-                context,
-                title: 'Accept offer',
-                submitLabel: 'Accept',
-                onSubmit: (String? message) async {
-                  await _controller.acceptOffer(
-                    clubId,
-                    offer.offerId,
-                    ClubSaleOfferRespondRequest(message: message),
-                  );
-                  if (!mounted || _controller.actionError != null) {
-                    return;
-                  }
-                  AppFeedback.showSuccess(context, 'Offer accepted.');
-                },
-              ),
-              onRejectOffer: (ClubSaleOffer offer) => _showOfferResponseDialog(
-                context,
-                title: 'Reject offer',
-                submitLabel: 'Reject',
-                onSubmit: (String? message) async {
-                  await _controller.rejectOffer(
-                    clubId,
-                    offer.offerId,
-                    ClubSaleOfferRespondRequest(message: message),
-                  );
-                  if (!mounted || _controller.actionError != null) {
-                    return;
-                  }
-                  AppFeedback.showSuccess(context, 'Offer rejected.');
-                },
-              ),
-              onExecuteTransfer: (ClubSaleOffer offer) =>
-                  _showExecuteTransferDialog(context, clubId, offer),
+              onRespondInquiry:
+                  (ClubSaleInquiry inquiry) =>
+                      _showInquiryResponseDialog(context, clubId, inquiry),
+              onCounterOffer:
+                  (ClubSaleOffer offer) =>
+                      _showCounterOfferDialog(context, clubId, offer),
+              onAcceptOffer:
+                  (ClubSaleOffer offer) => _showOfferResponseDialog(
+                    context,
+                    title: 'Accept offer',
+                    submitLabel: 'Accept',
+                    onSubmit: (String? message) async {
+                      await _controller.acceptOffer(
+                        clubId,
+                        offer.offerId,
+                        ClubSaleOfferRespondRequest(message: message),
+                      );
+                      if (!mounted || _controller.actionError != null) {
+                        return;
+                      }
+                      AppFeedback.showSuccess(context, 'Offer accepted.');
+                    },
+                  ),
+              onRejectOffer:
+                  (ClubSaleOffer offer) => _showOfferResponseDialog(
+                    context,
+                    title: 'Reject offer',
+                    submitLabel: 'Reject',
+                    onSubmit: (String? message) async {
+                      await _controller.rejectOffer(
+                        clubId,
+                        offer.offerId,
+                        ClubSaleOfferRespondRequest(message: message),
+                      );
+                      if (!mounted || _controller.actionError != null) {
+                        return;
+                      }
+                      AppFeedback.showSuccess(context, 'Offer rejected.');
+                    },
+                  ),
+              onExecuteTransfer:
+                  (ClubSaleOffer offer) =>
+                      _showExecuteTransferDialog(context, clubId, offer),
             ),
           ],
         ],
@@ -588,8 +611,10 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
             20 + MediaQuery.of(context).viewInsets.bottom,
           ),
           child: StatefulBuilder(
-            builder: (BuildContext context,
-                void Function(void Function()) setModalState) {
+            builder: (
+              BuildContext context,
+              void Function(void Function()) setModalState,
+            ) {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,10 +628,12 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: priceController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration:
-                        const InputDecoration(labelText: 'Asking price'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Asking price',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -638,8 +665,9 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: () async {
-                      final double? price =
-                          double.tryParse(priceController.text.trim());
+                      final double? price = double.tryParse(
+                        priceController.text.trim(),
+                      );
                       if (price == null || price <= 0) {
                         AppFeedback.showError(
                           context,
@@ -649,10 +677,10 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                       }
                       final ClubSaleListingUpsertRequest request =
                           ClubSaleListingUpsertRequest(
-                        askingPrice: price,
-                        visibility: visibility,
-                        note: noteController.text.trim(),
-                      );
+                            askingPrice: price,
+                            visibility: visibility,
+                            note: noteController.text.trim(),
+                          );
                       if (existing == null) {
                         await _controller.createListing(clubId, request);
                       } else {
@@ -876,15 +904,17 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
     String? inquiryId,
   }) async {
     final TextEditingController priceController = TextEditingController(
-      text: existingOffer == null
-          ? ''
-          : existingOffer.offerPrice.toStringAsFixed(2),
+      text:
+          existingOffer == null
+              ? ''
+              : existingOffer.offerPrice.toStringAsFixed(2),
     );
     final TextEditingController noteController = TextEditingController(
       text: existingOffer?.message ?? '',
     );
-    final TextEditingController expiryController =
-        TextEditingController(text: '7');
+    final TextEditingController expiryController = TextEditingController(
+      text: '7',
+    );
     final bool? submitted = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -907,8 +937,9 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: priceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(labelText: 'Offer price'),
               ),
               const SizedBox(height: 12),
@@ -926,8 +957,9 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () async {
-                  final double? price =
-                      double.tryParse(priceController.text.trim());
+                  final double? price = double.tryParse(
+                    priceController.text.trim(),
+                  );
                   final int? days = int.tryParse(expiryController.text.trim());
                   if (price == null || price <= 0) {
                     AppFeedback.showError(
@@ -936,9 +968,10 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                     );
                     return;
                   }
-                  final DateTime? expiresAt = days == null || days <= 0
-                      ? null
-                      : DateTime.now().toUtc().add(Duration(days: days));
+                  final DateTime? expiresAt =
+                      days == null || days <= 0
+                          ? null
+                          : DateTime.now().toUtc().add(Duration(days: days));
                   if (existingOffer == null) {
                     await _controller.submitOffer(
                       clubId,
@@ -990,11 +1023,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
     String clubId,
     ClubSaleOffer offer,
   ) async {
-    await _showOfferDialog(
-      context,
-      clubId,
-      existingOffer: offer,
-    );
+    await _showOfferDialog(context, clubId, existingOffer: offer);
   }
 
   Future<void> _showOfferResponseDialog(
@@ -1083,16 +1112,19 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: priceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration:
-                    const InputDecoration(labelText: 'Executed sale price'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Executed sale price',
+                ),
               ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () async {
-                  final double? price =
-                      double.tryParse(priceController.text.trim());
+                  final double? price = double.tryParse(
+                    priceController.text.trim(),
+                  );
                   if (price == null || price <= 0) {
                     AppFeedback.showError(
                       context,
@@ -1132,17 +1164,20 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
     }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => ClubSaleMarketScreen(
-          clubId: clubId.trim(),
-          clubName:
-              widget.currentClubId == clubId.trim() ? widget.clubName : null,
-          baseUrl: widget.baseUrl,
-          backendMode: widget.backendMode,
-          accessToken: widget.accessToken,
-          currentUserId: widget.currentUserId,
-          currentClubId: widget.currentClubId,
-          onOpenLogin: widget.onOpenLogin,
-        ),
+        builder:
+            (BuildContext context) => ClubSaleMarketScreen(
+              clubId: clubId.trim(),
+              clubName:
+                  widget.currentClubId == clubId.trim()
+                      ? widget.clubName
+                      : null,
+              baseUrl: widget.baseUrl,
+              backendMode: widget.backendMode,
+              accessToken: widget.accessToken,
+              currentUserId: widget.currentUserId,
+              currentClubId: widget.currentClubId,
+              onOpenLogin: widget.onOpenLogin,
+            ),
       ),
     );
   }
@@ -1151,18 +1186,14 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
     return currency.toLowerCase() == 'credits' ||
             currency.toLowerCase() == 'credit'
         ? gteFormatCredits(amount)
-        : currency.toLowerCase() == 'coin' ||
-                currency.toLowerCase() == 'coins'
-            ? gteFormatFanCoins(amount)
+        : currency.toLowerCase() == 'coin' || currency.toLowerCase() == 'coins'
+        ? gteFormatFanCoins(amount)
         : gteFormatFiat(amount, currency: currency.toUpperCase());
   }
 }
 
 class _MarketTag extends StatelessWidget {
-  const _MarketTag({
-    required this.label,
-    required this.color,
-  });
+  const _MarketTag({required this.label, required this.color});
 
   final String label;
   final Color color;
@@ -1179,20 +1210,17 @@ class _MarketTag extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1,
-            ),
+          color: color,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1,
+        ),
       ),
     );
   }
 }
 
 class _ClubSaleListingTile extends StatelessWidget {
-  const _ClubSaleListingTile({
-    required this.listing,
-    required this.onOpen,
-  });
+  const _ClubSaleListingTile({required this.listing, required this.onOpen});
 
   final ClubSaleListing listing;
   final VoidCallback onOpen;
@@ -1222,17 +1250,18 @@ class _ClubSaleListingTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                         color: const Color(0xFFF5C65B).withValues(alpha: 0.14),
                         border: Border.all(
-                          color:
-                              const Color(0xFFF5C65B).withValues(alpha: 0.24),
+                          color: const Color(
+                            0xFFF5C65B,
+                          ).withValues(alpha: 0.24),
                         ),
                       ),
                       child: Text(
                         listing.isActive ? 'HOT LISTING' : 'MARKET WATCH',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFFF5C65B),
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
-                            ),
+                          color: const Color(0xFFF5C65B),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -1243,13 +1272,13 @@ class _ClubSaleListingTile extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 6),
-                      Text(
-                        listingNote?.isNotEmpty == true
-                            ? listingNote!
-                            : 'Live now in Club Market.',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                    Text(
+                      listingNote?.isNotEmpty == true
+                          ? listingNote!
+                          : 'Live now in Club Market.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ),
@@ -1288,7 +1317,9 @@ class _ClubSaleListingTile extends StatelessWidget {
     if (clubId.trim().isEmpty) {
       return 'Unnamed club';
     }
-    return clubId.replaceAll(RegExp(r'[-_]+'), ' ').replaceAllMapped(
+    return clubId
+        .replaceAll(RegExp(r'[-_]+'), ' ')
+        .replaceAllMapped(
           RegExp(r'\b[a-z]'),
           (Match match) => match.group(0)!.toUpperCase(),
         );
@@ -1569,7 +1600,9 @@ class _HistorySection extends StatelessWidget {
           if (history!.ownershipHistory.recentTransfers.isEmpty)
             const Text('No completed transfers have been recorded yet.')
           else
-            ...history!.ownershipHistory.recentTransfers.take(5).map(
+            ...history!.ownershipHistory.recentTransfers
+                .take(5)
+                .map(
                   (ClubSaleOwnershipHistoryEvent event) => ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.swap_horiz_outlined),
@@ -1635,10 +1668,7 @@ class _OwnerWorkspaceSection extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              IconButton(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-              ),
+              IconButton(onPressed: onRetry, icon: const Icon(Icons.refresh)),
             ],
           ),
           if (error != null) ...<Widget>[
@@ -1722,7 +1752,9 @@ class _OwnerWorkspaceSection extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            ...myOffers.take(3).map(
+            ...myOffers
+                .take(3)
+                .map(
                   (ClubSaleOffer offer) => ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.south_east_outlined),

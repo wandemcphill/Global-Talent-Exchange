@@ -4,98 +4,85 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_exchange_models.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/player_match_service.dart';
-import 'package:gte_frontend/domain/match/match_weight_presets.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_market_players_screen.dart';
 
 void main() {
   testWidgets(
-      'player discovery screen keeps the scout layout on narrow viewports',
-      (WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(360, 800));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    'trading floor keeps the card layout stable on narrow viewports',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-    controller.marketPage = const GteMarketPlayerListView(
-      items: <GteMarketPlayerListItem>[
-        GteMarketPlayerListItem(
-          playerId: 'player-1',
-          playerName: 'Ayo Forward',
-          position: 'ST',
-          nationality: 'Nigeria',
-          currentClubName: 'Free Agent',
-          age: 20,
-          currentValueCredits: 1200,
-          movementPct: 0.08,
-          trendScore: 8.2,
-          marketInterestScore: 78,
-          averageRating: 7.4,
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.marketPage = const GteMarketPlayerListView(
+        items: <GteMarketPlayerListItem>[
+          GteMarketPlayerListItem(
+            playerId: 'player-1',
+            playerName: 'Ayo Forward',
+            position: 'ST',
+            nationality: 'Nigeria',
+            currentClubName: 'Free Agent',
+            age: 20,
+            currentValueCredits: 1200,
+            movementPct: 0.08,
+            trendScore: 8.2,
+            marketInterestScore: 78,
+            averageRating: 7.4,
+          ),
+          GteMarketPlayerListItem(
+            playerId: 'player-2',
+            playerName: 'Mina Creator',
+            position: 'AM',
+            nationality: 'Ghana',
+            currentClubName: 'Accra Stars',
+            age: 22,
+            currentValueCredits: 980,
+            movementPct: -0.03,
+            trendScore: 6.8,
+            marketInterestScore: 64,
+            averageRating: 7.1,
+          ),
+        ],
+        limit: 20,
+        hasMore: false,
+        offset: 0,
+        total: 2,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: GteMarketPlayersScreen(
+            controller: controller,
+            onOpenPlayer: (_) {},
+            onOpenLogin: () {},
+            matchService: GtePlayerMatchService(latency: Duration.zero),
+          ),
         ),
-        GteMarketPlayerListItem(
-          playerId: 'player-2',
-          playerName: 'Mina Creator',
-          position: 'AM',
-          nationality: 'Ghana',
-          currentClubName: 'Accra Stars',
-          age: 22,
-          currentValueCredits: 980,
-          movementPct: -0.03,
-          trendScore: 6.8,
-          marketInterestScore: 64,
-          averageRating: 7.1,
-        ),
-      ],
-      limit: 20,
-      hasMore: false,
-      offset: 0,
-      total: 2,
-    );
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: GteMarketPlayersScreen(
-          controller: controller,
-          onOpenPlayer: (_) {},
-          onOpenLogin: () {},
-          matchService: GtePlayerMatchService(latency: Duration.zero),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 700));
+      expect(find.text('TRADING FLOOR'), findsOneWidget);
+      expect(find.text('Desk pulse'), findsOneWidget);
+      expect(find.text('MARKET LENS'), findsOneWidget);
+      expect(find.text('PRICE BOARD'), findsOneWidget);
+      expect(find.text('Ayo Forward'), findsOneWidget);
+      expect(find.text('Mina Creator'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-    expect(find.text('Welcome back,'), findsOneWidget);
-    expect(find.text('Scout Talent'), findsOneWidget);
-    expect(find.text('Search players, clubs...'), findsOneWidget);
-    expect(find.text('Top Matches'), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('top-matches-section')),
-        findsOneWidget);
-    expect(find.text('Scout brief'), findsAtLeastNWidgets(1));
-    expect(find.text('Perfect position match'), findsOneWidget);
-    expect(find.text('100%'), findsOneWidget);
-    expect(find.text('Discover Players'), findsOneWidget);
-    expect(find.text('View Profile'), findsWidgets);
-
-    final GridView grid = tester.widget<GridView>(
-      find.byKey(const ValueKey<String>('discover-player-grid')),
-    );
-    final SliverGridDelegateWithFixedCrossAxisCount delegate =
-        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-
-    expect(delegate.crossAxisCount, 2);
-  });
-
-  testWidgets('player discovery screen auto-loads more pages on scroll',
-      (WidgetTester tester) async {
+  testWidgets('trading floor loads more pages from the tape CTA', (
+    WidgetTester tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final _PagedMarketApiClient api = _PagedMarketApiClient();
-    final GteExchangeController controller = GteExchangeController(
-      api: api,
-    );
+    final GteExchangeController controller = GteExchangeController(api: api);
     await controller.bootstrap();
 
     await tester.pumpWidget(
@@ -113,26 +100,34 @@ void main() {
 
     final int initialCount = controller.players.length;
 
-    for (int i = 0; i < 6 && controller.hasMorePlayers; i += 1) {
-      await tester.drag(
-        find.byKey(const ValueKey<String>('discover-player-scroll')),
-        const Offset(0, -1400),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 120));
-    }
+    await tester.drag(
+      find.byKey(const ValueKey<String>('trading-floor-scroll')),
+      const Offset(0, -1600),
+    );
+    await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Load more from tape'));
+    await tester.pumpAndSettle();
+    expect(find.text('Load more from tape'), findsOneWidget);
+
+    await tester.tap(find.text('Load more from tape'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
 
     expect(controller.players.length, greaterThan(initialCount));
     expect(controller.hasMorePlayers, isFalse);
     expect(api.requests, hasLength(2));
-    expect(find.text('Load more players'), findsNothing);
-    expect(find.text('No more players'), findsOneWidget);
+    expect(
+      controller.players.any(
+        (GteMarketPlayerListItem player) => player.playerId == 'player-3',
+      ),
+      isTrue,
+    );
   });
 
-  testWidgets('player discovery screen applies match weight presets',
-      (WidgetTester tester) async {
+  testWidgets('trading floor lens chips filter the visible tape', (
+    WidgetTester tester,
+  ) async {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
     );
@@ -184,29 +179,34 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
 
-    await tester.tap(find.text('Weights'));
+    expect(find.text('Ayo Forward'), findsOneWidget);
+    expect(find.text('Mina Creator'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Dips 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dips 1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Tune Matching Logic'), findsOneWidget);
+    expect(find.text('Ayo Forward'), findsNothing);
+    expect(find.text('Mina Creator'), findsOneWidget);
 
-    await tester.tap(find.text('Ready Now'));
+    await tester.ensureVisible(find.text('Heat 1'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Apply'));
-    await tester.tap(find.text('Apply'));
+    await tester.tap(find.text('Heat 1'));
     await tester.pumpAndSettle();
 
-    expect(controller.weights.cacheKey, MatchWeightPresets.readyNow().cacheKey);
-    expect(find.text('Ready Now Mode'), findsOneWidget);
+    expect(find.text('Ayo Forward'), findsOneWidget);
+    expect(find.text('Mina Creator'), findsNothing);
   });
 }
 
 class _PagedMarketApiClient extends GteExchangeApiClient {
   _PagedMarketApiClient._(GteExchangeApiClient delegate)
-      : super(
-          config: delegate.config,
-          transport: delegate.transport,
-          repository: delegate.repository,
-        );
+    : super(
+        config: delegate.config,
+        transport: delegate.transport,
+        repository: delegate.repository,
+      );
 
   factory _PagedMarketApiClient() {
     final GteExchangeApiClient delegate = GteExchangeApiClient.fixture();

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
@@ -9,7 +7,7 @@ import 'package:gte_frontend/screens/competitions/gte_live_match_center_screen.d
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('live match center exposes broadcast and replay entry points', (
+  testWidgets('live match center exposes replay and spectator entry points', (
     WidgetTester tester,
   ) async {
     final CompetitionSummary competition = _buildCompetition();
@@ -51,30 +49,22 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 64));
 
-    expect(find.text('Live broadcast layer'), findsOneWidget);
-    expect(find.text('Watch broadcast'), findsOneWidget);
     expect(find.text('2D replay viewer'), findsOneWidget);
-    expect(find.text('Open replay'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Tactical match simulation'),
-      250,
-    );
-    expect(find.text('Tactical match simulation'), findsOneWidget);
-    expect(find.text('Run simulation'), findsOneWidget);
+    expect(find.text('Open viewer'), findsOneWidget);
+    expect(find.text('Spectator modes'), findsOneWidget);
+    expect(find.text('2D commentary'), findsOneWidget);
+    expect(find.text('Key-moment video'), findsWidgets);
+    await tester.scrollUntilVisible(find.text('Live momentum'), 250);
+    expect(find.text('Live momentum'), findsOneWidget);
   });
 
-  testWidgets('live match center prompts replay after a new big moment', (
+  testWidgets('live match center switches into the key-moment access panel', (
     WidgetTester tester,
   ) async {
     final CompetitionSummary competition = _buildCompetition();
     final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
       competition,
     );
-    final StreamController<List<LiveMatchEvent>> commentaryController =
-        StreamController<List<LiveMatchEvent>>();
-    addTearDown(() async {
-      await commentaryController.close();
-    });
 
     await tester.pumpWidget(
       MaterialApp(
@@ -82,7 +72,7 @@ void main() {
         home: GteLiveMatchCenterScreen(
           competition: competition,
           snapshotLoader: (_) async => snapshot,
-          commentaryStreamLoader: (_) => commentaryController.stream,
+          onOpenLogin: () {},
         ),
       ),
     );
@@ -90,26 +80,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 64));
 
-    commentaryController.add(snapshot.commentary);
-    await tester.pump();
+    await tester.scrollUntilVisible(find.text('Key-moment video').first, 250);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Key-moment video').first);
+    await tester.pumpAndSettle();
 
-    commentaryController.add(<LiveMatchEvent>[
-      ...snapshot.commentary,
-      const LiveMatchEvent(
-        minute: 87,
-        title: 'Late winner',
-        detail: 'GTEX Live bury the rebound at the far post.',
-        team: 'GTEX Live',
-        type: LiveMatchEventType.goal,
-        isKeyMoment: true,
-      ),
-    ]);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 64));
-
-    expect(find.text('Big moment'), findsOneWidget);
-    expect(find.textContaining('Late winner'), findsOneWidget);
-    expect(find.text('Watch Replay'), findsWidgets);
+    expect(find.text('Key-moment video locked'), findsOneWidget);
+    expect(find.text('Unlock with Arena Pass'), findsOneWidget);
   });
 }
 

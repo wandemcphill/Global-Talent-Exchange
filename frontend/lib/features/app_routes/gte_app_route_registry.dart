@@ -84,7 +84,7 @@ class GteAppRouteRegistry {
   }
 
   Widget buildScreen(BuildContext context, GteAppRouteData route) {
-    final GteNavigationDependencies liveDependencies = dependencies.liveOnly();
+    final GteNavigationDependencies liveDependencies = dependencies;
     final VoidCallback? openLogin =
         dependencies.onOpenLogin == null
             ? null

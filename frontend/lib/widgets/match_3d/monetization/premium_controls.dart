@@ -104,8 +104,9 @@ class PremiumControls extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+              FittedBox(
+                alignment: Alignment.centerLeft,
+                fit: BoxFit.scaleDown,
                 child: SegmentedButton<RenderMode>(
                   segments: const <ButtonSegment<RenderMode>>[
                     ButtonSegment<RenderMode>(

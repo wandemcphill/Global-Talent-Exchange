@@ -1,6 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/match_playback_controller.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_repository.dart';
+import 'package:gte_frontend/features/match/presentation/real_match_scene_director.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/commentary_ribbon_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/real_match_scorebug_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/real_match_tactical_hud_widget.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_monetization.dart';
@@ -12,9 +19,7 @@ import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
-import 'package:gte_frontend/widgets/match/event_ticker_widget.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
-import 'package:gte_frontend/widgets/match/scoreboard_widget.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 import 'package:gte_frontend/widgets/match_3d/monetization/gifting_overlay.dart';
 import 'package:gte_frontend/widgets/match_3d/monetization/match_3d_upgrade_prompt.dart';
@@ -443,6 +448,25 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                     monetizationService.hasClaimedRewardedAd(
                       rewardedPlacement.id,
                     );
+                final package = const BroadcastPackageRepository().resolve(
+                  viewState,
+                );
+                final presentation = RealMatchSceneDirector.resolve(
+                  viewState: viewState,
+                  frame: controller.displayFrame,
+                  package: package,
+                  activeEvent: activeEvent,
+                  playbackSeconds: controller.positionSeconds,
+                );
+                final String commentaryHeadline =
+                    activeEvent?.bannerText?.trim().isNotEmpty == true
+                        ? activeEvent!.bannerText
+                        : controller.displayFrame.overlayText ??
+                            presentation.sceneLabel;
+                final String commentaryDetail =
+                    activeEvent?.commentary.trim().isNotEmpty == true
+                        ? activeEvent!.commentary
+                        : 'Match telemetry, tactical context, and the latest scene cue stay pinned here.';
                 final bool showSupportControls =
                     monetizationService.effectiveEntitlement.isPremiumUser ||
                     monetizationService.availableCoinBalance > 0;
@@ -486,23 +510,56 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                                 top: 28,
                                 left: 28,
                                 right: 28,
-                                child: Row(
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    ScoreboardWidget(
-                                      viewState: viewState,
-                                      frame: controller.displayFrame,
-                                      activeEvent: activeEvent,
+                                    RealMatchScorebugWidget(
+                                      homeName: viewState.homeTeam.shortName,
+                                      awayName: viewState.awayTeam.shortName,
+                                      homeScore:
+                                          controller.displayFrame.homeScore,
+                                      awayScore:
+                                          controller.displayFrame.awayScore,
+                                      clockLabel: presentation.clockLabel,
+                                      phaseLabel: presentation.phaseLabel,
+                                      stateLabel: presentation.stateLabel,
+                                      cameraLabel: presentation.cameraLabel,
+                                      eventLabel: activeEvent?.bannerText,
+                                      competitionLabel: widget.competition.name,
+                                      detailLabel: presentation.sceneLabel,
                                     ),
-                                    const Spacer(),
-                                    ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 360,
-                                      ),
-                                      child: EventTickerWidget(
-                                        event: activeEvent,
+                                    const SizedBox(height: 12),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 360,
+                                        ),
+                                        child: CommentaryRibbonWidget(
+                                          headline: commentaryHeadline,
+                                          detail: commentaryDetail,
+                                          label: presentation.stateLabel,
+                                          trailing: presentation.cameraLabel,
+                                          accentColor:
+                                              GteShellTheme.accentArena,
+                                        ),
                                       ),
                                     ),
+                                    if (!wide) ...<Widget>[
+                                      const SizedBox(height: 12),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 360,
+                                          ),
+                                          child: RealMatchTacticalHudWidget(
+                                            package: package,
+                                            presentation: presentation,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -568,8 +625,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           ),
                       ],
                     );
-                    final Widget rail = Column(
+                    final Widget wideRail = Column(
                       children: <Widget>[
+                        if (wide) ...<Widget>[
+                          RealMatchTacticalHudWidget(
+                            package: package,
+                            presentation: presentation,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         PremiumControls(
                           entitlement: monetizationService.effectiveEntitlement,
                           selectedRenderMode:
@@ -636,7 +700,80 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           child: _EventRail(
                             controller: controller,
                             viewState: viewState,
+                            scrollable: true,
                           ),
+                        ),
+                      ],
+                    );
+                    final Widget narrowRail = Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        PremiumControls(
+                          entitlement: monetizationService.effectiveEntitlement,
+                          selectedRenderMode:
+                              monetizationService.selectedRenderMode,
+                          effectiveRenderMode: effectiveRenderMode,
+                          threeDAvailable: canAccess3D(
+                            matchContext,
+                            monetizationService.effectiveEntitlement,
+                          ),
+                          availableCoins:
+                              monetizationService.availableCoinBalance,
+                          cameraPreset: monetizationService.cameraPreset,
+                          canUsePremiumCamera: monetizationService
+                              .canUsePremiumCamera(matchContext),
+                          canUseFastReplay: monetizationService
+                              .canUseFastReplay(matchContext),
+                          onRenderModeSelected:
+                              (RenderMode mode) =>
+                                  _selectRenderMode(viewState, mode),
+                          onCameraPresetSelected:
+                              (Match3dCameraPreset preset) =>
+                                  monetizationService.setCameraPreset(
+                                    preset,
+                                    matchContext,
+                                  ),
+                          onUnlockSlowMotion:
+                              () => _unlockInteraction(
+                                Match3dPaidInteraction.slowMotionReplay,
+                                viewState,
+                              ),
+                          onUnlockAlternateCamera:
+                              () => _unlockInteraction(
+                                Match3dPaidInteraction.alternateCameraAngle,
+                                viewState,
+                              ),
+                          onUnlockHighlightAttack:
+                              () => _unlockInteraction(
+                                Match3dPaidInteraction.highlightNextAttack,
+                                viewState,
+                              ),
+                          onUpgradeTournament:
+                              monetizationService.tournamentBoostPrice == null
+                                  ? null
+                                  : () =>
+                                      _upgradeTournamentExperience(viewState),
+                        ),
+                        if (_statusMessage != null) ...<Widget>[
+                          const SizedBox(height: 12),
+                          _StatusCard(message: _statusMessage!),
+                        ],
+                        if (rewardedPlacement != null) ...<Widget>[
+                          const SizedBox(height: 12),
+                          _RewardedAdCard(
+                            placement: rewardedPlacement,
+                            claimed: rewardClaimed,
+                            onClaim:
+                                rewardClaimed
+                                    ? null
+                                    : () => _claimRewardedAd(rewardedPlacement),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        _EventRail(
+                          controller: controller,
+                          viewState: viewState,
+                          scrollable: false,
                         ),
                       ],
                     );
@@ -648,21 +785,23 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                             width: 360,
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
-                              child: rail,
+                              child: wideRail,
                             ),
                           ),
                         ],
                       );
                     }
-                    return Column(
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
                       children: <Widget>[
-                        Expanded(child: viewerPanel),
                         SizedBox(
-                          height: 420,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                            child: rail,
-                          ),
+                          height: math.max(480, constraints.maxHeight * 1.1),
+                          child: viewerPanel,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                          child: narrowRail,
                         ),
                       ],
                     );
@@ -905,10 +1044,15 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _EventRail extends StatelessWidget {
-  const _EventRail({required this.controller, required this.viewState});
+  const _EventRail({
+    required this.controller,
+    required this.viewState,
+    required this.scrollable,
+  });
 
   final MatchPlaybackController controller;
   final MatchViewState viewState;
+  final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
@@ -923,31 +1067,34 @@ class _EventRail extends StatelessWidget {
         builder: (BuildContext context, Widget? child) {
           final MatchEvent? activeEvent = controller.activeEvent;
           final List<MatchEvent> events = controller.upcomingEvents;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: <Widget>[
-              Text(
-                'Replay lane',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Source: ${viewState.source} | ${viewState.durationSeconds}s | ${viewState.events.length} events',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 14),
-              if (activeEvent != null)
-                _EventTile(event: activeEvent, active: true),
-              ...events
-                  .where((MatchEvent item) => item.id != activeEvent?.id)
-                  .map(
-                    (MatchEvent item) => Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: _EventTile(event: item),
-                    ),
+          final List<Widget> children = <Widget>[
+            Text('Replay lane', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              'Source: ${viewState.source} | ${viewState.durationSeconds}s | ${viewState.events.length} events',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 14),
+            if (activeEvent != null)
+              _EventTile(event: activeEvent, active: true),
+            ...events
+                .where((MatchEvent item) => item.id != activeEvent?.id)
+                .map(
+                  (MatchEvent item) => Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: _EventTile(event: item),
                   ),
-            ],
-          );
+                ),
+          ];
+          return scrollable
+              ? ListView(padding: const EdgeInsets.all(16), children: children)
+              : Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: children,
+                ),
+              );
         },
       ),
     );

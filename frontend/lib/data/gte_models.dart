@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 enum NotificationIntensity { light, standard, scoutMode }
 
@@ -620,16 +620,24 @@ class GteAuthSession {
 
   factory GteAuthSession.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'auth session');
+    final Map<String, Object?> userJson = GteJson.map(
+      GteJson.value(json, <String>['user']),
+      label: 'current user',
+    );
+    final String accessToken = GteJson.string(json, <String>[
+      'access_token',
+      'accessToken',
+    ]);
     return GteAuthSession(
-      accessToken: GteJson.string(json, <String>[
-        'access_token',
-        'accessToken',
-      ]),
+      accessToken: accessToken,
       refreshToken: GteJson.string(json, <String>[
         'refresh_token',
         'refreshToken',
       ], fallback: ''),
-      sessionId: GteJson.string(json, <String>['session_id', 'sessionId']),
+      sessionId:
+          GteJson.stringOrNull(json, <String>['session_id', 'sessionId']) ??
+          GteJson.stringOrNull(userJson, <String>['session_id', 'sessionId']) ??
+          'session-${GteJson.stringOrNull(userJson, <String>['id']) ?? accessToken}',
       tokenType: GteJson.string(json, <String>[
         'token_type',
         'tokenType',
@@ -642,7 +650,7 @@ class GteAuthSession {
         'refresh_expires_in',
         'refreshExpiresIn',
       ], fallback: 0),
-      user: GteCurrentUser.fromJson(GteJson.value(json, <String>['user'])),
+      user: GteCurrentUser.fromJson(userJson),
       permissions: GteJson.typedList<String>(json, <String>[
         'permissions',
       ], (Object? value) => value.toString()),
@@ -3363,7 +3371,6 @@ class GteAnalyticsFunnel {
     );
   }
 }
-
 
 class GtePortfolioHolding {
   const GtePortfolioHolding({

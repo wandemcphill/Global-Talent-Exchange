@@ -94,7 +94,7 @@ class _PlayerCardMarketplaceScreenState
           child: Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
-              title: const Text('Player Card Market'),
+              title: const Text('Player-card marketplace'),
               actions: <Widget>[
                 IconButton(
                   onPressed: _reload,

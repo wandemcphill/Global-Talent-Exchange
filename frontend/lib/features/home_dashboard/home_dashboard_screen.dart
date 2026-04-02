@@ -334,6 +334,61 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   onRetry: _refresh,
                 ),
                 const SizedBox(height: 20),
+                _HomeExpansionLanesPanel(
+                  isAdmin:
+                      (widget.navigationDependencies?.currentUserRole ??
+                                  widget.exchangeController.session?.user.role)
+                              ?.trim() ==
+                          'admin',
+                  onOpenStreamerTournaments:
+                      () => _openFeatureRoute(
+                        const StreamerTournamentsListRouteData(),
+                      ),
+                  onOpenNationsCup:
+                      () => _openFeatureRoute(
+                        const NationalTeamCompetitionsRouteData(),
+                      ),
+                  onOpenWorld:
+                      () => _openFeatureRoute(
+                        WorldClubContextRouteData(
+                          clubId: clubId,
+                          clubName: clubName,
+                        ),
+                      ),
+                  onOpenTransferCenter:
+                      () => _openFeatureRoute(
+                        const FootballTransferCenterRouteData(),
+                      ),
+                  onOpenPlayerCards:
+                      () => _openFeatureRoute(
+                        const PlayerCardsBrowseRouteData(),
+                      ),
+                  onOpenCreatorShareMarket:
+                      () => _openFeatureRoute(
+                        CreatorShareMarketClubRouteData(
+                          clubId: clubId,
+                          clubName: clubName,
+                        ),
+                      ),
+                  onOpenClubSaleMarket:
+                      () => _openFeatureRoute(
+                        const ClubSaleMarketListingsRouteData(),
+                      ),
+                  onOpenCreatorStadium:
+                      () => _openFeatureRoute(
+                        CreatorStadiumClubRouteData(
+                          clubId: clubId,
+                          clubName: clubName,
+                        ),
+                      ),
+                  onOpenFinanceAdmin:
+                      () => _openFeatureRoute(
+                        const CreatorLeagueFinancialReportRouteData(),
+                      ),
+                  onOpenGiftStabilizer:
+                      () => _openFeatureRoute(const GiftStabilizerRouteData()),
+                ),
+                const SizedBox(height: 20),
                 _HomeSectionHeading(
                   eyebrow: 'QUIETER SIGNALS',
                   title:
@@ -389,10 +444,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Future<void> _refresh() async {
     final ClubController? clubController = _clubController;
+    final bool hasClubScope = _hasClubScope(_clubId, _clubName);
     await Future.wait<void>(<Future<void>>[
       if (clubController != null) clubController.refresh(),
-      _competitionController.loadDiscovery(),
-      _regenUniverseController.refresh(),
+      if (hasClubScope) _competitionController.loadDiscovery(),
+      if (hasClubScope) _regenUniverseController.refresh(),
     ]);
     _primeTradingSummary();
   }
@@ -417,10 +473,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       );
       _clubController!.ensureLoaded();
       _competitionController.bootstrap();
+      _regenUniverseController.ensureLoaded();
     } else {
       _clubController = null;
     }
-    _regenUniverseController.ensureLoaded();
   }
 
   void _recreateControllers() {
@@ -462,6 +518,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         );
         _clubController!.ensureLoaded();
         _competitionController.bootstrap();
+        _regenUniverseController.ensureLoaded();
       } else {
         _clubController = null;
       }
@@ -569,22 +626,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             : dependencyUserName?.isNotEmpty == true
             ? dependencyUserName
             : null;
-    final String clubName =
-        widget.clubName?.trim().isNotEmpty == true
-            ? widget.clubName!.trim()
-            : dependencyClubName?.isNotEmpty == true
-            ? dependencyClubName!
-            : displayName?.isNotEmpty == true
-            ? displayName!
-            : username.isNotEmpty
-            ? username
-            : 'Royal Lagos FC';
-    final String clubId =
+    final String? clubId =
         widget.clubId?.trim().isNotEmpty == true
             ? widget.clubId!.trim()
             : dependencyClubId?.isNotEmpty == true
             ? dependencyClubId!
-            : _slugifyClub(clubName);
+            : null;
+    final String? clubName =
+        widget.clubName?.trim().isNotEmpty == true
+            ? widget.clubName!.trim()
+            : dependencyClubName?.isNotEmpty == true
+            ? dependencyClubName!
+            : clubId == null || clubId.isEmpty
+            ? null
+            : _formatClubName(clubId);
     return _HomeIdentity(
       userId: userId,
       userName: userName,
@@ -3255,7 +3310,7 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Around the grounds',
+            'Expansion lanes',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),

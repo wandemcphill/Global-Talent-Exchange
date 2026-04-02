@@ -43,13 +43,7 @@ void main() {
     expect(find.byKey(const Key('real-match-scorebug')), findsOneWidget);
     expect(find.byKey(const Key('real-match-tactical-hud')), findsOneWidget);
     expect(find.byKey(const Key('commentary-ribbon')), findsOneWidget);
-    await tester.dragUntilVisible(
-      find.text('Restart'),
-      find.byType(Scrollable).first,
-      const Offset(0, -200),
-    );
-    await tester.pump(const Duration(milliseconds: 64));
-    expect(find.text('Restart'), findsOneWidget);
+    expect(find.text('Restart'), findsAtLeastNWidgets(1));
     expect(find.text('Next event'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());

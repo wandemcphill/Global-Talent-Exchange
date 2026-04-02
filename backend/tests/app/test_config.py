@@ -337,8 +337,8 @@ def test_load_settings_rejects_placeholder_runtime_secrets() -> None:
         load_settings(
             environ={
                 "DATABASE_URL": "sqlite+pysqlite:///:memory:",
-                "GTE_AUTH_SECRET": "replace-me-with-a-long-random-string",
-                "GTE_MEDIA_SIGNING_SECRET": "test-media-signing-secret-not-for-production",
+                "GTE_AUTH_SECRET": "replace-me-with-a-long-random-string",  # pragma: allowlist secret
+                "GTE_MEDIA_SIGNING_SECRET": "test-media-signing-secret-not-for-production",  # pragma: allowlist secret
             },
             config_root=(Path(__file__).resolve().parents[2] / "config"),
         )

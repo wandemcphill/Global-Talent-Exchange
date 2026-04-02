@@ -18,7 +18,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<Widget> overviewChips = <Widget>[
       if (onBrowseClubMarket != null)
-        const Chip(label: Text('1. Browse Club Market')),
+        const Chip(label: Text('1. Browse club market')),
       if (onExploreArena != null) const Chip(label: Text('2. Explore Arena')),
     ];
     final List<Widget> overviewActions = <Widget>[
@@ -26,7 +26,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
         FilledButton.icon(
           onPressed: onBrowseClubMarket,
           icon: const Icon(Icons.storefront_outlined),
-          label: const Text('Browse Club Market'),
+          label: const Text('Browse club market'),
         ),
       if (onExploreArena != null)
         FilledButton.tonalIcon(
@@ -39,12 +39,12 @@ class GteNoClubOnboardingView extends StatelessWidget {
       if (onBrowseClubMarket != null)
         _NoClubActionCard(
           eyebrow: 'PLAY NOW',
-          title: 'Browse Club Market',
+          title: 'Browse club market',
           detail:
               'Scout live club prices and sale notes even before you own a club.',
           icon: Icons.storefront_outlined,
           accent: GteShellTheme.accentWarm,
-          actionLabel: 'Browse Club Market',
+          actionLabel: 'Browse club market',
           onTap: onBrowseClubMarket!,
         ),
       if (onExploreArena != null)
@@ -74,32 +74,24 @@ class GteNoClubOnboardingView extends StatelessWidget {
                 Text(
                   'NO CLUB ONBOARDING',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: GteShellTheme.accent,
-                        letterSpacing: 1.1,
-                      ),
+                    color: GteShellTheme.accent,
+                    letterSpacing: 1.1,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Your club spot is still open',
+                  'This signed-in session has no canonical club yet',
                   style: Theme.of(context).textTheme.displaySmall,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Club-only actions stay locked until this account is linked to a club. Until then, jump into the live routes below.',
+                  'Club-only actions stay locked until this account is linked to a canonical club. Until then, jump into the live routes below.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 18),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: overviewChips,
-                ),
+                Wrap(spacing: 12, runSpacing: 12, children: overviewChips),
                 const SizedBox(height: 20),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: overviewActions,
-                ),
+                Wrap(spacing: 12, runSpacing: 12, children: overviewActions),
               ],
             ),
           ),
@@ -170,9 +162,9 @@ class _NoClubActionCard extends StatelessWidget {
           Text(
             eyebrow,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: accent,
-                  letterSpacing: 1.05,
-                ),
+              color: accent,
+              letterSpacing: 1.05,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -193,7 +185,7 @@ class _NoClubActionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          FilledButton.tonalIcon(
+          OutlinedButton.icon(
             onPressed: onTap,
             icon: Icon(icon),
             label: Text(actionLabel),

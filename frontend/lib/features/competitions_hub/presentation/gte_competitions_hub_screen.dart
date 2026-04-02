@@ -941,7 +941,7 @@ class _ArenaRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'E-Games and more',
+            'Arena extensions',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
@@ -957,12 +957,12 @@ class _ArenaRoutePanel extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onOpenStreamerTournaments,
                 icon: const Icon(Icons.live_tv_outlined),
-                label: const Text('E-Games'),
+                label: const Text('Streamer tournaments'),
               ),
               FilledButton.tonalIcon(
                 onPressed: null,
                 icon: const Icon(Icons.insights_outlined),
-                label: const Text('Predictions (live only)'),
+                label: const Text('Fan predictions (live match only)'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenNationsCup,
@@ -983,7 +983,7 @@ class _ArenaRoutePanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Predictions unlock once a live-match route sends a match id.',
+            'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

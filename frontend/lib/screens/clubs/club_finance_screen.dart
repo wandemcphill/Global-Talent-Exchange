@@ -48,7 +48,8 @@ class ClubFinanceScreen extends StatelessWidget {
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
               title: 'Loading club finances',
-              message: 'Preparing balance summary, budget allocation, and recent ledger movement.',
+              message:
+                  'Preparing balance summary, budget allocation, and recent ledger movement.',
               icon: Icons.account_balance_outlined,
             ),
           );
@@ -73,51 +74,58 @@ class ClubFinanceScreen extends StatelessWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: <Widget>[
-              FinanceSummaryCard(finance: finance),
-              const SizedBox(height: 16),
               ClubOpsSectionHeader(
                 title: 'Planning views',
-                subtitle: 'Move between budget allocation and day-to-day cash movement.',
+                subtitle:
+                    'Move between budget allocation and day-to-day cash movement.',
                 action: Wrap(
                   spacing: 8,
                   children: <Widget>[
                     FilledButton.tonal(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (BuildContext context) => ClubBudgetScreen(
-                            controller: controller,
-                            clubId: clubId,
-                            clubName: clubName,
+                      onPressed:
+                          () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder:
+                                  (BuildContext context) => ClubBudgetScreen(
+                                    controller: controller,
+                                    clubId: clubId,
+                                    clubName: clubName,
+                                  ),
+                            ),
                           ),
-                        ),
-                      ),
                       child: const Text('Budget'),
                     ),
                     FilledButton.tonal(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (BuildContext context) => ClubCashflowScreen(
-                            controller: controller,
-                            clubId: clubId,
-                            clubName: clubName,
+                      onPressed:
+                          () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder:
+                                  (BuildContext context) => ClubCashflowScreen(
+                                    controller: controller,
+                                    clubId: clubId,
+                                    clubName: clubName,
+                                  ),
+                            ),
                           ),
-                        ),
-                      ),
                       child: const Text('Cashflow'),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
+              FinanceSummaryCard(finance: finance),
+              const SizedBox(height: 16),
               BudgetBreakdownCard(
                 title: 'Operating budget',
-                subtitle: 'Planned spend stays weighted toward payroll, pathway support, and facilities.',
+                subtitle:
+                    'Planned spend stays weighted toward payroll, pathway support, and facilities.',
                 items: finance.budgetAllocations,
               ),
               const SizedBox(height: 16),
               CashflowTrendCard(
                 title: 'Recent cashflow',
-                subtitle: 'Monthly inflow and outflow are shown as transparent operating movement.',
+                subtitle:
+                    'Monthly inflow and outflow are shown as transparent operating movement.',
                 cashflow: finance.cashflow,
               ),
               const SizedBox(height: 16),
@@ -125,8 +133,10 @@ class ClubFinanceScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text('Finance notes',
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      'Finance notes',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 12),
                     for (final String note in finance.financeNotes) ...<Widget>[
                       Text(note, style: Theme.of(context).textTheme.bodyMedium),

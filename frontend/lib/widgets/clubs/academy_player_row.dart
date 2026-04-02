@@ -5,11 +5,7 @@ import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 import 'package:gte_frontend/widgets/squad/squad_avatar_badge.dart';
 
 class AcademyPlayerRow extends StatelessWidget {
-  const AcademyPlayerRow({
-    super.key,
-    required this.player,
-    this.onTap,
-  });
+  const AcademyPlayerRow({super.key, required this.player, this.onTap});
 
   final AcademyPlayer player;
   final VoidCallback? onTap;
@@ -21,6 +17,7 @@ class AcademyPlayerRow extends StatelessWidget {
       onTap: onTap,
       padding: const EdgeInsets.all(16),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SquadAvatarBadge(avatar: avatar),
           const SizedBox(width: 14),
@@ -28,24 +25,45 @@ class AcademyPlayerRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(player.name,
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  player.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 4),
                 Text(
-                  '${player.age} · ${player.pathwayStage}',
+                  '${player.age} - ${player.pathwayStage}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              Text('${player.readinessScore}',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 4),
-              Text('Readiness', style: Theme.of(context).textTheme.bodyMedium),
-            ],
+          const SizedBox(width: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 76),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                Text(
+                  '${player.readinessScore}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Readiness',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
           ),
         ],
       ),
