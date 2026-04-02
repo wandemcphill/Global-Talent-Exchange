@@ -250,7 +250,3 @@ CompetitionSummary _buildCompetition({required String id}) {
   );
 }
 
-Future<void> _pumpForOverlayTransition(WidgetTester tester) async {
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 320));
-}
