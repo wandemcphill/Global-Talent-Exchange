@@ -81,7 +81,32 @@ jobs:
         with:
           python-version: "3.14"
       - run: python -m py_compile ops/render/deploy.py
+      - name: Check Render deploy config
+        id: render-config
+        shell: bash
+        env:
+          RENDER_SERVICE_API: ${{ secrets.RENDER_SERVICE_API }}
+          RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
+          RENDER_SERVICE_WEB: ${{ secrets.RENDER_SERVICE_WEB }}
+          RENDER_DEPLOY_HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+          RENDER_HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
+        run: |
+          missing=()
+          [[ -n "$RENDER_SERVICE_API" ]] || missing+=("RENDER_SERVICE_API")
+          [[ -n "$RENDER_DEPLOY_HOOK_API" ]] || missing+=("RENDER_DEPLOY_HOOK_API")
+          [[ -n "$RENDER_SERVICE_WEB" ]] || missing+=("RENDER_SERVICE_WEB")
+          [[ -n "$RENDER_DEPLOY_HOOK_WEB" ]] || missing+=("RENDER_DEPLOY_HOOK_WEB")
+          [[ -n "$RENDER_HEALTH_URL" ]] || missing+=("RENDER_HEALTH_URL")
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping staging deploy. Missing: ${missing[*]}"
+            exit 0
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
       - run: python ops/render/deploy.py
+        if: steps.render-config.outputs.configured == 'true'
         env:
           RENDER_SERVICE_API: ${{ secrets.RENDER_SERVICE_API }}
           RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}

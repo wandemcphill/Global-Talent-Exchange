@@ -96,8 +96,7 @@ def _load_service_targets() -> list[ServiceTarget]:
 
         if not service_id:
             raise RenderDeployError(
-                f"Missing RENDER_SERVICE_{suffix}. "
-                "Each configured service needs its Render service id."
+                f"Missing RENDER_SERVICE_{suffix}. " "Each configured service needs its Render service id."
             )
 
         if not deploy_hook_url:
@@ -208,9 +207,7 @@ def _request_json(
             content = response.read().decode("utf-8", errors="replace").strip()
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace").strip()
-        raise RenderDeployError(
-            f"{request_label} {method} {url} failed with HTTP {exc.code}: {detail}"
-        ) from exc
+        raise RenderDeployError(f"{request_label} {method} {url} failed with HTTP {exc.code}: {detail}") from exc
     except error.URLError as exc:
         raise RenderDeployError(f"{request_label} {method} {url} failed: {exc}") from exc
 
@@ -220,14 +217,10 @@ def _request_json(
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError as exc:
-        raise RenderDeployError(
-            f"{request_label} {method} {url} returned non-JSON content: {content}"
-        ) from exc
+        raise RenderDeployError(f"{request_label} {method} {url} returned non-JSON content: {content}") from exc
 
     if not isinstance(parsed, dict):
-        raise RenderDeployError(
-            f"{request_label} {method} {url} returned an unexpected payload: {parsed!r}"
-        )
+        raise RenderDeployError(f"{request_label} {method} {url} returned an unexpected payload: {parsed!r}")
 
     return parsed
 
@@ -275,9 +268,7 @@ def _wait_for_deploy(
         if _is_failure_status(status):
             raise RenderDeployError(f"Deploy failed for {target.name} with status '{status}'.")
         if not status and deploy.get("finishedAt"):
-            raise RenderDeployError(
-                f"Deploy for {target.name} finished without a recognized success status."
-            )
+            raise RenderDeployError(f"Deploy for {target.name} finished without a recognized success status.")
 
         time.sleep(poll_interval_seconds)
 
@@ -331,9 +322,7 @@ def main() -> int:
 
             deploy_id = _extract_deploy_id(deploy)
             if not deploy_id:
-                raise RenderDeployError(
-                    f"Deploy hook did not return a deploy id for {target.name}: {deploy!r}"
-                )
+                raise RenderDeployError(f"Deploy hook did not return a deploy id for {target.name}: {deploy!r}")
 
             _wait_for_deploy(
                 client.retrieve_deploy,
