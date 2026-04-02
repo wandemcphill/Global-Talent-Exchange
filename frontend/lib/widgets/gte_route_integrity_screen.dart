@@ -83,6 +83,7 @@ class GteRouteIntegrityScreen extends StatelessWidget {
                             accentColor: accent,
                             padding: const EdgeInsets.all(24),
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Wrap(
@@ -162,36 +163,31 @@ class GteRouteIntegrityScreen extends StatelessWidget {
                                 BoxConstraints constraints,
                               ) {
                                 final bool stacked = constraints.maxWidth < 620;
-                                final List<Widget> notes = <Widget>[
-                                  Expanded(
-                                    child: _IntegrityNote(
-                                      label: 'Route Truth',
-                                      body: _truthMessage(),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _IntegrityNote(
-                                      label: 'Mounted Shell',
-                                      body:
-                                          'The active shell keeps its current route classification intact and avoids fake live or fallback-only behavior here.',
-                                    ),
-                                  ),
-                                ];
+                                final Widget truthNote = _IntegrityNote(
+                                  label: 'Route Truth',
+                                  body: _truthMessage(),
+                                );
+                                final Widget mountedShellNote = _IntegrityNote(
+                                  label: 'Mounted Shell',
+                                  body:
+                                      'The active shell keeps its current route classification intact and avoids fake live or fallback-only behavior here.',
+                                );
                                 if (stacked) {
                                   return Column(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: <Widget>[
-                                      notes[0],
+                                      truthNote,
                                       const SizedBox(height: 14),
-                                      notes[1],
+                                      mountedShellNote,
                                     ],
                                   );
                                 }
                                 return Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    notes[0],
+                                    Expanded(child: truthNote),
                                     const SizedBox(width: 14),
-                                    notes[1],
+                                    Expanded(child: mountedShellNote),
                                   ],
                                 );
                               },

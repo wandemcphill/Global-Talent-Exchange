@@ -26,6 +26,7 @@ class GteSurfacePanel extends StatelessWidget {
         accentColor ?? (emphasized ? tokens.accent : tokens.accentWarm);
     final BorderRadius radius = BorderRadius.circular(tokens.radiusLarge);
     final Widget content = Container(
+      constraints: const BoxConstraints(minWidth: 1, minHeight: 1),
       padding: padding,
       decoration: BoxDecoration(
         borderRadius: radius,
