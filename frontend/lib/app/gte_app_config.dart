@@ -13,7 +13,10 @@ class GteAppConfig {
     );
     const String rawMode = String.fromEnvironment(
       'GTE_BACKEND_MODE',
-      defaultValue: 'live',
+      // Default to fixture for local app boots so the mounted shell does not
+      // fail closed when no live backend is running. Production/live runs
+      // should continue to set GTE_BACKEND_MODE explicitly.
+      defaultValue: 'fixture',
     );
     return GteAppConfig(
       apiBaseUrl: rawBaseUrl,
