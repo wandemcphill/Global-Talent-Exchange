@@ -80,8 +80,8 @@ void main() {
     expect(find.text('Sand Hill Gold'), findsOneWidget);
     await _scrollTo(tester, find.text('Menlo Night Blue'));
     expect(find.text('Menlo Night Blue'), findsOneWidget);
-    await _scrollTo(tester, find.text('AI Arena Crimson'));
-    expect(find.text('AI Arena Crimson'), findsOneWidget);
+    await _scrollTo(tester, find.text('Ultra Red'));
+    expect(find.text('Ultra Red'), findsOneWidget);
   });
 }
 

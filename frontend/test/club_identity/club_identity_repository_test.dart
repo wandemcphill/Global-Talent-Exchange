@@ -106,7 +106,7 @@ void main() {
         isA<GteApiException>().having(
           (GteApiException error) => error.type,
           'type',
-          GteApiErrorType.unavailable,
+          GteApiErrorType.network,
         ),
       ),
     );

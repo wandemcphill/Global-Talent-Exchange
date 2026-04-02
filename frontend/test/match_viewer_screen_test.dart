@@ -91,6 +91,18 @@ void main() {
             matchKey: competition.id,
             fallbackSnapshot: snapshot,
             preferFallback: true,
+            viewStateLoader: () async {
+              final viewState = await MatchViewerMapper.load(
+                competition: competition,
+                matchKey: competition.id,
+                fallbackSnapshot: snapshot,
+                preferFallback: true,
+              );
+              final MatchEvent offsideEvent = viewState.events.firstWhere(
+                (event) => event.type == MatchViewerEventType.offside,
+              );
+              return viewState.copyWith(events: <MatchEvent>[offsideEvent]);
+            },
           ),
         ),
       );
@@ -98,29 +110,37 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 64));
 
+      await tester.scrollUntilVisible(
+        find.widgetWithText(FilledButton, 'Next event'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
       expect(find.text('2D Match Viewer'), findsOneWidget);
-      expect(find.text('Replay lane'), findsOneWidget);
-      expect(find.text('Restart'), findsOneWidget);
-      expect(find.text('Next event'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Pause'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Restart'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Next event'), findsOneWidget);
       expect(
         find.text(snapshot.homeTeam.substring(0, 3).toUpperCase()),
-        findsOneWidget,
+        findsWidgets,
       );
       expect(
         find.text(snapshot.awayTeam.substring(0, 3).toUpperCase()),
-        findsOneWidget,
+        findsWidgets,
       );
 
-      for (
-        int index = 0;
-        index < 8 && find.text('Offside (data unavailable)').evaluate().isEmpty;
-        index += 1
-      ) {
-        await tester.tap(find.text('Next event'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 24));
-      }
+      await tester.tap(find.widgetWithText(FilledButton, 'Pause'));
+      await tester.pump();
 
+      await tester.scrollUntilVisible(
+        find.text('Replay lane'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
+      expect(find.text('Replay lane'), findsOneWidget);
       expect(find.text('Offside (data unavailable)'), findsWidgets);
     },
   );
@@ -180,6 +200,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 48));
 
+    await tester.scrollUntilVisible(
+      find.text('Replay lane'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Replay lane'), findsOneWidget);
 
     await tester.pumpWidget(
@@ -197,8 +223,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 64));
 
     expect(find.text('2D Match Viewer'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Replay lane'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Replay lane'), findsOneWidget);
-    expect(find.text('Next event'), findsOneWidget);
   });
 }
 

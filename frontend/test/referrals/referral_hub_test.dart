@@ -100,16 +100,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Creator access required'), findsOneWidget);
+    expect(find.text('Creator referrals preview'), findsOneWidget);
+    expect(find.textContaining('preview-only'), findsOneWidget);
     expect(find.text('MAYA-GROWTH'), findsNothing);
     expect(find.text('@maya_scout'), findsNothing);
     expect(find.text('Creator dashboard'), findsNothing);
     expect(find.text('Share creator competition'), findsNothing);
-
-    await tester.tap(find.text('Request creator access'));
-    await tester.pumpAndSettle();
-
-    expect(openedCreatorAccess, isTrue);
+    expect(find.text('Request creator access'), findsNothing);
+    expect(openedCreatorAccess, isFalse);
   });
 
   testWidgets(
@@ -136,7 +134,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Referral runtime unavailable'), findsOneWidget);
+    expect(find.text('Creator referrals preview'), findsOneWidget);
+    expect(find.textContaining('preview-only'), findsOneWidget);
     expect(find.text('MAYA-GROWTH'), findsNothing);
     expect(find.text('@maya_scout'), findsNothing);
     expect(find.text('Creator dashboard'), findsNothing);

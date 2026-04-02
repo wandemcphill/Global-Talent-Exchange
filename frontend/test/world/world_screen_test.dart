@@ -3,10 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:gte_frontend/core/theme/app_theme.dart';
+import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
+import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
+import 'package:gte_frontend/features/world/live_world_provider.dart';
 import 'package:gte_frontend/features/world/world_screen.dart';
+import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/hosted_competition_models.dart';
 
 void main() {
-  testWidgets('lazy loads world tabs and joins a federation', (
+  testWidgets('loads world summaries and federation links', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1280, 1800);
@@ -16,46 +21,80 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
+    const CompetitionHubData emptyHub = CompetitionHubData(
+      gtexCompetitions: <CompetitionSummary>[],
+      hostedCompetitions: <HostedCompetition>[],
+      streamerTournaments: <StreamerTournament>[],
+    );
+
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          worldAggregateProvider.overrideWith((Ref ref) async {
+            return const WorldAggregateData(
+              risingStars: <Map<String, Object?>>[
+                <String, Object?>{
+                  'player_name': 'Ayo Akin',
+                  'position': 'ST',
+                  'nationality': 'Nigeria',
+                },
+              ],
+              scoutingFeed: <Map<String, Object?>>[
+                <String, Object?>{
+                  'headline': 'Ayo Akin spikes in scouting feed',
+                },
+              ],
+              seasons: <Map<String, Object?>>[
+                <String, Object?>{'name': '2031 season'},
+              ],
+              awards: <Map<String, Object?>>[
+                <String, Object?>{'name': 'Golden Regen'},
+              ],
+              hallOfFame: <Map<String, Object?>>[
+                <String, Object?>{'player_name': 'Legend One'},
+              ],
+              federations: <Map<String, Object?>>[
+                <String, Object?>{
+                  'id': 'west-africa',
+                  'name': 'West Africa Federation',
+                },
+              ],
+              tracking: <String, Object?>{'season_phase': 'midseason'},
+              competitions: emptyHub,
+              federationJoinReason:
+                  'Federation membership is blocked: this session has no verified club context.',
+            );
+          }),
+        ],
         child: MaterialApp(
           theme: AppTheme.dark(),
           home: const Scaffold(body: WorldScreen()),
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('World'), findsOneWidget);
-    expect(find.byKey(const Key('world-loading-regens')), findsOneWidget);
+    expect(find.text('World route'), findsOneWidget);
+    expect(find.text('Competition families'), findsOneWidget);
+    expect(find.text('Rising stars'), findsOneWidget);
+    expect(find.text('Federations'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Open federations hub'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 450));
-
-    expect(find.byKey(const Key('world-regens-grid')), findsOneWidget);
-    expect(
-      find.byKey(const Key('world-regen-card-regen-kamara')),
-      findsOneWidget,
+    await tester.scrollUntilVisible(
+      find.text('Ayo Akin'),
+      240,
+      scrollable: find.byType(Scrollable).first,
     );
+    await tester.pumpAndSettle();
+    expect(find.text('Ayo Akin'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('world-tab-competitions')));
-    await tester.pump(const Duration(milliseconds: 180));
-
-    expect(find.text('GTEX World Cup'), findsNothing);
-
-    await tester.pump(const Duration(milliseconds: 700));
-
-    expect(find.text('GTEX World Cup'), findsOneWidget);
-    expect(find.byKey(const Key('world-competition-card-0')), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('world-tab-federations')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 900));
-
-    expect(find.byKey(const Key('world-federation-card-0')), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('world-federation-join-0')));
-    await tester.pump();
-
-    expect(find.text('Joined'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('West Africa Federation'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('West Africa Federation'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Open'), findsWidgets);
   });
 }

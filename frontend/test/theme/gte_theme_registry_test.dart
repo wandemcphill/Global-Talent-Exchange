@@ -17,7 +17,7 @@ void main() {
           'Palo Alto Glass',
           'Sand Hill Gold',
           'Menlo Night Blue',
-          'AI Arena Crimson',
+          'Ultra Red',
         ]),
       );
     });

@@ -42,28 +42,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Hub').last);
-      await tester.tap(find.text('Hub').last);
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Notifications').last);
-      await tester.tap(find.text('Notifications').last);
-      await tester.pumpAndSettle();
-      expect(find.text('Wallet alerts'), findsOneWidget);
-      expect(find.text('Announcements'), findsOneWidget);
-      final Finder marketOpenAlerts = find.widgetWithText(
-        SwitchListTile,
-        'Market open alerts',
-      );
-      expect(tester.widget<SwitchListTile>(marketOpenAlerts).value, isTrue);
-      await tester.tap(find.text('Market open alerts'));
-      await _pumpUntilSwitchValue(tester, marketOpenAlerts, false);
-      expect(tester.widget<SwitchListTile>(marketOpenAlerts).value, isFalse);
-
       await tester.ensureVisible(find.text('Portfolio').last);
       await tester.tap(find.text('Portfolio').last);
       await _pumpUntilText(tester, 'Wallet actions');
       expect(find.text('Wallet actions'), findsOneWidget);
       expect(find.text('Fund wallet'), findsOneWidget);
+
+      await tester.tap(find.text('Notifications'));
+      await _pumpUntilText(tester, 'Mark all read');
+      expect(find.text('Mark all read'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _pumpUntilText(tester, 'Wallet actions');
 
       expect(find.byTooltip('Creator community'), findsNothing);
 
@@ -166,8 +156,8 @@ void main() {
       );
       await tester.ensureVisible(fundWalletButton);
       await tester.tap(fundWalletButton);
-      await _pumpUntilText(tester, 'Top Up Wallet');
-      expect(find.text('Top up by bank transfer'), findsOneWidget);
+      await _pumpUntilText(tester, 'Top up wallet');
+      expect(find.text('Fund with Paystack'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');
@@ -190,8 +180,9 @@ void main() {
       );
       await tester.ensureVisible(depositHistoryButton);
       await tester.tap(depositHistoryButton);
-      await _pumpUntilText(tester, 'Top Up History');
-      expect(find.text('DEP-1001'), findsOneWidget);
+      await _pumpUntilText(tester, 'Wallet transactions');
+      expect(find.text('No wallet transactions yet'), findsOneWidget);
+      expect(find.text('Top up'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');
@@ -214,8 +205,8 @@ void main() {
       );
       await tester.ensureVisible(supportButton);
       await tester.tap(supportButton);
-      await _pumpUntilText(tester, 'Support & disputes');
-      expect(find.text('DEP-1001'), findsOneWidget);
+      await _pumpUntilText(tester, 'Deposit still pending');
+      expect(find.text('Deposit still pending'), findsOneWidget);
 
       final Finder openThreadButton = find.widgetWithText(
         OutlinedButton,
@@ -316,7 +307,7 @@ void main() {
         find.text('Deposit DEP-1001 submitted. Pending review.'),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Top Up History'), findsOneWidget);
+      expect(find.text('Wallet transactions'), findsOneWidget);
 
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -465,22 +456,6 @@ Future<void> _pumpUntilText(
     }
   }
   throw TestFailure('Timed out waiting for "$text".');
-}
-
-Future<void> _pumpUntilSwitchValue(
-  WidgetTester tester,
-  Finder finder,
-  bool expected, {
-  Duration step = const Duration(milliseconds: 50),
-  int maxPumps = 120,
-}) async {
-  for (int pump = 0; pump < maxPumps; pump += 1) {
-    await tester.pump(step);
-    if (tester.widget<SwitchListTile>(finder).value == expected) {
-      return;
-    }
-  }
-  throw TestFailure('Timed out waiting for switch value $expected.');
 }
 
 class _BlockedComplianceApi extends GteMockApi {

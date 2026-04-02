@@ -47,13 +47,8 @@ void main() {
       of: goldTrimCard,
       matching: find.widgetWithText(FilledButton, 'Purchase'),
     );
-    await tester.dragUntilVisible(
-      purchaseButton,
-      find.byType(ListView),
-      const Offset(0, -200),
-    );
-    await tester.drag(find.byType(ListView), const Offset(0, -180));
-    await tester.pump();
+    await tester.ensureVisible(purchaseButton);
+    await tester.pumpAndSettle();
     await tester.tap(purchaseButton);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));

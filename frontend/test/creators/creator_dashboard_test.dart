@@ -22,17 +22,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Creator command deck'), findsOneWidget);
-      expect(find.text('Maya Scout'), findsOneWidget);
-      expect(find.text('Creator stats'), findsOneWidget);
-      expect(find.text('Growth summary'), findsOneWidget);
-      expect(find.text('AI CREATOR COPILOT'), findsOneWidget);
-      expect(find.text('Optimize with AI'), findsOneWidget);
-      expect(find.text('Viral score'), findsOneWidget);
-      expect(find.text('Clip income'), findsOneWidget);
-      expect(find.text('Wallet balance'), findsOneWidget);
-      expect(find.text('LIVE CREATOR COMPETITIONS'), findsOneWidget);
-      expect(find.text('Spring Scout Sprint'), findsOneWidget);
+      expect(find.text('Creator dashboard preview'), findsOneWidget);
+      expect(find.textContaining('preview-only'), findsOneWidget);
+      expect(find.text('Growth summary'), findsNothing);
+      expect(find.text('Spring Scout Sprint'), findsNothing);
     },
   );
 
@@ -51,19 +44,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Profile'));
-    await tester.pumpAndSettle();
-    expect(find.text('Creator profile deck'), findsOneWidget);
-    expect(find.text('PUBLIC CREATOR LINK'), findsOneWidget);
-
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('Share').first);
-    await tester.tap(find.text('Share').first);
-    await tester.pumpAndSettle();
-    expect(find.text('Creator competition share'), findsOneWidget);
-    expect(find.text('Share creator competition invite'), findsOneWidget);
+    expect(find.text('Creator dashboard preview'), findsOneWidget);
+    expect(find.text('Profile'), findsNothing);
+    expect(find.text('Share'), findsNothing);
   });
 
   testWidgets(
@@ -105,8 +88,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('901 credits'), findsOneWidget);
-      expect(find.text('999 credits'), findsOneWidget);
+      expect(find.text('Creator dashboard preview'), findsOneWidget);
+      expect(find.text('901 credits'), findsNothing);
+      expect(find.text('999 credits'), findsNothing);
     },
   );
 }

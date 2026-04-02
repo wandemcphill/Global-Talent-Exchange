@@ -10,7 +10,7 @@ import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
   testWidgets(
-      'club hub exposes the canonical identity, reputation, trophy, and dynasty tabs',
+      'club hub exposes the canonical workspace quick links',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
@@ -43,23 +43,16 @@ void main() {
     await tester.tap(find.text('Club').last);
     await tester.pumpAndSettle();
     expect(find.text('Club hub'), findsOneWidget);
+    expect(find.text('World context'), findsOneWidget);
+    expect(find.text('Owner-only inbox'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Reputation'));
-    await tester.tap(find.text('Reputation').last);
+    await tester.ensureVisible(find.text('World context'));
+    await tester.tap(find.text('World context'));
     await tester.pumpAndSettle();
-    expect(find.text('Open reputation'), findsOneWidget);
-
-    await tester.tap(find.text('Trophies').last);
-    await tester.pumpAndSettle();
-    expect(find.text('View trophies'), findsOneWidget);
-
-    await tester.tap(find.text('Dynasty').last);
-    await tester.pumpAndSettle();
-    expect(find.text('View dynasty'), findsOneWidget);
-
-    await tester.tap(find.text('Identity').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Edit identity'), findsOneWidget);
+    expect(
+      find.textContaining('canonical football-world simulation'),
+      findsOneWidget,
+    );
   });
 }
 

@@ -23,10 +23,10 @@ void main() {
       final String mainSource = _readSource('lib/main.dart');
       final String appSource = _readSource('lib/app/gte_frontend_app.dart');
 
-      expect(mainSource, contains('GteThemeController.bootstrap()'));
+      expect(mainSource, contains('GteThemeController.bootstrap('));
       expect(
         mainSource,
-        contains('runApp(GteFrontendApp(themeController: themeController));'),
+        contains('child: GtexApp(themeController: themeController),'),
       );
       expect(appSource, contains('GteThemeControllerScope('));
       expect(
@@ -66,10 +66,10 @@ void main() {
       expect(market, lessThan(hub));
       expect(hub, lessThan(club));
       expect(shellSource, contains('_buildThemePickerAction(context)'));
-      expect(shellSource, contains('_buildCapitalAction(context)'));
-      expect(shellSource, contains("tooltip: 'Capital'"));
+      expect(shellSource, contains('_buildCapitalAction()'));
+      expect(shellSource, contains("tooltip: 'Capital room'"));
       expect(shellSource, contains('GteThemePickerSheet'));
-      expect(shellSource, contains('label: destination.label'));
+      expect(shellSource, contains('destination.label,'));
     });
 
     test('home dashboard preserves hero to secondary information order', () {
@@ -103,8 +103,8 @@ void main() {
   });
 
   group('controlled merge runtime contract', () {
-    test('theme registry still exposes four selectable themes', () {
-      expect(GteThemeRegistry.themes, hasLength(4));
+    test('theme registry still exposes five selectable themes', () {
+      expect(GteThemeRegistry.themes, hasLength(5));
       expect(
         GteThemeRegistry.themes
             .map((GteThemeDefinition definition) => definition.metadata.id),
@@ -179,9 +179,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
 
-      expect(find.text('Wallet overview'), findsOneWidget);
-      expect(find.text('Wallet hub'), findsOneWidget);
-      expect(find.text('FanCoin'), findsOneWidget);
+      expect(find.text('Club Wallet'), findsOneWidget);
+      expect(find.text('Live wallet balance'), findsOneWidget);
+      expect(find.text('Top up'), findsOneWidget);
     });
 
     testWidgets('club sale market surface opens against fixture data',

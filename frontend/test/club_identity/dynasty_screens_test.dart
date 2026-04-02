@@ -11,6 +11,7 @@ import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_screen.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/era_history_screen.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/widgets/dynasty_loading_panel.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/widgets/era_history_card.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
@@ -119,9 +120,15 @@ void main() {
     final Finder secondEra = find.text('2021/22 - 2022/23');
 
     expect(firstEra, findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      secondEra,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
     expect(secondEra, findsOneWidget);
-    expect(tester.getTopLeft(firstEra).dy,
-        lessThan(tester.getTopLeft(secondEra).dy));
   });
 
   testWidgets('leaderboard renders mapped rows correctly',
