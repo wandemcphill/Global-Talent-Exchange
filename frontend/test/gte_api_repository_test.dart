@@ -652,7 +652,7 @@ void main() {
   );
 
   test(
-    'login persists token and reuses it on authenticated requests',
+    'login persists token, merges bootstrap club context, and reuses it on authenticated requests',
     () async {
       final _RecordingTransport transport = _RecordingTransport(
         <GteTransportResponse>[
@@ -670,6 +670,20 @@ void main() {
                 'display_name': 'QA User',
                 'role': 'user',
               },
+            },
+          ),
+          GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'active_organization_id': 'ibadan-lions',
+              'active_organization_name': 'Ibadan Lions FC',
+              'active_organization_type': 'club',
+              'club': <String, Object?>{
+                'id': 'ibadan-lions',
+                'name': 'Ibadan Lions FC',
+              },
+              'wallet': <String, Object?>{},
+              'compliance': <String, Object?>{},
             },
           ),
           GteTransportResponse(
@@ -707,10 +721,13 @@ void main() {
 
       expect(session.accessToken, 'live-token');
       expect(session.sessionId, 'live-session');
+      expect(session.rawJson['active_organization_id'], 'ibadan-lions');
       expect(await tokenStore.readToken(), 'live-token');
       expect((await authSessionStore.readSession())?.userId, 'user-1');
       expect((await authSessionStore.readSession())?.sessionId, 'live-session');
+      expect((await authSessionStore.readSession())?.clubId, 'ibadan-lions');
       expect(user.username, 'qa_user');
+      expect(transport.requests[1].uri.path, '/api/v1/session/bootstrap');
       expect(
         transport.requests.last.headers['Authorization'],
         'Bearer live-token',

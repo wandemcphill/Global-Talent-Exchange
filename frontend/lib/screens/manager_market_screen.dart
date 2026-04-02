@@ -32,6 +32,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
   bool _isLoading = true;
   bool _isRunningAction = false;
   String? _error;
+  String? _loadNotice;
   String? _tactic;
   String? _trait;
   String? _mentality;
@@ -137,9 +138,10 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
   List<String> get _traits =>
       _availableTraits.isNotEmpty ? _availableTraits : _fallbackTraits;
 
-  List<String> get _mentalities => _availableMentalities.isNotEmpty
-      ? _availableMentalities
-      : _fallbackMentalities;
+  List<String> get _mentalities =>
+      _availableMentalities.isNotEmpty
+          ? _availableMentalities
+          : _fallbackMentalities;
 
   List<String> get _rarities =>
       _availableRarities.isNotEmpty ? _availableRarities : _fallbackRarities;
@@ -162,75 +164,113 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
       setState(() {
         _isLoading = true;
         _error = null;
+        _loadNotice = null;
       });
     }
     try {
-      final Map<String, dynamic> filterData =
-          await _managerRepository.fetchFilters();
-      final Map<String, dynamic> catalogData =
-          await _managerRepository.fetchCatalog(
-        search: _searchController.text,
-        tactic: _tactic,
-        trait: _trait,
-        mentality: _mentality,
-        rarity: _rarity,
-        limit: 500,
-      );
-      final Map<String, dynamic> nextTeam =
-          await _managerRepository.fetchTeam();
-      final int totalOwned = (nextTeam['total_owned'] as int?) ?? 0;
-      final int participants = totalOwned < 2 ? 2 : totalOwned;
-      final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
-        Future<Map<String, dynamic>>.value(catalogData),
-        Future<Map<String, dynamic>>.value(nextTeam),
-        _managerRepository.fetchListings(),
-        _managerRepository.fetchMyListings(),
-        _managerRepository.fetchRecommendation(),
-        _competitionRepository.fetchRuntime('fast_league',
-            participants: participants),
-        _managerRepository.fetchTradeHistory(),
-      ]);
+      final List<String> warnings = <String>[];
+      final List<Object?> basePayload =
+          await Future.wait<Object?>(<Future<Object?>>[
+            _loadOptional<Map<String, dynamic>>(
+              _managerRepository.fetchFilters,
+              warnings: warnings,
+              warningPrefix: 'Filters unavailable.',
+            ),
+            _loadOptional<Map<String, dynamic>>(
+              () => _managerRepository.fetchCatalog(
+                search: _searchController.text,
+                tactic: _tactic,
+                trait: _trait,
+                mentality: _mentality,
+                rarity: _rarity,
+                limit: 500,
+              ),
+              warnings: warnings,
+              warningPrefix: 'Catalog unavailable.',
+            ),
+            _loadOptional<List<Map<String, dynamic>>>(
+              _managerRepository.fetchListings,
+              warnings: warnings,
+              warningPrefix: 'Listings unavailable.',
+            ),
+            _loadOptional<Map<String, dynamic>>(
+              _managerRepository.fetchTeam,
+              warnings: warnings,
+              warningPrefix: 'Team assignment unavailable.',
+            ),
+          ]);
+      final Map<String, dynamic>? filterData =
+          basePayload[0] as Map<String, dynamic>?;
+      final Map<String, dynamic>? catalogData =
+          basePayload[1] as Map<String, dynamic>?;
+      final List<Map<String, dynamic>> nextListings =
+          basePayload[2] as List<Map<String, dynamic>>? ??
+          <Map<String, dynamic>>[];
+      final Map<String, dynamic>? nextTeam =
+          basePayload[3] as Map<String, dynamic>?;
+      final int participants = _runtimeParticipants(nextTeam);
+      final List<Object?> advisoryPayload =
+          await Future.wait<Object?>(<Future<Object?>>[
+            _loadOptional<List<Map<String, dynamic>>>(
+              _managerRepository.fetchMyListings,
+              warnings: warnings,
+              warningPrefix: 'Your listings are unavailable.',
+            ),
+            _loadOptional<Map<String, dynamic>>(
+              _managerRepository.fetchRecommendation,
+              warnings: warnings,
+              warningPrefix: 'Recommendation desk unavailable.',
+            ),
+            _loadOptional<Map<String, dynamic>>(
+              () => _competitionRepository.fetchRuntime(
+                'fast_league',
+                participants: participants,
+              ),
+              warnings: warnings,
+              warningPrefix: 'Runtime preview unavailable.',
+            ),
+            _loadOptional<List<Map<String, dynamic>>>(
+              _managerRepository.fetchTradeHistory,
+              warnings: warnings,
+              warningPrefix: 'Trade history unavailable.',
+            ),
+          ]);
 
       if (!mounted) {
         return;
       }
       setState(() {
-        _availableTactics =
-            (filterData['tactics'] as List<dynamic>? ?? <dynamic>[])
-                .map((dynamic item) => item.toString())
-                .toList();
-        _availableTraits =
-            (filterData['traits'] as List<dynamic>? ?? <dynamic>[])
-                .map((dynamic item) => item.toString())
-                .toList();
-        _availableMentalities =
-            (filterData['mentalities'] as List<dynamic>? ?? <dynamic>[])
-                .map((dynamic item) => item.toString())
-                .toList();
-        _availableRarities =
-            (filterData['rarities'] as List<dynamic>? ?? <dynamic>[])
-                .map((dynamic item) => item.toString())
-                .toList();
-        _catalog =
-            ((payload[0] as Map<String, dynamic>)['items'] as List<dynamic>? ??
-                    <dynamic>[])
-                .whereType<Map>()
-                .map((dynamic item) => Map<String, dynamic>.from(item as Map))
-                .toList();
-        _team = payload[1] as Map<String, dynamic>;
-        _listings = (payload[2] as List<dynamic>).cast<Map<String, dynamic>>();
+        _availableTactics = _stringOptions(filterData?['tactics']);
+        _availableTraits = _stringOptions(filterData?['traits']);
+        _availableMentalities = _stringOptions(filterData?['mentalities']);
+        _availableRarities = _stringOptions(filterData?['rarities']);
+        _catalog = _catalogItems(catalogData);
+        _team = nextTeam;
+        _listings = nextListings;
         _myListings =
-            (payload[3] as List<dynamic>).cast<Map<String, dynamic>>();
-        _recommendation = payload[4] as Map<String, dynamic>;
-        _fastLeagueRuntime = payload[5] as Map<String, dynamic>;
+            advisoryPayload[0] as List<Map<String, dynamic>>? ??
+            <Map<String, dynamic>>[];
+        _recommendation = advisoryPayload[1] as Map<String, dynamic>?;
+        _fastLeagueRuntime = advisoryPayload[2] as Map<String, dynamic>?;
         _tradeHistory =
-            (payload[6] as List<dynamic>).cast<Map<String, dynamic>>();
+            advisoryPayload[3] as List<Map<String, dynamic>>? ??
+            <Map<String, dynamic>>[];
+        _loadNotice = _summarizeWarnings(warnings);
         final List<Map<String, dynamic>> catalogItems = _catalog;
         if (catalogItems.length >= 2) {
           _compareLeftManagerId ??=
               (catalogItems.first['manager_id'] ?? '').toString();
           _compareRightManagerId ??=
               (catalogItems[1]['manager_id'] ?? '').toString();
+        } else if (catalogItems.length == 1) {
+          _compareLeftManagerId ??=
+              (catalogItems.first['manager_id'] ?? '').toString();
+          _compareRightManagerId = null;
+          _comparison = null;
+        } else {
+          _compareLeftManagerId = null;
+          _compareRightManagerId = null;
+          _comparison = null;
         }
       });
       await _loadComparison();
@@ -250,16 +290,56 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
     }
   }
 
+  Future<T?> _loadOptional<T>(
+    Future<T> Function() loader, {
+    required List<String> warnings,
+    required String warningPrefix,
+  }) async {
+    try {
+      return await loader();
+    } catch (error) {
+      warnings.add('$warningPrefix ${AppFeedback.messageFor(error)}');
+      return null;
+    }
+  }
+
+  int _runtimeParticipants(Map<String, dynamic>? team) {
+    final int totalOwned = (team?['total_owned'] as int?) ?? 0;
+    return totalOwned < 2 ? 2 : totalOwned;
+  }
+
+  List<String> _stringOptions(Object? value) {
+    return (value as List<dynamic>? ?? <dynamic>[])
+        .map((dynamic item) => item.toString())
+        .where((String item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _catalogItems(Map<String, dynamic>? catalogData) {
+    return ((catalogData?['items'] as List<dynamic>?) ?? <dynamic>[])
+        .whereType<Map>()
+        .map((dynamic item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  String? _summarizeWarnings(List<String> warnings) {
+    final List<String> uniqueWarnings = warnings
+        .toSet()
+        .where((String item) => item.trim().isNotEmpty)
+        .toList(growable: false);
+    if (uniqueWarnings.isEmpty) {
+      return null;
+    }
+    return uniqueWarnings.take(4).join('\n');
+  }
+
   Future<void> _loadComparison() async {
     if (_compareLeftManagerId == null || _compareRightManagerId == null) {
       return;
     }
     try {
-      final Map<String, dynamic> comparison =
-          await _managerRepository.compareManagers(
-        _compareLeftManagerId!,
-        _compareRightManagerId!,
-      );
+      final Map<String, dynamic> comparison = await _managerRepository
+          .compareManagers(_compareLeftManagerId!, _compareRightManagerId!);
       if (!mounted) {
         return;
       }
@@ -324,29 +404,36 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
   }
 
   Future<void> _listForSale(String assetId) async {
-    final TextEditingController priceController =
-        TextEditingController(text: '100.0000');
+    final TextEditingController priceController = TextEditingController(
+      text: '100.0000',
+    );
     final String? price = await showDialog<String>(
       context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: const Text('List manager for trade'),
-        content: TextField(
-          controller: priceController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Asking price GTEX Coin'),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+      builder:
+          (BuildContext context) => AlertDialog(
+            title: const Text('List manager for trade'),
+            content: TextField(
+              controller: priceController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Asking price GTEX Coin',
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed:
+                    () =>
+                        Navigator.of(context).pop(priceController.text.trim()),
+                child: const Text('List'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(context).pop(priceController.text.trim()),
-            child: const Text('List'),
-          ),
-        ],
-      ),
     );
     if (price == null || price.isEmpty) {
       return;
@@ -384,75 +471,87 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
     ];
     if (owned.isEmpty) {
       AppFeedback.showError(
-          context, 'Recruit at least one manager before offering a swap.');
+        context,
+        'Recruit at least one manager before offering a swap.',
+      );
       return;
     }
     String proposerAssetId = (owned.first['asset_id'] ?? '').toString();
-    final TextEditingController cashController =
-        TextEditingController(text: '0');
+    final TextEditingController cashController = TextEditingController(
+      text: '0',
+    );
     final Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (BuildContext context) => StatefulBuilder(
-        builder: (
-          BuildContext context,
-          void Function(void Function()) setDialogState,
-        ) {
-          return AlertDialog(
-            title: const Text('Offer manager swap'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                DropdownButtonFormField<String>(
-                  value: proposerAssetId,
-                  decoration: const InputDecoration(labelText: 'Your manager'),
-                  items: owned
-                      .map(
-                        (Map<String, dynamic> item) => DropdownMenuItem<String>(
-                          value: (item['asset_id'] ?? '').toString(),
-                          child: Text((item['display_name'] ?? '').toString()),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (String? value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setDialogState(() {
-                      proposerAssetId = value;
-                    });
-                  },
+      builder:
+          (BuildContext context) => StatefulBuilder(
+            builder: (
+              BuildContext context,
+              void Function(void Function()) setDialogState,
+            ) {
+              return AlertDialog(
+                title: const Text('Offer manager swap'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    DropdownButtonFormField<String>(
+                      value: proposerAssetId,
+                      decoration: const InputDecoration(
+                        labelText: 'Your manager',
+                      ),
+                      items:
+                          owned
+                              .map(
+                                (Map<String, dynamic> item) =>
+                                    DropdownMenuItem<String>(
+                                      value:
+                                          (item['asset_id'] ?? '').toString(),
+                                      child: Text(
+                                        (item['display_name'] ?? '').toString(),
+                                      ),
+                                    ),
+                              )
+                              .toList(),
+                      onChanged: (String? value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setDialogState(() {
+                          proposerAssetId = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: cashController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Cash adjustment (optional)',
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: cashController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                      labelText: 'Cash adjustment (optional)'),
-                ),
-              ],
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(
-                  <String, dynamic>{
-                    'proposer_asset_id': proposerAssetId,
-                    'cash_adjustment_credits':
-                        cashController.text.trim().isEmpty
-                            ? '0'
-                            : cashController.text.trim(),
-                  },
-                ),
-                child: const Text('Submit'),
-              ),
-            ],
-          );
-        },
-      ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed:
+                        () => Navigator.of(context).pop(<String, dynamic>{
+                          'proposer_asset_id': proposerAssetId,
+                          'cash_adjustment_credits':
+                              cashController.text.trim().isEmpty
+                                  ? '0'
+                                  : cashController.text.trim(),
+                        }),
+                    child: const Text('Submit'),
+                  ),
+                ],
+              );
+            },
+          ),
     );
     if (result == null) {
       return;
@@ -479,10 +578,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
       items: <DropdownMenuItem<String?>>[
         const DropdownMenuItem<String?>(value: null, child: Text('All')),
         ...options.map(
-          (String item) => DropdownMenuItem<String?>(
-            value: item,
-            child: Text(item),
-          ),
+          (String item) =>
+              DropdownMenuItem<String?>(value: item, child: Text(item)),
         ),
       ],
       onChanged: onChanged,
@@ -499,8 +596,10 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
             children: <Widget>[
               Text(
                 title,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               if (subtitle != null) ...<Widget>[
                 const SizedBox(height: 4),
@@ -594,7 +693,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         leading: const Icon(Icons.person_off_outlined),
         title: Text('$label manager'),
         subtitle: const Text(
-            'No manager assigned to this slot yet. Bench managers can be promoted here instantly.'),
+          'No manager assigned to this slot yet. Bench managers can be promoted here instantly.',
+        ),
       );
     }
     return ListTile(
@@ -621,21 +721,27 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
               break;
           }
         },
-        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-          if (label != 'Main team')
-            const PopupMenuItem<String>(
-              value: 'main',
-              child: Text('Promote to main'),
-            ),
-          if (label != 'Academy')
-            const PopupMenuItem<String>(
-              value: 'academy',
-              child: Text('Move to academy'),
-            ),
-          const PopupMenuItem<String>(
-              value: 'list', child: Text('List for trade')),
-          const PopupMenuItem<String>(value: 'release', child: Text('Release')),
-        ],
+        itemBuilder:
+            (BuildContext context) => <PopupMenuEntry<String>>[
+              if (label != 'Main team')
+                const PopupMenuItem<String>(
+                  value: 'main',
+                  child: Text('Promote to main'),
+                ),
+              if (label != 'Academy')
+                const PopupMenuItem<String>(
+                  value: 'academy',
+                  child: Text('Move to academy'),
+                ),
+              const PopupMenuItem<String>(
+                value: 'list',
+                child: Text('List for trade'),
+              ),
+              const PopupMenuItem<String>(
+                value: 'release',
+                child: Text('Release'),
+              ),
+            ],
       ),
     );
   }
@@ -664,13 +770,22 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
               break;
           }
         },
-        itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
-          PopupMenuItem<String>(value: 'main', child: Text('Assign to main')),
-          PopupMenuItem<String>(
-              value: 'academy', child: Text('Assign to academy')),
-          PopupMenuItem<String>(value: 'list', child: Text('List for trade')),
-          PopupMenuItem<String>(value: 'release', child: Text('Release')),
-        ],
+        itemBuilder:
+            (BuildContext context) => const <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                value: 'main',
+                child: Text('Assign to main'),
+              ),
+              PopupMenuItem<String>(
+                value: 'academy',
+                child: Text('Assign to academy'),
+              ),
+              PopupMenuItem<String>(
+                value: 'list',
+                child: Text('List for trade'),
+              ),
+              PopupMenuItem<String>(value: 'release', child: Text('Release')),
+            ],
       ),
     );
   }
@@ -724,11 +839,14 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   ),
                   isThreeLine: true,
                   trailing: FilledButton.tonal(
-                    onPressed: supplyAvailable > 0 && !_isRunningAction
-                        ? () => _recruit((item['manager_id'] ?? '').toString())
-                        : null,
-                    child:
-                        Text(supplyAvailable > 0 ? 'Claim free' : 'Sold out'),
+                    onPressed:
+                        supplyAvailable > 0 && !_isRunningAction
+                            ? () =>
+                                _recruit((item['manager_id'] ?? '').toString())
+                            : null,
+                    child: Text(
+                      supplyAvailable > 0 ? 'Claim free' : 'Sold out',
+                    ),
                   ),
                 );
               }),
@@ -776,25 +894,31 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                     children: <Widget>[
                       if (isOwnListing)
                         OutlinedButton(
-                          onPressed: _isRunningAction
-                              ? null
-                              : () => _cancelListing(
-                                  (item['listing_id'] ?? '').toString()),
+                          onPressed:
+                              _isRunningAction
+                                  ? null
+                                  : () => _cancelListing(
+                                    (item['listing_id'] ?? '').toString(),
+                                  ),
                           child: const Text('Cancel'),
                         )
                       else ...<Widget>[
                         FilledButton.tonal(
-                          onPressed: _isRunningAction
-                              ? null
-                              : () => _swapForListing(
-                                  (item['asset_id'] ?? '').toString()),
+                          onPressed:
+                              _isRunningAction
+                                  ? null
+                                  : () => _swapForListing(
+                                    (item['asset_id'] ?? '').toString(),
+                                  ),
                           child: const Text('Swap'),
                         ),
                         FilledButton(
-                          onPressed: _isRunningAction
-                              ? null
-                              : () =>
-                                  _buy((item['listing_id'] ?? '').toString()),
+                          onPressed:
+                              _isRunningAction
+                                  ? null
+                                  : () => _buy(
+                                    (item['listing_id'] ?? '').toString(),
+                                  ),
                           child: const Text('Buy'),
                         ),
                       ],
@@ -812,20 +936,21 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
     final String summary =
         (_recommendation?['summary'] ?? 'No recommendation loaded yet.')
             .toString();
-    final String positions =
-        ((_recommendation?['recommended_positions'] as List<dynamic>? ??
-                <dynamic>[])
-            .join(' • '));
-    final String actions =
-        ((_recommendation?['suggested_actions'] as List<dynamic>? ??
-                <dynamic>[])
-            .join(' • '));
+    final String positions = ((_recommendation?['recommended_positions']
+                as List<dynamic>? ??
+            <dynamic>[])
+        .join(' • '));
+    final String actions = ((_recommendation?['suggested_actions']
+                as List<dynamic>? ??
+            <dynamic>[])
+        .join(' • '));
     final String rationale =
-        ((_recommendation?['rationale'] as List<dynamic>? ?? <dynamic>[])
-            .join(' • '));
-    final String risks =
-        ((_recommendation?['risk_flags'] as List<dynamic>? ?? <dynamic>[])
-            .join(' • '));
+        ((_recommendation?['rationale'] as List<dynamic>? ?? <dynamic>[]).join(
+          ' • ',
+        ));
+    final String risks = ((_recommendation?['risk_flags'] as List<dynamic>? ??
+            <dynamic>[])
+        .join(' • '));
     final int fitScore = (_recommendation?['style_fit_score'] as int?) ?? 0;
     final String selectedTactic =
         (_recommendation?['selected_tactic'] ?? 'manual').toString();
@@ -854,9 +979,11 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _sectionHeader('Manager comparison',
-                subtitle:
-                    'Pit two tactical identities against each other before you recruit or trade.'),
+            _sectionHeader(
+              'Manager comparison',
+              subtitle:
+                  'Pit two tactical identities against each other before you recruit or trade.',
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -866,17 +993,23 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   width: 220,
                   child: DropdownButtonFormField<String>(
                     value: _compareLeftManagerId,
-                    decoration:
-                        const InputDecoration(labelText: 'Left manager'),
-                    items: _catalog
-                        .take(80)
-                        .map((Map<String, dynamic> item) =>
-                            DropdownMenuItem<String>(
-                              value: (item['manager_id'] ?? '').toString(),
-                              child:
-                                  Text((item['display_name'] ?? '').toString()),
-                            ))
-                        .toList(),
+                    decoration: const InputDecoration(
+                      labelText: 'Left manager',
+                    ),
+                    items:
+                        _catalog
+                            .take(80)
+                            .map(
+                              (Map<String, dynamic> item) =>
+                                  DropdownMenuItem<String>(
+                                    value:
+                                        (item['manager_id'] ?? '').toString(),
+                                    child: Text(
+                                      (item['display_name'] ?? '').toString(),
+                                    ),
+                                  ),
+                            )
+                            .toList(),
                     onChanged: (String? value) {
                       setState(() => _compareLeftManagerId = value);
                       _loadComparison();
@@ -887,17 +1020,23 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   width: 220,
                   child: DropdownButtonFormField<String>(
                     value: _compareRightManagerId,
-                    decoration:
-                        const InputDecoration(labelText: 'Right manager'),
-                    items: _catalog
-                        .take(80)
-                        .map((Map<String, dynamic> item) =>
-                            DropdownMenuItem<String>(
-                              value: (item['manager_id'] ?? '').toString(),
-                              child:
-                                  Text((item['display_name'] ?? '').toString()),
-                            ))
-                        .toList(),
+                    decoration: const InputDecoration(
+                      labelText: 'Right manager',
+                    ),
+                    items:
+                        _catalog
+                            .take(80)
+                            .map(
+                              (Map<String, dynamic> item) =>
+                                  DropdownMenuItem<String>(
+                                    value:
+                                        (item['manager_id'] ?? '').toString(),
+                                    child: Text(
+                                      (item['display_name'] ?? '').toString(),
+                                    ),
+                                  ),
+                            )
+                            .toList(),
                     onChanged: (String? value) {
                       setState(() => _compareRightManagerId = value);
                       _loadComparison();
@@ -909,7 +1048,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
             const SizedBox(height: 12),
             if (comparison == null)
               const Text(
-                  'Choose two managers to compare tactical overlap and style fit.')
+                'Choose two managers to compare tactical overlap and style fit.',
+              )
             else
               Text(
                 '${(comparison['left_name'] ?? '').toString()} fit ${(comparison['style_fit_left'] ?? 0).toString()} vs '
@@ -930,9 +1070,11 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: <Widget>[
-            _sectionHeader('Manager trade history',
-                subtitle:
-                    'Recent settlement trails for your manager market journey.'),
+            _sectionHeader(
+              'Manager trade history',
+              subtitle:
+                  'Recent settlement trails for your manager market journey.',
+            ),
             const SizedBox(height: 12),
             if (_tradeHistory.isEmpty)
               _stateCard(
@@ -942,12 +1084,22 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                     'Complete a manager trade or swap to start filling this ledger trail.',
               )
             else
-              ..._tradeHistory.take(12).map((Map<String, dynamic> entry) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text((entry['display_name'] ?? 'Unknown manager').toString()),
-                subtitle: Text('Mode: ${(entry['mode'] ?? '').toString()} • Gross: ${(entry['gross_credits'] ?? '').toString()} GTEX Coin • Fee: ${(entry['fee_credits'] ?? '').toString()} GTEX Coin'),
-                trailing: Text((entry['settlement_status'] ?? '').toString()),
-              )),
+              ..._tradeHistory
+                  .take(12)
+                  .map(
+                    (Map<String, dynamic> entry) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        (entry['display_name'] ?? 'Unknown manager').toString(),
+                      ),
+                      subtitle: Text(
+                        'Mode: ${(entry['mode'] ?? '').toString()} • Gross: ${(entry['gross_credits'] ?? '').toString()} GTEX Coin • Fee: ${(entry['fee_credits'] ?? '').toString()} GTEX Coin',
+                      ),
+                      trailing: Text(
+                        (entry['settlement_status'] ?? '').toString(),
+                      ),
+                    ),
+                  ),
           ],
         ),
       ),
@@ -957,9 +1109,11 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
   Widget _buildRuntimeCard() {
     return Card(
       child: ListTile(
-        leading: Icon((_fastLeagueRuntime?['can_run'] ?? false)
-            ? Icons.emoji_events_outlined
-            : Icons.pause_circle_outline),
+        leading: Icon(
+          (_fastLeagueRuntime?['can_run'] ?? false)
+              ? Icons.emoji_events_outlined
+              : Icons.pause_circle_outline,
+        ),
         title: const Text('Fast League runtime check'),
         subtitle: Text(
           '${(_fastLeagueRuntime?['reason'] ?? 'Runtime check unavailable.').toString()}\n'
@@ -975,7 +1129,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasFilters = _tactic != null ||
+    final bool hasFilters =
+        _tactic != null ||
         _trait != null ||
         _mentality != null ||
         _rarity != null ||
@@ -998,150 +1153,154 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: _stateCard(
-                  eyebrow: 'MANAGER MARKET',
-                  icon: Icons.manage_accounts_outlined,
-                  title: 'Loading dugout exchange',
-                  message:
-                      'Coach profiles, listings, tactical fit, and runtime checks are being arranged into one premium desk.',
-                  actionLabel: 'Refreshing market',
-                  onAction: null,
-                  accent: GteShellTheme.accentWarm,
-                  isLoading: true,
-                ),
-              ),
-            )
-          : _error != null
+      body:
+          _isLoading
               ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: _stateCard(
-                      icon: Icons.warning_amber_rounded,
-                      title: 'Manager market unavailable',
-                      message: _error!,
-                      actionLabel: 'Retry',
-                      onAction: _load,
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: _stateCard(
+                    eyebrow: 'MANAGER MARKET',
+                    icon: Icons.manage_accounts_outlined,
+                    title: 'Loading dugout exchange',
+                    message:
+                        'Coach profiles, listings, tactical fit, and runtime checks are being arranged into one premium desk.',
+                    actionLabel: 'Refreshing market',
+                    onAction: null,
+                    accent: GteShellTheme.accentWarm,
+                    isLoading: true,
                   ),
-                )
+                ),
+              )
+              : _error != null
+              ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: _stateCard(
+                    icon: Icons.warning_amber_rounded,
+                    title: 'Manager market unavailable',
+                    message: _error!,
+                    actionLabel: 'Retry',
+                    onAction: _load,
+                  ),
+                ),
+              )
               : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: <Widget>[
-                      GteSurfacePanel(
-                        accentColor: GteShellTheme.accentWarm,
-                        emphasized: true,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              'MANAGER MARKET',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelLarge
-                                  ?.copyWith(
-                                    color: GteShellTheme.accentWarm,
-                                    letterSpacing: 1.1,
-                                  ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Trade tactical identity, not just names on a card.',
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'This lane stays distinct from player trading by foregrounding mentality, tactical fit, and dugout influence. Filter the board, compare profiles, then move decisively.',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                            const SizedBox(height: 14),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: const <Widget>[
-                                Chip(label: Text('Tactical fit first')),
-                                Chip(label: Text('Compare dugouts')),
-                                Chip(label: Text('Listings and swaps')),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          labelText: 'Search managers',
-                          helperText:
-                              'Filter by manager name, style, or profile keywords.',
-                          suffixIcon: IconButton(
-                            onPressed: _load,
-                            icon: const Icon(Icons.search),
-                          ),
-                        ),
-                        onSubmitted: (_) => _load(),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
+                onRefresh: _load,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: <Widget>[
+                    GteSurfacePanel(
+                      accentColor: GteShellTheme.accentWarm,
+                      emphasized: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          SizedBox(
-                            width: 180,
-                            child: _filterDropdown(
-                              'Tactic',
-                              _tactic,
-                              _tactics,
-                              (String? value) {
-                                setState(() => _tactic = value);
-                                _load();
-                              },
+                          Text(
+                            'MANAGER MARKET',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelLarge?.copyWith(
+                              color: GteShellTheme.accentWarm,
+                              letterSpacing: 1.1,
                             ),
                           ),
-                          SizedBox(
-                            width: 180,
-                            child: _filterDropdown(
-                              'Trait',
-                              _trait,
-                              _traits,
-                              (String? value) {
-                                setState(() => _trait = value);
-                                _load();
-                              },
-                            ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Trade tactical identity, not just names on a card.',
+                            style: Theme.of(context).textTheme.headlineSmall,
                           ),
-                          SizedBox(
-                            width: 180,
-                            child: _filterDropdown(
-                              'Mentality',
-                              _mentality,
-                              _mentalities,
-                              (String? value) {
-                                setState(() => _mentality = value);
-                                _load();
-                              },
-                            ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'This lane stays distinct from player trading by foregrounding mentality, tactical fit, and dugout influence. Filter the board, compare profiles, then move decisively.',
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
-                          SizedBox(
-                            width: 180,
-                            child: _filterDropdown(
-                              'Rarity',
-                              _rarity,
-                              _rarities,
-                              (String? value) {
-                                setState(() => _rarity = value);
-                                _load();
-                              },
-                            ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: const <Widget>[
+                              Chip(label: Text('Tactical fit first')),
+                              Chip(label: Text('Compare dugouts')),
+                              Chip(label: Text('Listings and swaps')),
+                            ],
                           ),
-                          OutlinedButton.icon(
-                            onPressed: hasFilters
-                                ? () {
+                        ],
+                      ),
+                    ),
+                    if (_loadNotice != null) ...<Widget>[
+                      const SizedBox(height: 16),
+                      _stateCard(
+                        icon: Icons.info_outline,
+                        eyebrow: 'REDUCED MODE',
+                        title: 'Manager market is running with partial data',
+                        message: _loadNotice!,
+                        actionLabel: 'Retry',
+                        onAction: _load,
+                        accent: GteShellTheme.accentWarm,
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        labelText: 'Search managers',
+                        helperText:
+                            'Filter by manager name, style, or profile keywords.',
+                        suffixIcon: IconButton(
+                          onPressed: _load,
+                          icon: const Icon(Icons.search),
+                        ),
+                      ),
+                      onSubmitted: (_) => _load(),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: <Widget>[
+                        SizedBox(
+                          width: 180,
+                          child: _filterDropdown('Tactic', _tactic, _tactics, (
+                            String? value,
+                          ) {
+                            setState(() => _tactic = value);
+                            _load();
+                          }),
+                        ),
+                        SizedBox(
+                          width: 180,
+                          child: _filterDropdown('Trait', _trait, _traits, (
+                            String? value,
+                          ) {
+                            setState(() => _trait = value);
+                            _load();
+                          }),
+                        ),
+                        SizedBox(
+                          width: 180,
+                          child: _filterDropdown(
+                            'Mentality',
+                            _mentality,
+                            _mentalities,
+                            (String? value) {
+                              setState(() => _mentality = value);
+                              _load();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 180,
+                          child: _filterDropdown('Rarity', _rarity, _rarities, (
+                            String? value,
+                          ) {
+                            setState(() => _rarity = value);
+                            _load();
+                          }),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed:
+                              hasFilters
+                                  ? () {
                                     setState(() {
                                       _tactic = null;
                                       _trait = null;
@@ -1151,71 +1310,72 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                                     });
                                     _load();
                                   }
-                                : null,
-                            icon: const Icon(Icons.clear),
-                            label: const Text('Clear filters'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      if (_isRunningAction) ...<Widget>[
-                        const LinearProgressIndicator(),
-                        const SizedBox(height: 16),
-                      ],
-                      _buildRecommendationSection(),
-                      const SizedBox(height: 16),
-                      _buildRuntimeCard(),
-                      const SizedBox(height: 16),
-                      _buildComparisonCard(),
-                      const SizedBox(height: 16),
-                      _buildTeamSection(),
-                      const SizedBox(height: 16),
-                      _buildCatalogSection(),
-                      const SizedBox(height: 16),
-                      _buildListingSection(),
-                      const SizedBox(height: 16),
-                      _buildHistoryCard(),
-                      if (_myListings.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: 16),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: <Widget>[
-                                _sectionHeader(
-                                  'My listings',
-                                  subtitle:
-                                      'These are live listings created from your squad inventory.',
-                                ),
-                                const SizedBox(height: 12),
-                                ..._myListings.map(
-                                  (Map<String, dynamic> item) => ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(
-                                      (item['display_name'] ?? '').toString(),
-                                    ),
-                                    subtitle: Text(
-                                      'Ask ${(item['asking_price_credits'] ?? '').toString()} GTEX Coin',
-                                    ),
-                                    trailing: OutlinedButton(
-                                      onPressed: _isRunningAction
-                                          ? null
-                                          : () => _cancelListing(
-                                                (item['listing_id'] ?? '')
-                                                    .toString(),
-                                              ),
-                                      child: const Text('Cancel'),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                                  : null,
+                          icon: const Icon(Icons.clear),
+                          label: const Text('Clear filters'),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (_isRunningAction) ...<Widget>[
+                      const LinearProgressIndicator(),
+                      const SizedBox(height: 16),
                     ],
-                  ),
+                    _buildRecommendationSection(),
+                    const SizedBox(height: 16),
+                    _buildRuntimeCard(),
+                    const SizedBox(height: 16),
+                    _buildComparisonCard(),
+                    const SizedBox(height: 16),
+                    _buildTeamSection(),
+                    const SizedBox(height: 16),
+                    _buildCatalogSection(),
+                    const SizedBox(height: 16),
+                    _buildListingSection(),
+                    const SizedBox(height: 16),
+                    _buildHistoryCard(),
+                    if (_myListings.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 16),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: <Widget>[
+                              _sectionHeader(
+                                'My listings',
+                                subtitle:
+                                    'These are live listings created from your squad inventory.',
+                              ),
+                              const SizedBox(height: 12),
+                              ..._myListings.map(
+                                (Map<String, dynamic> item) => ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    (item['display_name'] ?? '').toString(),
+                                  ),
+                                  subtitle: Text(
+                                    'Ask ${(item['asking_price_credits'] ?? '').toString()} GTEX Coin',
+                                  ),
+                                  trailing: OutlinedButton(
+                                    onPressed:
+                                        _isRunningAction
+                                            ? null
+                                            : () => _cancelListing(
+                                              (item['listing_id'] ?? '')
+                                                  .toString(),
+                                            ),
+                                    child: const Text('Cancel'),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
+              ),
     );
   }
 }

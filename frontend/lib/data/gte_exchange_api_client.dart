@@ -92,7 +92,6 @@ class GteExchangeApiClient {
     );
   }
 
-
   Future<void> logout() => repository.logout();
 
   Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
@@ -399,44 +398,51 @@ class GteExchangeApiClient {
   Future<GteMarketPlayerListView> fetchPlayers({
     GteMarketPlayersQuery query = const GteMarketPlayersQuery(),
   }) async {
-    if (config.mode == GteBackendMode.fixture) {
-      return _fallbackPlayers(query);
-    }
-    return GteMarketPlayerListView.fromJson(
-      await _sendPublicGet(
-        '/marketplace/players',
-        query: query.toQueryParameters(),
-      ),
+    return _loadPublicWithFallback<GteMarketPlayerListView>(
+      liveCall:
+          () async => GteMarketPlayerListView.fromJson(
+            await _sendPublicGet(
+              '/marketplace/players',
+              query: query.toQueryParameters(),
+            ),
+          ),
+      fallbackCall: () => _fallbackPlayers(query),
     );
   }
 
   Future<GteMarketPlayerDetailView> fetchPlayerDetail(String playerId) async {
-    if (config.mode == GteBackendMode.fixture) {
-      return _fallbackPlayerDetail(playerId);
-    }
-    return GteMarketPlayerDetailView.fromJson(
-      await _sendPublicGet('/api/market/players/$playerId'),
+    return _loadPublicWithFallback<GteMarketPlayerDetailView>(
+      liveCall:
+          () async => GteMarketPlayerDetailView.fromJson(
+            await _sendPublicGet('/api/market/players/$playerId'),
+          ),
+      fallbackCall: () => _fallbackPlayerDetail(playerId),
     );
   }
 
   Future<GtePlayerOverview> fetchPlayerOverview(String playerId) async {
-    if (config.mode == GteBackendMode.fixture) {
-      return _fallbackPlayerOverview(playerId);
-    }
-    return GtePlayerOverview.fromJson(
-      await _sendPublicGet('/api/players/$playerId/overview'),
+    return _loadPublicWithFallback<GtePlayerOverview>(
+      liveCall:
+          () async => GtePlayerOverview.fromJson(
+            await _sendPublicGet('/api/players/$playerId/overview'),
+          ),
+      fallbackCall: () => _fallbackPlayerOverview(playerId),
     );
   }
 
   Future<List<GteCareerEntry>> fetchPlayerCareer(String playerId) async {
-    if (config.mode == GteBackendMode.fixture) {
-      return _fallbackPlayerCareer(playerId);
-    }
-    final Object? raw = await _sendPublicGet('/api/players/$playerId/career');
-    return GteJson.list(
-      raw,
-      label: 'player career',
-    ).map(GteCareerEntry.fromJson).toList(growable: false);
+    return _loadPublicWithFallback<List<GteCareerEntry>>(
+      liveCall: () async {
+        final Object? raw = await _sendPublicGet(
+          '/api/players/$playerId/career',
+        );
+        return GteJson.list(
+          raw,
+          label: 'player career',
+        ).map(GteCareerEntry.fromJson).toList(growable: false);
+      },
+      fallbackCall: () => _fallbackPlayerCareer(playerId),
+    );
   }
 
   Future<GtePlayerMarketSnapshot> fetchPlayerMarket(
@@ -467,14 +473,17 @@ class GteExchangeApiClient {
   Future<GtePlayerLifecycleSnapshot?> fetchPlayerLifecycleSnapshot(
     String playerId,
   ) async {
-    if (config.mode == GteBackendMode.fixture) {
-      final GtePlayerOverview overview = await _fallbackPlayerOverview(
-        playerId,
-      );
-      return GtePlayerLifecycleSnapshot.fromOverview(overview);
-    }
-    return GtePlayerLifecycleSnapshot.fromJson(
-      await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
+    return _loadPublicWithFallback<GtePlayerLifecycleSnapshot?>(
+      liveCall:
+          () async => GtePlayerLifecycleSnapshot.fromJson(
+            await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
+          ),
+      fallbackCall: () async {
+        final GtePlayerOverview overview = await _fallbackPlayerOverview(
+          playerId,
+        );
+        return GtePlayerLifecycleSnapshot.fromOverview(overview);
+      },
     );
   }
 
@@ -552,7 +561,6 @@ class GteExchangeApiClient {
       label: 'match replay',
     );
   }
-
 
   Future<GteMarketCandles> fetchCandles(
     String playerId, {
@@ -673,6 +681,23 @@ class GteExchangeApiClient {
     }
     return (error is GteApiException && error.supportsFixtureFallback) ||
         error is GteParsingException;
+  }
+
+  Future<T> _loadPublicWithFallback<T>({
+    required Future<T> Function() liveCall,
+    required Future<T> Function() fallbackCall,
+  }) async {
+    if (config.mode == GteBackendMode.fixture) {
+      return fallbackCall();
+    }
+    try {
+      return await liveCall();
+    } catch (error) {
+      if (_shouldFallback(error)) {
+        return fallbackCall();
+      }
+      rethrow;
+    }
   }
 
   Map<String, Object?> _fixtureSpectateSession(String matchKey) {
