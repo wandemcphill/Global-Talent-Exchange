@@ -61,20 +61,6 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
     await _refresh();
   }
 
-  double _fanCoinBalance(List<GteWalletLedgerEntry> entries) {
-    double total = 0;
-    for (final GteWalletLedgerEntry entry in entries) {
-      final String reason = entry.reason.toLowerCase();
-      if (reason.contains('reward') ||
-          reason.contains('promo') ||
-          reason.contains('gift') ||
-          reason.contains('fan')) {
-        total += entry.amount;
-      }
-    }
-    return total;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -169,132 +155,6 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                if (overview.policyBlocked ||
-                    overview.requiredPolicyAcceptancesMissing > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 18),
-                    child: GteSurfacePanel(
-                      accentColor: Colors.orange,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text('Compliance action needed',
-                              style: Theme.of(context).textTheme.titleMedium),
-                          const SizedBox(height: 8),
-                          Text(
-                            overview.policyBlockReason ??
-                                'Complete required policy acceptances to unlock all wallet actions.',
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton.icon(
-                            onPressed: () async {
-                              await Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => GtePolicyComplianceCenterScreen(
-                                    controller: widget.controller,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  _BalanceTile(
-                                    label: 'Coin / Market Balance',
-                                    value: gteFormatCredits(
-                                        overview.availableBalance),
-                                    caption:
-                                        'Balance ready for market and competitions.',
-                                    accent: GteShellTheme.accentCapital,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: <Widget>[
-                                  _MetricTile(
-                                    label: 'Pending deposits',
-                                    value: gteFormatCredits(
-                                        overview.pendingDeposits),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  _MetricTile(
-                                    label: 'Pending withdrawals',
-                                    value: gteFormatCredits(
-                                        overview.pendingWithdrawals),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (overview.policyBlocked ||
-                            overview.requiredPolicyAcceptancesMissing > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 18),
-                            child: GteSurfacePanel(
-                              accentColor: Colors.orange,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text('Compliance action needed',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    overview.policyBlockReason ??
-                                        'Complete required policy acceptances to unlock all wallet actions.',
-                                  ),
-                                  const SizedBox(height: 12),
-                                  FilledButton.icon(
-                                    onPressed: () async {
-                                      await Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) =>
-                                              GtePolicyComplianceCenterScreen(
-                                            controller: widget.controller,
-                                          ),
-                                        ),
-                                      );
-                                      await _refresh();
-                                    },
-                                    icon: const Icon(Icons.gavel_outlined),
-                                    label: Text(complianceActionLabel),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        Text(
-                          'Money moves',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Every wallet event stays readable by source so rewards, top-ups, and transfers do not blur together.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 12),
-                        if (ledgerSnapshot.connectionState ==
-                                ConnectionState.waiting &&
-                            !ledgerSnapshot.hasData)
-                          const GteSurfacePanel(
-                            child: Text('Loading wallet history...'),
-                          )
-                        else if (!ledgerSnapshot.hasData)
-                          const GteStatePanel(
-                            title: 'Wallet history unavailable',
-                            message:
-                                'Unable to load source-tagged history right now.',
-                            icon: Icons.receipt_long_outlined,
-                          )
-                        else
-                          ...ledgerSnapshot.data!.items
-                              .map((GteWalletLedgerEntry entry) {
-                            return _LedgerEntryTile(entry: entry);
-                          }),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 18),
                 GteSurfacePanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,36 +209,6 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   }
 }
 
-class _WalletTag extends StatelessWidget {
-  const _WalletTag({
-    required this.label,
-    required this.color,
-  });
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: color.withValues(alpha: 0.14),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Text(
-        label.toUpperCase(),
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1,
-            ),
-      ),
-    );
-  }
-}
-
 class _MetricTile extends StatelessWidget {
   const _MetricTile({required this.label, required this.value});
 
@@ -394,7 +224,8 @@ class _MetricTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           color: GteShellTheme.panelStrong.withValues(alpha: 0.6),
           border: Border.all(
-              color: GteShellTheme.accentCapital.withValues(alpha: 0.12)),
+            color: GteShellTheme.accentCapital.withValues(alpha: 0.12),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,9 +233,9 @@ class _MetricTile extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    letterSpacing: 0.9,
-                    fontWeight: FontWeight.w700,
-                  ),
+                letterSpacing: 0.9,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 8),
             Text(value, style: Theme.of(context).textTheme.titleMedium),
@@ -432,7 +263,7 @@ class _WalletTransactionTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GteSurfacePanel(
-        accentColor: accent,
+        accentColor: tone,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
