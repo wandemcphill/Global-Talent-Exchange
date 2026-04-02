@@ -8,17 +8,7 @@ from pathlib import Path
 import re
 import tomllib
 
-from pydantic import AliasChoices, Field, field_validator
-
-try:
-    from pydantic_settings import BaseSettings, SettingsConfigDict
-except ImportError:  # pragma: no cover - compatibility fallback when dependency bootstrap lags
-    from pydantic import BaseModel, ConfigDict
-
-    class BaseSettings(BaseModel):
-        pass
-
-    SettingsConfigDict = ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
@@ -37,7 +27,6 @@ PLAYER_CARD_MARKET_INTEGRITY_FILE = "player_card_market_integrity.toml"
 MEDIA_STORAGE_FILE = "media_storage.toml"
 SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
 REGEN_GENERATION_FILE = "regen_generation.toml"
-ADMIN_BUYBACK_FILE = "admin_buyback.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 DEFAULT_CORS_ALLOWED_ORIGINS = ("https://gtex-web.onrender.com",)
 DEFAULT_CORS_ALLOW_ORIGIN_REGEX = r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
@@ -52,8 +41,8 @@ UNSAFE_SECRET_PLACEHOLDERS = frozenset(
 )
 
 
-class SettingsSource(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore", populate_by_name=True)
+class SettingsSource(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     app_name: str = Field(default="Global Talent Exchange API", validation_alias="GTE_APP_NAME")
     app_version: str = Field(default="0.1.0", validation_alias="GTE_APP_VERSION")
@@ -781,7 +770,6 @@ class Settings:
     regen_generation: RegenGenerationConfig
     suspicion_thresholds: SuspicionThresholdsConfig
     player_card_market_integrity: PlayerCardMarketIntegrityConfig
-    admin_buyback: AdminBuybackConfig
     value_engine_weighting: ValueEngineWeightingConfig
     live_commentary_llm_enabled: bool = False
     live_commentary_llm_endpoint_url: str | None = None
@@ -972,7 +960,9 @@ def load_media_storage_config(config_root: Path, environ: Mapping[str, str]) -> 
         storage_root = defaults.storage_root
 
     cdn_base_url = environ.get("GTE_MEDIA_CDN_BASE_URL") or document.get("cdn_base_url") or defaults.cdn_base_url
-    download_base_url = environ.get("GTE_MEDIA_DOWNLOAD_BASE_URL") or document.get("download_base_url") or defaults.download_base_url
+    download_base_url = (
+        environ.get("GTE_MEDIA_DOWNLOAD_BASE_URL") or document.get("download_base_url") or defaults.download_base_url
+    )
 
     watermark_enabled_value = document.get("watermark_enabled")
     if watermark_enabled_value is None:
@@ -989,7 +979,9 @@ def load_media_storage_config(config_root: Path, environ: Mapping[str, str]) -> 
         highlight_archive_ttl_days=int(document.get("highlight_archive_ttl_days", defaults.highlight_archive_ttl_days)),
         download_expiry_minutes=int(document.get("download_expiry_minutes", defaults.download_expiry_minutes)),
         download_rate_limit_count=int(document.get("download_rate_limit_count", defaults.download_rate_limit_count)),
-        download_rate_limit_window_minutes=int(document.get("download_rate_limit_window_minutes", defaults.download_rate_limit_window_minutes)),
+        download_rate_limit_window_minutes=int(
+            document.get("download_rate_limit_window_minutes", defaults.download_rate_limit_window_minutes)
+        ),
         watermark_enabled=bool(watermark_enabled_value),
     )
 
@@ -1047,7 +1039,9 @@ def load_sponsorship_inventory_config(config_root: Path) -> SponsorshipInventory
                 is_internal=bool(table.get("internal", False)),
                 surfaces=_coerce_string_tuple(table.get("surfaces", list(surfaces)), name="campaigns[].surfaces"),
                 region_codes=_coerce_string_tuple(table.get("region_codes", []), name="campaigns[].region_codes"),
-                competition_ids=_coerce_string_tuple(table.get("competition_ids", []), name="campaigns[].competition_ids"),
+                competition_ids=_coerce_string_tuple(
+                    table.get("competition_ids", []), name="campaigns[].competition_ids"
+                ),
                 stage_names=_coerce_string_tuple(table.get("stage_names", []), name="campaigns[].stage_names"),
                 creative_url=str(table.get("creative_url") or "") or None,
             )
@@ -1073,49 +1067,44 @@ def load_regen_generation_config(config_root: Path) -> RegenGenerationConfig:
         return defaults
 
     country_documents = _require_array(document.get("country_tuning", []), name="country_tuning")
-    country_tuning = tuple(
-        RegenCountryTuningConfig(
-            country_code=str(_require_table(item, name="country_tuning[]").get("country_code", "")).strip().upper(),
-            academy_quality_bias=float(_require_table(item, name="country_tuning[]").get("academy_quality_bias", 1.0)),
-            elite_probability_boost=float(
-                _require_table(item, name="country_tuning[]").get("elite_probability_boost", 0.0)
-            ),
-            urban_bias=float(_require_table(item, name="country_tuning[]").get("urban_bias", 0.0)),
-            default_regions=_coerce_string_tuple(
-                _require_table(item, name="country_tuning[]").get("default_regions", []),
-                name="country_tuning[].default_regions",
-            ),
-            default_cities=_coerce_string_tuple(
-                _require_table(item, name="country_tuning[]").get("default_cities", []),
-                name="country_tuning[].default_cities",
-            ),
+    country_tuning = (
+        tuple(
+            RegenCountryTuningConfig(
+                country_code=str(_require_table(item, name="country_tuning[]").get("country_code", "")).strip().upper(),
+                academy_quality_bias=float(
+                    _require_table(item, name="country_tuning[]").get("academy_quality_bias", 1.0)
+                ),
+                elite_probability_boost=float(
+                    _require_table(item, name="country_tuning[]").get("elite_probability_boost", 0.0)
+                ),
+                urban_bias=float(_require_table(item, name="country_tuning[]").get("urban_bias", 0.0)),
+                default_regions=_coerce_string_tuple(
+                    _require_table(item, name="country_tuning[]").get("default_regions", []),
+                    name="country_tuning[].default_regions",
+                ),
+                default_cities=_coerce_string_tuple(
+                    _require_table(item, name="country_tuning[]").get("default_cities", []),
+                    name="country_tuning[].default_cities",
+                ),
+            )
+            for item in country_documents
         )
-        for item in country_documents
-    ) or defaults.country_tuning
+        or defaults.country_tuning
+    )
 
     config = RegenGenerationConfig(
-        academy_intakes_per_season=int(
-            document.get("academy_intakes_per_season", defaults.academy_intakes_per_season)
-        ),
-        academy_intake_min_players=int(
-            document.get("academy_intake_min_players", defaults.academy_intake_min_players)
-        ),
-        academy_intake_max_players=int(
-            document.get("academy_intake_max_players", defaults.academy_intake_max_players)
-        ),
+        academy_intakes_per_season=int(document.get("academy_intakes_per_season", defaults.academy_intakes_per_season)),
+        academy_intake_min_players=int(document.get("academy_intake_min_players", defaults.academy_intake_min_players)),
+        academy_intake_max_players=int(document.get("academy_intake_max_players", defaults.academy_intake_max_players)),
         starter_regen_count=int(document.get("starter_regen_count", defaults.starter_regen_count)),
         starter_age_min=int(document.get("starter_age_min", defaults.starter_age_min)),
         starter_age_max=int(document.get("starter_age_max", defaults.starter_age_max)),
         starter_gsi_min=int(document.get("starter_gsi_min", defaults.starter_gsi_min)),
         starter_gsi_max=int(document.get("starter_gsi_max", defaults.starter_gsi_max)),
-        seasonal_supply_cap_ratio=float(
-            document.get("seasonal_supply_cap_ratio", defaults.seasonal_supply_cap_ratio)
-        ),
+        seasonal_supply_cap_ratio=float(document.get("seasonal_supply_cap_ratio", defaults.seasonal_supply_cap_ratio)),
         base_elite_probability=float(document.get("base_elite_probability", defaults.base_elite_probability)),
         max_elite_probability=float(document.get("max_elite_probability", defaults.max_elite_probability)),
-        default_active_player_base=int(
-            document.get("default_active_player_base", defaults.default_active_player_base)
-        ),
+        default_active_player_base=int(document.get("default_active_player_base", defaults.default_active_player_base)),
         market_fee_bps_default=int(document.get("market_fee_bps_default", defaults.market_fee_bps_default)),
         market_fee_bps_min=int(document.get("market_fee_bps_min", defaults.market_fee_bps_min)),
         market_fee_bps_max=int(document.get("market_fee_bps_max", defaults.market_fee_bps_max)),
@@ -1145,15 +1134,11 @@ def load_regen_generation_config(config_root: Path) -> RegenGenerationConfig:
         player_lifecycle_decline_max_age=int(
             document.get("player_lifecycle_decline_max_age", defaults.player_lifecycle_decline_max_age)
         ),
-        lineage_base_probability=float(
-            document.get("lineage_base_probability", defaults.lineage_base_probability)
-        ),
+        lineage_base_probability=float(document.get("lineage_base_probability", defaults.lineage_base_probability)),
         lineage_legend_probability=float(
             document.get("lineage_legend_probability", defaults.lineage_legend_probability)
         ),
-        lineage_owner_probability=float(
-            document.get("lineage_owner_probability", defaults.lineage_owner_probability)
-        ),
+        lineage_owner_probability=float(document.get("lineage_owner_probability", defaults.lineage_owner_probability)),
         lineage_retired_regen_probability=float(
             document.get("lineage_retired_regen_probability", defaults.lineage_retired_regen_probability)
         ),
@@ -1230,9 +1215,7 @@ def load_regen_generation_config(config_root: Path) -> RegenGenerationConfig:
     if config.default_active_player_base <= 0:
         raise ValueError("Regen config default_active_player_base must be greater than zero.")
     if not 0 <= config.market_fee_bps_min <= config.market_fee_bps_default <= config.market_fee_bps_max <= 10_000:
-        raise ValueError(
-            "Regen config market fee bps must satisfy 0 <= min <= default <= max <= 10000."
-        )
+        raise ValueError("Regen config market fee bps must satisfy 0 <= min <= default <= max <= 10000.")
     if not 0 < config.ecosystem_target_regen_share < 1:
         raise ValueError("Regen config ecosystem_target_regen_share must be between 0 and 1.")
     if not 0 < config.elite_regen_share_cap < 1:
@@ -1372,24 +1355,6 @@ def load_liquidity_bands_config(config_root: Path) -> LiquidityBandsConfig:
     return LiquidityBandsConfig(bands=bands)
 
 
-def _default_admin_buyback_config() -> AdminBuybackConfig:
-    return AdminBuybackConfig(
-        p2p_priority_window_hours=48,
-        minimum_hold_days=7,
-        admin_reserve_cooldown_days=7,
-        wash_trade_lookback_hours=72,
-        nigeria_aliases=("Nigeria", "NG", "NGA"),
-        african_allowlist=("Ghana", "Kenya", "South Africa"),
-        band_payouts={
-            "a": 0.45,
-            "b": 0.58,
-            "c": 0.66,
-            "d": 0.72,
-            "e": 0.75,
-        },
-    )
-
-
 def load_admin_buyback_config(config_root: Path) -> AdminBuybackConfig:
     document = _load_optional_toml_document(config_root / ADMIN_BUYBACK_FILE)
     defaults = _default_admin_buyback_config()
@@ -1445,7 +1410,9 @@ def load_image_policy_config(config_root: Path) -> ImagePolicyConfig:
     )
     if not variants:
         raise ValueError("Config section 'variants' must define at least one image variant.")
-    allowed_formats = tuple(str(item).lower() for item in _require_array(source.get("allowed_formats", []), name="source.allowed_formats"))
+    allowed_formats = tuple(
+        str(item).lower() for item in _require_array(source.get("allowed_formats", []), name="source.allowed_formats")
+    )
     if not allowed_formats:
         raise ValueError("Image policy must define at least one allowed source format.")
     default_variant = str(processing.get("default_variant"))
@@ -1527,7 +1494,9 @@ def load_suspicion_thresholds_config(config_root: Path) -> SuspicionThresholdsCo
     if thresholds.thin_market_max_pending_offers < 0:
         raise ValueError("Suspicion thresholds thin_market_max_pending_offers must be greater than or equal to zero.")
     if thresholds.thin_market_max_active_trade_intents < 0:
-        raise ValueError("Suspicion thresholds thin_market_max_active_trade_intents must be greater than or equal to zero.")
+        raise ValueError(
+            "Suspicion thresholds thin_market_max_active_trade_intents must be greater than or equal to zero."
+        )
     if thresholds.holder_concentration_min_assets <= 0:
         raise ValueError("Suspicion thresholds holder_concentration_min_assets must be greater than zero.")
     if not 0 < thresholds.holder_concentration_share <= 1:
@@ -1550,31 +1519,21 @@ def load_player_card_market_integrity_config(config_root: Path) -> PlayerCardMar
             document.get("sale_reference_lookback_days", defaults.sale_reference_lookback_days)
         ),
         minimum_reference_sales=int(document.get("minimum_reference_sales", defaults.minimum_reference_sales)),
-        listing_price_floor_ratio=float(
-            document.get("listing_price_floor_ratio", defaults.listing_price_floor_ratio)
-        ),
+        listing_price_floor_ratio=float(document.get("listing_price_floor_ratio", defaults.listing_price_floor_ratio)),
         listing_price_ceiling_ratio=float(
             document.get("listing_price_ceiling_ratio", defaults.listing_price_ceiling_ratio)
         ),
         relist_cooldown_minutes=int(document.get("relist_cooldown_minutes", defaults.relist_cooldown_minutes)),
-        pair_trade_lookback_hours=int(
-            document.get("pair_trade_lookback_hours", defaults.pair_trade_lookback_hours)
-        ),
-        pair_trade_alert_threshold=int(
-            document.get("pair_trade_alert_threshold", defaults.pair_trade_alert_threshold)
-        ),
-        asset_churn_window_hours=int(
-            document.get("asset_churn_window_hours", defaults.asset_churn_window_hours)
-        ),
+        pair_trade_lookback_hours=int(document.get("pair_trade_lookback_hours", defaults.pair_trade_lookback_hours)),
+        pair_trade_alert_threshold=int(document.get("pair_trade_alert_threshold", defaults.pair_trade_alert_threshold)),
+        asset_churn_window_hours=int(document.get("asset_churn_window_hours", defaults.asset_churn_window_hours)),
         asset_churn_alert_threshold=int(
             document.get("asset_churn_alert_threshold", defaults.asset_churn_alert_threshold)
         ),
         circular_trade_window_hours=int(
             document.get("circular_trade_window_hours", defaults.circular_trade_window_hours)
         ),
-        price_spike_alert_ratio=float(
-            document.get("price_spike_alert_ratio", defaults.price_spike_alert_ratio)
-        ),
+        price_spike_alert_ratio=float(document.get("price_spike_alert_ratio", defaults.price_spike_alert_ratio)),
         volume_cluster_window_minutes=int(
             document.get("volume_cluster_window_minutes", defaults.volume_cluster_window_minutes)
         ),
@@ -1613,6 +1572,8 @@ def load_player_card_market_integrity_config(config_root: Path) -> PlayerCardMar
     if config.volume_cluster_trade_threshold <= 1:
         raise ValueError("Player card market integrity volume_cluster_trade_threshold must be greater than one.")
     return config
+
+
 def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightingConfig:
     document = _load_toml_document(config_root / VALUE_ENGINE_WEIGHTING_FILE)
     ftv_msv_blend_weights = _require_table(
@@ -1627,17 +1588,20 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
     price_band_documents = _require_array(document.get("price_band_limits", []), name="price_band_limits")
     default_ftv_weight = float(component_weights.get("ftv_weight", ftv_msv_blend_weights.get("ftv_weight", 0.70)))
     default_msv_weight = float(component_weights.get("msv_weight", ftv_msv_blend_weights.get("msv_weight", 0.18)))
-    price_band_limits = tuple(
-        PriceBandLimit(
-            code=_catalog_code(
-                str(_require_table(item, name="price_band_limits[]").get("code")),
-                _require_table(item, name="price_band_limits[]").get("code"),
-            ),
-            min_ratio=float(_require_table(item, name="price_band_limits[]").get("min_ratio")),
-            max_ratio=float(_require_table(item, name="price_band_limits[]").get("max_ratio")),
+    price_band_limits = (
+        tuple(
+            PriceBandLimit(
+                code=_catalog_code(
+                    str(_require_table(item, name="price_band_limits[]").get("code")),
+                    _require_table(item, name="price_band_limits[]").get("code"),
+                ),
+                min_ratio=float(_require_table(item, name="price_band_limits[]").get("min_ratio")),
+                max_ratio=float(_require_table(item, name="price_band_limits[]").get("max_ratio")),
+            )
+            for item in price_band_documents
         )
-        for item in price_band_documents
-    ) or _default_price_band_limits()
+        or _default_price_band_limits()
+    )
     weight_profile_documents = _require_array(document.get("weight_profiles", []), name="weight_profiles")
     weight_profiles = tuple(
         ValueWeightProfile(
@@ -1645,7 +1609,9 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
                 str(_require_table(item, name="weight_profiles[]").get("code")),
                 _require_table(item, name="weight_profiles[]").get("code"),
             ),
-            description=str(_require_table(item, name="weight_profiles[]").get("description", "Value weighting profile")),
+            description=str(
+                _require_table(item, name="weight_profiles[]").get("description", "Value weighting profile")
+            ),
             liquidity_tiers=_coerce_string_tuple(
                 _require_table(item, name="weight_profiles[]").get("liquidity_tiers", []),
                 name="weight_profiles[].liquidity_tiers",
@@ -1660,8 +1626,16 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
             ),
             ftv_weight=float(_require_table(item, name="weight_profiles[]").get("ftv_weight", default_ftv_weight)),
             msv_weight=float(_require_table(item, name="weight_profiles[]").get("msv_weight", default_msv_weight)),
-            sgv_weight=float(_require_table(item, name="weight_profiles[]").get("sgv_weight", component_weights.get("sgv_weight", 0.08 if has_component_weights else 0.0))),
-            egv_weight=float(_require_table(item, name="weight_profiles[]").get("egv_weight", component_weights.get("egv_weight", 0.04 if has_component_weights else 0.0))),
+            sgv_weight=float(
+                _require_table(item, name="weight_profiles[]").get(
+                    "sgv_weight", component_weights.get("sgv_weight", 0.08 if has_component_weights else 0.0)
+                )
+            ),
+            egv_weight=float(
+                _require_table(item, name="weight_profiles[]").get(
+                    "egv_weight", component_weights.get("egv_weight", 0.04 if has_component_weights else 0.0)
+                )
+            ),
         )
         for item in weight_profile_documents
     ) or (
@@ -1781,11 +1755,15 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
     if weighting.momentum_short_window_days <= 0 or weighting.momentum_medium_window_days <= 0:
         raise ValueError("Value engine momentum windows must be greater than zero.")
     if weighting.momentum_medium_window_days < weighting.momentum_short_window_days:
-        raise ValueError("Value engine momentum_medium_window_days must be greater than or equal to momentum_short_window_days.")
+        raise ValueError(
+            "Value engine momentum_medium_window_days must be greater than or equal to momentum_short_window_days."
+        )
     if weighting.reference_stale_days <= 0 or weighting.reference_very_stale_days <= 0:
         raise ValueError("Value engine reference staleness windows must be greater than zero.")
     if weighting.reference_very_stale_days < weighting.reference_stale_days:
-        raise ValueError("Value engine reference_very_stale_days must be greater than or equal to reference_stale_days.")
+        raise ValueError(
+            "Value engine reference_very_stale_days must be greater than or equal to reference_stale_days."
+        )
     if not 0 <= weighting.reference_stale_blend <= 1:
         raise ValueError("Value engine reference_stale_blend must be between 0 and 1.")
     if weighting.participant_diversity_scale <= 0:
@@ -1804,14 +1782,10 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         )
     for key, value in weighting.real_player_bridge_reference_weights.items():
         if not 0 <= value <= 1:
-            raise ValueError(
-                f"Value engine real_player_bridge_reference_weights[{key}] must be between 0 and 1."
-            )
+            raise ValueError(f"Value engine real_player_bridge_reference_weights[{key}] must be between 0 and 1.")
     for key, value in weighting.real_player_bridge_tier_multipliers.items():
         if value <= 0:
-            raise ValueError(
-                f"Value engine real_player_bridge_tier_multipliers[{key}] must be greater than zero."
-            )
+            raise ValueError(f"Value engine real_player_bridge_tier_multipliers[{key}] must be greater than zero.")
     if not 0 <= weighting.ftv_weight <= 1 or not 0 <= weighting.msv_weight <= 1:
         raise ValueError("Value engine FTV/MSV blend weights must each be between 0 and 1.")
     if weighting.ftv_weight + weighting.msv_weight <= 0:
@@ -1827,9 +1801,7 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
     )
     for key, value in weighting.gsi_signal_weights.items():
         if value < 0:
-            raise ValueError(
-                f"Value engine GSI weight for '{key}' must be greater than or equal to zero, got {value}."
-            )
+            raise ValueError(f"Value engine GSI weight for '{key}' must be greater than or equal to zero, got {value}.")
     for key, value in weighting.egame_signal_weights.items():
         if value < 0:
             raise ValueError(
@@ -1837,9 +1809,7 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
             )
     for key, value in weighting.liquidity_band_market_weights.items():
         if not 0 <= value <= 1:
-            raise ValueError(
-                f"Value engine liquidity weight for '{key}' must be between 0 and 1, got {value}."
-            )
+            raise ValueError(f"Value engine liquidity weight for '{key}' must be between 0 and 1, got {value}.")
     if len({profile.code for profile in weighting.weight_profiles}) != len(weighting.weight_profiles):
         raise ValueError("Value engine weight profile codes must be unique.")
     for profile in weighting.weight_profiles:
@@ -1920,16 +1890,11 @@ def _validate_bootstrap_admin_config(source: SettingsSource) -> None:
         "GTE_BOOTSTRAP_ADMIN_PASSWORD": source.bootstrap_admin_password,
         "GTE_BOOTSTRAP_ADMIN_USERNAME": source.bootstrap_admin_username,
     }
-    missing = [
-        name
-        for name, value in required_settings.items()
-        if _normalized_optional_setting(value) is None
-    ]
+    missing = [name for name, value in required_settings.items() if _normalized_optional_setting(value) is None]
     if missing:
         joined = ", ".join(missing)
         raise ValueError(
-            "Bootstrap admin provisioning is enabled but the following environment variables are missing: "
-            f"{joined}."
+            "Bootstrap admin provisioning is enabled but the following environment variables are missing: " f"{joined}."
         )
 
 
@@ -1966,9 +1931,7 @@ def load_settings(
     environ: Mapping[str, str] | None = None,
     config_root: str | Path | None = None,
 ) -> Settings:
-    resolved_environ = dict(os.environ) if environ is None else {
-        str(key): str(value) for key, value in environ.items()
-    }
+    resolved_environ = dict(os.environ) if environ is None else {str(key): str(value) for key, value in environ.items()}
     if environ is not None:
         for secret_name in ("GTE_AUTH_SECRET", "GTE_MEDIA_SIGNING_SECRET"):
             if _normalized_optional_setting(resolved_environ.get(secret_name)) is None:

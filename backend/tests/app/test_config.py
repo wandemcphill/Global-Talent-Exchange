@@ -357,6 +357,23 @@ def test_load_settings_rejects_incomplete_bootstrap_admin_config() -> None:
         )
 
 
+def test_load_settings_rejects_incomplete_bootstrap_admin_config_from_explicit_environ(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GTE_BOOTSTRAP_ADMIN_PASSWORD", "ambient-process-password")
+
+    with pytest.raises(ValueError, match="GTE_BOOTSTRAP_ADMIN_PASSWORD"):
+        load_settings(
+            environ={
+                "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+                "GTE_BOOTSTRAP_ADMIN_ENABLED": "true",
+                "GTE_BOOTSTRAP_ADMIN_EMAIL": "admin@example.com",
+                "GTE_BOOTSTRAP_ADMIN_USERNAME": "admin_user",
+            },
+            config_root=(Path(__file__).resolve().parents[2] / "config"),
+        )
+
+
 def test_load_settings_reads_real_player_import_env_overrides() -> None:
     settings = load_settings(
         environ={
@@ -404,4 +421,7 @@ def test_value_engine_uses_central_value_weighting_config() -> None:
     settings = load_settings()
 
     assert engine.config.baseline_eur_per_credit == settings.value_engine_weighting.baseline_eur_per_credit
-    assert engine.config.competition_multipliers["world cup"] == settings.value_engine_weighting.competition_multipliers["world cup"]
+    assert (
+        engine.config.competition_multipliers["world cup"]
+        == settings.value_engine_weighting.competition_multipliers["world cup"]
+    )
