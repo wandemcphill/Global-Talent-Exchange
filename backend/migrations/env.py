@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from logging.config import fileConfig
 import os
@@ -38,6 +38,7 @@ def _restore_database_url() -> None:
     else:
         os.environ["DATABASE_URL"] = _previous_database_url
     reset_settings_cache()
+
 
 _apply_database_url_override()
 load_model_modules()
