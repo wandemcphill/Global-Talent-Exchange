@@ -77,15 +77,9 @@ jobs:
       - run: python -m py_compile ops/render/deploy.py
       - run: python ops/render/deploy.py
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
-          RENDER_HEALTH_REQUIRED_CHECKS: api,database,redis
-          RENDER_DEPLOY_TIMEOUT_SECONDS: ${{ vars.RENDER_DEPLOY_TIMEOUT_SECONDS }}
-          RENDER_HEALTH_TIMEOUT_SECONDS: ${{ vars.RENDER_HEALTH_TIMEOUT_SECONDS }}
-          RENDER_POLL_INTERVAL_SECONDS: ${{ vars.RENDER_POLL_INTERVAL_SECONDS }}
-          RENDER_SERVICE_ORDER: API,OUTBOX,SIMULATION,PROJECTIONS,WEB
           RENDER_SERVICE_API: ${{ secrets.RENDER_SERVICE_API }}
-          RENDER_SERVICE_OUTBOX: ${{ secrets.RENDER_SERVICE_OUTBOX }}
-          RENDER_SERVICE_SIMULATION: ${{ secrets.RENDER_SERVICE_SIMULATION }}
-          RENDER_SERVICE_PROJECTIONS: ${{ secrets.RENDER_SERVICE_PROJECTIONS }}
+          RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
           RENDER_SERVICE_WEB: ${{ secrets.RENDER_SERVICE_WEB }}
+          RENDER_DEPLOY_HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+          RENDER_SERVICE_ORDER: ${{ vars.RENDER_SERVICE_ORDER }}
+          RENDER_HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
