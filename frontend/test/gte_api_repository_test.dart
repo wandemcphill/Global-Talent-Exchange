@@ -7,6 +7,8 @@ import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 
 void main() {
+  const String testPassword = 'DemoPass123'; // pragma: allowlist secret
+
   test(
     'live-then-fixture mode falls back to fixtures for market reads',
     () async {
@@ -116,7 +118,7 @@ void main() {
         () => repository.login(
           const GteAuthLoginRequest(
             email: 'qa@example.com',
-            password: 'DemoPass123',
+            password: testPassword,
           ),
         ),
         throwsA(isA<GteApiException>()),
@@ -164,7 +166,7 @@ void main() {
         phoneNumber: '08000000000',
         isOver18: true,
         regionCode: 'ng',
-        password: 'DemoPass123',
+        password: testPassword,
       ),
     );
 
@@ -176,7 +178,7 @@ void main() {
       'phone_number': '08000000000',
       'is_over_18': true,
       'region_code': 'NG',
-      'password': 'DemoPass123',
+      'password': testPassword,
     });
   });
 
@@ -210,7 +212,7 @@ void main() {
           phoneNumber: '08000000000',
           isOver18: true,
           regionCode: 'NG',
-          password: 'DemoPass123',
+          password: testPassword,
         ),
       ),
       throwsA(
@@ -714,7 +716,7 @@ void main() {
       final GteAuthSession session = await repository.login(
         const GteAuthLoginRequest(
           email: 'qa@example.com',
-          password: 'DemoPass123',
+          password: testPassword,
         ),
       );
       final GteCurrentUser user = await repository.fetchCurrentUser();
