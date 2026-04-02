@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from alembic import context
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, pool
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -41,8 +41,7 @@ def _restore_database_url() -> None:
 
 _apply_database_url_override()
 load_model_modules()
-if not config.get_main_option("sqlalchemy.url"):
-    config.set_main_option("sqlalchemy.url", get_database_url())
+config.set_main_option("sqlalchemy.url", get_database_url())
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -65,7 +64,10 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = create_engine(get_database_url())
+    connectable = create_engine(
+        get_database_url(),
+        poolclass=pool.NullPool,
+    )
 
     with connectable.connect() as connection:
         context.configure(
