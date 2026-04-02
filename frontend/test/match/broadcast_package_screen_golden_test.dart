@@ -6,11 +6,19 @@ import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 import '../support/gtex_match_broadcast_fixture.dart';
+import '../support/tolerant_golden_comparator.dart';
 
 void main() {
   testWidgets('broadcast package premium surface matches golden', (
     WidgetTester tester,
   ) async {
+    // Minor blur and antialiasing differences across local Windows runs and
+    // Linux CI should not fail this full-screen golden.
+    installTolerantGoldenComparator(
+      testFilePath: 'test/match/broadcast_package_screen_golden_test.dart',
+      precisionTolerance: 0.005,
+    );
+
     await tester.binding.setSurfaceSize(const Size(1440, 1024));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 

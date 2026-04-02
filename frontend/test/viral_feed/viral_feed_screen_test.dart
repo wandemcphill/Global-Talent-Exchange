@@ -12,6 +12,8 @@ import 'package:gte_frontend/services/reliability/reliable_event_queue.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tolerant_golden_comparator.dart';
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -52,6 +54,13 @@ void main() {
   testWidgets('viral feed premium surface matches golden', (
     WidgetTester tester,
   ) async {
+    // Minor blur and antialiasing differences across local Windows runs and
+    // Linux CI should not fail this full-screen golden.
+    installTolerantGoldenComparator(
+      testFilePath: 'test/viral_feed/viral_feed_screen_test.dart',
+      precisionTolerance: 0.005,
+    );
+
     await tester.binding.setSurfaceSize(const Size(430, 932));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
