@@ -217,6 +217,11 @@ void main() {
   );
 }
 
+Future<void> _pumpForOverlayTransition(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
 CompetitionSummary _buildCompetition({required String id}) {
   return CompetitionSummary(
     id: id,

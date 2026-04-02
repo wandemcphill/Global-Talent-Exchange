@@ -990,7 +990,6 @@ class _ArenaRoutePanel extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _DestinationRouteCard extends StatelessWidget {

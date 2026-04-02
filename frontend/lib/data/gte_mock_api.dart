@@ -199,18 +199,18 @@ class GteMockApi implements GteApiRepository {
     await _delay();
     final List<GtePolicyRequirementSummary> missing =
         await fetchPolicyRequirements();
-    final bool canDeposit = missing.isEmpty;
     return GteComplianceStatus(
       countryCode: _kycProfile.country?.toUpperCase() ?? 'NG',
       countryPolicyBucket: 'regulated_market_disabled',
       depositsEnabled: true,
-      marketTradingEnabled: canDeposit,
-      platformRewardWithdrawalsEnabled: canDeposit,
+      marketTradingEnabled: true,
+      platformRewardWithdrawalsEnabled: true,
+      complianceStatus: 'verified',
       requiredPolicyAcceptancesMissing: missing.length,
       missingPolicyAcceptances: missing,
       canDeposit: true,
-      canWithdrawPlatformRewards: canDeposit,
-      canTradeMarket: canDeposit,
+      canWithdrawPlatformRewards: true,
+      canTradeMarket: true,
     );
   }
 
@@ -928,7 +928,7 @@ class GteMockApi implements GteApiRepository {
     }
     final String reference = 'DEP-${++_depositSequence}';
     final GteDepositRequest deposit = GteDepositRequest(
-      id: 'deposit-$_depositSequence',
+      id: 'deposit-${_depositSequence}',
       reference: reference,
       status: GteDepositStatus.awaitingPayment,
       amountFiat: amountFiat,
@@ -1049,8 +1049,8 @@ class GteMockApi implements GteApiRepository {
     final String reference = 'WDR-${++_withdrawalSequence}';
     final GteTreasuryWithdrawalRequest withdrawal =
         GteTreasuryWithdrawalRequest(
-          id: 'withdrawal-$_withdrawalSequence',
-          payoutRequestId: 'payout-$_withdrawalSequence',
+          id: 'withdrawal-${_withdrawalSequence}',
+          payoutRequestId: 'payout-${_withdrawalSequence}',
           reference: reference,
           status: GteWithdrawalStatus.pendingReview,
           unit: GteLedgerUnit.coin,
@@ -1256,7 +1256,7 @@ class GteMockApi implements GteApiRepository {
     final DateTime now = _nextTimestamp();
     final String disputeId = 'dispute-${++_disputeSequence}';
     final GteDisputeMessage message = GteDisputeMessage(
-      id: 'dispute-msg-$_disputeSequence-1',
+      id: 'dispute-msg-${_disputeSequence}-1',
       senderUserId: _fixtureSession.user.id,
       senderRole: 'user',
       message: request.message,
@@ -1310,7 +1310,7 @@ class GteMockApi implements GteApiRepository {
     }
     final DateTime now = _nextTimestamp();
     final GteDisputeMessage message = GteDisputeMessage(
-      id: 'dispute-msg-$disputeId-${now.millisecondsSinceEpoch}',
+      id: 'dispute-msg-${disputeId}-${now.millisecondsSinceEpoch}',
       senderUserId: _fixtureSession.user.id,
       senderRole: 'user',
       message: request.message,
@@ -2155,7 +2155,7 @@ class GteMockApi implements GteApiRepository {
     }
     final DateTime now = _nextTimestamp();
     final GteDisputeMessage message = GteDisputeMessage(
-      id: 'dispute-admin-msg-$disputeId-${now.millisecondsSinceEpoch}',
+      id: 'dispute-admin-msg-${disputeId}-${now.millisecondsSinceEpoch}',
       senderUserId: 'admin-1',
       senderRole: 'admin',
       message: request.message,

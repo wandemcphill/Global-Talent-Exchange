@@ -130,19 +130,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       return _buildNoClubState();
     }
     final CompetitionController competitionController = _competitionController;
-    final List<Listenable> listenables = <Listenable>[
-      widget.exchangeController,
-      if (_clubController != null) _clubController!,
-      _competitionController,
-      _regenUniverseController,
-    ];
     return AnimatedBuilder(
-      animation: Listenable.merge(listenables),
+      animation: Listenable.merge(<Listenable>[
+        widget.exchangeController,
+        clubController,
+        competitionController,
+        _regenUniverseController,
+      ]),
       builder: (BuildContext context, Widget? child) {
         final ClubDashboardData? clubData = clubController.data;
         final bool waitingForFirstFrame =
             clubData == null &&
-            _competitionController.competitions.isEmpty &&
+            competitionController.competitions.isEmpty &&
             (clubController.isLoading ||
                 competitionController.isLoadingDiscovery);
         if (waitingForFirstFrame) {
@@ -196,6 +195,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   onOpenClub: () => _openTarget(_HomeLinkTarget.club),
                   onOpenCompetitions:
                       () => _openTarget(_HomeLinkTarget.competitions),
+                  onOpenWallet: widget.onOpenWalletTab,
                   onOpenLogin: widget.onOpenLogin,
                   chips: <Widget>[
                     GteMetricChip(
@@ -228,8 +228,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   syncedAt: widget.exchangeController.marketSyncedAt,
                   accent: GteShellTheme.accent,
                   isRefreshing:
-                      (clubController.isLoading) ||
-                      _competitionController.isLoadingDiscovery,
+                      clubController.isLoading ||
+                      competitionController.isLoadingDiscovery,
                   onRefresh: _refresh,
                 ),
                 if (clubController.errorMessage != null ||
@@ -311,7 +311,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const SizedBox(height: 20),
                 _HomeQuickActionsStrip(
                   isAuthenticated: widget.exchangeController.isAuthenticated,
-                  onOpenClub: () => _openTarget(_HomeLinkTarget.club),
+                  onOpenMarket: widget.onOpenMarketTab,
                   onOpenCompetitions:
                       () => _openTarget(_HomeLinkTarget.competitions),
                   onOpenReplays: () => _openTarget(_HomeLinkTarget.replays),
@@ -388,15 +388,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   Future<void> _refresh() async {
-    final List<Future<void>> refreshes = <Future<void>>[
+    final ClubController? clubController = _clubController;
+    await Future.wait<void>(<Future<void>>[
+      if (clubController != null) clubController.refresh(),
       _competitionController.loadDiscovery(),
       _regenUniverseController.refresh(),
-    ];
-    final ClubController? clubController = _clubController;
-    if (clubController != null) {
-      refreshes.add(clubController.refresh());
-    }
-    await Future.wait<void>(refreshes);
+    ]);
     _primeTradingSummary();
   }
 
@@ -406,6 +403,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     _userName = identity.userName;
     _clubId = identity.clubId;
     _clubName = identity.clubName;
+    _competitionController = _buildCompetitionController();
+    _regenUniverseController = RegenUniverseController.standard(
+      baseUrl: widget.apiBaseUrl,
+      backendMode: widget.backendMode,
+    );
     final String? clubId = _clubId;
     final String? clubName = _clubName;
     if (_hasClubScope(clubId, clubName)) {
@@ -414,15 +416,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         clubName: clubName!,
       );
       _clubController!.ensureLoaded();
+      _competitionController.bootstrap();
     } else {
       _clubController = null;
     }
-    _competitionController = _buildCompetitionController();
-    _regenUniverseController = RegenUniverseController.standard(
-      baseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
-    );
-    _competitionController.bootstrap();
     _regenUniverseController.ensureLoaded();
   }
 
@@ -445,11 +442,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (next.userId != _userId || next.userName != _userName) {
       _userId = next.userId;
       _userName = next.userName;
-      _competitionController.updateCurrentUser(
+      final CompetitionController competitionController = _competitionController;
+      competitionController.updateCurrentUser(
         userId: _userId,
         userName: _userName,
       );
-      _competitionController.loadDiscovery();
+      competitionController.loadDiscovery();
     }
     if (next.clubId != _clubId || next.clubName != _clubName) {
       final ClubController? previousClub = _clubController;
@@ -463,6 +461,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           clubName: clubName!,
         );
         _clubController!.ensureLoaded();
+        _competitionController.bootstrap();
       } else {
         _clubController = null;
       }
@@ -585,7 +584,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ? widget.clubId!.trim()
             : dependencyClubId?.isNotEmpty == true
             ? dependencyClubId!
-            : _slugifyClubName(clubName);
+            : _slugifyClub(clubName);
     return _HomeIdentity(
       userId: userId,
       userName: userName,
@@ -680,11 +679,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         .join(' ');
   }
 
-  String _slugifyClubName(String clubName) {
+  String _slugifyClub(String clubName) {
     return clubName
         .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-');
   }
 
   bool _hasClubScope(String? clubId, String? clubName) {
@@ -909,6 +909,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Future<void> _openTarget(_HomeLinkTarget target) async {
     final ClubController? clubController = _clubController;
+    final CompetitionController competitionController = _competitionController;
     final String? clubId = _clubId;
     final String? clubName = _clubName;
     if (clubController == null ||
@@ -948,7 +949,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         MaterialPageRoute<void>(
           builder:
               (BuildContext context) => CompetitionDiscoveryScreen(
-                controller: _competitionController,
+                controller: competitionController,
                 baseUrl: widget.apiBaseUrl,
                 backendMode: widget.backendMode,
                 currentUserId: _userId,
@@ -987,7 +988,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       isAuthenticated: widget.exchangeController.isAuthenticated,
       userLabel: _displayUserLabel(),
       clubData: clubController.data,
-      competitions: _competitionController.competitions,
+      competitions: competitionController.competitions,
     );
     if (target == _HomeLinkTarget.replays) {
       await Navigator.of(context).push<void>(
@@ -1004,7 +1005,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder:
-              (BuildContext context) => _HomeTacticsScreen(
+            (BuildContext context) => _HomeTacticsScreen(
               clubName: clubName,
               nextMatch: snapshot.nextMatch,
               tacticalNotes: snapshot.tacticalNotes,
@@ -1185,18 +1186,16 @@ class _HomeSignalCard extends StatelessWidget {
 class _HomeQuickActionsStrip extends StatelessWidget {
   const _HomeQuickActionsStrip({
     required this.isAuthenticated,
-    required this.onOpenClub,
+    required this.onOpenMarket,
     required this.onOpenCompetitions,
     required this.onOpenReplays,
-    this.onOpenCoaches,
     this.onOpenLogin,
   });
 
   final bool isAuthenticated;
-  final VoidCallback onOpenClub;
+  final VoidCallback? onOpenMarket;
   final VoidCallback onOpenCompetitions;
   final VoidCallback onOpenReplays;
-  final VoidCallback? onOpenCoaches;
   final VoidCallback? onOpenLogin;
 
   @override
@@ -1209,7 +1208,6 @@ class _HomeQuickActionsStrip extends StatelessWidget {
                 : constraints.maxWidth >= 760
                 ? 2
                 : 1;
-        final bool singleColumn = columnCount == 1;
         final List<Widget> cards = <Widget>[
           _HomeActionCard(
             eyebrow: 'PLAY',
@@ -1231,10 +1229,10 @@ class _HomeQuickActionsStrip extends StatelessWidget {
                 : 'Coach discovery is live in GTEX. Sign in to claim free coaches and chase the scarce elite and legendary copies.',
             icon: Icons.manage_accounts_outlined,
             accent: GteShellTheme.accentWarm,
-            badge: 'Coach',
+            badge: 'Free',
             actionLabel:
                 isAuthenticated ? 'Open coach market' : 'Sign in for coaches',
-            onTap: isAuthenticated ? onOpenCoaches : onOpenLogin,
+            onTap: isAuthenticated ? onOpenMarket : onOpenLogin,
           ),
           _HomeActionCard(
             eyebrow: isAuthenticated ? 'REPLAYS' : 'UNLOCK',
@@ -1254,12 +1252,12 @@ class _HomeQuickActionsStrip extends StatelessWidget {
                 isAuthenticated
                     ? GteShellTheme.accentWarm
                     : GteShellTheme.accentCapital,
-            badge: 'Story',
+            badge: isAuthenticated ? 'Tap' : 'Secure',
             actionLabel: isAuthenticated ? 'Open replays' : 'Sign in',
             onTap: isAuthenticated ? onOpenReplays : onOpenLogin,
           ),
         ];
-        if (singleColumn) {
+        if (columnCount == 1) {
           return Column(
             children: cards
                 .map(

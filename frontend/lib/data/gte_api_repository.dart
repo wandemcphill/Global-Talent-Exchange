@@ -412,7 +412,10 @@ class GteReliableApiRepository implements GteApiRepository {
       () => fixtures.login(request),
       allowFixtureFallback: false,
     );
-    await _persistAuthSession(session);
+    await _persistAuthSession(
+      session,
+      bootstrap: config.mode != GteBackendMode.fixture,
+    );
     return session;
   }
 
@@ -425,7 +428,10 @@ class GteReliableApiRepository implements GteApiRepository {
       () => fixtures.register(request),
       allowFixtureFallback: false,
     );
-    await _persistAuthSession(session);
+    await _persistAuthSession(
+      session,
+      bootstrap: config.mode != GteBackendMode.fixture,
+    );
     return session;
   }
 
@@ -494,8 +500,7 @@ class GteReliableApiRepository implements GteApiRepository {
       return payload
           .map(GtePolicyDocumentSummary.fromJson)
           .toList(growable: false);
-    }, () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly),
-        allowFixtureFallback: false);
+    }, () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly));
   }
 
   @override
@@ -515,7 +520,6 @@ class GteReliableApiRepository implements GteApiRepository {
       ),
       () =>
           fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
-      allowFixtureFallback: false,
     );
   }
 
@@ -526,7 +530,6 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request('GET', '/policies/me/compliance', requiresAuth: true),
       ),
       fixtures.fetchComplianceStatus,
-      allowFixtureFallback: false,
     );
   }
 
@@ -540,7 +543,7 @@ class GteReliableApiRepository implements GteApiRepository {
       return payload
           .map(GtePolicyRequirementSummary.fromJson)
           .toList(growable: false);
-    }, fixtures.fetchPolicyRequirements, allowFixtureFallback: false);
+    }, fixtures.fetchPolicyRequirements);
   }
 
   @override
@@ -553,7 +556,7 @@ class GteReliableApiRepository implements GteApiRepository {
       return payload
           .map(GtePolicyAcceptanceSummary.fromJson)
           .toList(growable: false);
-    }, fixtures.fetchMyPolicyAcceptances, allowFixtureFallback: false);
+    }, fixtures.fetchMyPolicyAcceptances);
   }
 
   @override
@@ -589,9 +592,9 @@ class GteReliableApiRepository implements GteApiRepository {
           'acceptedAt',
         ]),
       );
-    }, () => fixtures.acceptPolicyDocument(documentKey, versionLabel),
-        allowFixtureFallback: false);
+    }, () => fixtures.acceptPolicyDocument(documentKey, versionLabel));
   }
+
 
   @override
   Future<List<PlayerSnapshot>> fetchPlayers({int limit = 20}) {
@@ -604,12 +607,19 @@ class GteReliableApiRepository implements GteApiRepository {
         ),
         label: 'market players',
       );
+      final Map<String, PlayerSnapshot> fixtureById = {
+        for (final PlayerSnapshot player in await fixtures.fetchPlayers(
+          limit: limit,
+        ))
+          player.id: player,
+      };
       return GteJson.typedList(payload, <String>['items'], (Object? value) {
         final Map<String, Object?> item = GteJson.map(
           value,
           label: 'market player item',
         );
-        return _mapPlayerSnapshot(item, null);
+        final String playerId = GteJson.string(item, <String>['player_id']);
+        return _mapPlayerSnapshot(item, fixtureById[playerId]);
       });
     }, () => fixtures.fetchPlayers(limit: limit));
   }
@@ -617,6 +627,9 @@ class GteReliableApiRepository implements GteApiRepository {
   @override
   Future<PlayerProfile> fetchPlayerProfile(String playerId) {
     return _withFallback<PlayerProfile>(() async {
+      final PlayerProfile? fixtureProfile = await _safeFixture<PlayerProfile?>(
+        () => fixtures.fetchPlayerProfile(playerId),
+      );
       final Map<String, Object?> detail = GteJson.map(
         await _request('GET', '/api/market/players/$playerId'),
         label: 'market player detail',
@@ -629,7 +642,7 @@ class GteReliableApiRepository implements GteApiRepository {
         ticker,
         candles,
         orderBook,
-        null,
+        fixtureProfile,
       );
     }, () => fixtures.fetchPlayerProfile(playerId));
   }
@@ -637,10 +650,11 @@ class GteReliableApiRepository implements GteApiRepository {
   @override
   Future<MarketPulse> fetchMarketPulse() {
     return _withFallback<MarketPulse>(() async {
+      final MarketPulse fixturePulse = await fixtures.fetchMarketPulse();
       final List<PlayerSnapshot> players = await fetchPlayers(limit: 6);
       final double marketMomentum =
           players.isEmpty
-              ? 0
+              ? fixturePulse.marketMomentum
               : players.fold<double>(
                     0,
                     (double sum, PlayerSnapshot player) =>
@@ -667,10 +681,10 @@ class GteReliableApiRepository implements GteApiRepository {
                     .length *
                 73 +
             131,
-        liveDeals: 0,
-        hottestLeague: 'Global Exchange',
-        tickers: tickers,
-        transferRoom: const <TransferRoomEntry>[],
+        liveDeals: fixturePulse.transferRoom.length,
+        hottestLeague: fixturePulse.hottestLeague,
+        tickers: tickers.isEmpty ? fixturePulse.tickers : tickers,
+        transferRoom: fixturePulse.transferRoom,
       );
     }, fixtures.fetchMarketPulse);
   }
@@ -1711,6 +1725,14 @@ class GteReliableApiRepository implements GteApiRepository {
         return fixtureCall();
       }
       rethrow;
+    }
+  }
+
+  Future<T?> _safeFixture<T>(Future<T> Function() callback) async {
+    try {
+      return await callback();
+    } catch (_) {
+      return null;
     }
   }
 

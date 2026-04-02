@@ -1,7 +1,7 @@
-import 'dart:async';
-import 'package:flutter/foundation.dart';
-
 import 'dart:collection';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 
 import '../core/app_feedback.dart';
 import '../domain/match/match_weights.dart';

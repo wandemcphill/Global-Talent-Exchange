@@ -602,6 +602,7 @@ def request_account_recovery(
     request: Request = None,
 ) -> ActionStatusResponse:
     service = _build_auth_service(request)
+    analytics = AnalyticsService()
     user = None
     recovery_code = None
     try:

@@ -608,17 +608,6 @@ class PlayerCardMarketIntegrityConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class AdminBuybackConfig:
-    p2p_priority_window_hours: int
-    minimum_hold_days: int
-    admin_reserve_cooldown_days: int
-    wash_trade_lookback_hours: int
-    nigeria_aliases: tuple[str, ...]
-    african_allowlist: tuple[str, ...]
-    band_payouts: dict[str, float]
-
-
-@dataclass(frozen=True, slots=True)
 class ValueEngineWeightingConfig:
     config_version: str
     baseline_eur_per_credit: int
@@ -1521,41 +1510,6 @@ def load_suspicion_thresholds_config(config_root: Path) -> SuspicionThresholdsCo
             document.get("circular_trade_min_repetitions", defaults.circular_trade_min_repetitions)
         ),
     )
-
-
-def load_admin_buyback_config(config_root: Path) -> AdminBuybackConfig:
-    document = _load_optional_toml_document(config_root / ADMIN_BUYBACK_FILE)
-    if document is None:
-        return _default_admin_buyback_config()
-
-    defaults = _default_admin_buyback_config()
-    band_payouts = {
-        key.strip().lower(): float(value)
-        for key, value in _coerce_float_map(document.get("band_payouts", {}), name="band_payouts").items()
-    }
-    return AdminBuybackConfig(
-        p2p_priority_window_hours=int(
-            document.get("p2p_priority_window_hours", defaults.p2p_priority_window_hours)
-        ),
-        minimum_hold_days=int(document.get("minimum_hold_days", defaults.minimum_hold_days)),
-        admin_reserve_cooldown_days=int(
-            document.get("admin_reserve_cooldown_days", defaults.admin_reserve_cooldown_days)
-        ),
-        wash_trade_lookback_hours=int(
-            document.get("wash_trade_lookback_hours", defaults.wash_trade_lookback_hours)
-        ),
-        nigeria_aliases=_coerce_string_tuple(
-            document.get("nigeria_aliases", list(defaults.nigeria_aliases)),
-            name="nigeria_aliases",
-        )
-        or defaults.nigeria_aliases,
-        african_allowlist=_coerce_string_tuple(
-            document.get("african_allowlist", list(defaults.african_allowlist)),
-            name="african_allowlist",
-        )
-        or defaults.african_allowlist,
-        band_payouts=band_payouts or defaults.band_payouts,
-    )
     if thresholds.player_min_suspicious_events <= 0:
         raise ValueError("Suspicion thresholds player_min_suspicious_events must be greater than zero.")
     if not 0 < thresholds.player_min_suspicious_share <= 1:
@@ -1659,41 +1613,6 @@ def load_player_card_market_integrity_config(config_root: Path) -> PlayerCardMar
     if config.volume_cluster_trade_threshold <= 1:
         raise ValueError("Player card market integrity volume_cluster_trade_threshold must be greater than one.")
     return config
-
-
-def load_admin_buyback_config(config_root: Path) -> AdminBuybackConfig:
-    document = _load_optional_toml_document(config_root / ADMIN_BUYBACK_FILE)
-    if document is None:
-        return _default_admin_buyback_config()
-
-    defaults = _default_admin_buyback_config()
-    band_payouts = {
-        key.strip().lower(): float(value)
-        for key, value in _coerce_float_map(document.get("band_payouts", {}), name="band_payouts").items()
-    }
-    return AdminBuybackConfig(
-        p2p_priority_window_hours=int(
-            document.get("p2p_priority_window_hours", defaults.p2p_priority_window_hours)
-        ),
-        minimum_hold_days=int(document.get("minimum_hold_days", defaults.minimum_hold_days)),
-        admin_reserve_cooldown_days=int(
-            document.get("admin_reserve_cooldown_days", defaults.admin_reserve_cooldown_days)
-        ),
-        wash_trade_lookback_hours=int(
-            document.get("wash_trade_lookback_hours", defaults.wash_trade_lookback_hours)
-        ),
-        nigeria_aliases=_coerce_string_tuple(
-            document.get("nigeria_aliases", list(defaults.nigeria_aliases)),
-            name="nigeria_aliases",
-        ),
-        african_allowlist=_coerce_string_tuple(
-            document.get("african_allowlist", list(defaults.african_allowlist)),
-            name="african_allowlist",
-        ),
-        band_payouts=band_payouts or dict(defaults.band_payouts),
-    )
-
-
 def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightingConfig:
     document = _load_toml_document(config_root / VALUE_ENGINE_WEIGHTING_FILE)
     ftv_msv_blend_weights = _require_table(
