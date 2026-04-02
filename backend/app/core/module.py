@@ -8,6 +8,7 @@ from typing import Any, Callable
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 
+from app.core.api_contract import register_versioned_route_aliases
 from app.core.container import ApplicationContext
 
 ModuleHook = Callable[[FastAPI, ApplicationContext], None]
@@ -68,6 +69,8 @@ def register_domain_modules(app: FastAPI, modules: Iterable[DomainModule]) -> No
 
         router = module.load_router()
         if router is None:
+            loaded_module_names.add(module.name)
+            app.state.loaded_domain_module_names = loaded_module_names
             continue
 
         module_routes = _route_fingerprints(router.routes)
@@ -80,8 +83,10 @@ def register_domain_modules(app: FastAPI, modules: Iterable[DomainModule]) -> No
             raise ValueError(f"Router collision detected for module '{module.name}': {collision_labels}")
 
         app.include_router(router)
+        register_versioned_route_aliases(app, router.routes)
         registered_routes.update(module_routes)
         loaded_module_names.add(module.name)
+        app.state.loaded_domain_module_names = loaded_module_names
 
     app.state.loaded_domain_module_names = loaded_module_names
 

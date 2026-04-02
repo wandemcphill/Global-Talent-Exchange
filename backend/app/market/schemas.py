@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.market.models import (
     ListingStatus,
@@ -16,11 +16,31 @@ from app.schemas.avatar import PlayerAvatarView
 
 
 class ListingCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     asset_id: str = Field(min_length=1)
     listing_type: ListingType
     ask_price: int | None = Field(default=None, gt=0)
     desired_asset_ids: tuple[str, ...] = ()
     note: str | None = None
+
+    @field_validator("asset_id", "note")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("desired_asset_ids", mode="before")
+    @classmethod
+    def normalize_asset_ids(cls, value: object) -> tuple[str, ...]:
+        if value in (None, ""):
+            return ()
+        if isinstance(value, str):
+            candidate = value.strip()
+            return (candidate,) if candidate else ()
+        return tuple(str(item).strip() for item in value if str(item).strip())
 
 
 class ListingView(BaseModel):
@@ -39,6 +59,8 @@ class ListingView(BaseModel):
 
 
 class OfferCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     asset_id: str = Field(min_length=1)
     seller_user_id: str = Field(min_length=1)
     cash_amount: int = Field(default=0, ge=0)
@@ -46,11 +68,49 @@ class OfferCreate(BaseModel):
     listing_id: str | None = None
     note: str | None = None
 
+    @field_validator("asset_id", "seller_user_id", "listing_id", "note")
+    @classmethod
+    def normalize_offer_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("offered_asset_ids", mode="before")
+    @classmethod
+    def normalize_offered_asset_ids(cls, value: object) -> tuple[str, ...]:
+        if value in (None, ""):
+            return ()
+        if isinstance(value, str):
+            candidate = value.strip()
+            return (candidate,) if candidate else ()
+        return tuple(str(item).strip() for item in value if str(item).strip())
+
 
 class OfferCounterCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     cash_amount: int = Field(default=0, ge=0)
     offered_asset_ids: tuple[str, ...] = ()
     note: str | None = None
+
+    @field_validator("note")
+    @classmethod
+    def normalize_counter_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("offered_asset_ids", mode="before")
+    @classmethod
+    def normalize_counter_asset_ids(cls, value: object) -> tuple[str, ...]:
+        if value in (None, ""):
+            return ()
+        if isinstance(value, str):
+            candidate = value.strip()
+            return (candidate,) if candidate else ()
+        return tuple(str(item).strip() for item in value if str(item).strip())
 
 
 class OfferView(BaseModel):
@@ -73,12 +133,32 @@ class OfferView(BaseModel):
 
 
 class TradeIntentCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     asset_id: str = Field(min_length=1)
     direction: TradeIntentDirection
     price_floor: int | None = Field(default=None, gt=0)
     price_ceiling: int | None = Field(default=None, gt=0)
     offered_asset_ids: tuple[str, ...] = ()
     note: str | None = None
+
+    @field_validator("asset_id", "note")
+    @classmethod
+    def normalize_trade_intent_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("offered_asset_ids", mode="before")
+    @classmethod
+    def normalize_trade_intent_asset_ids(cls, value: object) -> tuple[str, ...]:
+        if value in (None, ""):
+            return ()
+        if isinstance(value, str):
+            candidate = value.strip()
+            return (candidate,) if candidate else ()
+        return tuple(str(item).strip() for item in value if str(item).strip())
 
 
 class TradeIntentView(BaseModel):

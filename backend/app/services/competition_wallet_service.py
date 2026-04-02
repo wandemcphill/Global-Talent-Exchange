@@ -42,15 +42,7 @@ class CompetitionWalletService:
             return CompetitionWalletResult(status="free")
         user = self.session.get(User, participant_user_id)
         if user is None or not user.is_active:
-            self._record_competition_ledger(
-                competition_id=competition.id,
-                entry_type="entry_fee_projection",
-                amount_minor=amount_minor,
-                currency=competition.currency,
-                reference_id=participant_user_id,
-                payload_json={"status": "projected", "reason": "missing_wallet_user"},
-            )
-            return CompetitionWalletResult(status="projected", reason="missing_wallet_user")
+            raise InsufficientBalanceError("Competition entry requires an active wallet user.")
 
         amount = self._minor_to_decimal(amount_minor)
         user_account = self.wallet_service.get_user_account(

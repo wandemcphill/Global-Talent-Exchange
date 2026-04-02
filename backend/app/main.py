@@ -10,6 +10,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.core.api_contract import install_api_contracts
 from app.core.container import (
     ApplicationContext,
     Container,
@@ -29,13 +30,10 @@ _CORS_EXPOSE_HEADERS = (
     "X-RateLimit-Remaining",
     "X-RateLimit-Scope",
 )
-INITIAL_ADMIN_EMAIL = os.getenv("GTE_BOOTSTRAP_ADMIN_EMAIL", "vidvimedialtd@gmail.com")
-INITIAL_ADMIN_PASSWORD = os.getenv("GTE_BOOTSTRAP_ADMIN_PASSWORD", "NewPass1234!")
-INITIAL_ADMIN_USERNAME = os.getenv("GTE_BOOTSTRAP_ADMIN_USERNAME", "vidvimedialtd")
-INITIAL_ADMIN_DISPLAY_NAME = os.getenv(
-    "GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME",
-    "GTEX God Mode Admin",
-)
+INITIAL_ADMIN_EMAIL = os.getenv("GTE_BOOTSTRAP_ADMIN_EMAIL") or ""
+INITIAL_ADMIN_PASSWORD = os.getenv("GTE_BOOTSTRAP_ADMIN_PASSWORD") or ""
+INITIAL_ADMIN_USERNAME = os.getenv("GTE_BOOTSTRAP_ADMIN_USERNAME") or ""
+INITIAL_ADMIN_DISPLAY_NAME = os.getenv("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME") or ""
 
 
 def create_app(
@@ -74,6 +72,7 @@ def create_app(
     app = FastAPI(
         title=resolved_settings.app_name,
         version=resolved_settings.app_version,
+        docs_url="/docs",
     )
     app.state.settings = resolved_settings
     app.state.container = context
@@ -93,6 +92,7 @@ def create_app(
     )
 
     register_core(app)
+    install_api_contracts(app)
     register_modules(app, modules)
     if resolved_settings.observability_tracing_enabled:
         from app.observability.tracing import configure_tracing
@@ -153,6 +153,7 @@ def register_core(app: FastAPI) -> None:
     from app.core.database import get_read_session as core_get_read_session
     from app.core.database import get_session as core_get_session
     from app.core.health import router as health_router
+    from app.core.request_security import RequestHardeningMiddleware
     from app.core.rate_limit import RateLimitMiddleware
     from app.db import get_session as db_get_session
     from app.observability.middleware import ObservabilityMiddleware
@@ -164,6 +165,7 @@ def register_core(app: FastAPI) -> None:
     app.include_router(health_router)
     app.add_middleware(AuthEnforcementMiddleware)
     app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RequestHardeningMiddleware)
     if settings.observability_metrics_enabled:
         app.add_middleware(ObservabilityMiddleware, metrics=context.metrics)
     app.dependency_overrides[db_get_session] = context.database.get_session

@@ -10,6 +10,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.request_security import extract_access_token_subject, extract_client_ip
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -56,8 +58,8 @@ class ApiRateLimiter:
         if path.startswith(self.EXEMPT_PREFIXES):
             return None
         rule = self._rule_for_request(request)
-        ip_address = self._client_ip(request)
-        bucket_key = f"{rule.scope}:{ip_address}"
+        actor_key = self._actor_key(request)
+        bucket_key = f"{rule.scope}:{actor_key}"
         now = _utcnow()
         with self._lock:
             self._purge_expired_buckets_unlocked(now=now)
@@ -118,26 +120,35 @@ class ApiRateLimiter:
 
     def _rule_for_request(self, request: Request) -> RateLimitRule:
         path = (request.url.path or "/").lower()
-        method = request.method.upper()
-        if path == "/auth/login":
+        if path in {"/auth/login", "/api/auth/login"}:
             return self._rules()[0]
         if path.startswith("/integrations/payments/") and path.endswith("/webhook"):
+            return self._rules()[5]
+        if path in {
+            "/market/buy",
+            "/market/sell",
+            "/api/market/buy",
+            "/api/market/sell",
+            "/gtex/market/buy",
+            "/gtex/market/sell",
+            "/api/gtex/market/buy",
+            "/api/gtex/market/sell",
+        }:
+            return self._rules()[1]
+        if self._matches_prefix(path, "/api/market", "/market", "/api/gtex/market", "/gtex/market"):
             return self._rules()[3]
-        if path.startswith("/api/wallets/") and method in {"POST", "PUT", "PATCH", "DELETE"}:
-            return self._rules()[1]
-        if path.startswith("/wallets/") and method in {"POST", "PUT", "PATCH", "DELETE"}:
-            return self._rules()[1]
-        if path.startswith("/api/matches/") and method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if self._matches_prefix(path, "/api/wallets", "/wallets", "/wallet"):
             return self._rules()[2]
         return self._rules()[4]
 
     def _rules(self) -> tuple[RateLimitRule, ...]:
         return (
-            RateLimitRule("auth", limit=self._env_int("GTE_AUTH_RATE_LIMIT_PER_MINUTE", 8), window_seconds=60),
-            RateLimitRule("wallet_mutation", limit=self._env_int("GTE_WALLET_RATE_LIMIT_PER_MINUTE", 30), window_seconds=60),
-            RateLimitRule("match_mutation", limit=self._env_int("GTE_MATCH_RATE_LIMIT_PER_MINUTE", 60), window_seconds=60),
+            RateLimitRule("auth", limit=self._env_int("GTE_AUTH_RATE_LIMIT_PER_MINUTE", 10), window_seconds=60),
+            RateLimitRule("market_trade", limit=self._env_int("GTE_MARKET_TRADE_RATE_LIMIT_PER_MINUTE", 10), window_seconds=60),
+            RateLimitRule("wallet", limit=self._env_int("GTE_WALLET_RATE_LIMIT_PER_MINUTE", 50), window_seconds=60),
+            RateLimitRule("market", limit=self._env_int("GTE_MARKET_RATE_LIMIT_PER_MINUTE", 40), window_seconds=60),
+            RateLimitRule("default", limit=self._env_int("GTE_API_RATE_LIMIT_PER_MINUTE", 100), window_seconds=60),
             RateLimitRule("payment_webhook", limit=self._env_int("GTE_PAYMENT_WEBHOOK_RATE_LIMIT_PER_MINUTE", 120), window_seconds=60),
-            RateLimitRule("default", limit=self._env_int("GTE_API_RATE_LIMIT_PER_MINUTE", 240), window_seconds=60),
         )
 
     def _audit_rate_limit_hit(
@@ -155,7 +166,7 @@ class ApiRateLimiter:
             return
         with session_factory() as session:
             RiskOpsService(session).log_audit(
-                actor_user_id=None,
+                actor_user_id=extract_access_token_subject(request),
                 action_key="api.rate_limited",
                 resource_type="http_request",
                 resource_id=None,
@@ -166,7 +177,7 @@ class ApiRateLimiter:
                     "retry_after_seconds": retry_after_seconds,
                     "path": request.url.path,
                     "method": request.method.upper(),
-                    "client_ip": self._client_ip(request),
+                    "client_ip": extract_client_ip(request),
                 },
                 outcome="blocked",
             )
@@ -177,14 +188,15 @@ class ApiRateLimiter:
         for key in expired_keys:
             self._buckets.pop(key, None)
 
+    def _actor_key(self, request: Request) -> str:
+        user_id = extract_access_token_subject(request)
+        if user_id:
+            return f"user:{user_id}"
+        return f"ip:{extract_client_ip(request)}"
+
     @staticmethod
-    def _client_ip(request: Request) -> str:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",", 1)[0].strip()
-        if request.client is not None and request.client.host:
-            return str(request.client.host)
-        return "unknown"
+    def _matches_prefix(path: str, *prefixes: str) -> bool:
+        return any(path == prefix or path.startswith(f"{prefix}/") for prefix in prefixes)
 
     @staticmethod
     def _env_int(name: str, default: int) -> int:

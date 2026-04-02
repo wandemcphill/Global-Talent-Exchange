@@ -1,20 +1,34 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from decimal import Decimal
+
+from sqlalchemy import func, select
 
 from app.models.calendar_engine import CalendarEvent
 from app.models.competition import Competition
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_wallet_ledger import CompetitionWalletLedger
 
 
-def _create_competition(client, *, name: str, format: str, capacity: int) -> str:
+def _create_competition(
+    client,
+    *,
+    name: str,
+    format: str,
+    capacity: int,
+    entry_fee: str = "0.00",
+    currency: str = "credit",
+) -> str:
     response = client.post(
         "/api/competitions",
         json={
             "name": name,
             "format": format,
             "visibility": "public",
-            "entry_fee": "0.00",
-            "currency": "credit",
+            "entry_fee": entry_fee,
+            "currency": currency,
             "capacity": capacity,
             "creator_id": f"host-{name}",
             "payout_structure": [{"place": 1, "percent": "1.00"}],
@@ -196,3 +210,75 @@ def test_launch_applies_tournament_lock_metadata(
     assert lock["reason"] == "competition_live"
     assert lock["transfers_disabled"] is True
     assert lock["rentals_disabled"] is True
+
+
+def test_paid_competition_join_is_idempotent_and_collects_single_fee(
+    client,
+    app_session_factory,
+    competition_admin_headers,
+    auth_user_factory,
+) -> None:
+    competition_id = _create_competition(
+        client,
+        name="Paid Join Guard",
+        format="league",
+        capacity=2,
+        entry_fee="25.00",
+        currency="credit",
+    )
+    entrant = auth_user_factory(suffix="paid-join-guard", funded_credit=Decimal("100.0000"))
+
+    publish = client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=competition_admin_headers,
+        json={"open_for_join": True},
+    )
+    assert publish.status_code == 200
+
+    first_join = client.post(
+        f"/api/competitions/{competition_id}/join",
+        headers=entrant["headers"],
+        json={"user_id": entrant["user_id"]},
+    )
+    assert first_join.status_code == 200, first_join.text
+
+    second_join = client.post(
+        f"/api/competitions/{competition_id}/join",
+        headers=entrant["headers"],
+        json={"user_id": entrant["user_id"]},
+    )
+    assert second_join.status_code == 200, second_join.text
+
+    with app_session_factory() as session:
+        participant_count = session.scalar(
+            select(func.count()).select_from(CompetitionParticipant).where(
+                CompetitionParticipant.competition_id == competition_id,
+                CompetitionParticipant.club_id == entrant["user_id"],
+            )
+        )
+        entry_count = session.scalar(
+            select(func.count()).select_from(CompetitionEntry).where(
+                CompetitionEntry.competition_id == competition_id,
+                CompetitionEntry.club_id == entrant["user_id"],
+            )
+        )
+        fee_collection_count = session.scalar(
+            select(func.count()).select_from(CompetitionWalletLedger).where(
+                CompetitionWalletLedger.competition_id == competition_id,
+                CompetitionWalletLedger.entry_type == "entry_fee_collection",
+                CompetitionWalletLedger.reference_id == entrant["user_id"],
+            )
+        )
+        participant = session.scalar(
+            select(CompetitionParticipant).where(
+                CompetitionParticipant.competition_id == competition_id,
+                CompetitionParticipant.club_id == entrant["user_id"],
+            )
+        )
+
+    assert participant_count == 1
+    assert entry_count == 1
+    assert fee_collection_count == 1
+    assert participant is not None
+    assert participant.paid_at is not None
+    assert participant.paid_entry_fee_minor == 2500

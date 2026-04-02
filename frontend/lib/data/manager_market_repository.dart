@@ -81,18 +81,18 @@ class ManagerMarketRepository {
     if (response.statusCode >= 400) {
       throw _toException(response);
     }
-    return response.body;
+    return gteApiSuccessPayload(response.body);
   }
 
   GteApiException _toException(GteTransportResponse response) {
-    final Object? body = response.body;
-    String message = 'Manager request failed.';
-    if (body is Map<String, dynamic>) {
-      message = (body['detail'] ?? body['message'] ?? message).toString();
-    } else if (body is String && body.trim().isNotEmpty) {
-      message = body;
-    }
-    return GteApiException(type: _errorType(response.statusCode), message: message, statusCode: response.statusCode);
+    return GteApiException(
+      type: _errorType(response.statusCode),
+      message: gteApiErrorMessage(
+        response.body,
+        fallback: 'Manager request failed.',
+      ),
+      statusCode: response.statusCode,
+    );
   }
 
   GteApiErrorType _errorType(int statusCode) {

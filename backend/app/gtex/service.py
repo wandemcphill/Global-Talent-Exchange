@@ -9,6 +9,7 @@ import random
 from typing import Any
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.event_backbone import build_outbox_event, defer_event_publish_until_commit, defer_session_callback_until_commit
@@ -46,8 +47,10 @@ from app.models.gtex_economy import (
     GtexRiskFlagStatus,
     GtexTradeSide,
 )
+from app.models.risk_ops import RiskSignalType
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 
@@ -150,6 +153,35 @@ class GtexBaseService:
                     },
                 ),
             )
+
+    @staticmethod
+    def _supports_row_locks(session: Session) -> bool:
+        bind = session.get_bind()
+        if bind is None:
+            return False
+        return bind.dialect.name not in {"sqlite"}
+
+    def _audit_log(
+        self,
+        session: Session,
+        *,
+        actor_user_id: str | None,
+        action_key: str,
+        resource_type: str,
+        resource_id: str | None,
+        detail: str,
+        metadata_json: dict[str, Any] | None = None,
+        outcome: str = "success",
+    ) -> None:
+        RiskOpsService(session).log_audit(
+            actor_user_id=actor_user_id,
+            action_key=action_key,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            detail=detail,
+            metadata_json=metadata_json,
+            outcome=outcome,
+        )
 
 
 class JackpotService(GtexBaseService):
@@ -663,23 +695,38 @@ class CreatorMarketService(GtexBaseService):
             },
         }
 
-    def buy_shares(self, session: Session, *, buyer: User, player_id: str, shares: int) -> GtexCreatorTrade:
+    def buy_shares(
+        self,
+        session: Session,
+        *,
+        buyer: User,
+        player_id: str,
+        shares: int,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> GtexCreatorTrade:
         if shares <= 0:
             raise GtexValidationError("Share quantity must be positive.")
-        asset = self.get_asset(session, player_id)
+        asset = self._get_asset_for_trade(session, player_id)
         self._assert_trade_cooldown(session, actor_id=buyer.id, player_id=player_id)
-        holding = self._get_or_create_holding(session, user_id=buyer.id, player_id=player_id)
+        holding = self._get_or_create_holding(session, user_id=buyer.id, player_id=player_id, for_update=True)
         max_allowed = Decimal(str(asset.total_shares)) * self.settings.creator_max_ownership_ratio
         if self._amount(holding.shares_owned + Decimal(shares)) > self._amount(max_allowed):
             raise GtexConflictError("Ownership cap exceeded for this asset.")
         if shares > asset.available_shares:
             raise GtexConflictError("Requested share volume exceeds available inventory.")
-        execution_price = self._trade_price(asset=asset, shares=shares, side=GtexTradeSide.BUY)
-        gross_amount = self._amount(execution_price * Decimal(shares))
         buyer_account = self.wallet_service.get_user_account(session, buyer, LedgerUnit.COIN)
         liquidity_account = self.wallet_service.ensure_market_liquidity_account(session, LedgerUnit.COIN)
+        wallet_before = self.wallet_service.get_balance(session, buyer_account)
+        holding_before = self._amount(holding.shares_owned)
+        avg_price_before = self._amount(holding.avg_price)
+        asset_price_before = self._amount(asset.current_price)
+        available_before = int(asset.available_shares)
+        circulating_before = int(asset.circulating_shares)
+        execution_price = self._trade_price(asset=asset, shares=shares, side=GtexTradeSide.BUY)
+        gross_amount = self._amount(execution_price * Decimal(shares))
         try:
-            self.wallet_service.append_transaction(
+            entries = self.wallet_service.append_transaction(
                 session,
                 postings=[
                     LedgerPosting(account=buyer_account, amount=-gross_amount),
@@ -694,9 +741,9 @@ class CreatorMarketService(GtexBaseService):
             )
         except InsufficientBalanceError as exc:
             raise GtexConflictError(str(exc)) from exc
-        previous_shares = self._amount(holding.shares_owned)
-        previous_cost = self._amount(holding.avg_price) * previous_shares
-        new_share_count = previous_shares + Decimal(shares)
+        transaction_id = entries[0].transaction_id if entries else None
+        previous_cost = avg_price_before * holding_before
+        new_share_count = holding_before + Decimal(shares)
         holding.shares_owned = self._amount(new_share_count)
         holding.avg_price = self._amount((previous_cost + gross_amount) / new_share_count)
         asset.available_shares -= shares
@@ -712,6 +759,7 @@ class CreatorMarketService(GtexBaseService):
             player_id=player_id,
             gross_amount=gross_amount,
         )
+        wallet_after = self.wallet_service.get_balance(session, buyer_account)
         trade = GtexCreatorTrade(
             buyer_id=buyer.id,
             seller_id=None,
@@ -722,9 +770,34 @@ class CreatorMarketService(GtexBaseService):
             gross_amount=gross_amount,
             demand_impact=self._amount(asset.current_price - self._amount(asset.base_price)),
             anomaly_flag=anomaly_flag,
-            metadata_json={"holding_after": str(holding.shares_owned)},
+            metadata_json=self._build_trade_metadata(
+                transaction_id=transaction_id,
+                wallet_before=wallet_before,
+                wallet_after=wallet_after,
+                holding_before=holding_before,
+                holding_after=self._amount(holding.shares_owned),
+                avg_price_before=avg_price_before,
+                avg_price_after=self._amount(holding.avg_price),
+                asset_price_before=asset_price_before,
+                asset_price_after=self._amount(asset.current_price),
+                available_before=available_before,
+                available_after=int(asset.available_shares),
+                circulating_before=circulating_before,
+                circulating_after=int(asset.circulating_shares),
+                client_ip=client_ip,
+                user_agent=user_agent,
+            ),
         )
         session.add(trade)
+        session.flush()
+        extra_flag = self._record_trade_risk(
+            session,
+            actor=buyer,
+            trade=trade,
+            client_ip=client_ip,
+        )
+        trade.anomaly_flag = bool(trade.anomaly_flag or extra_flag)
+        self._audit_trade(session, actor=buyer, trade=trade)
         self._record_price_history(session, asset=asset, reason="trade_buy")
         self._refresh_asset_cache(session, asset, cooldown_user_id=buyer.id)
         defer_session_callback_until_commit(
@@ -754,32 +827,48 @@ class CreatorMarketService(GtexBaseService):
         )
         return trade
 
-    def sell_shares(self, session: Session, *, seller: User, player_id: str, shares: int) -> GtexCreatorTrade:
+    def sell_shares(
+        self,
+        session: Session,
+        *,
+        seller: User,
+        player_id: str,
+        shares: int,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> GtexCreatorTrade:
         if shares <= 0:
             raise GtexValidationError("Share quantity must be positive.")
-        asset = self.get_asset(session, player_id)
+        asset = self._get_asset_for_trade(session, player_id)
         self._assert_trade_cooldown(session, actor_id=seller.id, player_id=player_id)
-        holding = self._get_or_create_holding(session, user_id=seller.id, player_id=player_id)
-        if self._amount(holding.shares_owned) < Decimal(shares):
+        holding = self._get_or_create_holding(session, user_id=seller.id, player_id=player_id, for_update=True)
+        holding_before = self._amount(holding.shares_owned)
+        avg_price_before = self._amount(holding.avg_price)
+        if holding_before < Decimal(shares):
             raise GtexConflictError("Not enough shares are available to sell.")
         execution_price = self._trade_price(asset=asset, shares=shares, side=GtexTradeSide.SELL)
         gross_amount = self._amount(execution_price * Decimal(shares))
         seller_account = self.wallet_service.get_user_account(session, seller, LedgerUnit.COIN)
         liquidity_account = self.wallet_service.ensure_market_liquidity_account(session, LedgerUnit.COIN)
-        self.wallet_service.append_transaction(
+        wallet_before = self.wallet_service.get_balance(session, seller_account)
+        asset_price_before = self._amount(asset.current_price)
+        available_before = int(asset.available_shares)
+        circulating_before = int(asset.circulating_shares)
+        entries = self.wallet_service.append_transaction(
             session,
             postings=[
                 LedgerPosting(account=seller_account, amount=gross_amount),
                 LedgerPosting(account=liquidity_account, amount=-gross_amount),
             ],
             reason=LedgerEntryReason.TRADE_SETTLEMENT,
-            source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
+            source_tag=LedgerSourceTag.PLAYER_SHARE_SALE,
             transaction_type=LedgerTransactionType.TRADE_SELL,
             reference=f"gtex-market-sell:{player_id}:{seller.id}:{utcnow().timestamp()}",
             description=f"Sold {shares} GTEX creator shares",
             actor=seller,
         )
-        holding.shares_owned = self._amount(holding.shares_owned - Decimal(shares))
+        transaction_id = entries[0].transaction_id if entries else None
+        holding.shares_owned = self._amount(holding_before - Decimal(shares))
         if self._amount(holding.shares_owned) <= Decimal("0.0000"):
             holding.avg_price = Decimal("0.0000")
         asset.available_shares += shares
@@ -795,6 +884,12 @@ class CreatorMarketService(GtexBaseService):
             player_id=player_id,
             gross_amount=gross_amount,
         )
+        wallet_after = self.wallet_service.get_balance(session, seller_account)
+        cost_basis = self._amount(avg_price_before * Decimal(shares))
+        realized_profit = self._amount(gross_amount - cost_basis)
+        profit_ratio = Decimal("0.0000")
+        if cost_basis > Decimal("0.0000"):
+            profit_ratio = self._amount(realized_profit / cost_basis)
         trade = GtexCreatorTrade(
             buyer_id=None,
             seller_id=seller.id,
@@ -805,9 +900,38 @@ class CreatorMarketService(GtexBaseService):
             gross_amount=gross_amount,
             demand_impact=self._amount(self._amount(asset.base_price) - self._amount(asset.current_price)),
             anomaly_flag=anomaly_flag,
-            metadata_json={"holding_after": str(holding.shares_owned)},
+            metadata_json=self._build_trade_metadata(
+                transaction_id=transaction_id,
+                wallet_before=wallet_before,
+                wallet_after=wallet_after,
+                holding_before=holding_before,
+                holding_after=self._amount(holding.shares_owned),
+                avg_price_before=avg_price_before,
+                avg_price_after=self._amount(holding.avg_price),
+                asset_price_before=asset_price_before,
+                asset_price_after=self._amount(asset.current_price),
+                available_before=available_before,
+                available_after=int(asset.available_shares),
+                circulating_before=circulating_before,
+                circulating_after=int(asset.circulating_shares),
+                client_ip=client_ip,
+                user_agent=user_agent,
+                realized_profit=realized_profit,
+                profit_ratio=profit_ratio,
+            ),
         )
         session.add(trade)
+        session.flush()
+        extra_flag = self._record_trade_risk(
+            session,
+            actor=seller,
+            trade=trade,
+            client_ip=client_ip,
+            realized_profit=realized_profit,
+            profit_ratio=profit_ratio,
+        )
+        trade.anomaly_flag = bool(trade.anomaly_flag or extra_flag)
+        self._audit_trade(session, actor=seller, trade=trade)
         self._record_price_history(session, asset=asset, reason="trade_sell")
         self._refresh_asset_cache(session, asset, cooldown_user_id=seller.id)
         defer_session_callback_until_commit(
@@ -908,13 +1032,30 @@ class CreatorMarketService(GtexBaseService):
         ).all()
         return [self.get_view(session, player_id=asset.id, viewer=viewer) for asset in assets]
 
-    def _get_or_create_holding(self, session: Session, *, user_id: str, player_id: str) -> GtexCreatorHolding:
-        holding = session.scalar(
-            select(GtexCreatorHolding).where(
-                GtexCreatorHolding.user_id == user_id,
-                GtexCreatorHolding.player_id == player_id,
-            )
+    def _get_asset_for_trade(self, session: Session, player_id: str) -> GtexCreatorAsset:
+        statement = select(GtexCreatorAsset).where(GtexCreatorAsset.id == player_id)
+        if self._supports_row_locks(session):
+            statement = statement.with_for_update()
+        asset = session.scalar(statement)
+        if asset is None:
+            raise GtexNotFoundError(f"Creator market player {player_id} was not found.")
+        return asset
+
+    def _get_or_create_holding(
+        self,
+        session: Session,
+        *,
+        user_id: str,
+        player_id: str,
+        for_update: bool = False,
+    ) -> GtexCreatorHolding:
+        statement = select(GtexCreatorHolding).where(
+            GtexCreatorHolding.user_id == user_id,
+            GtexCreatorHolding.player_id == player_id,
         )
+        if for_update and self._supports_row_locks(session):
+            statement = statement.with_for_update()
+        holding = session.scalar(statement)
         if holding is None:
             holding = GtexCreatorHolding(
                 user_id=user_id,
@@ -923,9 +1064,331 @@ class CreatorMarketService(GtexBaseService):
                 reserved_shares=Decimal("0.0000"),
                 avg_price=Decimal("0.0000"),
             )
-            session.add(holding)
-            session.flush()
+            savepoint = session.begin_nested()
+            try:
+                session.add(holding)
+                session.flush()
+            except IntegrityError:
+                savepoint.rollback()
+                holding = session.scalar(statement)
+                if holding is None:
+                    raise GtexConflictError("Unable to resolve holding state for this trade.")
+            else:
+                savepoint.commit()
         return holding
+
+    def _build_trade_metadata(
+        self,
+        *,
+        transaction_id: str | None,
+        wallet_before: Decimal,
+        wallet_after: Decimal,
+        holding_before: Decimal,
+        holding_after: Decimal,
+        avg_price_before: Decimal,
+        avg_price_after: Decimal,
+        asset_price_before: Decimal,
+        asset_price_after: Decimal,
+        available_before: int,
+        available_after: int,
+        circulating_before: int,
+        circulating_after: int,
+        client_ip: str | None,
+        user_agent: str | None,
+        realized_profit: Decimal | None = None,
+        profit_ratio: Decimal | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "transaction_id": transaction_id,
+            "wallet_before": str(self._amount(wallet_before)),
+            "wallet_after": str(self._amount(wallet_after)),
+            "holding_before": str(self._amount(holding_before)),
+            "holding_after": str(self._amount(holding_after)),
+            "avg_price_before": str(self._amount(avg_price_before)),
+            "avg_price_after": str(self._amount(avg_price_after)),
+            "asset_price_before": str(self._amount(asset_price_before)),
+            "asset_price_after": str(self._amount(asset_price_after)),
+            "available_shares_before": available_before,
+            "available_shares_after": available_after,
+            "circulating_shares_before": circulating_before,
+            "circulating_shares_after": circulating_after,
+            "client_ip": client_ip,
+            "user_agent": user_agent,
+        }
+        if realized_profit is not None:
+            payload["realized_profit"] = str(self._amount(realized_profit))
+        if profit_ratio is not None:
+            payload["profit_ratio"] = str(self._amount(profit_ratio))
+        return payload
+
+    def _record_trade_risk(
+        self,
+        session: Session,
+        *,
+        actor: User,
+        trade: GtexCreatorTrade,
+        client_ip: str | None,
+        realized_profit: Decimal | None = None,
+        profit_ratio: Decimal | None = None,
+    ) -> bool:
+        triggered_categories: list[str] = []
+        if client_ip and self._flag_shared_ip_accounts(
+            session,
+            actor_id=actor.id,
+            player_id=trade.player_id,
+            client_ip=client_ip,
+            trade_id=trade.id,
+        ):
+            triggered_categories.append("shared_ip_accounts")
+        if self._flag_rapid_trade_loop(
+            session,
+            actor_id=actor.id,
+            player_id=trade.player_id,
+            trade_id=trade.id,
+        ):
+            triggered_categories.append("rapid_trade_loop")
+        if realized_profit is not None and self._flag_abnormal_profit(
+            session,
+            actor_id=actor.id,
+            player_id=trade.player_id,
+            trade_id=trade.id,
+            realized_profit=realized_profit,
+            profit_ratio=profit_ratio or Decimal("0.0000"),
+        ):
+            triggered_categories.append("abnormal_profit")
+        if triggered_categories:
+            trade.metadata_json = {
+                **dict(trade.metadata_json or {}),
+                "risk_categories": sorted(set(triggered_categories)),
+            }
+            return True
+        return False
+
+    def _flag_shared_ip_accounts(
+        self,
+        session: Session,
+        *,
+        actor_id: str,
+        player_id: str,
+        client_ip: str,
+        trade_id: str,
+    ) -> bool:
+        RiskOpsService(session).ingest_signal(
+            actor_user_id=actor_id,
+            user_id=actor_id,
+            signal_type=RiskSignalType.IP_ADDRESS,
+            signal_key="gtex_trade_ip",
+            signal_value=client_ip,
+            ip_address=client_ip,
+            source="gtex_market_trade",
+            confidence_score=Decimal("85.00"),
+            metadata_json={"player_id": player_id, "trade_id": trade_id},
+        )
+        recent_cutoff = utcnow() - timedelta(hours=24)
+        recent_trades = session.scalars(
+            select(GtexCreatorTrade)
+            .where(GtexCreatorTrade.created_at >= recent_cutoff)
+            .order_by(GtexCreatorTrade.created_at.desc())
+            .limit(250)
+        ).all()
+        linked_user_ids = sorted(
+            {
+                str(item.buyer_id or item.seller_id)
+                for item in recent_trades
+                if (item.metadata_json or {}).get("client_ip") == client_ip and (item.buyer_id or item.seller_id)
+            }
+        )
+        if len(linked_user_ids) < 2:
+            return False
+        self._record_risk_flag(
+            session,
+            category="shared_ip_accounts",
+            subject_key=f"user:{actor_id}",
+            reference_id=trade_id,
+            severity="high" if len(linked_user_ids) >= 3 else "medium",
+            signal_score=self._amount(len(linked_user_ids)),
+            detail="Multiple accounts traded from the same IP address inside the review window.",
+            metadata={
+                "client_ip": client_ip,
+                "linked_user_ids": linked_user_ids,
+                "player_id": player_id,
+            },
+        )
+        return True
+
+    def _flag_rapid_trade_loop(
+        self,
+        session: Session,
+        *,
+        actor_id: str,
+        player_id: str,
+        trade_id: str,
+    ) -> bool:
+        recent_cutoff = utcnow() - timedelta(minutes=15)
+        recent_trades = session.scalars(
+            select(GtexCreatorTrade)
+            .where(
+                GtexCreatorTrade.player_id == player_id,
+                GtexCreatorTrade.created_at >= recent_cutoff,
+                or_(GtexCreatorTrade.buyer_id == actor_id, GtexCreatorTrade.seller_id == actor_id),
+            )
+            .order_by(GtexCreatorTrade.created_at.desc())
+            .limit(8)
+        ).all()
+        if len(recent_trades) < 4:
+            return False
+        alternating_count = 1
+        last_side = recent_trades[0].side
+        for item in recent_trades[1:]:
+            if item.side != last_side:
+                alternating_count += 1
+                last_side = item.side
+                continue
+            break
+        if alternating_count < 4:
+            return False
+        RiskOpsService(session).ingest_signal(
+            actor_user_id=actor_id,
+            user_id=actor_id,
+            signal_type=RiskSignalType.TRANSACTION_PATTERN,
+            signal_key="rapid_trade_loop",
+            signal_value=f"{actor_id}:{player_id}",
+            source="gtex_market_trade",
+            confidence_score=Decimal("90.00"),
+            metadata_json={
+                "pattern": "rapid_trade_loop",
+                "category": "rapid_trade_loop",
+                "loop_count": alternating_count,
+                "window_minutes": 15,
+                "player_id": player_id,
+                "trade_id": trade_id,
+            },
+        )
+        self._record_risk_flag(
+            session,
+            category="rapid_trade_loop",
+            subject_key=f"user:{actor_id}",
+            reference_id=player_id,
+            severity="high",
+            signal_score=self._amount(alternating_count),
+            detail="Rapid alternating buy and sell activity crossed the anti-loop threshold.",
+            metadata={
+                "loop_count": alternating_count,
+                "window_minutes": 15,
+                "trade_id": trade_id,
+            },
+        )
+        return True
+
+    def _flag_abnormal_profit(
+        self,
+        session: Session,
+        *,
+        actor_id: str,
+        player_id: str,
+        trade_id: str,
+        realized_profit: Decimal,
+        profit_ratio: Decimal,
+    ) -> bool:
+        resolved_profit = self._amount(realized_profit)
+        resolved_ratio = self._amount(profit_ratio)
+        if resolved_profit < Decimal("100.0000") or resolved_ratio < Decimal("1.5000"):
+            return False
+        RiskOpsService(session).ingest_signal(
+            actor_user_id=actor_id,
+            user_id=actor_id,
+            signal_type=RiskSignalType.TRANSACTION_PATTERN,
+            signal_key="abnormal_profit",
+            signal_value=f"{actor_id}:{player_id}",
+            source="gtex_market_trade",
+            confidence_score=Decimal("88.00"),
+            metadata_json={
+                "category": "abnormal_profit",
+                "profit_amount": str(resolved_profit),
+                "profit_ratio": str(resolved_ratio),
+                "player_id": player_id,
+                "trade_id": trade_id,
+            },
+        )
+        self._record_risk_flag(
+            session,
+            category="abnormal_profit",
+            subject_key=f"user:{actor_id}",
+            reference_id=player_id,
+            severity="high" if resolved_ratio >= Decimal("3.0000") else "medium",
+            signal_score=resolved_profit,
+            detail="Realized trade profits crossed the abnormal-profit review threshold.",
+            metadata={
+                "profit_amount": str(resolved_profit),
+                "profit_ratio": str(resolved_ratio),
+                "trade_id": trade_id,
+            },
+        )
+        return True
+
+    def _record_risk_flag(
+        self,
+        session: Session,
+        *,
+        category: str,
+        subject_key: str,
+        reference_id: str | None,
+        severity: str,
+        signal_score: Decimal,
+        detail: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> GtexRiskFlag:
+        recent_cutoff = utcnow() - timedelta(hours=24)
+        existing = session.scalar(
+            select(GtexRiskFlag)
+            .where(
+                GtexRiskFlag.category == category,
+                GtexRiskFlag.subject_key == subject_key,
+                GtexRiskFlag.reference_id == reference_id,
+                GtexRiskFlag.status.in_((GtexRiskFlagStatus.OPEN, GtexRiskFlagStatus.REVIEWING)),
+                GtexRiskFlag.created_at >= recent_cutoff,
+            )
+            .order_by(GtexRiskFlag.created_at.desc())
+        )
+        resolved_score = self._amount(signal_score)
+        if existing is not None:
+            existing.signal_score = max(self._amount(existing.signal_score), resolved_score)
+            existing.detail = detail
+            existing.metadata_json = {**(existing.metadata_json or {}), **dict(metadata or {})}
+            if severity == "high":
+                existing.severity = "high"
+            return existing
+        flag = GtexRiskFlag(
+            category=category,
+            subject_key=subject_key,
+            reference_id=reference_id,
+            severity=severity,
+            signal_score=resolved_score,
+            status=GtexRiskFlagStatus.OPEN,
+            detail=detail,
+            metadata_json=dict(metadata or {}),
+        )
+        session.add(flag)
+        session.flush()
+        return flag
+
+    def _audit_trade(self, session: Session, *, actor: User, trade: GtexCreatorTrade) -> None:
+        self._audit_log(
+            session,
+            actor_user_id=actor.id,
+            action_key=f"gtex.trade.{trade.side.value}",
+            resource_type="gtex_creator_trade",
+            resource_id=trade.id,
+            detail=f"GTEX creator market {trade.side.value} executed.",
+            metadata_json={
+                "player_id": trade.player_id,
+                "shares": str(self._amount(trade.shares)),
+                "price": str(self._amount(trade.price)),
+                "gross_amount": str(self._amount(trade.gross_amount)),
+                "anomaly_flag": bool(trade.anomaly_flag),
+                **dict(trade.metadata_json or {}),
+            },
+        )
 
     def _trade_price(self, *, asset: GtexCreatorAsset, shares: int, side: GtexTradeSide) -> Decimal:
         share_ratio = Decimal(shares) / Decimal(max(asset.total_shares, 1))
@@ -1030,17 +1493,39 @@ class CreatorMarketService(GtexBaseService):
         )
         anomalous = self._amount(recent_notional + gross_amount) >= self.settings.creator_anomaly_notional_threshold
         if anomalous:
-            session.add(
-                GtexRiskFlag(
-                    category="suspicious_trading",
-                    subject_key=f"user:{actor_id}",
-                    reference_id=player_id,
-                    severity="high",
-                    signal_score=self._amount(recent_notional + gross_amount),
-                    status=GtexRiskFlagStatus.OPEN,
-                    detail="Creator market volume breached the configured anomaly threshold.",
-                    metadata_json={"player_id": player_id, "recent_notional": str(recent_notional), "gross_amount": str(gross_amount)},
-                )
+            total_notional = self._amount(recent_notional + gross_amount)
+            RiskOpsService(session).ingest_signal(
+                actor_user_id=actor_id,
+                user_id=actor_id,
+                signal_type=RiskSignalType.TRANSACTION_PATTERN,
+                signal_key="suspicious_trading",
+                signal_value=f"{actor_id}:{player_id}",
+                source="gtex_market_trade",
+                confidence_score=Decimal("92.00"),
+                metadata_json={
+                    "category": "suspicious_trading",
+                    "player_id": player_id,
+                    "recent_notional": str(recent_notional),
+                    "gross_amount": str(self._amount(gross_amount)),
+                    "total_notional": str(total_notional),
+                    "window_seconds": self.settings.creator_anomaly_window_seconds,
+                },
+            )
+            self._record_risk_flag(
+                session,
+                category="suspicious_trading",
+                subject_key=f"user:{actor_id}",
+                reference_id=player_id,
+                severity="high",
+                signal_score=total_notional,
+                detail="Creator market volume breached the configured anomaly threshold.",
+                metadata={
+                    "player_id": player_id,
+                    "recent_notional": str(recent_notional),
+                    "gross_amount": str(self._amount(gross_amount)),
+                    "total_notional": str(total_notional),
+                    "window_seconds": self.settings.creator_anomaly_window_seconds,
+                },
             )
         return anomalous
 

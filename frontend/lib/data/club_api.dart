@@ -445,10 +445,11 @@ class ClubApi {
           headers: const <String, String>{'Accept': 'application/json'},
         ),
       );
-      if (response.statusCode >= 400 || response.body == null) {
+      final Object? payload = gteApiSuccessPayload(response.body);
+      if (response.statusCode >= 400 || payload == null) {
         return null;
       }
-      return GteJson.map(response.body, label: 'club record');
+      return GteJson.map(payload, label: 'club record');
     } catch (_) {
       return null;
     }
@@ -577,7 +578,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
           cause: response.body,
         );
       }
-      return response.body;
+      return gteApiSuccessPayload(response.body);
     } on GteApiException {
       rethrow;
     } catch (error) {
@@ -709,7 +710,7 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
           cause: response.body,
         );
       }
-      return response.body;
+      return gteApiSuccessPayload(response.body);
     } on GteApiException {
       rethrow;
     } catch (error) {

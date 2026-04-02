@@ -41,6 +41,15 @@ ADMIN_BUYBACK_FILE = "admin_buyback.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 DEFAULT_CORS_ALLOWED_ORIGINS = ("https://gtex-web.onrender.com",)
 DEFAULT_CORS_ALLOW_ORIGIN_REGEX = r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
+UNSAFE_SECRET_PLACEHOLDERS = frozenset(
+    {
+        "change-me",
+        "gte-dev-secret-change-me",
+        "gte-media-secret-change-me",
+        "replace-me",
+        "replace-me-with-a-long-random-string",
+    }
+)
 
 
 class SettingsSource(BaseSettings):
@@ -68,8 +77,8 @@ class SettingsSource(BaseSettings):
         default=256,
         validation_alias="GTE_BROADCAST_MAX_PENDING_MESSAGES",
     )
-    auth_secret: str = Field(default="gte-dev-secret-change-me", validation_alias="GTE_AUTH_SECRET")
-    media_signing_secret: str = Field(default="gte-media-secret-change-me", validation_alias="GTE_MEDIA_SIGNING_SECRET")
+    auth_secret: str | None = Field(default=None, validation_alias="GTE_AUTH_SECRET")
+    media_signing_secret: str | None = Field(default=None, validation_alias="GTE_MEDIA_SIGNING_SECRET")
     crypto_deposit_enabled: bool = Field(default=False, validation_alias="GTE_CRYPTO_DEPOSIT_ENABLED")
     crypto_provider_key: str = Field(default="crypto_fiat", validation_alias="GTE_CRYPTO_PROVIDER_KEY")
     run_migration_check: bool = Field(default=True, validation_alias="GTE_RUN_MIGRATION_CHECK")
@@ -1975,6 +1984,36 @@ def _normalized_optional_setting(value: str | None) -> str | None:
     return candidate or None
 
 
+def _require_secret(name: str, value: str | None) -> str:
+    candidate = _normalized_optional_setting(value)
+    if candidate is None:
+        raise ValueError(f"{name} must be set via environment variables.")
+    if candidate.lower() in UNSAFE_SECRET_PLACEHOLDERS:
+        raise ValueError(f"{name} must be replaced with a unique secret value before startup.")
+    return candidate
+
+
+def _validate_bootstrap_admin_config(source: SettingsSource) -> None:
+    if not source.bootstrap_admin_enabled:
+        return
+    required_settings = {
+        "GTE_BOOTSTRAP_ADMIN_EMAIL": source.bootstrap_admin_email,
+        "GTE_BOOTSTRAP_ADMIN_PASSWORD": source.bootstrap_admin_password,
+        "GTE_BOOTSTRAP_ADMIN_USERNAME": source.bootstrap_admin_username,
+    }
+    missing = [
+        name
+        for name, value in required_settings.items()
+        if _normalized_optional_setting(value) is None
+    ]
+    if missing:
+        joined = ", ".join(missing)
+        raise ValueError(
+            "Bootstrap admin provisioning is enabled but the following environment variables are missing: "
+            f"{joined}."
+        )
+
+
 def load_email_config(environ: Mapping[str, str]) -> EmailConfig:
     use_tls = _get_bool(environ, "BREVO_SMTP_USE_TLS", True)
     use_ssl = _get_bool(environ, "BREVO_SMTP_USE_SSL", False)
@@ -1984,9 +2023,9 @@ def load_email_config(environ: Mapping[str, str]) -> EmailConfig:
     return EmailConfig(
         enabled=_get_bool(environ, "EMAIL_ENABLED", False),
         provider=environ.get("EMAIL_PROVIDER", "brevo_smtp").strip().lower(),
-        from_address=environ.get("EMAIL_FROM_ADDRESS", "vidzimedialtd@gmail.com").strip(),
+        from_address=environ.get("EMAIL_FROM_ADDRESS", "noreply@example.com").strip(),
         from_name=environ.get("EMAIL_FROM_NAME", "GTEX").strip(),
-        reply_to=_normalized_optional_setting(environ.get("EMAIL_REPLY_TO", "vidzimedialtd@gmail.com")),
+        reply_to=_normalized_optional_setting(environ.get("EMAIL_REPLY_TO", "support@example.com")),
         send_timeout_seconds=_get_int(environ, "EMAIL_SEND_TIMEOUT_SECONDS", 15),
         signup_confirmation_ttl_minutes=_get_int(environ, "EMAIL_CONFIRMATION_TTL_MINUTES", 1440),
         account_recovery_ttl_minutes=_get_int(environ, "ACCOUNT_RECOVERY_TTL_MINUTES", 30),
@@ -1995,7 +2034,7 @@ def load_email_config(environ: Mapping[str, str]) -> EmailConfig:
         brevo_smtp=BrevoSmtpConfig(
             host=environ.get("BREVO_SMTP_HOST", "smtp-relay.brevo.com").strip(),
             port=_get_int(environ, "BREVO_SMTP_PORT", 587),
-            username=environ.get("BREVO_SMTP_USERNAME", "a21b41001@smtp-brevo.com").strip(),
+            username=environ.get("BREVO_SMTP_USERNAME", "").strip(),
             password=environ.get("BREVO_SMTP_PASSWORD", ""),
             use_tls=use_tls,
             use_ssl=use_ssl,
@@ -2008,13 +2047,24 @@ def load_settings(
     environ: Mapping[str, str] | None = None,
     config_root: str | Path | None = None,
 ) -> Settings:
-    resolved_environ = os.environ if environ is None else environ
+    resolved_environ = dict(os.environ) if environ is None else {
+        str(key): str(value) for key, value in environ.items()
+    }
+    if environ is not None:
+        for secret_name in ("GTE_AUTH_SECRET", "GTE_MEDIA_SIGNING_SECRET"):
+            if _normalized_optional_setting(resolved_environ.get(secret_name)) is None:
+                fallback_value = _normalized_optional_setting(os.environ.get(secret_name))
+                if fallback_value is not None:
+                    resolved_environ[secret_name] = fallback_value
     source = SettingsSource.model_validate(dict(resolved_environ))
+    _validate_bootstrap_admin_config(source)
     resolved_config_root = _resolve_config_root(
         resolved_environ,
         config_root if config_root is not None else source.config_root_override,
     )
     database_url = resolve_database_url(resolved_environ)
+    auth_secret = _require_secret("GTE_AUTH_SECRET", source.auth_secret)
+    media_signing_secret = _require_secret("GTE_MEDIA_SIGNING_SECRET", source.media_signing_secret)
     return Settings(
         app_name=source.app_name,
         app_version=source.app_version,
@@ -2032,8 +2082,8 @@ def load_settings(
         broadcast_presence_ttl_seconds=source.broadcast_presence_ttl_seconds,
         broadcast_presence_heartbeat_interval_seconds=source.broadcast_presence_heartbeat_interval_seconds,
         broadcast_max_pending_messages=source.broadcast_max_pending_messages,
-        auth_secret=source.auth_secret,
-        media_signing_secret=source.media_signing_secret,
+        auth_secret=auth_secret,
+        media_signing_secret=media_signing_secret,
         crypto_deposit_enabled=source.crypto_deposit_enabled,
         crypto_provider_key=source.crypto_provider_key,
         run_migration_check=source.run_migration_check,

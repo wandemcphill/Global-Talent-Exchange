@@ -125,7 +125,7 @@ class ReputationApiRepository implements ReputationRepository {
           cause: response.body,
         );
       }
-      return response.body;
+      return gteApiSuccessPayload(response.body);
     } on GteApiException {
       rethrow;
     } catch (error) {

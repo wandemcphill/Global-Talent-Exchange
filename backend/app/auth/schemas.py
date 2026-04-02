@@ -34,6 +34,8 @@ PROTECTED_PROFILE_FIELDS = frozenset(
 
 
 class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: str = Field(min_length=5, max_length=320)
     full_name: str | None = Field(default=None, min_length=2, max_length=160)
     phone_number: str | None = Field(default=None, min_length=6, max_length=32)
@@ -91,6 +93,8 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: str = Field(min_length=5, max_length=320)
     password: str = Field(min_length=8, max_length=128)
 
@@ -101,6 +105,8 @@ class LoginRequest(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     refresh_token: str = Field(min_length=24, max_length=4096)
 
     @field_validator("refresh_token")
@@ -119,6 +125,8 @@ class ActionStatusResponse(BaseModel):
 
 
 class ConfirmEmailRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     code: str = Field(min_length=8, max_length=256)
 
     @field_validator("code")
@@ -128,6 +136,8 @@ class ConfirmEmailRequest(BaseModel):
 
 
 class AccountRecoveryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: str = Field(min_length=5, max_length=320)
 
     @field_validator("email")
@@ -137,6 +147,8 @@ class AccountRecoveryRequest(BaseModel):
 
 
 class AccountRecoveryResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     code: str = Field(min_length=8, max_length=256)
     new_password: str = Field(min_length=8, max_length=128)
     confirm_new_password: str = Field(min_length=8, max_length=128)
@@ -154,6 +166,8 @@ class AccountRecoveryResetRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     current_password: str = Field(min_length=8, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
     confirm_new_password: str = Field(min_length=8, max_length=128)

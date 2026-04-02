@@ -16,7 +16,6 @@ PBKDF2_ITERATIONS = 390000
 ACCESS_TOKEN_TTL_SECONDS = 15 * 60
 REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
 AUTH_SECRET_ENV = "GTE_AUTH_SECRET"
-DEFAULT_AUTH_SECRET = "gte-dev-secret-change-me"
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 
@@ -35,7 +34,10 @@ def _urlsafe_b64decode(value: str) -> bytes:
 
 
 def _auth_secret(secret: str | None = None) -> bytes:
-    return (secret or get_settings().auth_secret or DEFAULT_AUTH_SECRET).encode("utf-8")
+    resolved_secret = secret or get_settings().auth_secret
+    if not resolved_secret:
+        raise RuntimeError(f"{AUTH_SECRET_ENV} must be configured before issuing tokens.")
+    return resolved_secret.encode("utf-8")
 
 
 def hash_password(password: str) -> str:

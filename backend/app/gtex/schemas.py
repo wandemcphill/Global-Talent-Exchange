@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class GtexSchema(BaseModel):
@@ -97,8 +97,18 @@ class CreatorPlayerView(GtexSchema):
 
 
 class CreatorTradeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     player_id: str
     shares: int = Field(ge=1, le=100000)
+
+    @field_validator("player_id")
+    @classmethod
+    def normalize_player_id(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("player_id is required.")
+        return candidate
 
 
 class CreatorTradeView(GtexSchema):
@@ -113,6 +123,39 @@ class CreatorTradeView(GtexSchema):
     demand_impact: Decimal
     anomaly_flag: bool
     created_at: datetime
+
+
+class AdminFlagView(GtexSchema):
+    id: str
+    category: str
+    subject_key: str
+    user_id: str | None = None
+    reference_id: str | None = None
+    severity: str
+    signal_score: Decimal
+    status: str
+    detail: str
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminBanUserRequest(BaseModel):
+    user_id: str
+    reason: str = Field(min_length=3, max_length=255)
+    deactivate_account: bool = True
+    freeze_wallet: bool = True
+    block_trading: bool = True
+    block_withdrawals: bool = True
+    require_manual_review: bool = True
+
+
+class AdminBanUserView(BaseModel):
+    user_id: str
+    banned: bool
+    reason: str
+    actions_applied: list[str] = Field(default_factory=list)
+    active_flag_count: int = 0
 
 
 class MarketTrendingView(BaseModel):

@@ -20,3 +20,4 @@ backend/.tmp_*.db-*
 *.db
 2nd.zip
 fm2023.csv.zip
+node_modules/

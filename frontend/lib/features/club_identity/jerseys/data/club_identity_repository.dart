@@ -167,7 +167,7 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
           cause: response.body,
         );
       }
-      return response.body;
+      return gteApiSuccessPayload(response.body);
     } on GteApiException {
       rethrow;
     } catch (error) {

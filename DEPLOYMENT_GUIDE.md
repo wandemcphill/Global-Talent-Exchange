@@ -47,6 +47,53 @@
 4. Start the FastAPI app with a production ASGI server.
 5. Attach Redis for jobs, cache, and event fan-out.
 
+## CI/CD pipeline
+
+The repository now uses a three-environment release model:
+
+- `dev`
+  - local Docker / `.env` driven workflow
+  - use `backend/.env.example` and `infra/.env.example` as templates
+- `staging`
+  - deploys automatically after `main` passes CI
+  - uses the GitHub Actions `staging` environment and its own Render service IDs and health URL
+- `production`
+  - deploys only from the manual `Production Deploy` workflow
+  - uses the GitHub Actions `production` environment
+  - protect this environment with required reviewers so GitHub pauses before the deploy job runs
+
+### GitHub environment contract
+
+Create separate GitHub environments named `staging` and `production` and define these values independently in each one:
+
+- Secrets:
+  - `RENDER_API_KEY`
+  - `RENDER_SERVICE_API`
+  - `RENDER_SERVICE_OUTBOX`
+  - `RENDER_SERVICE_SIMULATION`
+  - `RENDER_SERVICE_PROJECTIONS`
+  - `RENDER_SERVICE_WEB`
+- Variables:
+  - `RENDER_HEALTH_URL`
+  - optional `RENDER_DEPLOY_TIMEOUT_SECONDS`
+  - optional `RENDER_HEALTH_TIMEOUT_SECONDS`
+  - optional `RENDER_POLL_INTERVAL_SECONDS`
+
+The workflow reads the same variable names in both environments, but GitHub resolves different values per environment so staging and production stay isolated.
+
+### Deployment safety
+
+- Pull requests run tests only. No deploys are triggered from PR workflows.
+- Pushes to `main` run CI first, then deploy staging.
+- Production deploys are manual and should be dispatched from `main` only.
+- Render auto deploys are disabled in `render.yaml` so GitHub Actions remains the single release gate.
+- The deploy runner polls Render until each service is live, then calls `/health` and requires:
+  - `api`
+  - `database`
+  - `redis`
+- If any deploy or health gate fails, the runner triggers Render rollbacks for the services already promoted in that release.
+- The API service runs with two instances and an extended shutdown delay so Render can roll instances without dropping all capacity at once.
+
 ## Render to Kubernetes
 
 Render remains the simplest production starting point for this repo because the backend is still a modular monolith with separate worker entrypoints. The Kubernetes-ready path is:

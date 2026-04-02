@@ -13,18 +13,19 @@ from app.core.database import DatabaseRuntime
 router = APIRouter(tags=["health"])
 
 
-class HealthResponse(BaseModel):
-    status: Literal["ok"] = "ok"
-
-
-class ReadinessCheck(BaseModel):
-    status: Literal["ok", "error"]
+class ServiceCheck(BaseModel):
+    status: Literal["ok", "error", "skipped"]
     detail: str | None = None
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok", "degraded"]
+    checks: dict[str, ServiceCheck]
 
 
 class ReadinessResponse(BaseModel):
     status: Literal["ready", "not_ready"]
-    checks: dict[str, ReadinessCheck]
+    checks: dict[str, ServiceCheck]
 
 
 class VersionResponse(BaseModel):
@@ -47,47 +48,29 @@ class DiagnosticsResponse(BaseModel):
 
 
 class SystemStatusService:
-    def build_health(self) -> HealthResponse:
-        return HealthResponse()
+    def build_health(self, request: Request) -> HealthResponse:
+        database = request.app.state.context.database
+        checks = {
+            "api": ServiceCheck(status="ok"),
+            "database": self._database_check(database),
+            "redis": self._redis_check(request),
+        }
+        has_errors = any(check.status == "error" for check in checks.values())
+        return HealthResponse(status="degraded" if has_errors else "ok", checks=checks)
 
-    def build_readiness(self, database: DatabaseRuntime, *, check_schema: bool = True) -> ReadinessResponse:
-        try:
-            is_ready = database.ping()
-        except Exception as exc:
-            return ReadinessResponse(
-                status="not_ready",
-                checks={"database": ReadinessCheck(status="error", detail=str(exc))},
-            )
+    def build_readiness(self, request: Request, *, check_schema: bool = True) -> ReadinessResponse:
+        database = request.app.state.context.database
+        checks: dict[str, ServiceCheck] = {
+            "api": ServiceCheck(status="ok"),
+            "database": self._database_check(database),
+            "redis": self._redis_check(request),
+        }
 
-        if not is_ready:
-            return ReadinessResponse(
-                status="not_ready",
-                checks={
-                    "database": ReadinessCheck(
-                        status="error",
-                        detail="Database connectivity check failed.",
-                    )
-                },
-            )
+        if checks["database"].status == "ok" and check_schema and os.getenv("SKIP_SCHEMA_CHECK") != "true":
+            checks["schema"] = self._schema_check(database)
 
-        checks: dict[str, ReadinessCheck] = {"database": ReadinessCheck(status="ok")}
-        if check_schema and os.getenv("SKIP_SCHEMA_CHECK") != "true":
-            try:
-                database.check_schema_smoke()
-            except Exception as exc:
-                return ReadinessResponse(
-                    status="not_ready",
-                    checks={
-                        **checks,
-                        "schema": ReadinessCheck(status="error", detail=str(exc)),
-                    },
-                )
-            checks["schema"] = ReadinessCheck(status="ok")
-
-        return ReadinessResponse(
-            status="ready",
-            checks=checks,
-        )
+        has_errors = any(check.status == "error" for check in checks.values())
+        return ReadinessResponse(status="not_ready" if has_errors else "ready", checks=checks)
 
     def build_version(self, settings: Settings) -> VersionResponse:
         return VersionResponse(
@@ -140,14 +123,54 @@ class SystemStatusService:
             scaffolding_gaps=scaffolding_gaps,
         )
 
+    @staticmethod
+    def _database_check(database: DatabaseRuntime) -> ServiceCheck:
+        try:
+            is_ready = database.ping()
+        except Exception as exc:
+            return ServiceCheck(status="error", detail=str(exc))
+        if not is_ready:
+            return ServiceCheck(status="error", detail="Database connectivity check failed.")
+        return ServiceCheck(status="ok")
+
+    @staticmethod
+    def _schema_check(database: DatabaseRuntime) -> ServiceCheck:
+        try:
+            database.check_schema_smoke()
+        except Exception as exc:
+            return ServiceCheck(status="error", detail=str(exc))
+        return ServiceCheck(status="ok")
+
+    @staticmethod
+    def _redis_check(request: Request) -> ServiceCheck:
+        settings = getattr(request.app.state, "settings", get_settings())
+        if not settings.redis_url:
+            return ServiceCheck(status="skipped", detail="Redis is not configured.")
+        cache_backend = getattr(request.app.state, "cache_backend", None)
+        if cache_backend is None:
+            return ServiceCheck(status="error", detail="Redis cache backend is unavailable.")
+        try:
+            if cache_backend.ping():
+                return ServiceCheck(status="ok")
+        except Exception as exc:
+            return ServiceCheck(status="error", detail=str(exc))
+        return ServiceCheck(status="error", detail="Redis connectivity check failed.")
+
 
 def get_system_status_service() -> SystemStatusService:
     return SystemStatusService()
 
 
 @router.get("/health", response_model=HealthResponse)
-def read_health(service: SystemStatusService = Depends(get_system_status_service)) -> HealthResponse:
-    return service.build_health()
+def read_health(
+    request: Request,
+    response: Response,
+    service: SystemStatusService = Depends(get_system_status_service),
+) -> HealthResponse:
+    health = service.build_health(request)
+    if health.status != "ok":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return health
 
 
 @router.get("/ready", response_model=ReadinessResponse)
@@ -156,7 +179,7 @@ def read_ready(
     response: Response,
     service: SystemStatusService = Depends(get_system_status_service),
 ) -> ReadinessResponse:
-    readiness = service.build_readiness(request.app.state.context.database, check_schema=True)
+    readiness = service.build_readiness(request, check_schema=True)
     if readiness.status != "ready":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return readiness

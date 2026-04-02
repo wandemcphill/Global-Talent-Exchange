@@ -46,7 +46,23 @@ class WalletAccountBalance(BaseModel):
     balance: Decimal
 
 
-class PaymentEventCreate(BaseModel):
+class WalletRequestModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def normalize_request_text(cls, value):
+        if isinstance(value, str):
+            candidate = value.strip()
+            return candidate
+        if isinstance(value, list):
+            return [item.strip() if isinstance(item, str) else item for item in value]
+        if isinstance(value, tuple):
+            return tuple(item.strip() if isinstance(item, str) else item for item in value)
+        return value
+
+
+class PaymentEventCreate(WalletRequestModel):
     model_config = ConfigDict(
         title="PaymentEventCreate",
         json_schema_extra={
@@ -85,7 +101,7 @@ class PurchaseOrderSourceScope(str, Enum):
     MARKET = "market"
 
 
-class PurchaseOrderQuoteRequest(BaseModel):
+class PurchaseOrderQuoteRequest(WalletRequestModel):
     amount: Decimal
     input_unit: str = Field(default="fiat")
     provider_key: str = Field(min_length=2, max_length=64)
@@ -162,7 +178,7 @@ class PurchaseOrderView(BaseModel):
     expired_at: datetime | None = None
 
 
-class PurchaseOrderStatusUpdate(BaseModel):
+class PurchaseOrderStatusUpdate(WalletRequestModel):
     status: str = Field(min_length=3, max_length=32)
     notes: str | None = Field(default=None, max_length=255)
 
@@ -173,7 +189,7 @@ class MarketTopupSourceScope(str, Enum):
     LIQUIDITY = "liquidity"
 
 
-class MarketTopupQuoteRequest(BaseModel):
+class MarketTopupQuoteRequest(WalletRequestModel):
     amount: Decimal
     fee_bps: int = Field(default=0, ge=0, le=10_000)
     unit: LedgerUnit = LedgerUnit.COIN
@@ -199,7 +215,7 @@ class MarketTopupCreateRequest(MarketTopupQuoteRequest):
     notes: str | None = Field(default=None, max_length=255)
 
 
-class MarketTopupStatusUpdate(BaseModel):
+class MarketTopupStatusUpdate(WalletRequestModel):
     status: str = Field(min_length=3, max_length=32)
     notes: str | None = Field(default=None, max_length=255)
 
@@ -231,8 +247,8 @@ class MarketTopupView(BaseModel):
     reversed_at: datetime | None = None
 
 
-class WithdrawalRequestCreate(BaseModel):
-    model_config = ConfigDict(title="WithdrawalRequestCreate")
+class WithdrawalRequestCreate(WalletRequestModel):
+    model_config = ConfigDict(title="WithdrawalRequestCreate", extra="forbid")
 
     amount: Decimal
     unit: LedgerUnit = LedgerUnit.COIN
@@ -308,7 +324,7 @@ class PaymentEventView(BaseModel):
     ledger_transaction_id: str | None
 
 
-class WalletConversionQuoteRequest(BaseModel):
+class WalletConversionQuoteRequest(WalletRequestModel):
     amount: Decimal
     source_unit: LedgerUnit
 

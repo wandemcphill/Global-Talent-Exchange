@@ -109,11 +109,12 @@ class GteRepositoryConfig {
     String path, [
     Map<String, Object?> queryParameters = const <String, Object?>{},
   ]) {
+    final String resolvedPath = gteVersionedApiPath(path);
     final Uri baseUri = Uri.parse(
       baseUrl.endsWith('/') ? baseUrl : '$baseUrl/',
     );
     final Uri resolved = baseUri.resolve(
-      path.startsWith('/') ? path.substring(1) : path,
+      resolvedPath.startsWith('/') ? resolvedPath.substring(1) : resolvedPath,
     );
     final Map<String, List<String>> query = <String, List<String>>{};
     for (final MapEntry<String, Object?> entry in queryParameters.entries) {
@@ -1669,7 +1670,7 @@ class GteReliableApiRepository implements GteApiRepository {
           cause: decoded,
         );
       }
-      return GteAttachment.fromJson(decoded);
+      return GteAttachment.fromJson(gteApiSuccessPayload(decoded));
     } on FormatException catch (error) {
       throw GteApiException(
         type: GteApiErrorType.parsing,
@@ -1769,7 +1770,8 @@ class GteReliableApiRepository implements GteApiRepository {
         await _authSessionStore?.writeSession(null);
         return false;
       }
-      final GteAuthSession refreshed = GteAuthSession.fromJson(response.body);
+      final Object? payload = gteApiSuccessPayload(response.body);
+      final GteAuthSession refreshed = GteAuthSession.fromJson(payload);
       await _persistAuthSession(refreshed, bootstrap: true);
       return true;
     } catch (_) {
@@ -1840,7 +1842,7 @@ class GteReliableApiRepository implements GteApiRepository {
           cause: response.body,
         );
       }
-      return response.body;
+      return gteApiSuccessPayload(response.body);
     } on GteParsingException catch (error) {
       throw GteApiException(
         type: GteApiErrorType.parsing,
@@ -2012,6 +2014,46 @@ String gteApiErrorMessage(Object? payload, {required String fallback}) {
   return _extractApiErrorMessage(payload) ?? fallback;
 }
 
+String gteVersionedApiPath(String path) {
+  final String trimmed = path.trim();
+  if (trimmed.isEmpty) {
+    return '/api/v1';
+  }
+  if (_hasUriScheme(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/api/v1')) {
+    return trimmed;
+  }
+  if (trimmed == '/api') {
+    return '/api/v1';
+  }
+  if (trimmed.startsWith('/api/')) {
+    return '/api/v1${trimmed.substring(4)}';
+  }
+  if (_shouldSkipVersioning(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/')) {
+    return '/api/v1$trimmed';
+  }
+  return '/api/v1/$trimmed';
+}
+
+Object? gteApiSuccessPayload(Object? payload) {
+  if (!_isApiEnvelope(payload)) {
+    return payload;
+  }
+  final Map<String, Object?> envelope = Map<String, Object?>.from(
+    payload as Map,
+  );
+  final Object? success = envelope['success'];
+  if (success == false) {
+    return payload;
+  }
+  return envelope['data'];
+}
+
 String? _extractApiErrorMessage(Object? payload) {
   if (payload is String) {
     final String message = payload.trim();
@@ -2063,6 +2105,39 @@ String? _extractApiErrorMessage(Object? payload) {
   }
 
   return null;
+}
+
+bool _hasUriScheme(String path) {
+  return path.startsWith('http://') ||
+      path.startsWith('https://') ||
+      path.startsWith('ws://') ||
+      path.startsWith('wss://');
+}
+
+bool _shouldSkipVersioning(String path) {
+  return path == '/docs' ||
+      path.startsWith('/docs/') ||
+      path == '/openapi.json' ||
+      path == '/redoc' ||
+      path.startsWith('/tts') ||
+      path == '/health' ||
+      path == '/ready' ||
+      path == '/version' ||
+      path == '/metrics';
+}
+
+bool _isApiEnvelope(Object? payload) {
+  if (payload is! Map) {
+    return false;
+  }
+  if (payload['success'] is! bool) {
+    return false;
+  }
+  final Set<Object?> keys = payload.keys.toSet();
+  return keys.every(
+    (Object? key) =>
+        key == 'success' || key == 'data' || key == 'error' || key == 'code',
+  );
 }
 
 String? _formatApiErrorLocation(Object? location) {

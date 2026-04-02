@@ -165,7 +165,7 @@ class DynastyApiRepository implements DynastyRepository {
           cause: response.body,
         );
       }
-      return response.body;
+      return gteApiSuccessPayload(response.body);
     } on GteApiException {
       rethrow;
     } catch (error) {

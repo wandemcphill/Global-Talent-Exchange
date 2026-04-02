@@ -32,7 +32,9 @@ class CompetitiveIntegrityScheduler:
     def stop(self) -> None:
         self._stop_event.set()
         if self._thread is not None:
-            self._thread.join(timeout=1.0)
+            if self._thread.ident is not None:
+                self._thread.join(timeout=1.0)
+            self._thread = None
 
     def run_once(self) -> None:
         with self.session_factory() as session:

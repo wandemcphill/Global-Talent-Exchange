@@ -112,6 +112,8 @@ def _resolve_authenticated_user(
     if request is not None:
         request.state.auth_token_payload = payload
         request.state.auth_session = auth_session
+        request.state.authenticated_user_id = user.id
+        request.state.authenticated_session_id = auth_session.id
         control = RuntimeControlService(request.app).get_account_control(user_id=user.id)
         if control is not None and control.freeze_login:
             logger.warning("auth.request.failed user_id=%s session_id=%s reason=login_frozen", user.id, token_session_id)
@@ -196,10 +198,14 @@ def get_current_trading_user(
     current_user: User = Depends(get_current_wallet_user),
 ) -> User:
     del request
+    from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
     from app.wallets.funding_service import WalletFundingError, WalletFundingService
 
     try:
+        RiskOpsService(session).assert_trading_allowed(current_user.id)
         WalletFundingService().assert_verified_for_trading(session, current_user)
+    except RiskActionBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=str(exc)) from exc
     except WalletFundingError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return current_user

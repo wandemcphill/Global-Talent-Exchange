@@ -812,20 +812,16 @@ class ManagerAdminRepository {
     if (response.statusCode >= 400) {
       throw _toException(response);
     }
-    return response.body;
+    return gteApiSuccessPayload(response.body);
   }
 
   GteApiException _toException(GteTransportResponse response) {
-    final Object? body = response.body;
-    String message = 'Admin request failed.';
-    if (body is Map<String, dynamic>) {
-      message = (body['detail'] ?? body['message'] ?? message).toString();
-    } else if (body is String && body.trim().isNotEmpty) {
-      message = body;
-    }
     return GteApiException(
       type: GteApiErrorType.unknown,
-      message: message,
+      message: gteApiErrorMessage(
+        response.body,
+        fallback: 'Admin request failed.',
+      ),
       statusCode: response.statusCode,
     );
   }

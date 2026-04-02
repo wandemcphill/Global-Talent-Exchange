@@ -45,12 +45,8 @@ def test_api_v1_requires_auth_and_wraps_success_envelopes(app_client) -> None:
     assert unauthorized.status_code == 401
     assert unauthorized.json() == {
         "success": False,
-        "data": None,
-        "error": {
-            "code": "unauthorized",
-            "message": "Authentication credentials were not provided.",
-            "details": None,
-        },
+        "error": "Authentication credentials were not provided.",
+        "code": "unauthorized",
     }
 
     _user_id, token = _create_authenticated_user(app)
@@ -62,7 +58,8 @@ def test_api_v1_requires_auth_and_wraps_success_envelopes(app_client) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert payload["error"] is None
+    assert "error" not in payload
+    assert "code" not in payload
     assert payload["data"]["club"]["name"] == "Lagos Titans"
     assert payload["data"]["live_matches"][0]["match_id"] == "m1"
 

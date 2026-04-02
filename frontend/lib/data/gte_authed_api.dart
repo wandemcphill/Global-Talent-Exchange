@@ -90,7 +90,7 @@ class GteAuthedApi {
     if (response.statusCode >= 400) {
       throw _toException(response);
     }
-    return response.body;
+    return gteApiSuccessPayload(response.body);
   }
 
   Future<Object?> post(
@@ -152,15 +152,9 @@ class GteAuthedApi {
 
   GteApiException _toException(GteTransportResponse response) {
     final Object? body = response.body;
-    String message = 'Request failed.';
-    if (body is Map<String, dynamic>) {
-      message = (body['detail'] ?? body['message'] ?? message).toString();
-    } else if (body is String && body.trim().isNotEmpty) {
-      message = body;
-    }
     return GteApiException(
       type: _errorType(response.statusCode),
-      message: message,
+      message: gteApiErrorMessage(body, fallback: 'Request failed.'),
       statusCode: response.statusCode,
     );
   }
@@ -204,12 +198,13 @@ class GteAuthedApi {
         body: <String, Object?>{'refresh_token': refreshToken},
       ),
     );
-    if (response.statusCode >= 400 || response.body is! Map) {
+    final Object? normalizedPayload = gteApiSuccessPayload(response.body);
+    if (response.statusCode >= 400 || normalizedPayload is! Map) {
       await _clearSession();
       return false;
     }
     final Map<String, Object?> payload = Map<String, Object?>.from(
-      response.body as Map,
+      normalizedPayload,
     );
     final AuthSession refreshed = AuthSession.fromTokenPayload(payload);
     final AuthSession bootstrapMerged = await _bootstrapSession(refreshed);
@@ -232,11 +227,12 @@ class GteAuthedApi {
         headers: headers,
       ),
     );
-    if (response.statusCode >= 400 || response.body is! Map) {
+    final Object? normalizedPayload = gteApiSuccessPayload(response.body);
+    if (response.statusCode >= 400 || normalizedPayload is! Map) {
       return session;
     }
     return session.mergeProfile(
-      Map<String, Object?>.from(response.body as Map),
+      Map<String, Object?>.from(normalizedPayload),
     );
   }
 

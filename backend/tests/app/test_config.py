@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import textwrap
 
+import pytest
+
 from app.core.config import (
     DEFAULT_CORS_ALLOWED_ORIGINS,
     DEFAULT_CORS_ALLOW_ORIGIN_REGEX,
@@ -317,6 +319,42 @@ def test_load_settings_provides_default_cors_origins_and_regex() -> None:
     assert settings.cors_allowed_origins == DEFAULT_CORS_ALLOWED_ORIGINS
     assert settings.cors_allow_origin_regex == DEFAULT_CORS_ALLOW_ORIGIN_REGEX
     assert settings.cors_allow_credentials is False
+
+
+def test_load_settings_requires_runtime_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GTE_AUTH_SECRET", raising=False)
+    monkeypatch.delenv("GTE_MEDIA_SIGNING_SECRET", raising=False)
+
+    with pytest.raises(ValueError, match="GTE_AUTH_SECRET"):
+        load_settings(
+            environ={"DATABASE_URL": "sqlite+pysqlite:///:memory:"},
+            config_root=(Path(__file__).resolve().parents[2] / "config"),
+        )
+
+
+def test_load_settings_rejects_placeholder_runtime_secrets() -> None:
+    with pytest.raises(ValueError, match="GTE_AUTH_SECRET"):
+        load_settings(
+            environ={
+                "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+                "GTE_AUTH_SECRET": "replace-me-with-a-long-random-string",
+                "GTE_MEDIA_SIGNING_SECRET": "test-media-signing-secret-not-for-production",
+            },
+            config_root=(Path(__file__).resolve().parents[2] / "config"),
+        )
+
+
+def test_load_settings_rejects_incomplete_bootstrap_admin_config() -> None:
+    with pytest.raises(ValueError, match="GTE_BOOTSTRAP_ADMIN_PASSWORD"):
+        load_settings(
+            environ={
+                "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+                "GTE_BOOTSTRAP_ADMIN_ENABLED": "true",
+                "GTE_BOOTSTRAP_ADMIN_EMAIL": "admin@example.com",
+                "GTE_BOOTSTRAP_ADMIN_USERNAME": "admin_user",
+            },
+            config_root=(Path(__file__).resolve().parents[2] / "config"),
+        )
 
 
 def test_load_settings_reads_real_player_import_env_overrides() -> None:

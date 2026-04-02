@@ -266,7 +266,7 @@ class CompetitionApi {
           cause: response.body,
         );
       }
-      return response.body;
+      return gteApiSuccessPayload(response.body);
     } on GteParsingException catch (error) {
       throw GteApiException(
         type: GteApiErrorType.parsing,

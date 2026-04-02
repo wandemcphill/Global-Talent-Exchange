@@ -62,6 +62,15 @@ def get_market_engine(request: Request) -> MarketEngine:
     return market_engine
 
 
+def _client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for") or request.headers.get("cf-connecting-ip")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip() or None
+    if request.client is not None and request.client.host:
+        return str(request.client.host)
+    return None
+
+
 def get_market_player_query_service(
     request: Request,
     session: Session = Depends(get_session),
@@ -285,6 +294,8 @@ def buy_market_position(
                 buyer=current_user,
                 player_id=payload.player_id,
                 shares=payload.shares,
+                client_ip=_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
             )
             session.commit()
         except GtexError as exc:
@@ -327,6 +338,8 @@ def sell_market_position(
                 seller=current_user,
                 player_id=payload.player_id,
                 shares=payload.shares,
+                client_ip=_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
             )
             session.commit()
         except GtexError as exc:

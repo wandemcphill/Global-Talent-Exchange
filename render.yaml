@@ -2,13 +2,16 @@ services:
   - type: web
     name: gtex-api
     runtime: python
-    plan: free
+    plan: starter
+    numInstances: 2
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
     preDeployCommand: python -m alembic -c backend/migrations/alembic.ini upgrade head
     # Gunicorn binds the port in the master process before the heavy FastAPI
     # app import finishes, which avoids Render's cold-start port scan failures.
     startCommand: gunicorn backend.app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180
     healthCheckPath: /health
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 120
     buildFilter:
       paths:
         - backend/**
@@ -79,9 +82,10 @@ services:
   - type: worker
     name: gtex-outbox-relay
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
     startCommand: bash -lc "cd backend && python -m app.backbone.outbox_relay_main"
+    autoDeployTrigger: off
     buildFilter:
       paths:
         - backend/**
@@ -116,9 +120,10 @@ services:
   - type: worker
     name: gtex-simulation-worker
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
     startCommand: bash -lc "cd backend && python -m app.backbone.simulation_worker_main"
+    autoDeployTrigger: off
     buildFilter:
       paths:
         - backend/**
@@ -153,9 +158,10 @@ services:
   - type: worker
     name: gtex-projection-workers
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
     startCommand: bash -lc "cd backend && python -m app.backbone.projection_worker_main"
+    autoDeployTrigger: off
     buildFilter:
       paths:
         - backend/**
@@ -190,9 +196,10 @@ services:
   - type: web
     name: gtex-web
     runtime: static
-    plan: free
+    plan: starter
     buildCommand: bash ops/render/build-frontend.sh
     staticPublishPath: frontend/build/web
+    autoDeployTrigger: off
     buildFilter:
       paths:
         - frontend/**
@@ -212,10 +219,10 @@ services:
 
   - type: keyvalue
     name: gtex-cache
-    plan: free
+    plan: starter
     ipAllowList: []
 
 databases:
   - name: gtex-postgres
-    plan: free
+    plan: basic-256mb
     ipAllowList: []
