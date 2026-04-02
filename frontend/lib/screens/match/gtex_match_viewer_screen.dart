@@ -459,7 +459,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                   playbackSeconds: controller.positionSeconds,
                 );
                 final String commentaryHeadline =
-                    activeEvent?.bannerText?.trim().isNotEmpty == true
+                    activeEvent?.bannerText.trim().isNotEmpty == true
                         ? activeEvent!.bannerText
                         : controller.displayFrame.overlayText ??
                             presentation.sceneLabel;
