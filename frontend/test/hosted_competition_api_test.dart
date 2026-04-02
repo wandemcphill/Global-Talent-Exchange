@@ -19,7 +19,7 @@ void main() {
     expect(transport.requests.single.method, 'POST');
     expect(
       transport.requests.single.uri.path,
-      '/admin/hosted-competitions/seed',
+      '/api/v1/admin/hosted-competitions/seed',
     );
   });
 }

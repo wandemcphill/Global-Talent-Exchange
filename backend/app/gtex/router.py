@@ -3,11 +3,15 @@ from __future__ import annotations
 from typing import Never
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_match_user, get_current_user, get_optional_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_match_user, get_current_trading_user, get_current_user, get_optional_current_user, get_session
 from app.gtex.runtime import ensure_gtex_runtime
 from app.gtex.schemas import (
+    AdminBanUserRequest,
+    AdminBanUserView,
+    AdminFlagView,
     AiLeaguesView,
     AiLeagueView,
     AiMatchView,
@@ -24,13 +28,25 @@ from app.gtex.schemas import (
     MatchFindResponse,
 )
 from app.gtex.service import GtexConflictError, GtexError, GtexNotFoundError, GtexValidationError
+from app.models.gtex_economy import GtexRiskFlag, GtexRiskFlagStatus
+from app.models.risk_ops import RiskActionType
 from app.models.user import User
+from app.risk_ops_engine.service import RiskOpsService
 
 router = APIRouter(tags=["gtex"])
 
 
 def get_runtime(request: Request):
     return ensure_gtex_runtime(request.app)
+
+
+def _client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for") or request.headers.get("cf-connecting-ip")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip() or None
+    if request.client is not None and request.client.host:
+        return str(request.client.host)
+    return None
 
 
 def raise_gtex_http_exception(exc: GtexError) -> Never:
@@ -121,8 +137,9 @@ def get_creator_player(
 @router.post("/gtex/market/buy", response_model=CreatorTradeView, status_code=status.HTTP_201_CREATED)
 def buy_creator_shares(
     payload: CreatorTradeRequest,
+    request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_trading_user),
     runtime=Depends(get_runtime),
 ) -> CreatorTradeView:
     try:
@@ -131,6 +148,8 @@ def buy_creator_shares(
             buyer=current_user,
             player_id=payload.player_id,
             shares=payload.shares,
+            client_ip=_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
         )
         session.commit()
     except GtexError as exc:
@@ -142,8 +161,9 @@ def buy_creator_shares(
 @router.post("/gtex/market/sell", response_model=CreatorTradeView, status_code=status.HTTP_201_CREATED)
 def sell_creator_shares(
     payload: CreatorTradeRequest,
+    request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_trading_user),
     runtime=Depends(get_runtime),
 ) -> CreatorTradeView:
     try:
@@ -152,6 +172,8 @@ def sell_creator_shares(
             seller=current_user,
             player_id=payload.player_id,
             shares=payload.shares,
+            client_ip=_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
         )
         session.commit()
     except GtexError as exc:
@@ -168,6 +190,143 @@ def get_market_trending(
     runtime=Depends(get_runtime),
 ) -> MarketTrendingView:
     return MarketTrendingView(items=[CreatorPlayerView.model_validate(item) for item in runtime.creator_market.list_trending(session, limit=limit, viewer=current_user)])
+
+
+@router.get("/admin/flags", response_model=list[AdminFlagView])
+def list_admin_flags(
+    limit: int = Query(default=100, ge=1, le=500),
+    user_id: str | None = Query(default=None),
+    status_filter: GtexRiskFlagStatus | None = Query(default=None, alias="status"),
+    _: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> list[AdminFlagView]:
+    del _
+    stmt = select(GtexRiskFlag)
+    if user_id:
+        stmt = stmt.where(GtexRiskFlag.subject_key == f"user:{user_id}")
+    if status_filter is not None:
+        stmt = stmt.where(GtexRiskFlag.status == status_filter)
+    else:
+        stmt = stmt.where(GtexRiskFlag.status.in_((GtexRiskFlagStatus.OPEN, GtexRiskFlagStatus.REVIEWING)))
+    items = session.scalars(
+        stmt.order_by(GtexRiskFlag.created_at.desc(), GtexRiskFlag.updated_at.desc()).limit(limit)
+    ).all()
+    payload: list[AdminFlagView] = []
+    for item in items:
+        extracted_user_id = item.subject_key.split(":", 1)[1] if item.subject_key.startswith("user:") else None
+        payload.append(
+            AdminFlagView(
+                id=item.id,
+                category=item.category,
+                subject_key=item.subject_key,
+                user_id=extracted_user_id,
+                reference_id=item.reference_id,
+                severity=item.severity,
+                signal_score=item.signal_score,
+                status=item.status.value if hasattr(item.status, "value") else str(item.status),
+                detail=item.detail,
+                metadata_json=dict(item.metadata_json or {}),
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+        )
+    return payload
+
+
+@router.post("/admin/ban-user", response_model=AdminBanUserView)
+def ban_user_account(
+    payload: AdminBanUserRequest,
+    current_admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> AdminBanUserView:
+    user = session.get(User, payload.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User was not found.")
+
+    risk_service = RiskOpsService(session)
+    applied_actions: list[str] = []
+    if payload.freeze_wallet:
+        _, created = risk_service.create_action(
+            actor_user_id=current_admin.id,
+            user_id=user.id,
+            action_type=RiskActionType.FREEZE_WALLET,
+            reason=payload.reason,
+            source_rule_key="admin_ban_user",
+            metadata_json={"reason": payload.reason},
+        )
+        if created:
+            applied_actions.append(RiskActionType.FREEZE_WALLET.value)
+    if payload.block_trading:
+        _, created = risk_service.create_action(
+            actor_user_id=current_admin.id,
+            user_id=user.id,
+            action_type=RiskActionType.BLOCK_TRADING,
+            reason=payload.reason,
+            source_rule_key="admin_ban_user",
+            metadata_json={"reason": payload.reason},
+        )
+        if created:
+            applied_actions.append(RiskActionType.BLOCK_TRADING.value)
+    if payload.block_withdrawals:
+        _, created = risk_service.create_action(
+            actor_user_id=current_admin.id,
+            user_id=user.id,
+            action_type=RiskActionType.BLOCK_WITHDRAWAL,
+            reason=payload.reason,
+            source_rule_key="admin_ban_user",
+            metadata_json={"reason": payload.reason},
+        )
+        if created:
+            applied_actions.append(RiskActionType.BLOCK_WITHDRAWAL.value)
+    if payload.require_manual_review:
+        _, created = risk_service.create_action(
+            actor_user_id=current_admin.id,
+            user_id=user.id,
+            action_type=RiskActionType.MANUAL_REVIEW,
+            reason=payload.reason,
+            source_rule_key="admin_ban_user",
+            metadata_json={"reason": payload.reason},
+        )
+        if created:
+            applied_actions.append(RiskActionType.MANUAL_REVIEW.value)
+    if payload.deactivate_account:
+        user.is_active = False
+
+    risk_service.log_audit(
+        actor_user_id=current_admin.id,
+        action_key="admin.user.banned",
+        resource_type="user",
+        resource_id=user.id,
+        detail="Admin banned a user account.",
+        metadata_json={
+            "reason": payload.reason,
+            "deactivate_account": payload.deactivate_account,
+            "freeze_wallet": payload.freeze_wallet,
+            "block_trading": payload.block_trading,
+            "block_withdrawals": payload.block_withdrawals,
+            "require_manual_review": payload.require_manual_review,
+            "actions_applied": applied_actions,
+        },
+    )
+    session.commit()
+    active_flag_count = int(
+        session.scalar(
+            select(func.count())
+            .select_from(GtexRiskFlag)
+            .where(
+                GtexRiskFlag.subject_key == f"user:{user.id}",
+                GtexRiskFlag.status.in_((GtexRiskFlagStatus.OPEN, GtexRiskFlagStatus.REVIEWING)),
+            )
+        )
+        or 0
+    )
+    return AdminBanUserView(
+        user_id=user.id,
+        banned=not bool(user.is_active),
+        reason=payload.reason,
+        actions_applied=applied_actions,
+        active_flag_count=active_flag_count,
+    )
 
 
 @router.post("/match/find", response_model=MatchFindResponse, status_code=status.HTTP_202_ACCEPTED)

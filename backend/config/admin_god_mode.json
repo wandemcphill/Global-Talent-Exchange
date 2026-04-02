@@ -49,7 +49,31 @@
   "roles": {
     "assignments": [
       {
-        "subject_key": "competition-admin-cfb92501@example.com",
+        "is_enabled": true,
+        "permissions": [
+          "manage_competitions"
+        ],
+        "role_name": "scoped_admin",
+        "subject_key": "competition-admin-cfb92501@example.com"
+      },
+      {
+        "is_enabled": true,
+        "permissions": [
+          "manage_competitions"
+        ],
+        "role_name": "scoped_admin",
+        "subject_key": "competition-admin-4122422e@example.com"
+      },
+      {
+        "is_enabled": true,
+        "permissions": [
+          "manage_competitions"
+        ],
+        "role_name": "scoped_admin",
+        "subject_key": "competition-admin-9b18a376@example.com"
+      },
+      {
+        "subject_key": "competition-admin-975ed73f@example.com",
         "role_name": "scoped_admin",
         "permissions": [
           "manage_competitions"
@@ -81,23 +105,23 @@
         "view_audit_log",
         "view_integrity_controls"
       ],
+      "scoped_admin": [],
       "support_admin": [
         "manage_withdrawals",
         "view_audit_log"
-      ],
-      "scoped_admin": []
+      ]
     },
     "default_admin_role": "scoped_admin"
   },
   "treasury_withdrawals": [],
   "withdrawal_controls": {
-    "deposits_via_bank_transfer": true,
+    "deposits_via_bank_transfer": false,
     "egame_withdrawals_enabled": false,
     "payouts_via_bank_transfer": true,
-    "processor_mode": "manual_bank_transfer",
-    "reason": "Manual bank-transfer-first control baseline.",
+    "processor_mode": "automatic_gateway",
+    "reason": "Enable gateway deposit path for reliability tests.",
     "trade_withdrawals_enabled": true,
-    "updated_at": null,
-    "updated_by": null
+    "updated_at": "2026-04-02T05:17:41.707938+00:00",
+    "updated_by": "c3a6567c-1e62-4d64-8bc9-9293f3af2733"
   }
 }

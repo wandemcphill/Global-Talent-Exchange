@@ -44,18 +44,18 @@ class CompetitionControlRepository {
     if (auth) headers['Authorization'] = 'Bearer $accessToken';
     final GteTransportResponse response = await transport.send(GteTransportRequest(method: method, uri: config.uriFor(path, query), headers: headers, body: body));
     if (response.statusCode >= 400) throw _toException(response);
-    return response.body;
+    return gteApiSuccessPayload(response.body);
   }
 
   GteApiException _toException(GteTransportResponse response) {
-    final Object? body = response.body;
-    String message = 'Competition request failed.';
-    if (body is Map<String, dynamic>) {
-      message = (body['detail'] ?? body['message'] ?? message).toString();
-    } else if (body is String && body.trim().isNotEmpty) {
-      message = body;
-    }
-    return GteApiException(type: _errorType(response.statusCode), message: message, statusCode: response.statusCode);
+    return GteApiException(
+      type: _errorType(response.statusCode),
+      message: gteApiErrorMessage(
+        response.body,
+        fallback: 'Competition request failed.',
+      ),
+      statusCode: response.statusCode,
+    );
   }
 
   GteApiErrorType _errorType(int statusCode) {

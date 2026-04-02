@@ -11,6 +11,7 @@ from typing import Iterable
 from fastapi import Depends
 from pydantic import ValidationError
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_session
@@ -89,6 +90,7 @@ from app.services.competition_validation_service import CompetitionValidationSer
 from app.services.competition_visibility_service import CompetitionVisibilityService
 from app.services.competition_wallet_service import CompetitionWalletService
 from app.services.dynamic_prize_pool_service import DynamicPrizePoolListContext, DynamicPrizePoolService
+from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.service import InsufficientBalanceError
 
 _DEFAULT_RULES = (
@@ -146,6 +148,37 @@ class CompetitionOrchestrator:
         self.competition_wallet_service = CompetitionWalletService(self.session)
         self.progression_service = CompetitionProgressionService(self.session)
         self.auto_runner = CompetitionAutoRunner(self.session)
+
+    def _audit_competition_action(
+        self,
+        *,
+        actor_user_id: str | None,
+        action_key: str,
+        competition: Competition,
+        detail: str,
+        metadata_json: dict | None = None,
+    ) -> None:
+        RiskOpsService(self.session).log_audit(
+            actor_user_id=actor_user_id,
+            action_key=action_key,
+            resource_type="competition",
+            resource_id=competition.id,
+            detail=detail,
+            metadata_json={
+                "competition_id": competition.id,
+                "status": competition.status,
+                "format": competition.format,
+                "entry_fee_minor": competition.entry_fee_minor,
+                "currency": competition.currency,
+                **dict(metadata_json or {}),
+            },
+        )
+
+    @staticmethod
+    def _consume_invite(invite: CompetitionInvite) -> None:
+        invite.uses += 1
+        invite.responded_at = datetime.now(timezone.utc)
+        invite.status = "fulfilled" if invite.uses >= invite.max_uses else "accepted"
 
     def create(self, payload: CompetitionCreateRequest) -> CompetitionSummaryView:
         self._validate_against_thread_a_domain(payload)
@@ -224,6 +257,18 @@ class CompetitionOrchestrator:
             ),
         )
         self.session.add(reward_pool)
+        self._audit_competition_action(
+            actor_user_id=competition.host_user_id,
+            action_key="competition.created",
+            competition=competition,
+            detail="Competition created.",
+            metadata_json={
+                "source_type": competition.source_type,
+                "source_id": competition.source_id,
+                "reward_pool_type": reward_pool.pool_type,
+                "reward_pool_amount_minor": reward_pool.amount_minor,
+            },
+        )
         self.session.commit()
         self.session.refresh(competition)
         self.event_publisher.publish(
@@ -310,6 +355,17 @@ class CompetitionOrchestrator:
                 self.session.add_all(rules)
 
         competition.updated_at = datetime.now(timezone.utc)
+        self._audit_competition_action(
+            actor_user_id=competition.host_user_id,
+            action_key="competition.updated",
+            competition=competition,
+            detail="Competition updated.",
+            metadata_json={
+                "capacity": rule_set.max_participants,
+                "visibility": competition.visibility,
+                "competition_type": competition.competition_type,
+            },
+        )
         self.session.commit()
         self.session.refresh(competition)
         return self._to_summary(competition)
@@ -323,6 +379,13 @@ class CompetitionOrchestrator:
         competition.status = CompetitionStatus.OPEN.value
         competition.opened_at = datetime.now(timezone.utc)
         competition.stage = "registration"
+        self._audit_competition_action(
+            actor_user_id=competition.host_user_id,
+            action_key="competition.published",
+            competition=competition,
+            detail="Competition published for registration.",
+            metadata_json={"open_for_join": open_for_join},
+        )
         self.session.commit()
         self.session.refresh(competition)
         return self._to_summary(competition)
@@ -445,7 +508,7 @@ class CompetitionOrchestrator:
 
         invite_used = None
         if invite_code:
-            invite_used = self._resolve_invite(competition.id, invite_code=invite_code, club_id=user_id, consume=True)
+            invite_used = self._resolve_invite(competition.id, invite_code=invite_code, club_id=user_id, consume=False)
             if invite_used is None and join_decision.requires_invite:
                 return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
 
@@ -459,8 +522,15 @@ class CompetitionOrchestrator:
             responded_at=datetime.now(timezone.utc),
             metadata_json={**({"user_name": user_name} if user_name else {}), **({"invite_code": invite_code} if invite_code else {})},
         )
-        self.session.add(entry)
-        self.session.flush()
+        entry_savepoint = self.session.begin_nested()
+        try:
+            self.session.add(entry)
+            self.session.flush()
+        except IntegrityError as exc:
+            entry_savepoint.rollback()
+            raise CompetitionActionError("User has already joined this competition.", reason="duplicate_entry") from exc
+        else:
+            entry_savepoint.commit()
         participant = CompetitionParticipant(
             competition_id=competition.id,
             club_id=user_id,
@@ -468,7 +538,15 @@ class CompetitionOrchestrator:
             status="joined",
             paid_entry_fee_minor=competition.entry_fee_minor,
         )
-        self.session.add(participant)
+        participant_savepoint = self.session.begin_nested()
+        try:
+            self.session.add(participant)
+            self.session.flush()
+        except IntegrityError as exc:
+            participant_savepoint.rollback()
+            raise CompetitionActionError("User has already joined this competition.", reason="duplicate_entry") from exc
+        else:
+            participant_savepoint.commit()
         try:
             fee_result = self.competition_wallet_service.collect_entry_fee(
                 competition=competition,
@@ -479,6 +557,13 @@ class CompetitionOrchestrator:
                 "Available balance is lower than the competition entry fee.",
                 reason="entry_fee_insufficient_balance",
             ) from exc
+        if competition.entry_fee_minor > 0 and fee_result.status != "settled":
+            raise CompetitionActionError(
+                "Competition entry payment could not be validated.",
+                reason="entry_fee_unverified",
+            )
+        if invite_used is not None:
+            self._consume_invite(invite_used)
         entry.metadata_json = {
             **dict(entry.metadata_json or {}),
             "entry_fee_status": fee_result.status,
@@ -486,6 +571,21 @@ class CompetitionOrchestrator:
             "entry_fee_reason": fee_result.reason,
         }
         participant.paid_at = datetime.now(timezone.utc) if fee_result.status == "settled" else None
+        self._audit_competition_action(
+            actor_user_id=user_id,
+            action_key="competition.joined",
+            competition=competition,
+            detail="Competition join completed.",
+            metadata_json={
+                "participant_user_id": user_id,
+                "entry_id": entry.id,
+                "participant_id": participant.id,
+                "entry_type": entry.entry_type,
+                "invite_id": invite_used.id if invite_used is not None else None,
+                "entry_fee_status": fee_result.status,
+                "entry_fee_transaction_id": fee_result.transaction_id,
+            },
+        )
         self._refresh_financials(competition, rule_set, participant_count=participant_count + 1)
         self.session.commit()
         self.session.refresh(competition)
@@ -537,6 +637,21 @@ class CompetitionOrchestrator:
         self.session.delete(participant)
         participant_count = max(0, self._participant_count(competition.id) - 1)
         self._refresh_financials(competition, rule_set, participant_count=participant_count)
+        self._audit_competition_action(
+            actor_user_id=user_id,
+            action_key="competition.left",
+            competition=competition,
+            detail="Competition entry withdrawn.",
+            metadata_json={
+                "participant_user_id": user_id,
+                "entry_id": entry.id if entry is not None else None,
+                "participant_id": participant.id,
+                "refund_status": (entry.metadata_json or {}).get("entry_fee_refund_status") if entry is not None else None,
+                "refund_transaction_id": (entry.metadata_json or {}).get("entry_fee_refund_transaction_id")
+                if entry is not None
+                else None,
+            },
+        )
         self.session.commit()
         self.session.refresh(competition)
         return self._to_summary(competition, user_id=user_id)
@@ -566,6 +681,18 @@ class CompetitionOrchestrator:
             metadata_json={"note": note} if note else {},
         )
         self.session.add(invite)
+        self._audit_competition_action(
+            actor_user_id=issued_by,
+            action_key="competition.invite.created",
+            competition=competition,
+            detail="Competition invite created.",
+            metadata_json={
+                "invite_code": invite.invite_code,
+                "invite_id": invite.id,
+                "max_uses": invite.max_uses,
+                "expires_at": invite.expires_at.isoformat() if invite.expires_at is not None else None,
+            },
+        )
         self.session.commit()
         self.session.refresh(invite)
         return self._invite_view(invite)
@@ -593,6 +720,7 @@ class CompetitionOrchestrator:
             return None
         rule_set = self._rule_set(competition.id)
         club_id = payload.club_id
+        participant_count = self._participant_count(competition.id)
         participant = self._participant(competition.id, club_id)
         if participant is not None:
             return self._to_summary(competition, user_id=club_id, invite_code=payload.invite_code)
@@ -601,7 +729,7 @@ class CompetitionOrchestrator:
             invite_code=payload.invite_code,
             invite_id=payload.invite_id,
             club_id=club_id,
-            consume=True,
+            consume=False,
         )
         if invite is None:
             raise CompetitionActionError("Invite is invalid or expired.", reason="invite_invalid")
@@ -615,8 +743,15 @@ class CompetitionOrchestrator:
             responded_at=datetime.now(timezone.utc),
             metadata_json={"invite_code": invite.invite_code},
         )
-        self.session.add(entry)
-        self.session.flush()
+        entry_savepoint = self.session.begin_nested()
+        try:
+            self.session.add(entry)
+            self.session.flush()
+        except IntegrityError as exc:
+            entry_savepoint.rollback()
+            raise CompetitionActionError("User has already joined this competition.", reason="duplicate_entry") from exc
+        else:
+            entry_savepoint.commit()
         participant = CompetitionParticipant(
             competition_id=competition.id,
             club_id=club_id,
@@ -624,7 +759,15 @@ class CompetitionOrchestrator:
             status="joined",
             paid_entry_fee_minor=competition.entry_fee_minor,
         )
-        self.session.add(participant)
+        participant_savepoint = self.session.begin_nested()
+        try:
+            self.session.add(participant)
+            self.session.flush()
+        except IntegrityError as exc:
+            participant_savepoint.rollback()
+            raise CompetitionActionError("User has already joined this competition.", reason="duplicate_entry") from exc
+        else:
+            participant_savepoint.commit()
         try:
             fee_result = self.competition_wallet_service.collect_entry_fee(
                 competition=competition,
@@ -635,6 +778,12 @@ class CompetitionOrchestrator:
                 "Available balance is lower than the competition entry fee.",
                 reason="entry_fee_insufficient_balance",
             ) from exc
+        if competition.entry_fee_minor > 0 and fee_result.status != "settled":
+            raise CompetitionActionError(
+                "Competition entry payment could not be validated.",
+                reason="entry_fee_unverified",
+            )
+        self._consume_invite(invite)
         entry.metadata_json = {
             **dict(entry.metadata_json or {}),
             "entry_fee_status": fee_result.status,
@@ -642,8 +791,23 @@ class CompetitionOrchestrator:
             "entry_fee_reason": fee_result.reason,
         }
         participant.paid_at = datetime.now(timezone.utc) if fee_result.status == "settled" else None
-        participant_count = self._participant_count(competition.id) + 1
-        self._refresh_financials(competition, rule_set, participant_count=participant_count)
+        self._audit_competition_action(
+            actor_user_id=payload.user_id or club_id,
+            action_key="competition.invite.accepted",
+            competition=competition,
+            detail="Competition invite accepted.",
+            metadata_json={
+                "participant_user_id": payload.user_id or club_id,
+                "club_id": club_id,
+                "entry_id": entry.id,
+                "participant_id": participant.id,
+                "invite_id": invite.id,
+                "invite_code": invite.invite_code,
+                "entry_fee_status": fee_result.status,
+                "entry_fee_transaction_id": fee_result.transaction_id,
+            },
+        )
+        self._refresh_financials(competition, rule_set, participant_count=participant_count + 1)
         self.session.commit()
         self.session.refresh(competition)
         self.auto_runner.run_until_idle(competition)

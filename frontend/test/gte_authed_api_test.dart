@@ -37,6 +37,7 @@ void main() {
     await client.post('/feed/for-you');
 
     final GteTransportRequest request = transport.requests.single;
+    expect(request.uri.path, '/api/v1/feed/for-you');
     expect(request.headers['Authorization'], 'Bearer session-token');
     expect(request.headers['X-User-Id'], 'user-123');
     expect(request.headers['X-Session-Id'], 'session-abc');
@@ -121,6 +122,30 @@ void main() {
       7,
     );
   });
+
+  test('getMap unwraps standard success envelopes', () async {
+    final _RecordingTransport transport = _RecordingTransport(
+      response: const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'success': true,
+          'data': <String, Object?>{'items': <Object?>[]},
+        },
+      ),
+    );
+    final GteAuthedApi client = GteAuthedApi(
+      config: const GteRepositoryConfig(baseUrl: 'http://127.0.0.1:8000'),
+      transport: transport,
+      mode: GteBackendMode.live,
+    );
+
+    final Map<String, dynamic> payload = await client.getMap(
+      '/feed/for-you',
+      auth: false,
+    );
+
+    expect(payload, <String, Object?>{'items': <Object?>[]});
+  });
 }
 
 String _jwtToken(Map<String, Object?> payload) {
@@ -138,14 +163,19 @@ String _jwtToken(Map<String, Object?> payload) {
 }
 
 class _RecordingTransport implements GteTransport {
+  _RecordingTransport({
+    this.response = const GteTransportResponse(
+      statusCode: 200,
+      body: <String, Object?>{},
+    ),
+  });
+
   final List<GteTransportRequest> requests = <GteTransportRequest>[];
+  final GteTransportResponse response;
 
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) async {
     requests.add(request);
-    return const GteTransportResponse(
-      statusCode: 200,
-      body: <String, Object?>{},
-    );
+    return response;
   }
 }

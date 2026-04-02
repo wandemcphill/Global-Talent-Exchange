@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
-from app.core.config import load_settings
+from app.core.config import load_settings, reset_settings_cache
 from app.models.user import User
 from app.models.wallet import LedgerUnit
 from app.wallets.service import WalletService
@@ -20,11 +20,13 @@ DEFAULT_TEST_DATABASE_URL = (
 )
 
 os.environ.setdefault("GTE_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+os.environ.setdefault("GTE_AUTH_SECRET", "test-auth-secret-not-for-production")
+os.environ.setdefault("GTE_MEDIA_SIGNING_SECRET", "test-media-signing-secret-not-for-production")
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_ENABLED", "1")
-os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_EMAIL", "vidvimedialtd@gmail.com")
-os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_PASSWORD", "NewPass1234!")
-os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_USERNAME", "vidvimedialtd")
-os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME", "GTEX God Mode Admin")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_EMAIL", "admin@test.gtex.local")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_PASSWORD", "TestAdminPass123!")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_USERNAME", "gtex_test_admin")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME", "GTEX Test Admin")
 
 
 @pytest.fixture(scope="module")
@@ -32,13 +34,26 @@ def test_settings(tmp_path_factory: pytest.TempPathFactory):
     database_path = tmp_path_factory.mktemp("gte-app") / "gte_app.db"
     media_root = tmp_path_factory.mktemp("gte-media")
     database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
-    return load_settings(
-        environ={
-            **os.environ,
-            "GTE_DATABASE_URL": database_url,
-            "GTE_MEDIA_STORAGE_ROOT": str(media_root),
-        }
-    )
+    managed_env = {
+        "DATABASE_URL": database_url,
+        "GTE_DATABASE_URL": database_url,
+        "GTE_MEDIA_STORAGE_ROOT": str(media_root),
+    }
+    previous_env = {key: os.environ.get(key) for key in managed_env}
+
+    try:
+        for key, value in managed_env.items():
+            os.environ[key] = value
+        reset_settings_cache()
+        yield load_settings()
+    finally:
+        reset_settings_cache()
+        for key, previous_value in previous_env.items():
+            if previous_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous_value
+        reset_settings_cache()
 
 
 @pytest.fixture(scope="module")
@@ -99,6 +114,11 @@ def demo_auth_headers(client, demo_seed, demo_user_credentials):
 
 @pytest.fixture
 def bootstrap_admin_headers(client):
+    startup_thread = getattr(client.app.state, "deferred_startup_thread", None)
+    if startup_thread is not None and startup_thread.is_alive():
+        startup_thread.join(timeout=30)
+    assert startup_thread is None or not startup_thread.is_alive(), "Deferred startup did not finish in time."
+
     response = client.post(
         "/auth/login",
         json={

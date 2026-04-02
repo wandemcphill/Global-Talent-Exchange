@@ -115,6 +115,7 @@ class Container:
         from app.players.service import PlayerSummaryProjector
         from app.realtime.service import RealtimeHub
         from app.risk.fraud_service import FraudDetectionService
+        from app.risk.security_monitoring_service import SecurityMonitoringService
         from app.services.email import EmailService
         from app.services.referral_orchestrator import ReferralOrchestrator
         from app.value_engine.service import IngestionValueEngineBridge
@@ -143,12 +144,16 @@ class Container:
             session_factory=self.database.session_factory,
             event_publisher=event_publisher,
         )
+        security_monitoring = SecurityMonitoringService(
+            session_factory=self.database.session_factory,
+        )
         self.global_memory_projector = GlobalMemoryProjectionService(self.database.session_factory)
         event_publisher.subscribe(self.notifications.handle_event)
         event_publisher.subscribe(self.alert_system.handle_event)
         event_publisher.subscribe(self.metrics.handle_event)
         event_publisher.subscribe(self.realtime.handle_event)
         event_publisher.subscribe(fraud_detection.handle_event)
+        event_publisher.subscribe(security_monitoring.handle_event)
         event_publisher.subscribe(self.global_memory_projector.handle_event)
 
         self.outbox_relay = None

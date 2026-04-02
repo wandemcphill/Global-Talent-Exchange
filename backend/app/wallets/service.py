@@ -674,6 +674,10 @@ class WalletService:
         return event
 
     def verify_payment_event(self, session: Session, payment_event: PaymentEvent, *, actor: User | None = None) -> PaymentEvent:
+        if payment_event.status == PaymentStatus.VERIFIED and payment_event.ledger_transaction_id is not None:
+            raise LedgerError("Only pending payment events can be verified.")
+        if payment_event.ledger_transaction_id is not None and payment_event.status != PaymentStatus.VERIFIED:
+            raise LedgerError("Payment event is already linked to a processed ledger transaction.")
         if payment_event.status != PaymentStatus.PENDING:
             raise LedgerError("Only pending payment events can be verified.")
 
@@ -1224,9 +1228,20 @@ class WalletService:
             list(accounts_by_id.values()),
             for_update=True,
         )
+        balance_transitions: dict[str, dict[str, Any]] = {}
         for account_id, delta in delta_by_account.items():
             account = accounts_by_id[account_id]
-            projected_balance = self._normalize_amount(balance_projections[account_id].balance + delta)
+            before_balance = self._normalize_amount(balance_projections[account_id].balance)
+            projected_balance = self._normalize_amount(before_balance + delta)
+            balance_transitions[account_id] = {
+                "account_id": account.id,
+                "account_code": account.code,
+                "owner_user_id": account.owner_user_id,
+                "unit": account.unit.value,
+                "before_balance": str(before_balance),
+                "delta": str(delta),
+                "after_balance": str(projected_balance),
+            }
             if projected_balance < Decimal("0.0000") and not account.allow_negative:
                 raise InsufficientBalanceError(f"Account {account.code} does not have enough balance.")
 
@@ -1326,6 +1341,7 @@ class WalletService:
                 "external_reference": external_reference,
                 "account_ids": [posting.account.id for posting in normalized_postings],
                 "owner_user_ids": owner_user_ids,
+                "created_by_user_id": actor.id if actor is not None else None,
                 "units": sorted(unit.value for unit in total_by_unit),
                 "idempotency_key": normalized_idempotency_key,
                 "metadata": dict(transaction_record.metadata_json or {}),
@@ -1401,6 +1417,38 @@ class WalletService:
                     partition_key=account.owner_user_id or account.id,
                 ),
             )
+        from app.risk_ops_engine.service import RiskOpsService
+
+        RiskOpsService(session).log_audit(
+            actor_user_id=actor.id if actor is not None else None,
+            action_key="wallet.transaction.recorded",
+            resource_type="ledger_transaction",
+            resource_id=transaction_record.id,
+            detail=f"Wallet transaction recorded for {reason.value}.",
+            metadata_json={
+                "transaction_id": transaction_record.id,
+                "reason": reason.value,
+                "source_tag": transaction_source_tag.value,
+                "reference": reference,
+                "external_reference": external_reference,
+                "idempotency_key": normalized_idempotency_key,
+                "balance_transitions": list(balance_transitions.values()),
+                "entries": [
+                    {
+                        "entry_id": entry.id,
+                        "account_id": entry.account_id,
+                        "account_code": entry.account.code if entry.account is not None else None,
+                        "owner_user_id": entry.account.owner_user_id if entry.account is not None else None,
+                        "amount": str(entry.amount),
+                        "unit": entry.unit.value if hasattr(entry.unit, "value") else str(entry.unit),
+                        "transaction_type": entry.transaction_type.value if hasattr(entry.transaction_type, "value") else str(entry.transaction_type),
+                        "source_tag": entry.source_tag.value if hasattr(entry.source_tag, "value") else str(entry.source_tag),
+                    }
+                    for entry in entries
+                ],
+                "metadata": dict(transaction_record.metadata_json or {}),
+            },
+        )
         self._prime_impacted_wallet_summary_caches(session, accounts=accounts_by_id)
         return entries
 

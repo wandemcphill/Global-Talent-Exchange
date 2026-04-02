@@ -12,8 +12,8 @@ def contract_app(tmp_path):
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_contract_test.db').as_posix()}"
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     app = create_app(engine=engine, run_migration_check=True)
-    with TestClient(app):
-        yield app
+    with TestClient(app) as client:
+        yield app, client
 
 
 def _resolve_response_component(openapi: dict, schema: dict) -> tuple[str, dict]:
@@ -30,7 +30,8 @@ def _resolve_response_component(openapi: dict, schema: dict) -> tuple[str, dict]
 
 
 def test_target_api_contracts_are_documented_with_stable_operation_ids(contract_app) -> None:
-    openapi = contract_app.openapi()
+    app, _client = contract_app
+    openapi = app.openapi()
     expected_operations = {
         ("/api/orders", "get"): "api_list_orders_api_orders_get",
         ("/api/orders", "post"): "api_place_order_api_orders_post",
@@ -86,3 +87,51 @@ def test_target_api_contracts_are_documented_with_stable_operation_ids(contract_
     assert "/api/api/orders/book/{player_id}" not in openapi["paths"]
     assert "/api/api/orders/{order_id}" not in openapi["paths"]
     assert "/api/api/orders/{order_id}/cancel" not in openapi["paths"]
+
+
+def test_versioned_contract_paths_publish_standard_response_and_error_schemas(contract_app) -> None:
+    app, _client = contract_app
+    openapi = app.openapi()
+
+    assert "/api/v1/orders" in openapi["paths"]
+    assert "/api/v1/auth/register" in openapi["paths"]
+    assert "/api/v1/wallets/accounts" in openapi["paths"]
+
+    list_orders = openapi["paths"]["/api/v1/orders"]["get"]
+    success_schema_ref = list_orders["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    success_component = openapi["components"]["schemas"][success_schema_ref.rsplit("/", 1)[-1]]
+    assert success_component["required"] == ["success", "data"]
+    assert success_component["properties"]["success"]["enum"] == [True]
+    assert "data" in success_component["properties"]
+
+    error_schema_ref = list_orders["responses"]["401"]["content"]["application/json"]["schema"]["$ref"]
+    error_component = openapi["components"]["schemas"][error_schema_ref.rsplit("/", 1)[-1]]
+    assert error_component["required"] == ["success", "error", "code"]
+    assert error_component["properties"]["success"]["enum"] == [False]
+
+    place_order = openapi["paths"]["/api/v1/orders"]["post"]
+    assert "requestBody" in place_order
+    request_schema = place_order["requestBody"]["content"]["application/json"]["schema"]
+    assert "$ref" in request_schema
+
+
+def test_versioned_aliases_wrap_legacy_handlers_in_standard_success_envelope(contract_app) -> None:
+    _app, client = contract_app
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "contract-user@example.com",
+            "full_name": "Contract User",
+            "phone_number": "08000000000",
+            "is_over_18": True,
+            "region_code": "NG",
+            "password": "SuperSecret1",
+        },
+    )
+
+    assert response.status_code < 300, response.text
+    payload = response.json()
+    assert payload["success"] is True
+    assert "error" not in payload
+    assert "code" not in payload
+    assert "access_token" in payload["data"]

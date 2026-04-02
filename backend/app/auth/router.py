@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from time import perf_counter
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -31,6 +32,7 @@ from app.auth.service import (
     InvalidSessionError,
     IssuedAuthSession,
 )
+from app.core.request_security import extract_client_ip
 from app.models.user import User
 from app.policies.schemas import PolicyRequirementSummary, UserComplianceStatus
 from app.policies.service import PolicyService
@@ -156,12 +158,50 @@ def _request_client_context(request: Request | None, *, device_id: str | None = 
     ip_address = None
     if request is not None:
         user_agent = request.headers.get("user-agent")
-        ip_address = request.client.host if request.client is not None else None
+        ip_address = extract_client_ip(request)
     return {
         "device_id": device_id,
         "user_agent": user_agent,
         "ip_address": ip_address,
     }
+
+
+def _record_login_attempt(
+    request: Request | None,
+    *,
+    email: str,
+    success: bool,
+    user_id: str | None,
+    device_id: str | None,
+    failure_reason: str | None = None,
+) -> None:
+    if request is None:
+        return
+    session_factory = getattr(request.app.state, "session_factory", None)
+    if session_factory is None:
+        return
+    from app.risk.security_monitoring_service import SecurityMonitoringService
+
+    client_context = _request_client_context(request, device_id=device_id)
+    try:
+        SecurityMonitoringService(session_factory=session_factory).record_login_attempt(
+            email=email,
+            success=success,
+            user_id=user_id,
+            ip_address=client_context["ip_address"],
+            user_agent=client_context["user_agent"],
+            device_id=client_context["device_id"],
+            path=str(request.url.path),
+            failure_reason=failure_reason,
+        )
+    except Exception as exc:
+        logger.warning(
+            "auth.login.audit_failed email=%s success=%s error_type=%s error=%s",
+            email,
+            success,
+            exc.__class__.__name__,
+            str(exc),
+        )
 
 
 def _build_compliance_status(session: Session, user: User) -> UserComplianceStatus:
@@ -322,6 +362,7 @@ def login_user(
     payload: LoginRequest,
     session: Session = Depends(get_session),
     request: Request = None,
+    x_device_id: Annotated[str | None, Header(alias="X-Device-Id")] = None,
 ) -> TokenResponse:
     service = _build_auth_service(request)
     analytics = AnalyticsService()
@@ -349,7 +390,7 @@ def login_user(
         issued_session = service.issue_session_tokens(
             user,
             session=session,
-            **_request_client_context(request),
+            **_request_client_context(request, device_id=x_device_id),
             timing_recorder=telemetry.capture,
         )
         telemetry.mark("service.issue_access_token_ms", token_started_at)
@@ -364,6 +405,14 @@ def login_user(
         analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
         telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
         _rollback_with_telemetry(session, telemetry)
+        _record_login_attempt(
+            request,
+            email=payload.email,
+            success=False,
+            user_id=None,
+            device_id=x_device_id,
+            failure_reason=str(exc),
+        )
         telemetry.log_failure(status_code=status.HTTP_401_UNAUTHORIZED, user_id=None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AuthError as exc:
@@ -371,12 +420,35 @@ def login_user(
         analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
         telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
         _rollback_with_telemetry(session, telemetry)
+        _record_login_attempt(
+            request,
+            email=payload.email,
+            success=False,
+            user_id=user.id if user is not None else None,
+            device_id=x_device_id,
+            failure_reason=str(exc),
+        )
         telemetry.log_failure(status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         _rollback_with_telemetry(session, telemetry)
+        _record_login_attempt(
+            request,
+            email=payload.email,
+            success=False,
+            user_id=user.id if user is not None else None,
+            device_id=x_device_id,
+            failure_reason=str(exc),
+        )
         telemetry.log_failure(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, user_id=user.id if user is not None else None, error=str(exc))
         raise
+    _record_login_attempt(
+        request,
+        email=payload.email,
+        success=True,
+        user_id=user.id,
+        device_id=x_device_id,
+    )
     telemetry.log_success(status_code=status.HTTP_200_OK, user_id=user.id)
 
     return _build_token_response(
@@ -395,7 +467,7 @@ def refresh_auth_session(
     payload: RefreshTokenRequest,
     request: Request,
     session: Session = Depends(get_session),
-    x_device_id: str | None = Header(default=None, alias="X-Device-Id"),
+    x_device_id: Annotated[str | None, Header(alias="X-Device-Id")] = None,
 ) -> TokenResponse:
     service = _build_auth_service(request)
     telemetry = _AuthRouteTelemetry("refresh")

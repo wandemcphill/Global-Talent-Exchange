@@ -4,7 +4,7 @@ from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.auth.service import AuthService
 from app.gtex import redis_keys
@@ -55,6 +55,18 @@ def _fund_user(app_session_factory, *, user_id: str, amount: Decimal) -> None:
             reference=f"test-fund:{user_id}",
             description="Seed user wallet for GTEX tests",
         )
+        session.commit()
+
+
+def _age_latest_trade(app_session_factory, *, user_id: str, age: timedelta) -> None:
+    with app_session_factory() as session:
+        latest_trade = session.scalar(
+            select(GtexCreatorTrade)
+            .where(or_(GtexCreatorTrade.buyer_id == user_id, GtexCreatorTrade.seller_id == user_id))
+            .order_by(GtexCreatorTrade.created_at.desc())
+        )
+        assert latest_trade is not None
+        latest_trade.created_at = utcnow() - age
         session.commit()
 
 
@@ -131,6 +143,92 @@ def test_creator_market_buy_sell_and_trending(client, app_session_factory, app):
     trending_response = client.get("/market/trending")
     assert trending_response.status_code == 200
     assert any(item["id"] == player_id for item in trending_response.json()["items"])
+
+
+def test_creator_market_flags_and_admin_ban_flow(client, app, app_session_factory, bootstrap_admin_headers):
+    runtime = ensure_gtex_runtime(app)
+    creator_user, _ = _register_user(app_session_factory, label="risk-creator")
+    looping_user, looping_headers = _register_user(app_session_factory, label="risk-loop")
+    shared_ip_user, shared_ip_headers = _register_user(app_session_factory, label="risk-shared")
+    _fund_user(app_session_factory, user_id=looping_user.id, amount=Decimal("8000.0000"))
+    _fund_user(app_session_factory, user_id=shared_ip_user.id, amount=Decimal("4000.0000"))
+
+    with app_session_factory() as session:
+        creator_model = session.get(User, creator_user.id)
+        assert creator_model is not None
+        asset = runtime.creator_market.ensure_asset_for_user(session, creator_model)
+        session.commit()
+        player_id = asset.id
+
+    shared_ip = "198.51.100.24"
+    looping_trade_headers = {**looping_headers, "X-Forwarded-For": shared_ip}
+    shared_ip_trade_headers = {**shared_ip_headers, "X-Forwarded-For": shared_ip}
+
+    first_buy = client.post(
+        "/market/buy",
+        headers=looping_trade_headers,
+        json={"player_id": player_id, "shares": 10},
+    )
+    assert first_buy.status_code == 201, first_buy.text
+    _age_latest_trade(app_session_factory, user_id=looping_user.id, age=timedelta(minutes=12))
+    runtime.state_store.delete(redis_keys.creator_cooldown(looping_user.id, player_id))
+
+    second_buy = client.post(
+        "/market/buy",
+        headers=shared_ip_trade_headers,
+        json={"player_id": player_id, "shares": 3},
+    )
+    assert second_buy.status_code == 201, second_buy.text
+
+    sell_one = client.post(
+        "/market/sell",
+        headers=looping_trade_headers,
+        json={"player_id": player_id, "shares": 4},
+    )
+    assert sell_one.status_code == 201, sell_one.text
+    _age_latest_trade(app_session_factory, user_id=looping_user.id, age=timedelta(minutes=9))
+    runtime.state_store.delete(redis_keys.creator_cooldown(looping_user.id, player_id))
+
+    buy_back = client.post(
+        "/market/buy",
+        headers=looping_trade_headers,
+        json={"player_id": player_id, "shares": 4},
+    )
+    assert buy_back.status_code == 201, buy_back.text
+    _age_latest_trade(app_session_factory, user_id=looping_user.id, age=timedelta(minutes=6))
+    runtime.state_store.delete(redis_keys.creator_cooldown(looping_user.id, player_id))
+
+    sell_back = client.post(
+        "/market/sell",
+        headers=looping_trade_headers,
+        json={"player_id": player_id, "shares": 4},
+    )
+    assert sell_back.status_code == 201, sell_back.text
+
+    shared_ip_flags = client.get(f"/admin/flags?user_id={shared_ip_user.id}", headers=bootstrap_admin_headers)
+    assert shared_ip_flags.status_code == 200, shared_ip_flags.text
+    assert "shared_ip_accounts" in {item["category"] for item in shared_ip_flags.json()}
+
+    rapid_loop_flags = client.get(f"/admin/flags?user_id={looping_user.id}", headers=bootstrap_admin_headers)
+    assert rapid_loop_flags.status_code == 200, rapid_loop_flags.text
+    assert "rapid_trade_loop" in {item["category"] for item in rapid_loop_flags.json()}
+
+    ban_response = client.post(
+        "/admin/ban-user",
+        headers=bootstrap_admin_headers,
+        json={"user_id": looping_user.id, "reason": "Automated fraud test ban"},
+    )
+    assert ban_response.status_code == 200, ban_response.text
+    banned_payload = ban_response.json()
+    assert banned_payload["banned"] is True
+    assert "block_trading" in banned_payload["actions_applied"]
+
+    blocked_trade = client.post(
+        "/market/buy",
+        headers=looping_trade_headers,
+        json={"player_id": player_id, "shares": 1},
+    )
+    assert blocked_trade.status_code == 401, blocked_trade.text
 
 
 def test_ai_match_completion_updates_economy(client, app, app_session_factory):

@@ -64,7 +64,7 @@ void main() {
     expect(player.name, 'Victor Osimhen');
     expect(
       transport.requests.single.uri.path,
-      '/players/real-universe/player-osimhen',
+      '/api/v1/players/real-universe/player-osimhen',
     );
     expect(
       transport.requests.single.headers.containsKey('Authorization'),
@@ -113,7 +113,7 @@ void main() {
 
       expect(players, hasLength(1));
       expect(players.single.id, 'player-saliba');
-      expect(transport.requests.single.uri.path, '/players');
+      expect(transport.requests.single.uri.path, '/api/v1/players');
       expect(transport.requests.single.uri.queryParameters['search'], 'Saliba');
     },
   );
@@ -291,7 +291,7 @@ void main() {
       availability: 'free_agent',
     );
 
-    expect(transport.requests.single.uri.path, '/players');
+    expect(transport.requests.single.uri.path, '/api/v1/players');
     expect(
       transport.requests.single.uri.queryParameters,
       containsPair('search', 'ronaldo'),
@@ -348,7 +348,7 @@ void main() {
 
       await service.listPlayers(offset: 20);
 
-      expect(transport.requests.single.uri.path, '/players');
+      expect(transport.requests.single.uri.path, '/api/v1/players');
       expect(transport.requests.single.uri.queryParameters['offset'], '20');
       expect(
         transport.requests.single.uri.queryParameters.containsKey('cursor'),
@@ -383,9 +383,9 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/players/player-osimhen/scout',
-        '/players/player-osimhen/shortlist',
-        '/players/player-osimhen/contact',
+        '/api/v1/players/player-osimhen/scout',
+        '/api/v1/players/player-osimhen/shortlist',
+        '/api/v1/players/player-osimhen/contact',
       ],
     );
     expect(

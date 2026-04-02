@@ -49,19 +49,14 @@ async def _handle_http_exception(request: Request, exc: HTTPException):
         return await http_exception_handler(request, exc)
     detail = exc.detail
     message = detail if isinstance(detail, str) else "Request failed."
-    details = None if isinstance(detail, str) else detail
     return JSONResponse(
         status_code=exc.status_code,
         content=jsonable_encoder(
-            ApiEnvelope[dict[str, Any]](
-                success=False,
-                data=None,
-                error=ApiError(
-                    code=_error_code_for_status(exc.status_code),
-                    message=message,
-                    details=details,
-                ),
-            )
+            {
+                "success": False,
+                "error": message,
+                "code": _error_code_for_status(exc.status_code),
+            }
         ),
     )
 
@@ -72,15 +67,11 @@ async def _handle_validation_error(request: Request, exc: RequestValidationError
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=jsonable_encoder(
-            ApiEnvelope[dict[str, Any]](
-                success=False,
-                data=None,
-                error=ApiError(
-                    code="validation_error",
-                    message="Request validation failed.",
-                    details=exc.errors(),
-                ),
-            )
+            {
+                "success": False,
+                "error": "Request validation failed.",
+                "code": "validation_error",
+            }
         ),
     )
 

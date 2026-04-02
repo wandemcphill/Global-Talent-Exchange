@@ -127,6 +127,30 @@ def test_verify_payment_event_credits_user_with_append_only_entries(session) -> 
     session.rollback()
 
 
+def test_verify_payment_event_rejects_duplicate_verification(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    payment_event = service.create_payment_event(
+        session,
+        user=user,
+        provider="monnify",
+        provider_reference="monnify-ref-idempotent-001",
+        amount=Decimal("25"),
+        pack_code="starter-25",
+    )
+    service.verify_payment_event(session, payment_event, actor=user)
+    session.commit()
+
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+
+    with pytest.raises(LedgerError, match="Only pending payment events can be verified"):
+        service.verify_payment_event(session, payment_event, actor=user)
+    session.rollback()
+
+    assert service.get_balance(session, user_account) == Decimal("25.0000")
+    assert session.scalar(select(func.count()).select_from(LedgerTransaction)) == 1
+
+
 def test_append_transaction_rejects_negative_balance_for_user_accounts(session) -> None:
     user = _create_user(session)
     service = WalletService()

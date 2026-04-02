@@ -130,16 +130,19 @@ void main() {
         GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
-            'access_token': 'live-token',
-            'session_id': 'live-session',
-            'token_type': 'bearer',
-            'expires_in': 3600,
-            'user': <String, Object?>{
-              'id': 'user-1',
-              'email': 'qa@example.com',
-              'username': 'qa_user',
-              'display_name': 'QA User',
-              'role': 'user',
+            'success': true,
+            'data': <String, Object?>{
+              'access_token': 'live-token',
+              'session_id': 'live-session',
+              'token_type': 'bearer',
+              'expires_in': 3600,
+              'user': <String, Object?>{
+                'id': 'user-1',
+                'email': 'qa@example.com',
+                'username': 'qa_user',
+                'display_name': 'QA User',
+                'role': 'user',
+              },
             },
           },
         ),
@@ -166,7 +169,7 @@ void main() {
     );
 
     expect(transport.requests, hasLength(1));
-    expect(transport.requests.single.uri.path, '/auth/register');
+    expect(transport.requests.single.uri.path, '/api/v1/auth/register');
     expect(transport.requests.single.body, <String, Object?>{
       'email': 'qa@example.com',
       'full_name': 'QA User',

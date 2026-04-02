@@ -74,6 +74,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         health_response = client.get("/health")
         ready_response = client.get("/ready")
         version_response = client.get("/version")
+        docs_response = client.get("/docs")
 
     assert get_session in app.dependency_overrides
     assert health_response.status_code == 200
@@ -99,12 +100,16 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         "api_version": app.state.settings.app_version,
         "phase_marker": app.state.settings.phase_marker,
     }
+    assert docs_response.status_code == 200
+    assert "Swagger UI" in docs_response.text
     paths = app.openapi()["paths"]
     assert "/health" in paths
     assert "/ready" in paths
     assert "/version" in paths
     assert "/auth/register" in paths
     assert "/auth/login" in paths
+    assert "/api/v1/auth/register" in paths
+    assert "/api/v1/auth/login" in paths
     assert "/api/auth/me" in paths
     assert "/admin/config/supply-tiers" in paths
     assert "/admin/config/liquidity-bands" in paths
@@ -114,9 +119,13 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/wallets/accounts" in paths
     assert "/wallets/payment-events" in paths
     assert "/api/wallets/accounts" in paths
+    assert "/api/v1/wallets/accounts" in paths
     assert "/api/wallets/summary" in paths
+    assert "/api/v1/wallets/summary" in paths
     assert "/api/wallets/ledger" in paths
+    assert "/api/v1/wallets/ledger" in paths
     assert "/api/wallets/payment-events" in paths
+    assert "/api/v1/wallets/payment-events" in paths
     assert "/players/summaries/recent" in paths
     assert "/clubs/{club_id}" in paths
     assert "/api/competitions" in paths
@@ -138,9 +147,13 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/surveillance/holder-concentration-alerts" in paths
     assert "/surveillance/circular-trade-alerts" in paths
     assert "/api/orders" in paths
+    assert "/api/v1/orders" in paths
     assert "/api/orders/{order_id}" in paths
+    assert "/api/v1/orders/{order_id}" in paths
     assert "/api/orders/{order_id}/cancel" in paths
+    assert "/api/v1/orders/{order_id}/cancel" in paths
     assert "/api/orders/book/{player_id}" in paths
+    assert "/api/v1/orders/book/{player_id}" in paths
     assert "/api/portfolio" in paths
     assert "/api/portfolio/snapshot" in paths
     assert "/api/portfolio/summary" in paths
@@ -158,6 +171,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/match-engine/replay" in paths
     assert "/api/match-engine/replay" in paths
     assert "/api/clubs/{club_id}/reputation" in paths
+    assert "/api/v1/clubs/{club_id}/reputation" in paths
     assert "/api/clubs/{club_id}/reputation/history" in paths
     assert "/api/clubs/{club_id}/prestige" in paths
     assert "/api/leaderboards/prestige" in paths
