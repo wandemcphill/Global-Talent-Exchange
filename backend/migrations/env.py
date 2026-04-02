@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from logging.config import fileConfig
+import os
 from pathlib import Path
 import sys
 
@@ -11,10 +12,34 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.append(str(BACKEND_DIR))
 
+from app.core.config import reset_settings_cache  # noqa: E402
 from app.db import get_database_url, get_target_metadata, load_model_modules  # noqa: E402
 
 config = context.config
+_database_url_override = config.get_main_option("sqlalchemy.url").strip() or None
+_previous_database_url = os.environ.get("DATABASE_URL")
+_restore_database_url_override = False
 
+
+def _apply_database_url_override() -> None:
+    global _restore_database_url_override
+    if _database_url_override is None:
+        return
+    os.environ["DATABASE_URL"] = _database_url_override
+    reset_settings_cache()
+    _restore_database_url_override = True
+
+
+def _restore_database_url() -> None:
+    if not _restore_database_url_override:
+        return
+    if _previous_database_url is None:
+        os.environ.pop("DATABASE_URL", None)
+    else:
+        os.environ["DATABASE_URL"] = _previous_database_url
+    reset_settings_cache()
+
+_apply_database_url_override()
 load_model_modules()
 if not config.get_main_option("sqlalchemy.url"):
     config.set_main_option("sqlalchemy.url", get_database_url())
@@ -53,7 +78,10 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
 
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
+try:
+    if context.is_offline_mode():
+        run_migrations_offline()
+    else:
+        run_migrations_online()
+finally:
+    _restore_database_url()
