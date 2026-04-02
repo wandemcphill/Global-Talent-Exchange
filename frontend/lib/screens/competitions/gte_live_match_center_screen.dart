@@ -96,33 +96,6 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     );
   }
 
-  void _reload() {
-    setState(() {
-      _snapshotFuture = _loadSnapshot();
-    });
-  }
-
-  Future<LiveMatchSnapshot> _loadSnapshot() {
-    final GteLiveMatchSnapshotLoader? loader = widget.snapshotLoader;
-    if (loader != null) {
-      return loader(widget.competition);
-    }
-    return loadLiveMatchSnapshot(widget.competition);
-  }
-
-  Future<void> _openFeatureRoute(GteAppRouteData route) {
-    final GteNavigationDependencies? dependencies =
-        widget.navigationDependencies;
-    if (dependencies == null) {
-      return Future<void>.value();
-    }
-    return GteNavigationHelpers.pushRoute<void>(
-      context,
-      route: route,
-      dependencies: dependencies,
-    );
-  }
-
   Future<void> _openHalftime() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(

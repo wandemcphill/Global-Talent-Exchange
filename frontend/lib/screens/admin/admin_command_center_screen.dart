@@ -24,26 +24,4 @@ class AdminCommandCenterScreen extends StatelessWidget {
       icon: Icons.dashboard_customize_outlined,
     );
   }
-
-  Future<void> _openRoute(GteAppRouteData route) {
-    return GteNavigationHelpers.pushRoute<void>(
-      context,
-      route: route,
-      dependencies: _routeDependencies(),
-    );
-  }
-
-  GteNavigationDependencies _routeDependencies() {
-    final String accessToken = widget.accessToken.trim();
-    final bool hasAdminSession = accessToken.isNotEmpty;
-    return GteNavigationDependencies(
-      apiBaseUrl: widget.baseUrl,
-      backendMode: widget.backendMode,
-      currentUserId: hasAdminSession ? 'admin-user' : 'guest-user',
-      currentUserName: hasAdminSession ? 'Admin' : null,
-      currentUserRole: hasAdminSession ? 'admin' : null,
-      accessToken: hasAdminSession ? accessToken : null,
-      isAuthenticated: hasAdminSession,
-    );
-  }
 }

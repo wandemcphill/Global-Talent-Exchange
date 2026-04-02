@@ -454,7 +454,7 @@ class Match3dMonetizationService extends ChangeNotifier {
     final List<double> options =
         canUseFastReplay(context)
             ? _premiumSpeedOptions
-            : _standardSpeedOptions;
+            : standardSpeedOptions;
     if (hasInteraction(
       context.matchId,
       Match3dPaidInteraction.slowMotionReplay,

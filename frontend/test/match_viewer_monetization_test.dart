@@ -36,6 +36,7 @@ void main() {
           matchKey: competition.id,
           fallbackSnapshot: snapshot,
           preferFallback: true,
+          entitlement: const Match3dUserEntitlement(availableCoins: 1),
         ),
       ),
     );
@@ -214,6 +215,11 @@ void main() {
       expect(find.byKey(const Key('match-ad-live-banner')), findsOneWidget);
     },
   );
+}
+
+Future<void> _pumpForOverlayTransition(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 CompetitionSummary _buildCompetition({required String id}) {

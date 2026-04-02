@@ -23,6 +23,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   final TextEditingController _amountController = TextEditingController();
   bool _isSubmitting = false;
   bool _isVerifying = false;
+  bool _awaitingInitialComplianceCheck = false;
   String? _error;
   GteWalletTopUpSession? _session;
   GteWalletTopUpVerificationResult? _verification;
@@ -30,7 +31,8 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   @override
   void initState() {
     super.initState();
-    _awaitingInitialComplianceCheck = widget.controller.isAuthenticated &&
+    _awaitingInitialComplianceCheck =
+        widget.controller.isAuthenticated &&
         widget.controller.complianceStatus == null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.controller.isAuthenticated) {
@@ -157,6 +159,11 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   Widget build(BuildContext context) {
     final GteWalletTopUpSession? session = _session;
     final GteWalletTopUpVerificationResult? verification = _verification;
+    final GteComplianceStatus? compliance = widget.controller.complianceStatus;
+    final bool blocked =
+        compliance != null &&
+        (compliance.requiredPolicyAcceptancesMissing > 0 ||
+            !compliance.canDeposit);
     return Scaffold(
       appBar: AppBar(title: const Text('Top up wallet')),
       body: ListView(
@@ -174,18 +181,19 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    compliance?.requiredPolicyAcceptancesMissing == null
+                    compliance.requiredPolicyAcceptancesMissing == 0
                         ? 'Complete required policy acceptances to unlock deposits.'
-                        : 'Complete ${compliance!.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
+                        : 'Complete ${compliance.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
                   ),
                   const SizedBox(height: 12),
                   FilledButton.tonalIcon(
                     onPressed: () async {
                       await Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => GtePolicyComplianceCenterScreen(
-                            controller: widget.controller,
-                          ),
+                          builder:
+                              (_) => GtePolicyComplianceCenterScreen(
+                                controller: widget.controller,
+                              ),
                         ),
                       );
                     },

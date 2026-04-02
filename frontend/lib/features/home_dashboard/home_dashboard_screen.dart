@@ -22,10 +22,10 @@ import 'package:gte_frontend/screens/clubs/club_trophy_cabinet_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
 import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
-import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
+import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 
 import 'widgets/home_featured_event_banner.dart';
 import 'widgets/home_section_card.dart';
@@ -47,8 +47,6 @@ class HomeDashboardScreen extends StatefulWidget {
     this.onOpenHubTab,
     this.onOpenWalletTab,
     this.onOpenClubSubtab,
-    this.isCheckingCreatorAccess = false,
-    this.canHostCompetitions = false,
     this.onOpenCreatorAccessRequest,
     this.navigationDependencies,
   });
@@ -67,8 +65,6 @@ class HomeDashboardScreen extends StatefulWidget {
   final VoidCallback? onOpenHubTab;
   final VoidCallback? onOpenWalletTab;
   final ValueChanged<ClubNavigationTab>? onOpenClubSubtab;
-  final bool isCheckingCreatorAccess;
-  final bool canHostCompetitions;
   final Future<void> Function()? onOpenCreatorAccessRequest;
   final GteNavigationDependencies? navigationDependencies;
 
@@ -133,23 +129,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         clubName.isEmpty) {
       return _buildNoClubState();
     }
-    assert(
-      _competitionController != null,
-      'Competition controller must exist when club scope is active.',
-    );
-    final CompetitionController competitionController = _competitionController!;
+    final CompetitionController competitionController = _competitionController;
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[
         widget.exchangeController,
-        _clubController,
-        _competitionController,
+        clubController,
+        competitionController,
         _regenUniverseController,
       ]),
       builder: (BuildContext context, Widget? child) {
-        final ClubDashboardData? clubData = _clubController.data;
+        final ClubDashboardData? clubData = clubController.data;
         final bool waitingForFirstFrame =
             clubData == null &&
-            _competitionController.competitions.isEmpty &&
+            competitionController.competitions.isEmpty &&
             (clubController.isLoading ||
                 competitionController.isLoadingDiscovery);
         if (waitingForFirstFrame) {
@@ -203,7 +195,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   onOpenClub: () => _openTarget(_HomeLinkTarget.club),
                   onOpenCompetitions:
                       () => _openTarget(_HomeLinkTarget.competitions),
-                  onOpenReplays: () => _openTarget(_HomeLinkTarget.replays),
+                  onOpenWallet: widget.onOpenWalletTab,
                   onOpenLogin: widget.onOpenLogin,
                   chips: <Widget>[
                     GteMetricChip(
@@ -236,8 +228,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   syncedAt: widget.exchangeController.marketSyncedAt,
                   accent: GteShellTheme.accent,
                   isRefreshing:
-                      _clubController.isLoading ||
-                      _competitionController.isLoadingDiscovery,
+                      clubController.isLoading ||
+                      competitionController.isLoadingDiscovery,
                   onRefresh: _refresh,
                 ),
                 if (clubController.errorMessage != null ||
@@ -319,7 +311,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const SizedBox(height: 20),
                 _HomeQuickActionsStrip(
                   isAuthenticated: widget.exchangeController.isAuthenticated,
-                  onOpenClub: () => _openTarget(_HomeLinkTarget.club),
+                  onOpenMarket: widget.onOpenMarketTab,
                   onOpenCompetitions:
                       () => _openTarget(_HomeLinkTarget.competitions),
                   onOpenReplays: () => _openTarget(_HomeLinkTarget.replays),
@@ -328,7 +320,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const SizedBox(height: 16),
                 _HomeJourneyPanel(
                   isAuthenticated: widget.exchangeController.isAuthenticated,
-                  clubName: _clubName,
+                  clubName: clubName,
                   notificationCount: snapshot.notificationCount,
                   openCompetitionCount: snapshot.openCompetitionCount,
                   onOpenCompetitions:
@@ -396,8 +388,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   Future<void> _refresh() async {
+    final ClubController? clubController = _clubController;
     await Future.wait<void>(<Future<void>>[
-      _clubController.refresh(),
+      if (clubController != null) clubController.refresh(),
       _competitionController.loadDiscovery(),
       _regenUniverseController.refresh(),
     ]);
@@ -410,6 +403,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     _userName = identity.userName;
     _clubId = identity.clubId;
     _clubName = identity.clubName;
+    _competitionController = _buildCompetitionController();
+    _regenUniverseController = RegenUniverseController.standard(
+      baseUrl: widget.apiBaseUrl,
+      backendMode: widget.backendMode,
+    );
     final String? clubId = _clubId;
     final String? clubName = _clubName;
     if (_hasClubScope(clubId, clubName)) {
@@ -418,26 +416,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         clubName: clubName!,
       );
       _clubController!.ensureLoaded();
-      _competitionController = _buildCompetitionController();
-      _competitionController!.bootstrap();
+      _competitionController.bootstrap();
     } else {
       _clubController = null;
-      _competitionController = null;
     }
-    _competitionController = CompetitionController(
-      api: CompetitionApi.standard(
-        baseUrl: widget.apiBaseUrl,
-        mode: widget.backendMode,
-      ),
-      currentUserId: _userId,
-      currentUserName: _userName,
-    );
-    _regenUniverseController = RegenUniverseController.standard(
-      baseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
-    );
-    _clubController.ensureLoaded();
-    _competitionController.bootstrap();
     _regenUniverseController.ensureLoaded();
   }
 
@@ -460,19 +442,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (next.userId != _userId || next.userName != _userName) {
       _userId = next.userId;
       _userName = next.userName;
-      final CompetitionController? competitionController =
-          _competitionController;
-      if (competitionController != null) {
-        competitionController.updateCurrentUser(
-          userId: _userId,
-          userName: _userName,
-        );
-        competitionController.loadDiscovery();
-      }
+      final CompetitionController competitionController = _competitionController;
+      competitionController.updateCurrentUser(
+        userId: _userId,
+        userName: _userName,
+      );
+      competitionController.loadDiscovery();
     }
     if (next.clubId != _clubId || next.clubName != _clubName) {
       final ClubController? previousClub = _clubController;
-      final CompetitionController? previousCompetition = _competitionController;
       _clubId = next.clubId;
       _clubName = next.clubName;
       final String? clubId = _clubId;
@@ -483,15 +461,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           clubName: clubName!,
         );
         _clubController!.ensureLoaded();
-        _competitionController ??= _buildCompetitionController()..bootstrap();
+        _competitionController.bootstrap();
       } else {
         _clubController = null;
-        _competitionController = null;
       }
       previousClub?.dispose();
-      if (!identical(previousCompetition, _competitionController)) {
-        previousCompetition?.dispose();
-      }
       if (mounted) {
         setState(() {});
       }
@@ -703,6 +677,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           return '${token[0].toUpperCase()}${token.substring(1)}';
         })
         .join(' ');
+  }
+
+  String _slugifyClub(String clubName) {
+    return clubName
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-');
   }
 
   bool _hasClubScope(String? clubId, String? clubName) {
@@ -927,6 +909,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Future<void> _openTarget(_HomeLinkTarget target) async {
     final ClubController? clubController = _clubController;
+    final CompetitionController competitionController = _competitionController;
     final String? clubId = _clubId;
     final String? clubName = _clubName;
     if (clubController == null ||
@@ -945,9 +928,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         MaterialPageRoute<void>(
           builder:
               (BuildContext context) => ClubProfileScreen(
-                clubId: _clubId,
-                clubName: _clubName,
-                controller: _clubController,
+                clubId: clubId,
+                clubName: clubName,
+                controller: clubController,
                 baseUrl: widget.apiBaseUrl,
                 backendMode: widget.backendMode,
                 isAuthenticated: widget.exchangeController.isAuthenticated,
@@ -966,7 +949,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         MaterialPageRoute<void>(
           builder:
               (BuildContext context) => CompetitionDiscoveryScreen(
-                controller: _competitionController,
+                controller: competitionController,
                 baseUrl: widget.apiBaseUrl,
                 backendMode: widget.backendMode,
                 currentUserId: _userId,
@@ -995,7 +978,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         MaterialPageRoute<void>(
           builder:
               (BuildContext context) =>
-                  ClubTrophyCabinetScreen(controller: _clubController),
+                  ClubTrophyCabinetScreen(controller: clubController),
         ),
       );
       return;
@@ -1005,15 +988,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       isAuthenticated: widget.exchangeController.isAuthenticated,
       userLabel: _displayUserLabel(),
       clubData: clubController.data,
-      competitions:
-          _competitionController?.competitions ?? const <CompetitionSummary>[],
+      competitions: competitionController.competitions,
     );
     if (target == _HomeLinkTarget.replays) {
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder:
               (BuildContext context) => _HomeReplayHubScreen(
-                clubName: _clubName,
+                clubName: clubName,
                 replays: snapshot.replays,
               ),
         ),
@@ -1024,7 +1006,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       MaterialPageRoute<void>(
         builder:
             (BuildContext context) => _HomeTacticsScreen(
-              clubName: _clubName,
+              clubName: clubName,
               nextMatch: snapshot.nextMatch,
               tacticalNotes: snapshot.tacticalNotes,
             ),
@@ -1205,19 +1187,15 @@ class _HomeQuickActionsStrip extends StatelessWidget {
   const _HomeQuickActionsStrip({
     required this.isAuthenticated,
     required this.onOpenMarket,
-    required this.onOpenClub,
     required this.onOpenCompetitions,
     required this.onOpenReplays,
-    this.onOpenCoaches,
     this.onOpenLogin,
   });
 
   final bool isAuthenticated;
   final VoidCallback? onOpenMarket;
-  final VoidCallback onOpenClub;
   final VoidCallback onOpenCompetitions;
   final VoidCallback onOpenReplays;
-  final VoidCallback? onOpenCoaches;
   final VoidCallback? onOpenLogin;
 
   @override
@@ -1230,10 +1208,6 @@ class _HomeQuickActionsStrip extends StatelessWidget {
                 : constraints.maxWidth >= 760
                 ? 2
                 : 1;
-        final double spacing = 12;
-        final double cardWidth =
-            (constraints.maxWidth - (spacing * (columnCount - 1))) /
-            columnCount;
         final List<Widget> cards = <Widget>[
           _HomeActionCard(
             eyebrow: 'PLAY',
@@ -1255,9 +1229,10 @@ class _HomeQuickActionsStrip extends StatelessWidget {
                 : 'Coach discovery is live in GTEX. Sign in to claim free coaches and chase the scarce elite and legendary copies.',
             icon: Icons.manage_accounts_outlined,
             accent: GteShellTheme.accentWarm,
+            badge: 'Free',
             actionLabel:
                 isAuthenticated ? 'Open coach market' : 'Sign in for coaches',
-            onTap: isAuthenticated ? onOpenCoaches : onOpenLogin,
+            onTap: isAuthenticated ? onOpenMarket : onOpenLogin,
           ),
           _HomeActionCard(
             eyebrow: isAuthenticated ? 'REPLAYS' : 'UNLOCK',
@@ -1277,11 +1252,12 @@ class _HomeQuickActionsStrip extends StatelessWidget {
                 isAuthenticated
                     ? GteShellTheme.accentWarm
                     : GteShellTheme.accentCapital,
+            badge: isAuthenticated ? 'Tap' : 'Secure',
             actionLabel: isAuthenticated ? 'Open replays' : 'Sign in',
             onTap: isAuthenticated ? onOpenReplays : onOpenLogin,
           ),
         ];
-        if (singleColumn) {
+        if (columnCount == 1) {
           return Column(
             children: cards
                 .map(
@@ -1448,26 +1424,6 @@ class _HomeJourneyPanel extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            detail,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 14),
-          if (emphasized)
-            FilledButton.icon(
-              onPressed: onTap,
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text(actionLabel),
-            )
-          else
-            FilledButton.tonalIcon(
-              onPressed: onTap,
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text(actionLabel),
-            ),
         ],
       ),
     );
