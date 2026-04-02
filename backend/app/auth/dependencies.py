@@ -83,7 +83,9 @@ def _resolve_authenticated_user(
         )
     auth_session = session.get(AuthSession, token_session_id)
     if auth_session is None or auth_session.user_id != user.id:
-        logger.warning("auth.request.failed user_id=%s session_id=%s reason=session_not_found", user.id, token_session_id)
+        logger.warning(
+            "auth.request.failed user_id=%s session_id=%s reason=session_not_found", user.id, token_session_id
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authenticated session is invalid.",
@@ -116,7 +118,9 @@ def _resolve_authenticated_user(
         request.state.authenticated_session_id = auth_session.id
         control = RuntimeControlService(request.app).get_account_control(user_id=user.id)
         if control is not None and control.freeze_login:
-            logger.warning("auth.request.failed user_id=%s session_id=%s reason=login_frozen", user.id, token_session_id)
+            logger.warning(
+                "auth.request.failed user_id=%s session_id=%s reason=login_frozen", user.id, token_session_id
+            )
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
                 detail=control.reason or "Account access is temporarily frozen.",
@@ -330,7 +334,6 @@ def require_identity(identity: IdentityContext = Depends(get_identity_context)) 
     if not identity.user_id or not identity.session_id:
         _raise_missing_identity()
     return identity
-
 
 
 def get_current_super_admin(current_user: User = Depends(get_current_user)) -> User:

@@ -237,9 +237,11 @@ def _build_compliance_status(session: Session, user: User) -> UserComplianceStat
 def _build_wallet_bootstrap(service: AuthService, session: Session, user: User) -> WalletAdaptiveOverviewView:
     wallet_payload = service.wallet_service.get_adaptive_overview(session, user)
     wallet_payload["competition_reward_balance"] = service.wallet_service.competition_reward_balance(session, user)
-    wallet_payload["competition_reward_withdrawable_balance"] = service.wallet_service.competition_reward_withdrawable_balance(
-        session,
-        user,
+    wallet_payload["competition_reward_withdrawable_balance"] = (
+        service.wallet_service.competition_reward_withdrawable_balance(
+            session,
+            user,
+        )
     )
     return WalletAdaptiveOverviewView(**wallet_payload)
 
@@ -288,7 +290,9 @@ def register_user(
         telemetry.mark("analytics.signup_started_ms", analytics_started_at)
         if not payload.is_over_18:
             underage_started_at = perf_counter()
-            analytics.track_event(session, name="underage_signup_blocked", user_id=None, metadata={"email": payload.email})
+            analytics.track_event(
+                session, name="underage_signup_blocked", user_id=None, metadata={"email": payload.email}
+            )
             telemetry.mark("analytics.underage_signup_blocked_ms", underage_started_at)
             raise AuthError("You must be at least 18 years old to sign up.")
         register_started_at = perf_counter()
@@ -327,15 +331,23 @@ def register_user(
         telemetry.mark("db.refresh_user_ms", refresh_started_at)
     except DuplicateUserError as exc:
         _rollback_with_telemetry(session, telemetry)
-        telemetry.log_failure(status_code=status.HTTP_409_CONFLICT, user_id=user.id if user is not None else None, error=str(exc))
+        telemetry.log_failure(
+            status_code=status.HTTP_409_CONFLICT, user_id=user.id if user is not None else None, error=str(exc)
+        )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AuthError as exc:
         _rollback_with_telemetry(session, telemetry)
-        telemetry.log_failure(status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc))
+        telemetry.log_failure(
+            status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc)
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         _rollback_with_telemetry(session, telemetry)
-        telemetry.log_failure(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, user_id=user.id if user is not None else None, error=str(exc))
+        telemetry.log_failure(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            user_id=user.id if user is not None else None,
+            error=str(exc),
+        )
         raise
     else:
         if confirmation_code is not None:
@@ -428,7 +440,9 @@ def login_user(
             device_id=x_device_id,
             failure_reason=str(exc),
         )
-        telemetry.log_failure(status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc))
+        telemetry.log_failure(
+            status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc)
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         _rollback_with_telemetry(session, telemetry)
@@ -440,7 +454,11 @@ def login_user(
             device_id=x_device_id,
             failure_reason=str(exc),
         )
-        telemetry.log_failure(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, user_id=user.id if user is not None else None, error=str(exc))
+        telemetry.log_failure(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            user_id=user.id if user is not None else None,
+            error=str(exc),
+        )
         raise
     _record_login_attempt(
         request,
