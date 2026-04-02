@@ -569,7 +569,6 @@ DOMAIN_MODULES = (
         with_api_alias=True,
         on_startup=(_seed_engagement_defaults,),
     ),
-    _module("club_sale_market", router_path="app.club_sale_market.router:router"),
     _module("ownership_groups", router_path="app.ownership_groups.router:router", with_api_alias=True),
     _module("ownership_groups_admin", router_path="app.ownership_groups.router:admin_router"),
     _module("live_ops", router_path="app.live_ops.router:router", with_api_alias=True),
