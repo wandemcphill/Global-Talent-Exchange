@@ -8,7 +8,7 @@ services:
     preDeployCommand: python -m alembic -c backend/migrations/alembic.ini upgrade head
     # Gunicorn binds the port in the master process before the heavy FastAPI
     # app import finishes, which avoids Render's cold-start port scan failures.
-    startCommand: gunicorn backend.app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180
+    startCommand: gunicorn backend.app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180 --graceful-timeout 120
     healthCheckPath: /health
     autoDeployTrigger: off
     maxShutdownDelaySeconds: 120

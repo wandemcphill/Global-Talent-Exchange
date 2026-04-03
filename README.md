@@ -30,7 +30,7 @@ python -m pip install -r backend/requirements.txt
 
 Production read caching, distributed rate limiting, and durable background jobs now expect Redis to be available through `GTE_REDIS_URL`. Local boot still works without Redis, but the production-safe path is:
 
-- API: `gunicorn backend.app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180`
+- API: `gunicorn backend.app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180 --graceful-timeout 120`
 - RQ worker: `cd backend && python -m app.workers.rq_worker_main`
 - GTEX runtime workers: `cd backend && python -m app.gtex.worker_main`
 
