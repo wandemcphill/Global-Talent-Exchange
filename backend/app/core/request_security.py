@@ -8,10 +8,10 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.auth.security import TokenError, decode_access_token
+from app.core.errors import error_response
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _DANGEROUS_PATH_RE = re.compile(r"(?i)(?:\.\./|\.\.\\|<\s*script\b|javascript:)")
@@ -141,13 +141,10 @@ class RequestHardeningMiddleware(BaseHTTPMiddleware):
             await self._sanitize_body(request)
         except SuspiciousInputError as exc:
             self._audit_blocked_request(request, exc)
-            return JSONResponse(
-                status_code=422,
-                content={
-                    "detail": exc.detail(),
-                    "location": exc.location,
-                    "reason": exc.reason,
-                },
+            return error_response(
+                422,
+                message=exc.detail(),
+                code="validation_error",
             )
         return await call_next(request)
 

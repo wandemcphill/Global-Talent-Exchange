@@ -85,6 +85,7 @@ class GlobalMemoryService:
         self,
         *,
         limit: int = 50,
+        offset: int = 0,
         country_code: str | None = None,
         age_bracket: str | None = None,
     ) -> tuple[CompetitionListItemView, ...]:
@@ -92,6 +93,7 @@ class GlobalMemoryService:
             select(Competition, Country.alpha2_code)
             .outerjoin(Country, Country.id == Competition.country_id)
             .order_by(Competition.is_major.desc(), Competition.competition_strength.desc(), Competition.name.asc())
+            .offset(offset)
             .limit(limit)
         )
         if country_code:

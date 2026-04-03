@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_session
+from app.core.cache_namespaces import COMPETITIONS_CACHE_NAMESPACE
+from app.core.pagination import build_pagination_meta, resolve_pagination
+from app.core.response_cache import get_response_cache
 from app.global_memory.schemas import (
     CompetitionEntryResultView,
     CompetitionEnterRequest,
     CompetitionListItemView,
+    CompetitionPageView,
     DynastyLeaderboardEntryView,
     HallOfFamePlayerView,
     NationalPoolPlayerView,
@@ -17,6 +22,7 @@ from app.global_memory.schemas import (
     UserDynastyView,
 )
 from app.global_memory.service import GlobalMemoryError, GlobalMemoryNotFoundError, GlobalMemoryService
+from app.ingestion.models import Competition, Country
 
 router = APIRouter(tags=["global-memory"])
 
@@ -31,14 +37,54 @@ def _raise_http(exc: GlobalMemoryError) -> None:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
-@router.get("/competitions", response_model=tuple[CompetitionListItemView, ...])
+@router.get("/competitions", response_model=CompetitionPageView)
 def list_competitions(
-    limit: int = Query(default=50, ge=1, le=200),
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1),
+    limit: int | None = Query(default=None, ge=1, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
     country_code: str | None = Query(default=None),
     age_bracket: str | None = Query(default=None),
     service: GlobalMemoryService = Depends(_service),
-) -> tuple[CompetitionListItemView, ...]:
-    return service.list_competitions(limit=limit, country_code=country_code, age_bracket=age_bracket)
+) -> CompetitionPageView:
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
+    settings = request.app.state.settings
+    if settings.api_cache_enabled:
+        cached_payload = get_response_cache(request.app).get_json(
+            namespace=COMPETITIONS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+        )
+        if cached_payload is not None:
+            return CompetitionPageView.model_validate(cached_payload)
+
+    count_stmt = select(func.count()).select_from(Competition).outerjoin(Country, Country.id == Competition.country_id)
+    if country_code:
+        count_stmt = count_stmt.where(func.upper(Country.alpha2_code) == country_code.upper())
+    if age_bracket:
+        count_stmt = count_stmt.where(func.lower(func.coalesce(Competition.age_bracket, "")) == age_bracket.lower())
+    total = int(service.session.scalar(count_stmt) or 0)
+
+    items = service.list_competitions(
+        limit=params.per_page,
+        offset=params.offset,
+        country_code=country_code,
+        age_bracket=age_bracket,
+    )
+    response = CompetitionPageView(
+        items=tuple(CompetitionListItemView.model_validate(item) for item in items),
+        pagination=build_pagination_meta(params=params, total=total),
+    )
+    if settings.api_cache_enabled:
+        get_response_cache(request.app).set_json(
+            namespace=COMPETITIONS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+            payload=response.model_dump(mode="json"),
+            ttl_seconds=settings.competitions_cache_ttl_seconds,
+        )
+    return response
 
 
 @router.post("/enter", response_model=CompetitionEntryResultView)

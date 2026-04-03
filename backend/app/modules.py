@@ -510,6 +510,7 @@ DOMAIN_MODULES = (
         router_path="app.api_v1.router:router",
         on_startup=("app.api_v1.router:install_exception_handlers",),
     ),
+    _module("jobs_api", router_path="app.jobs.router:router"),
     _module("organizations", router_path="app.access_control.router:router"),
     _module("wallets", router_path="app.wallets.router:router"),
     _module("paystack_webhooks", router_path="app.admin_finance.router:webhook_router"),

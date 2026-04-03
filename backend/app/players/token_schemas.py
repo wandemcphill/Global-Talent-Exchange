@@ -5,6 +5,8 @@ from decimal import Decimal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from app.core.pagination import PaginationMeta
+
 
 class PlayerShareMarketView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -134,3 +136,4 @@ class PlayerShareMarketListView(BaseModel):
     limit: int
     offset: int
     total: int
+    pagination: PaginationMeta | None = None

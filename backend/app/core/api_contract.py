@@ -9,11 +9,22 @@ from typing import Any, Iterable
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.datastructures import DefaultPlaceholder
-from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.routing import APIRoute, APIWebSocketRoute
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.core.errors import (
+    ApiError,
+    error_response,
+    format_validation_errors,
+    handle_api_error,
+    handle_http_exception,
+    handle_unexpected_exception,
+    handle_validation_error,
+    map_http_exception_code,
+    message_from_detail,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,41 +188,23 @@ def _versioned_operation_id(route: APIRoute) -> str | None:
 def _install_exception_handlers(app: FastAPI) -> None:
     if getattr(app.state, "api_contract_exception_handlers_installed", False):
         return
-    app.add_exception_handler(HTTPException, _handle_http_exception)
-    app.add_exception_handler(RequestValidationError, _handle_validation_error)
-    app.add_exception_handler(Exception, _handle_unexpected_exception)
+    app.add_exception_handler(ApiError, handle_api_error)
+    app.add_exception_handler(HTTPException, handle_http_exception)
+    app.add_exception_handler(RequestValidationError, handle_validation_error)
+    app.add_exception_handler(Exception, handle_unexpected_exception)
     app.state.api_contract_exception_handlers_installed = True
 
 
 async def _handle_http_exception(request: Request, exc: HTTPException) -> Response:
-    if not _is_versioned_request(request):
-        return await http_exception_handler(request, exc)
-    detail = exc.detail
-    message = _error_message_from_detail(detail)
-    code = _error_code_for_status(exc.status_code, detail=detail)
-    return _error_response(exc.status_code, message=message, code=code, headers=exc.headers)
+    return await handle_http_exception(request, exc)
 
 
 async def _handle_validation_error(request: Request, exc: RequestValidationError) -> Response:
-    if not _is_versioned_request(request):
-        return await request_validation_exception_handler(request, exc)
-    message = _format_validation_errors(exc.errors())
-    return _error_response(
-        status.HTTP_422_UNPROCESSABLE_ENTITY,
-        message=message,
-        code="validation_error",
-    )
+    return await handle_validation_error(request, exc)
 
 
 async def _handle_unexpected_exception(request: Request, exc: Exception) -> Response:
-    logger.exception("api.contract.unhandled path=%s", request.url.path)
-    if not _is_versioned_request(request):
-        return PlainTextResponse("Internal Server Error", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    return _error_response(
-        status.HTTP_500_INTERNAL_SERVER_ERROR,
-        message="Internal server error.",
-        code="internal_server_error",
-    )
+    return await handle_unexpected_exception(request, exc)
 
 
 def _error_response(
@@ -221,15 +214,7 @@ def _error_response(
     code: str,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code,
-        headers=headers,
-        content={
-            "success": False,
-            "error": message,
-            "code": code,
-        },
-    )
+    return error_response(status_code, message=message, code=code, headers=headers)
 
 
 class ApiContractEnvelopeMiddleware(BaseHTTPMiddleware):
@@ -353,13 +338,13 @@ def _apply_versioned_contract_schema(schema: dict[str, Any]) -> None:
     components = schema.setdefault("components", {}).setdefault("schemas", {})
     components[_ERROR_COMPONENT_NAME] = {
         "type": "object",
-        "required": ["success", "error", "code"],
+        "required": ["error", "message", "code"],
         "properties": {
-            "success": {
-                "type": "boolean",
-                "enum": [False],
-            },
             "error": {
+                "type": "boolean",
+                "enum": [True],
+            },
+            "message": {
                 "type": "string",
                 "example": "Authentication credentials were not provided.",
             },
@@ -449,49 +434,23 @@ def _is_versioned_request(request: Request) -> bool:
 
 
 def _error_message_from_detail(detail: Any) -> str:
-    if isinstance(detail, dict):
-        for key in ("error", "message", "detail"):
-            value = detail.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return "Request failed."
     if isinstance(detail, list):
-        return _format_validation_errors(detail)
-    if isinstance(detail, str):
-        stripped = detail.strip()
-        return stripped or "Request failed."
-    return "Request failed."
+        return format_validation_errors(detail)
+    return message_from_detail(detail)
 
 
 def _error_code_for_status(status_code: int, *, detail: Any | None = None) -> str:
-    if isinstance(detail, dict):
-        explicit = detail.get("code")
-        if isinstance(explicit, str) and explicit.strip():
-            return explicit.strip()
-    mapping = {
-        400: "bad_request",
-        401: "unauthorized",
-        403: "forbidden",
-        404: "not_found",
-        409: "conflict",
-        422: "validation_error",
-        500: "internal_server_error",
-    }
-    return mapping.get(status_code, f"http_{status_code}")
+    return map_http_exception_code(status_code, detail=detail)
 
 
 def _format_validation_errors(errors: list[Any]) -> str:
-    parts: list[str] = []
+    formatted_errors: list[dict[str, Any]] = []
     for error in errors[:3]:
         if isinstance(error, dict):
-            location = _format_validation_location(error.get("loc"))
-            message = str(error.get("msg") or "Invalid value.")
-            parts.append(f"{location}: {message}" if location else message)
-            continue
-        parts.append(str(error))
-    if not parts:
-        return "Request validation failed."
-    return "; ".join(parts)
+            formatted_errors.append(error)
+        else:
+            formatted_errors.append({"loc": ("request",), "msg": str(error)})
+    return format_validation_errors(formatted_errors)
 
 
 def _format_validation_location(location: Any) -> str | None:

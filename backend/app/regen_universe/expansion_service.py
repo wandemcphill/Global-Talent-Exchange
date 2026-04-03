@@ -544,13 +544,25 @@ class RegenUniverseExpansionService:
         self.session.flush()
         return {"pairs_scanned": len(buckets), "rivalries_updated": updated}
 
-    def list_youth_tournaments(self, *, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-        stmt = select(YouthTournament).order_by(YouthTournament.start_date.desc(), YouthTournament.created_at.desc()).limit(limit)
+    def list_youth_tournaments(
+        self,
+        *,
+        status: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        stmt = (
+            select(YouthTournament)
+            .order_by(YouthTournament.start_date.desc(), YouthTournament.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
         if status:
             stmt = (
                 select(YouthTournament)
                 .where(YouthTournament.status == status)
                 .order_by(YouthTournament.start_date.desc(), YouthTournament.created_at.desc())
+                .offset(offset)
                 .limit(limit)
             )
         return [self._tournament_view(item) for item in self.session.scalars(stmt).all()]
@@ -1554,6 +1566,7 @@ class RegenUniverseExpansionService:
         age_min: int | None = None,
         age_max: int | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         if age_min is not None and age_max is not None and age_min > age_max:
             raise RegenUniverseExpansionValidationError("preseed_invalid_age_range")
@@ -1582,7 +1595,7 @@ class RegenUniverseExpansionService:
                     continue
                 filtered.append(seed)
             seeds = filtered
-        return [self._national_seed_view(item) for item in seeds[:limit]]
+        return [self._national_seed_view(item) for item in seeds[offset : offset + limit]]
 
     def build_regen_tracking(self) -> dict[str, Any]:
         seeds = list(self.session.scalars(select(NationalRegenSeed)).all())

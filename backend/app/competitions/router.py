@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_admin, get_session
 from app.competitions.schemas import CompetitionView
 from app.competitions.service import CompetitionQueryService
+from app.core.cache_namespaces import COMPETITIONS_CACHE_NAMESPACE
+from app.core.response_cache import get_response_cache
 from app.manager_market.schemas import CompetitionAdminUpdateRequest, CompetitionAdminView, CompetitionOrchestrationView, CompetitionRuntimeView
 from app.manager_market.service import ManagerMarketService
 from app.models.user import User
@@ -68,6 +70,7 @@ def update_admin_competition(
         payload,
     )
     session.commit()
+    get_response_cache(request.app).invalidate(COMPETITIONS_CACHE_NAMESPACE)
     return result
 
 

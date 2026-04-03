@@ -1,0 +1,263 @@
+from __future__ import annotations
+
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
+
+from fastapi import FastAPI, Query
+from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import select
+
+from app.core.api_contract import install_api_contracts
+from app.core.pagination import MAX_PER_PAGE
+from app.core.rate_limit import MemoryRateLimitStore, RateLimitMiddleware
+from app.core.response_cache import NamespacedResponseCache
+from app.core.task_queue import NullTaskQueueBackend, TaskExecution
+from app.ingestion.models import Player
+from app.models.player_token_market import PlayerShareMarket
+from app.players.token_service import PlayerTokenMarketService
+
+
+class FakeCacheBackend:
+    enabled = True
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.set_calls: list[dict[str, object]] = []
+
+    def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    def set(self, key: str, value: str, ttl_seconds: int) -> None:
+        self.values[key] = value
+        self.set_calls.append({"key": key, "ttl_seconds": ttl_seconds})
+
+    def delete_many(self, keys: list[str]) -> None:
+        for key in keys:
+            self.values.pop(key, None)
+
+    def increment(self, key: str, amount: int = 1) -> int:
+        current = int(self.values.get(key, "0")) + amount
+        self.values[key] = str(current)
+        return current
+
+    def ping(self) -> bool:
+        return True
+
+
+class FakeTaskQueueBackend:
+    def __init__(self, execution: TaskExecution) -> None:
+        self.execution = execution
+        self.enqueued: list[dict[str, object]] = []
+
+    def enqueue(self, **kwargs) -> TaskExecution:
+        self.enqueued.append(kwargs)
+        return self.execution
+
+    def get(self, job_id: str) -> TaskExecution | None:
+        del job_id
+        return None
+
+
+def test_player_markets_cache_hit_and_invalidation(
+    client,
+    demo_seed,
+    app_session_factory,
+    bootstrap_admin_headers,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del demo_seed
+    fake_cache = FakeCacheBackend()
+    original_cache_backend = getattr(client.app.state, "cache_backend", None)
+    original_response_cache = getattr(client.app.state, "response_cache", None)
+    client.app.state.cache_backend = fake_cache
+    client.app.state.response_cache = NamespacedResponseCache(fake_cache)
+
+    try:
+        with app_session_factory() as session:
+            player_id = session.scalar(
+                select(Player.id)
+                .outerjoin(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .where(Player.is_tradable.is_(True), PlayerShareMarket.id.is_(None))
+                .limit(1)
+            )
+        assert player_id is not None
+
+        create_market = client.post(
+            f"/players/{player_id}/shares/market",
+            headers=bootstrap_admin_headers,
+            json={
+                "total_shares": 1000,
+                "share_price_coin": "5.0000",
+                "liquidity_coin": "2500.0000",
+                "status": "active",
+            },
+        )
+        assert create_market.status_code == 200, create_market.text
+
+        call_count = 0
+        original_list_markets = PlayerTokenMarketService.list_markets
+
+        def wrapped_list_markets(self, *args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return original_list_markets(self, *args, **kwargs)
+
+        monkeypatch.setattr(PlayerTokenMarketService, "list_markets", wrapped_list_markets)
+
+        first = client.get("/players/markets")
+        assert first.status_code == 200, first.text
+        assert first.json()["pagination"]["page"] == 1
+        assert fake_cache.set_calls[-1]["ttl_seconds"] == 5
+
+        second = client.get("/players/markets")
+        assert second.status_code == 200, second.text
+        assert call_count == 1
+
+        reprice = client.post(
+            f"/players/{player_id}/shares/performance",
+            headers=bootstrap_admin_headers,
+            json={"multiplier": "1.0100", "reason": "cache_invalidation_test"},
+        )
+        assert reprice.status_code == 200, reprice.text
+
+        third = client.get("/players/markets")
+        assert third.status_code == 200, third.text
+        assert call_count == 2
+    finally:
+        client.app.state.cache_backend = original_cache_backend
+        client.app.state.response_cache = original_response_cache
+
+
+def test_competitions_pagination_defaults_and_clamps(client, demo_seed) -> None:
+    del demo_seed
+    default_page = client.get("/competitions")
+    assert default_page.status_code == 200, default_page.text
+    default_payload = default_page.json()
+    assert "items" in default_payload
+    assert default_payload["pagination"]["page"] == 1
+    assert default_payload["pagination"]["per_page"] == 20
+
+    clamped_page = client.get("/competitions", params={"per_page": 999})
+    assert clamped_page.status_code == 200, clamped_page.text
+    clamped_payload = clamped_page.json()
+    assert clamped_payload["pagination"]["per_page"] == MAX_PER_PAGE
+    assert "total" in clamped_payload["pagination"]
+
+
+def test_wallet_top_up_verify_queues_background_job(client, auth_user_factory) -> None:
+    user = auth_user_factory(suffix="wallet-queue-user")
+    execution = TaskExecution(
+        job_id="wallet-top-up-verify:ref-123",
+        name="wallet.verify_top_up",
+        status="queued",
+        queued_at=datetime.now(timezone.utc),
+        owner_user_id=user["user_id"],
+    )
+    fake_backend = FakeTaskQueueBackend(execution)
+    original_backend = getattr(client.app.state, "task_queue", None)
+    client.app.state.task_queue = fake_backend
+    try:
+        response = client.post(
+            "/wallet/top-up/verify",
+            headers=user["headers"],
+            json={"reference": "REF-123"},
+        )
+    finally:
+        client.app.state.task_queue = original_backend
+
+    assert response.status_code == 202, response.text
+    payload = response.json()
+    assert payload["job_id"] == execution.job_id
+    assert payload["status"] == "queued"
+    assert payload["reference"] == "REF-123"
+    assert fake_backend.enqueued
+
+
+def test_wallet_top_up_verify_returns_503_when_queue_is_unavailable(client, auth_user_factory) -> None:
+    user = auth_user_factory(suffix="wallet-queue-down")
+    original_backend = getattr(client.app.state, "task_queue", None)
+    client.app.state.task_queue = NullTaskQueueBackend()
+    try:
+        response = client.post(
+            "/wallet/top-up/verify",
+            headers=user["headers"],
+            json={"reference": "REF-999"},
+        )
+    finally:
+        client.app.state.task_queue = original_backend
+
+    assert response.status_code == 503, response.text
+    assert response.json() == {
+        "error": True,
+        "message": "Wallet verification queue is unavailable.",
+        "code": "service_unavailable",
+    }
+
+
+def test_auth_and_validation_errors_use_standard_envelope(client) -> None:
+    auth_response = client.get("/wallet")
+    assert auth_response.status_code == 401, auth_response.text
+    assert auth_response.json()["error"] is True
+    assert auth_response.json()["code"] == "unauthorized"
+
+    validation_response = client.get("/regen-universe/rankings", params={"page": 0})
+    assert validation_response.status_code == 422, validation_response.text
+    assert validation_response.json()["error"] is True
+    assert validation_response.json()["code"] == "validation_error"
+
+
+def test_sensitive_rate_limit_override_returns_standard_429(monkeypatch: pytest.MonkeyPatch, test_settings) -> None:
+    import app.core.rate_limit as rate_limit_module
+
+    settings = replace(
+        test_settings,
+        distributed_rate_limit_enabled=True,
+        redis_url=None,
+        api_rate_limit_per_minute=100,
+        auth_rate_limit_per_minute=100,
+        market_rate_limit_per_minute=100,
+        wallet_rate_limit_per_minute=100,
+        sensitive_rate_limit_per_minute=1,
+    )
+    monkeypatch.setattr(rate_limit_module, "extract_access_token_subject", lambda _request: "user-1")
+
+    app = FastAPI()
+    app.state.settings = settings
+    install_api_contracts(app)
+    app.add_middleware(RateLimitMiddleware)
+
+    @app.post("/market/buy")
+    def buy() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.get("/regular")
+    def regular(limit: int = Query(default=1, ge=1)) -> dict[str, bool]:
+        return {"ok": limit > 0}
+
+    with TestClient(app) as isolated_client:
+        first = isolated_client.post("/market/buy")
+        second = isolated_client.post("/market/buy")
+        regular = isolated_client.get("/regular")
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 429, second.text
+    assert second.json()["error"] is True
+    assert second.json()["code"] == "rate_limit_exceeded"
+    assert regular.status_code == 200, regular.text
+
+
+def test_memory_rate_limit_store_resets_after_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.core.rate_limit as rate_limit_module
+
+    store = MemoryRateLimitStore()
+    baseline = datetime(2026, 4, 2, tzinfo=timezone.utc)
+    monkeypatch.setattr(rate_limit_module, "_utcnow", lambda: baseline)
+    first_count, _ = store.increment(key="gte:test", window_seconds=60)
+    second_count, _ = store.increment(key="gte:test", window_seconds=60)
+    monkeypatch.setattr(rate_limit_module, "_utcnow", lambda: baseline + timedelta(seconds=61))
+    reset_count, _ = store.increment(key="gte:test", window_seconds=60)
+
+    assert first_count == 1
+    assert second_count == 2
+    assert reset_count == 1

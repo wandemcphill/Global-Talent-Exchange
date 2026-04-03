@@ -5,6 +5,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.common.schemas.base import CommonSchema
+from app.core.pagination import PaginationMeta
 from app.schemas.regen_core import RegenCardView, RegenProfileView, RegenValueSnapshotView
 
 
@@ -31,6 +32,11 @@ class RegenSeasonView(BaseModel):
     is_active: bool
     closed_at: datetime | None = None
     source_ingestion_season_ids: list[str] = Field(default_factory=list)
+
+
+class RegenSeasonPageView(CommonSchema):
+    items: list[RegenSeasonView] = Field(default_factory=list)
+    pagination: PaginationMeta
 
 
 class RegenAwardDefinitionView(CommonSchema):
@@ -60,6 +66,11 @@ class RegenAwardResultView(CommonSchema):
     winners: list[RegenAwardWinnerView] = Field(default_factory=list)
 
 
+class RegenAwardResultPageView(CommonSchema):
+    items: list[RegenAwardResultView] = Field(default_factory=list)
+    pagination: PaginationMeta
+
+
 class RegenRankingEntryView(CommonSchema):
     id: str
     player_id: str
@@ -74,6 +85,7 @@ class RegenRankingLeaderboardView(CommonSchema):
     season: RegenSeasonView | None = None
     category: str
     entries: list[RegenRankingEntryView] = Field(default_factory=list)
+    pagination: PaginationMeta | None = None
 
 
 class RegenHallOfFameEntryView(CommonSchema):
@@ -89,6 +101,7 @@ class RegenHallOfFameEntryView(CommonSchema):
 
 class RegenHallOfFameView(CommonSchema):
     entries: list[RegenHallOfFameEntryView] = Field(default_factory=list)
+    pagination: PaginationMeta | None = None
 
 
 class RegenUniverseCloseResultView(CommonSchema):
@@ -189,6 +202,7 @@ class RegenRisingStarEntryView(CommonSchema):
 
 class RegenRisingStarsView(CommonSchema):
     entries: list[RegenRisingStarEntryView] = Field(default_factory=list)
+    pagination: PaginationMeta | None = None
 
 
 class RegenBloodlinePlayerView(CommonSchema):
@@ -216,6 +230,7 @@ class RegenBloodlineChainView(CommonSchema):
 
 class RegenBloodlinesView(CommonSchema):
     entries: list[RegenBloodlineChainView] = Field(default_factory=list)
+    pagination: PaginationMeta | None = None
 
 
 class RegenScoutingFeedItemView(CommonSchema):
@@ -233,3 +248,4 @@ class RegenScoutingFeedItemView(CommonSchema):
 
 class RegenScoutingFeedView(CommonSchema):
     items: list[RegenScoutingFeedItemView] = Field(default_factory=list)
+    pagination: PaginationMeta | None = None

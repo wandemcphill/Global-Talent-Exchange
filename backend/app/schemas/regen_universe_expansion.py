@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import Field
 
 from app.common.schemas.base import CommonSchema
+from app.core.pagination import PaginationMeta
 
 
 class RivalryPlayerView(CommonSchema):
@@ -142,6 +143,11 @@ class YouthTournamentView(CommonSchema):
     status: str
 
 
+class YouthTournamentPageView(CommonSchema):
+    items: list[YouthTournamentView] = Field(default_factory=list)
+    pagination: PaginationMeta
+
+
 class YouthTournamentCreateRequest(CommonSchema):
     name: str = Field(min_length=3, max_length=160)
     age_limit: str = Field(min_length=2, max_length=12)
@@ -184,6 +190,11 @@ class NationalRegenSeedView(CommonSchema):
     status: str
     preseed_batch: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NationalRegenSeedPageView(CommonSchema):
+    items: list[NationalRegenSeedView] = Field(default_factory=list)
+    pagination: PaginationMeta
 
 
 class NationalRegenPreseedRequest(CommonSchema):

@@ -39,8 +39,6 @@ router = APIRouter(prefix="/api/v1", tags=["api-v1"])
 def install_exception_handlers(app, _context: ApplicationContext) -> None:
     if getattr(app.state, "api_v1_exception_handlers_installed", False):
         return
-    app.add_exception_handler(HTTPException, _handle_http_exception)
-    app.add_exception_handler(RequestValidationError, _handle_validation_error)
     app.state.api_v1_exception_handlers_installed = True
 
 

@@ -6,6 +6,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.pagination import PaginationMeta
 from app.models.wallet import (
     LedgerAccountKind,
     LedgerEntryReason,
@@ -586,3 +587,21 @@ class WalletTopUpVerifyRequest(BaseModel):
 class WalletTopUpVerifyView(BaseModel):
     wallet: WalletProfileView
     transaction: WalletTransactionRecordView
+
+
+class WalletTopUpVerifyAcceptedView(BaseModel):
+    job_id: str
+    name: str
+    status: str
+    queued_at: datetime
+    reference: str
+
+
+class PurchaseOrderPageView(BaseModel):
+    items: list[PurchaseOrderView]
+    pagination: PaginationMeta
+
+
+class MarketTopupPageView(BaseModel):
+    items: list[MarketTopupView]
+    pagination: PaginationMeta

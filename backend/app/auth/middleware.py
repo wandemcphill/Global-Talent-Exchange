@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from fastapi import Request, status
-from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.auth.dependencies import _resolve_authenticated_user
+from app.core.errors import error_response
 
 
 PROTECTED_PATH_PREFIXES = (
@@ -35,17 +35,19 @@ class AuthEnforcementMiddleware(BaseHTTPMiddleware):
 
         authorization = request.headers.get("authorization", "").strip()
         if not authorization:
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Authentication credentials were not provided."},
+            return error_response(
+                status.HTTP_401_UNAUTHORIZED,
+                message="Authentication credentials were not provided.",
+                code="unauthorized",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         try:
             scheme, token = authorization.split(" ", maxsplit=1)
         except ValueError:
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Authentication credentials were not provided."},
+            return error_response(
+                status.HTTP_401_UNAUTHORIZED,
+                message="Authentication credentials were not provided.",
+                code="unauthorized",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         credentials = HTTPAuthorizationCredentials(scheme=scheme, credentials=token.strip())
@@ -61,9 +63,10 @@ class AuthEnforcementMiddleware(BaseHTTPMiddleware):
                 status_code = getattr(exc, "status_code", status.HTTP_401_UNAUTHORIZED)
                 detail = getattr(exc, "detail", "Authentication failed.")
                 headers = getattr(exc, "headers", {"WWW-Authenticate": "Bearer"})
-                return JSONResponse(
-                    status_code=status_code,
-                    content={"detail": detail},
+                return error_response(
+                    status_code,
+                    message=str(detail),
+                    code="unauthorized" if status_code == status.HTTP_401_UNAUTHORIZED else f"http_{status_code}",
                     headers=headers,
                 )
         return await call_next(request)

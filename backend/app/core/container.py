@@ -107,7 +107,7 @@ class Container:
         from app.global_memory.projections import GlobalMemoryProjectionService
         from app.jobs import IngestionJobRunner
         from app.market.projections import MarketSummaryProjector
-        from app.market.repositories import InMemoryMarketRepository
+        from app.market.repositories import build_market_repository
         from app.market.service import MarketEngine
         from app.match_engine.services.match_simulation_service import MatchSimulationService
         from app.notifications.service import NotificationCenter
@@ -186,7 +186,7 @@ class Container:
                 self.outbox_relay.start()
 
         self.market_engine = MarketEngine(
-            repository=InMemoryMarketRepository(),
+            repository=build_market_repository(self.settings.redis_url),
             summary_projector=MarketSummaryProjector(self.database.session_factory),
             event_publisher=event_publisher,
             cache_backend=self.cache_backend,

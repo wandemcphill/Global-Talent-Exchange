@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
+from app.core.cache_namespaces import PLAYER_MARKETS_CACHE_NAMESPACE
+from app.core.pagination import build_pagination_meta, resolve_pagination
+from app.core.response_cache import get_response_cache
 from app.models.user import User
 from app.players.real_player_schemas import (
     PlayerMatchEventCreate,
@@ -60,6 +63,12 @@ from app.services.player_face_service import PlayerFaceError, PlayerFaceNotFound
 from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/players", tags=["players"])
+
+
+def _invalidate_player_markets_cache(request: Request | None) -> None:
+    if request is None:
+        return
+    get_response_cache(request.app).invalidate(PLAYER_MARKETS_CACHE_NAMESPACE)
 
 
 def get_real_player_universe_query_service(
@@ -151,20 +160,43 @@ def list_recent_player_summaries(
 
 @router.get("/markets", response_model=PlayerShareMarketListView)
 def list_player_share_markets(
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1),
+    limit: int | None = Query(default=None, ge=1, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
     search: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> PlayerShareMarketListView:
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
+    settings = request.app.state.settings
+    if settings.api_cache_enabled:
+        cached_payload = get_response_cache(request.app).get_json(
+            namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+        )
+        if cached_payload is not None:
+            return PlayerShareMarketListView.model_validate(cached_payload)
     try:
         payload = PlayerTokenMarketService(session).list_markets(
-            limit=limit,
-            offset=offset,
+            limit=params.per_page,
+            offset=params.offset,
             search=search,
         )
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
-    return PlayerShareMarketListView.model_validate(payload)
+    payload["pagination"] = build_pagination_meta(params=params, total=payload["total"]).model_dump(mode="json")
+    response = PlayerShareMarketListView.model_validate(payload)
+    if settings.api_cache_enabled:
+        get_response_cache(request.app).set_json(
+            namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+            payload=response.model_dump(mode="json"),
+            ttl_seconds=settings.player_markets_cache_ttl_seconds,
+        )
+    return response
 
 
 @router.get("/{player_id}/summary", response_model=PlayerSummaryView)
@@ -235,6 +267,7 @@ def create_player_share_market(
         raise_player_token_market_http_exception(exc)
     session.commit()
     session.refresh(market)
+    _invalidate_player_markets_cache(request)
     return PlayerShareMarketView.model_validate(service.get_market_view(player_id=player_id))
 
 
@@ -259,6 +292,7 @@ def issue_player_share_market(
 def buy_player_shares(
     player_id: str,
     payload: PlayerSharePurchaseRequest,
+    request: Request,
     session: Session = Depends(get_session),
     actor: User = Depends(get_current_user),
 ) -> PlayerSharePurchaseView:
@@ -269,6 +303,7 @@ def buy_player_shares(
         raise_player_token_market_http_exception(exc)
     session.commit()
     session.refresh(result["holding"])
+    _invalidate_player_markets_cache(request)
     return PlayerSharePurchaseView(
         market=PlayerShareMarketView.model_validate(result["market"]),
         holding=PlayerShareHoldingView.model_validate(result["holding"]),
@@ -281,6 +316,7 @@ def buy_player_shares(
 def sell_player_shares(
     player_id: str,
     payload: PlayerShareSaleRequest,
+    request: Request,
     session: Session = Depends(get_session),
     actor: User = Depends(get_current_user),
 ) -> PlayerShareSaleView:
@@ -291,6 +327,7 @@ def sell_player_shares(
         raise_player_token_market_http_exception(exc)
     session.commit()
     session.refresh(result["holding"])
+    _invalidate_player_markets_cache(request)
     return PlayerShareSaleView(
         market=PlayerShareMarketView.model_validate(result["market"]),
         holding=PlayerShareHoldingView.model_validate(result["holding"]),
@@ -320,6 +357,7 @@ def reprice_player_shares_from_performance(
         raise_player_token_market_http_exception(exc)
     session.commit()
     session.refresh(market)
+    _invalidate_player_markets_cache(request)
     return PlayerShareMarketView.model_validate(market)
 
 
@@ -343,6 +381,7 @@ def distribute_player_share_dividends(
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
     session.commit()
+    _invalidate_player_markets_cache(request)
     return PlayerShareDividendView(
         market=PlayerShareMarketView.model_validate(result["market"]),
         transaction_id=result["transaction_id"],

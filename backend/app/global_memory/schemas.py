@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import Field
 
 from app.common.schemas.base import CommonSchema
+from app.core.pagination import PaginationMeta
 
 
 class CompetitionListItemView(CommonSchema):
@@ -16,6 +17,11 @@ class CompetitionListItemView(CommonSchema):
     age_bracket: str | None = None
     country_code: str | None = None
     is_major: bool
+
+
+class CompetitionPageView(CommonSchema):
+    items: tuple[CompetitionListItemView, ...] = Field(default_factory=tuple)
+    pagination: PaginationMeta
 
 
 class CompetitionEnterRequest(CommonSchema):

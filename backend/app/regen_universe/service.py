@@ -20,7 +20,7 @@ from app.ingestion.models import (
     TeamStanding,
 )
 from app.models.regen_ecosystem import NationalRegenSeed
-from app.models.regen import RegenDiscoveryBadge, RegenLegacyRecord, RegenLineageProfile, RegenProfile, RegenScoutReport
+from app.models.regen import RegenLegacyRecord, RegenLineageProfile, RegenProfile, RegenScoutReport
 from app.regen_universe.awards_engine import AwardDefinition, AwardsEngine, DEFAULT_AWARD_DEFINITIONS
 from app.regen_universe.models import (
     RegenAward,
@@ -530,7 +530,14 @@ class RegenUniverseService:
             for definition in definitions
         ]
 
-    def list_rankings(self, *, season_id: str | None = None, category: str = "overall", limit: int = 50) -> dict[str, object]:
+    def list_rankings(
+        self,
+        *,
+        season_id: str | None = None,
+        category: str = "overall",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, object]:
         season = self._resolve_target_season(season_id)
         if season is None:
             return {"season": None, "category": category, "entries": []}
@@ -542,6 +549,7 @@ class RegenUniverseService:
                     RegenRankingSnapshot.category == category,
                 )
                 .order_by(RegenRankingSnapshot.rank.asc(), RegenRankingSnapshot.player_name.asc())
+                .offset(offset)
                 .limit(limit)
             )
         )
@@ -551,7 +559,7 @@ class RegenUniverseService:
             "entries": [self._ranking_payload(item) for item in entries],
         }
 
-    def list_hall_of_fame(self, *, limit: int = 50) -> dict[str, object]:
+    def list_hall_of_fame(self, *, limit: int = 50, offset: int = 0) -> dict[str, object]:
         entries = list(
             self.session.scalars(
                 select(RegenHallOfFame)
@@ -562,6 +570,7 @@ class RegenUniverseService:
                     RegenHallOfFame.peak_rank.asc(),
                     RegenHallOfFame.player_name.asc(),
                 )
+                .offset(offset)
                 .limit(limit)
             )
         )
@@ -1019,9 +1028,9 @@ class RegenUniverseService:
             "discovery_badges": discovery_badges,
         }
 
-    def list_rising_stars(self, *, limit: int = 20, age_max: int = 21) -> dict[str, object]:
+    def list_rising_stars(self, *, limit: int = 20, offset: int = 0, age_max: int = 21) -> dict[str, object]:
         candidates: list[tuple[float, dict[str, object]]] = []
-        for prospect in self._discovery_pool(limit=max(limit * 3, 24), age_min=15, age_max=age_max):
+        for prospect in self._discovery_pool(limit=max((offset + limit) * 3, 24), age_min=15, age_max=age_max):
             if prospect.profile is None or prospect.card is None:
                 continue
             prestige = (
@@ -1057,9 +1066,13 @@ class RegenUniverseService:
             ),
             reverse=True,
         )
-        return {"entries": [entry for _, entry in candidates[:limit]]}
+        entries = [entry for _, entry in candidates]
+        return {
+            "entries": entries[offset : offset + limit],
+            "total": len(entries),
+        }
 
-    def list_bloodlines(self, *, limit: int = 20) -> dict[str, object]:
+    def list_bloodlines(self, *, limit: int = 20, offset: int = 0) -> dict[str, object]:
         market_service = RegenMarketService(self.session)
         lineage_rows = list(
             self.session.scalars(
@@ -1132,11 +1145,14 @@ class RegenUniverseService:
             ),
             reverse=True,
         )
-        return {"entries": chains[:limit]}
+        return {
+            "entries": chains[offset : offset + limit],
+            "total": len(chains),
+        }
 
-    def list_scouting_feed(self, *, limit: int = 20) -> dict[str, object]:
+    def list_scouting_feed(self, *, limit: int = 20, offset: int = 0) -> dict[str, object]:
         items: list[dict[str, object]] = []
-        for prospect in self._discovery_pool(limit=max(limit * 2, 20), age_min=15, age_max=21):
+        for prospect in self._discovery_pool(limit=max((offset + limit) * 2, 20), age_min=15, age_max=21):
             items.append(
                 {
                     "feed_id": f"discover:{prospect.lookup_id}",
@@ -1229,7 +1245,10 @@ class RegenUniverseService:
             ),
             reverse=True,
         )
-        return {"items": items[:limit]}
+        return {
+            "items": items[offset : offset + limit],
+            "total": len(items),
+        }
 
     def _build_performance_inputs(self, season: RegenSeason) -> list[PerformanceInput]:
         players = list(

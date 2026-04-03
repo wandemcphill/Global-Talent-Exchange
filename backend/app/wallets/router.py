@@ -36,12 +36,13 @@ from app.wallets.schemas import (
     PurchaseOrderSourceScope,
     PurchaseOrderStatusUpdate,
     PurchaseOrderView,
+    PurchaseOrderPageView,
     MarketTopupCreateRequest,
     MarketTopupQuoteRequest,
     MarketTopupQuoteView,
-    MarketTopupSourceScope,
     MarketTopupStatusUpdate,
     MarketTopupView,
+    MarketTopupPageView,
     WalletAccountBalance,
     WalletConversionQuoteRequest,
     WalletConversionQuoteView,
@@ -56,19 +57,19 @@ from app.wallets.schemas import (
     WalletTopUpInitiateRequest,
     WalletTopUpInitiateView,
     WalletTopUpVerifyRequest,
-    WalletTopUpVerifyView,
+    WalletTopUpVerifyAcceptedView,
     WalletTransactionRecordView,
 )
+from app.core.pagination import build_pagination_meta, resolve_pagination
+from app.core.task_queue import NullTaskQueueBackend, get_task_queue_backend
 from app.wallets.funding_service import (
     WalletFundingError,
     WalletFundingService,
-    WalletTopUpNotFoundError,
-    WalletTopUpVerificationError,
 )
 from app.wallets.service import LedgerError, WalletService
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
 from app.wallets.providers import get_provider_adapter
-from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest, PayoutStatus
+from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict
 from app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasurySettings, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
@@ -85,6 +86,7 @@ from app.treasury.schemas import (
     WithdrawalRequestView as TreasuryWithdrawalRequestView,
 )
 from app.treasury.service import TreasuryConflictError, TreasuryService
+from app.workers.jobs import verify_wallet_top_up_job
 
 router = APIRouter()
 wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])
@@ -450,30 +452,57 @@ def initiate_wallet_top_up(
     )
 
 
-@public_wallet_router.post("/top-up/verify", response_model=WalletTopUpVerifyView)
+@public_wallet_router.post(
+    "/top-up/verify",
+    response_model=WalletTopUpVerifyAcceptedView,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def verify_wallet_top_up(
     payload: WalletTopUpVerifyRequest,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
-) -> WalletTopUpVerifyView:
-    service = _build_wallet_funding_service(request)
-    try:
-        with _wallet_transaction_lock(request, user=current_user, operation="wallet_top_up_verify"):
-            result = service.verify_top_up(session, current_user, reference=payload.reference)
-            session.commit()
-    except WalletTopUpNotFoundError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except WalletTopUpVerificationError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except WalletFundingError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return WalletTopUpVerifyView(
-        wallet=WalletProfileView.model_validate(result.wallet),
-        transaction=WalletTransactionRecordView.model_validate(result.transaction),
+) -> WalletTopUpVerifyAcceptedView:
+    del session
+    normalized_reference = payload.reference.strip()
+    if not normalized_reference:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A transaction reference is required.",
+        )
+
+    task_queue = get_task_queue_backend(request.app)
+    if isinstance(task_queue, NullTaskQueueBackend):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Wallet verification queue is unavailable.",
+        )
+
+    job_id = f"wallet-top-up-verify:{normalized_reference.lower()}"
+    execution = task_queue.get(job_id)
+    if execution is None:
+        try:
+            execution = task_queue.enqueue(
+                name="wallet.verify_top_up",
+                callable_=verify_wallet_top_up_job,
+                kwargs={"user_id": current_user.id, "reference": normalized_reference},
+                job_id=job_id,
+                timeout_seconds=90,
+                retry_intervals_seconds=(10, 30, 60),
+                owner_user_id=current_user.id,
+                meta={"reference": normalized_reference},
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Wallet verification queue is unavailable.",
+            ) from exc
+    return WalletTopUpVerifyAcceptedView(
+        job_id=execution.job_id,
+        name=execution.name,
+        status=execution.status,
+        queued_at=execution.queued_at,
+        reference=normalized_reference,
     )
 
 
@@ -811,16 +840,36 @@ def create_purchase_order(
     return PurchaseOrderView.model_validate(order)
 
 
-@wallet_router.get("/purchase-orders", response_model=list[PurchaseOrderView])
+@wallet_router.get("/purchase-orders", response_model=PurchaseOrderPageView)
 def list_purchase_orders(
-    limit: int = Query(default=50, ge=1, le=200),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1),
+    limit: int | None = Query(default=None, ge=1, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     request: Request = None,
-) -> list[PurchaseOrderView]:
-    rail_service = _build_wallet_rail_service(request, session)
-    orders = rail_service.list_purchase_orders_for_user(user=current_user, limit=limit)
-    return [PurchaseOrderView.model_validate(order) for order in orders]
+) -> PurchaseOrderPageView:
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
+    total = int(
+        session.scalar(
+            select(func.count())
+            .select_from(FancoinPurchaseOrder)
+            .where(FancoinPurchaseOrder.user_id == current_user.id)
+        )
+        or 0
+    )
+    orders = session.scalars(
+        select(FancoinPurchaseOrder)
+        .where(FancoinPurchaseOrder.user_id == current_user.id)
+        .order_by(FancoinPurchaseOrder.created_at.desc())
+        .offset(params.offset)
+        .limit(params.per_page)
+    ).all()
+    return PurchaseOrderPageView(
+        items=[PurchaseOrderView.model_validate(order) for order in orders],
+        pagination=build_pagination_meta(params=params, total=total),
+    )
 
 
 @wallet_router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderView)
@@ -837,19 +886,35 @@ def get_purchase_order(
     return PurchaseOrderView.model_validate(order)
 
 
-@wallet_router.get("/market-topups", response_model=list[MarketTopupView])
+@wallet_router.get("/market-topups", response_model=MarketTopupPageView)
 def list_market_topups(
-    limit: int = Query(default=50, ge=1, le=200),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1),
+    limit: int | None = Query(default=None, ge=1, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-) -> list[MarketTopupView]:
+) -> MarketTopupPageView:
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
+    total = int(
+        session.scalar(
+            select(func.count())
+            .select_from(MarketTopup)
+            .where(MarketTopup.user_id == current_user.id)
+        )
+        or 0
+    )
     topups = session.scalars(
         select(MarketTopup)
         .where(MarketTopup.user_id == current_user.id)
         .order_by(MarketTopup.created_at.desc())
-        .limit(limit)
+        .offset(params.offset)
+        .limit(params.per_page)
     ).all()
-    return [MarketTopupView.model_validate(item) for item in topups]
+    return MarketTopupPageView(
+        items=[MarketTopupView.model_validate(item) for item in topups],
+        pagination=build_pagination_meta(params=params, total=total),
+    )
 
 
 @wallet_router.get("/ledger", response_model=WalletLedgerPageView)
@@ -1050,7 +1115,7 @@ async def handle_provider_webhook(
     }
 
 
-@admin_router.get("/purchase-orders", response_model=list[PurchaseOrderView])
+@admin_router.get("/purchase-orders", response_model=PurchaseOrderPageView)
 def list_admin_purchase_orders(
     actor: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
@@ -1058,10 +1123,13 @@ def list_admin_purchase_orders(
     status_filter: str | None = Query(default=None, alias="status"),
     provider_key: str | None = Query(default=None),
     user_id: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-) -> list[PurchaseOrderView]:
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1),
+    limit: int | None = Query(default=None, ge=1, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
+) -> PurchaseOrderPageView:
     _require_payment_rails_permission(request, actor)
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
     query = select(FancoinPurchaseOrder)
     if status_filter:
         try:
@@ -1073,10 +1141,14 @@ def list_admin_purchase_orders(
         query = query.where(FancoinPurchaseOrder.provider_key == provider_key)
     if user_id:
         query = query.where(FancoinPurchaseOrder.user_id == user_id)
+    total = int(session.scalar(select(func.count()).select_from(query.subquery())) or 0)
     orders = session.scalars(
-        query.order_by(FancoinPurchaseOrder.created_at.desc()).limit(limit).offset(offset)
+        query.order_by(FancoinPurchaseOrder.created_at.desc()).offset(params.offset).limit(params.per_page)
     ).all()
-    return [PurchaseOrderView.model_validate(order) for order in orders]
+    return PurchaseOrderPageView(
+        items=[PurchaseOrderView.model_validate(order) for order in orders],
+        pagination=build_pagination_meta(params=params, total=total),
+    )
 
 
 @admin_router.post("/purchase-orders/{order_id}/status", response_model=PurchaseOrderView)
@@ -1161,17 +1233,20 @@ def create_market_topup(
     return MarketTopupView.model_validate(topup)
 
 
-@admin_router.get("/market-topups", response_model=list[MarketTopupView])
+@admin_router.get("/market-topups", response_model=MarketTopupPageView)
 def list_admin_market_topups(
     actor: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
     request: Request = None,
     status_filter: str | None = Query(default=None, alias="status"),
     user_id: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-) -> list[MarketTopupView]:
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1),
+    limit: int | None = Query(default=None, ge=1, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
+) -> MarketTopupPageView:
     _require_payment_rails_permission(request, actor)
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
     query = select(MarketTopup)
     if status_filter:
         try:
@@ -1181,10 +1256,14 @@ def list_admin_market_topups(
         query = query.where(MarketTopup.status == status_value)
     if user_id:
         query = query.where(MarketTopup.user_id == user_id)
+    total = int(session.scalar(select(func.count()).select_from(query.subquery())) or 0)
     topups = session.scalars(
-        query.order_by(MarketTopup.created_at.desc()).limit(limit).offset(offset)
+        query.order_by(MarketTopup.created_at.desc()).offset(params.offset).limit(params.per_page)
     ).all()
-    return [MarketTopupView.model_validate(item) for item in topups]
+    return MarketTopupPageView(
+        items=[MarketTopupView.model_validate(item) for item in topups],
+        pagination=build_pagination_meta(params=params, total=total),
+    )
 
 
 @admin_router.post("/market-topups/{topup_id}/status", response_model=MarketTopupView)

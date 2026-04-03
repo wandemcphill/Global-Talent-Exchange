@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-import os
+import logging
 from threading import RLock
-from typing import Any
+from typing import Any, Protocol
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from redis import Redis
+from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.config import Settings, get_settings
+from app.core.errors import error_response
 from app.core.request_security import extract_access_token_subject, extract_client_ip
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
@@ -24,14 +29,6 @@ class RateLimitRule:
     window_seconds: int
 
 
-@dataclass(slots=True)
-class RateLimitBucketState:
-    count: int
-    reset_at: datetime
-    last_seen_at: datetime
-    audited: bool = False
-
-
 @dataclass(frozen=True, slots=True)
 class RateLimitDecision:
     allowed: bool
@@ -42,11 +39,68 @@ class RateLimitDecision:
     retry_after_seconds: int
 
 
+class RateLimitStore(Protocol):
+    def increment(self, *, key: str, window_seconds: int) -> tuple[int, int]:
+        ...
+
+    def snapshot(self) -> dict[str, Any]:
+        ...
+
+
+@dataclass(slots=True)
+class MemoryRateLimitStore:
+    _lock: RLock = field(default_factory=RLock)
+    _buckets: dict[str, tuple[int, datetime]] = field(default_factory=dict)
+
+    def increment(self, *, key: str, window_seconds: int) -> tuple[int, int]:
+        now = _utcnow()
+        with self._lock:
+            current, reset_at = self._buckets.get(key, (0, now + timedelta(seconds=window_seconds)))
+            if reset_at <= now:
+                current = 0
+                reset_at = now + timedelta(seconds=window_seconds)
+            current += 1
+            self._buckets[key] = (current, reset_at)
+            retry_after = max(1, int((reset_at - now).total_seconds()))
+            return current, retry_after
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {"backend": "memory", "bucket_count": len(self._buckets)}
+
+
+class RedisRateLimitStore:
+    _SCRIPT = """
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('TTL', KEYS[1])
+return {current, ttl}
+"""
+
+    def __init__(self, redis_url: str):
+        self.client = Redis.from_url(redis_url, decode_responses=True)
+        self._script = self.client.register_script(self._SCRIPT)
+
+    def increment(self, *, key: str, window_seconds: int) -> tuple[int, int]:
+        try:
+            current, ttl = self._script(keys=[key], args=[window_seconds])
+            retry_after = max(1, int(ttl or window_seconds))
+            return int(current), retry_after
+        except RedisError:
+            logger.warning("rate_limit.increment_failed key=%s", key)
+            return 0, window_seconds
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"backend": "redis"}
+
+
 @dataclass(slots=True)
 class ApiRateLimiter:
     app: FastAPI
-    _lock: RLock = field(default_factory=RLock)
-    _buckets: dict[str, RateLimitBucketState] = field(default_factory=dict)
+    settings: Settings
+    store: RateLimitStore
     _throttled_events: int = 0
 
     EXEMPT_PREFIXES = ("/health", "/ready", "/version", "/docs", "/redoc", "/openapi.json")
@@ -57,73 +111,53 @@ class ApiRateLimiter:
         path = request.url.path or "/"
         if path.startswith(self.EXEMPT_PREFIXES):
             return None
+        if not self.settings.distributed_rate_limit_enabled:
+            return None
+
         rule = self._rule_for_request(request)
         actor_key = self._actor_key(request)
-        bucket_key = f"{rule.scope}:{actor_key}"
-        now = _utcnow()
-        with self._lock:
-            self._purge_expired_buckets_unlocked(now=now)
-            bucket = self._buckets.get(bucket_key)
-            if bucket is None or bucket.reset_at <= now:
-                bucket = RateLimitBucketState(
-                    count=0,
-                    reset_at=now + timedelta(seconds=rule.window_seconds),
-                    last_seen_at=now,
-                )
-                self._buckets[bucket_key] = bucket
-            bucket.count += 1
-            bucket.last_seen_at = now
-            remaining = max(0, rule.limit - bucket.count)
-            allowed = bucket.count <= rule.limit
-            retry_after_seconds = max(1, int((bucket.reset_at - now).total_seconds()))
-            if not allowed:
-                self._throttled_events += 1
-                if not bucket.audited:
-                    self._audit_rate_limit_hit(
-                        request=request,
-                        scope=rule.scope,
-                        limit=rule.limit,
-                        retry_after_seconds=retry_after_seconds,
-                    )
-                    bucket.audited = True
-            return RateLimitDecision(
-                allowed=allowed,
+        bucket_key = self._bucket_key(rule=rule, actor_key=actor_key)
+        current, retry_after = self.store.increment(key=bucket_key, window_seconds=rule.window_seconds)
+        if current <= 0:
+            return None
+        remaining = max(0, rule.limit - current)
+        allowed = current <= rule.limit
+        if not allowed:
+            self._throttled_events += 1
+            self._audit_rate_limit_hit(
+                request=request,
                 scope=rule.scope,
                 limit=rule.limit,
-                window_seconds=rule.window_seconds,
-                remaining=remaining,
-                retry_after_seconds=retry_after_seconds,
+                retry_after_seconds=retry_after,
             )
+        return RateLimitDecision(
+            allowed=allowed,
+            scope=rule.scope,
+            limit=rule.limit,
+            window_seconds=rule.window_seconds,
+            remaining=remaining,
+            retry_after_seconds=retry_after,
+        )
 
     def snapshot(self) -> dict[str, Any]:
-        now = _utcnow()
-        with self._lock:
-            self._purge_expired_buckets_unlocked(now=now)
-            by_scope: dict[str, int] = {}
-            for key in self._buckets:
-                scope = key.split(":", 1)[0]
-                by_scope[scope] = by_scope.get(scope, 0) + 1
-            return {
-                "enabled": True,
-                "rules": [
-                    {
-                        "scope": rule.scope,
-                        "limit": rule.limit,
-                        "window_seconds": rule.window_seconds,
-                    }
-                    for rule in self._rules()
-                ],
-                "active_bucket_count": len(self._buckets),
-                "active_buckets_by_scope": by_scope,
-                "throttled_events": self._throttled_events,
-            }
+        return {
+            "enabled": bool(self.settings.distributed_rate_limit_enabled),
+            "rules": [
+                {
+                    "scope": rule.scope,
+                    "limit": rule.limit,
+                    "window_seconds": rule.window_seconds,
+                }
+                for rule in self._rules()
+            ],
+            "throttled_events": self._throttled_events,
+            "store": self.store.snapshot(),
+        }
 
     def _rule_for_request(self, request: Request) -> RateLimitRule:
         path = (request.url.path or "/").lower()
         if path in {"/auth/login", "/api/auth/login"}:
             return self._rules()[0]
-        if path.startswith("/integrations/payments/") and path.endswith("/webhook"):
-            return self._rules()[5]
         if path in {
             "/market/buy",
             "/market/sell",
@@ -133,23 +167,30 @@ class ApiRateLimiter:
             "/gtex/market/sell",
             "/api/gtex/market/buy",
             "/api/gtex/market/sell",
+            "/wallet/top-up/initiate",
+            "/wallet/top-up/verify",
+            "/api/wallet/top-up/initiate",
+            "/api/wallet/top-up/verify",
         }:
             return self._rules()[1]
         if self._matches_prefix(path, "/api/market", "/market", "/api/gtex/market", "/gtex/market"):
-            return self._rules()[3]
-        if self._matches_prefix(path, "/api/wallets", "/wallets", "/wallet"):
             return self._rules()[2]
+        if self._matches_prefix(path, "/api/wallets", "/wallets", "/wallet"):
+            return self._rules()[3]
         return self._rules()[4]
 
     def _rules(self) -> tuple[RateLimitRule, ...]:
         return (
-            RateLimitRule("auth", limit=self._env_int("GTE_AUTH_RATE_LIMIT_PER_MINUTE", 10), window_seconds=60),
-            RateLimitRule("market_trade", limit=self._env_int("GTE_MARKET_TRADE_RATE_LIMIT_PER_MINUTE", 10), window_seconds=60),
-            RateLimitRule("wallet", limit=self._env_int("GTE_WALLET_RATE_LIMIT_PER_MINUTE", 50), window_seconds=60),
-            RateLimitRule("market", limit=self._env_int("GTE_MARKET_RATE_LIMIT_PER_MINUTE", 40), window_seconds=60),
-            RateLimitRule("default", limit=self._env_int("GTE_API_RATE_LIMIT_PER_MINUTE", 100), window_seconds=60),
-            RateLimitRule("payment_webhook", limit=self._env_int("GTE_PAYMENT_WEBHOOK_RATE_LIMIT_PER_MINUTE", 120), window_seconds=60),
+            RateLimitRule("auth", limit=self.settings.auth_rate_limit_per_minute, window_seconds=60),
+            RateLimitRule("sensitive", limit=self.settings.sensitive_rate_limit_per_minute, window_seconds=60),
+            RateLimitRule("market", limit=self.settings.market_rate_limit_per_minute, window_seconds=60),
+            RateLimitRule("wallet", limit=self.settings.wallet_rate_limit_per_minute, window_seconds=60),
+            RateLimitRule("default", limit=self.settings.api_rate_limit_per_minute, window_seconds=60),
         )
+
+    def _bucket_key(self, *, rule: RateLimitRule, actor_key: str) -> str:
+        bucket = int(_utcnow().timestamp()) // rule.window_seconds
+        return f"gte:rate_limit:{rule.scope}:{actor_key}:{bucket}"
 
     def _audit_rate_limit_hit(
         self,
@@ -183,11 +224,6 @@ class ApiRateLimiter:
             )
             session.commit()
 
-    def _purge_expired_buckets_unlocked(self, *, now: datetime) -> None:
-        expired_keys = [key for key, state in self._buckets.items() if state.reset_at <= now]
-        for key in expired_keys:
-            self._buckets.pop(key, None)
-
     def _actor_key(self, request: Request) -> str:
         user_id = extract_access_token_subject(request)
         if user_id:
@@ -198,13 +234,6 @@ class ApiRateLimiter:
     def _matches_prefix(path: str, *prefixes: str) -> bool:
         return any(path == prefix or path.startswith(f"{prefix}/") for prefix in prefixes)
 
-    @staticmethod
-    def _env_int(name: str, default: int) -> int:
-        try:
-            return max(1, int(os.getenv(name, str(default)).strip()))
-        except (TypeError, ValueError, AttributeError):
-            return default
-
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -213,13 +242,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if decision is None:
             return await call_next(request)
         if not decision.allowed:
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "detail": "Rate limit exceeded. Please retry later.",
-                    "scope": decision.scope,
-                    "retry_after_seconds": decision.retry_after_seconds,
-                },
+            return error_response(
+                429,
+                message="Rate limit exceeded. Please retry later.",
+                code="rate_limit_exceeded",
                 headers={
                     "Retry-After": str(decision.retry_after_seconds),
                     "X-RateLimit-Limit": str(decision.limit),
@@ -237,9 +263,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 def ensure_api_rate_limiter(app: FastAPI) -> ApiRateLimiter:
     limiter = getattr(app.state, "api_rate_limiter", None)
     if limiter is None:
-        limiter = ApiRateLimiter(app=app)
+        settings = getattr(app.state, "settings", None) or get_settings()
+        store = _build_store(settings)
+        limiter = ApiRateLimiter(app=app, settings=settings, store=store)
         app.state.api_rate_limiter = limiter
     return limiter
+
+
+def _build_store(settings: Settings) -> RateLimitStore:
+    if settings.redis_url:
+        try:
+            store = RedisRateLimitStore(settings.redis_url)
+            store.client.ping()
+            return store
+        except Exception:
+            logger.warning("rate_limit.redis_unavailable_falling_back_to_memory")
+    return MemoryRateLimitStore()
 
 
 __all__ = [

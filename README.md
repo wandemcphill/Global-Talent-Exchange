@@ -26,6 +26,29 @@ python -m pip install --upgrade pip
 python -m pip install -r backend/requirements.txt
 ```
 
+## Scaling runtime
+
+Production read caching, distributed rate limiting, and durable background jobs now expect Redis to be available through `GTE_REDIS_URL`. Local boot still works without Redis, but the production-safe path is:
+
+- API: `gunicorn backend.app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180`
+- RQ worker: `cd backend && python -m app.workers.rq_worker_main`
+- GTEX runtime workers: `cd backend && python -m app.gtex.worker_main`
+
+Key env vars:
+
+- `GTE_API_CACHE_ENABLED` default `true`: enables Redis-backed response caching.
+- `GTE_PLAYER_MARKETS_CACHE_TTL_SECONDS` default `5`: cache TTL for `/players/markets`.
+- `GTE_COMPETITIONS_CACHE_TTL_SECONDS` default `30`: cache TTL for `/competitions`.
+- `GTE_REGEN_UNIVERSE_CACHE_TTL_SECONDS` default `15`: cache TTL for `/regen-universe/*`.
+- `GTE_DISTRIBUTED_RATE_LIMIT_ENABLED` default `true`: enables Redis-backed per-user/IP limits.
+- `GTE_API_RATE_LIMIT_PER_MINUTE` default `100`: global per-user request budget.
+- `GTE_SENSITIVE_RATE_LIMIT_PER_MINUTE` default `5`: stricter per-user limit for `/market/buy`, `/market/sell`, and wallet top-up endpoints.
+- `GTE_TASK_QUEUE_ENABLED` default `true`: enables the durable RQ queue.
+- `GTE_TASK_QUEUE_NAME` default `gtex-jobs`: shared Redis queue name for API and worker processes.
+- `GTE_TASK_QUEUE_RESULT_TTL_SECONDS` default `3600`: retained success metadata for `/jobs/{job_id}`.
+- `GTE_TASK_QUEUE_FAILURE_TTL_SECONDS` default `86400`: retained failure metadata for `/jobs/{job_id}`.
+- `GTE_GTEX_WORKERS` default `valuation,matchmaker,brain,jackpot`: selects which GTEX Redis-stream workers run inside `app.gtex.worker_main`.
+
 ## Frontend quick start
 
 Flutter commands are run from `frontend/`. The app reads `GTE_API_BASE_URL` and `GTE_BACKEND_MODE` from `--dart-define`; `frontend/.env.example` is a reference file and is not auto-loaded by Flutter.

@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+PLAYER_MARKETS_CACHE_NAMESPACE = "players_markets"
+COMPETITIONS_CACHE_NAMESPACE = "competitions"
+REGEN_UNIVERSE_CACHE_NAMESPACE = "regen_universe"
+
+
+__all__ = [
+    "COMPETITIONS_CACHE_NAMESPACE",
+    "PLAYER_MARKETS_CACHE_NAMESPACE",
+    "REGEN_UNIVERSE_CACHE_NAMESPACE",
+]
