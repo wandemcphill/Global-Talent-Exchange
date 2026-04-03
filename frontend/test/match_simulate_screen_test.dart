@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/match/match_simulate_screen.dart';
 
 void main() {
-  testWidgets('simulate route stays explicitly local and demo-labeled', (
+  testWidgets('simulate screen stays explicitly fixture-mode and local', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -13,13 +13,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Simulate'), findsWidgets);
-    expect(find.text('Simulation mode is local by design.'), findsNothing);
     expect(
-      find.textContaining('Simulation mode is local by design.'),
+      find.textContaining(
+        'Simulation is available only in explicit fixture mode.',
+      ),
       findsOneWidget,
     );
     expect(
-      find.textContaining('without pretending it is a backend feed'),
+      find.textContaining(
+        'local simulation engine without pretending it is a backend feed',
+      ),
       findsOneWidget,
     );
     expect(find.text('Launch simulation'), findsOneWidget);

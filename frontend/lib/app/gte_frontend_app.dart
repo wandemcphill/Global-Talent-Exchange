@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/gte_session_identity.dart';
+import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
 import '../data/gte_models.dart';
 import '../features/app_routes/gte_app_route_registry.dart';
@@ -42,6 +43,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   void initState() {
     super.initState();
     _config = widget.config ?? GteAppConfig.fromEnvironment();
+    final GteBackendMode activeBackendMode = _config.activeShellBackendMode;
     _ownsController = widget.controller == null;
     _ownsThemeController = widget.themeController == null;
     _controller =
@@ -49,7 +51,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
         GteExchangeController(
           api: GteExchangeApiClient.standard(
             baseUrl: _config.apiBaseUrl,
-            mode: _config.backendMode,
+            mode: activeBackendMode,
           ),
         );
     gteReliableEventQueue.configure(
@@ -86,9 +88,10 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   Widget build(BuildContext context) {
     final GteSessionIdentity identity =
         GteSessionIdentity.fromExchangeController(_controller);
+    final GteBackendMode activeBackendMode = _config.activeShellBackendMode;
     final GteNavigationDependencies dependencies = GteNavigationDependencies(
       apiBaseUrl: _config.apiBaseUrl,
-      backendMode: _config.backendMode,
+      backendMode: activeBackendMode,
       currentUserId: identity.userId,
       currentUserName: identity.userName,
       currentUserRole: _controller.session?.user.role,
@@ -141,7 +144,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
             home: GteExchangeShellScreen.fromPath(
               controller: _controller,
               apiBaseUrl: _config.apiBaseUrl,
-              backendMode: _config.backendMode,
+              backendMode: activeBackendMode,
               initialPath: '/app/home',
             ),
             onGenerateRoute: (RouteSettings settings) {
@@ -153,7 +156,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
                       (BuildContext context) => GteExchangeShellScreen.fromPath(
                         controller: _controller,
                         apiBaseUrl: _config.apiBaseUrl,
-                        backendMode: _config.backendMode,
+                        backendMode: activeBackendMode,
                         initialPath: name,
                       ),
                 );

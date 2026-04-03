@@ -165,11 +165,7 @@ final Provider<String> apiBaseUrlProvider = Provider<String>(
 
 final Provider<GteBackendMode> criticalBackendModeProvider =
     Provider<GteBackendMode>((Ref ref) {
-      final GteBackendMode configured =
-          ref.watch(appConfigProvider).backendMode;
-      return configured == GteBackendMode.fixture
-          ? GteBackendMode.fixture
-          : GteBackendMode.live;
+      return ref.watch(appConfigProvider).activeShellBackendMode;
     });
 
 final Provider<GteAuthedApi> authedApiProvider = Provider<GteAuthedApi>(

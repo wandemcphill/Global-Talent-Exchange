@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
+import '../../data/gte_api_repository.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -19,6 +20,8 @@ class MatchScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bool authenticated = ref.watch(isAuthenticatedProvider);
+    final bool fixtureMode =
+        ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture;
     final AsyncValue<LiveMatchOverview> overview = ref.watch(
       liveMatchOverviewProvider,
     );
@@ -31,7 +34,7 @@ class MatchScreen extends ConsumerWidget {
     return AppPageLayout(
       title: 'Matches',
       subtitle:
-          'Premium live match hub for viewer launch, broadcast package entry, and honest separation between live, gated 3D, and simulated routes.',
+          'Premium live match hub for viewer launch, broadcast package entry, and honest separation between live routes, gated 3D, and fixture-mode-only local tools.',
       trailing: Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -107,7 +110,7 @@ class MatchScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const _ActionDeck(),
+                _ActionDeck(fixtureMode: fixtureMode),
               ],
             );
           },
@@ -128,7 +131,7 @@ class MatchScreen extends ConsumerWidget {
                     accentColor: Theme.of(context).colorScheme.error,
                   ),
                   const SizedBox(height: 24),
-                  const _ActionDeck(),
+                  _ActionDeck(fixtureMode: fixtureMode),
                 ],
               ),
         ),
@@ -198,7 +201,9 @@ class _LiveMatchCard extends StatelessWidget {
 }
 
 class _ActionDeck extends StatelessWidget {
-  const _ActionDeck();
+  const _ActionDeck({required this.fixtureMode});
+
+  final bool fixtureMode;
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +211,7 @@ class _ActionDeck extends StatelessWidget {
       eyebrow: 'VIEWER LANES',
       title: 'Blocked probes and truth-preserving side routes',
       subtitle:
-          'These routes stay explicit so live, blocked, and simulated states are never confused.',
+          'These routes stay explicit so live, blocked, and fixture-mode-only states are never confused.',
       child: Column(
         children: <Widget>[
           _ActionCard(
@@ -228,11 +233,17 @@ class _ActionDeck extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _ActionCard(
-            title: 'Simulate',
+            title: 'Simulation sandbox',
             description:
-                'Explicit local simulation path. This is not presented as a live backend feed.',
-            chips: const <String>['DEMO'],
-            primaryLabel: 'Open simulate',
+                fixtureMode
+                    ? 'Explicit fixture-mode local simulation path. This route does not present itself as a live backend feed.'
+                    : 'This local simulation route is disabled in live shells and only opens during explicit fixture-mode QA runs.',
+            chips:
+                fixtureMode
+                    ? const <String>['FIXTURE MODE', 'LOCAL']
+                    : const <String>['BLOCKED', 'FIXTURE ONLY'],
+            primaryLabel:
+                fixtureMode ? 'Open simulation sandbox' : 'Why it is blocked',
             onPrimaryTap: () => context.push(AppRoutes.matchesSimulate),
           ),
         ],

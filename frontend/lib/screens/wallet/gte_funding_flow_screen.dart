@@ -270,7 +270,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   if (session.mockMode) ...<Widget>[
                     const SizedBox(height: 10),
                     const Text(
-                      'Mock mode is active because no Paystack secret key is configured locally.',
+                      'Local payment simulation is active because no Paystack secret key is configured for this environment.',
                     ),
                   ],
                   const SizedBox(height: 14),

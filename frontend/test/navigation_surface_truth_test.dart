@@ -32,6 +32,10 @@ void main() {
       appRouteSurfaceFor(AppRoutes.matchesNativeThreeD)?.state,
       AppRouteSurfaceState.placeholder,
     );
+    expect(
+      appRouteSurfaceFor(AppRoutes.matchesSimulate)?.state,
+      AppRouteSurfaceState.hidden,
+    );
   });
 
   test(
@@ -45,6 +49,20 @@ void main() {
       expect(threeD!.summary, contains('Flutter-rendered'));
       expect(threeD.summary, contains('entitlement'));
       expect(threeD.summary.toLowerCase(), isNot(contains('native 3d')));
+    },
+  );
+
+  test(
+    'simulation inventory stays fixture-gated instead of live-shell visible',
+    () {
+      final AppRouteSurface? simulation = appRouteSurfaceFor(
+        AppRoutes.matchesSimulate,
+      );
+
+      expect(simulation, isNotNull);
+      expect(simulation!.state, AppRouteSurfaceState.hidden);
+      expect(simulation.summary, contains('fixture-mode'));
+      expect(simulation.summary.toLowerCase(), contains('blocked'));
     },
   );
 

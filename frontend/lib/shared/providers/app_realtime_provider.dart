@@ -37,6 +37,8 @@ class AppRealtimeSyncController {
     required this.socketUri,
     required this.invalidateMarket,
     required this.invalidateCompetitions,
+    this.fallbackPollingInterval = const Duration(seconds: 5),
+    this.fallbackActivationDelay = const Duration(seconds: 10),
     ReliableWebSocketManager Function(Uri socketUri)? managerFactory,
   }) : _managerFactory =
            managerFactory ??
@@ -46,16 +48,19 @@ class AppRealtimeSyncController {
   final Uri? socketUri;
   final VoidCallback invalidateMarket;
   final VoidCallback invalidateCompetitions;
+  final Duration fallbackPollingInterval;
+  final Duration fallbackActivationDelay;
   final ReliableWebSocketManager Function(Uri socketUri) _managerFactory;
 
   ReliableWebSocketManager? _manager;
   StreamSubscription<dynamic>? _messageSubscription;
   StreamSubscription<ReliableWebSocketState>? _stateSubscription;
   Timer? _fallbackTimer;
+  Timer? _fallbackActivationTimer;
 
   void start() {
     if (!enabled || socketUri == null) {
-      _startFallbackPolling();
+      _startFallbackPollingNow();
       return;
     }
     final ReliableWebSocketManager manager = _managerFactory(socketUri!);
@@ -96,19 +101,35 @@ class AppRealtimeSyncController {
       case ReliableWebSocketState.connecting:
       case ReliableWebSocketState.disconnected:
       case ReliableWebSocketState.reconnecting:
-        _startFallbackPolling();
+        _scheduleFallbackPolling();
         return;
     }
   }
 
-  void _startFallbackPolling() {
-    _fallbackTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+  void _startFallbackPollingNow() {
+    _fallbackActivationTimer?.cancel();
+    _fallbackActivationTimer = null;
+    _fallbackTimer ??= Timer.periodic(fallbackPollingInterval, (_) {
+      invalidateMarket();
+      invalidateCompetitions();
+    });
+  }
+
+  void _scheduleFallbackPolling() {
+    if (_fallbackTimer != null || _fallbackActivationTimer != null) {
+      return;
+    }
+    _fallbackActivationTimer = Timer(fallbackActivationDelay, () {
+      _fallbackActivationTimer = null;
+      _startFallbackPollingNow();
       invalidateMarket();
       invalidateCompetitions();
     });
   }
 
   void _stopFallbackPolling() {
+    _fallbackActivationTimer?.cancel();
+    _fallbackActivationTimer = null;
     _fallbackTimer?.cancel();
     _fallbackTimer = null;
   }

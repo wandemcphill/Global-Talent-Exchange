@@ -13,7 +13,7 @@ import '../features/match/match_3d_route_screen.dart';
 import '../features/match/match_broadcast_screen.dart';
 import '../features/match/match_native_3d_blocked_screen.dart';
 import '../features/match/match_screen.dart';
-import '../features/match/match_simulate_screen.dart';
+import '../features/match/match_simulate_route_screen.dart';
 import '../features/match/match_spectate_screen.dart';
 import '../features/match/match_viewer_route_screen.dart';
 import '../features/national_teams/national_teams_screen.dart';
@@ -347,7 +347,7 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             (BuildContext context, GoRouterState state) =>
                 AppMotion.slidePage<void>(
                   state: state,
-                  child: const MatchSimulateScreen(),
+                  child: const MatchSimulateRouteScreen(),
                 ),
       ),
     ],

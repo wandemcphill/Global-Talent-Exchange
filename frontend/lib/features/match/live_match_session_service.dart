@@ -5,26 +5,28 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'live_match_session.dart';
 
 class LiveMatchSessionService {
-  LiveMatchSessionService({
-    GteAppConfig? config,
-    GteExchangeApiClient? api,
-  }) : _config = config ?? GteAppConfig.fromEnvironment(),
-       _api = api ??
-           GteExchangeApiClient.standard(
-             baseUrl: (config ?? GteAppConfig.fromEnvironment()).apiBaseUrl,
-             mode: (config ?? GteAppConfig.fromEnvironment()).backendMode,
-           );
+  LiveMatchSessionService({GteAppConfig? config, GteExchangeApiClient? api})
+    : _config = config ?? GteAppConfig.fromEnvironment(),
+      _api =
+          api ??
+          GteExchangeApiClient.standard(
+            baseUrl: (config ?? GteAppConfig.fromEnvironment()).apiBaseUrl,
+            mode:
+                (config ?? GteAppConfig.fromEnvironment())
+                    .activeShellBackendMode,
+          );
 
   final GteAppConfig _config;
   final GteExchangeApiClient _api;
 
   Future<LiveMatchSpectateSession?> resolveSession(String matchId) async {
-    if (_config.backendMode == GteBackendMode.fixture) {
+    if (_config.activeShellBackendMode == GteBackendMode.fixture) {
       return null;
     }
     try {
-      final Map<String, Object?> payload =
-          await _api.joinMatchSpectateSession(matchId);
+      final Map<String, Object?> payload = await _api.joinMatchSpectateSession(
+        matchId,
+      );
       return LiveMatchSpectateSession.fromJson(payload);
     } catch (_) {
       return null;

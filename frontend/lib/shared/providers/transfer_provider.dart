@@ -226,6 +226,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
   static const Duration _refreshInterval = Duration(seconds: 20);
 
   final GteAppConfig _config = GteAppConfig.fromEnvironment();
+  late final GteBackendMode _backendMode = _config.activeShellBackendMode;
   final Map<String, ReliableWebSocketManager> _listingStreams =
       <String, ReliableWebSocketManager>{};
   final Map<String, StreamSubscription<dynamic>> _listingSubscriptions =
@@ -233,7 +234,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
 
   late final GteRepositoryConfig _repositoryConfig = GteRepositoryConfig(
     baseUrl: _config.apiBaseUrl,
-    mode: _config.backendMode,
+    mode: _backendMode,
   );
   late final GteHttpTransport _transport = GteHttpTransport(
     connectionTimeout: const Duration(seconds: 2),
@@ -257,7 +258,10 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
 
   @override
   TransferMarketState build() {
-    final TransferMarketState initialState = _buildFixtureState();
+    final TransferMarketState initialState =
+        _backendMode == GteBackendMode.fixture
+            ? _buildFixtureState()
+            : _buildEmptyState();
     ref.onDispose(() {
       _disposed = true;
       _refreshTimer?.cancel();
@@ -275,6 +279,17 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
       _startLiveSync();
     }
     return initialState;
+  }
+
+  TransferMarketState _buildEmptyState() {
+    return const TransferMarketState(
+      players: <Player>[],
+      listings: <TransferMarketListing>[],
+      searchQuery: '',
+      shortlistedIds: <String>{},
+      activeFilter: TransferMarketFilter.all,
+      simulationTick: 0,
+    );
   }
 
   void setSearchQuery(String value) {
@@ -513,7 +528,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
   }
 
   bool _shouldEnableLiveSync() {
-    if (_config.backendMode == GteBackendMode.fixture) {
+    if (_backendMode == GteBackendMode.fixture) {
       return false;
     }
     try {
@@ -536,7 +551,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
       transport: _transport,
       authSession: ref.read(authProvider),
       deviceId: deviceId,
-      mode: _config.backendMode,
+      mode: _backendMode,
     );
   }
 

@@ -9,6 +9,9 @@ import 'package:gte_frontend/services/reliability/reliable_websocket_manager.dar
 
 import 'live_match_session_service.dart';
 
+const Duration _socketFallbackPollInterval = Duration(seconds: 5);
+const Duration _socketFallbackActivationDelay = Duration(seconds: 10);
+
 abstract interface class LiveMatchSnapshotFeedService {
   Stream<LiveMatchSnapshot> watch({required LiveMatchSnapshot seed});
 }
@@ -25,7 +28,9 @@ class HybridLiveMatchSnapshotFeedService
            api ??
            GteExchangeApiClient.standard(
              baseUrl: (config ?? GteAppConfig.fromEnvironment()).apiBaseUrl,
-             mode: (config ?? GteAppConfig.fromEnvironment()).backendMode,
+             mode:
+                 (config ?? GteAppConfig.fromEnvironment())
+                     .activeShellBackendMode,
            );
 
   final LiveMatchSessionService _sessionService;
@@ -47,6 +52,7 @@ class HybridLiveMatchSnapshotFeedService
       StreamSubscription<ReliableWebSocketState>? stateSubscription;
       ReliableWebSocketManager? manager;
       Timer? fallbackTimer;
+      Timer? fallbackActivationTimer;
       bool cancelled = false;
 
       Future<void> pollSnapshot() async {
@@ -64,16 +70,30 @@ class HybridLiveMatchSnapshotFeedService
         controller.add(current);
       }
 
-      void startFallbackPolling({required bool syncImmediately}) {
+      void startFallbackPollingNow({required bool syncImmediately}) {
+        fallbackActivationTimer?.cancel();
+        fallbackActivationTimer = null;
         if (syncImmediately) {
           unawaited(pollSnapshot());
         }
-        fallbackTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+        fallbackTimer ??= Timer.periodic(_socketFallbackPollInterval, (_) {
           unawaited(pollSnapshot());
         });
       }
 
+      void scheduleFallbackPolling() {
+        if (fallbackTimer != null || fallbackActivationTimer != null) {
+          return;
+        }
+        fallbackActivationTimer = Timer(_socketFallbackActivationDelay, () {
+          fallbackActivationTimer = null;
+          startFallbackPollingNow(syncImmediately: true);
+        });
+      }
+
       void stopFallbackPolling() {
+        fallbackActivationTimer?.cancel();
+        fallbackActivationTimer = null;
         fallbackTimer?.cancel();
         fallbackTimer = null;
       }
@@ -87,7 +107,7 @@ class HybridLiveMatchSnapshotFeedService
           return;
         }
         if (session == null || socketUri == null) {
-          startFallbackPolling(syncImmediately: true);
+          startFallbackPollingNow(syncImmediately: true);
           return;
         }
         manager = ReliableWebSocketManager(
@@ -112,7 +132,7 @@ class HybridLiveMatchSnapshotFeedService
           if (state == ReliableWebSocketState.reconnecting ||
               state == ReliableWebSocketState.disconnected ||
               state == ReliableWebSocketState.connecting) {
-            startFallbackPolling(syncImmediately: true);
+            scheduleFallbackPolling();
           }
         });
         manager!.connect();

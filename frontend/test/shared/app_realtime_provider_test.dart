@@ -42,7 +42,7 @@ void main() {
   );
 
   test(
-    'app realtime sync polls every five seconds only while websocket is unavailable',
+    'app realtime sync waits before enabling fallback polling during reconnect churn',
     () {
       fakeAsync((FakeAsync async) {
         int marketInvalidations = 0;
@@ -54,6 +54,7 @@ void main() {
           socketUri: Uri.parse('ws://example.test/realtime/stream'),
           invalidateMarket: () => marketInvalidations += 1,
           invalidateCompetitions: () => competitionInvalidations += 1,
+          fallbackActivationDelay: const Duration(seconds: 10),
           managerFactory: (Uri _) {
             fakeManager = _FakeReliableWebSocketManager();
             return fakeManager;
@@ -65,7 +66,11 @@ void main() {
         expect(marketInvalidations, 0);
         expect(competitionInvalidations, 0);
 
-        async.elapse(const Duration(seconds: 5));
+        async.elapse(const Duration(seconds: 9));
+        expect(marketInvalidations, 0);
+        expect(competitionInvalidations, 0);
+
+        async.elapse(const Duration(seconds: 1));
         expect(marketInvalidations, 1);
         expect(competitionInvalidations, 1);
 

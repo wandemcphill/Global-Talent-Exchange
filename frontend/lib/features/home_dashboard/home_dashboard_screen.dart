@@ -337,9 +337,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 _HomeExpansionLanesPanel(
                   isAdmin:
                       (widget.navigationDependencies?.currentUserRole ??
-                                  widget.exchangeController.session?.user.role)
-                              ?.trim() ==
-                          'admin',
+                              widget.exchangeController.session?.user.role)
+                          ?.trim() ==
+                      'admin',
                   onOpenStreamerTournaments:
                       () => _openFeatureRoute(
                         const StreamerTournamentsListRouteData(),
@@ -360,9 +360,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         const FootballTransferCenterRouteData(),
                       ),
                   onOpenPlayerCards:
-                      () => _openFeatureRoute(
-                        const PlayerCardsBrowseRouteData(),
-                      ),
+                      () =>
+                          _openFeatureRoute(const PlayerCardsBrowseRouteData()),
                   onOpenCreatorShareMarket:
                       () => _openFeatureRoute(
                         CreatorShareMarketClubRouteData(
@@ -498,7 +497,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (next.userId != _userId || next.userName != _userName) {
       _userId = next.userId;
       _userName = next.userName;
-      final CompetitionController competitionController = _competitionController;
+      final CompetitionController competitionController =
+          _competitionController;
       competitionController.updateCurrentUser(
         userId: _userId,
         userName: _userName,
@@ -617,7 +617,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ? sessionUserId
             : dependencyUserId.isNotEmpty
             ? dependencyUserId
-            : 'demo-user';
+            : 'guest-user';
     final String? userName =
         displayName?.isNotEmpty == true
             ? displayName
@@ -1279,9 +1279,10 @@ class _HomeQuickActionsStrip extends StatelessWidget {
           _HomeActionCard(
             eyebrow: 'COACHES',
             title: 'Scout free coaches',
-            detail: isAuthenticated
-                ? 'Open the coach market, claim standard coaches for free, and track elite and legendary copy scarcity before the board dries up.'
-                : 'Coach discovery is live in GTEX. Sign in to claim free coaches and chase the scarce elite and legendary copies.',
+            detail:
+                isAuthenticated
+                    ? 'Open the coach market, claim standard coaches for free, and track elite and legendary copy scarcity before the board dries up.'
+                    : 'Coach discovery is live in GTEX. Sign in to claim free coaches and chase the scarce elite and legendary copies.',
             icon: Icons.manage_accounts_outlined,
             accent: GteShellTheme.accentWarm,
             badge: 'Free',

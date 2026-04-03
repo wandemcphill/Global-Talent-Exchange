@@ -7,20 +7,9 @@ import 'gte_models.dart';
 import '../models/player_avatar.dart';
 import '../models/competition_models.dart';
 
-enum LiveMatchPhase {
-  preMatch,
-  firstHalf,
-  halftime,
-  secondHalf,
-  fullTime,
-}
+enum LiveMatchPhase { preMatch, firstHalf, halftime, secondHalf, fullTime }
 
-enum LiveMatchEventType {
-  goal,
-  card,
-  substitution,
-  incident,
-}
+enum LiveMatchEventType { goal, card, substitution, incident }
 
 class LiveMatchEvent {
   const LiveMatchEvent({
@@ -71,12 +60,18 @@ class LiveMatchLineupPlayer {
     if (explicitId != null && explicitId.isNotEmpty) {
       return explicitId;
     }
-    final String normalizedName =
-        name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-    final String normalizedPosition =
-        position.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-    final String normalizedTeam =
-        teamName.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    final String normalizedName = name.trim().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '-',
+    );
+    final String normalizedPosition = position.trim().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '-',
+    );
+    final String normalizedTeam = teamName.trim().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '-',
+    );
     return '$matchId-$normalizedTeam-$normalizedName-$normalizedPosition';
   }
 }
@@ -230,65 +225,95 @@ class LiveMatchSnapshot {
 }
 
 Future<LiveMatchSnapshot> loadLiveMatchSnapshot(
-  CompetitionSummary competition,
-) async {
-  await Future<void>.delayed(const Duration(milliseconds: 350));
-  final LiveMatchSnapshot fallback =
-      LiveMatchFixtures.buildSnapshot(competition);
-  if (_matchApiConfig.backendMode == GteBackendMode.fixture) {
+  CompetitionSummary competition, {
+  GteAppConfig? config,
+  GteExchangeApiClient? api,
+}) async {
+  final GteAppConfig resolvedConfig = config ?? _matchApiConfig;
+  final GteBackendMode effectiveMode = resolvedConfig.activeShellBackendMode;
+  final GteExchangeApiClient client =
+      api ?? _resolveMatchApiClient(resolvedConfig);
+  final LiveMatchSnapshot fallback = LiveMatchFixtures.buildSnapshot(
+    competition,
+  );
+  if (effectiveMode == GteBackendMode.fixture) {
     return fallback;
   }
+
+  final Map<String, Object?> livePayload = await client.fetchMatchLiveFeed(
+    competition.id,
+  );
+  LiveMatchSnapshot merged = _mergeLiveFeedSnapshot(
+    fallback,
+    livePayload,
+    competition,
+  );
   try {
-    final Map<String, Object?> livePayload =
-        await _matchApiClient.fetchMatchLiveFeed(competition.id);
-    LiveMatchSnapshot merged =
-        _mergeLiveFeedSnapshot(fallback, livePayload, competition);
-    try {
-      final Map<String, Object?> highlightPayload =
-          await _matchApiClient.fetchMatchHighlights(competition.id);
-      merged = _mergeHighlightsSnapshot(merged, highlightPayload, competition);
-    } catch (_) {
-      return merged;
-    }
-    return merged;
+    final Map<String, Object?> highlightPayload = await client
+        .fetchMatchHighlights(competition.id);
+    merged = _mergeHighlightsSnapshot(merged, highlightPayload, competition);
   } catch (_) {
-    return fallback;
+    return merged;
   }
+  return merged;
 }
 
 final GteAppConfig _matchApiConfig = GteAppConfig.fromEnvironment();
 final GteExchangeApiClient _matchApiClient = GteExchangeApiClient.standard(
   baseUrl: _matchApiConfig.apiBaseUrl,
-  mode: _matchApiConfig.backendMode,
+  mode: _matchApiConfig.activeShellBackendMode,
 );
+
+GteExchangeApiClient _resolveMatchApiClient(GteAppConfig config) {
+  if (identical(config, _matchApiConfig)) {
+    return _matchApiClient;
+  }
+  return GteExchangeApiClient.standard(
+    baseUrl: config.apiBaseUrl,
+    mode: config.activeShellBackendMode,
+  );
+}
 
 LiveMatchSnapshot _mergeLiveFeedSnapshot(
   LiveMatchSnapshot fallback,
   Map<String, Object?> payload,
   CompetitionSummary competition,
 ) {
-  final String matchId =
-      GteJson.string(payload, <String>['match_id'], fallback: competition.id);
-  final String homeTeam =
-      GteJson.string(payload, <String>['home_team_name', 'homeTeamName']);
-  final String awayTeam =
-      GteJson.string(payload, <String>['away_team_name', 'awayTeamName']);
-  final int homeScore =
-      _requireInt(payload, <String>['home_score', 'homeScore'], 'home_score');
-  final int awayScore =
-      _requireInt(payload, <String>['away_score', 'awayScore'], 'away_score');
+  final String matchId = GteJson.string(payload, <String>[
+    'match_id',
+  ], fallback: competition.id);
+  final String homeTeam = GteJson.string(payload, <String>[
+    'home_team_name',
+    'homeTeamName',
+  ]);
+  final String awayTeam = GteJson.string(payload, <String>[
+    'away_team_name',
+    'awayTeamName',
+  ]);
+  final int homeScore = _requireInt(payload, <String>[
+    'home_score',
+    'homeScore',
+  ], 'home_score');
+  final int awayScore = _requireInt(payload, <String>[
+    'away_score',
+    'awayScore',
+  ], 'away_score');
   final String status = GteJson.string(payload, <String>['status']);
   final String phaseLabel = GteJson.string(payload, <String>['phase']);
   final int? minute = _optionalInt(payload, <String>['minute']);
-  final LiveMatchPhase phase =
-      _phaseFromLiveFeed(phaseLabel, status, minute ?? fallback.minute);
+  final LiveMatchPhase phase = _phaseFromLiveFeed(
+    phaseLabel,
+    status,
+    minute ?? fallback.minute,
+  );
   final List<LiveMatchEvent> commentary = _mapLiveFeedEvents(
     payload,
     fallback: fallback,
   );
   final List<LiveMatchEvent> substitutions = commentary
-      .where((LiveMatchEvent event) =>
-          event.type == LiveMatchEventType.substitution)
+      .where(
+        (LiveMatchEvent event) => event.type == LiveMatchEventType.substitution,
+      )
       .toList(growable: false);
   final List<LiveMatchEvent> cards = commentary
       .where((LiveMatchEvent event) => event.type == LiveMatchEventType.card)
@@ -299,21 +324,18 @@ LiveMatchSnapshot _mergeLiveFeedSnapshot(
         const <String, Object?>{},
     label: 'match availability',
   );
-  final bool halftimeAvailable = GteJson.boolean(
-    availability,
-    <String>['halftime_analytics_available', 'halftimeAnalyticsAvailable'],
-    fallback: false,
-  );
-  final bool highlightsAvailable = GteJson.boolean(
-    availability,
-    <String>['highlights_available', 'highlightsAvailable'],
-    fallback: commentary.isNotEmpty,
-  );
-  final bool keyMomentsAvailable = GteJson.boolean(
-    availability,
-    <String>['key_moments_available', 'keyMomentsAvailable'],
-    fallback: commentary.isNotEmpty,
-  );
+  final bool halftimeAvailable = GteJson.boolean(availability, <String>[
+    'halftime_analytics_available',
+    'halftimeAnalyticsAvailable',
+  ], fallback: false);
+  final bool highlightsAvailable = GteJson.boolean(availability, <String>[
+    'highlights_available',
+    'highlightsAvailable',
+  ], fallback: commentary.isNotEmpty);
+  final bool keyMomentsAvailable = GteJson.boolean(availability, <String>[
+    'key_moments_available',
+    'keyMomentsAvailable',
+  ], fallback: commentary.isNotEmpty);
 
   final DateTime now = DateTime.now().toUtc();
   final DateTime premiumExpiry = now.add(const Duration(hours: 3));
@@ -323,9 +345,10 @@ LiveMatchSnapshot _mergeLiveFeedSnapshot(
   final List<LiveMatchLineupPlayer>? awayLineup = _lineupFromPayload(
     GteJson.value(payload, <String>['away_lineup', 'awayLineup']),
   );
-  final List<LiveMatchHighlightClip> keyMoments = keyMomentsAvailable
-      ? _keyMomentsFromEvents(commentary, matchId, premiumExpiry)
-      : const <LiveMatchHighlightClip>[];
+  final List<LiveMatchHighlightClip> keyMoments =
+      keyMomentsAvailable
+          ? _keyMomentsFromEvents(commentary, matchId, premiumExpiry)
+          : const <LiveMatchHighlightClip>[];
 
   return LiveMatchSnapshot(
     matchId: matchId,
@@ -346,9 +369,10 @@ LiveMatchSnapshot _mergeLiveFeedSnapshot(
     cards: cards,
     tacticalSuggestions: fallback.tacticalSuggestions,
     keyMoments: keyMoments,
-    highlights: highlightsAvailable
-        ? fallback.highlights
-        : const <LiveMatchHighlightClip>[],
+    highlights:
+        highlightsAvailable
+            ? fallback.highlights
+            : const <LiveMatchHighlightClip>[],
     standardHighlightExpiresAt: fallback.standardHighlightExpiresAt,
     premiumHighlightExpiresAt: fallback.premiumHighlightExpiresAt,
   );
@@ -371,33 +395,34 @@ LiveMatchSnapshot _mergeHighlightsSnapshot(
   final List<LiveMatchHighlightClip> keyMoments = <LiveMatchHighlightClip>[];
 
   for (int index = 0; index < rawHighlights.length; index += 1) {
-    final Map<String, Object?> item =
-        GteJson.map(rawHighlights[index], label: 'highlight item');
-    final String highlightId = GteJson.string(
-      item,
-      <String>['highlight_id', 'highlightId'],
-      fallback: '${competition.id}-clip-$index',
+    final Map<String, Object?> item = GteJson.map(
+      rawHighlights[index],
+      label: 'highlight item',
     );
-    final String title =
-        GteJson.string(item, <String>['title'], fallback: 'Highlight');
-    final String eventType =
-        GteJson.string(item, <String>['event_type', 'eventType'], fallback: '');
+    final String highlightId = GteJson.string(item, <String>[
+      'highlight_id',
+      'highlightId',
+    ], fallback: '${competition.id}-clip-$index');
+    final String title = GteJson.string(item, <String>[
+      'title',
+    ], fallback: 'Highlight');
+    final String eventType = GteJson.string(item, <String>[
+      'event_type',
+      'eventType',
+    ], fallback: '');
     final int minute = GteJson.integer(item, <String>['minute'], fallback: 0);
-    final String accessState = GteJson.string(
-      item,
-      <String>['access_state', 'accessState'],
-      fallback: 'available',
-    );
-    final bool archiveAvailable = GteJson.boolean(
-      item,
-      <String>['archive_available', 'archiveAvailable'],
-      fallback: false,
-    );
-    final bool downloadAvailable = GteJson.boolean(
-      item,
-      <String>['download_available', 'downloadAvailable'],
-      fallback: false,
-    );
+    final String accessState = GteJson.string(item, <String>[
+      'access_state',
+      'accessState',
+    ], fallback: 'available');
+    final bool archiveAvailable = GteJson.boolean(item, <String>[
+      'archive_available',
+      'archiveAvailable',
+    ], fallback: false);
+    final bool downloadAvailable = GteJson.boolean(item, <String>[
+      'download_available',
+      'downloadAvailable',
+    ], fallback: false);
     final bool isKeyMoment = _isKeyMoment(eventType);
     final bool isPremium = isKeyMoment || accessState != 'available';
     final LiveMatchHighlightClip clip = LiveMatchHighlightClip(
@@ -446,37 +471,43 @@ List<LiveMatchLineupPlayer>? _lineupFromPayload(Object? value) {
   if (value is! List<Object?> || value.isEmpty) {
     return null;
   }
-  return value.map((Object? item) {
-    final Map<String, Object?> json = GteJson.map(
-      item,
-      label: 'live match lineup player',
-    );
-    return LiveMatchLineupPlayer(
-      playerId: GteJson.stringOrNull(json, <String>['player_id', 'playerId']),
-      name: GteJson.string(
-        json,
-        <String>['player_name', 'playerName', 'name'],
-        fallback: 'Unnamed player',
-      ),
-      position: GteJson.string(json, <String>['position'], fallback: 'UNK'),
-      rating: GteJson.number(json, <String>['rating'], fallback: 6.5),
-      captain: GteJson.boolean(json, <String>['captain'], fallback: false),
-      nationalityCode: GteJson.stringOrNull(
-        json,
-        <String>['nationality_code', 'nationalityCode'],
-      ),
-      avatarSeedToken: GteJson.stringOrNull(
-        json,
-        <String>['avatar_seed_token', 'avatarSeedToken'],
-      ),
-      avatarDnaSeed: GteJson.stringOrNull(
-        json,
-        <String>['avatar_dna_seed', 'avatarDnaSeed'],
-      ),
-      avatar:
-          PlayerAvatar.fromJsonOrNull(GteJson.value(json, <String>['avatar'])),
-    );
-  }).toList(growable: false);
+  return value
+      .map((Object? item) {
+        final Map<String, Object?> json = GteJson.map(
+          item,
+          label: 'live match lineup player',
+        );
+        return LiveMatchLineupPlayer(
+          playerId: GteJson.stringOrNull(json, <String>[
+            'player_id',
+            'playerId',
+          ]),
+          name: GteJson.string(json, <String>[
+            'player_name',
+            'playerName',
+            'name',
+          ], fallback: 'Unnamed player'),
+          position: GteJson.string(json, <String>['position'], fallback: 'UNK'),
+          rating: GteJson.number(json, <String>['rating'], fallback: 6.5),
+          captain: GteJson.boolean(json, <String>['captain'], fallback: false),
+          nationalityCode: GteJson.stringOrNull(json, <String>[
+            'nationality_code',
+            'nationalityCode',
+          ]),
+          avatarSeedToken: GteJson.stringOrNull(json, <String>[
+            'avatar_seed_token',
+            'avatarSeedToken',
+          ]),
+          avatarDnaSeed: GteJson.stringOrNull(json, <String>[
+            'avatar_dna_seed',
+            'avatarDnaSeed',
+          ]),
+          avatar: PlayerAvatar.fromJsonOrNull(
+            GteJson.value(json, <String>['avatar']),
+          ),
+        );
+      })
+      .toList(growable: false);
 }
 
 int _requireInt(Map<String, Object?> payload, List<String> keys, String label) {
@@ -493,11 +524,7 @@ int? _optionalInt(Map<String, Object?> payload, List<String> keys) {
   return GteJson.integer(payload, keys);
 }
 
-LiveMatchPhase _phaseFromLiveFeed(
-  String phase,
-  String status,
-  int minute,
-) {
+LiveMatchPhase _phaseFromLiveFeed(String phase, String status, int minute) {
   final String normalizedPhase = phase.trim().toLowerCase();
   final String normalizedStatus = status.trim().toLowerCase();
   if (normalizedPhase == 'scheduled' || normalizedStatus == 'scheduled') {
@@ -524,56 +551,69 @@ List<LiveMatchEvent> _mapLiveFeedEvents(
         const <Object?>[],
     label: 'timeline events',
   );
-  return rawEvents.map((Object? rawEvent) {
-    final Map<String, Object?> json =
-        GteJson.map(rawEvent, label: 'timeline event');
-    final String eventType =
-        GteJson.string(json, <String>['event_type', 'eventType'], fallback: '');
-    final int minute = GteJson.integer(json, <String>['minute'], fallback: 0);
-    final String? teamName = GteJson.stringOrNull(
-      json,
-      <String>['team_name', 'teamName', 'club_name', 'clubName'],
-    );
-    final String? playerName =
-        GteJson.stringOrNull(json, <String>['player_name', 'playerName']);
-    final String? secondaryPlayerName = GteJson.stringOrNull(
-      json,
-      <String>['secondary_player_name', 'secondaryPlayerName'],
-    );
-    final String? description =
-        GteJson.stringOrNull(json, <String>['description', 'commentary']);
-    final int homeScore = GteJson.integer(
-      json,
-      <String>['home_score', 'homeScore'],
-      fallback: fallback.homeScore,
-    );
-    final int awayScore = GteJson.integer(
-      json,
-      <String>['away_score', 'awayScore'],
-      fallback: fallback.awayScore,
-    );
-    final bool isKeyMoment = _isKeyMoment(eventType);
-    final LiveMatchEventType mappedType = _mapEventType(eventType);
-    final String resolvedTeamName = teamName ?? '';
-    final String title = _eventTitle(eventType, playerName, teamName);
-    final String detail = description ??
-        _eventDetail(
-          eventType,
-          playerName,
-          secondaryPlayerName,
-          resolvedTeamName,
-          homeScore,
-          awayScore,
+  return rawEvents
+      .map((Object? rawEvent) {
+        final Map<String, Object?> json = GteJson.map(
+          rawEvent,
+          label: 'timeline event',
         );
-    return LiveMatchEvent(
-      minute: minute,
-      title: title,
-      detail: detail,
-      team: teamName ?? '',
-      type: mappedType,
-      isKeyMoment: isKeyMoment,
-    );
-  }).toList(growable: false);
+        final String eventType = GteJson.string(json, <String>[
+          'event_type',
+          'eventType',
+        ], fallback: '');
+        final int minute = GteJson.integer(json, <String>[
+          'minute',
+        ], fallback: 0);
+        final String? teamName = GteJson.stringOrNull(json, <String>[
+          'team_name',
+          'teamName',
+          'club_name',
+          'clubName',
+        ]);
+        final String? playerName = GteJson.stringOrNull(json, <String>[
+          'player_name',
+          'playerName',
+        ]);
+        final String? secondaryPlayerName = GteJson.stringOrNull(json, <String>[
+          'secondary_player_name',
+          'secondaryPlayerName',
+        ]);
+        final String? description = GteJson.stringOrNull(json, <String>[
+          'description',
+          'commentary',
+        ]);
+        final int homeScore = GteJson.integer(json, <String>[
+          'home_score',
+          'homeScore',
+        ], fallback: fallback.homeScore);
+        final int awayScore = GteJson.integer(json, <String>[
+          'away_score',
+          'awayScore',
+        ], fallback: fallback.awayScore);
+        final bool isKeyMoment = _isKeyMoment(eventType);
+        final LiveMatchEventType mappedType = _mapEventType(eventType);
+        final String resolvedTeamName = teamName ?? '';
+        final String title = _eventTitle(eventType, playerName, teamName);
+        final String detail =
+            description ??
+            _eventDetail(
+              eventType,
+              playerName,
+              secondaryPlayerName,
+              resolvedTeamName,
+              homeScore,
+              awayScore,
+            );
+        return LiveMatchEvent(
+          minute: minute,
+          title: title,
+          detail: detail,
+          team: teamName ?? '',
+          type: mappedType,
+          isKeyMoment: isKeyMoment,
+        );
+      })
+      .toList(growable: false);
 }
 
 LiveMatchEventType _mapEventType(String eventType) {
@@ -657,19 +697,23 @@ List<LiveMatchHighlightClip> _keyMomentsFromEvents(
 ) {
   final List<LiveMatchEvent> keyMoments =
       events.where((LiveMatchEvent event) => event.isKeyMoment).toList();
-  return keyMoments.asMap().entries.map((MapEntry<int, LiveMatchEvent> entry) {
-    final LiveMatchEvent event = entry.value;
-    return LiveMatchHighlightClip(
-      id: '$matchId-key-${entry.key}',
-      title: event.title,
-      minute: event.minute,
-      durationLabel: '${18 + entry.key * 3} sec',
-      isPremium: true,
-      isArchived: false,
-      expiresAt: expiry,
-      downloadEligible: false,
-    );
-  }).toList(growable: false);
+  return keyMoments
+      .asMap()
+      .entries
+      .map((MapEntry<int, LiveMatchEvent> entry) {
+        final LiveMatchEvent event = entry.value;
+        return LiveMatchHighlightClip(
+          id: '$matchId-key-${entry.key}',
+          title: event.title,
+          minute: event.minute,
+          durationLabel: '${18 + entry.key * 3} sec',
+          isPremium: true,
+          isArchived: false,
+          expiresAt: expiry,
+          downloadEligible: false,
+        );
+      })
+      .toList(growable: false);
 }
 
 class LiveMatchFixtures {
@@ -693,23 +737,30 @@ class LiveMatchFixtures {
       minute: minute,
     );
     final List<LiveMatchEvent> substitutions = commentary
-        .where((LiveMatchEvent event) =>
-            event.type == LiveMatchEventType.substitution)
+        .where(
+          (LiveMatchEvent event) =>
+              event.type == LiveMatchEventType.substitution,
+        )
         .toList(growable: false);
     final List<LiveMatchEvent> cards = commentary
         .where((LiveMatchEvent event) => event.type == LiveMatchEventType.card)
         .toList(growable: false);
     final List<LiveMatchHighlightClip> keyMoments = _buildKeyMoments(
-        competition,
-        commentary
-            .where((LiveMatchEvent event) => event.isKeyMoment)
-            .toList(growable: false));
+      competition,
+      commentary
+          .where((LiveMatchEvent event) => event.isKeyMoment)
+          .toList(growable: false),
+    );
 
     final DateTime now = DateTime.now().toUtc();
     final DateTime standardExpiry = now.add(const Duration(minutes: 10));
     final DateTime premiumExpiry = now.add(const Duration(hours: 3));
     final List<LiveMatchHighlightClip> highlights = _buildHighlights(
-        competition, commentary, standardExpiry, premiumExpiry);
+      competition,
+      commentary,
+      standardExpiry,
+      premiumExpiry,
+    );
 
     return LiveMatchSnapshot(
       matchId: competition.id,
@@ -769,8 +820,11 @@ class LiveMatchFixtures {
     }
   }
 
-  static int _scoreForSide(Random rng, LiveMatchPhase phase,
-      {required bool isHome}) {
+  static int _scoreForSide(
+    Random rng,
+    LiveMatchPhase phase, {
+    required bool isHome,
+  }) {
     if (phase == LiveMatchPhase.preMatch) {
       return 0;
     }
@@ -900,8 +954,8 @@ class LiveMatchFixtures {
   }
 
   static List<LiveMatchTacticalSuggestion> _buildSuggestions(Random rng) {
-    final List<LiveMatchTacticalSuggestion> suggestions =
-        <LiveMatchTacticalSuggestion>[
+    final List<LiveMatchTacticalSuggestion>
+    suggestions = <LiveMatchTacticalSuggestion>[
       const LiveMatchTacticalSuggestion(
         title: 'Shift press to the right channel',
         detail:
@@ -933,18 +987,19 @@ class LiveMatchFixtures {
         .asMap()
         .entries
         .map((MapEntry<int, LiveMatchEvent> entry) {
-      final LiveMatchEvent event = entry.value;
-      return LiveMatchHighlightClip(
-        id: '${competition.id}-key-${entry.key}',
-        title: event.title,
-        minute: event.minute,
-        durationLabel: '${18 + entry.key * 3} sec',
-        isPremium: true,
-        isArchived: false,
-        expiresAt: now.add(const Duration(hours: 3)),
-        downloadEligible: true,
-      );
-    }).toList(growable: false);
+          final LiveMatchEvent event = entry.value;
+          return LiveMatchHighlightClip(
+            id: '${competition.id}-key-${entry.key}',
+            title: event.title,
+            minute: event.minute,
+            durationLabel: '${18 + entry.key * 3} sec',
+            isPremium: true,
+            isArchived: false,
+            expiresAt: now.add(const Duration(hours: 3)),
+            downloadEligible: true,
+          );
+        })
+        .toList(growable: false);
   }
 
   static List<LiveMatchHighlightClip> _buildHighlights(
@@ -954,27 +1009,33 @@ class LiveMatchFixtures {
     DateTime premiumExpiry,
   ) {
     final List<LiveMatchEvent> shortlist = commentary
-        .where((LiveMatchEvent event) =>
-            event.type == LiveMatchEventType.goal || event.isKeyMoment)
+        .where(
+          (LiveMatchEvent event) =>
+              event.type == LiveMatchEventType.goal || event.isKeyMoment,
+        )
         .take(4)
         .toList(growable: false);
     if (shortlist.isEmpty) {
       shortlist.addAll(commentary.take(3));
     }
-    return shortlist.asMap().entries.map((MapEntry<int, LiveMatchEvent> entry) {
-      final LiveMatchEvent event = entry.value;
-      final bool premium = entry.key.isEven;
-      return LiveMatchHighlightClip(
-        id: '${competition.id}-clip-${entry.key}',
-        title: event.detail,
-        minute: event.minute,
-        durationLabel: '${22 + entry.key * 4} sec',
-        isPremium: premium,
-        isArchived: false,
-        expiresAt: premium ? premiumExpiry : standardExpiry,
-        downloadEligible: premium,
-      );
-    }).toList(growable: false);
+    return shortlist
+        .asMap()
+        .entries
+        .map((MapEntry<int, LiveMatchEvent> entry) {
+          final LiveMatchEvent event = entry.value;
+          final bool premium = entry.key.isEven;
+          return LiveMatchHighlightClip(
+            id: '${competition.id}-clip-${entry.key}',
+            title: event.detail,
+            minute: event.minute,
+            durationLabel: '${22 + entry.key * 4} sec',
+            isPremium: premium,
+            isArchived: false,
+            expiresAt: premium ? premiumExpiry : standardExpiry,
+            downloadEligible: premium,
+          );
+        })
+        .toList(growable: false);
   }
 }
 

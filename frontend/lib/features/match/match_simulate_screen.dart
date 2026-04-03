@@ -38,7 +38,7 @@ class _MatchSimulateScreenState extends State<MatchSimulateScreen> {
     return AppPageLayout(
       title: 'Simulate',
       subtitle:
-          'Simulation stays separate from live spectating. This route launches the existing simulation engine without pretending it is a backend feed.',
+          'Fixture-mode simulation stays separate from live spectating. This route launches the local simulation engine without pretending it is a backend feed.',
       trailing: const DataSourceBadge(status: DataSourceStatus.demo),
       children: <Widget>[
         Card(
@@ -48,7 +48,7 @@ class _MatchSimulateScreenState extends State<MatchSimulateScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 const Text(
-                  'Simulation mode is local by design. It is honest, labeled, and kept separate from the live spectate path.',
+                  'Simulation is available only in explicit fixture mode. It stays honest, labeled, and separate from the live spectate path.',
                 ),
                 const SizedBox(height: spacingMD),
                 TextField(
@@ -90,7 +90,7 @@ class _MatchSimulateScreenState extends State<MatchSimulateScreen> {
       visibility: CompetitionVisibility.public,
       status: CompetitionStatus.published,
       creatorId: 'simulation',
-      creatorName: 'Simulation',
+      creatorName: 'Fixture Simulation',
       participantCount: 2,
       capacity: 2,
       currency: 'coin',
@@ -101,7 +101,7 @@ class _MatchSimulateScreenState extends State<MatchSimulateScreen> {
       hostFeeAmount: 0,
       prizePool: 0,
       payoutStructure: const <CompetitionPayoutBreakdown>[],
-      rulesSummary: 'Local simulation route',
+      rulesSummary: 'Fixture-mode local simulation route',
       matchType: MatchType.fastMatch,
       joinEligibility: const CompetitionJoinEligibility(
         eligible: false,

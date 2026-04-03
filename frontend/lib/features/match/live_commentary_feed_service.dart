@@ -10,6 +10,9 @@ import 'package:gte_frontend/services/reliability/reliable_websocket_manager.dar
 
 import 'live_match_session_service.dart';
 
+const Duration _socketFallbackPollInterval = Duration(seconds: 5);
+const Duration _socketFallbackActivationDelay = Duration(seconds: 10);
+
 abstract interface class LiveCommentaryFeedService {
   Stream<List<LiveMatchEvent>> watch({
     required String matchId,
@@ -31,7 +34,9 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
            api ??
            GteExchangeApiClient.standard(
              baseUrl: (config ?? GteAppConfig.fromEnvironment()).apiBaseUrl,
-             mode: (config ?? GteAppConfig.fromEnvironment()).backendMode,
+             mode:
+                 (config ?? GteAppConfig.fromEnvironment())
+                     .activeShellBackendMode,
            );
 
   final GteAppConfig _config;
@@ -44,7 +49,7 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
     required String matchId,
     required List<LiveMatchEvent> seedEvents,
   }) {
-    if (_config.backendMode == GteBackendMode.fixture) {
+    if (_config.activeShellBackendMode == GteBackendMode.fixture) {
       return _fallback.watch(matchId: matchId, seedEvents: seedEvents);
     }
     return Stream<List<LiveMatchEvent>>.multi((
@@ -55,6 +60,7 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
 
       StreamSubscription<List<LiveMatchEvent>>? relaySubscription;
       Timer? fallbackTimer;
+      Timer? fallbackActivationTimer;
 
       () async {
         final session = await _sessionService.resolveSession(matchId);
@@ -88,22 +94,36 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
           }
         }
 
-        void startFallbackPolling({required bool syncImmediately}) {
+        void startFallbackPollingNow({required bool syncImmediately}) {
+          fallbackActivationTimer?.cancel();
+          fallbackActivationTimer = null;
           if (syncImmediately) {
             unawaited(pollCommentary());
           }
-          fallbackTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+          fallbackTimer ??= Timer.periodic(_socketFallbackPollInterval, (_) {
             unawaited(pollCommentary());
           });
         }
 
+        void scheduleFallbackPolling() {
+          if (fallbackTimer != null || fallbackActivationTimer != null) {
+            return;
+          }
+          fallbackActivationTimer = Timer(_socketFallbackActivationDelay, () {
+            fallbackActivationTimer = null;
+            startFallbackPollingNow(syncImmediately: true);
+          });
+        }
+
         void stopFallbackPolling() {
+          fallbackActivationTimer?.cancel();
+          fallbackActivationTimer = null;
           fallbackTimer?.cancel();
           fallbackTimer = null;
         }
 
         if (socketUri == null) {
-          startFallbackPolling(syncImmediately: true);
+          startFallbackPollingNow(syncImmediately: true);
           return;
         }
         relaySubscription = WebSocketLiveCommentaryFeedService(
@@ -116,7 +136,7 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
             if (state == ReliableWebSocketState.connecting ||
                 state == ReliableWebSocketState.disconnected ||
                 state == ReliableWebSocketState.reconnecting) {
-              startFallbackPolling(syncImmediately: true);
+              scheduleFallbackPolling();
             }
           },
         ).watch(matchId: matchId, seedEvents: merged).listen((
@@ -128,6 +148,7 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
       }();
 
       controller.onCancel = () async {
+        fallbackActivationTimer?.cancel();
         fallbackTimer?.cancel();
         await relaySubscription?.cancel();
       };

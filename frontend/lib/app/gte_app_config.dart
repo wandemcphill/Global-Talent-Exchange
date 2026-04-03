@@ -6,6 +6,11 @@ class GteAppConfig {
   final String apiBaseUrl;
   final GteBackendMode backendMode;
 
+  GteBackendMode get activeShellBackendMode =>
+      backendMode == GteBackendMode.fixture
+          ? GteBackendMode.fixture
+          : GteBackendMode.live;
+
   static GteAppConfig fromEnvironment() {
     const String rawBaseUrl = String.fromEnvironment(
       'GTE_API_BASE_URL',

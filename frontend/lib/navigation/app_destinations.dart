@@ -133,7 +133,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'Matches',
     location: AppRoutes.matches,
     state: AppRouteSurfaceState.live,
-    summary: 'Live match discovery with explicit viewer and simulation paths.',
+    summary:
+        'Live match discovery with explicit viewer lanes. Local simulation remains gated to explicit fixture-mode runs.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -306,8 +307,9 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
   AppRouteSurface(
     label: 'Simulation',
     location: AppRoutes.matchesSimulate,
-    state: AppRouteSurfaceState.partiallyWired,
-    summary: 'Local simulation sandbox that stays separate from live feeds.',
+    state: AppRouteSurfaceState.hidden,
+    summary:
+        'Deep route reserved for explicit fixture-mode local simulation. Live shells resolve it to a blocked disclosure screen.',
   ),
 ];
 
