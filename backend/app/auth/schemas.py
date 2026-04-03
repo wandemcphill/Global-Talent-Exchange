@@ -90,6 +90,7 @@ class RegisterRequest(BaseModel):
             return None
         return candidate
 
+
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -114,8 +115,6 @@ class RefreshTokenRequest(BaseModel):
         if not candidate:
             raise ValueError("refresh_token is required.")
         return candidate
-
-
 
 
 class ActionStatusResponse(BaseModel):
