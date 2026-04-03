@@ -265,9 +265,7 @@ def test_auth_session_rebuild_migration_handles_preexisting_table(tmp_path) -> N
     command.upgrade(config, "20260401_0079_history_engagement_schema_repair")
 
     with engine.begin() as connection:
-        connection.execute(
-            text(
-                """
+        connection.execute(text("""
                 CREATE TABLE auth_sessions (
                     user_id VARCHAR(36) NOT NULL,
                     refresh_token_hash VARCHAR(128) NOT NULL,
@@ -284,9 +282,7 @@ def test_auth_session_rebuild_migration_handles_preexisting_table(tmp_path) -> N
                     PRIMARY KEY (id),
                     FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
                 )
-                """
-            )
-        )
+                """))
 
     inspector = inspect(engine)
     assert inspector.has_table("auth_sessions")
@@ -304,7 +300,9 @@ def test_auth_session_rebuild_migration_handles_preexisting_table(tmp_path) -> N
     } <= {index["name"] for index in repaired_inspector.get_indexes("auth_sessions")}
 
     with engine.connect() as connection:
-        versions = connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()
+        versions = (
+            connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()
+        )
 
     assert set(versions) == _migration_graph_heads()
 
@@ -394,17 +392,22 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
     assert repaired_inspector.has_table("leaderboard_season_rewards")
 
     with engine.connect() as connection:
-        assert connection.execute(
-            text("SELECT COUNT(*) FROM player_share_markets WHERE player_id = :player_id"),
-            {"player_id": "repair-real-player"},
-        ).scalar_one() == 1
-        assert connection.execute(
-            text(
-                "SELECT COUNT(*) FROM player_share_events "
-                "WHERE player_id = :player_id AND event_type = 'issue'"
-            ),
-            {"player_id": "repair-real-player"},
-        ).scalar_one() == 1
+        assert (
+            connection.execute(
+                text("SELECT COUNT(*) FROM player_share_markets WHERE player_id = :player_id"),
+                {"player_id": "repair-real-player"},
+            ).scalar_one()
+            == 1
+        )
+        assert (
+            connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM player_share_events " "WHERE player_id = :player_id AND event_type = 'issue'"
+                ),
+                {"player_id": "repair-real-player"},
+            ).scalar_one()
+            == 1
+        )
 
     inspector = repaired_inspector
 
@@ -435,7 +438,9 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
         "max_placement_price_coin",
     } <= creator_stadium_control_columns
 
-    creator_revenue_settlement_columns = {column["name"] for column in inspector.get_columns("creator_revenue_settlements")}
+    creator_revenue_settlement_columns = {
+        column["name"] for column in inspector.get_columns("creator_revenue_settlements")
+    }
     assert {
         "review_status",
         "review_reason_codes_json",
@@ -642,7 +647,9 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
         "payload_json",
     } <= club_sale_audit_columns
 
-    real_player_import_batch_columns = {column["name"] for column in inspector.get_columns("real_player_import_batches")}
+    real_player_import_batch_columns = {
+        column["name"] for column in inspector.get_columns("real_player_import_batches")
+    }
     assert {
         "batch_key",
         "provider_name",
@@ -687,7 +694,9 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
         "audit_findings_json",
     } <= real_player_import_row_columns
 
-    real_player_import_staging_columns = {column["name"] for column in inspector.get_columns("real_player_import_staging")}
+    real_player_import_staging_columns = {
+        column["name"] for column in inspector.get_columns("real_player_import_staging")
+    }
     assert {
         "provider_name",
         "provider_player_id",
@@ -744,7 +753,9 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
         "metadata_json",
     } <= real_player_unresolved_reference_columns
 
-    real_player_value_lineage_columns = {column["name"] for column in inspector.get_columns("real_player_value_lineages")}
+    real_player_value_lineage_columns = {
+        column["name"] for column in inspector.get_columns("real_player_value_lineages")
+    }
     assert {
         "player_id",
         "snapshot_id",
@@ -786,9 +797,7 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
         "ix_real_player_reference_mappings_provider_external_id",
     } <= real_player_reference_mapping_indexes
 
-    real_player_value_lineage_indexes = {
-        index["name"] for index in inspector.get_indexes("real_player_value_lineages")
-    }
+    real_player_value_lineage_indexes = {index["name"] for index in inspector.get_indexes("real_player_value_lineages")}
     assert {
         "ix_real_player_value_lineages_player_id",
         "ix_real_player_value_lineages_snapshot_id",
@@ -878,9 +887,7 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
         "metadata_json",
     } <= broadcast_distribution_columns
 
-    broadcast_watch_session_columns = {
-        column["name"] for column in inspector.get_columns("broadcast_watch_sessions")
-    }
+    broadcast_watch_session_columns = {column["name"] for column in inspector.get_columns("broadcast_watch_sessions")}
     assert {
         "user_id",
         "channel_id",
@@ -936,7 +943,14 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
     assert {"user_id", "season_id", "tier", "xp", "level", "rewards_json"} <= season_pass_columns
 
     live_event_columns = {column["name"] for column in inspector.get_columns("live_events")}
-    assert {"name", "start_date", "end_date", "rules_json", "rewards_json", "started_notification_sent_at"} <= live_event_columns
+    assert {
+        "name",
+        "start_date",
+        "end_date",
+        "rules_json",
+        "rewards_json",
+        "started_notification_sent_at",
+    } <= live_event_columns
 
     competition_queue_columns = {column["name"] for column in inspector.get_columns("competition_queue_records")}
     assert {
@@ -978,7 +992,9 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
         "metadata_json",
     } <= projection_receipt_columns
 
-    standing_projection_columns = {column["name"] for column in inspector.get_columns("competition_standing_projections")}
+    standing_projection_columns = {
+        column["name"] for column in inspector.get_columns("competition_standing_projections")
+    }
     assert {
         "competition_id",
         "season_id",
@@ -1023,7 +1039,9 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
     } <= player_projection_columns
 
     with engine.connect() as connection:
-        versions = connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()
+        versions = (
+            connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()
+        )
 
     target_heads = _migration_graph_heads()
     assert len(versions) == 1
