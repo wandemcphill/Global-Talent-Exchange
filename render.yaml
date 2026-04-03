@@ -3,7 +3,7 @@ services:
   - name: gtex-api
     type: web
     runtime: python
-    plan: basic-256mb
+    plan: free
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180 --graceful-timeout 120"
     envVars:
@@ -27,6 +27,7 @@ services:
   - name: gtex-web
     type: web
     runtime: static
+    plan: free
     buildCommand: "cd frontend && flutter build web"
     staticPublishPath: "frontend/build/web"
 
@@ -90,7 +91,7 @@ services:
   # 🔴 Redis
   - type: redis
     name: gtex-cache
-    plan: basic-256mb
+    plan: starter
     ipAllowList: []
 
 databases:
