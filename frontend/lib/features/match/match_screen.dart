@@ -242,8 +242,7 @@ class _ActionDeck extends StatelessWidget {
                 fixtureMode
                     ? const <String>['FIXTURE MODE', 'LOCAL']
                     : const <String>['BLOCKED', 'FIXTURE ONLY'],
-            primaryLabel:
-                fixtureMode ? 'Open simulation sandbox' : 'Why it is blocked',
+            primaryLabel: 'Open simulate',
             onPrimaryTap: () => context.push(AppRoutes.matchesSimulate),
           ),
         ],
