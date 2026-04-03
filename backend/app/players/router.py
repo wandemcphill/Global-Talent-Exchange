@@ -134,9 +134,7 @@ def raise_player_token_market_http_exception(exc: PlayerTokenMarketError) -> Nev
 
 def _require_manager_supply_permission(request: Request, actor: User) -> None:
     service = AdminGodModeService(
-        wallet_service=WalletService(
-            cache_backend=getattr(request.app.state, "cache_backend", None)
-        )
+        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
     )
     try:
         state = service._load_state(request.app)
@@ -206,7 +204,9 @@ def get_player_summary(
 ) -> PlayerSummaryView:
     summary = PlayerSummaryQueryService(session).get_summary_view(player_id)
     if summary is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player summary for {player_id} was not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Player summary for {player_id} was not found"
+        )
     return summary
 
 

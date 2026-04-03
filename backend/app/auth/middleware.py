@@ -7,7 +7,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.auth.dependencies import _resolve_authenticated_user
 from app.core.errors import error_response
 
-
 PROTECTED_PATH_PREFIXES = (
     "/api/admin",
     "/api/session",

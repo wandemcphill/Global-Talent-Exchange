@@ -194,15 +194,14 @@ class RegenUniverseExpansionService:
             return batch_code
         historical_codes = list(
             self.session.scalars(
-                select(NationalRegenSeed.country_code)
-                .where(NationalRegenSeed.country_name == country.name)
-                .distinct()
+                select(NationalRegenSeed.country_code).where(NationalRegenSeed.country_name == country.name).distinct()
             ).all()
         )
         for code in historical_codes:
             owner_count = self.session.scalar(
-                select(func.count(func.distinct(NationalRegenSeed.country_name)))
-                .where(NationalRegenSeed.country_code == code)
+                select(func.count(func.distinct(NationalRegenSeed.country_name))).where(
+                    NationalRegenSeed.country_code == code
+                )
             )
             if owner_count == 1:
                 return code
@@ -277,7 +276,11 @@ class RegenUniverseExpansionService:
             StoryFeedService(self.session).publish(
                 story_type="documentary",
                 title=f"{player.full_name}: documentary chapter updated",
-                body=payload["chapters"][0]["summary"] if payload.get("chapters") else f"New story beats were recorded for {player.full_name}.",
+                body=(
+                    payload["chapters"][0]["summary"]
+                    if payload.get("chapters")
+                    else f"New story beats were recorded for {player.full_name}."
+                ),
                 audience="public",
                 subject_type="player",
                 subject_id=player.id,
@@ -313,8 +316,10 @@ class RegenUniverseExpansionService:
         }
 
     def evolve_dna_profiles(self, *, player_id: str | None = None) -> dict[str, Any]:
-        players = [self._require_player(player_id)] if player_id else list(
-            self.session.scalars(select(Player).where(Player.source_provider == "gtex_regen")).all()
+        players = (
+            [self._require_player(player_id)]
+            if player_id
+            else list(self.session.scalars(select(Player).where(Player.source_provider == "gtex_regen")).all())
         )
         updated = 0
         for player in players:
@@ -327,8 +332,10 @@ class RegenUniverseExpansionService:
         return {"players_scanned": len(players), "players_updated": updated}
 
     def regenerate_stories(self, *, player_id: str | None = None) -> dict[str, Any]:
-        players = [self._require_player(player_id)] if player_id else list(
-            self.session.scalars(select(Player).where(Player.source_provider == "gtex_regen")).all()
+        players = (
+            [self._require_player(player_id)]
+            if player_id
+            else list(self.session.scalars(select(Player).where(Player.source_provider == "gtex_regen")).all())
         )
         count = 0
         for player in players:
@@ -349,14 +356,9 @@ class RegenUniverseExpansionService:
         )
         if not rivalries:
             return []
-        player_ids = {
-            item
-            for rivalry in rivalries
-            for item in (rivalry.player_a_id, rivalry.player_b_id)
-        }
+        player_ids = {item for rivalry in rivalries for item in (rivalry.player_a_id, rivalry.player_b_id)}
         players = {
-            player.id: player
-            for player in self.session.scalars(select(Player).where(Player.id.in_(player_ids))).all()
+            player.id: player for player in self.session.scalars(select(Player).where(Player.id.in_(player_ids))).all()
         }
         club_ids = {player.current_club_profile_id for player in players.values() if player.current_club_profile_id}
         clubs = {
@@ -378,14 +380,22 @@ class RegenUniverseExpansionService:
                             "player_id": left.id,
                             "player_name": left.full_name,
                             "club_id": left.current_club_profile_id,
-                            "club_name": clubs.get(left.current_club_profile_id).club_name if left.current_club_profile_id in clubs else None,
+                            "club_name": (
+                                clubs.get(left.current_club_profile_id).club_name
+                                if left.current_club_profile_id in clubs
+                                else None
+                            ),
                             "position": left.normalized_position or left.position,
                         },
                         {
                             "player_id": right.id,
                             "player_name": right.full_name,
                             "club_id": right.current_club_profile_id,
-                            "club_name": clubs.get(right.current_club_profile_id).club_name if right.current_club_profile_id in clubs else None,
+                            "club_name": (
+                                clubs.get(right.current_club_profile_id).club_name
+                                if right.current_club_profile_id in clubs
+                                else None
+                            ),
                             "position": right.normalized_position or right.position,
                         },
                     ],
@@ -396,10 +406,16 @@ class RegenUniverseExpansionService:
         return views
 
     def detect_rivalries(self, *, player_id: str | None = None) -> dict[str, Any]:
-        query = select(PlayerMatchStat, Player, Match).join(Player, Player.id == PlayerMatchStat.player_id).join(Match, Match.id == PlayerMatchStat.match_id)
+        query = (
+            select(PlayerMatchStat, Player, Match)
+            .join(Player, Player.id == PlayerMatchStat.player_id)
+            .join(Match, Match.id == PlayerMatchStat.match_id)
+        )
         if player_id:
             match_ids = list(
-                self.session.scalars(select(PlayerMatchStat.match_id).where(PlayerMatchStat.player_id == player_id)).all()
+                self.session.scalars(
+                    select(PlayerMatchStat.match_id).where(PlayerMatchStat.player_id == player_id)
+                ).all()
             )
             if not match_ids:
                 return {"pairs_scanned": 0, "rivalries_updated": 0}
@@ -437,7 +453,9 @@ class RegenUniverseExpansionService:
                     },
                 )
                 bucket["matchup_count"] += 1
-                if _position_group(player_a.normalized_position or player_a.position) == _position_group(player_b.normalized_position or player_b.position):
+                if _position_group(player_a.normalized_position or player_a.position) == _position_group(
+                    player_b.normalized_position or player_b.position
+                ):
                     bucket["shared_position_group"] += 1
                 bucket["goals"][player_a.id] += int(stat_a.goals or 0)
                 bucket["goals"][player_b.id] += int(stat_b.goals or 0)
@@ -631,7 +649,10 @@ class RegenUniverseExpansionService:
         tournament = self.create_youth_tournament(
             name=f"Global NextGen {today.year}",
             age_limit="U19",
-            rewards={"winner": "global_exposure_boost", "awards": ["Best Young Player", "Top Scorer", "Breakout Talent"]},
+            rewards={
+                "winner": "global_exposure_boost",
+                "awards": ["Best Young Player", "Top Scorer", "Breakout Talent"],
+            },
             start_date=today + timedelta(days=7),
             end_date=today + timedelta(days=10),
             participant_limit=4,
@@ -639,15 +660,16 @@ class RegenUniverseExpansionService:
         )
         return {"created": 1, "tournament_ids": [tournament.id]}
 
-    def apply_match_context(self, home_team: MatchTeamInput, away_team: MatchTeamInput) -> tuple[MatchTeamInput, MatchTeamInput]:
+    def apply_match_context(
+        self, home_team: MatchTeamInput, away_team: MatchTeamInput
+    ) -> tuple[MatchTeamInput, MatchTeamInput]:
         player_ids = {
             player.player_id
             for player in [*home_team.starters, *home_team.bench, *away_team.starters, *away_team.bench]
             if not player.player_id.startswith("academy:") and not player.player_id.startswith("synthetic:")
         }
         players = {
-            player.id: player
-            for player in self.session.scalars(select(Player).where(Player.id.in_(player_ids))).all()
+            player.id: player for player in self.session.scalars(select(Player).where(Player.id.in_(player_ids))).all()
         }
         regens = {
             regen.player_id: regen
@@ -666,12 +688,28 @@ class RegenUniverseExpansionService:
                 )
             ).all()
         }
-        updated_home, home_intensity = self._apply_team_context(home_team, players=players, rivalry_lookup=rivalry_lookup, opponent=away_team)
-        updated_away, away_intensity = self._apply_team_context(away_team, players=players, rivalry_lookup=rivalry_lookup, opponent=home_team)
+        updated_home, home_intensity = self._apply_team_context(
+            home_team, players=players, rivalry_lookup=rivalry_lookup, opponent=away_team
+        )
+        updated_away, away_intensity = self._apply_team_context(
+            away_team, players=players, rivalry_lookup=rivalry_lookup, opponent=home_team
+        )
         rivalry_intensity = max(home_intensity, away_intensity)
         return (
-            updated_home.model_copy(update={"club_context": updated_home.club_context.model_copy(update={"rivalry_intensity": rivalry_intensity})}),
-            updated_away.model_copy(update={"club_context": updated_away.club_context.model_copy(update={"rivalry_intensity": rivalry_intensity})}),
+            updated_home.model_copy(
+                update={
+                    "club_context": updated_home.club_context.model_copy(
+                        update={"rivalry_intensity": rivalry_intensity}
+                    )
+                }
+            ),
+            updated_away.model_copy(
+                update={
+                    "club_context": updated_away.club_context.model_copy(
+                        update={"rivalry_intensity": rivalry_intensity}
+                    )
+                }
+            ),
         )
 
     def _apply_team_context(
@@ -689,30 +727,50 @@ class RegenUniverseExpansionService:
                 rivalry = rivalry_lookup.get(frozenset({player_id, opponent_id}))
                 if rivalry is not None:
                     player_heat[player_id] += float(rivalry.intensity_score)
-        updated_starters = [self._apply_player_context(player, players.get(player.player_id), player_heat.get(player.player_id, 0.0)) for player in team.starters]
-        updated_bench = [self._apply_player_context(player, players.get(player.player_id), player_heat.get(player.player_id, 0.0)) for player in team.bench]
+        updated_starters = [
+            self._apply_player_context(player, players.get(player.player_id), player_heat.get(player.player_id, 0.0))
+            for player in team.starters
+        ]
+        updated_bench = [
+            self._apply_player_context(player, players.get(player.player_id), player_heat.get(player.player_id, 0.0))
+            for player in team.bench
+        ]
         chemistry_bonus = self._dna_chemistry_bonus(updated_starters, players)
-        resolved_context = team.club_context.model_copy(update={"team_chemistry": _clamp_int(team.club_context.team_chemistry + chemistry_bonus, 1, 100)})
+        resolved_context = team.club_context.model_copy(
+            update={"team_chemistry": _clamp_int(team.club_context.team_chemistry + chemistry_bonus, 1, 100)}
+        )
         highest_heat = max(player_heat.values()) if player_heat else 0.0
         return (
-            team.model_copy(update={"starters": updated_starters, "bench": updated_bench, "club_context": resolved_context}),
+            team.model_copy(
+                update={"starters": updated_starters, "bench": updated_bench, "club_context": resolved_context}
+            ),
             _clamp_int(round(highest_heat / 2.0), 0, 100),
         )
 
-    def _apply_player_context(self, player_input: MatchPlayerInput, player: Player | None, rivalry_heat: float) -> MatchPlayerInput:
+    def _apply_player_context(
+        self, player_input: MatchPlayerInput, player: Player | None, rivalry_heat: float
+    ) -> MatchPlayerInput:
         payload = player_input.model_dump(mode="python")
         if player is not None:
-            adjustments = match_attribute_adjustments(normalize_dna_profile(player.dna_profile, position=player.normalized_position or player.position))
+            adjustments = match_attribute_adjustments(
+                normalize_dna_profile(player.dna_profile, position=player.normalized_position or player.position)
+            )
             for key, delta in adjustments.items():
                 if key in payload and payload[key] is not None:
                     payload[key] = _clamp_int(int(payload[key]) + delta, 1, 99)
-            payload["position_archetype"] = str(player.dna_profile.get("archetype", payload.get("position_archetype") or "engine"))
+            payload["position_archetype"] = str(
+                player.dna_profile.get("archetype", payload.get("position_archetype") or "engine")
+            )
         if rivalry_heat > 0:
             payload["discipline"] = _clamp_int(int(payload.get("discipline") or 70) - round(rivalry_heat / 12), 1, 99)
             payload["motivation"] = _clamp_int(int(payload.get("motivation") or 60) + round(rivalry_heat / 10), 1, 99)
             payload["consistency"] = _clamp_int(int(payload.get("consistency") or 50) - round(rivalry_heat / 16), 1, 99)
-            payload["clutch_factor"] = _clamp_int(int(payload.get("clutch_factor") or 50) + round(rivalry_heat / 14), 1, 99)
-            payload["big_match_temperament"] = _clamp_int(int(payload.get("big_match_temperament") or 50) + round(rivalry_heat / 12), 1, 99)
+            payload["clutch_factor"] = _clamp_int(
+                int(payload.get("clutch_factor") or 50) + round(rivalry_heat / 14), 1, 99
+            )
+            payload["big_match_temperament"] = _clamp_int(
+                int(payload.get("big_match_temperament") or 50) + round(rivalry_heat / 12), 1, 99
+            )
         return MatchPlayerInput.model_validate(payload)
 
     def _dna_chemistry_bonus(self, starters: list[MatchPlayerInput], players: dict[str, Player]) -> int:
@@ -762,16 +820,29 @@ class RegenUniverseExpansionService:
         dna_profile = self._ensure_player_dna(player, regen=regen)
 
         origin_summary = self._origin_story_summary(player, regen, dna_profile)
-        breakout_summary = trophies[0]["summary"] if trophies else (key_matches[0]["summary"] if key_matches else f"{player.full_name} is still building the first signature breakout.")
+        breakout_summary = (
+            trophies[0]["summary"]
+            if trophies
+            else (
+                key_matches[0]["summary"]
+                if key_matches
+                else f"{player.full_name} is still building the first signature breakout."
+            )
+        )
         turning_event = next(
             (
                 event
                 for event in lifecycle_events
-                if event.event_type in {"transfer_completed", "regen_retired", "injury", "free_agency", "starter_bootstrap"}
+                if event.event_type
+                in {"transfer_completed", "regen_retired", "injury", "free_agency", "starter_bootstrap"}
             ),
             lifecycle_events[0] if lifecycle_events else None,
         )
-        turning_summary = turning_event.summary if turning_event is not None else f"{player.full_name}'s story has not hit a decisive fork in the road yet."
+        turning_summary = (
+            turning_event.summary
+            if turning_event is not None
+            else f"{player.full_name}'s story has not hit a decisive fork in the road yet."
+        )
         peak_entry = max(career_entries, key=lambda item: (item.goals + item.assists + item.appearances), default=None)
         peak_summary = (
             f"{peak_entry.season_label} with {peak_entry.club_name} marked the peak: "
@@ -787,8 +858,16 @@ class RegenUniverseExpansionService:
         )
 
         chapters = [
-            {"title": "Origin Story", "summary": origin_summary, "source_keys": ["regen_profile", "dna_profile", "career_entries"]},
-            {"title": "Breakout Moment", "summary": breakout_summary, "source_keys": ["match_events", "trophies", "milestones"]},
+            {
+                "title": "Origin Story",
+                "summary": origin_summary,
+                "source_keys": ["regen_profile", "dna_profile", "career_entries"],
+            },
+            {
+                "title": "Breakout Moment",
+                "summary": breakout_summary,
+                "source_keys": ["match_events", "trophies", "milestones"],
+            },
             {"title": "Career Turning Point", "summary": turning_summary, "source_keys": ["career_events"]},
             {"title": "Peak Era", "summary": peak_summary, "source_keys": ["career_entries", "stats_milestones"]},
         ]
@@ -801,7 +880,13 @@ class RegenUniverseExpansionService:
                     "source_keys": ["rivalries", "match_events"],
                 }
             )
-        chapters.append({"title": "Legacy Reflection", "summary": legacy_summary, "source_keys": ["legacy", "career_entries", "trophies"]})
+        chapters.append(
+            {
+                "title": "Legacy Reflection",
+                "summary": legacy_summary,
+                "source_keys": ["legacy", "career_entries", "trophies"],
+            }
+        )
 
         timeline = []
         for event in lifecycle_events[:5]:
@@ -833,7 +918,11 @@ class RegenUniverseExpansionService:
                 {
                     "title": "Rivalry Peak",
                     "event_type": "rivalry_peak",
-                    "summary": chapters[-2]["summary"] if chapters[-2]["title"] == "Defining Rivalry Chapter" else "Rivalry pressure is reshaping the narrative arc.",
+                    "summary": (
+                        chapters[-2]["summary"]
+                        if chapters[-2]["title"] == "Defining Rivalry Chapter"
+                        else "Rivalry pressure is reshaping the narrative arc."
+                    ),
                     "occurred_on": None,
                     "importance": 8.5,
                     "metadata": {"rivalry_id": rivalries[0]["id"], "intensity_score": rivalries[0]["intensity_score"]},
@@ -897,7 +986,12 @@ class RegenUniverseExpansionService:
         )
         ranked: list[tuple[float, dict[str, Any]]] = []
         for stat, match, competition in rows:
-            score = (float(stat.rating or 0.0) * 5.0) + (int(stat.goals or 0) * 7.0) + (int(stat.assists or 0) * 5.0) + (int(stat.saves or 0) * 0.5)
+            score = (
+                (float(stat.rating or 0.0) * 5.0)
+                + (int(stat.goals or 0) * 7.0)
+                + (int(stat.assists or 0) * 5.0)
+                + (int(stat.saves or 0) * 0.5)
+            )
             if stat.clean_sheet:
                 score += 4.0
             if stat.club_id == match.home_club_id:
@@ -930,7 +1024,9 @@ class RegenUniverseExpansionService:
 
     def _collect_trophies(self, player_id: str, regen: RegenProfile | None) -> list[dict[str, Any]]:
         trophies: list[dict[str, Any]] = []
-        for entry in self.session.scalars(select(PlayerCareerEntry).where(PlayerCareerEntry.player_id == player_id)).all():
+        for entry in self.session.scalars(
+            select(PlayerCareerEntry).where(PlayerCareerEntry.player_id == player_id)
+        ).all():
             for honour in entry.honours_json or []:
                 title = str(honour.get("name") or honour.get("title") or honour.get("honour") or "Major honour")
                 trophies.append(
@@ -945,7 +1041,9 @@ class RegenUniverseExpansionService:
                 )
         if regen is not None:
             for award in self.session.scalars(
-                select(RegenAwardWinner).where(RegenAwardWinner.player_id == player_id).order_by(RegenAwardWinner.awarded_at.desc())
+                select(RegenAwardWinner)
+                .where(RegenAwardWinner.player_id == player_id)
+                .order_by(RegenAwardWinner.awarded_at.desc())
             ).all():
                 trophies.append(
                     {
@@ -957,7 +1055,9 @@ class RegenUniverseExpansionService:
                         "metadata": {"award_id": award.award_id},
                     }
                 )
-        return sorted(trophies, key=lambda item: (item["occurred_on"] or date.min, item["importance"]), reverse=True)[:5]
+        return sorted(trophies, key=lambda item: (item["occurred_on"] or date.min, item["importance"]), reverse=True)[
+            :5
+        ]
 
     def _collect_milestones(self, player: Player, career_entries: list[PlayerCareerEntry]) -> list[dict[str, Any]]:
         total_appearances = sum(item.appearances for item in career_entries)
@@ -965,13 +1065,49 @@ class RegenUniverseExpansionService:
         total_assists = sum(item.assists for item in career_entries)
         milestones: list[dict[str, Any]] = []
         if total_appearances >= 50:
-            milestones.append({"title": "50 Appearances", "event_type": "milestone", "summary": f"Reached {total_appearances} senior appearances.", "occurred_on": None, "importance": 6.5, "metadata": {"appearances": total_appearances}})
+            milestones.append(
+                {
+                    "title": "50 Appearances",
+                    "event_type": "milestone",
+                    "summary": f"Reached {total_appearances} senior appearances.",
+                    "occurred_on": None,
+                    "importance": 6.5,
+                    "metadata": {"appearances": total_appearances},
+                }
+            )
         if total_goals >= 25:
-            milestones.append({"title": "Goal Milestone", "event_type": "milestone", "summary": f"Hit {total_goals} career goals.", "occurred_on": None, "importance": 7.0, "metadata": {"goals": total_goals}})
+            milestones.append(
+                {
+                    "title": "Goal Milestone",
+                    "event_type": "milestone",
+                    "summary": f"Hit {total_goals} career goals.",
+                    "occurred_on": None,
+                    "importance": 7.0,
+                    "metadata": {"goals": total_goals},
+                }
+            )
         if total_assists >= 20:
-            milestones.append({"title": "Creator Milestone", "event_type": "milestone", "summary": f"Delivered {total_assists} career assists.", "occurred_on": None, "importance": 6.8, "metadata": {"assists": total_assists}})
+            milestones.append(
+                {
+                    "title": "Creator Milestone",
+                    "event_type": "milestone",
+                    "summary": f"Delivered {total_assists} career assists.",
+                    "occurred_on": None,
+                    "importance": 6.8,
+                    "metadata": {"assists": total_assists},
+                }
+            )
         if player.market_value_eur and player.market_value_eur >= 20_000_000:
-            milestones.append({"title": "Market Surge", "event_type": "market_value", "summary": f"Market value climbed above {round(player.market_value_eur / 1_000_000, 1)}M EUR.", "occurred_on": None, "importance": 6.2, "metadata": {"market_value_eur": player.market_value_eur}})
+            milestones.append(
+                {
+                    "title": "Market Surge",
+                    "event_type": "market_value",
+                    "summary": f"Market value climbed above {round(player.market_value_eur / 1_000_000, 1)}M EUR.",
+                    "occurred_on": None,
+                    "importance": 6.2,
+                    "metadata": {"market_value_eur": player.market_value_eur},
+                }
+            )
         return milestones
 
     def _story_view(self, story: PlayerStory) -> dict[str, Any]:
@@ -1012,7 +1148,9 @@ class RegenUniverseExpansionService:
             club_id = player.current_club_profile_id
             if club_id is None:
                 continue
-            participant = grouped.setdefault(club_id, {"team_id": club_id, "team_name": None, "source": "regen_pool", "players": []})
+            participant = grouped.setdefault(
+                club_id, {"team_id": club_id, "team_name": None, "source": "regen_pool", "players": []}
+            )
             if participant["source"] != "regen_pool":
                 participant["source"] = "mixed"
             participant["players"].append(
@@ -1023,7 +1161,17 @@ class RegenUniverseExpansionService:
                     "display_name": player.full_name,
                     "age": age,
                     "position": regen.primary_position,
-                    "overall": _clamp_int(round((regen.current_ability_range_json.get("minimum", regen.current_gsi) + regen.current_ability_range_json.get("maximum", regen.current_gsi)) / 2), 35, 95),
+                    "overall": _clamp_int(
+                        round(
+                            (
+                                regen.current_ability_range_json.get("minimum", regen.current_gsi)
+                                + regen.current_ability_range_json.get("maximum", regen.current_gsi)
+                            )
+                            / 2
+                        ),
+                        35,
+                        95,
+                    ),
                     "team_id": club_id,
                     "market_value": float(player.market_value_eur or 0.0),
                     "dna_profile": self._ensure_player_dna(player, regen=regen),
@@ -1033,7 +1181,9 @@ class RegenUniverseExpansionService:
         for academy in self.session.scalars(select(AcademyPlayer).where(AcademyPlayer.age <= age_limit)).all():
             if club_filter and academy.club_id not in club_filter:
                 continue
-            participant = grouped.setdefault(academy.club_id, {"team_id": academy.club_id, "team_name": None, "source": "academy", "players": []})
+            participant = grouped.setdefault(
+                academy.club_id, {"team_id": academy.club_id, "team_name": None, "source": "academy", "players": []}
+            )
             if participant["source"] != "academy":
                 participant["source"] = "mixed"
             participant["players"].append(
@@ -1060,11 +1210,17 @@ class RegenUniverseExpansionService:
             players = participant["players"]
             if not players:
                 continue
-            participant["team_name"] = clubs.get(participant["team_id"]).club_name if participant["team_id"] in clubs else f"Youth Select {len(participants) + 1}"
+            participant["team_name"] = (
+                clubs.get(participant["team_id"]).club_name
+                if participant["team_id"] in clubs
+                else f"Youth Select {len(participants) + 1}"
+            )
             participant["player_count"] = len(players)
             participant["average_age"] = round(sum(int(player["age"]) for player in players) / len(players), 2)
             participant["average_rating"] = round(sum(int(player["overall"]) for player in players) / len(players), 2)
-            participant["player_ids"] = [str(player["player_id"] or f"academy:{player['entity_id']}") for player in players]
+            participant["player_ids"] = [
+                str(player["player_id"] or f"academy:{player['entity_id']}") for player in players
+            ]
             participants.append(participant)
 
         participants.sort(key=lambda item: (item["player_count"], item["average_rating"]), reverse=True)
@@ -1081,14 +1237,22 @@ class RegenUniverseExpansionService:
                     "source": "mixed",
                     "players": team_players[:12],
                     "player_count": len(team_players[:12]),
-                    "average_age": round(sum(int(player["age"]) for player in team_players[:12]) / max(1, len(team_players[:12])), 2),
-                    "average_rating": round(sum(int(player["overall"]) for player in team_players[:12]) / max(1, len(team_players[:12])), 2),
-                    "player_ids": [str(player["player_id"] or f"academy:{player['entity_id']}") for player in team_players[:12]],
+                    "average_age": round(
+                        sum(int(player["age"]) for player in team_players[:12]) / max(1, len(team_players[:12])), 2
+                    ),
+                    "average_rating": round(
+                        sum(int(player["overall"]) for player in team_players[:12]) / max(1, len(team_players[:12])), 2
+                    ),
+                    "player_ids": [
+                        str(player["player_id"] or f"academy:{player['entity_id']}") for player in team_players[:12]
+                    ],
                 }
             )
         return participants[:participant_limit]
 
-    def _run_tournament(self, tournament: YouthTournament) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _run_tournament(
+        self, tournament: YouthTournament
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         participants = list(tournament.participants_json or [])
         groups = {"A": participants[:2], "B": participants[2:4]} if len(participants) == 4 else {"A": participants[:4]}
         standings: dict[str, dict[str, Any]] = {}
@@ -1121,7 +1285,11 @@ class RegenUniverseExpansionService:
                 self._apply_group_result(standings, summary)
                 self._accumulate_player_board(player_board, member_lookup, summary)
 
-        finalists = sorted(standings.values(), key=lambda item: (item["points"], item["goal_difference"], item["goals_for"]), reverse=True)[:2]
+        finalists = sorted(
+            standings.values(),
+            key=lambda item: (item["points"], item["goal_difference"], item["goals_for"]),
+            reverse=True,
+        )[:2]
         team_lookup = {team["team_id"]: team for team in participants}
         final_summary = self._simulate_tournament_fixture(
             team_lookup[finalists[0]["team_id"]],
@@ -1212,8 +1380,13 @@ class RegenUniverseExpansionService:
                 rivalry_intensity=0,
                 schedule_pressure=38,
             ),
-            starters=[self._seed_to_match_player(seed, role=role, slot=index + 1) for index, (seed, role) in enumerate(starters)],
-            bench=[self._seed_to_match_player(seed, role=role, slot=index + 21) for index, (seed, role) in enumerate(bench)],
+            starters=[
+                self._seed_to_match_player(seed, role=role, slot=index + 1)
+                for index, (seed, role) in enumerate(starters)
+            ],
+            bench=[
+                self._seed_to_match_player(seed, role=role, slot=index + 21) for index, (seed, role) in enumerate(bench)
+            ],
         )
 
     def _select_tournament_squad(
@@ -1222,7 +1395,12 @@ class RegenUniverseExpansionService:
         *,
         team_key: str,
     ) -> tuple[list[tuple[_TournamentPlayerSeed, PlayerRole]], list[tuple[_TournamentPlayerSeed, PlayerRole]]]:
-        required_roles = [PlayerRole.GOALKEEPER] + ([PlayerRole.DEFENDER] * 4) + ([PlayerRole.MIDFIELDER] * 3) + ([PlayerRole.FORWARD] * 3)
+        required_roles = (
+            [PlayerRole.GOALKEEPER]
+            + ([PlayerRole.DEFENDER] * 4)
+            + ([PlayerRole.MIDFIELDER] * 3)
+            + ([PlayerRole.FORWARD] * 3)
+        )
         remaining = list(seeds)
         starters: list[tuple[_TournamentPlayerSeed, PlayerRole]] = []
         for index, role in enumerate(required_roles, start=1):
@@ -1233,9 +1411,14 @@ class RegenUniverseExpansionService:
                     remaining.remove(best)
                     continue
             starters.append((self._synthetic_seed(role, slot=index, team_key=team_key), role))
-        bench = [(seed, _resolve_role(seed.position)) for seed in sorted(remaining, key=lambda item: item.overall, reverse=True)[:7]]
+        bench = [
+            (seed, _resolve_role(seed.position))
+            for seed in sorted(remaining, key=lambda item: item.overall, reverse=True)[:7]
+        ]
         while len(bench) < 7:
-            role = [PlayerRole.GOALKEEPER, PlayerRole.DEFENDER, PlayerRole.MIDFIELDER, PlayerRole.FORWARD][len(bench) % 4]
+            role = [PlayerRole.GOALKEEPER, PlayerRole.DEFENDER, PlayerRole.MIDFIELDER, PlayerRole.FORWARD][
+                len(bench) % 4
+            ]
             bench.append((self._synthetic_seed(role, slot=40 + len(bench), team_key=team_key), role))
         return starters, bench
 
@@ -1252,8 +1435,15 @@ class RegenUniverseExpansionService:
         return 0
 
     def _synthetic_seed(self, role: PlayerRole, *, slot: int, team_key: str) -> _TournamentPlayerSeed:
-        name = {PlayerRole.GOALKEEPER: "Youth Keeper", PlayerRole.DEFENDER: "Youth Defender", PlayerRole.MIDFIELDER: "Youth Midfielder", PlayerRole.FORWARD: "Youth Forward"}[role]
-        team_slug = "".join(character if character.isalnum() else "-" for character in team_key.lower()).strip("-") or "team"
+        name = {
+            PlayerRole.GOALKEEPER: "Youth Keeper",
+            PlayerRole.DEFENDER: "Youth Defender",
+            PlayerRole.MIDFIELDER: "Youth Midfielder",
+            PlayerRole.FORWARD: "Youth Forward",
+        }[role]
+        team_slug = (
+            "".join(character if character.isalnum() else "-" for character in team_key.lower()).strip("-") or "team"
+        )
         return _TournamentPlayerSeed(
             source_type="synthetic",
             entity_id=f"synthetic-{team_slug}-{role.value.lower()}-{slot}",
@@ -1286,10 +1476,78 @@ class RegenUniverseExpansionService:
             "leadership": _clamp_int(overall - 4, 20, 90),
         }
         role_updates = {
-            PlayerRole.GOALKEEPER: {"finishing": 10, "creativity": 34, "defending": 52, "goalkeeping": _clamp_int(overall + 10, 40, 99), "position_archetype": "shot_stopper", "pace": _clamp_int(overall - 16, 20, 90), "composure": _clamp_int(overall + 4, 30, 99), "decision_making": _clamp_int(overall + 3, 30, 99), "positioning": _clamp_int(overall + 5, 30, 99), "off_ball_movement": _clamp_int(overall - 24, 10, 85), "aerial_ability": _clamp_int(overall + 7, 30, 99), "technique": _clamp_int(overall - 2, 20, 99), "stamina_curve": 70, "consistency": _clamp_int(overall + 2, 20, 99), "clutch_factor": _clamp_int(overall + 2, 20, 99), "big_match_temperament": _clamp_int(overall + 1, 20, 99)},
-            PlayerRole.DEFENDER: {"finishing": _clamp_int(overall - 18, 10, 90), "creativity": _clamp_int(overall - 4, 15, 92), "defending": _clamp_int(overall + 8, 25, 99), "goalkeeping": 5, "position_archetype": "ball_playing_defender", "pace": _clamp_int(overall - 1, 20, 95), "composure": _clamp_int(overall + 1, 20, 95), "decision_making": _clamp_int(overall + 2, 20, 95), "positioning": _clamp_int(overall + 6, 20, 99), "off_ball_movement": _clamp_int(overall - 7, 10, 90), "aerial_ability": _clamp_int(overall + 5, 20, 99), "technique": _clamp_int(overall - 1, 20, 95), "stamina_curve": 74, "consistency": _clamp_int(overall + 2, 20, 95), "clutch_factor": _clamp_int(overall - 2, 15, 92), "big_match_temperament": _clamp_int(overall + 1, 20, 95)},
-            PlayerRole.MIDFIELDER: {"finishing": _clamp_int(overall - 2, 18, 95), "creativity": _clamp_int(overall + 7, 25, 99), "defending": _clamp_int(overall - 4, 15, 92), "goalkeeping": 5, "position_archetype": "playmaker", "pace": _clamp_int(overall - 1, 20, 95), "composure": _clamp_int(overall + 3, 20, 99), "decision_making": _clamp_int(overall + 6, 20, 99), "positioning": _clamp_int(overall + 3, 20, 95), "off_ball_movement": _clamp_int(overall + 4, 20, 99), "aerial_ability": _clamp_int(overall - 6, 10, 90), "technique": _clamp_int(overall + 7, 20, 99), "stamina_curve": 78, "consistency": _clamp_int(overall + 4, 20, 99), "clutch_factor": _clamp_int(overall + 1, 18, 95), "big_match_temperament": _clamp_int(overall + 2, 20, 95)},
-            PlayerRole.FORWARD: {"finishing": _clamp_int(overall + 8, 24, 99), "creativity": _clamp_int(overall + 1, 18, 95), "defending": _clamp_int(overall - 16, 10, 85), "goalkeeping": 5, "position_archetype": "poacher", "pace": _clamp_int(overall + 6, 20, 99), "composure": _clamp_int(overall + 6, 20, 99), "decision_making": _clamp_int(overall + 1, 20, 95), "positioning": _clamp_int(overall + 4, 20, 99), "off_ball_movement": _clamp_int(overall + 8, 20, 99), "aerial_ability": _clamp_int(overall - 2, 15, 92), "technique": _clamp_int(overall + 3, 20, 95), "stamina_curve": 74, "consistency": _clamp_int(overall + 2, 20, 95), "clutch_factor": _clamp_int(overall + 7, 22, 99), "big_match_temperament": _clamp_int(overall + 5, 20, 99)},
+            PlayerRole.GOALKEEPER: {
+                "finishing": 10,
+                "creativity": 34,
+                "defending": 52,
+                "goalkeeping": _clamp_int(overall + 10, 40, 99),
+                "position_archetype": "shot_stopper",
+                "pace": _clamp_int(overall - 16, 20, 90),
+                "composure": _clamp_int(overall + 4, 30, 99),
+                "decision_making": _clamp_int(overall + 3, 30, 99),
+                "positioning": _clamp_int(overall + 5, 30, 99),
+                "off_ball_movement": _clamp_int(overall - 24, 10, 85),
+                "aerial_ability": _clamp_int(overall + 7, 30, 99),
+                "technique": _clamp_int(overall - 2, 20, 99),
+                "stamina_curve": 70,
+                "consistency": _clamp_int(overall + 2, 20, 99),
+                "clutch_factor": _clamp_int(overall + 2, 20, 99),
+                "big_match_temperament": _clamp_int(overall + 1, 20, 99),
+            },
+            PlayerRole.DEFENDER: {
+                "finishing": _clamp_int(overall - 18, 10, 90),
+                "creativity": _clamp_int(overall - 4, 15, 92),
+                "defending": _clamp_int(overall + 8, 25, 99),
+                "goalkeeping": 5,
+                "position_archetype": "ball_playing_defender",
+                "pace": _clamp_int(overall - 1, 20, 95),
+                "composure": _clamp_int(overall + 1, 20, 95),
+                "decision_making": _clamp_int(overall + 2, 20, 95),
+                "positioning": _clamp_int(overall + 6, 20, 99),
+                "off_ball_movement": _clamp_int(overall - 7, 10, 90),
+                "aerial_ability": _clamp_int(overall + 5, 20, 99),
+                "technique": _clamp_int(overall - 1, 20, 95),
+                "stamina_curve": 74,
+                "consistency": _clamp_int(overall + 2, 20, 95),
+                "clutch_factor": _clamp_int(overall - 2, 15, 92),
+                "big_match_temperament": _clamp_int(overall + 1, 20, 95),
+            },
+            PlayerRole.MIDFIELDER: {
+                "finishing": _clamp_int(overall - 2, 18, 95),
+                "creativity": _clamp_int(overall + 7, 25, 99),
+                "defending": _clamp_int(overall - 4, 15, 92),
+                "goalkeeping": 5,
+                "position_archetype": "playmaker",
+                "pace": _clamp_int(overall - 1, 20, 95),
+                "composure": _clamp_int(overall + 3, 20, 99),
+                "decision_making": _clamp_int(overall + 6, 20, 99),
+                "positioning": _clamp_int(overall + 3, 20, 95),
+                "off_ball_movement": _clamp_int(overall + 4, 20, 99),
+                "aerial_ability": _clamp_int(overall - 6, 10, 90),
+                "technique": _clamp_int(overall + 7, 20, 99),
+                "stamina_curve": 78,
+                "consistency": _clamp_int(overall + 4, 20, 99),
+                "clutch_factor": _clamp_int(overall + 1, 18, 95),
+                "big_match_temperament": _clamp_int(overall + 2, 20, 95),
+            },
+            PlayerRole.FORWARD: {
+                "finishing": _clamp_int(overall + 8, 24, 99),
+                "creativity": _clamp_int(overall + 1, 18, 95),
+                "defending": _clamp_int(overall - 16, 10, 85),
+                "goalkeeping": 5,
+                "position_archetype": "poacher",
+                "pace": _clamp_int(overall + 6, 20, 99),
+                "composure": _clamp_int(overall + 6, 20, 99),
+                "decision_making": _clamp_int(overall + 1, 20, 95),
+                "positioning": _clamp_int(overall + 4, 20, 99),
+                "off_ball_movement": _clamp_int(overall + 8, 20, 99),
+                "aerial_ability": _clamp_int(overall - 2, 15, 92),
+                "technique": _clamp_int(overall + 3, 20, 95),
+                "stamina_curve": 74,
+                "consistency": _clamp_int(overall + 2, 20, 95),
+                "clutch_factor": _clamp_int(overall + 7, 22, 99),
+                "big_match_temperament": _clamp_int(overall + 5, 20, 99),
+            },
         }
         base.update(role_updates[role])
         for key, delta in match_attribute_adjustments(seed.dna_profile).items():
@@ -1299,11 +1557,34 @@ class RegenUniverseExpansionService:
 
     def _fixture_from_summary(self, summary, *, stage: str, group_key: str | None) -> dict[str, Any]:
         top_performers = sorted(
-            ({"player_id": item.player_id, "player_name": item.player_name, "team_id": item.team_id, "rating": item.rating, "goals": item.goals, "assists": item.assists} for item in summary.player_stats if item.rating is not None),
+            (
+                {
+                    "player_id": item.player_id,
+                    "player_name": item.player_name,
+                    "team_id": item.team_id,
+                    "rating": item.rating,
+                    "goals": item.goals,
+                    "assists": item.assists,
+                }
+                for item in summary.player_stats
+                if item.rating is not None
+            ),
             key=lambda item: ((float(item["rating"] or 0.0)), item["goals"], item["assists"]),
             reverse=True,
         )[:3]
-        return {"match_id": summary.match_id, "stage": stage, "group": group_key, "home_team_id": summary.home_stats.team_id, "home_team_name": summary.home_stats.team_name, "away_team_id": summary.away_stats.team_id, "away_team_name": summary.away_stats.team_name, "home_score": summary.home_score, "away_score": summary.away_score, "winner_team_id": summary.winner_team_id, "top_performers": top_performers}
+        return {
+            "match_id": summary.match_id,
+            "stage": stage,
+            "group": group_key,
+            "home_team_id": summary.home_stats.team_id,
+            "home_team_name": summary.home_stats.team_name,
+            "away_team_id": summary.away_stats.team_id,
+            "away_team_name": summary.away_stats.team_name,
+            "home_score": summary.home_score,
+            "away_score": summary.away_score,
+            "winner_team_id": summary.winner_team_id,
+            "top_performers": top_performers,
+        }
 
     def _apply_group_result(self, standings: dict[str, dict[str, Any]], summary) -> None:
         home = standings[summary.home_stats.team_id]
@@ -1335,15 +1616,38 @@ class RegenUniverseExpansionService:
         for participant in participants:
             for player in participant.get("players", []):
                 public_id = str(player["player_id"] or f"academy:{player['entity_id']}")
-                lookup[public_id] = {"team_id": participant["team_id"], "team_name": participant["team_name"], "source_type": player["source_type"], "display_name": player["display_name"], "overall": player["overall"], "player_id": player["player_id"]}
+                lookup[public_id] = {
+                    "team_id": participant["team_id"],
+                    "team_name": participant["team_name"],
+                    "source_type": player["source_type"],
+                    "display_name": player["display_name"],
+                    "overall": player["overall"],
+                    "player_id": player["player_id"],
+                }
         return lookup
 
-    def _accumulate_player_board(self, board: dict[str, dict[str, Any]], lookup: dict[str, dict[str, Any]], summary) -> None:
+    def _accumulate_player_board(
+        self, board: dict[str, dict[str, Any]], lookup: dict[str, dict[str, Any]], summary
+    ) -> None:
         for stat in summary.player_stats:
             player = lookup.get(stat.player_id)
             if player is None:
                 continue
-            row = board.setdefault(stat.player_id, {"player_id": stat.player_id, "player_name": stat.player_name, "team_id": player["team_id"], "team_name": player["team_name"], "source_type": player["source_type"], "goals": 0, "assists": 0, "rating_total": 0.0, "appearances": 0, "baseline_overall": int(player["overall"])})
+            row = board.setdefault(
+                stat.player_id,
+                {
+                    "player_id": stat.player_id,
+                    "player_name": stat.player_name,
+                    "team_id": player["team_id"],
+                    "team_name": player["team_name"],
+                    "source_type": player["source_type"],
+                    "goals": 0,
+                    "assists": 0,
+                    "rating_total": 0.0,
+                    "appearances": 0,
+                    "baseline_overall": int(player["overall"]),
+                },
+            )
             row["goals"] += stat.goals
             row["assists"] += stat.assists
             row["rating_total"] += float(stat.rating or 0.0)
@@ -1352,14 +1656,51 @@ class RegenUniverseExpansionService:
     def _build_top_player_table(self, board: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         if not board:
             return []
-        ranked = sorted(board.values(), key=lambda row: (row["goals"] * 6 + row["assists"] * 4 + ((row["rating_total"] / max(row["appearances"], 1)) * 5) - (row["baseline_overall"] * 0.02), row["goals"], row["assists"]), reverse=True)
+        ranked = sorted(
+            board.values(),
+            key=lambda row: (
+                row["goals"] * 6
+                + row["assists"] * 4
+                + ((row["rating_total"] / max(row["appearances"], 1)) * 5)
+                - (row["baseline_overall"] * 0.02),
+                row["goals"],
+                row["assists"],
+            ),
+            reverse=True,
+        )
         top_scorer_id = max(ranked, key=lambda row: (row["goals"], row["assists"], row["rating_total"]))["player_id"]
         best_young_player_id = ranked[0]["player_id"]
-        breakout_talent_id = max(ranked, key=lambda row: ((row["rating_total"] / max(row["appearances"], 1)) - (row["baseline_overall"] / 10.0), row["goals"]))["player_id"]
+        breakout_talent_id = max(
+            ranked,
+            key=lambda row: (
+                (row["rating_total"] / max(row["appearances"], 1)) - (row["baseline_overall"] / 10.0),
+                row["goals"],
+            ),
+        )["player_id"]
         views: list[dict[str, Any]] = []
         for row in ranked[:10]:
-            award = "Top Scorer" if row["player_id"] == top_scorer_id else "Best Young Player" if row["player_id"] == best_young_player_id else "Breakout Talent" if row["player_id"] == breakout_talent_id else None
-            views.append({"player_id": row["player_id"], "player_name": row["player_name"], "team_id": row["team_id"], "team_name": row["team_name"], "source_type": row["source_type"], "goals": row["goals"], "assists": row["assists"], "average_rating": round(row["rating_total"] / max(row["appearances"], 1), 2), "award": award})
+            award = (
+                "Top Scorer"
+                if row["player_id"] == top_scorer_id
+                else (
+                    "Best Young Player"
+                    if row["player_id"] == best_young_player_id
+                    else "Breakout Talent" if row["player_id"] == breakout_talent_id else None
+                )
+            )
+            views.append(
+                {
+                    "player_id": row["player_id"],
+                    "player_name": row["player_name"],
+                    "team_id": row["team_id"],
+                    "team_name": row["team_name"],
+                    "source_type": row["source_type"],
+                    "goals": row["goals"],
+                    "assists": row["assists"],
+                    "average_rating": round(row["rating_total"] / max(row["appearances"], 1), 2),
+                    "award": award,
+                }
+            )
         return views
 
     def _apply_tournament_impacts(self, tournament: YouthTournament) -> None:
@@ -1373,7 +1714,10 @@ class RegenUniverseExpansionService:
                 if academy is not None:
                     academy.readiness_score += 4 if row.get("award") else 2
                     academy.overall_rating += 1 if row.get("average_rating", 0.0) >= 7.5 else 0
-                    academy.development_attributes_json = {**dict(academy.development_attributes_json or {}), "tournament_morale_boost": 1 if row.get("award") else 0}
+                    academy.development_attributes_json = {
+                        **dict(academy.development_attributes_json or {}),
+                        "tournament_morale_boost": 1 if row.get("award") else 0,
+                    }
                 continue
             player = self.session.get(Player, row["player_id"])
             if player is None:
@@ -1386,17 +1730,49 @@ class RegenUniverseExpansionService:
             boost_strength = 1.8 if row.get("award") else 1.0
             if regen is not None:
                 current_max = int(regen.potential_range_json.get("maximum", regen.current_gsi))
-                regen.potential_range_json = {**dict(regen.potential_range_json or {}), "maximum": _clamp_int(current_max + round(potential_multiplier * boost_strength), current_max, 99)}
-                regen.metadata_json = {**dict(regen.metadata_json or {}), "visibility_multiplier": round(max(float((regen.metadata_json or {}).get("visibility_multiplier", 1.0)), 1.0 + ((market_multiplier - 1.0) * boost_strength * 2.0)), 4)}
-            player.market_value_eur = float(player.market_value_eur or 0.0) * (1.0 + ((market_multiplier - 1.0) * 0.55 * boost_strength)) if player.market_value_eur is not None else 1_000_000 * market_multiplier
+                regen.potential_range_json = {
+                    **dict(regen.potential_range_json or {}),
+                    "maximum": _clamp_int(current_max + round(potential_multiplier * boost_strength), current_max, 99),
+                }
+                regen.metadata_json = {
+                    **dict(regen.metadata_json or {}),
+                    "visibility_multiplier": round(
+                        max(
+                            float((regen.metadata_json or {}).get("visibility_multiplier", 1.0)),
+                            1.0 + ((market_multiplier - 1.0) * boost_strength * 2.0),
+                        ),
+                        4,
+                    ),
+                }
+            player.market_value_eur = (
+                float(player.market_value_eur or 0.0) * (1.0 + ((market_multiplier - 1.0) * 0.55 * boost_strength))
+                if player.market_value_eur is not None
+                else 1_000_000 * market_multiplier
+            )
             if player.current_market_reference_value is not None:
-                player.current_market_reference_value = float(player.current_market_reference_value) * (1.0 + ((market_multiplier - 1.0) * 0.45 * boost_strength))
+                player.current_market_reference_value = float(player.current_market_reference_value) * (
+                    1.0 + ((market_multiplier - 1.0) * 0.45 * boost_strength)
+                )
             evolved = dict(dna_profile)
-            evolved["morale_boost"] = round(min(0.25, float(dna_profile.get("morale_boost", 0.0)) + ((morale_multiplier - 1.0) * 0.12 * boost_strength)), 4)
-            evolved["evolution"] = [*list(evolved.get("evolution", []))[-7:], {"at": _utcnow().isoformat(), "reason": "youth_tournament", "award": row.get("award")}]
+            evolved["morale_boost"] = round(
+                min(
+                    0.25,
+                    float(dna_profile.get("morale_boost", 0.0)) + ((morale_multiplier - 1.0) * 0.12 * boost_strength),
+                ),
+                4,
+            )
+            evolved["evolution"] = [
+                *list(evolved.get("evolution", []))[-7:],
+                {"at": _utcnow().isoformat(), "reason": "youth_tournament", "award": row.get("award")},
+            ]
             player.dna_profile = evolved
             if row.get("award") in {"Best Young Player", "Top Scorer", "Breakout Talent"}:
-                self.refresh_story(player.id, trigger="major_trophy_win" if row["award"] != "Breakout Talent" else "breakout_event", notify=False, publish=True)
+                self.refresh_story(
+                    player.id,
+                    trigger="major_trophy_win" if row["award"] != "Breakout Talent" else "breakout_event",
+                    notify=False,
+                    publish=True,
+                )
         self.session.flush()
 
     def _notify_tournament_start(self, tournament: YouthTournament) -> None:
@@ -1404,7 +1780,17 @@ class RegenUniverseExpansionService:
         for club in self.session.scalars(select(ClubProfile).where(ClubProfile.id.in_(club_ids))).all():
             if not club.owner_user_id:
                 continue
-            self.session.add(NotificationRecord(user_id=club.owner_user_id, topic="youth_tournament", template_key="YOUTH_TOURNAMENT_START", resource_type="youth_tournament", resource_id=tournament.id, message=f"{tournament.name} is kicking off.", metadata_json={"tournament_id": tournament.id, "age_limit": tournament.age_limit}))
+            self.session.add(
+                NotificationRecord(
+                    user_id=club.owner_user_id,
+                    topic="youth_tournament",
+                    template_key="YOUTH_TOURNAMENT_START",
+                    resource_type="youth_tournament",
+                    resource_id=tournament.id,
+                    message=f"{tournament.name} is kicking off.",
+                    metadata_json={"tournament_id": tournament.id, "age_limit": tournament.age_limit},
+                )
+            )
 
     def _notify_tournament_stars(self, tournament: YouthTournament) -> None:
         for row in tournament.top_players_json or []:
@@ -1412,7 +1798,15 @@ class RegenUniverseExpansionService:
                 continue
             player = self.session.get(Player, row["player_id"])
             if player is not None:
-                self._notify_player_owners(player, template_key="YOUTH_TOURNAMENT_STAR", topic="youth_tournament", message=f"{player.full_name} earned {row['award']} at {tournament.name}.", resource_type="youth_tournament", resource_id=tournament.id, metadata={"player_id": player.id, "award": row["award"], "tournament_id": tournament.id})
+                self._notify_player_owners(
+                    player,
+                    template_key="YOUTH_TOURNAMENT_STAR",
+                    topic="youth_tournament",
+                    message=f"{player.full_name} earned {row['award']} at {tournament.name}.",
+                    resource_type="youth_tournament",
+                    resource_id=tournament.id,
+                    metadata={"player_id": player.id, "award": row["award"], "tournament_id": tournament.id},
+                )
 
     def seed_preseeded_national_regens(
         self,
@@ -1429,7 +1823,11 @@ class RegenUniverseExpansionService:
         if age_min > age_max:
             raise RegenUniverseExpansionValidationError("preseed_invalid_age_range")
         normalized_codes = {code.strip().upper() for code in country_codes or [] if code and code.strip()}
-        stmt = select(Country).where(Country.is_enabled_for_universe.is_(True)).order_by(Country.name.asc(), Country.id.asc())
+        stmt = (
+            select(Country)
+            .where(Country.is_enabled_for_universe.is_(True))
+            .order_by(Country.name.asc(), Country.id.asc())
+        )
         countries = [
             country
             for country in self.session.scalars(stmt).all()
@@ -1465,8 +1863,7 @@ class RegenUniverseExpansionService:
             )
             existing_count = int(
                 self.session.scalar(
-                    select(func.count())
-                    .where(
+                    select(func.count()).where(
                         NationalRegenSeed.country_code == country_code,
                         NationalRegenSeed.preseed_batch == batch,
                     )
@@ -1510,12 +1907,21 @@ class RegenUniverseExpansionService:
                     age=age,
                     used_names=used_names,
                     rng=rng,
-                    current_gsi_override=self._national_seed_gsi_for_age(age=age, slot_index=slot_index, rarity_bonus=rarity_bonus),
+                    current_gsi_override=self._national_seed_gsi_for_age(
+                        age=age, slot_index=slot_index, rarity_bonus=rarity_bonus
+                    ),
                 )
-                current_rating = _clamp_int((regen_view.current_rating or regen_view.current_gsi) + rarity_bonus, 62, 92)
-                potential_rating = _clamp_int(max(regen_view.potential or current_rating + 6, current_rating + 5) + rarity_bonus, 74, 99)
+                current_rating = _clamp_int(
+                    (regen_view.current_rating or regen_view.current_gsi) + rarity_bonus, 62, 92
+                )
+                potential_rating = _clamp_int(
+                    max(regen_view.potential or current_rating + 6, current_rating + 5) + rarity_bonus, 74, 99
+                )
                 seed_key = f"{batch}:{country_code}:{slot_index + 1}:{primary_position}"
-                if self.session.scalar(select(NationalRegenSeed).where(NationalRegenSeed.seed_key == seed_key)) is not None:
+                if (
+                    self.session.scalar(select(NationalRegenSeed).where(NationalRegenSeed.seed_key == seed_key))
+                    is not None
+                ):
                     continue
                 seed = NationalRegenSeed(
                     seed_key=seed_key,
@@ -1529,14 +1935,18 @@ class RegenUniverseExpansionService:
                     secondary_positions_json=list(secondary_map.get(primary_position, [])),
                     current_rating=current_rating,
                     potential_rating=potential_rating,
-                    growth_curve=round(_clamp_float(float(regen_view.growth_curve) + (rarity_bonus / 100.0), 0.25, 1.0), 4),
+                    growth_curve=round(
+                        _clamp_float(float(regen_view.growth_curve) + (rarity_bonus / 100.0), 0.25, 1.0), 4
+                    ),
                     personality_seed_json={
                         "temperament": regen_view.personality.temperament,
                         "ambition": regen_view.personality.ambition,
                         "resilience": regen_view.personality.resilience,
                         "work_rate": regen_view.personality.work_rate,
                         "media_appetite": regen_view.personality.media_appetite,
-                        "story_seed": regen_view.story_seed.model_dump(mode="json") if regen_view.story_seed is not None else {},
+                        "story_seed": (
+                            regen_view.story_seed.model_dump(mode="json") if regen_view.story_seed is not None else {}
+                        ),
                     },
                     rarity_tier=rarity_tier,
                     status="available",
@@ -1608,15 +2018,17 @@ class RegenUniverseExpansionService:
             for winner in award_winners
             if isinstance(winner.metadata_json, dict) and winner.metadata_json.get("award_name")
         }
-        achievements.update(
-            legacy.narrative_summary
-            for legacy in legacy_records
-            if legacy.narrative_summary
-        )
+        achievements.update(legacy.narrative_summary for legacy in legacy_records if legacy.narrative_summary)
 
-        by_seed_type: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "peak_rating": 0, "achievements": set()})
-        by_rarity: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "peak_rating": 0, "achievements": set()})
-        by_country: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "peak_rating": 0, "achievements": set(), "metadata": {}})
+        by_seed_type: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {"count": 0, "peak_rating": 0, "achievements": set()}
+        )
+        by_rarity: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {"count": 0, "peak_rating": 0, "achievements": set()}
+        )
+        by_country: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {"count": 0, "peak_rating": 0, "achievements": set(), "metadata": {}}
+        )
 
         for seed in seeds:
             peak_rating = max(seed.current_rating, seed.potential_rating, int(seed.metadata_json.get("peak_rating", 0)))
@@ -1625,12 +2037,16 @@ class RegenUniverseExpansionService:
             by_rarity[seed.rarity_tier]["count"] += 1
             by_rarity[seed.rarity_tier]["peak_rating"] = max(by_rarity[seed.rarity_tier]["peak_rating"], peak_rating)
             by_country[seed.country_name]["count"] += 1
-            by_country[seed.country_name]["peak_rating"] = max(by_country[seed.country_name]["peak_rating"], peak_rating)
+            by_country[seed.country_name]["peak_rating"] = max(
+                by_country[seed.country_name]["peak_rating"], peak_rating
+            )
             by_country[seed.country_name]["metadata"] = {"country_code": seed.country_code}
 
         for profile in profiles:
             source = profile.generation_source or "academy"
-            peak_rating = max(profile.current_gsi, int((profile.potential_range_json or {}).get("maximum", profile.current_gsi)))
+            peak_rating = max(
+                profile.current_gsi, int((profile.potential_range_json or {}).get("maximum", profile.current_gsi))
+            )
             by_seed_type[source]["count"] += 1
             by_seed_type[source]["peak_rating"] = max(by_seed_type[source]["peak_rating"], peak_rating)
 
@@ -1666,7 +2082,13 @@ class RegenUniverseExpansionService:
                 }
                 for bucket, item in sorted(by_country.items(), key=lambda row: (-row[1]["count"], row[0]))
             ],
-            "global_peak_rating": max([0, *[item["peak_rating"] for item in by_seed_type.values()], *[item["peak_rating"] for item in by_rarity.values()]]),
+            "global_peak_rating": max(
+                [
+                    0,
+                    *[item["peak_rating"] for item in by_seed_type.values()],
+                    *[item["peak_rating"] for item in by_rarity.values()],
+                ]
+            ),
             "tracked_achievements": sorted(str(entry) for entry in achievements if entry),
         }
 
@@ -1675,15 +2097,23 @@ class RegenUniverseExpansionService:
         if season is None:
             raise RegenUniverseExpansionNotFoundError("regen_universe_season_not_found")
         performance_records = list(
-            self.session.scalars(select(RegenPerformanceRecord).where(RegenPerformanceRecord.season_id == season_id)).all()
+            self.session.scalars(
+                select(RegenPerformanceRecord).where(RegenPerformanceRecord.season_id == season_id)
+            ).all()
         )
         awards_by_player: dict[str, list[RegenAwardWinner]] = defaultdict(list)
-        for winner in self.session.scalars(select(RegenAwardWinner).where(RegenAwardWinner.season_id == season_id)).all():
+        for winner in self.session.scalars(
+            select(RegenAwardWinner).where(RegenAwardWinner.season_id == season_id)
+        ).all():
             awards_by_player[winner.player_id].append(winner)
         rivalry_scores: dict[str, float] = defaultdict(float)
         for rivalry in self.session.scalars(select(PlayerRivalry)).all():
-            rivalry_scores[rivalry.player_a_id] = max(rivalry_scores[rivalry.player_a_id], float(rivalry.intensity_score))
-            rivalry_scores[rivalry.player_b_id] = max(rivalry_scores[rivalry.player_b_id], float(rivalry.intensity_score))
+            rivalry_scores[rivalry.player_a_id] = max(
+                rivalry_scores[rivalry.player_a_id], float(rivalry.intensity_score)
+            )
+            rivalry_scores[rivalry.player_b_id] = max(
+                rivalry_scores[rivalry.player_b_id], float(rivalry.intensity_score)
+            )
 
         updated_count = 0
         boosted_players: list[str] = []
@@ -1702,10 +2132,16 @@ class RegenUniverseExpansionService:
                 boosted_players.append(record.player_id)
             rivalry_score = rivalry_scores.get(record.player_id, 0.0)
             if rivalry_score > 0:
-                personality_seed["temperament"] = _clamp_int(int(personality_seed.get("temperament", 50)) + round(rivalry_score / 18), 15, 99)
-                personality_seed["media_appetite"] = _clamp_int(int(personality_seed.get("media_appetite", 50)) + round(rivalry_score / 22), 15, 99)
+                personality_seed["temperament"] = _clamp_int(
+                    int(personality_seed.get("temperament", 50)) + round(rivalry_score / 18), 15, 99
+                )
+                personality_seed["media_appetite"] = _clamp_int(
+                    int(personality_seed.get("media_appetite", 50)) + round(rivalry_score / 22), 15, 99
+                )
                 rivalry_shifted_players.append(record.player_id)
-            personality_seed["ambition"] = _clamp_int(int(personality_seed.get("ambition", 60)) + len(awards_by_player.get(record.player_id, [])) * 4, 20, 99)
+            personality_seed["ambition"] = _clamp_int(
+                int(personality_seed.get("ambition", 60)) + len(awards_by_player.get(record.player_id, [])) * 4, 20, 99
+            )
             personality_seed["consistency"] = _clamp_int(int(record.consistency_score * 100), 20, 99)
             rarity_tier = str(metadata.get("rarity_tier", "common"))
             if len(awards_by_player.get(record.player_id, [])) >= 2 and rarity_tier in {"common", "rare"}:
@@ -1731,7 +2167,9 @@ class RegenUniverseExpansionService:
                 max_potential = int((profile.potential_range_json or {}).get("maximum", profile.current_gsi))
                 profile.potential_range_json = {
                     "minimum": int((profile.potential_range_json or {}).get("minimum", profile.current_gsi)),
-                    "maximum": _clamp_int(max_potential + min(len(awards_by_player[record.player_id]), 2), profile.current_gsi, 99),
+                    "maximum": _clamp_int(
+                        max_potential + min(len(awards_by_player[record.player_id]), 2), profile.current_gsi, 99
+                    ),
                 }
             profile.metadata_json = metadata
             updated_count += 1
@@ -1772,13 +2210,33 @@ class RegenUniverseExpansionService:
             "metadata": dict(seed.metadata_json or {}),
         }
 
-    def _notify_player_owners(self, player: Player, *, template_key: str, topic: str, message: str, resource_type: str, resource_id: str, metadata: dict[str, Any]) -> None:
+    def _notify_player_owners(
+        self,
+        player: Player,
+        *,
+        template_key: str,
+        topic: str,
+        message: str,
+        resource_type: str,
+        resource_id: str,
+        metadata: dict[str, Any],
+    ) -> None:
         if not player.current_club_profile_id:
             return
         club = self.session.get(ClubProfile, player.current_club_profile_id)
         if club is None or not club.owner_user_id:
             return
-        self.session.add(NotificationRecord(user_id=club.owner_user_id, topic=topic, template_key=template_key, resource_type=resource_type, resource_id=resource_id, message=message[:255], metadata_json=metadata))
+        self.session.add(
+            NotificationRecord(
+                user_id=club.owner_user_id,
+                topic=topic,
+                template_key=template_key,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                message=message[:255],
+                metadata_json=metadata,
+            )
+        )
 
     def _require_player(self, player_id: str) -> Player:
         player = self.session.get(Player, player_id)

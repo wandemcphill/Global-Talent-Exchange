@@ -332,7 +332,11 @@ class GlobalMemoryService:
                 tradable=evolution.is_tradable if evolution is not None else player.is_tradable,
                 unique=evolution.is_unique if evolution is not None else False,
                 hall_of_fame=evolution.hall_of_fame if evolution is not None else False,
-                gsi=evolution.current_gsi if evolution is not None else (regen.current_gsi if regen is not None else None),
+                gsi=(
+                    evolution.current_gsi
+                    if evolution is not None
+                    else (regen.current_gsi if regen is not None else None)
+                ),
                 scarcity_tier=evolution.scarcity_tier if evolution is not None else None,
             )
             for player, resolved_country_code, regen, evolution in rows
@@ -347,9 +351,7 @@ class GlobalMemoryService:
         from app.services.player_lifecycle_service import PlayerLifecycleService
 
         lifecycle_events = PlayerLifecycleService(self.session).list_events(player.id, limit=20)
-        evolution = self.session.scalar(
-            select(GlobalRegenEvolution).where(GlobalRegenEvolution.player_id == player.id)
-        )
+        evolution = self.session.scalar(select(GlobalRegenEvolution).where(GlobalRegenEvolution.player_id == player.id))
 
         club_rows = self._club_history(player=player, lifecycle_summary=lifecycle_summary)
         competition_rows = self._competition_history(
@@ -476,12 +478,8 @@ class GlobalMemoryService:
         if regen is None:
             return None, None
 
-        onboarding = self.session.scalar(
-            select(RegenOnboardingFlag).where(RegenOnboardingFlag.regen_id == regen.id)
-        )
-        evolution = self.session.scalar(
-            select(GlobalRegenEvolution).where(GlobalRegenEvolution.player_id == player.id)
-        )
+        onboarding = self.session.scalar(select(RegenOnboardingFlag).where(RegenOnboardingFlag.regen_id == regen.id))
+        evolution = self.session.scalar(select(GlobalRegenEvolution).where(GlobalRegenEvolution.player_id == player.id))
         if evolution is None:
             evolution = GlobalRegenEvolution(
                 player_id=player.id,
@@ -563,7 +561,9 @@ class GlobalMemoryService:
                 "scarcity_tier": evolution.scarcity_tier,
                 "unique_traits": list(evolution.unique_traits_json or []),
                 "legacy_boost_score": evolution.legacy_boost_score,
-                "legacy_boost_delta": evolution.legacy_boost_score if evolution.hall_of_fame and not was_hall_of_fame else 0.0,
+                "legacy_boost_delta": (
+                    evolution.legacy_boost_score if evolution.hall_of_fame and not was_hall_of_fame else 0.0
+                ),
                 "hall_of_fame": evolution.hall_of_fame,
             }
 
@@ -594,7 +594,9 @@ class GlobalMemoryService:
 
         injury_cases = int(
             self.session.scalar(
-                select(func.count()).select_from(PlayerLifecycleEvent).where(
+                select(func.count())
+                .select_from(PlayerLifecycleEvent)
+                .where(
                     PlayerLifecycleEvent.player_id == player.id,
                     PlayerLifecycleEvent.event_type.like("%injury%"),
                 )

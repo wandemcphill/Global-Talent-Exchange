@@ -222,7 +222,11 @@ class ApiContractEnvelopeMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         if not _is_versioned_request(request):
             return response
-        if request.method == "HEAD" or response.status_code >= 400 or response.status_code == status.HTTP_304_NOT_MODIFIED:
+        if (
+            request.method == "HEAD"
+            or response.status_code >= 400
+            or response.status_code == status.HTTP_304_NOT_MODIFIED
+        ):
             return response
         if not _is_json_response(response):
             return response
@@ -456,11 +460,7 @@ def _format_validation_errors(errors: list[Any]) -> str:
 def _format_validation_location(location: Any) -> str | None:
     if not isinstance(location, (list, tuple)):
         return None
-    parts = [
-        str(item)
-        for item in location
-        if str(item).lower() not in {"body", "query", "path", "header", "response"}
-    ]
+    parts = [str(item) for item in location if str(item).lower() not in {"body", "query", "path", "header", "response"}]
     if not parts:
         return None
     return ".".join(parts)

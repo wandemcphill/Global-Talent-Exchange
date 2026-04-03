@@ -57,7 +57,6 @@ from app.workers.jobs import (
     regen_tournament_scheduling_job,
 )
 
-
 router = APIRouter(prefix="/regen-universe", tags=["regen-universe"])
 admin_router = APIRouter(prefix="/admin/regen-universe", tags=["regen-universe-admin"])
 
@@ -576,7 +575,9 @@ def create_youth_tournament(
     return YouthTournamentView.model_validate(service.get_youth_tournament(tournament.id))
 
 
-@admin_router.post("/national-regens/preseed", response_model=NationalRegenSeedPageView, status_code=status.HTTP_201_CREATED)
+@admin_router.post(
+    "/national-regens/preseed", response_model=NationalRegenSeedPageView, status_code=status.HTTP_201_CREATED
+)
 def preseed_national_regens(
     payload: NationalRegenPreseedRequest,
     request: Request,

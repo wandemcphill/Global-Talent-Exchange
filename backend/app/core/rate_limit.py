@@ -40,11 +40,9 @@ class RateLimitDecision:
 
 
 class RateLimitStore(Protocol):
-    def increment(self, *, key: str, window_seconds: int) -> tuple[int, int]:
-        ...
+    def increment(self, *, key: str, window_seconds: int) -> tuple[int, int]: ...
 
-    def snapshot(self) -> dict[str, Any]:
-        ...
+    def snapshot(self) -> dict[str, Any]: ...
 
 
 @dataclass(slots=True)

@@ -10,7 +10,6 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-
 revision = "20260402_0082_scaling_layer_indexes"
 down_revision = "20260401_0081_wallet_profiles"
 branch_labels = None
@@ -22,10 +21,7 @@ def _index_names(bind, table_name: str) -> set[str]:
 
 
 def _indexed_column_sets(bind, table_name: str) -> set[tuple[str, ...]]:
-    return {
-        tuple(index.get("column_names") or ())
-        for index in sa.inspect(bind).get_indexes(table_name)
-    }
+    return {tuple(index.get("column_names") or ()) for index in sa.inspect(bind).get_indexes(table_name)}
 
 
 def _unique_column_sets(bind, table_name: str) -> set[tuple[str, ...]]:

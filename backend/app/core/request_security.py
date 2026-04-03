@@ -20,7 +20,10 @@ _INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("inline_event_handler", re.compile(r"(?is)\bon(?:error|load|click|mouseover|focus)\s*=")),
     ("javascript_url", re.compile(r"(?is)javascript\s*:")),
     ("sql_union_select", re.compile(r"(?is)\bunion\b\s+(?:all\s+)?\bselect\b")),
-    ("sql_tautology", re.compile(r"""(?is)\b(?:or|and)\b\s+['"]?[a-z0-9_]+['"]?\s*=\s*['"]?[a-z0-9_]+['"]?(?:\s*(?:--|#|/\*))?""")),
+    (
+        "sql_tautology",
+        re.compile(r"""(?is)\b(?:or|and)\b\s+['"]?[a-z0-9_]+['"]?\s*=\s*['"]?[a-z0-9_]+['"]?(?:\s*(?:--|#|/\*))?"""),
+    ),
     ("sql_drop_table", re.compile(r"(?is)\bdrop\b\s+\btable\b")),
     ("sql_information_schema", re.compile(r"(?is)\binformation_schema\b")),
     ("sql_xp_cmdshell", re.compile(r"(?is)\bxp_cmdshell\b")),
@@ -118,14 +121,10 @@ def sanitize_input_structure(
             )
         return sanitized
     if isinstance(value, list):
-        return [
-            sanitize_input_structure(item, location=f"{location}[{index}]")
-            for index, item in enumerate(value)
-        ]
+        return [sanitize_input_structure(item, location=f"{location}[{index}]") for index, item in enumerate(value)]
     if isinstance(value, tuple):
         return tuple(
-            sanitize_input_structure(item, location=f"{location}[{index}]")
-            for index, item in enumerate(value)
+            sanitize_input_structure(item, location=f"{location}[{index}]") for index, item in enumerate(value)
         )
     return value
 

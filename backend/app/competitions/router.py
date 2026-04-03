@@ -8,7 +8,12 @@ from app.competitions.schemas import CompetitionView
 from app.competitions.service import CompetitionQueryService
 from app.core.cache_namespaces import COMPETITIONS_CACHE_NAMESPACE
 from app.core.response_cache import get_response_cache
-from app.manager_market.schemas import CompetitionAdminUpdateRequest, CompetitionAdminView, CompetitionOrchestrationView, CompetitionRuntimeView
+from app.manager_market.schemas import (
+    CompetitionAdminUpdateRequest,
+    CompetitionAdminView,
+    CompetitionOrchestrationView,
+    CompetitionRuntimeView,
+)
 from app.manager_market.service import ManagerMarketService
 from app.models.user import User
 from app.wallets.service import WalletService
@@ -34,18 +39,20 @@ def _manager_market_service() -> ManagerMarketService:
     return ManagerMarketService(wallet_service=WalletService())
 
 
-@router.get('/runtime/{code}', response_model=CompetitionRuntimeView)
+@router.get("/runtime/{code}", response_model=CompetitionRuntimeView)
 def preview_runtime(
     code: str,
     request: Request,
     participants: int = Query(default=2, ge=0),
-    region: str = Query(default='africa'),
+    region: str = Query(default="africa"),
     session: Session = Depends(get_session),
 ) -> CompetitionRuntimeView:
-    return _manager_market_service().preview_competition_runtime(request.app, session, code=code, participants=participants, region=region)
+    return _manager_market_service().preview_competition_runtime(
+        request.app, session, code=code, participants=participants, region=region
+    )
 
 
-@router.get('/admin', response_model=list[CompetitionAdminView])
+@router.get("/admin", response_model=list[CompetitionAdminView])
 def list_admin_competitions(
     request: Request,
     session: Session = Depends(get_session),
@@ -54,7 +61,7 @@ def list_admin_competitions(
     return _manager_market_service().list_competitions(request.app, session)
 
 
-@router.patch('/admin/{code}', response_model=CompetitionAdminView)
+@router.patch("/admin/{code}", response_model=CompetitionAdminView)
 def update_admin_competition(
     code: str,
     payload: CompetitionAdminUpdateRequest,
@@ -74,13 +81,15 @@ def update_admin_competition(
     return result
 
 
-@router.get('/admin/{code}/orchestrate', response_model=CompetitionOrchestrationView)
+@router.get("/admin/{code}/orchestrate", response_model=CompetitionOrchestrationView)
 def preview_admin_orchestration(
     code: str,
     request: Request,
     participants: int = Query(default=4, ge=0),
-    region: str = Query(default='africa'),
+    region: str = Query(default="africa"),
     session: Session = Depends(get_session),
     _: User = Depends(get_current_admin),
 ) -> CompetitionOrchestrationView:
-    return _manager_market_service().orchestrate_competition(request.app, session, code=code, participants=participants, region=region)
+    return _manager_market_service().orchestrate_competition(
+        request.app, session, code=code, participants=participants, region=region
+    )

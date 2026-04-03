@@ -269,7 +269,9 @@ class WithdrawalRequestCreate(WalletRequestModel):
     def normalize_scope(cls, value: str) -> str:
         candidate = value.strip().lower()
         if candidate not in {"trade", "competition", "user_hosted_gift", "gtex_competition_gift", "national_reward"}:
-            raise ValueError("source_scope must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward")
+            raise ValueError(
+                "source_scope must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward"
+            )
         return candidate
 
 

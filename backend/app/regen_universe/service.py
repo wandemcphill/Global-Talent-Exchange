@@ -31,7 +31,13 @@ from app.regen_universe.models import (
     RegenSeason,
 )
 from app.regen_universe.ranking_engine import PerformanceInput, RankingEngine
-from app.schemas.regen_core import AbilityRangeView, RegenOriginView, RegenPersonalityView, RegenProfileView, RegenStorySeedView
+from app.schemas.regen_core import (
+    AbilityRangeView,
+    RegenOriginView,
+    RegenPersonalityView,
+    RegenProfileView,
+    RegenStorySeedView,
+)
 from app.services.regen_market_service import RegenAwardEvent, RegenMarketService
 
 
@@ -261,10 +267,7 @@ class RegenUniverseService:
     awards_engine: AwardsEngine = field(default_factory=AwardsEngine)
 
     def seed_defaults(self) -> None:
-        existing_awards = {
-            award.code: award
-            for award in self.session.scalars(select(RegenAward))
-        }
+        existing_awards = {award.code: award for award in self.session.scalars(select(RegenAward))}
         for legacy_code, next_code in _LEGACY_AWARD_CODE_MAP.items():
             legacy = existing_awards.get(legacy_code)
             replacement = existing_awards.get(next_code)
@@ -428,12 +431,18 @@ class RegenUniverseService:
             performances=computed_performances,
             rankings=rankings,
         )
-        regen_by_player = {
-            profile.player_id: profile
-            for profile in self.session.scalars(
-                select(RegenProfile).where(RegenProfile.player_id.in_([item.player_id for item in award_selections]))
-            ).all()
-        } if award_selections else {}
+        regen_by_player = (
+            {
+                profile.player_id: profile
+                for profile in self.session.scalars(
+                    select(RegenProfile).where(
+                        RegenProfile.player_id.in_([item.player_id for item in award_selections])
+                    )
+                ).all()
+            }
+            if award_selections
+            else {}
+        )
         market_service = RegenMarketService(self.session)
         story_candidate_ids: set[str] = set()
         for selection in award_selections:
@@ -462,7 +471,11 @@ class RegenUniverseService:
                         award_category=award.category,
                         season_label=str(season.season_number),
                         rank=selection.rank,
-                        fan_demand_score=2.0 if selection.rank == 1 else 1.0 if selection.rank is not None and selection.rank <= 3 else 0.4,
+                        fan_demand_score=(
+                            2.0
+                            if selection.rank == 1
+                            else 1.0 if selection.rank is not None and selection.rank <= 3 else 0.4
+                        ),
                         narrative_significance=3.0 if selection.rank == 1 else 1.5,
                     ),
                     club_id=regen.generated_for_club_id,
@@ -515,7 +528,12 @@ class RegenUniverseService:
             self.session.scalars(
                 select(RegenAwardWinner)
                 .where(RegenAwardWinner.season_id == season.id)
-                .order_by(RegenAwardWinner.rank.is_(None), RegenAwardWinner.rank.asc(), RegenAwardWinner.ranking_score.desc(), RegenAwardWinner.player_name.asc())
+                .order_by(
+                    RegenAwardWinner.rank.is_(None),
+                    RegenAwardWinner.rank.asc(),
+                    RegenAwardWinner.ranking_score.desc(),
+                    RegenAwardWinner.player_name.asc(),
+                )
             )
         )
         grouped_winners: dict[str, list[RegenAwardWinner]] = defaultdict(list)
@@ -602,7 +620,12 @@ class RegenUniverseService:
             .join(RegenAward, RegenAward.id == RegenAwardWinner.award_id)
             .join(RegenSeason, RegenSeason.id == RegenAwardWinner.season_id)
             .where(RegenAwardWinner.player_id == player_id)
-            .order_by(RegenSeason.season_number.desc(), RegenAward.sort_order.asc(), RegenAwardWinner.rank.is_(None), RegenAwardWinner.rank.asc())
+            .order_by(
+                RegenSeason.season_number.desc(),
+                RegenAward.sort_order.asc(),
+                RegenAwardWinner.rank.is_(None),
+                RegenAwardWinner.rank.asc(),
+            )
         ).all()
         if hall_of_fame is None and latest_ranking is None and not recent_awards:
             return None
@@ -635,7 +658,11 @@ class RegenUniverseService:
         return {
             "player_id": player_id,
             "total_awards": hall_of_fame.total_awards if hall_of_fame is not None else len(recent_awards),
-            "peak_rank": hall_of_fame.peak_rank if hall_of_fame is not None else (latest_ranking[0].rank if latest_ranking else None),
+            "peak_rank": (
+                hall_of_fame.peak_rank
+                if hall_of_fame is not None
+                else (latest_ranking[0].rank if latest_ranking else None)
+            ),
             "seasons_active": hall_of_fame.seasons_active if hall_of_fame is not None else 0,
             "legacy_score": hall_of_fame.legacy_score if hall_of_fame is not None else 0.0,
             "current_overall_ranking": active_ranking_payload,
@@ -770,7 +797,9 @@ class RegenUniverseService:
             "regen_type_badge": "Legend Echo" if prospect.regen_type == "legend_regen" else "New Wave",
             "uniqueness_badge": "Elite DNA" if prospect.uniqueness_score >= 0.82 else "Scouting Pulse",
             "legacy_score": 0.0,
-            "traits_icons": tuple(dict.fromkeys([_growth_curve_label(prospect.growth_curve), prospect.position.lower()])),
+            "traits_icons": tuple(
+                dict.fromkeys([_growth_curve_label(prospect.growth_curve), prospect.position.lower()])
+            ),
             "personality_tag": prospect.discovery_badges[0] if prospect.discovery_badges else None,
             "story_snippet": prospect.story_snippet,
             "badges": tuple(badges),
@@ -853,7 +882,11 @@ class RegenUniverseService:
             club_id=f"national-pool-{str(seed.country_code or 'global').lower()}",
             generated_at=seed.created_at,
             source_type="national_seed",
-            regen_type="legend_regen" if seed.seed_type == "legendary_regen" or seed.rarity_tier == "legendary" else "organic_newgen",
+            regen_type=(
+                "legend_regen"
+                if seed.seed_type == "legendary_regen" or seed.rarity_tier == "legendary"
+                else "organic_newgen"
+            ),
             uniqueness_score=self._seed_uniqueness_score(seed),
             story_snippet=str(story_seed.get("snippet")).strip() or None,
             discovery_badges=tuple(
@@ -1005,10 +1038,7 @@ class RegenUniverseService:
         latest_value = market_service.get_latest_value_view(regen.id)
         prestige = self.get_player_prestige_summary(player_id)
         legacy = self.session.scalar(select(RegenLegacyRecord).where(RegenLegacyRecord.regen_id == regen.id))
-        discovery_badges = [
-            badge.badge_name
-            for badge in market_service.list_discovery_badges(regen.id)
-        ]
+        discovery_badges = [badge.badge_name for badge in market_service.list_discovery_badges(regen.id)]
         legacy_score = (
             legacy.legacy_score
             if legacy is not None
@@ -1090,7 +1120,11 @@ class RegenUniverseService:
                 sorted(
                     rows,
                     key=lambda item: (
-                        (self.session.get(RegenProfile, item.regen_id).generated_at if self.session.get(RegenProfile, item.regen_id) is not None else _utcnow()),
+                        (
+                            self.session.get(RegenProfile, item.regen_id).generated_at
+                            if self.session.get(RegenProfile, item.regen_id) is not None
+                            else _utcnow()
+                        ),
                         item.created_at,
                     ),
                 ),
@@ -1100,7 +1134,9 @@ class RegenUniverseService:
                 if regen is None:
                     continue
                 profile = market_service.get_profile_view(regen.id)
-                prestige = self.get_player_prestige_summary(profile.player_id) if profile.player_id is not None else None
+                prestige = (
+                    self.get_player_prestige_summary(profile.player_id) if profile.player_id is not None else None
+                )
                 entries.append(
                     {
                         "player_id": profile.player_id,
@@ -1120,9 +1156,11 @@ class RegenUniverseService:
                 continue
             baseline = entries[0]["uniqueness_score"]
             drift_score = round(
-                0.0
-                if len(entries) == 1
-                else sum(abs(entry["uniqueness_score"] - baseline) for entry in entries[1:]) / (len(entries) - 1),
+                (
+                    0.0
+                    if len(entries) == 1
+                    else sum(abs(entry["uniqueness_score"] - baseline) for entry in entries[1:]) / (len(entries) - 1)
+                ),
                 4,
             )
             first = rows[0]
@@ -1437,7 +1475,9 @@ class RegenUniverseService:
 
     def _consistency_score(self, *, bucket: _AggregateBucket, average_rating: float | None) -> float:
         if bucket.match_count > 0:
-            high_rating_ratio = bucket.high_rating_matches / max(bucket.rated_match_count, 1) if bucket.rated_match_count > 0 else 0.0
+            high_rating_ratio = (
+                bucket.high_rating_matches / max(bucket.rated_match_count, 1) if bucket.rated_match_count > 0 else 0.0
+            )
             full_minutes_ratio = bucket.full_minutes_matches / bucket.match_count
             start_ratio = bucket.start_matches / bucket.match_count
             return round(min((high_rating_ratio * 0.5) + (full_minutes_ratio * 0.25) + (start_ratio * 0.25), 1.0), 4)
@@ -1450,11 +1490,15 @@ class RegenUniverseService:
     def _refresh_hall_of_fame(self) -> int:
         profiles = list(
             self.session.scalars(
-                select(Player).join(RegenProfile, RegenProfile.player_id == Player.id).where(Player.is_real_player.is_(False))
+                select(Player)
+                .join(RegenProfile, RegenProfile.player_id == Player.id)
+                .where(Player.is_real_player.is_(False))
             )
         )
         overall_rankings = defaultdict(list)
-        for ranking in self.session.scalars(select(RegenRankingSnapshot).where(RegenRankingSnapshot.category == "overall")):
+        for ranking in self.session.scalars(
+            select(RegenRankingSnapshot).where(RegenRankingSnapshot.category == "overall")
+        ):
             overall_rankings[ranking.player_id].append(ranking)
         performance_records = defaultdict(list)
         for record in self.session.scalars(select(RegenPerformanceRecord)):
@@ -1470,7 +1514,14 @@ class RegenUniverseService:
             cumulative_score = sum(record.overall_score for record in performance_records.get(player.id, []))
             top_five_bonus = sum(4.0 for item in overall_rankings.get(player.id, []) if item.rank <= 5)
             rank_bonus = max(0.0, 25.0 - float(peak_rank or 25))
-            legacy_score = round((cumulative_score * 0.35) + (total_awards * 12.0) + (seasons_active * 3.0) + top_five_bonus + rank_bonus, 4)
+            legacy_score = round(
+                (cumulative_score * 0.35)
+                + (total_awards * 12.0)
+                + (seasons_active * 3.0)
+                + top_five_bonus
+                + rank_bonus,
+                4,
+            )
             entry = self.session.scalar(select(RegenHallOfFame).where(RegenHallOfFame.player_id == player.id))
             if entry is None:
                 entry = RegenHallOfFame(player_id=player.id, player_name=player.full_name)
@@ -1488,7 +1539,9 @@ class RegenUniverseService:
         return len(profiles)
 
     def _ensure_next_active_season(self, season: RegenSeason) -> RegenSeason:
-        active = self.session.scalar(select(RegenSeason).where(RegenSeason.is_active.is_(True)).order_by(RegenSeason.season_number.desc()))
+        active = self.session.scalar(
+            select(RegenSeason).where(RegenSeason.is_active.is_(True)).order_by(RegenSeason.season_number.desc())
+        )
         if active is not None:
             return active
         duration = season.end_date - season.start_date
@@ -1506,7 +1559,9 @@ class RegenUniverseService:
         return next_season
 
     def _award_definitions(self) -> list[RegenAward]:
-        return list(self.session.scalars(select(RegenAward).order_by(RegenAward.sort_order.asc(), RegenAward.code.asc())))
+        return list(
+            self.session.scalars(select(RegenAward).order_by(RegenAward.sort_order.asc(), RegenAward.code.asc()))
+        )
 
     def _definition_from_model(self, award: RegenAward) -> AwardDefinition:
         return AwardDefinition(
@@ -1540,7 +1595,9 @@ class RegenUniverseService:
         if overlapping:
             return tuple(overlapping)
         if season.is_active:
-            current_ids = list(self.session.scalars(select(IngestionSeason.id).where(IngestionSeason.is_current.is_(True))))
+            current_ids = list(
+                self.session.scalars(select(IngestionSeason.id).where(IngestionSeason.is_current.is_(True)))
+            )
             if current_ids:
                 return tuple(current_ids)
         return ()
@@ -1679,11 +1736,7 @@ class RegenUniverseService:
         trait_source = personality_tags[:3]
         if not trait_source and profile.story_seed is not None:
             trait_source = (profile.story_seed.temperament,)
-        traits_icons = tuple(
-            tag.lower().replace(" ", "_")
-            for tag in trait_source
-            if tag
-        )
+        traits_icons = tuple(tag.lower().replace(" ", "_") for tag in trait_source if tag)
         return {
             "name": profile.display_name,
             "face_seed": visual_profile.get("portrait_seed"),
@@ -1694,7 +1747,11 @@ class RegenUniverseService:
             "uniqueness_badge": uniqueness_badge,
             "legacy_score": legacy_score,
             "traits_icons": traits_icons,
-            "personality_tag": personality_tags[0] if personality_tags else (profile.story_seed.temperament if profile.story_seed is not None else None),
+            "personality_tag": (
+                personality_tags[0]
+                if personality_tags
+                else (profile.story_seed.temperament if profile.story_seed is not None else None)
+            ),
             "story_snippet": profile.story_seed.snippet if profile.story_seed is not None else None,
             "badges": badges,
         }

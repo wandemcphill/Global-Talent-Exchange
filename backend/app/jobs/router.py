@@ -22,10 +22,15 @@ def get_background_job(
     execution = backend.get(job_id)
     if execution is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Background job was not found.")
-    if execution.owner_user_id and execution.owner_user_id != current_user.id and current_user.role not in {
-        UserRole.ADMIN,
-        UserRole.SUPER_ADMIN,
-    }:
+    if (
+        execution.owner_user_id
+        and execution.owner_user_id != current_user.id
+        and current_user.role
+        not in {
+            UserRole.ADMIN,
+            UserRole.SUPER_ADMIN,
+        }
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot access this background job.")
     return BackgroundTaskView(
         job_id=execution.job_id,

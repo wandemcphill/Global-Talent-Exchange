@@ -12,7 +12,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.ingestion.models import Player
-from app.market.models import Listing, ListingStatus, ListingType, Offer, OfferStatus, TradeIntent, TradeIntentDirection, TradeIntentStatus
+from app.market.models import (
+    Listing,
+    ListingStatus,
+    ListingType,
+    Offer,
+    OfferStatus,
+    TradeIntent,
+    TradeIntentDirection,
+    TradeIntentStatus,
+)
 from app.players.read_models import PlayerSummaryReadModel
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 
@@ -22,44 +31,31 @@ logger = logging.getLogger(__name__)
 
 
 class MarketRepository(Protocol):
-    def save_listing(self, listing: Listing) -> Listing:
-        ...
+    def save_listing(self, listing: Listing) -> Listing: ...
 
-    def save_offer(self, offer: Offer) -> Offer:
-        ...
+    def save_offer(self, offer: Offer) -> Offer: ...
 
-    def save_trade_intent(self, trade_intent: TradeIntent) -> TradeIntent:
-        ...
+    def save_trade_intent(self, trade_intent: TradeIntent) -> TradeIntent: ...
 
-    def get_listing(self, listing_id: str) -> Listing | None:
-        ...
+    def get_listing(self, listing_id: str) -> Listing | None: ...
 
-    def get_offer(self, offer_id: str) -> Offer | None:
-        ...
+    def get_offer(self, offer_id: str) -> Offer | None: ...
 
-    def get_trade_intent(self, intent_id: str) -> TradeIntent | None:
-        ...
+    def get_trade_intent(self, intent_id: str) -> TradeIntent | None: ...
 
-    def list_offers_for_listing(self, listing_id: str) -> tuple[Offer, ...]:
-        ...
+    def list_offers_for_listing(self, listing_id: str) -> tuple[Offer, ...]: ...
 
-    def list_offers_for_asset(self, asset_id: str, seller_user_id: str | None = None) -> tuple[Offer, ...]:
-        ...
+    def list_offers_for_asset(self, asset_id: str, seller_user_id: str | None = None) -> tuple[Offer, ...]: ...
 
-    def list_trade_intents_for_asset(self, asset_id: str) -> tuple[TradeIntent, ...]:
-        ...
+    def list_trade_intents_for_asset(self, asset_id: str) -> tuple[TradeIntent, ...]: ...
 
-    def list_listings_for_asset(self, asset_id: str) -> tuple[Listing, ...]:
-        ...
+    def list_listings_for_asset(self, asset_id: str) -> tuple[Listing, ...]: ...
 
-    def iter_trade_intents(self) -> tuple[TradeIntent, ...]:
-        ...
+    def iter_trade_intents(self) -> tuple[TradeIntent, ...]: ...
 
-    def iter_offers(self) -> tuple[Offer, ...]:
-        ...
+    def iter_offers(self) -> tuple[Offer, ...]: ...
 
-    def iter_listings(self) -> tuple[Listing, ...]:
-        ...
+    def iter_listings(self) -> tuple[Listing, ...]: ...
 
 
 @dataclass(slots=True)
@@ -202,23 +198,15 @@ class RedisMarketRepository:
 
     def iter_trade_intents(self) -> tuple[TradeIntent, ...]:
         return tuple(
-            intent
-            for intent in self._load_objects(self._key("intents"), self.get_trade_intent)
-            if intent is not None
+            intent for intent in self._load_objects(self._key("intents"), self.get_trade_intent) if intent is not None
         )
 
     def iter_offers(self) -> tuple[Offer, ...]:
-        return tuple(
-            offer
-            for offer in self._load_objects(self._key("offers"), self.get_offer)
-            if offer is not None
-        )
+        return tuple(offer for offer in self._load_objects(self._key("offers"), self.get_offer) if offer is not None)
 
     def iter_listings(self) -> tuple[Listing, ...]:
         return tuple(
-            listing
-            for listing in self._load_objects(self._key("listings"), self.get_listing)
-            if listing is not None
+            listing for listing in self._load_objects(self._key("listings"), self.get_listing) if listing is not None
         )
 
     def ping(self) -> bool:
@@ -439,10 +427,7 @@ class SqlAlchemyMarketPlayerRepository:
 
         player_ids = [player.id for player in players]
         summary_statement = select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(player_ids))
-        summaries = {
-            summary.player_id: summary
-            for summary in self.session.scalars(summary_statement)
-        }
+        summaries = {summary.player_id: summary for summary in self.session.scalars(summary_statement)}
 
         latest_snapshots: dict[str, PlayerValueSnapshotRecord] = {}
         snapshot_statement = (

@@ -47,11 +47,9 @@ class TaskQueueBackend(Protocol):
         retry_intervals_seconds: Sequence[int] = (),
         owner_user_id: str | None = None,
         meta: dict[str, Any] | None = None,
-    ) -> TaskExecution:
-        ...
+    ) -> TaskExecution: ...
 
-    def get(self, job_id: str) -> TaskExecution | None:
-        ...
+    def get(self, job_id: str) -> TaskExecution | None: ...
 
 
 class NullTaskQueueBackend:
