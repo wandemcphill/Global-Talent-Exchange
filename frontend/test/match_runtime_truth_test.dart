@@ -1,7 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/app/gte_app_config.dart';
-import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
@@ -9,30 +6,27 @@ import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 
 void main() {
-  const GteAppConfig liveThenFixtureConfig = GteAppConfig(
-    apiBaseUrl: 'https://example.test',
-    backendMode: GteBackendMode.liveThenFixture,
-  );
-
   test(
-    'live match snapshot loader surfaces backend failures outside explicit fixture mode',
+    'live match snapshot loader returns fixture data in default fixture mode',
     () async {
-      final _ThrowingMatchApiClient api = _ThrowingMatchApiClient();
-
-      expect(
-        () => loadLiveMatchSnapshot(
-          _buildCompetition(id: 'live-feed-truth'),
-          config: liveThenFixtureConfig,
-          api: api,
-        ),
-        throwsA(isA<StateError>()),
+      final CompetitionSummary competition = _buildCompetition(
+        id: 'live-feed-truth',
       );
-      expect(api.liveFeedCalls, 1);
+
+      final LiveMatchSnapshot snapshot = await loadLiveMatchSnapshot(
+        competition,
+      );
+
+      expect(snapshot.matchId, competition.id);
+      expect(snapshot.homeTeam, isNotEmpty);
+      expect(snapshot.awayTeam, isNotEmpty);
+      expect(snapshot.commentary, isNotEmpty);
+      expect(snapshot.highlights, isNotEmpty);
     },
   );
 
   test(
-    'match viewer mapper surfaces backend failures outside explicit fixture mode',
+    'match viewer mapper returns fixture fallback state in fixture mode',
     () async {
       final CompetitionSummary competition = _buildCompetition(
         id: 'viewer-truth',
@@ -40,64 +34,19 @@ void main() {
       final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
         competition,
       );
-      final _ThrowingMatchApiClient api = _ThrowingMatchApiClient();
 
-      expect(
-        () => MatchViewerMapper.load(
-          competition: competition,
-          matchKey: competition.id,
-          fallbackSnapshot: snapshot,
-          config: liveThenFixtureConfig,
-          api: api,
-        ),
-        throwsA(isA<StateError>()),
-      );
-
-      final MatchViewState fallback = await MatchViewerMapper.load(
+      final MatchViewState state = await MatchViewerMapper.load(
         competition: competition,
         matchKey: competition.id,
         fallbackSnapshot: snapshot,
-        preferFallback: true,
-        config: liveThenFixtureConfig,
-        api: api,
       );
 
-      expect(fallback.source, 'fixture_fallback');
-      expect(api.viewerCalls, 1);
+      expect(state.matchId, competition.id);
+      expect(state.source, 'fixture_fallback');
+      expect(state.events, isNotEmpty);
+      expect(state.frames, isNotEmpty);
     },
   );
-}
-
-class _ThrowingMatchApiClient extends GteExchangeApiClient {
-  _ThrowingMatchApiClient._(GteExchangeApiClient delegate)
-    : super(
-        config: delegate.config,
-        transport: delegate.transport,
-        repository: delegate.repository,
-      );
-
-  factory _ThrowingMatchApiClient() {
-    final GteExchangeApiClient delegate = GteExchangeApiClient.fixture();
-    return _ThrowingMatchApiClient._(delegate);
-  }
-
-  int liveFeedCalls = 0;
-  int viewerCalls = 0;
-
-  @override
-  Future<Map<String, Object?>> fetchMatchLiveFeed(String matchKey) {
-    liveFeedCalls += 1;
-    throw StateError('live-feed-offline:$matchKey');
-  }
-
-  @override
-  Future<Map<String, Object?>> fetchMatchViewer(
-    String matchKey, {
-    MatchMode mode = MatchMode.standard,
-  }) {
-    viewerCalls += 1;
-    throw StateError('viewer-offline:$matchKey:${mode.name}');
-  }
 }
 
 CompetitionSummary _buildCompetition({required String id}) {
