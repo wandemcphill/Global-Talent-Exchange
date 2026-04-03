@@ -12,7 +12,6 @@ import tempfile
 import time
 from typing import Any
 
-
 SCRIPT_PATH = Path(__file__).resolve()
 BACKEND_ROOT = SCRIPT_PATH.parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -56,9 +55,7 @@ class LoopConfig:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Continuously import, repair, and publish real players."
-    )
+    parser = argparse.ArgumentParser(description="Continuously import, repair, and publish real players.")
     parser.add_argument(
         "--database-url",
         default=os.environ.get("GTE_DATABASE_URL"),
@@ -186,9 +183,7 @@ class RealPlayerImportLoop:
                     logger.info("loop exiting after single cycle")
                     return 0
                 sleep_seconds = (
-                    self.config.sleep_seconds
-                    if cycle.get("made_progress")
-                    else self.config.idle_sleep_seconds
+                    self.config.sleep_seconds if cycle.get("made_progress") else self.config.idle_sleep_seconds
                 )
                 logger.info("sleeping seconds=%s", sleep_seconds)
                 time.sleep(sleep_seconds)
