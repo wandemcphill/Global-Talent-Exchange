@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+from backend.tests.support.secrets import TEST_PASSWORD
+
 
 def _create_competition(client, *, name: str) -> str:
     response = client.post(
@@ -27,7 +29,7 @@ def _register_user(client, *, suffix: str) -> tuple[dict[str, str], str]:
         json={
             "email": f"{suffix}@example.com",
             "username": suffix.replace("-", "_"),
-            "password": "SuperSecret1",
+            "password": TEST_PASSWORD,
             "full_name": f"User {suffix}",
             "phone_number": "1234567890",
             "is_over_18": True,
@@ -61,7 +63,7 @@ def _create_scoped_admin_headers(
     suffix: str,
     permissions: list[str],
 ) -> dict[str, str]:
-    password = "SuperSecret1"
+    password = TEST_PASSWORD
     email = f"{suffix}@example.com"
     username = suffix.replace("-", "_")
     response = client.post(
@@ -97,9 +99,7 @@ def test_authenticated_join_rejects_payload_user_spoofing(client) -> None:
     )
 
     assert response.status_code == 403
-    assert response.json() == {
-        "detail": "Authenticated user does not match competition join payload."
-    }
+    assert response.json() == {"detail": "Authenticated user does not match competition join payload."}
 
 
 def test_anonymous_join_is_rejected(client, competition_admin_headers) -> None:
@@ -118,9 +118,7 @@ def test_anonymous_join_is_rejected(client, competition_admin_headers) -> None:
     )
 
     assert response.status_code == 401
-    assert response.json() == {
-        "detail": "Authentication credentials were not provided."
-    }
+    assert response.json() == {"detail": "Authentication credentials were not provided."}
 
 
 def test_authenticated_scoped_admin_without_manage_competitions_cannot_publish_or_launch(
@@ -144,13 +142,9 @@ def test_authenticated_scoped_admin_without_manage_competitions_cannot_publish_o
     )
 
     assert publish.status_code == 403
-    assert publish.json() == {
-        "detail": "Permission manage_competitions is required for this action."
-    }
+    assert publish.json() == {"detail": "Permission manage_competitions is required for this action."}
     assert launch.status_code == 403
-    assert launch.json() == {
-        "detail": "Permission manage_competitions is required for this action."
-    }
+    assert launch.json() == {"detail": "Permission manage_competitions is required for this action."}
 
 
 def test_anonymous_publish_is_rejected(client) -> None:
@@ -162,9 +156,7 @@ def test_anonymous_publish_is_rejected(client) -> None:
     )
 
     assert response.status_code == 401
-    assert response.json() == {
-        "detail": "Authentication credentials were not provided."
-    }
+    assert response.json() == {"detail": "Authentication credentials were not provided."}
 
 
 def test_authenticated_scoped_admin_with_manage_competitions_can_publish(client) -> None:
@@ -214,6 +206,4 @@ def test_anonymous_launch_is_rejected(client, competition_admin_headers, auth_us
     response = client.post(f"/api/competitions/{competition_id}/launch")
 
     assert response.status_code == 401
-    assert response.json() == {
-        "detail": "Authentication credentials were not provided."
-    }
+    assert response.json() == {"detail": "Authentication credentials were not provided."}

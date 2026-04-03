@@ -23,6 +23,9 @@ from app.models import Base
 from app.models.user import User, UserRole
 from app.users.router import read_current_user
 
+TEST_PASSWORD = "SuperSecret1"  # pragma: allowlist secret
+WRONG_PASSWORD = "WrongPassword1"  # pragma: allowlist secret
+
 
 @pytest.fixture()
 def session():
@@ -87,9 +90,7 @@ def _ensure_bootstrap_admin(app, *, timeout_seconds: float = 20.0) -> None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         with app.state.session_factory() as session:
-            user = session.scalar(
-                select(User).where(User.email == os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"])
-            )
+            user = session.scalar(select(User).where(User.email == os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"]))
             if user is not None and user.role == UserRole.SUPER_ADMIN:
                 return
         time.sleep(0.25)
@@ -103,7 +104,7 @@ def _create_authenticated_user(app):
             session,
             email="fan@example.com",
             username="fanuser",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             display_name="Fan User",
         )
         issued_session = service.issue_session_tokens(user, session=session)
@@ -117,7 +118,7 @@ def test_register_login_and_me_flow(session) -> None:
         RegisterRequest(
             email="fan@example.com",
             username="fanuser",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             full_name="Fan User",
             region_code="NG",
         ),
@@ -126,7 +127,10 @@ def test_register_login_and_me_flow(session) -> None:
     current_user = session.get(User, register_response.user.id)
 
     me_response = read_current_user(current_user=current_user)
-    login_response = login_user(LoginRequest(email="fan@example.com", password="SuperSecret1"), session)
+    login_response = login_user(
+        LoginRequest(email="fan@example.com", password=TEST_PASSWORD),
+        session,
+    )
     register_claims = decode_access_token(register_response.access_token)
     login_claims = decode_access_token(login_response.access_token)
     register_refresh_claims = decode_refresh_token(register_response.refresh_token)
@@ -148,12 +152,22 @@ def test_register_login_and_me_flow(session) -> None:
 
 
 def test_duplicate_registration_returns_conflict(session) -> None:
-    payload = RegisterRequest(email="fan@example.com", username="fanuser", password="SuperSecret1", region_code="NG")
+    payload = RegisterRequest(
+        email="fan@example.com",
+        username="fanuser",
+        password=TEST_PASSWORD,
+        region_code="NG",
+    )
     register_user(payload, session)
 
     with pytest.raises(HTTPException) as exc_info:
         register_user(
-            RegisterRequest(email="fan@example.com", username="fanuser2", password="SuperSecret1", region_code="NG"),
+            RegisterRequest(
+                email="fan@example.com",
+                username="fanuser2",
+                password=TEST_PASSWORD,
+                region_code="NG",
+            ),
             session,
         )
 
@@ -165,7 +179,7 @@ def test_login_with_invalid_credentials_returns_unauthorized(session) -> None:
         RegisterRequest(
             email="fan@example.com",
             username="fanuser",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             full_name="Fan User",
             region_code="NG",
         ),
@@ -174,7 +188,7 @@ def test_login_with_invalid_credentials_returns_unauthorized(session) -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         login_user(
-            LoginRequest(email="fan@example.com", password="WrongPassword1"),
+            LoginRequest(email="fan@example.com", password=WRONG_PASSWORD),
             session,
         )
 
@@ -190,7 +204,7 @@ def test_register_without_region_code_defaults_to_global(app_client) -> None:
             "email": "noregion@example.com",
             "full_name": "No Region",
             "phone_number": "08000000000",
-            "password": "SuperSecret1",
+            "password": TEST_PASSWORD,
             "is_over_18": True,
         },
     )
@@ -300,7 +314,7 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
             "email": "bootstrap@example.com",
             "full_name": "Bootstrap User",
             "phone_number": "08000000000",
-            "password": "SuperSecret1",
+            "password": TEST_PASSWORD,
             "is_over_18": True,
             "region_code": "NG",
         },
@@ -371,7 +385,7 @@ def test_register_user_logs_completion(session, caplog: pytest.LogCaptureFixture
             RegisterRequest(
                 email="telemetry-register@example.com",
                 username="telemetryregister",
-                password="SuperSecret1",
+                password=TEST_PASSWORD,
                 full_name="Telemetry Register",
                 region_code="NG",
             ),
@@ -390,7 +404,7 @@ def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -
         RegisterRequest(
             email="telemetry-login@example.com",
             username="telemetrylogin",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             full_name="Telemetry Login",
             region_code="NG",
         ),
@@ -400,7 +414,7 @@ def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -
     caplog.clear()
     with caplog.at_level(logging.INFO):
         response = login_user(
-            LoginRequest(email="telemetry-login@example.com", password="SuperSecret1"),
+            LoginRequest(email="telemetry-login@example.com", password=TEST_PASSWORD),
             session,
         )
 
@@ -416,7 +430,7 @@ def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptur
         RegisterRequest(
             email="telemetry-login-failure@example.com",
             username="telemetryloginfailure",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             full_name="Telemetry Login Failure",
             region_code="NG",
         ),
@@ -427,7 +441,10 @@ def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptur
     with caplog.at_level(logging.INFO):
         with pytest.raises(HTTPException) as exc_info:
             login_user(
-                LoginRequest(email="telemetry-login-failure@example.com", password="WrongPassword1"),
+                LoginRequest(
+                    email="telemetry-login-failure@example.com",
+                    password=WRONG_PASSWORD,
+                ),
                 session,
             )
 
@@ -454,7 +471,7 @@ def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_c
     super_payload = _bootstrap_admin_login(client)
     super_headers = {"Authorization": f"Bearer {super_payload['access_token']}"}
     scoped_email = "scoped-auth-router@example.com"
-    scoped_password = "SuperSecret1"
+    scoped_password = TEST_PASSWORD
     create_response = client.post(
         "/api/admin/access",
         headers=super_headers,

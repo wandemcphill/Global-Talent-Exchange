@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import uuid4
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
 from app.models.user import User
 from app.models.wallet import LedgerUnit
@@ -14,7 +15,7 @@ def _register_user(session, *, suffix: str, funded: bool) -> User:
         session,
         email=f"treasure-{suffix}@example.com",
         username=f"treasure_{suffix}",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
     )
     if funded:
         WalletService().credit_trade_proceeds(
@@ -25,14 +26,14 @@ def _register_user(session, *, suffix: str, funded: bool) -> User:
             description="Competition API treasure chest funding",
             external_reference=f"seed:{user.id}",
             unit=LedgerUnit.CREDIT,
-    )
+        )
     return user
 
 
 def _login(client, *, email: str) -> dict[str, str]:
     response = client.post(
         "/auth/login",
-        json={"email": email, "password": "SuperSecret1"},
+        json={"email": email, "password": TEST_PASSWORD},
     )
     assert response.status_code == 200, response.text
     token = response.json()["access_token"]
@@ -201,9 +202,21 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
         assert third_place is not None
         assert fourth_place is not None
         assert host is not None
-        assert wallet_service.get_balance(session, wallet_service.get_user_account(session, winner, LedgerUnit.CREDIT)) == Decimal("120.8000")
-        assert wallet_service.get_balance(session, wallet_service.get_user_account(session, runner_up, LedgerUnit.CREDIT)) == Decimal("97.0000")
-        assert wallet_service.get_balance(session, wallet_service.get_user_account(session, third_place, LedgerUnit.CREDIT)) == Decimal("90.2000")
-        assert wallet_service.get_balance(session, wallet_service.get_user_account(session, fourth_place, LedgerUnit.CREDIT)) == Decimal("80.0000")
-        assert wallet_service.get_balance(session, wallet_service.get_user_account(session, host, LedgerUnit.CREDIT)) == Decimal("4.0000")
-        assert wallet_service.get_balance(session, wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)) == Decimal("8.0000")
+        assert wallet_service.get_balance(
+            session, wallet_service.get_user_account(session, winner, LedgerUnit.CREDIT)
+        ) == Decimal("120.8000")
+        assert wallet_service.get_balance(
+            session, wallet_service.get_user_account(session, runner_up, LedgerUnit.CREDIT)
+        ) == Decimal("97.0000")
+        assert wallet_service.get_balance(
+            session, wallet_service.get_user_account(session, third_place, LedgerUnit.CREDIT)
+        ) == Decimal("90.2000")
+        assert wallet_service.get_balance(
+            session, wallet_service.get_user_account(session, fourth_place, LedgerUnit.CREDIT)
+        ) == Decimal("80.0000")
+        assert wallet_service.get_balance(
+            session, wallet_service.get_user_account(session, host, LedgerUnit.CREDIT)
+        ) == Decimal("4.0000")
+        assert wallet_service.get_balance(
+            session, wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+        ) == Decimal("8.0000")

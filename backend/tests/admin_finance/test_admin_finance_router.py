@@ -8,10 +8,19 @@ from hashlib import sha256
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService, DuplicateUserError
 from app.live_matches.service import ensure_live_match_hub
 from app.main import INITIAL_ADMIN_DISPLAY_NAME, INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD
-from app.models import CountryFeaturePolicy, EconomyBurnEvent, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PlayerCardMomentum, User
+from app.models import (
+    CountryFeaturePolicy,
+    EconomyBurnEvent,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerUnit,
+    PlayerCardMomentum,
+    User,
+)
 from app.models.competition_reward_pool import CompetitionRewardPool
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.treasury import PaymentMode
@@ -71,7 +80,7 @@ def _seed_finance_state(app_session_factory) -> tuple[str, str]:
             session,
             email="finance-user@example.com",
             username="financeuser",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
         )
         wallet_service = WalletService()
         treasury = TreasuryService()
@@ -176,7 +185,7 @@ def _seed_provider_order(
                 session,
                 email=email,
                 username=username,
-                password="SuperSecret1",
+                password=TEST_PASSWORD,
             )
         else:
             user = session.get(User, existing.id)
@@ -208,7 +217,7 @@ def _create_user_auth_headers(app_session_factory, *, email: str, username: str)
                 session,
                 email=email,
                 username=username,
-                password="SuperSecret1",
+                password=TEST_PASSWORD,
             )
         else:
             user = session.get(User, existing.id)
@@ -320,7 +329,7 @@ def test_reconciliation_summary_surfaces_missing_ledger_links(client, app_sessio
             session,
             email="reconciliation-user@example.com",
             username="reconciliationuser",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
         )
         treasury = TreasuryService()
         settings = treasury.ensure_settings(session)
@@ -502,13 +511,17 @@ def test_wallet_protection_summary_surfaces_duplicate_deposit_candidates(client,
 
     assert response.status_code == 200, response.text
     payload = response.json()
-    duplicate = next(item for item in payload["duplicate_deposit_candidates"] if item["provider_reference"] == duplicate_reference)
+    duplicate = next(
+        item for item in payload["duplicate_deposit_candidates"] if item["provider_reference"] == duplicate_reference
+    )
     assert duplicate["provider_key"] == "paystack"
     assert duplicate["occurrence_count"] >= 2
     assert len(duplicate["order_ids"]) >= 2
 
 
-def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(client, app_session_factory, monkeypatch) -> None:
+def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
+    client, app_session_factory, monkeypatch
+) -> None:
     _prepare_admin(client, app_session_factory)
     _seed_paystack_order(app_session_factory)
     monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
@@ -532,7 +545,9 @@ def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(cl
     assert "signature is invalid" in response.json()["detail"].lower()
 
 
-def test_korapay_webhook_verifies_signature_and_settles_purchase_order(client, app_session_factory, monkeypatch) -> None:
+def test_korapay_webhook_verifies_signature_and_settles_purchase_order(
+    client, app_session_factory, monkeypatch
+) -> None:
     _prepare_admin(client, app_session_factory)
     order = _seed_provider_order(
         app_session_factory,

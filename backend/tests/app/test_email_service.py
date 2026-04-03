@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 import smtplib
 
-import pytest
-
+from backend.tests.support.secrets import SMTP_TEST_PASSWORD
 from app.core.config import BrevoSmtpConfig, EmailConfig
 from app.services.email.email_service import EmailService
 from app.services.email.providers.brevo_smtp_provider import BrevoSmtpProvider
@@ -27,7 +26,7 @@ def _email_config() -> EmailConfig:
             host="smtp-relay.brevo.com",
             port=587,
             username="a21b41001@smtp-brevo.com",
-            password="super-secret-password",
+            password=SMTP_TEST_PASSWORD,
             use_tls=True,
             use_ssl=False,
         ),
@@ -74,7 +73,7 @@ def test_brevo_provider_builds_multipart_message(monkeypatch) -> None:
         host="smtp-relay.brevo.com",
         port=587,
         username="a21b41001@smtp-brevo.com",
-        password="super-secret-password",
+        password=SMTP_TEST_PASSWORD,
         from_address="vidzimedialtd@gmail.com",
         from_name="GTEX",
         reply_to="vidzimedialtd@gmail.com",
@@ -95,11 +94,14 @@ def test_brevo_provider_builds_multipart_message(monkeypatch) -> None:
 
     assert result.success is True
     assert RecordingSMTP.starttls_called is True
-    assert RecordingSMTP.last_login == ("a21b41001@smtp-brevo.com", "super-secret-password")
+    assert RecordingSMTP.last_login == ("a21b41001@smtp-brevo.com", SMTP_TEST_PASSWORD)
     assert RecordingSMTP.last_message["Subject"] == "Confirm your GTEX account"
     assert RecordingSMTP.last_message["To"] == "fan@example.com"
     assert RecordingSMTP.last_message["Reply-To"] == "reply@example.com"
-    assert RecordingSMTP.last_message.get_body(preferencelist=("plain",)).get_content().strip() == "Confirmation code: 123456"
+    assert (
+        RecordingSMTP.last_message.get_body(preferencelist=("plain",)).get_content().strip()
+        == "Confirmation code: 123456"
+    )
     assert "<strong>123456</strong>" in RecordingSMTP.last_message.get_body(preferencelist=("html",)).get_content()
 
 
@@ -109,7 +111,7 @@ def test_brevo_provider_redacts_secret_in_logs(monkeypatch, caplog) -> None:
         host="smtp-relay.brevo.com",
         port=587,
         username="a21b41001@smtp-brevo.com",
-        password="super-secret-password",
+        password=SMTP_TEST_PASSWORD,
         from_address="vidzimedialtd@gmail.com",
         from_name="GTEX",
         reply_to="vidzimedialtd@gmail.com",
@@ -129,7 +131,7 @@ def test_brevo_provider_redacts_secret_in_logs(monkeypatch, caplog) -> None:
         )
 
     assert result.success is False
-    assert "super-secret-password" not in caplog.text
+    assert SMTP_TEST_PASSWORD not in caplog.text
     assert "[redacted]" in caplog.text
 
 

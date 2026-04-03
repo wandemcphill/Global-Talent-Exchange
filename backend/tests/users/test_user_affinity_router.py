@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.security import create_access_token
 from app.auth.service import AuthService
@@ -32,7 +33,7 @@ def _create_user_headers(app_session_factory, *, email: str, username: str) -> d
                 session,
                 email=email,
                 username=username,
-                password="SuperSecret1",
+                password=TEST_PASSWORD,
             )
         else:
             user = session.get(User, existing.id)
@@ -191,8 +192,12 @@ def test_follow_route_rejects_missing_identity_context(app_session_factory, clie
 
 
 def test_follow_routes_and_suggestions_surface_social_graph(app_session_factory, client) -> None:
-    current_user_id, headers = _create_user(app_session_factory, email="follow-current@example.com", username="followcurrent")
-    target_user_id, _target_headers = _create_user(app_session_factory, email="follow-target@example.com", username="followtarget")
+    current_user_id, headers = _create_user(
+        app_session_factory, email="follow-current@example.com", username="followcurrent"
+    )
+    target_user_id, _target_headers = _create_user(
+        app_session_factory, email="follow-target@example.com", username="followtarget"
+    )
     suggested_user_id, _suggested_headers = _create_user(
         app_session_factory,
         email="follow-suggested@example.com",
@@ -282,7 +287,7 @@ def _create_user(app_session_factory, *, email: str, username: str) -> tuple[str
                 session,
                 email=email,
                 username=username,
-                password="SuperSecret1",
+                password=TEST_PASSWORD,
             )
         else:
             user = session.get(User, existing.id)

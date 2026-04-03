@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+from backend.tests.support.secrets import TEST_PASSWORD
+
 
 def _bootstrap_admin_headers(client) -> dict[str, str]:
     response = client.post(
@@ -22,7 +24,7 @@ def _create_scoped_admin_headers(
     suffix: str,
     permissions: list[str],
 ) -> dict[str, str]:
-    password = "SuperSecret1"
+    password = TEST_PASSWORD
     email = f"{suffix}@example.com"
     username = suffix.replace("-", "_")
     response = client.post(
@@ -62,9 +64,7 @@ def test_scoped_admin_without_catalog_permission_cannot_open_real_player_import_
     )
 
     assert response.status_code == 403
-    assert response.json() == {
-        "detail": "Permission manage_manager_catalog is required for this action."
-    }
+    assert response.json() == {"detail": "Permission manage_manager_catalog is required for this action."}
 
 
 def test_scoped_admin_with_catalog_permission_can_open_real_player_import_status(
@@ -104,9 +104,7 @@ def test_scoped_admin_without_supply_permission_cannot_issue_share_market(
     )
 
     assert response.status_code == 403
-    assert response.json() == {
-        "detail": "Permission manage_manager_supply is required for this action."
-    }
+    assert response.json() == {"detail": "Permission manage_manager_supply is required for this action."}
 
 
 def test_scoped_admin_with_supply_permission_reaches_share_issue_handler(client) -> None:

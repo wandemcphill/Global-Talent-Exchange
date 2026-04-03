@@ -49,7 +49,7 @@ void main() {
 
     await controller.signIn(
       email: 'fixture.trader@gte.local',
-      password: 'DemoPass123',
+      password: 'DemoPass123', // pragma: allowlist secret
     );
 
     expect(controller.session?.user.username, 'fixture_trader');

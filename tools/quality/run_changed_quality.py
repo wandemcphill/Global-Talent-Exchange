@@ -8,6 +8,7 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NULL_SHA = "0" * 40
+SECRET_BASELINE_PATH = REPO_ROOT / ".secrets.baseline"
 PYTHON_EXTENSIONS = {".py"}
 JAVASCRIPT_EXTENSIONS = {".js", ".mjs", ".cjs"}
 SECRET_SCAN_EXTENSIONS = {
@@ -50,6 +51,10 @@ SECRET_SCAN_FILENAMES = {
     "dockerfile",
     "docker-compose.yml",
 }
+UNTRACKED_SKIP_PREFIXES = (
+    ".tmp",
+    "tmp/",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -90,12 +95,19 @@ def changed_files(base: str, head: str | None) -> list[str]:
         return sorted(files)
 
     files.update(git_stdout("diff", "--name-only", "--diff-filter=ACMRT", base, "--"))
-    files.update(git_stdout("ls-files", "--others", "--exclude-standard"))
+    files.update(
+        path for path in git_stdout("ls-files", "--others", "--exclude-standard") if include_untracked_file(path)
+    )
     return sorted(files)
 
 
 def existing_files(paths: list[str]) -> list[str]:
     return [path for path in paths if (REPO_ROOT / path).is_file()]
+
+
+def include_untracked_file(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    return not normalized.startswith(UNTRACKED_SKIP_PREFIXES)
 
 
 def select_files(paths: list[str], extensions: set[str]) -> list[str]:
@@ -153,9 +165,12 @@ def main() -> int:
         ["npm", "exec", "--", "eslint", "--max-warnings=0"],
         javascript_files,
     )
+    secret_scan_command = [sys.executable, "-m", "detect_secrets.pre_commit_hook", "--no-verify"]
+    if SECRET_BASELINE_PATH.is_file():
+        secret_scan_command.extend(["--baseline", str(SECRET_BASELINE_PATH)])
     run_check(
         "Secret scan",
-        [sys.executable, "-m", "detect_secrets.pre_commit_hook", "--no-verify"],
+        secret_scan_command,
         secret_scan_files,
     )
 

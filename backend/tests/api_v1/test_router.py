@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
 from app.main import create_app
 
@@ -28,7 +29,7 @@ def _create_authenticated_user(app) -> tuple[str, str]:
             session,
             email="v1fan@example.com",
             username="v1fan",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             display_name="V1 Fan",
         )
         token, _ = service.issue_access_token(user, session=session)

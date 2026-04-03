@@ -307,7 +307,9 @@ def test_app_still_boots_with_demo_simulation_enabled(tmp_path) -> None:
         app = create_demo_simulation_app(settings=settings, engine=engine, run_migration_check=True)
         with TestClient(app) as client:
             assert hasattr(app.state, "demo_simulation")
-            ticker_response = client.get(f"/api/market/ticker/{app.state.demo_simulation['liquidity']['liquid_player_id']}")
+            ticker_response = client.get(
+                f"/api/market/ticker/{app.state.demo_simulation['liquidity']['liquid_player_id']}"
+            )
         assert ticker_response.status_code == 200
     finally:
         for key in (
@@ -334,7 +336,7 @@ def test_demo_operator_flow_smoke(tmp_path, monkeypatch) -> None:
         player_count=12,
         provider="qa-demo",
         signal_provider="qa-demo-signals",
-        password="DemoPass123",
+        password="DemoPass123",  # pragma: allowlist secret
         seed=20260311,
         batch_size=6,
         liquid_player_count=3,

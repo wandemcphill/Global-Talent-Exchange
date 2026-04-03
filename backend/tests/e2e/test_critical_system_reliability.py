@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.security import create_access_token
 from app.ingestion.models import Player
 from app.models.auth_session import AuthSession
@@ -39,7 +40,7 @@ def _register_user(client, *, prefix: str) -> dict[str, object]:
             "email": email,
             "full_name": f"{prefix.title()} User",
             "phone_number": "08000000000",
-            "password": "SuperSecret1",
+            "password": TEST_PASSWORD,
             "is_over_18": True,
             "region_code": "NG",
         },
@@ -47,7 +48,7 @@ def _register_user(client, *, prefix: str) -> dict[str, object]:
     assert response.status_code == 201, response.text
     payload = response.json()
     payload["email"] = email
-    payload["password"] = "SuperSecret1"
+    payload["password"] = TEST_PASSWORD
     payload["headers"] = _auth_headers(payload["access_token"])
     return payload
 
@@ -263,9 +264,7 @@ def _create_coin_payment_event(
     assert response.status_code == 201, response.text
 
     with app_session_factory() as session:
-        event = session.scalar(
-            select(PaymentEvent).where(PaymentEvent.provider_reference == provider_reference)
-        )
+        event = session.scalar(select(PaymentEvent).where(PaymentEvent.provider_reference == provider_reference))
         assert event is not None
         session.expunge(event)
         return event
@@ -399,7 +398,9 @@ def test_auth_expired_token_refresh_works_and_invalid_token_is_rejected(
         headers=_auth_headers(invalid_session_token),
     )
     assert invalid_response.status_code == 401
-    assert "invalid" in invalid_response.json()["detail"].lower() or "session" in invalid_response.json()["detail"].lower()
+    assert (
+        "invalid" in invalid_response.json()["detail"].lower() or "session" in invalid_response.json()["detail"].lower()
+    )
 
 
 def test_market_buy_sell_flow_updates_holdings_wallet_and_price(
@@ -545,9 +546,7 @@ def test_competition_join_records_entry_and_match_simulation_saves_result(
     fixtures = fixtures_response.json()
     assert len(fixtures) == 1
 
-    events_response = client.get(
-        f"/api/competitions/{competition_id}/matches/{fixtures[0]['id']}/events"
-    )
+    events_response = client.get(f"/api/competitions/{competition_id}/matches/{fixtures[0]['id']}/events")
     assert events_response.status_code == 200, events_response.text
     assert len(events_response.json()) > 0
 

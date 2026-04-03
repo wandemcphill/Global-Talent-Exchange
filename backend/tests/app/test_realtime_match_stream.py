@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
+from backend.tests.support.secrets import MEDIA_SIGNING_TEST_SECRET, TEST_AUTH_SECRET
 from app.core.events import InMemoryEventPublisher
 from app.main import create_app
 from app.realtime.commentary_engine import CommentaryEngine
@@ -17,11 +18,16 @@ from app.realtime.websocket_gateway import MatchStreamWebSocketGateway
 
 
 @pytest.fixture()
-def realtime_app():
+def realtime_app(monkeypatch):
     temp_root = Path(__file__).resolve().parents[2] / ".tmp_testdbs"
     temp_root.mkdir(parents=True, exist_ok=True)
     database_path = temp_root / f"gte_realtime_test_{uuid4().hex}.db"
     database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("GTE_DATABASE_URL", database_url)
+    monkeypatch.setenv("GTE_AUTH_SECRET", TEST_AUTH_SECRET)
+    monkeypatch.setenv("GTE_MEDIA_SIGNING_SECRET", MEDIA_SIGNING_TEST_SECRET)
+    monkeypatch.delenv("SKIP_SCHEMA_CHECK", raising=False)
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     try:
         yield create_app(engine=engine, run_migration_check=True)

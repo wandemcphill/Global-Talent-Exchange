@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
 from app.core.database import load_model_modules
 from app.models import AmlCase, Base, CountryFeaturePolicy, LedgerUnit
@@ -38,7 +39,7 @@ def _create_user(session):
         session,
         email="rails@example.com",
         username="railsuser",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
     )
     session.commit()
     return user
@@ -180,7 +181,7 @@ def test_provider_webhook_does_not_auto_settle_duplicate_provider_reference(sess
         session,
         email="rails-duplicate@example.com",
         username="railsduplicate",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
     )
     _configure_deposit_settings(session)
     treasury = TreasuryService()

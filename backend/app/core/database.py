@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import time
 
+from alembic.config import Config
 from sqlalchemy import MetaData, create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
@@ -192,8 +193,6 @@ def run_read_with_primary_fallback(
 
 
 def build_alembic_config(database_url: str | None = None) -> Config:
-    from alembic.config import Config
-
     config = Config(str(ALEMBIC_INI_PATH.resolve()))
     config.set_main_option("script_location", str(MIGRATIONS_ROOT.resolve()))
     config.set_main_option("prepend_sys_path", str(PROJECT_ROOT.resolve()))
@@ -296,11 +295,7 @@ def check_runtime_schema_smoke(
     inspector = inspect(database_engine)
     missing_tables = tuple(table_name for table_name in required_tables if not inspector.has_table(table_name))
     if missing_tables:
-        raise RuntimeError(
-            "Database schema smoke check failed. Missing tables: "
-            + ", ".join(missing_tables)
-            + "."
-        )
+        raise RuntimeError("Database schema smoke check failed. Missing tables: " + ", ".join(missing_tables) + ".")
     return required_tables
 
 
@@ -387,7 +382,9 @@ class DatabaseRuntime:
     def initialize(self, *, run_migration_check: bool | None = None) -> Engine:
         return initialize_database_connection(
             self.engine,
-            run_migration_check=self.settings.run_migration_check if run_migration_check is None else run_migration_check,
+            run_migration_check=(
+                self.settings.run_migration_check if run_migration_check is None else run_migration_check
+            ),
         )
 
     def get_session(self) -> Iterator[Session]:
@@ -415,6 +412,11 @@ class DatabaseRuntime:
             return True
         except Exception:
             return False
+
+    def close(self) -> None:
+        self.read_engine.dispose()
+        if self.read_engine is not self.engine:
+            self.engine.dispose()
 
     def check_schema_smoke(self, *, required_tables: tuple[str, ...] = RUNTIME_SCHEMA_SMOKE_TABLES) -> tuple[str, ...]:
         return check_runtime_schema_smoke(self.engine, required_tables=required_tables)

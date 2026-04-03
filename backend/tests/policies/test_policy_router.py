@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
+
 
 def _login(client, *, email: str, password: str) -> dict[str, str]:
     response = client.post("/auth/login", json={"email": email, "password": password})
@@ -49,7 +51,7 @@ def test_authenticated_user_can_accept_policy_and_list_acceptances(client, demo_
 
 
 def test_admin_can_publish_new_policy_version(client) -> None:
-    headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     response = client.post(
         "/admin/policies/documents",
         headers=headers,
@@ -82,7 +84,6 @@ def test_country_policy_falls_back_to_global(client) -> None:
     assert payload["market_trading_enabled"] is True
 
 
-
 def test_policy_requirements_and_compliance_status(client, demo_seed, demo_user_credentials) -> None:
     headers = _login(client, email=demo_user_credentials["email"], password=demo_user_credentials["password"])
     requirements_response = client.get("/policies/me/requirements", headers=headers)
@@ -109,7 +110,7 @@ def test_region_profile_exposes_policy_state(client, demo_seed, demo_user_creden
 
 
 def test_admin_can_upsert_country_feature_policy(client) -> None:
-    headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     response = client.post(
         "/admin/policies/country-policies",
         headers=headers,

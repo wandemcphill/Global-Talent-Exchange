@@ -195,7 +195,8 @@ def _run_startup_seed(context, *, seed_name: str, seed_action) -> None:
     if not context.settings.run_startup_seeding:
         logger.info("app.startup.seed.skipped seed=%s reason=disabled", seed_name)
         return
-    if context.settings.environment != "local":
+    environment = str(context.settings.environment).strip().lower()
+    if environment != "local":
         logger.info(
             "app.startup.seed.skipped seed=%s environment=%s",
             seed_name,
@@ -416,24 +417,6 @@ def _seed_regen_universe_preseeded_national_u17_pool(app, context) -> None:
             session.commit()
 
     _run_startup_seed(context, seed_name="regen_universe_preseeded_national_u17_pool", seed_action=_seed)
-
-
-def _seed_football_event_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.football_events_engine.service import RealWorldFootballEventService
-
-        service = RealWorldFootballEventService(session)
-        service.seed_defaults()
-        session.commit()
-
-
-def _seed_world_simulation_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.world_simulation.service import FootballWorldService
-
-        service = FootballWorldService(session)
-        service.seed_defaults()
-        session.commit()
 
 
 DOMAIN_MODULES = (

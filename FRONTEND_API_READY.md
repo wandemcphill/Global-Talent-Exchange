@@ -23,10 +23,10 @@ Auth prerequisite for local seeded environments:
 
 Login request:
 
-```json
+```jsonc
 {
   "email": "seed.fan@gte.local",
-  "password": "DemoPass123"
+  "password": "DemoPass123" // pragma: allowlist secret
 }
 ```
 

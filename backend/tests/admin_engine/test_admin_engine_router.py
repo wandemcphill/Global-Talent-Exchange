@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.admin_engine.service import AdminEngineService
 from app.auth.service import AuthService
 from app.models.user import UserRole
@@ -20,13 +21,13 @@ def admin_headers(client, app_session_factory) -> dict[str, str]:
         AuthService().ensure_admin_user(
             session,
             email="admin-engine@example.com",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             username="admin_engine",
             display_name="Admin Engine",
             role=UserRole.SUPER_ADMIN,
         )
         session.commit()
-    return _login(client, email="admin-engine@example.com", password="SuperSecret1")
+    return _login(client, email="admin-engine@example.com", password=TEST_PASSWORD)
 
 
 @pytest.fixture()

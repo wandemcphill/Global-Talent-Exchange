@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
+from backend.tests.support.secrets import TEST_PASSWORD
 import app.ingestion.models  # noqa: F401
 import app.ledger.models  # noqa: F401
 import app.models  # noqa: F401
@@ -44,7 +45,7 @@ def admin_wallet_context(tmp_path: Path):
         email="admin-god@example.com",
         region_code="NG",
         username="admingod",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         role=UserRole.ADMIN,
     )
     trader = auth.register_user(
@@ -52,7 +53,7 @@ def admin_wallet_context(tmp_path: Path):
         email="wallet-user@example.com",
         region_code="NG",
         username="walletuser",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
     )
     policy_service = PolicyService(session)
     policy_service.seed_defaults()

@@ -4,6 +4,11 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, select
 
+from backend.tests.support.secrets import (
+    EMAIL_PROVIDER_TEST_PASSWORD,
+    RECOVERY_TEST_PASSWORD,
+    TEST_PASSWORD,
+)
 from app.core.config import BrevoSmtpConfig, EmailConfig
 from app.main import create_app
 from app.models.user import User
@@ -28,7 +33,7 @@ def _email_config() -> EmailConfig:
             host="smtp-relay.brevo.com",
             port=587,
             username="a21b41001@smtp-brevo.com",
-            password="test-password",
+            password=EMAIL_PROVIDER_TEST_PASSWORD,
             use_tls=True,
             use_ssl=False,
         ),
@@ -55,7 +60,9 @@ class FailingEmailProvider(EmailProvider):
 
 @pytest.fixture(scope="module")
 def app_client(tmp_path_factory: pytest.TempPathFactory):
-    database_url = f"sqlite+pysqlite:///{(tmp_path_factory.mktemp('auth-email-router') / 'auth-email-router.db').as_posix()}"
+    database_url = (
+        f"sqlite+pysqlite:///{(tmp_path_factory.mktemp('auth-email-router') / 'auth-email-router.db').as_posix()}"
+    )
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     app = create_app(engine=engine, run_migration_check=True)
     with TestClient(app) as client:
@@ -85,7 +92,7 @@ def test_register_route_triggers_confirmation_email_and_preserves_signup_respons
         json={
             "email": "fan.confirm@example.com",
             "username": "fanconfirm",
-            "password": "SuperSecret1",
+            "password": TEST_PASSWORD,
             "full_name": "Fan User",
             "phone_number": "1234567890",
             "is_over_18": True,
@@ -120,7 +127,7 @@ def test_recovery_request_triggers_email_and_reset_route_updates_password(app_cl
         json={
             "email": "fan.recover@example.com",
             "username": "fanrecover",
-            "password": "SuperSecret1",
+            "password": TEST_PASSWORD,
             "full_name": "Fan User",
             "phone_number": "1234567890",
             "is_over_18": True,
@@ -133,7 +140,10 @@ def test_recovery_request_triggers_email_and_reset_route_updates_password(app_cl
     recovery_response = client.post("/auth/recovery/request", json={"email": "fan.recover@example.com"})
 
     assert recovery_response.status_code == 200, recovery_response.text
-    assert recovery_response.json()["detail"] == "If an account exists for that email, recovery instructions have been sent."
+    assert (
+        recovery_response.json()["detail"]
+        == "If an account exists for that email, recovery instructions have been sent."
+    )
     assert len(provider.messages) == 1
     assert provider.messages[0].subject == "Recover your GTEX account"
     assert "Recovery code" in provider.messages[0].html_body
@@ -142,15 +152,15 @@ def test_recovery_request_triggers_email_and_reset_route_updates_password(app_cl
         "/auth/recovery/reset",
         json={
             "code": _extract_code(provider.messages[0]),
-            "new_password": "NewSecret123",
-            "confirm_new_password": "NewSecret123",
+            "new_password": RECOVERY_TEST_PASSWORD,
+            "confirm_new_password": RECOVERY_TEST_PASSWORD,
         },
     )
     assert reset_response.status_code == 200, reset_response.text
 
     login_response = client.post(
         "/auth/login",
-        json={"email": "fan.recover@example.com", "password": "NewSecret123"},
+        json={"email": "fan.recover@example.com", "password": RECOVERY_TEST_PASSWORD},
     )
 
     assert login_response.status_code == 200, login_response.text
@@ -165,7 +175,7 @@ def test_register_route_does_not_fail_when_email_delivery_fails(app_client) -> N
         json={
             "email": "fan.failure@example.com",
             "username": "fanfailure",
-            "password": "SuperSecret1",
+            "password": TEST_PASSWORD,
             "full_name": "Fan User",
             "phone_number": "1234567890",
             "is_over_18": True,

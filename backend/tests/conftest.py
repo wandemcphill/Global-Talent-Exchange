@@ -9,6 +9,12 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
+from backend.tests.support.secrets import (
+    BOOTSTRAP_TEST_ADMIN_PASSWORD,
+    MEDIA_SIGNING_TEST_SECRET,
+    TEST_AUTH_SECRET,
+    TEST_PASSWORD,
+)
 from app.core.config import load_settings, reset_settings_cache
 from app.models.user import User
 from app.models.wallet import LedgerUnit
@@ -20,11 +26,11 @@ DEFAULT_TEST_DATABASE_URL = (
 )
 
 os.environ.setdefault("GTE_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
-os.environ.setdefault("GTE_AUTH_SECRET", "test-auth-secret-not-for-production")
-os.environ.setdefault("GTE_MEDIA_SIGNING_SECRET", "test-media-signing-secret-not-for-production")
+os.environ.setdefault("GTE_AUTH_SECRET", TEST_AUTH_SECRET)
+os.environ.setdefault("GTE_MEDIA_SIGNING_SECRET", MEDIA_SIGNING_TEST_SECRET)
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_ENABLED", "1")
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_EMAIL", "admin@test.gtex.local")
-os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_PASSWORD", "TestAdminPass123!")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_PASSWORD", BOOTSTRAP_TEST_ADMIN_PASSWORD)
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_USERNAME", "gtex_test_admin")
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME", "GTEX Test Admin")
 
@@ -134,7 +140,7 @@ def bootstrap_admin_headers(client):
 @pytest.fixture
 def competition_admin_headers(client, bootstrap_admin_headers):
     suffix = f"competition-admin-{uuid4().hex[:8]}"
-    password = "SuperSecret1"
+    password = TEST_PASSWORD
     email = f"{suffix}@example.com"
     username = suffix.replace("-", "_")
     response = client.post(
@@ -170,7 +176,7 @@ def auth_user_factory(client, app_session_factory):
         unique_suffix = suffix or uuid4().hex[:8]
         email = f"{unique_suffix}@example.com"
         username = unique_suffix.replace("-", "_")
-        password = "SuperSecret1"
+        password = TEST_PASSWORD
         response = client.post(
             "/auth/register",
             json={

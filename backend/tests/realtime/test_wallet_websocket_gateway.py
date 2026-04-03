@@ -2,33 +2,58 @@ from __future__ import annotations
 
 import os
 
+from backend.tests.support.secrets import (
+    MEDIA_SIGNING_TEST_SECRET,
+    TEST_PASSWORD_HASH,
+    WALLET_WEBSOCKET_AUTH_SECRET,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.auth.security import create_access_token
-from app.core.database import load_model_modules
 from app.core.events import InMemoryEventPublisher
-from app.models.base import Base
+from app.models.event_backbone import EventOutbox
+from app.models.risk_ops import AuditLog
 from app.models.user import User
-from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerBalanceProjection,
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerTransaction,
+    LedgerUnit,
+)
 from app.realtime.router import router as realtime_router
 from app.realtime.service import RealtimeHub
 from app.wallets.service import LedgerPosting, WalletService
 
 
 def test_wallet_websocket_gateway_streams_committed_events(tmp_path) -> None:
+    os.environ["DATABASE_URL"] = f"sqlite+pysqlite:///{(tmp_path / 'settings.db').as_posix()}"
     os.environ["GTE_DATABASE_URL"] = f"sqlite+pysqlite:///{(tmp_path / 'auth.db').as_posix()}"
-    os.environ["GTE_AUTH_SECRET"] = "wallet-websocket-test-secret"
+    os.environ["GTE_AUTH_SECRET"] = WALLET_WEBSOCKET_AUTH_SECRET
+    os.environ["GTE_MEDIA_SIGNING_SECRET"] = MEDIA_SIGNING_TEST_SECRET
 
-    database_path = tmp_path / "wallet-websocket.db"
-    load_model_modules()
     engine = create_engine(
-        f"sqlite+pysqlite:///{database_path.as_posix()}",
+        "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine)
+    User.metadata.create_all(
+        engine,
+        tables=[
+            User.__table__,
+            LedgerAccount.__table__,
+            LedgerTransaction.__table__,
+            LedgerEntry.__table__,
+            LedgerBalanceProjection.__table__,
+            EventOutbox.__table__,
+            AuditLog.__table__,
+        ],
+    )
     session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
     publisher = InMemoryEventPublisher()
@@ -44,7 +69,7 @@ def test_wallet_websocket_gateway_streams_committed_events(tmp_path) -> None:
         user = User(
             email="wallet-websocket@example.com",
             username="wallet_websocket",
-            password_hash="test-password-hash",
+            password_hash=TEST_PASSWORD_HASH,
         )
         session.add(user)
         session.commit()

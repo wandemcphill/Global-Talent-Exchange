@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
+from backend.tests.support.secrets import TEST_PASSWORD
 import app.ingestion.models  # noqa: F401
 import app.ledger.models  # noqa: F401
 import app.models  # noqa: F401
@@ -45,7 +46,7 @@ def admin_access_context(tmp_path: Path):
     super_admin = auth.ensure_admin_user(
         session,
         email="root-admin@example.com",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         username="root_admin",
         display_name="Root Admin",
         role=UserRole.SUPER_ADMIN,
@@ -83,7 +84,7 @@ def test_create_admin_assigns_scoped_role_without_god_mode_baseline(
         json={
             "email": "scoped-admin@example.com",
             "username": "scoped_admin",
-            "password": "SuperSecret1",
+            "password": TEST_PASSWORD,
             "display_name": "Scoped Admin",
             "permissions": ["manage_commissions"],
         },
@@ -99,7 +100,7 @@ def test_create_admin_assigns_scoped_role_without_god_mode_baseline(
     admin = AuthService().authenticate_user(
         session,
         email="scoped-admin@example.com",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
     )
     profile = AdminGodModeService(wallet_service=WalletService()).resolve_profile(
         admin,
@@ -119,7 +120,7 @@ def test_resolve_profile_keeps_super_admin_full_and_plain_admin_scoped(
     plain_admin = auth.ensure_admin_user(
         session,
         email="plain-admin@example.com",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         username="plain_admin",
         display_name="Plain Admin",
         role=UserRole.ADMIN,
@@ -127,7 +128,7 @@ def test_resolve_profile_keeps_super_admin_full_and_plain_admin_scoped(
     super_admin = auth.ensure_admin_user(
         session,
         email="another-root@example.com",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         username="another_root",
         display_name="Another Root",
         role=UserRole.SUPER_ADMIN,
@@ -165,7 +166,7 @@ def test_disabled_assignment_resolves_to_no_delegated_permissions(
     scoped_admin = auth.ensure_admin_user(
         session,
         email="disabled-admin@example.com",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         username="disabled_admin",
         display_name="Disabled Admin",
         role=UserRole.ADMIN,

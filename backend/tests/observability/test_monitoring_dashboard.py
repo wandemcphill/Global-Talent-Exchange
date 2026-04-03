@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.tests.support.secrets import TEST_PASSWORD_HASH
 from app.auth.dependencies import get_current_admin, get_session
 from app.core.database import load_model_modules
 from app.core.events import InMemoryEventPublisher
@@ -58,13 +59,13 @@ def test_monitoring_dashboard_reports_transaction_and_fraud_signals(tmp_path) ->
         admin = User(
             email="monitoring-admin@example.com",
             username="monitoring_admin",
-            password_hash="test-password-hash",
+            password_hash=TEST_PASSWORD_HASH,
             role=UserRole.ADMIN,
         )
         user = User(
             email="monitoring-user@example.com",
             username="monitoring_user",
-            password_hash="test-password-hash",
+            password_hash=TEST_PASSWORD_HASH,
         )
         session.add_all([admin, user])
         session.commit()
@@ -134,7 +135,7 @@ def test_platform_infra_dashboard_reports_runtime_contracts(tmp_path) -> None:
         admin = User(
             email="platform-infra-admin@example.com",
             username="platform_infra_admin",
-            password_hash="test-password-hash",
+            password_hash=TEST_PASSWORD_HASH,
             role=UserRole.ADMIN,
         )
         session.add(admin)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import logging
 import os
 from threading import Thread
@@ -35,6 +36,15 @@ INITIAL_ADMIN_EMAIL = os.getenv("GTE_BOOTSTRAP_ADMIN_EMAIL") or ""
 INITIAL_ADMIN_PASSWORD = os.getenv("GTE_BOOTSTRAP_ADMIN_PASSWORD") or ""
 INITIAL_ADMIN_USERNAME = os.getenv("GTE_BOOTSTRAP_ADMIN_USERNAME") or ""
 INITIAL_ADMIN_DISPLAY_NAME = os.getenv("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME") or ""
+
+
+@asynccontextmanager
+async def _app_lifespan(app: FastAPI):
+    await _startup_app(app)
+    try:
+        yield
+    finally:
+        await _shutdown_app(app)
 
 
 def create_app(
@@ -74,6 +84,7 @@ def create_app(
         title=resolved_settings.app_name,
         version=resolved_settings.app_version,
         docs_url="/docs",
+        lifespan=_app_lifespan,
     )
     app.state.settings = resolved_settings
     app.state.container = context
@@ -174,50 +185,50 @@ def register_core(app: FastAPI) -> None:
     app.dependency_overrides[core_get_read_session] = context.database.get_read_session
     app.dependency_overrides[auth_get_session] = context.database.get_session
 
-    @app.on_event("startup")
-    async def startup() -> None:
-        runtime_context: Container = app.state.container
-        module_specs: tuple[DomainModule, ...] = tuple(getattr(app.state, "module_specs", ()))
-        try:
-            logger.info(
-                "app.startup.begin run_migration_check=%s settings_run_migration_check=%s",
-                app.state.run_migration_check,
-                app.state.settings.run_migration_check,
-            )
-            runtime_context.initialize(run_migration_check=app.state.run_migration_check)
-            bind_application_state(app, context=runtime_context, modules=module_specs)
-            if getattr(app.state, "realtime", None) is not None:
-                app.state.realtime.bind_loop(asyncio.get_running_loop())
-            check_db(app)
-            check_redis(app)
-            runtime_context.metrics.refresh_from_database()
-            _start_deferred_startup(app, context=runtime_context, modules=module_specs)
-            logger.info("app.startup.complete")
-        except Exception:
-            logger.exception(
-                "app.startup.failed run_migration_check=%s settings_run_migration_check=%s",
-                app.state.run_migration_check,
-                app.state.settings.run_migration_check,
-            )
-            raise
 
-    @app.on_event("shutdown")
-    async def shutdown() -> None:
-        runtime_context: Container = app.state.container
-        module_specs: tuple[DomainModule, ...] = tuple(getattr(app.state, "module_specs", ()))
-        logger.info("app.shutdown.begin")
-        startup_thread = getattr(app.state, "deferred_startup_thread", None)
-        if startup_thread is not None and startup_thread.is_alive():
-            startup_thread.join(timeout=1)
-        publish_jobs = getattr(app.state, "real_player_bulk_publish_jobs", None)
-        if publish_jobs is not None:
-            publish_jobs.shutdown(timeout=1.0)
-        realtime = getattr(app.state, "realtime", None)
-        if realtime is not None:
-            await realtime.shutdown()
-        run_module_hooks(app, runtime_context, module_specs, phase="shutdown")
-        runtime_context.shutdown()
-        logger.info("app.shutdown.complete")
+async def _startup_app(app: FastAPI) -> None:
+    runtime_context: Container = app.state.container
+    module_specs: tuple[DomainModule, ...] = tuple(getattr(app.state, "module_specs", ()))
+    try:
+        logger.info(
+            "app.startup.begin run_migration_check=%s settings_run_migration_check=%s",
+            app.state.run_migration_check,
+            app.state.settings.run_migration_check,
+        )
+        runtime_context.initialize(run_migration_check=app.state.run_migration_check)
+        bind_application_state(app, context=runtime_context, modules=module_specs)
+        if getattr(app.state, "realtime", None) is not None:
+            app.state.realtime.bind_loop(asyncio.get_running_loop())
+        check_db(app)
+        check_redis(app)
+        runtime_context.metrics.refresh_from_database()
+        _start_deferred_startup(app, context=runtime_context, modules=module_specs)
+        logger.info("app.startup.complete")
+    except Exception:
+        logger.exception(
+            "app.startup.failed run_migration_check=%s settings_run_migration_check=%s",
+            app.state.run_migration_check,
+            app.state.settings.run_migration_check,
+        )
+        raise
+
+
+async def _shutdown_app(app: FastAPI) -> None:
+    runtime_context: Container = app.state.container
+    module_specs: tuple[DomainModule, ...] = tuple(getattr(app.state, "module_specs", ()))
+    logger.info("app.shutdown.begin")
+    startup_thread = getattr(app.state, "deferred_startup_thread", None)
+    if startup_thread is not None and startup_thread.is_alive():
+        startup_thread.join(timeout=1)
+    publish_jobs = getattr(app.state, "real_player_bulk_publish_jobs", None)
+    if publish_jobs is not None:
+        publish_jobs.shutdown(timeout=1.0)
+    realtime = getattr(app.state, "realtime", None)
+    if realtime is not None:
+        await realtime.shutdown()
+    run_module_hooks(app, runtime_context, module_specs, phase="shutdown")
+    runtime_context.shutdown()
+    logger.info("app.shutdown.complete")
 
 
 def check_db(app: FastAPI) -> None:
@@ -350,7 +361,11 @@ def _ensure_initial_admin(
     if not settings.bootstrap_admin_enabled:
         logger.info("app.startup.initial_admin.skipped reason=disabled")
         return
-    if not settings.bootstrap_admin_email or not settings.bootstrap_admin_password or not settings.bootstrap_admin_username:
+    if (
+        not settings.bootstrap_admin_email
+        or not settings.bootstrap_admin_password
+        or not settings.bootstrap_admin_username
+    ):
         logger.warning(
             "app.startup.initial_admin.skipped reason=incomplete_config enabled=%s",
             settings.bootstrap_admin_enabled,
@@ -363,10 +378,7 @@ def _ensure_initial_admin(
             email=settings.bootstrap_admin_email,
             password=settings.bootstrap_admin_password,
             username=settings.bootstrap_admin_username,
-            display_name=(
-                settings.bootstrap_admin_display_name
-                or settings.bootstrap_admin_username
-            ),
+            display_name=(settings.bootstrap_admin_display_name or settings.bootstrap_admin_username),
             role=UserRole.SUPER_ADMIN,
         )
         session.commit()

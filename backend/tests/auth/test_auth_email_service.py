@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.tests.support.secrets import RECOVERY_TEST_PASSWORD, TEST_PASSWORD
 from app.auth.service import AuthService, InvalidCredentialsError
 from app.core.database import ensure_database_schema_current
 
@@ -34,7 +35,7 @@ def test_prepare_signup_confirmation_and_confirm_email(session) -> None:
         session,
         email="fan.confirm@example.com",
         username="fanconfirm",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         full_name="Fan User",
         region_code="NG",
     )
@@ -53,7 +54,7 @@ def test_prepare_account_recovery_and_reset_password(session) -> None:
         session,
         email="fan.recover@example.com",
         username="fanrecover",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         full_name="Fan User",
         region_code="NG",
     )
@@ -63,11 +64,15 @@ def test_prepare_account_recovery_and_reset_password(session) -> None:
     assert user is not None
     assert recovery_code is not None
 
-    service.reset_password_with_recovery(session, code=recovery_code, new_password="NewSecret123")
+    service.reset_password_with_recovery(session, code=recovery_code, new_password=RECOVERY_TEST_PASSWORD)
     session.commit()
 
-    authenticated_user = service.authenticate_user(session, email="fan.recover@example.com", password="NewSecret123")
+    authenticated_user = service.authenticate_user(
+        session,
+        email="fan.recover@example.com",
+        password=RECOVERY_TEST_PASSWORD,
+    )
 
     assert authenticated_user.email == "fan.recover@example.com"
     with pytest.raises(InvalidCredentialsError):
-        service.authenticate_user(session, email="fan.recover@example.com", password="SuperSecret1")
+        service.authenticate_user(session, email="fan.recover@example.com", password=TEST_PASSWORD)

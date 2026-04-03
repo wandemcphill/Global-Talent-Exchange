@@ -29,7 +29,7 @@ void main() {
 
     await controller.signIn(
       email: 'fixture.trader@gte.local',
-      password: 'DemoPass123',
+      password: 'DemoPass123', // pragma: allowlist secret
     );
 
     expect(controller.isAuthenticated, isTrue);
@@ -50,7 +50,7 @@ void main() {
 
       await controller.signIn(
         email: 'fixture.trader@gte.local',
-        password: 'DemoPass123',
+        password: 'DemoPass123', // pragma: allowlist secret
       );
       await controller.openPlayer('lamine-yamal');
       final double startingAvailable =

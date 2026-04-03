@@ -68,7 +68,7 @@ def _register_and_load_user(session) -> User:
             email="fan@example.com",
             region_code="NG",
             username="fanuser",
-            password="SuperSecret1",
+            password="SuperSecret1",  # pragma: allowlist secret
         ),
         session,
     )

@@ -6,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService, DuplicateUserError
 from app.main import INITIAL_ADMIN_DISPLAY_NAME, INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD
 from app.models.competitive_integrity import Match, CompetitiveMatchCompetitionType, CompetitiveMatchStatus
@@ -50,7 +51,7 @@ def _create_user_headers(app_session_factory, *, email: str, username: str) -> d
                 session,
                 email=email,
                 username=username,
-                password="SuperSecret1",
+                password=TEST_PASSWORD,
             )
         else:
             user = session.get(User, existing.id)
@@ -67,7 +68,7 @@ def _seed_analytics_insight_state(app_session_factory) -> str:
                 session,
                 email="analytics-home@example.com",
                 username="analyticshome",
-                password="SuperSecret1",
+                password=TEST_PASSWORD,
             )
         else:
             home_user = session.get(User, home_user.id)
@@ -78,7 +79,7 @@ def _seed_analytics_insight_state(app_session_factory) -> str:
                 session,
                 email="analytics-away@example.com",
                 username="analyticsaway",
-                password="SuperSecret1",
+                password=TEST_PASSWORD,
             )
         else:
             away_user = session.get(User, away_user.id)

@@ -6,6 +6,7 @@ from app.main import (
     INITIAL_ADMIN_EMAIL,
     INITIAL_ADMIN_PASSWORD,
 )
+from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
 
 
 def _ensure_admin_ready(client) -> None:
@@ -32,7 +33,7 @@ def _login(client, *, email: str, password: str) -> dict[str, str]:
 
 
 def test_story_feed_lists_auto_generated_national_team_stories(client, demo_seed) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     response = client.post(
         "/admin/national-team-engine/competitions",
         headers=admin_headers,
@@ -55,7 +56,7 @@ def test_story_feed_lists_auto_generated_national_team_stories(client, demo_seed
 
 
 def test_admin_can_publish_manual_story_and_digest_surfaces_it(client) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     response = client.post(
         "/admin/story-feed",
         headers=admin_headers,
@@ -78,7 +79,9 @@ def test_admin_can_publish_manual_story_and_digest_surfaces_it(client) -> None:
     digest = digest_response.json()
     assert any(item["story_type"] == "featured_update" for item in digest["feature_stories"])
 
-    filtered_response = client.get("/story-feed?subject_type=club_sale_transfer&subject_id=club_transfer_demo&featured_only=true")
+    filtered_response = client.get(
+        "/story-feed?subject_type=club_sale_transfer&subject_id=club_transfer_demo&featured_only=true"
+    )
     assert filtered_response.status_code == 200, filtered_response.text
     filtered_payload = filtered_response.json()
     assert len(filtered_payload) == 1

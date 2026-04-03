@@ -220,6 +220,8 @@ class Container:
             self.outbox_relay.stop()
         if self.event_publisher is not None and hasattr(self.event_publisher, "close"):
             self.event_publisher.close()
+        if hasattr(self.database, "close"):
+            self.database.close()
         self._initialized = False
         logger.info("container.shutdown.complete")
 

@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import os
 
+from backend.tests.support.secrets import (
+    MATCH_WEBSOCKET_AUTH_SECRET,
+    MEDIA_SIGNING_TEST_SECRET,
+    TEST_PASSWORD_HASH,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -17,7 +22,9 @@ from app.realtime.service import RealtimeHub
 
 
 def test_match_websocket_gateway_streams_match_events() -> None:
-    os.environ["GTE_AUTH_SECRET"] = "match-websocket-test-secret"
+    os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+    os.environ["GTE_AUTH_SECRET"] = MATCH_WEBSOCKET_AUTH_SECRET
+    os.environ["GTE_MEDIA_SIGNING_SECRET"] = MEDIA_SIGNING_TEST_SECRET
 
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -40,7 +47,7 @@ def test_match_websocket_gateway_streams_match_events() -> None:
         user = User(
             email="match-websocket@example.com",
             username="match_websocket",
-            password_hash="test-password-hash",
+            password_hash=TEST_PASSWORD_HASH,
         )
         session.add(user)
         session.commit()

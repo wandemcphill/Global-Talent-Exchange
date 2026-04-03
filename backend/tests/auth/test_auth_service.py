@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from backend.tests.support.secrets import ALTERNATE_TEST_PASSWORD, TEST_PASSWORD, WRONG_TEST_PASSWORD
 from app.auth.schemas import CurrentUserUpdateRequest
 from app.auth.security import decode_access_token, decode_refresh_token, verify_password
 from app.auth.service import (
@@ -42,7 +43,7 @@ def test_register_user_creates_default_accounts(session) -> None:
         session,
         email="owner@example.com",
         username="owner",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         display_name="Owner",
     )
     session.commit()
@@ -54,7 +55,7 @@ def test_register_user_creates_default_accounts(session) -> None:
     assert wallet.balance == Decimal("0.0000")
     assert wallet.currency == "credit"
     assert wallet.compliance_status == "verified"
-    assert verify_password("SuperSecret1", user.password_hash)
+    assert verify_password(TEST_PASSWORD, user.password_hash)
 
 
 def test_register_user_rejects_duplicate_email(session) -> None:
@@ -63,7 +64,7 @@ def test_register_user_rejects_duplicate_email(session) -> None:
         session,
         email="owner@example.com",
         username="owner",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
     )
     session.commit()
 
@@ -72,7 +73,7 @@ def test_register_user_rejects_duplicate_email(session) -> None:
             session,
             email="owner@example.com",
             username="owner-2",
-            password="AnotherSecret1",
+            password=ALTERNATE_TEST_PASSWORD,
         )
 
 
@@ -82,11 +83,11 @@ def test_authenticate_user_issues_token_and_updates_last_login(session) -> None:
         session,
         email="owner@example.com",
         username="owner",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
     )
     session.commit()
 
-    authenticated_user = service.authenticate_user(session, email="owner@example.com", password="SuperSecret1")
+    authenticated_user = service.authenticate_user(session, email="owner@example.com", password=TEST_PASSWORD)
     issued_session = service.issue_session_tokens(authenticated_user, session=session)
     session.commit()
 
@@ -113,7 +114,7 @@ def test_issue_access_token_uses_primary_organization_role_for_club_owner(sessio
         session,
         email="club@example.com",
         username="clubowner",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         display_name="Club Owner",
     )
     session.commit()
@@ -145,7 +146,7 @@ def test_refresh_session_rotates_refresh_token_and_logout_revokes_session(sessio
         session,
         email="refresh@example.com",
         username="refresh-owner",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         display_name="Refresh Owner",
     )
     session.commit()
@@ -176,12 +177,12 @@ def test_authenticate_user_rejects_invalid_password(session) -> None:
         session,
         email="owner@example.com",
         username="owner",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
     )
     session.commit()
 
     with pytest.raises(InvalidCredentialsError, match="Invalid email or password"):
-        service.authenticate_user(session, email="owner@example.com", password="WrongPassword1")
+        service.authenticate_user(session, email="owner@example.com", password=WRONG_TEST_PASSWORD)
 
 
 def test_update_current_user_profile_reads_and_persists_allowed_fields(session) -> None:
@@ -190,7 +191,7 @@ def test_update_current_user_profile_reads_and_persists_allowed_fields(session) 
         session,
         email="owner@example.com",
         username="owner",
-        password="SuperSecret1",
+        password=TEST_PASSWORD,
         display_name="Owner",
     )
     session.commit()

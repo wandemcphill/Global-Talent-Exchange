@@ -12,42 +12,47 @@ from app.observability.logging import configure_logging
 def main() -> None:
     settings = get_settings()
     service_name = settings.observability_service_name or f"{settings.kafka_client_id}-ads-worker"
+    database = None
+    runtime = None
     configure_logging(
         json_logs=settings.observability_log_json,
         service_name=service_name,
         environment=settings.app_env,
     )
-    database = DatabaseRuntime.build(settings=settings)
-    database.initialize(run_migration_check=settings.run_migration_check)
-    app = build_worker_app(
-        settings=settings,
-        session_factory=database.session_factory,
-        read_session_factory=database.read_session_factory,
-    )
-    if settings.observability_metrics_enabled:
-        app.state.metrics.start_http_server(settings.observability_metrics_port)
-    app.state.metrics.refresh_from_database()
-    consumer = KafkaJsonConsumer(
-        brokers=settings.kafka_brokers,
-        group_id=f"{settings.kafka_client_id}-ads-workers",
-        client_id=f"{settings.kafka_client_id}-ads-worker",
-        topics=KafkaJsonConsumer.topic_names(
-            prefix=settings.kafka_topic_prefix,
-            topics=("ads.feed.refresh.requested",),
-        ),
-    )
-    runtime = ScaleTopicConsumerService(
-        consumer=consumer,
-        session_factory=database.session_factory,
-        handler=ads_refresh_handler(app=app),
-        consumer_name="ads-refresh-worker",
-        metrics=app.state.metrics,
-    )
-    runtime.start()
     try:
+        database = DatabaseRuntime.build(settings=settings)
+        database.initialize(run_migration_check=settings.run_migration_check)
+        app = build_worker_app(
+            settings=settings,
+            session_factory=database.session_factory,
+            read_session_factory=database.read_session_factory,
+        )
+        if settings.observability_metrics_enabled:
+            app.state.metrics.start_http_server(settings.observability_metrics_port)
+        app.state.metrics.refresh_from_database()
+        consumer = KafkaJsonConsumer(
+            brokers=settings.kafka_brokers,
+            group_id=f"{settings.kafka_client_id}-ads-workers",
+            client_id=f"{settings.kafka_client_id}-ads-worker",
+            topics=KafkaJsonConsumer.topic_names(
+                prefix=settings.kafka_topic_prefix,
+                topics=("ads.feed.refresh.requested",),
+            ),
+        )
+        runtime = ScaleTopicConsumerService(
+            consumer=consumer,
+            session_factory=database.session_factory,
+            handler=ads_refresh_handler(app=app),
+            consumer_name="ads-refresh-worker",
+            metrics=app.state.metrics,
+        )
+        runtime.start()
         ThreadEvent().wait()
     finally:
-        runtime.stop()
+        if runtime is not None:
+            runtime.stop()
+        if database is not None:
+            database.close()
 
 
 if __name__ == "__main__":

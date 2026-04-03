@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
 from app.main import create_app
 from app.models.user import UserRole
@@ -42,7 +43,7 @@ def _create_user(app, email: str, username: str) -> tuple[str, str]:
             session,
             email=email,
             username=username,
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             display_name=username,
         )
         token, _ = service.issue_access_token(user, session=session)
@@ -57,7 +58,7 @@ def _create_admin(app, email: str, username: str) -> tuple[str, str]:
             session,
             email=email,
             username=username,
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
             display_name=username,
         )
         user.role = UserRole.ADMIN

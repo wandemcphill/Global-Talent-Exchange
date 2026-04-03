@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
+from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
 from app.ingestion.models import Country, Player
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerUnit
@@ -161,7 +162,7 @@ def _seed_national_pool(
 
 
 def test_admin_can_create_national_team_competition_and_entry(client, demo_seed) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     response = client.post(
         "/admin/national-team-engine/competitions",
         headers=admin_headers,
@@ -200,7 +201,7 @@ def test_admin_can_create_national_team_competition_and_entry(client, demo_seed)
 
 
 def test_admin_can_upsert_squad_and_user_can_view_history(client, demo_seed) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     user_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
     competition_id = client.get("/national-team-engine/competitions").json()[0]["id"]
     entry_response = client.post(
@@ -251,7 +252,7 @@ def test_admin_can_upsert_squad_and_user_can_view_history(client, demo_seed) -> 
 
 
 def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competition_admin_headers) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     manager = demo_seed.demo_users[0]
     manager_headers = _login(client, email=manager.email, password=manager.password)
     second_manager = demo_seed.demo_users[1]
@@ -348,8 +349,10 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competiti
     assert rent_response.json()["detail"] == "competition_already_live"
 
 
-def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(client, demo_seed, app_session_factory) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(
+    client, demo_seed, app_session_factory
+) -> None:
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     competition = _create_competition(client, admin_headers, key_prefix="pool-filter")
     home_code = "NP1"
     home_name = "Nation Prime One"
@@ -392,8 +395,10 @@ def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(cl
     assert all(Decimal(str(item["demand_multiplier"])) == Decimal("1.0000") for item in players_by_id.values())
 
 
-def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad(client, demo_seed, app_session_factory) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad(
+    client, demo_seed, app_session_factory
+) -> None:
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     manager_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
     competition = _create_competition(client, admin_headers, key_prefix="pool-rent")
     home_code = "NP2"
@@ -433,7 +438,9 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     )
     assert success_response.status_code == 200, success_response.text
     rented_entry = success_response.json()
-    rented_member = next(item for item in rented_entry["rental_squad_members"] if item["player_id"] == player_ids["home-st"])
+    rented_member = next(
+        item for item in rented_entry["rental_squad_members"] if item["player_id"] == player_ids["home-st"]
+    )
     assert rented_member["metadata_json"]["source_bucket"] == "real"
     assert rented_member["metadata_json"]["supply_mode"] == "infinite"
 
@@ -465,8 +472,10 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     assert auto_build_payload["source_mix"]["regen"] >= 1
 
 
-def test_claim_free_players_grants_starter_pack_shape_from_national_pool(client, demo_seed, app_session_factory) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+def test_claim_free_players_grants_starter_pack_shape_from_national_pool(
+    client, demo_seed, app_session_factory
+) -> None:
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     manager_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
     competition = _create_competition(client, admin_headers, key_prefix="pool-free")
     home_code = "NP3"
@@ -507,7 +516,7 @@ def test_claim_free_players_grants_starter_pack_shape_from_national_pool(client,
 
 
 def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(client, demo_seed) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
     primary_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
     secondary_headers = _login(client, email=demo_seed.demo_users[1].email, password=demo_seed.demo_users[1].password)
     third_user = demo_seed.demo_users[2]

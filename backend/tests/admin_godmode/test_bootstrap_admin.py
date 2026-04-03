@@ -11,6 +11,7 @@ import app.ingestion.models  # noqa: F401
 import app.ledger.models  # noqa: F401
 import app.models  # noqa: F401
 import app.orders.models  # noqa: F401
+from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
 from app.core.config import load_settings
 from app.main import _ensure_initial_admin
@@ -63,7 +64,7 @@ def test_ensure_initial_admin_creates_super_admin_when_enabled() -> None:
     settings = SimpleNamespace(
         bootstrap_admin_enabled=True,
         bootstrap_admin_email="bootstrap-admin@example.com",
-        bootstrap_admin_password="SuperSecret1",
+        bootstrap_admin_password=TEST_PASSWORD,
         bootstrap_admin_username="bootstrap_admin",
         bootstrap_admin_display_name="Bootstrap Admin",
     )
@@ -71,15 +72,13 @@ def test_ensure_initial_admin_creates_super_admin_when_enabled() -> None:
     _ensure_initial_admin(settings, SessionLocal)
 
     with SessionLocal() as session:
-        user = session.scalar(
-            select(User).where(User.email == "bootstrap-admin@example.com")
-        )
+        user = session.scalar(select(User).where(User.email == "bootstrap-admin@example.com"))
         assert user is not None
         assert user.role == UserRole.SUPER_ADMIN
         assert user.username == "bootstrap_admin"
         authenticated = AuthService().authenticate_user(
             session,
             email="bootstrap-admin@example.com",
-            password="SuperSecret1",
+            password=TEST_PASSWORD,
         )
         assert authenticated.id == user.id
