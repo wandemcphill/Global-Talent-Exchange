@@ -5,11 +5,13 @@ import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 class GteNoClubOnboardingView extends StatelessWidget {
   const GteNoClubOnboardingView({
     super.key,
+    this.onCreateClub,
     this.onBrowseClubMarket,
     this.onExploreArena,
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 120),
   });
 
+  final VoidCallback? onCreateClub;
   final VoidCallback? onBrowseClubMarket;
   final VoidCallback? onExploreArena;
   final EdgeInsetsGeometry padding;
@@ -17,45 +19,64 @@ class GteNoClubOnboardingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<Widget> overviewChips = <Widget>[
+      if (onCreateClub != null) const Chip(label: Text('1. Create your club')),
       if (onBrowseClubMarket != null)
-        const Chip(label: Text('1. Browse club market')),
-      if (onExploreArena != null) const Chip(label: Text('2. Explore Arena')),
+        const Chip(label: Text('2. Own an existing club')),
+      if (onExploreArena != null)
+        const Chip(label: Text('3. Explore competitions')),
     ];
     final List<Widget> overviewActions = <Widget>[
-      if (onBrowseClubMarket != null)
+      if (onCreateClub != null)
         FilledButton.icon(
+          onPressed: onCreateClub,
+          icon: const Icon(Icons.add_circle_outline),
+          label: const Text('Create your club'),
+        ),
+      if (onBrowseClubMarket != null)
+        FilledButton.tonalIcon(
           onPressed: onBrowseClubMarket,
           icon: const Icon(Icons.storefront_outlined),
           label: const Text('Browse club market'),
         ),
       if (onExploreArena != null)
-        FilledButton.tonalIcon(
+        OutlinedButton.icon(
           onPressed: onExploreArena,
           icon: const Icon(Icons.stadium_outlined),
-          label: const Text('Explore Arena'),
+          label: const Text('Explore competitions'),
         ),
     ];
     final List<Widget> cards = <Widget>[
+      if (onCreateClub != null)
+        _NoClubActionCard(
+          eyebrow: 'FIRST STEP',
+          title: 'Create your club',
+          detail:
+              'Launch a live club workspace, set the badge and palette later, and unlock identity, trophy, scouting, and competition routes immediately.',
+          icon: Icons.add_circle_outline,
+          accent: GteShellTheme.accentClub,
+          actionLabel: 'Create club',
+          onTap: onCreateClub!,
+        ),
       if (onBrowseClubMarket != null)
         _NoClubActionCard(
-          eyebrow: 'PLAY NOW',
-          title: 'Browse club market',
+          eyebrow: 'ALTERNATIVE',
+          title: 'Own an existing club',
           detail:
-              'Scout live club prices and sale notes even before you own a club.',
+              'Browse clubs available for sale, compare value, and take ownership to unlock club management.',
           icon: Icons.storefront_outlined,
           accent: GteShellTheme.accentWarm,
-          actionLabel: 'Browse club market',
+          actionLabel: 'Open club market',
           onTap: onBrowseClubMarket!,
         ),
       if (onExploreArena != null)
         _NoClubActionCard(
-          eyebrow: 'PLAY NOW',
-          title: 'Explore Arena',
+          eyebrow: 'ALSO AVAILABLE',
+          title: 'Explore competitions',
           detail:
-              'Jump into cups and live match nights while club linking is still pending.',
+              'Join competitions while you decide which club to own or back first.',
           icon: Icons.stadium_outlined,
           accent: GteShellTheme.accentArena,
-          actionLabel: 'Explore Arena',
+          actionLabel: 'Open competitions',
           onTap: onExploreArena!,
         ),
     ];
@@ -72,7 +93,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  'NO CLUB ONBOARDING',
+                  'CLUB SETUP',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: GteShellTheme.accent,
                     letterSpacing: 1.1,
@@ -80,12 +101,12 @@ class GteNoClubOnboardingView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'This signed-in session has no canonical club yet',
+                  'This account does not own a club yet',
                   style: Theme.of(context).textTheme.displaySmall,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Club-only actions stay locked until this account is linked to a canonical club. Until then, jump into the live routes below.',
+                  'Create a new club from scratch or take over one already on the market, then come back here to manage identity, trophies, scouting, and matchday operations.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 18),

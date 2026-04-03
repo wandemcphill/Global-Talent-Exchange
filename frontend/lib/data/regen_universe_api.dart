@@ -65,17 +65,50 @@ class RegenUniverseApi {
       return items.map(RegenScoutingFeedItem.fromJson).toList(growable: false);
     }, () async => fixtures.scoutingFeed(limit: limit));
   }
+
+  Future<List<NationalRegenSeed>> listNationalRegens({
+    int limit = 8,
+    int ageMax = 17,
+  }) {
+    return client.withFallback<List<NationalRegenSeed>>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/regen-universe/national-regens',
+        query: <String, Object?>{'limit': limit, 'age_max': ageMax},
+        auth: false,
+      );
+      final List<Object?> items = GteJson.list(
+        payload['items'] ?? const <Object?>[],
+      );
+      return items.map(NationalRegenSeed.fromJson).toList(growable: false);
+    }, () async => fixtures.nationalRegens(limit: limit));
+  }
+
+  Future<RegenGenerationTracking> fetchTracking() {
+    return client.withFallback<RegenGenerationTracking>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/regen-universe/tracking',
+        auth: false,
+      );
+      return RegenGenerationTracking.fromJson(payload);
+    }, fixtures.tracking);
+  }
 }
 
 class _RegenUniverseFixtures {
   const _RegenUniverseFixtures({
     required List<RegenRisingStar> risingStars,
     required List<RegenScoutingFeedItem> feed,
+    required List<NationalRegenSeed> nationalRegens,
+    required RegenGenerationTracking tracking,
   }) : _risingStars = risingStars,
-       _feed = feed;
+       _feed = feed,
+       _nationalRegens = nationalRegens,
+       _tracking = tracking;
 
   final List<RegenRisingStar> _risingStars;
   final List<RegenScoutingFeedItem> _feed;
+  final List<NationalRegenSeed> _nationalRegens;
+  final RegenGenerationTracking _tracking;
 
   static _RegenUniverseFixtures seed() {
     const RegenUniversePlayer starOne = RegenUniversePlayer(
@@ -103,6 +136,36 @@ class _RegenUniverseFixtures {
       growthCurve: 0.79,
       sourceType: 'regen',
       clubId: 'lagos-atlas',
+    );
+    const NationalRegenSeed seedOne = NationalRegenSeed(
+      id: 'national-seed-ng-1',
+      seedKey: 'seed:ng:1',
+      displayName: 'Kelechi Meridian',
+      age: 16,
+      countryCode: 'NG',
+      countryName: 'Nigeria',
+      seedType: 'national_seed',
+      primaryPosition: 'RW',
+      currentRating: 71,
+      potentialRating: 90,
+      rarityTier: 'elite',
+      preseedBatch: 'system_start',
+      metadata: <String, Object?>{'growth_curve': 0.82},
+    );
+    const NationalRegenSeed seedTwo = NationalRegenSeed(
+      id: 'national-seed-br-1',
+      seedKey: 'seed:br:1',
+      displayName: 'Mateus Sol',
+      age: 17,
+      countryCode: 'BR',
+      countryName: 'Brazil',
+      seedType: 'legendary_seed',
+      primaryPosition: 'ST',
+      currentRating: 74,
+      potentialRating: 94,
+      rarityTier: 'legendary',
+      preseedBatch: 'system_start',
+      metadata: <String, Object?>{'growth_curve': 0.89},
     );
     return _RegenUniverseFixtures(
       risingStars: const <RegenRisingStar>[
@@ -149,6 +212,64 @@ class _RegenUniverseFixtures {
           player: starTwo,
         ),
       ],
+      nationalRegens: const <NationalRegenSeed>[seedOne, seedTwo],
+      tracking: const RegenGenerationTracking(
+        totalSeededPlayers: 248,
+        seedTypes: <RegenGenerationTrackingEntry>[
+          RegenGenerationTrackingEntry(
+            bucket: 'national_seed',
+            count: 214,
+            peakRating: 93,
+            achievements: <String>['u17_callups'],
+            metadata: <String, Object?>{},
+          ),
+          RegenGenerationTrackingEntry(
+            bucket: 'legendary_seed',
+            count: 34,
+            peakRating: 96,
+            achievements: <String>['elite_watchlists'],
+            metadata: <String, Object?>{},
+          ),
+        ],
+        rarityBreakdown: <RegenGenerationTrackingEntry>[
+          RegenGenerationTrackingEntry(
+            bucket: 'elite',
+            count: 57,
+            peakRating: 94,
+            achievements: <String>[],
+            metadata: <String, Object?>{},
+          ),
+          RegenGenerationTrackingEntry(
+            bucket: 'legendary',
+            count: 12,
+            peakRating: 96,
+            achievements: <String>[],
+            metadata: <String, Object?>{},
+          ),
+        ],
+        countryDistribution: <RegenGenerationTrackingEntry>[
+          RegenGenerationTrackingEntry(
+            bucket: 'Nigeria',
+            count: 22,
+            peakRating: 90,
+            achievements: <String>['u17_callups'],
+            metadata: <String, Object?>{},
+          ),
+          RegenGenerationTrackingEntry(
+            bucket: 'Brazil',
+            count: 26,
+            peakRating: 94,
+            achievements: <String>['elite_watchlists'],
+            metadata: <String, Object?>{},
+          ),
+        ],
+        globalPeakRating: 96,
+        trackedAchievements: <String>[
+          'u17_callups',
+          'elite_watchlists',
+          'breakout_debuts',
+        ],
+      ),
     );
   }
 
@@ -158,4 +279,9 @@ class _RegenUniverseFixtures {
   Future<List<RegenScoutingFeedItem>> scoutingFeed({
     required int limit,
   }) async => _feed.take(limit).toList(growable: false);
+
+  Future<List<NationalRegenSeed>> nationalRegens({required int limit}) async =>
+      _nationalRegens.take(limit).toList(growable: false);
+
+  Future<RegenGenerationTracking> tracking() async => _tracking;
 }

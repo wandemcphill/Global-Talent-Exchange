@@ -209,7 +209,9 @@ abstract class GteApiRepository {
 
   Future<GteAdminBuybackExecution> executeAdminBuyback(String orderId);
 
-  Future<GteWalletSummary> fetchWalletSummary();
+  Future<GteWalletSummary> fetchWalletSummary({
+    GteLedgerUnit currency = GteLedgerUnit.coin,
+  });
 
   Future<GteUserWallet> fetchWallet();
 
@@ -229,6 +231,14 @@ abstract class GteApiRepository {
   );
 
   Future<GteWalletTopUpVerificationResult> verifyWalletTopUp(String reference);
+
+  Future<GteWalletConversionQuote> quoteWalletConversion(
+    GteWalletConversionQuoteRequest request,
+  );
+
+  Future<GteWalletConversion> createWalletConversion(
+    GteWalletConversionRequest request,
+  );
 
   Future<GteWithdrawalEligibility> fetchWithdrawalEligibility();
 
@@ -818,12 +828,19 @@ class GteReliableApiRepository implements GteApiRepository {
   }
 
   @override
-  Future<GteWalletSummary> fetchWalletSummary() {
+  Future<GteWalletSummary> fetchWalletSummary({
+    GteLedgerUnit currency = GteLedgerUnit.coin,
+  }) {
     return _withFallback<GteWalletSummary>(
       () async => GteWalletSummary.fromJson(
-        await _request('GET', '/api/wallets/summary', requiresAuth: true),
+        await _request(
+          'GET',
+          '/api/wallets/summary',
+          query: <String, Object?>{'currency': currency.name},
+          requiresAuth: true,
+        ),
       ),
-      fixtures.fetchWalletSummary,
+      () => fixtures.fetchWalletSummary(currency: currency),
     );
   }
 
@@ -914,6 +931,40 @@ class GteReliableApiRepository implements GteApiRepository {
         ),
       ),
       () => fixtures.verifyWalletTopUp(reference),
+    );
+  }
+
+  @override
+  Future<GteWalletConversionQuote> quoteWalletConversion(
+    GteWalletConversionQuoteRequest request,
+  ) {
+    return _withFallback<GteWalletConversionQuote>(
+      () async => GteWalletConversionQuote.fromJson(
+        await _request(
+          'POST',
+          '/api/wallets/conversions/quote',
+          body: request.toJson(),
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.quoteWalletConversion(request),
+    );
+  }
+
+  @override
+  Future<GteWalletConversion> createWalletConversion(
+    GteWalletConversionRequest request,
+  ) {
+    return _withFallback<GteWalletConversion>(
+      () async => GteWalletConversion.fromJson(
+        await _request(
+          'POST',
+          '/api/wallets/conversions',
+          body: request.toJson(),
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.createWalletConversion(request),
     );
   }
 

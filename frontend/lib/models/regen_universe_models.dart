@@ -178,6 +178,206 @@ class RegenScoutingFeedItem {
   }
 }
 
+class NationalRegenSeed {
+  const NationalRegenSeed({
+    required this.id,
+    required this.seedKey,
+    required this.displayName,
+    required this.countryCode,
+    required this.countryName,
+    required this.seedType,
+    required this.primaryPosition,
+    required this.currentRating,
+    required this.potentialRating,
+    required this.rarityTier,
+    required this.metadata,
+    this.age,
+    this.preseedBatch,
+  });
+
+  final String id;
+  final String seedKey;
+  final String displayName;
+  final int? age;
+  final String countryCode;
+  final String countryName;
+  final String seedType;
+  final String primaryPosition;
+  final int currentRating;
+  final int potentialRating;
+  final String rarityTier;
+  final String? preseedBatch;
+  final Map<String, Object?> metadata;
+
+  factory NationalRegenSeed.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'national regen seed',
+    );
+    return NationalRegenSeed(
+      id: GteJson.string(json, <String>['id']),
+      seedKey: GteJson.string(json, <String>['seed_key', 'seedKey']),
+      displayName: GteJson.string(json, <String>[
+        'display_name',
+        'displayName',
+      ]),
+      age: GteJson.integerOrNull(json, <String>['age']),
+      countryCode: GteJson.string(json, <String>[
+        'country_code',
+        'countryCode',
+      ]),
+      countryName: GteJson.string(json, <String>[
+        'country_name',
+        'countryName',
+      ]),
+      seedType: GteJson.string(json, <String>[
+        'seed_type',
+        'seedType',
+      ], fallback: 'national_seed'),
+      primaryPosition: GteJson.string(json, <String>[
+        'primary_position',
+        'primaryPosition',
+      ], fallback: 'CM'),
+      currentRating: GteJson.integer(json, <String>[
+        'current_rating',
+        'currentRating',
+      ], fallback: 60),
+      potentialRating: GteJson.integer(json, <String>[
+        'potential_rating',
+        'potentialRating',
+      ], fallback: 75),
+      rarityTier: GteJson.string(json, <String>[
+        'rarity_tier',
+        'rarityTier',
+      ], fallback: 'standard'),
+      preseedBatch: GteJson.stringOrNull(json, <String>[
+        'preseed_batch',
+        'preseedBatch',
+      ]),
+      metadata: GteJson.map(
+        json,
+        keys: <String>['metadata'],
+        fallback: const <String, Object?>{},
+      ),
+    );
+  }
+
+  RegenUniversePlayer toPlayer() {
+    return RegenUniversePlayer(
+      id: id,
+      name: displayName,
+      age: age ?? 17,
+      nationality: countryName,
+      nationalityCode: countryCode,
+      position: primaryPosition,
+      potential: potentialRating,
+      currentRating: currentRating,
+      growthCurve: GteJson.number(metadata, <String>[
+        'growth_curve',
+        'growthCurve',
+      ], fallback: 0.65),
+      sourceType: seedType,
+      clubId: null,
+    );
+  }
+}
+
+class RegenGenerationTrackingEntry {
+  const RegenGenerationTrackingEntry({
+    required this.bucket,
+    required this.count,
+    required this.peakRating,
+    required this.achievements,
+    required this.metadata,
+  });
+
+  final String bucket;
+  final int count;
+  final int peakRating;
+  final List<String> achievements;
+  final Map<String, Object?> metadata;
+
+  factory RegenGenerationTrackingEntry.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'regen tracking entry',
+    );
+    return RegenGenerationTrackingEntry(
+      bucket: GteJson.string(json, <String>['bucket']),
+      count: GteJson.integer(json, <String>['count']),
+      peakRating: GteJson.integer(json, <String>[
+        'peak_rating',
+        'peakRating',
+      ]),
+      achievements: GteJson.typedList(
+        json,
+        <String>['achievements'],
+        (Object? item) => item?.toString() ?? '',
+      ).where((String item) => item.trim().isNotEmpty).toList(growable: false),
+      metadata: GteJson.map(
+        json,
+        keys: <String>['metadata'],
+        fallback: const <String, Object?>{},
+      ),
+    );
+  }
+}
+
+class RegenGenerationTracking {
+  const RegenGenerationTracking({
+    required this.totalSeededPlayers,
+    required this.seedTypes,
+    required this.rarityBreakdown,
+    required this.countryDistribution,
+    required this.globalPeakRating,
+    required this.trackedAchievements,
+  });
+
+  final int totalSeededPlayers;
+  final List<RegenGenerationTrackingEntry> seedTypes;
+  final List<RegenGenerationTrackingEntry> rarityBreakdown;
+  final List<RegenGenerationTrackingEntry> countryDistribution;
+  final int globalPeakRating;
+  final List<String> trackedAchievements;
+
+  factory RegenGenerationTracking.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'regen tracking',
+    );
+    return RegenGenerationTracking(
+      totalSeededPlayers: GteJson.integer(json, <String>[
+        'total_seeded_players',
+        'totalSeededPlayers',
+      ]),
+      seedTypes: GteJson.typedList(
+        json,
+        <String>['seed_types', 'seedTypes'],
+        RegenGenerationTrackingEntry.fromJson,
+      ),
+      rarityBreakdown: GteJson.typedList(
+        json,
+        <String>['rarity_breakdown', 'rarityBreakdown'],
+        RegenGenerationTrackingEntry.fromJson,
+      ),
+      countryDistribution: GteJson.typedList(
+        json,
+        <String>['country_distribution', 'countryDistribution'],
+        RegenGenerationTrackingEntry.fromJson,
+      ),
+      globalPeakRating: GteJson.integer(json, <String>[
+        'global_peak_rating',
+        'globalPeakRating',
+      ]),
+      trackedAchievements: GteJson.typedList(
+        json,
+        <String>['tracked_achievements', 'trackedAchievements'],
+        (Object? item) => item?.toString() ?? '',
+      ).where((String item) => item.trim().isNotEmpty).toList(growable: false),
+    );
+  }
+}
+
 RegenUniversePlayer _playerFromEntry(Map<String, Object?> json) {
   if (json['player'] != null) {
     return RegenUniversePlayer.fromJson(json['player']);

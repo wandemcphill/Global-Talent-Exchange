@@ -3,6 +3,7 @@ import 'package:gte_frontend/controllers/club_controller.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/controllers/regen_universe_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
+import 'package:gte_frontend/data/club_creation_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
@@ -18,6 +19,7 @@ import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/regen_universe_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/clubs/club_profile_screen.dart';
+import 'package:gte_frontend/screens/clubs/create_club_screen.dart';
 import 'package:gte_frontend/screens/clubs/club_trophy_cabinet_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
 import 'package:gte_frontend/widgets/gte_formatters.dart';
@@ -224,7 +226,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   status:
                       widget.exchangeController.isAuthenticated
                           ? 'Market, play, hub, club, and capital layers are stitched into one premium shell.'
-                          : 'Preview mode is live. Sign in to unlock trading, capital execution, and writable club actions.',
+                          : 'Guest access is live. Sign in to unlock trading, capital execution, and writable club actions.',
                   syncedAt: widget.exchangeController.marketSyncedAt,
                   accent: GteShellTheme.accent,
                   isRefreshing:
@@ -332,6 +334,17 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 _HomeRegenUniverseSection(
                   controller: _regenUniverseController,
                   onRetry: _refresh,
+                  onOpenNationalTeams:
+                      () => _openFeatureRoute(
+                        const NationalTeamCompetitionsRouteData(),
+                      ),
+                  onOpenWorldRegens:
+                      () => _openFeatureRoute(
+                        WorldClubContextRouteData(
+                          clubId: clubId,
+                          clubName: clubName,
+                        ),
+                      ),
                 ),
                 const SizedBox(height: 20),
                 _HomeExpansionLanesPanel(
@@ -680,14 +693,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   String _capitalMetricLabel() {
     final wallet = widget.exchangeController.walletSummary;
     if (wallet != null) {
-      return gteFormatFiat(
+      return gteFormatAmountForUnit(
         wallet.availableBalance,
-        currency: wallet.currency.name.toUpperCase(),
+        wallet.currency,
       );
     }
     final portfolioSummary = widget.exchangeController.portfolioSummary;
     if (portfolioSummary != null) {
-      return gteFormatFiat(portfolioSummary.cashBalance);
+      return gteFormatCredits(portfolioSummary.cashBalance);
     }
     if (!widget.exchangeController.isAuthenticated) {
       return 'Preview';
@@ -718,7 +731,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (username.isNotEmpty) {
       return username;
     }
-    return 'Preview User';
+    return 'Guest user';
   }
 
   String _formatClubName(String clubId) {
@@ -776,14 +789,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (!widget.exchangeController.isAuthenticated) {
       return widget.onOpenLogin;
     }
-    return null;
-  }
-
-  VoidCallback? _joinClubOnboardingAction() {
-    if (!widget.exchangeController.isAuthenticated) {
-      return widget.onOpenLogin;
-    }
-    return null;
+    return () {
+      _openCreateClubFlow();
+    };
   }
 
   VoidCallback? _arenaOnboardingAction() {
@@ -804,12 +812,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final bool isAuthenticated = widget.exchangeController.isAuthenticated;
     if (isAuthenticated) {
       return GteNoClubOnboardingView(
+        onCreateClub: _createClubOnboardingAction(),
         onBrowseClubMarket: _browseClubMarketOnboardingAction(),
         onExploreArena: _arenaOnboardingAction(),
       );
     }
     final VoidCallback? createClubAction = _createClubOnboardingAction();
-    final VoidCallback? joinClubAction = _joinClubOnboardingAction();
+    final VoidCallback? browseClubAction = _browseClubMarketOnboardingAction();
     final VoidCallback? arenaAction = _arenaOnboardingAction();
     final List<Widget> cards = <Widget>[
       _HomeActionCard(
@@ -817,27 +826,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         title: 'Create Club',
         detail:
             isAuthenticated
-                ? 'Club creation is not yet available from Home in this active shell. A dedicated create-club route is still required before this CTA can go live.'
+                ? 'Create a club from Home to unlock identity, trophies, and live matchday operations.'
                 : 'Sign in, then start your first club to unlock Home, trophies, and matchday stories.',
         icon: Icons.add_circle_outline,
         accent: GteShellTheme.accent,
         badge: 'Start',
-        actionLabel:
-            isAuthenticated ? 'Create Club unavailable' : 'Create Club',
+        actionLabel: 'Create Club',
         onTap: createClubAction,
       ),
       _HomeActionCard(
         eyebrow: 'STEP 2',
-        title: 'Join Club',
+        title: 'Own an Existing Club',
         detail:
-            isAuthenticated
-                ? 'Club linking is not yet available from Home in this active shell. A dedicated join-club route is still required before this CTA can go live.'
-                : 'Sign in to bring an existing club into Home and light up live matches, replays, and prestige.',
-        icon: Icons.group_add_outlined,
+            'Browse clubs already available for sale, compare their current position, and step straight into a live owner workspace.',
+        icon: Icons.storefront_outlined,
         accent: GteShellTheme.accentWarm,
-        badge: 'Link',
-        actionLabel: isAuthenticated ? 'Join Club unavailable' : 'Join Club',
-        onTap: joinClubAction,
+        badge: 'Own',
+        actionLabel: 'Open Club Market',
+        onTap: browseClubAction,
       ),
       if (arenaAction != null)
         _HomeActionCard(
@@ -881,8 +887,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const SizedBox(height: 8),
                 Text(
                   isAuthenticated
-                      ? 'Home onboarding is mounted for this signed-in session, but club creation and join routing are not yet live in the active shell. Arena remains available while those entry points are finished.'
-                      : 'Scout the lobby first, then sign in to build a club or bring one in. That unlocks the full Home crowd.',
+                      ? 'Create a club from scratch or step into one already listed on the market, then use Home as the command surface for your sporting and commercial journey.'
+                      : 'Scout the lobby first, then sign in to create a club or buy one already on the market. That unlocks the full Home crowd.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 18),
@@ -891,7 +897,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   runSpacing: 12,
                   children: <Widget>[
                     Chip(label: const Text('1. Create Club')),
-                    Chip(label: const Text('2. Join Club')),
+                    Chip(label: const Text('2. Own an Existing Club')),
                     if (arenaAction != null)
                       const Chip(label: Text('3. Explore Arena')),
                   ],
@@ -903,17 +909,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   children: <Widget>[
                     FilledButton(
                       onPressed: createClubAction,
-                      child: Text(
-                        isAuthenticated
-                            ? 'Create Club unavailable'
-                            : 'Create Club',
-                      ),
+                      child: const Text('Create Club'),
                     ),
                     FilledButton.tonal(
-                      onPressed: joinClubAction,
-                      child: Text(
-                        isAuthenticated ? 'Join Club unavailable' : 'Join Club',
-                      ),
+                      onPressed: browseClubAction,
+                      child: const Text('Open Club Market'),
                     ),
                     if (arenaAction != null)
                       OutlinedButton(
@@ -1081,6 +1081,39 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     while (clubController.isLoading && mounted) {
       await Future<void>.delayed(const Duration(milliseconds: 60));
     }
+  }
+
+  Future<void> _openCreateClubFlow() async {
+    final String? accessToken = widget.exchangeController.accessToken;
+    if (accessToken == null || accessToken.trim().isEmpty) {
+      widget.onOpenLogin?.call();
+      return;
+    }
+    final GteCreatedClubProfile? created = await Navigator.of(
+      context,
+    ).push<GteCreatedClubProfile>(
+      MaterialPageRoute<GteCreatedClubProfile>(
+        builder:
+            (BuildContext context) => CreateClubScreen(
+              baseUrl: widget.apiBaseUrl,
+              accessToken: accessToken,
+              backendMode: widget.backendMode,
+              onClubCreated: _adoptCreatedClub,
+            ),
+      ),
+    );
+    if (created != null) {
+      _adoptCreatedClub(created);
+    }
+  }
+
+  void _adoptCreatedClub(GteCreatedClubProfile club) {
+    widget.exchangeController.bindCurrentClub(
+      clubId: club.id,
+      clubName: club.clubName,
+      clubSlug: club.slug,
+    );
+    widget.onOpenClubTab?.call();
   }
 }
 
@@ -1490,13 +1523,25 @@ class _HomeRegenUniverseSection extends StatelessWidget {
   const _HomeRegenUniverseSection({
     required this.controller,
     required this.onRetry,
+    required this.onOpenNationalTeams,
+    required this.onOpenWorldRegens,
   });
 
   final RegenUniverseController controller;
   final Future<void> Function() onRetry;
+  final VoidCallback onOpenNationalTeams;
+  final VoidCallback onOpenWorldRegens;
 
   @override
   Widget build(BuildContext context) {
+    final RegenGenerationTracking? tracking = controller.tracking;
+    final List<NationalRegenSeed> nationalRegens = controller.nationalRegens
+        .take(4)
+        .toList(growable: false);
+    final RegenGenerationTrackingEntry? leadingCountry =
+        tracking == null || tracking.countryDistribution.isEmpty
+            ? null
+            : tracking.countryDistribution.first;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -1504,7 +1549,63 @@ class _HomeRegenUniverseSection extends StatelessWidget {
           eyebrow: 'REGEN UNIVERSE',
           title: 'The talent map keeps producing new names and new stories.',
           detail:
-              'Rising stars surface the best prospects, while the scouting feed keeps the wider football world moving in real time.',
+              'Rising stars surface the best prospects, national-team pools expose pre-seeded regens, and world context keeps club-generated pathways visible.',
+        ),
+        const SizedBox(height: 14),
+        GteSurfacePanel(
+          accentColor: GteShellTheme.accent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'National seeds and club regen routes',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'National teams opens the pre-seeded U17 pool. World context keeps club-generated regen discovery, scouting, and tracking in one visible route.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  FilledButton.tonalIcon(
+                    onPressed: onOpenNationalTeams,
+                    icon: const Icon(Icons.flag_outlined),
+                    label: const Text('National regen pool'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: onOpenWorldRegens,
+                    icon: const Icon(Icons.public_outlined),
+                    label: const Text('Open world regen desk'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  _RegenMetaChip(
+                    label:
+                        '${nationalRegens.length} visible national pre-seeds',
+                  ),
+                  if (tracking != null)
+                    _RegenMetaChip(
+                      label:
+                          '${tracking.totalSeededPlayers} total seeded players tracked',
+                    ),
+                  if (leadingCountry != null)
+                    _RegenMetaChip(
+                      label:
+                          '${leadingCountry.bucket}: ${leadingCountry.count} tracked',
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         LayoutBuilder(
@@ -1742,6 +1843,7 @@ class _RegenRisingStarTile extends StatelessWidget {
     final RegenUniversePlayer player = star.player;
     final List<String> badges = <String>[
       star.momentumLabel,
+      _humanizeRegenSource(player.sourceType),
       ...star.badges.take(2),
     ].where((String value) => value.trim().isNotEmpty).toList(growable: false);
     final String nationality = player.nationalityCode ?? player.nationality;
@@ -1828,6 +1930,7 @@ class _RegenScoutingFeedTile extends StatelessWidget {
     final RegenUniversePlayer? player = item.player;
     final List<String> badges = <String>[
       _humanizeSlug(item.feedType),
+      if (player != null) _humanizeRegenSource(player.sourceType),
       ...item.badges.take(2).map(_humanizeSlug),
     ].where((String value) => value.trim().isNotEmpty).toList(growable: false);
     return Container(
@@ -1880,7 +1983,7 @@ class _RegenScoutingFeedTile extends StatelessWidget {
           if (player != null) ...<Widget>[
             const SizedBox(height: 10),
             Text(
-              '${player.name} | ${player.age} | ${player.position} | ${player.potential} POT',
+              '${player.name} | ${player.age} | ${player.position} | ${player.potential} POT | ${_humanizeRegenSource(player.sourceType)}',
               style: Theme.of(context).textTheme.labelLarge,
             ),
           ],
@@ -1960,6 +2063,20 @@ String _humanizeSlug(String value) {
   }
   final String spaced = normalized.replaceAll('_', ' ');
   return spaced[0].toUpperCase() + spaced.substring(1);
+}
+
+String _humanizeRegenSource(String value) {
+  final String normalized = value.trim().toLowerCase();
+  switch (normalized) {
+    case 'national_seed':
+      return 'National pre-seed';
+    case 'legendary_seed':
+      return 'Legendary pre-seed';
+    case 'regen':
+      return 'Club/world regen';
+    default:
+      return _humanizeSlug(value);
+  }
 }
 
 class _HomeSectionHeading extends StatelessWidget {

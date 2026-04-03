@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'gte_api_repository.dart';
@@ -21,6 +21,7 @@ class GteMockApi implements GteApiRepository {
             MapEntry<String, GteOrderBook>(key, _cloneOrderBook(value)),
       ),
       _walletSummary = _seedWalletSummary,
+      _fanWalletSummary = _seedFanWalletSummary,
       _walletLedger = List<GteWalletLedgerEntry>.of(
         _seedWalletLedger,
         growable: true,
@@ -79,6 +80,7 @@ class GteMockApi implements GteApiRepository {
   final Map<String, GteOrderBook> _baseOrderBooks;
 
   GteWalletSummary _walletSummary;
+  GteWalletSummary _fanWalletSummary;
   final List<GteWalletLedgerEntry> _walletLedger;
   final List<GteWalletTransactionRecord> _walletTransactions;
   final Map<String, GteWalletTopUpSession> _topUpSessions =
@@ -164,10 +166,12 @@ class GteMockApi implements GteApiRepository {
     bool mandatoryOnly = false,
   }) async {
     await _delay();
-    final Iterable<GtePolicyDocumentDetail> docs = mandatoryOnly
-        ? _policyDocuments
-            .where((GtePolicyDocumentDetail doc) => doc.isMandatory)
-        : _policyDocuments;
+    final Iterable<GtePolicyDocumentDetail> docs =
+        mandatoryOnly
+            ? _policyDocuments.where(
+              (GtePolicyDocumentDetail doc) => doc.isMandatory,
+            )
+            : _policyDocuments;
     return docs
         .map(
           (GtePolicyDocumentDetail doc) => GtePolicyDocumentSummary(
@@ -223,8 +227,10 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() async {
     await _delay();
-    return List<GtePolicyAcceptanceSummary>.of(_policyAcceptances,
-        growable: false);
+    return List<GtePolicyAcceptanceSummary>.of(
+      _policyAcceptances,
+      growable: false,
+    );
   }
 
   @override
@@ -233,8 +239,9 @@ class GteMockApi implements GteApiRepository {
     String versionLabel,
   ) async {
     await _delay();
-    final GtePolicyDocumentDetail document =
-        await fetchPolicyDocument(documentKey);
+    final GtePolicyDocumentDetail document = await fetchPolicyDocument(
+      documentKey,
+    );
     final int existingIndex = _policyAcceptances.indexWhere(
       (GtePolicyAcceptanceSummary item) => item.documentKey == documentKey,
     );
@@ -446,7 +453,7 @@ class GteMockApi implements GteApiRepository {
       remainingQuantity: request.quantity,
       maxPrice: request.maxPrice ?? referencePrice,
       reservedAmount: reservedAmount,
-      currency: GteLedgerUnit.credit,
+      currency: GteLedgerUnit.coin,
       holdTransactionId:
           request.side == GteOrderSide.buy && reservedAmount > 0
               ? 'ledger-${_ledgerSequence + 1}'
@@ -475,7 +482,7 @@ class GteMockApi implements GteApiRepository {
           id: 'ledger-${++_ledgerSequence}',
           amount: -reservedAmount,
           reason: 'order_funds_reserved',
-          description: 'Reserved credits for ${request.playerId} buy order',
+          description: 'Reserved GTEX Coin for ${request.playerId} buy order',
           createdAt: timestamp,
         ),
       );
@@ -536,7 +543,8 @@ class GteMockApi implements GteApiRepository {
           id: 'ledger-${++_ledgerSequence}',
           amount: existing.reservedAmount,
           reason: 'order_cancel_release',
-          description: 'Released credits from cancelled order ${existing.id}',
+          description:
+              'Released GTEX Coin from cancelled order ${existing.id}',
           createdAt: timestamp,
         ),
       );
@@ -672,9 +680,11 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
-  Future<GteWalletSummary> fetchWalletSummary() async {
+  Future<GteWalletSummary> fetchWalletSummary({
+    GteLedgerUnit currency = GteLedgerUnit.coin,
+  }) async {
     await _delay();
-    return _walletSummary;
+    return currency == GteLedgerUnit.credit ? _fanWalletSummary : _walletSummary;
   }
 
   @override
@@ -729,12 +739,16 @@ class GteMockApi implements GteApiRepository {
   ) async {
     await _delay();
     final String reference = 'WTX-${++_walletTransactionSequence}';
+    final String provider = request.provider.trim().toLowerCase();
     final GteWalletTopUpSession session = GteWalletTopUpSession(
       reference: reference,
-      paymentLink: 'https://mock.paystack.local/$reference',
+      paymentLink:
+          provider == 'korapay'
+              ? 'https://mock.korapay.local/$reference'
+              : 'https://mock.paystack.local/$reference',
       amount: request.amount,
-      currency: 'credit',
-      provider: request.provider,
+      currency: 'coin',
+      provider: provider,
       status: 'pending',
       mockMode: true,
     );
@@ -801,13 +815,85 @@ class GteMockApi implements GteApiRepository {
         id: 'ledger-${++_ledgerSequence}',
         amount: updated.amount,
         reason: 'wallet_top_up',
-        description: 'Wallet top-up credited via Paystack',
+        description:
+            'Wallet top-up credited via ${pendingSession.provider == 'korapay' ? 'KoraPay' : 'Paystack'}',
         createdAt: timestamp,
       ),
     );
+    _rebuildPortfolioSummary();
     return GteWalletTopUpVerificationResult(
       wallet: await fetchWallet(),
       transaction: updated,
+    );
+  }
+
+  @override
+  Future<GteWalletConversionQuote> quoteWalletConversion(
+    GteWalletConversionQuoteRequest request,
+  ) async {
+    await _delay();
+    return _buildWalletConversionQuote(request);
+  }
+
+  @override
+  Future<GteWalletConversion> createWalletConversion(
+    GteWalletConversionRequest request,
+  ) async {
+    await _delay();
+    final GteWalletConversionQuote quote = _buildWalletConversionQuote(request);
+    if (_walletSummary.availableBalance < quote.sourceAmount) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message:
+            'Available GTEX Coin balance is lower than the requested conversion amount.',
+      );
+    }
+    final String reference = 'WCV-${++_walletTransactionSequence}';
+    final DateTime timestamp = _nextTimestamp();
+    _walletSummary = GteWalletSummary(
+      availableBalance: _walletSummary.availableBalance - quote.sourceAmount,
+      reservedBalance: _walletSummary.reservedBalance,
+      totalBalance: _walletSummary.totalBalance - quote.sourceAmount,
+      currency: _walletSummary.currency,
+    );
+    _fanWalletSummary = GteWalletSummary(
+      availableBalance: _fanWalletSummary.availableBalance + quote.targetAmount,
+      reservedBalance: _fanWalletSummary.reservedBalance,
+      totalBalance: _fanWalletSummary.totalBalance + quote.targetAmount,
+      currency: _fanWalletSummary.currency,
+    );
+    _walletLedger.insert(
+      0,
+      GteWalletLedgerEntry(
+        id: 'ledger-${++_ledgerSequence}',
+        amount: -quote.sourceAmount,
+        reason: 'adjustment',
+        description:
+            'Converted ${quote.sourceAmount.toStringAsFixed(2)} GTEX Coin into ${quote.targetAmount.toStringAsFixed(2)} Fan Coin',
+        createdAt: timestamp,
+      ),
+    );
+    _walletTransactions.insert(
+      0,
+      GteWalletTransactionRecord(
+        id: 'wallet-txn-$reference',
+        userId: _fixtureSession.user.id,
+        type: 'conversion',
+        amount: quote.sourceAmount,
+        status: 'verified',
+        reference: reference,
+        createdAt: timestamp,
+      ),
+    );
+    _rebuildPortfolioSummary();
+    return GteWalletConversion(
+      transactionId: 'txn-$reference',
+      reference: reference,
+      sourceUnit: quote.sourceUnit,
+      sourceAmount: quote.sourceAmount,
+      targetUnit: quote.targetUnit,
+      targetAmount: quote.targetAmount,
+      rate: quote.rate,
     );
   }
 
@@ -860,9 +946,9 @@ class GteMockApi implements GteApiRepository {
       rateDirection: _treasurySettings.withdrawalRateDirection,
       estimatedFiatPayout: estimatedFiat,
       processorMode:
-          _treasurySettings.withdrawalMode == GtePaymentMode.manual
-              ? 'manual_bank_transfer'
-              : 'automatic_gateway',
+          _treasurySettings.withdrawalMode == GtePaymentMode.automatic
+              ? 'automatic_gateway'
+              : 'manual_bank_transfer',
       payoutChannel: 'bank_transfer',
       feeBps: feeBps,
       minimumFee: minimumFee,
@@ -893,10 +979,13 @@ class GteMockApi implements GteApiRepository {
       totalDebit: withdrawal.totalDebit,
       sourceScope: 'trade',
       processorMode:
-          _treasurySettings.withdrawalMode == GtePaymentMode.manual
-              ? 'manual_bank_transfer'
-              : 'automatic_gateway',
-      payoutChannel: 'bank_transfer',
+          _treasurySettings.withdrawalMode == GtePaymentMode.automatic
+              ? 'automatic_gateway'
+              : 'manual_bank_transfer',
+      payoutChannel:
+          _treasurySettings.withdrawalMode == GtePaymentMode.automatic
+              ? 'gateway'
+              : 'bank_transfer',
     );
   }
 
@@ -2470,6 +2559,31 @@ class GteMockApi implements GteApiRepository {
     return order.maxPrice ?? _referencePriceFor(order.playerId, order.side);
   }
 
+  GteWalletConversionQuote _buildWalletConversionQuote(
+    GteWalletConversionQuoteRequest request,
+  ) {
+    if (request.amount <= 0) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Conversion amount must be positive.',
+      );
+    }
+    if (request.sourceUnit != GteLedgerUnit.coin) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Only GTEX Coin can be converted into Fan Coin.',
+      );
+    }
+    const double rate = 100;
+    return GteWalletConversionQuote(
+      sourceUnit: GteLedgerUnit.coin,
+      sourceAmount: request.amount,
+      targetUnit: GteLedgerUnit.credit,
+      targetAmount: request.amount * rate,
+      rate: rate,
+    );
+  }
+
   List<GteOrderBookLevel> _mergeOrderBookSide(
     List<GteOrderBookLevel> seeded,
     Iterable<GteOrderRecord> liveOrders, {
@@ -3404,6 +3518,13 @@ const GteWalletSummary _seedWalletSummary = GteWalletSummary(
   availableBalance: 1200,
   reservedBalance: 62.5,
   totalBalance: 1262.5,
+  currency: GteLedgerUnit.coin,
+);
+
+const GteWalletSummary _seedFanWalletSummary = GteWalletSummary(
+  availableBalance: 4800,
+  reservedBalance: 0,
+  totalBalance: 4800,
   currency: GteLedgerUnit.credit,
 );
 
@@ -3441,7 +3562,7 @@ final List<GteWalletLedgerEntry> _seedWalletLedger = <GteWalletLedgerEntry>[
     id: 'ledger-1',
     amount: -62.5,
     reason: 'withdrawal_hold',
-    description: 'Reserved credits for resting buy order',
+    description: 'Reserved GTEX Coin for resting buy order',
     createdAt: DateTime.utc(2026, 3, 11, 11, 30),
   ),
   GteWalletLedgerEntry(
@@ -3472,7 +3593,7 @@ final List<GteOrderRecord> _seedOrders = <GteOrderRecord>[
     remainingQuantity: 0.5,
     maxPrice: 125,
     reservedAmount: 62.5,
-    currency: GteLedgerUnit.credit,
+    currency: GteLedgerUnit.coin,
     holdTransactionId: 'ledger-1',
     createdAt: DateTime.utc(2026, 3, 11, 11, 30),
     updatedAt: DateTime.utc(2026, 3, 11, 11, 30),
@@ -3493,7 +3614,7 @@ final List<GteOrderRecord> _seedOrders = <GteOrderRecord>[
     remainingQuantity: 0.0,
     maxPrice: 920,
     reservedAmount: 0.0,
-    currency: GteLedgerUnit.credit,
+    currency: GteLedgerUnit.coin,
     holdTransactionId: 'ledger-3',
     createdAt: DateTime.utc(2026, 3, 10, 18, 15),
     updatedAt: DateTime.utc(2026, 3, 10, 18, 16),

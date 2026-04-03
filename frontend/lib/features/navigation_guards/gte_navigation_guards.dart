@@ -12,6 +12,7 @@ import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_d
 import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_repository.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/jersey_variant_dto.dart';
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_repository.dart';
+import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
@@ -189,7 +190,11 @@ class GteNavigationDependencies {
   }
 
   TrophyCabinetRepository createTrophyCabinetRepository() {
-    return trophyCabinetRepository ?? StubTrophyCabinetRepository();
+    return trophyCabinetRepository ??
+        TrophyCabinetApiRepository.standard(
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+        );
   }
 
   DynastyRepository createDynastyRepository() {

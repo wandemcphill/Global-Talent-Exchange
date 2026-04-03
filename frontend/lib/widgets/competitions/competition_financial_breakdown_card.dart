@@ -54,9 +54,7 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
             value: '${_formatAmount(entryFee, currency)} per player',
           ),
           _MoneyRow(
-            label: projected
-                ? 'Projected gross pool'
-                : 'Gross pool',
+            label: projected ? 'Projected gross pool' : 'Gross pool',
             value: _formatAmount(grossPool, currency),
           ),
           _MoneyRow(
@@ -94,10 +92,7 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Icon(
-                  Icons.lock_outline,
-                  color: GteShellTheme.accentWarm,
-                ),
+                const Icon(Icons.lock_outline, color: GteShellTheme.accentWarm),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -134,18 +129,20 @@ class _MoneyRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: emphasize
-                  ? Theme.of(context).textTheme.titleMedium
-                  : Theme.of(context).textTheme.bodyMedium,
+              style:
+                  emphasize
+                      ? Theme.of(context).textTheme.titleMedium
+                      : Theme.of(context).textTheme.bodyMedium,
             ),
           ),
           Text(
             value,
-            style: emphasize
-                ? Theme.of(context).textTheme.titleLarge?.copyWith(
+            style:
+                emphasize
+                    ? Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: GteShellTheme.accent,
                     )
-                : Theme.of(context).textTheme.titleMedium,
+                    : Theme.of(context).textTheme.titleMedium,
           ),
         ],
       ),
@@ -155,10 +152,10 @@ class _MoneyRow extends StatelessWidget {
 
 String _formatAmount(double value, String currency) {
   if (currency.toLowerCase() == 'credit') {
-    return gteFormatCredits(value);
+    return gteFormatFanCoins(value);
   }
   if (currency.toLowerCase() == 'coin') {
-    return gteFormatFanCoins(value);
+    return gteFormatCredits(value);
   }
   final bool whole = value == value.roundToDouble();
   final String number = value.toStringAsFixed(whole ? 0 : 2);

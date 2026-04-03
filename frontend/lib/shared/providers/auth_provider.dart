@@ -147,7 +147,7 @@ final Provider<FederationContext?> federationContextProvider =
 final Provider<Match3dUserEntitlement> match3dEntitlementProvider =
     Provider<Match3dUserEntitlement>((Ref ref) {
       final AuthSession? session = ref.watch(authProvider);
-      final bool premium = _hasMatch3dPremiumAccess(session);
+      final bool premium = session?.isAuthenticated ?? false;
       return Match3dUserEntitlement(
         isPremiumUser: premium,
         premiumCameraAccess: premium,
@@ -254,40 +254,4 @@ bool _hasAdminPermission(AuthSession? session, String permission) {
     return false;
   }
   return session.isSuperAdmin || session.hasPermission(permission);
-}
-
-bool _hasMatch3dPremiumAccess(AuthSession? session) {
-  if (session == null || !session.isAuthenticated) {
-    return false;
-  }
-  final Map<String, Object?> rawJson = session.rawJson;
-  final Map<String, Object?> user =
-      _mapFromObject(rawJson['user'] ?? rawJson['current_user']) ??
-      const <String, Object?>{};
-  return _boolFromJson(rawJson['is_premium_user']) ||
-      _boolFromJson(rawJson['premium_access']) ||
-      _boolFromJson(user['is_premium_user']) ||
-      _boolFromJson(user['premium_access']) ||
-      session.hasPermission('match_3d_premium');
-}
-
-Map<String, Object?>? _mapFromObject(Object? value) {
-  if (value is Map<String, Object?>) {
-    return value;
-  }
-  if (value is Map) {
-    return value.map(
-      (Object? key, Object? entryValue) =>
-          MapEntry<String, Object?>(key.toString(), entryValue),
-    );
-  }
-  return null;
-}
-
-bool _boolFromJson(Object? value) {
-  if (value is bool) {
-    return value;
-  }
-  final String normalized = value?.toString().trim().toLowerCase() ?? '';
-  return normalized == 'true' || normalized == '1' || normalized == 'yes';
 }

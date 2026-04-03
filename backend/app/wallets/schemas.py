@@ -106,7 +106,7 @@ class PurchaseOrderQuoteRequest(WalletRequestModel):
     amount: Decimal
     input_unit: str = Field(default="fiat")
     provider_key: str = Field(min_length=2, max_length=64)
-    unit: LedgerUnit = LedgerUnit.CREDIT
+    unit: LedgerUnit = LedgerUnit.COIN
     source_scope: PurchaseOrderSourceScope = PurchaseOrderSourceScope.WALLET
 
     @field_validator("input_unit")
@@ -336,6 +336,13 @@ class WalletConversionQuoteRequest(WalletRequestModel):
     def validate_conversion_amount(cls, value: Decimal) -> Decimal:
         if value <= 0:
             raise ValueError("Conversion amount must be positive.")
+        return value
+
+    @field_validator("source_unit")
+    @classmethod
+    def validate_source_unit(cls, value: LedgerUnit) -> LedgerUnit:
+        if value != LedgerUnit.COIN:
+            raise ValueError("Only GTEX Coin can be converted into Fan Coin.")
         return value
 
 

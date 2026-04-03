@@ -22,16 +22,16 @@ class GtexMatchBroadcastController extends ChangeNotifier {
     this.competitionId,
     Match3dUserEntitlement? entitlement,
     GtexMatchOverlayController? overlayController,
-  })  : _viewState = viewState,
-        _spectatorMode = spectatorMode,
-        _auto3DEnabled = auto3DEnabled,
-        _entitlement = entitlement,
-        _modeController = GtexMatchModeController(
-          baseViewState: viewState,
-          initialMode: initialMode,
-        ),
-        _overlayController = overlayController ?? GtexMatchOverlayController(),
-        _isPremiumUser = isPremiumUser {
+  }) : _viewState = viewState,
+       _spectatorMode = spectatorMode,
+       _auto3DEnabled = auto3DEnabled,
+       _entitlement = entitlement,
+       _modeController = GtexMatchModeController(
+         baseViewState: viewState,
+         initialMode: initialMode,
+       ),
+       _overlayController = overlayController ?? GtexMatchOverlayController(),
+       _isPremiumUser = isPremiumUser {
     _viewType = _resolveInitialViewType(initialViewType);
     _rebuildHudState();
   }
@@ -72,11 +72,11 @@ class GtexMatchBroadcastController extends ChangeNotifier {
   bool get isPaused => _isPaused;
 
   bool get canUsePseudo3D {
-    final Match3dUserEntitlement entitlement = _entitlement ??
-        Match3dUserEntitlement(
-          isPremiumUser: _isPremiumUser,
-        );
+    final Match3dUserEntitlement entitlement =
+        _entitlement ?? Match3dUserEntitlement(isPremiumUser: _isPremiumUser);
     return entitlement.isPremiumUser ||
+        entitlement.premiumCameraAccess ||
+        entitlement.fastReplayAccess ||
         entitlement.hasUnlockedMatch(_viewState.matchId) ||
         (competitionId != null &&
             entitlement.hasTournamentBoost(competitionId!));
@@ -90,9 +90,8 @@ class GtexMatchBroadcastController extends ChangeNotifier {
   double get authoritativePositionSeconds =>
       _modeController.authoritativeSecondsForViewer(_viewerPositionSeconds);
 
-  MatchTimelineFrame get currentFrame => frameAtAuthoritativeSeconds(
-        authoritativePositionSeconds,
-      );
+  MatchTimelineFrame get currentFrame =>
+      frameAtAuthoritativeSeconds(authoritativePositionSeconds);
 
   GtexBroadcastHudState get hudState => _hudState;
 
@@ -143,8 +142,8 @@ class GtexMatchBroadcastController extends ChangeNotifier {
   void replay() {
     final MatchEvent? anchor = _lastReplayableEvent();
     if (anchor != null) {
-      final double anchorViewerSeconds =
-          _modeController.viewerSecondsForAuthoritative(anchor.timeSeconds);
+      final double anchorViewerSeconds = _modeController
+          .viewerSecondsForAuthoritative(anchor.timeSeconds);
       _viewerPositionSeconds = math.max(0, anchorViewerSeconds - 2.4);
     } else {
       _viewerPositionSeconds = math.max(0, _viewerPositionSeconds - 6);
@@ -247,18 +246,15 @@ class GtexMatchBroadcastController extends ChangeNotifier {
       );
     }
     if (isFullTime) {
-      return (
-        home: finalHomeScore,
-        away: finalAwayScore,
-        masked: false,
-      );
+      return (home: finalHomeScore, away: finalAwayScore, masked: false);
     }
     return (home: null, away: null, masked: true);
   }
 
   double _goalRevealViewerSeconds(MatchEvent event) {
-    final double viewerSeconds =
-        _modeController.viewerSecondsForAuthoritative(event.timeSeconds);
+    final double viewerSeconds = _modeController.viewerSecondsForAuthoritative(
+      event.timeSeconds,
+    );
     if (event.commitsScoreAfterReview || event.reviewable) {
       return viewerSeconds + 1.15;
     }

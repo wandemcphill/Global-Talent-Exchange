@@ -69,9 +69,8 @@ class CompetitionPayoutCard extends StatelessWidget {
                       ),
                       Text(
                         _formatAmount(payout.amount, currency),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: GteShellTheme.accent,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(color: GteShellTheme.accent),
                       ),
                     ],
                   ),
@@ -86,10 +85,10 @@ class CompetitionPayoutCard extends StatelessWidget {
 
 String _formatAmount(double value, String currency) {
   if (currency.toLowerCase() == 'credit') {
-    return gteFormatCredits(value);
+    return gteFormatFanCoins(value);
   }
   if (currency.toLowerCase() == 'coin') {
-    return gteFormatFanCoins(value);
+    return gteFormatCredits(value);
   }
   final bool whole = value == value.roundToDouble();
   final String number = value.toStringAsFixed(whole ? 0 : 2);

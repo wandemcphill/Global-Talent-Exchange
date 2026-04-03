@@ -122,10 +122,10 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       isAuthenticatedProvider: () => _controller.isAuthenticated,
       match3dEntitlementProvider:
           () => Match3dUserEntitlement(
-            isPremiumUser: _resolvePremiumUser(_controller.session),
+            isPremiumUser: _controller.isAuthenticated,
             availableCoins: _controller.walletSummary?.availableBalance ?? 0,
-            premiumCameraAccess: _resolvePremiumUser(_controller.session),
-            fastReplayAccess: _resolvePremiumUser(_controller.session),
+            premiumCameraAccess: _controller.isAuthenticated,
+            fastReplayAccess: _controller.isAuthenticated,
           ),
     );
     final GteAppRouteRegistry registry = GteAppRouteRegistry(
@@ -170,26 +170,4 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       ),
     );
   }
-}
-
-bool _resolvePremiumUser(GteAuthSession? session) {
-  if (session == null) {
-    return false;
-  }
-  final Map<String, Object?> userJson = session.user.rawJson;
-  final Map<String, Object?> sessionJson = session.rawJson;
-  return _boolFromJson(userJson['is_premium_user']) ||
-      _boolFromJson(userJson['premium_access']) ||
-      _boolFromJson(sessionJson['is_premium_user']) ||
-      session.permissions
-          .map((String value) => value.trim().toLowerCase())
-          .contains('match_3d_premium');
-}
-
-bool _boolFromJson(Object? value) {
-  if (value is bool) {
-    return value;
-  }
-  final String normalized = value?.toString().trim().toLowerCase() ?? '';
-  return normalized == 'true' || normalized == '1' || normalized == 'yes';
 }

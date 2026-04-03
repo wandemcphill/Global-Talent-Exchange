@@ -37,6 +37,8 @@ class KoraPayProviderAdapter:
         purchase_order_reference = (
             metadata.get("purchase_order_reference")
             or metadata.get("order_reference")
+            or metadata.get("purchase-order-reference")
+            or metadata.get("order-reference")
             or data.get("merchant_reference")
         )
         event_id = data.get("id") or payload.get("id")

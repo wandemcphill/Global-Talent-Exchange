@@ -151,6 +151,8 @@ bool canAccess3D(
   Match3dUserEntitlement userEntitlement,
 ) {
   return userEntitlement.isPremiumUser ||
+      userEntitlement.premiumCameraAccess ||
+      userEntitlement.fastReplayAccess ||
       userEntitlement.hasTournamentBoost(matchContext.competitionId) ||
       userEntitlement.hasUnlockedMatch(matchContext.matchId);
 }
@@ -452,9 +454,7 @@ class Match3dMonetizationService extends ChangeNotifier {
 
   List<double> speedOptionsFor(Match3dMatchContext context) {
     final List<double> options =
-        canUseFastReplay(context)
-            ? _premiumSpeedOptions
-            : standardSpeedOptions;
+        canUseFastReplay(context) ? _premiumSpeedOptions : standardSpeedOptions;
     if (hasInteraction(
       context.matchId,
       Match3dPaidInteraction.slowMotionReplay,

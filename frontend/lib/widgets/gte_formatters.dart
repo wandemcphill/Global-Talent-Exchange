@@ -9,17 +9,28 @@ String gteFormatCredits(double value) {
   return _gteFormatUnitAmount(value, 'GTEX Coin');
 }
 
+String gteFormatAmountForUnit(double value, GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.coin:
+      return gteFormatCredits(value);
+    case GteLedgerUnit.credit:
+      return gteFormatFanCoins(value);
+    case GteLedgerUnit.unknown:
+      return _gteFormatUnitAmount(value, 'Unit');
+  }
+}
+
 String gteFormatCompetitionAmount(double value, [String currency = 'credit']) {
   final String normalized = currency.trim().toLowerCase();
   if (normalized.isEmpty ||
-      normalized == 'credit' ||
-      normalized == 'credits' ||
+      normalized == 'coin' ||
+      normalized == 'coins' ||
       normalized == 'gtex' ||
       normalized == 'gtex coin') {
     return gteFormatCredits(value);
   }
-  if (normalized == 'coin' ||
-      normalized == 'coins' ||
+  if (normalized == 'credit' ||
+      normalized == 'credits' ||
       normalized == 'fan coin' ||
       normalized == 'fan coins' ||
       normalized == 'fancoin' ||
@@ -40,9 +51,9 @@ String gteFormatFanCoin(double value) {
 String gteFormatLedgerUnitName(GteLedgerUnit unit) {
   switch (unit) {
     case GteLedgerUnit.credit:
-      return 'GTEX Coin';
-    case GteLedgerUnit.coin:
       return 'Fan Coin';
+    case GteLedgerUnit.coin:
+      return 'GTEX Coin';
     case GteLedgerUnit.unknown:
       return 'Unit';
   }

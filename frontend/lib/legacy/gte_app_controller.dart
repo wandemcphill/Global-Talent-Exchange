@@ -157,7 +157,7 @@ class GteAppController extends ChangeNotifier {
     try {
       final List<dynamic> payload =
           await Future.wait<dynamic>(<Future<dynamic>>[
-            _api.fetchWalletSummary(),
+            _api.fetchWalletSummary(currency: GteLedgerUnit.coin),
             _api.fetchWalletLedger(page: 1, pageSize: 5),
             _api.fetchPortfolio(),
             _api.fetchPortfolioSummary(),

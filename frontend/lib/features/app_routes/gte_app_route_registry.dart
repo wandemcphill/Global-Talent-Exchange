@@ -7,9 +7,19 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/app_routes/gte_feature_route_support.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_screen.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/presentation/era_history_screen.dart';
+import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_identity_screen.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_identity_controller.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/presentation/identity_preview_screen.dart';
+import 'package:gte_frontend/features/club_identity/reputation/presentation/prestige_leaderboard_screen.dart';
 import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_controller.dart';
+import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_history_screen.dart';
+import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_screen.dart';
+import 'package:gte_frontend/features/club_identity/trophies/presentation/honors_timeline_screen.dart';
+import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_cabinet_screen.dart';
+import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_leaderboard_screen.dart';
 import 'package:gte_frontend/features/club_sale_market/club_sale_market.dart';
 import 'package:gte_frontend/features/creator_league_admin/creator_league_admin.dart';
 import 'package:gte_frontend/features/creator_share_market/creator_share_market.dart';
@@ -154,83 +164,95 @@ class GteAppRouteRegistry {
       );
     }
     if (route is ClubIdentityJerseysRouteData) {
-      return const GteRouteIntegrityScreen.preview(
-        title: 'Club identity preview',
-        message:
-            'Club identity remains preview-only until the real backend profile service is connected. Mock and local-only identity data are disabled on this route.',
-        icon: Icons.shield_outlined,
+      return ClubIdentityScreen(
+        clubId: route.clubId,
+        initialClubName: route.clubName,
+        repository: liveDependencies.createClubIdentityRepository(),
       );
     }
     if (route is ClubReputationOverviewRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Club reputation unavailable',
-        message:
-            'Club reputation routes are blocked until the backend can return real prestige data without fixture fallback.',
-        icon: Icons.emoji_events_outlined,
+      return ClubReputationOverviewScreen(
+        clubId: route.clubId,
+        clubName: route.clubName,
+        repository: liveDependencies.createReputationRepository(),
       );
     }
     if (route is ClubReputationHistoryRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Reputation history unavailable',
-        message:
-            'Reputation history stays blocked until it is backed by the real club backend only.',
-        icon: Icons.history_outlined,
+      return _ReputationSubscreenRouteScreen(
+        dependencies: liveDependencies,
+        clubId: route.clubId,
+        builder: (ReputationController controller) {
+          return ReputationHistoryScreen(controller: controller);
+        },
       );
     }
     if (route is ClubReputationLeaderboardRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Reputation leaderboard unavailable',
-        message:
-            'The leaderboard route is blocked until prestige rankings come from the real backend only.',
-        icon: Icons.leaderboard_outlined,
+      return _ReputationSubscreenRouteScreen(
+        dependencies: liveDependencies,
+        clubId: route.clubId,
+        builder: (ReputationController controller) {
+          return PrestigeLeaderboardScreen(controller: controller);
+        },
       );
     }
     if (route is ClubTrophyCabinetRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Trophy cabinet unavailable',
-        message:
-            'Trophy routes are blocked until club honors come from a connected backend instead of stubbed cabinet data.',
-        icon: Icons.workspace_premium_outlined,
+      return TrophyCabinetScreen(
+        clubId: route.clubId,
+        clubName: route.clubName,
+        repository: liveDependencies.createTrophyCabinetRepository(),
+        initialFilter: route.filter,
       );
     }
     if (route is ClubTrophyTimelineRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Honors timeline unavailable',
-        message:
-            'The honors timeline remains blocked until club history is connected to the real backend.',
-        icon: Icons.timeline_outlined,
+      return HonorsTimelineScreen(
+        clubId: route.clubId,
+        clubName: route.clubName,
+        repository: liveDependencies.createTrophyCabinetRepository(),
+        initialFilter: route.filter,
       );
     }
     if (route is ClubTrophyLeaderboardRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Trophy leaderboard unavailable',
-        message:
-            'This leaderboard is blocked until it can load backend trophy records without stub entries.',
-        icon: Icons.leaderboard_outlined,
+      return TrophyLeaderboardScreen(
+        repository: liveDependencies.createTrophyCabinetRepository(),
+        initialFilter: route.filter,
       );
     }
     if (route is ClubDynastyOverviewRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Club dynasty unavailable',
-        message:
-            'Dynasty routes are blocked until the backend can return real era history without fixture substitution.',
-        icon: Icons.history_edu_outlined,
+      return DynastyScreen(
+        clubId: route.clubId,
+        repository: liveDependencies.createDynastyRepository(),
+        backendMode: liveDependencies.backendMode,
+        onOpenTimeline:
+            () => GteNavigationHelpers.pushRoute<void>(
+              context,
+              route: ClubDynastyHistoryRouteData(
+                clubId: route.clubId,
+                clubName: route.clubName,
+              ),
+              dependencies: liveDependencies,
+            ),
+        onOpenLeaderboard:
+            () => GteNavigationHelpers.pushRoute<void>(
+              context,
+              route: ClubDynastyLeaderboardRouteData(
+                clubId: route.clubId,
+                clubName: route.clubName,
+              ),
+              dependencies: liveDependencies,
+            ),
       );
     }
     if (route is ClubDynastyHistoryRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Dynasty history unavailable',
-        message:
-            'Dynasty history stays blocked until it is backed by the real club backend only.',
-        icon: Icons.history_outlined,
+      return EraHistoryScreen(
+        clubId: route.clubId,
+        repository: liveDependencies.createDynastyRepository(),
+        backendMode: liveDependencies.backendMode,
       );
     }
     if (route is ClubDynastyLeaderboardRouteData) {
-      return const GteRouteIntegrityScreen.blocked(
-        title: 'Dynasty leaderboard unavailable',
-        message:
-            'The dynasty leaderboard is blocked until the route can load real backend rankings without seeded era data.',
-        icon: Icons.leaderboard_outlined,
+      return DynastyLeaderboardScreen(
+        repository: liveDependencies.createDynastyRepository(),
+        backendMode: liveDependencies.backendMode,
       );
     }
     if (route is ClubReplaysRouteData) {

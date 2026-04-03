@@ -610,8 +610,9 @@ class GteExchangeApiClient {
     );
   }
 
-  Future<GteWalletSummary> fetchWalletSummary() =>
-      repository.fetchWalletSummary();
+  Future<GteWalletSummary> fetchWalletSummary({
+    GteLedgerUnit currency = GteLedgerUnit.coin,
+  }) => repository.fetchWalletSummary(currency: currency);
 
   Future<GteUserWallet> fetchWallet() => repository.fetchWallet();
 
@@ -636,6 +637,18 @@ class GteExchangeApiClient {
 
   Future<GteWalletTopUpVerificationResult> verifyWalletTopUp(String reference) {
     return repository.verifyWalletTopUp(reference);
+  }
+
+  Future<GteWalletConversionQuote> quoteWalletConversion(
+    GteWalletConversionQuoteRequest request,
+  ) {
+    return repository.quoteWalletConversion(request);
+  }
+
+  Future<GteWalletConversion> createWalletConversion(
+    GteWalletConversionRequest request,
+  ) {
+    return repository.createWalletConversion(request);
   }
 
   Future<GtePortfolioView> fetchPortfolio() => repository.fetchPortfolio();

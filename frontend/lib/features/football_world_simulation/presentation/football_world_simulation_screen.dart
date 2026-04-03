@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
+import 'package:gte_frontend/controllers/regen_universe_controller.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/shared/presentation/gte_feature_forms.dart';
+import 'package:gte_frontend/models/regen_universe_models.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
@@ -38,6 +40,7 @@ class FootballWorldSimulationScreen extends StatefulWidget {
 class _FootballWorldSimulationScreenState
     extends State<FootballWorldSimulationScreen> {
   late FootballWorldSimulationController _controller;
+  late RegenUniverseController _regenController;
 
   bool get _isAdmin => <String>{
     'admin',
@@ -48,6 +51,7 @@ class _FootballWorldSimulationScreenState
   void initState() {
     super.initState();
     _controller = _buildController();
+    _regenController = _buildRegenController();
     _load();
   }
 
@@ -58,7 +62,9 @@ class _FootballWorldSimulationScreenState
         oldWidget.backendMode != widget.backendMode ||
         oldWidget.accessToken != widget.accessToken) {
       _controller.dispose();
+      _regenController.dispose();
       _controller = _buildController();
+      _regenController = _buildRegenController();
       _load();
       return;
     }
@@ -71,6 +77,7 @@ class _FootballWorldSimulationScreenState
   @override
   void dispose() {
     _controller.dispose();
+    _regenController.dispose();
     super.dispose();
   }
 
@@ -79,6 +86,13 @@ class _FootballWorldSimulationScreenState
       baseUrl: widget.baseUrl,
       backendMode: widget.backendMode,
       accessToken: widget.accessToken,
+    );
+  }
+
+  RegenUniverseController _buildRegenController() {
+    return RegenUniverseController.standard(
+      baseUrl: widget.baseUrl,
+      backendMode: widget.backendMode,
     );
   }
 
@@ -95,6 +109,7 @@ class _FootballWorldSimulationScreenState
         ),
       ),
       _controller.loadFederations(),
+      _regenController.load(),
     ]);
   }
 
@@ -230,7 +245,10 @@ class _FootballWorldSimulationScreenState
           ],
         ),
         body: AnimatedBuilder(
-          animation: _controller,
+          animation: Listenable.merge(<Listenable>[
+            _controller,
+            _regenController,
+          ]),
           builder: (BuildContext context, Widget? child) {
             final ClubWorldContext? club = _controller.clubContext;
             final CompetitionWorldContext? competition =
@@ -329,6 +347,11 @@ class _FootballWorldSimulationScreenState
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
+                  const SizedBox(height: 18),
+                  _WorldRegenDeskCard(
+                    controller: _regenController,
+                    clubName: widget.clubName,
+                  ),
                   const SizedBox(height: 18),
                   GteSurfacePanel(
                     child: Column(
@@ -479,6 +502,220 @@ class _FootballWorldSimulationScreenState
       ),
     );
   }
+}
+
+class _WorldRegenDeskCard extends StatelessWidget {
+  const _WorldRegenDeskCard({required this.controller, required this.clubName});
+
+  final RegenUniverseController controller;
+  final String? clubName;
+
+  @override
+  Widget build(BuildContext context) {
+    final RegenGenerationTracking? tracking = controller.tracking;
+    final Map<String, List<NationalRegenSeed>> regensByCountry =
+        <String, List<NationalRegenSeed>>{};
+    for (final NationalRegenSeed seed in controller.nationalRegens) {
+      regensByCountry.putIfAbsent(
+        seed.countryName,
+        () => <NationalRegenSeed>[],
+      );
+      regensByCountry[seed.countryName]!.add(seed);
+    }
+    final List<MapEntry<String, List<NationalRegenSeed>>> groupedCountries =
+        regensByCountry.entries.toList(growable: false)..sort(
+          (
+            MapEntry<String, List<NationalRegenSeed>> left,
+            MapEntry<String, List<NationalRegenSeed>> right,
+          ) => right.value.length.compareTo(left.value.length),
+        );
+
+    return GteSurfacePanel(
+      accentColor: const Color(0xFF7BE0AD),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Regen universe desk',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            clubName == null
+                ? 'National pre-seeded regens, club generation events, and global tracking are visible from the live regen universe.'
+                : 'National pre-seeded regens and club-generated prospects stay visible for $clubName from the live regen universe.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              GteMetricChip(
+                label: 'National seeds',
+                value: controller.nationalRegens.length.toString(),
+              ),
+              GteMetricChip(
+                label: 'Scouting feed',
+                value: controller.scoutingFeed.length.toString(),
+              ),
+              GteMetricChip(
+                label: 'Rising stars',
+                value: controller.risingStars.length.toString(),
+              ),
+              if (tracking != null)
+                GteMetricChip(
+                  label: 'Peak rating',
+                  value: tracking.globalPeakRating.toString(),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (controller.isLoading && !controller.hasData)
+            const GteStatePanel(
+              title: 'Loading regen universe',
+              message:
+                  'National pre-seeds, club generation events, and tracking are syncing.',
+              icon: Icons.auto_awesome_outlined,
+              isLoading: true,
+            )
+          else if (controller.errorMessage != null && !controller.hasData)
+            GteStatePanel(
+              title: 'Regen universe unavailable',
+              message: controller.errorMessage!,
+              icon: Icons.error_outline,
+            )
+          else ...<Widget>[
+            if (groupedCountries.isNotEmpty) ...<Widget>[
+              Text(
+                'National pre-seeded regens',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              ...groupedCountries.take(4).map((
+                MapEntry<String, List<NationalRegenSeed>> entry,
+              ) {
+                final List<NationalRegenSeed> seeds =
+                    entry.value..sort(
+                      (NationalRegenSeed left, NationalRegenSeed right) =>
+                          right.potentialRating.compareTo(left.potentialRating),
+                    );
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: const Color(0xFF7BE0AD).withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          entry.key,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        ...seeds
+                            .take(3)
+                            .map(
+                              (NationalRegenSeed seed) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  '${seed.displayName} • ${seed.primaryPosition} • ${seed.currentRating}/${seed.potentialRating} • ${_labelize(seed.rarityTier)}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                            ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+            if (controller.scoutingFeed.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 4),
+              Text(
+                'Club and academy generation feed',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              ...controller.scoutingFeed
+                  .take(4)
+                  .map(
+                    (RegenScoutingFeedItem item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        '${item.title} • ${_labelize(item.feedType)}${item.player == null ? '' : ' • ${item.player!.name} (${item.player!.position})'}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ),
+            ],
+            if (controller.risingStars.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 4),
+              Text(
+                'Global rising regens',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              ...controller.risingStars
+                  .take(4)
+                  .map(
+                    (RegenRisingStar star) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        '${star.player.name} • ${star.player.nationality} • ${star.player.currentRating}/${star.player.potential} • ${star.momentumLabel}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ),
+            ],
+            if (tracking != null) ...<Widget>[
+              const SizedBox(height: 4),
+              Text('Tracking', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
+              Text(
+                'Tracked seeded players: ${tracking.totalSeededPlayers}. Peak rating reached: ${tracking.globalPeakRating}.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (tracking.countryDistribution.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    tracking.countryDistribution
+                        .take(4)
+                        .map(
+                          (RegenGenerationTrackingEntry entry) =>
+                              '${entry.bucket} ${entry.count}',
+                        )
+                        .join(' • '),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: GteShellTheme.textMuted,
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _labelize(String value) {
+  final List<String> parts = value
+      .split(RegExp(r'[_\s]+'))
+      .where((String part) => part.trim().isNotEmpty)
+      .map(
+        (String part) =>
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+      )
+      .toList(growable: false);
+  return parts.isEmpty ? '--' : parts.join(' ');
 }
 
 class _SimpleWorldListCard extends StatelessWidget {

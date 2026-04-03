@@ -24,8 +24,14 @@ class RegenUniverseController extends ChangeNotifier {
   String? errorMessage;
   List<RegenRisingStar> risingStars = const <RegenRisingStar>[];
   List<RegenScoutingFeedItem> scoutingFeed = const <RegenScoutingFeedItem>[];
+  List<NationalRegenSeed> nationalRegens = const <NationalRegenSeed>[];
+  RegenGenerationTracking? tracking;
 
-  bool get hasData => risingStars.isNotEmpty || scoutingFeed.isNotEmpty;
+  bool get hasData =>
+      risingStars.isNotEmpty ||
+      scoutingFeed.isNotEmpty ||
+      nationalRegens.isNotEmpty ||
+      tracking != null;
 
   Future<void> ensureLoaded() async {
     if (isLoading || hasData) {
@@ -46,9 +52,13 @@ class RegenUniverseController extends ChangeNotifier {
         final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
           _api.listRisingStars(),
           _api.listScoutingFeed(),
+          _api.listNationalRegens(),
+          _api.fetchTracking(),
         ]);
         risingStars = payload[0] as List<RegenRisingStar>;
         scoutingFeed = payload[1] as List<RegenScoutingFeedItem>;
+        nationalRegens = payload[2] as List<NationalRegenSeed>;
+        tracking = payload[3] as RegenGenerationTracking;
         syncedAt = DateTime.now().toUtc();
       } catch (error) {
         errorMessage = AppFeedback.messageFor(

@@ -15,7 +15,7 @@ enum GteOrderStatus {
 
 enum GteLedgerUnit { credit, coin, unknown }
 
-enum GtePaymentMode { manual, automatic }
+enum GtePaymentMode { manual, automatic, hybrid }
 
 enum GteRateDirection { fiatPerCoin, coinPerFiat }
 
@@ -1061,7 +1061,7 @@ class GteUserWallet {
       id: GteJson.string(json, <String>['id']),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
       balance: GteJson.number(json, <String>['balance']),
-      currency: GteJson.string(json, <String>['currency'], fallback: 'credit'),
+      currency: GteJson.string(json, <String>['currency'], fallback: 'coin'),
       complianceStatus: GteJson.string(json, <String>[
         'compliance_status',
         'complianceStatus',
@@ -1144,7 +1144,7 @@ class GteWalletTopUpSession {
         'paymentLink',
       ]),
       amount: GteJson.number(json, <String>['amount']),
-      currency: GteJson.string(json, <String>['currency'], fallback: 'credit'),
+      currency: GteJson.string(json, <String>['currency'], fallback: 'coin'),
       provider: GteJson.string(json, <String>[
         'provider',
       ], fallback: 'paystack'),
@@ -1200,6 +1200,122 @@ class GteWalletTopUpVerificationResult {
         GteJson.value(json, <String>['transaction']) ??
             const <String, Object?>{},
       ),
+    );
+  }
+}
+
+class GteWalletConversionQuoteRequest {
+  const GteWalletConversionQuoteRequest({
+    required this.amount,
+    this.sourceUnit = GteLedgerUnit.coin,
+  });
+
+  final double amount;
+  final GteLedgerUnit sourceUnit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'amount': amount,
+    'source_unit': sourceUnit.name,
+  };
+}
+
+class GteWalletConversionRequest extends GteWalletConversionQuoteRequest {
+  const GteWalletConversionRequest({
+    required super.amount,
+    super.sourceUnit = GteLedgerUnit.coin,
+    this.idempotencyKey,
+  });
+
+  final String? idempotencyKey;
+
+  @override
+  Map<String, Object?> toJson() => <String, Object?>{
+    ...super.toJson(),
+    if (idempotencyKey != null && idempotencyKey!.trim().isNotEmpty)
+      'idempotency_key': idempotencyKey!.trim(),
+  };
+}
+
+class GteWalletConversionQuote {
+  const GteWalletConversionQuote({
+    required this.sourceUnit,
+    required this.sourceAmount,
+    required this.targetUnit,
+    required this.targetAmount,
+    required this.rate,
+  });
+
+  final GteLedgerUnit sourceUnit;
+  final double sourceAmount;
+  final GteLedgerUnit targetUnit;
+  final double targetAmount;
+  final double rate;
+
+  factory GteWalletConversionQuote.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet conversion quote',
+    );
+    return GteWalletConversionQuote(
+      sourceUnit: _ledgerUnitFromString(
+        GteJson.string(json, <String>['source_unit', 'sourceUnit']),
+      ),
+      sourceAmount: GteJson.number(json, <String>[
+        'source_amount',
+        'sourceAmount',
+      ]),
+      targetUnit: _ledgerUnitFromString(
+        GteJson.string(json, <String>['target_unit', 'targetUnit']),
+      ),
+      targetAmount: GteJson.number(json, <String>[
+        'target_amount',
+        'targetAmount',
+      ]),
+      rate: GteJson.number(json, <String>['rate']),
+    );
+  }
+}
+
+class GteWalletConversion extends GteWalletConversionQuote {
+  const GteWalletConversion({
+    required this.transactionId,
+    required this.reference,
+    required super.sourceUnit,
+    required super.sourceAmount,
+    required super.targetUnit,
+    required super.targetAmount,
+    required super.rate,
+  });
+
+  final String transactionId;
+  final String reference;
+
+  factory GteWalletConversion.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet conversion',
+    );
+    return GteWalletConversion(
+      transactionId: GteJson.string(json, <String>[
+        'transaction_id',
+        'transactionId',
+      ]),
+      reference: GteJson.string(json, <String>['reference']),
+      sourceUnit: _ledgerUnitFromString(
+        GteJson.string(json, <String>['source_unit', 'sourceUnit']),
+      ),
+      sourceAmount: GteJson.number(json, <String>[
+        'source_amount',
+        'sourceAmount',
+      ]),
+      targetUnit: _ledgerUnitFromString(
+        GteJson.string(json, <String>['target_unit', 'targetUnit']),
+      ),
+      targetAmount: GteJson.number(json, <String>[
+        'target_amount',
+        'targetAmount',
+      ]),
+      rate: GteJson.number(json, <String>['rate']),
     );
   }
 }
@@ -3573,7 +3689,7 @@ class GteOrderRecord {
     required this.executionSummary,
     this.userId,
     this.filledQuantity = 0,
-    this.currency = GteLedgerUnit.credit,
+    this.currency = GteLedgerUnit.coin,
     this.holdTransactionId,
     this.createdAt,
     this.updatedAt,
@@ -3622,7 +3738,7 @@ class GteOrderRecord {
               ? null
               : GteJson.number(json, <String>['max_price', 'maxPrice']),
       currency: _ledgerUnitFromString(
-        GteJson.string(json, <String>['currency'], fallback: 'credit'),
+        GteJson.string(json, <String>['currency'], fallback: 'coin'),
       ),
       reservedAmount: GteJson.number(json, <String>[
         'reserved_amount',
@@ -3854,9 +3970,14 @@ GteLedgerUnit _ledgerUnitFromString(String value) {
 }
 
 GtePaymentMode _paymentModeFromString(String value) {
-  return value.toLowerCase() == 'automatic'
-      ? GtePaymentMode.automatic
-      : GtePaymentMode.manual;
+  switch (value.toLowerCase()) {
+    case 'automatic':
+      return GtePaymentMode.automatic;
+    case 'hybrid':
+      return GtePaymentMode.hybrid;
+    default:
+      return GtePaymentMode.manual;
+  }
 }
 
 GteRateDirection _rateDirectionFromString(String value) {

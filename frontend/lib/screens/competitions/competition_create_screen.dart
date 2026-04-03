@@ -58,9 +58,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
       body: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, Widget? child) {
-          if (!widget.isAuthenticated ||
-              widget.isCheckingHostEligibility ||
-              !widget.hostEligible) {
+          if (!widget.isAuthenticated) {
             return _buildLockedState();
           }
           final draft = widget.controller.draft;
@@ -73,12 +71,12 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Create a creator competition',
+                      'Create competition',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose a skill league or skill cup, set GTex entry stakes, publish rules, and preview the transparent payout before sharing.',
+                      'Choose a format, set entry requirements, publish the rules, and preview the payout before sharing.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -153,7 +151,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                       onChanged: widget.controller.updateDraftBeginnerFriendly,
                       title: const Text('Beginner friendly'),
                       subtitle: const Text(
-                        'Mark this community competition as approachable for first-time creators and players.',
+                        'Mark this competition as approachable for first-time players.',
                       ),
                     ),
                   ],
@@ -170,7 +168,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Competition stakes settle in GTex Coin. Fan Coin stays on the viewing and gifting lanes.',
+                      'User-hosted competition stakes settle in Fan Coin so gifting, community play, and trading capital remain separated.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -338,43 +336,16 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
         child: GteStatePanel(
           eyebrow: 'HOST ACCESS',
-          title: 'Sign in to host competitions',
+          title: 'Sign in to create competitions',
           message:
-              'Competition hosting only opens from a real signed-in creator session.',
+              'A signed-in account is required before the competition form can be opened.',
           actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
           onAction: widget.onOpenLogin,
           icon: Icons.login_outlined,
         ),
       );
     }
-    if (widget.isCheckingHostEligibility) {
-      return const SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, 12, 20, 120),
-        child: GteStatePanel(
-          eyebrow: 'HOST ACCESS',
-          title: 'Checking creator access',
-          message:
-              'The app is verifying whether this account can host creator competitions.',
-          icon: Icons.hourglass_top_outlined,
-          isLoading: true,
-        ),
-      );
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-      child: GteStatePanel(
-        eyebrow: 'HOST ACCESS',
-        title: 'Creator access required to host',
-        message:
-            'This account is not approved to host creator competitions yet, so the live publish form stays locked.',
-        actionLabel:
-            widget.onOpenCreatorAccessRequest == null
-                ? null
-                : 'Request creator access',
-        onAction: widget.onOpenCreatorAccessRequest,
-        icon: Icons.lock_outline,
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   void _handleNameChanged() {

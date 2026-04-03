@@ -20,13 +20,31 @@ class GteFundWalletScreen extends StatefulWidget {
 }
 
 class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
-  final TextEditingController _amountController = TextEditingController();
+  static const List<String> _automaticProviders = <String>[
+    'paystack',
+    'korapay',
+  ];
+
+  final TextEditingController _automaticAmountController =
+      TextEditingController();
+  final TextEditingController _manualAmountController = TextEditingController();
+  final TextEditingController _payerNameController = TextEditingController();
+  final TextEditingController _senderBankController = TextEditingController();
+  final TextEditingController _transferReferenceController =
+      TextEditingController();
+
   bool _isSubmitting = false;
   bool _isVerifying = false;
+  bool _isLoadingDeposits = false;
+  bool _isCreatingManualDeposit = false;
+  bool _isSubmittingManualDeposit = false;
   bool _awaitingInitialComplianceCheck = false;
+  String _automaticProvider = 'paystack';
   String? _error;
   GteWalletTopUpSession? _session;
   GteWalletTopUpVerificationResult? _verification;
+  List<GteDepositRequest> _depositRequests = <GteDepositRequest>[];
+  GteDepositRequest? _manualDeposit;
 
   @override
   void initState() {
@@ -46,13 +64,40 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
           _awaitingInitialComplianceCheck = false;
         });
       });
+      _refreshDepositRequests();
     });
   }
 
   @override
   void dispose() {
-    _amountController.dispose();
+    _automaticAmountController.dispose();
+    _manualAmountController.dispose();
+    _payerNameController.dispose();
+    _senderBankController.dispose();
+    _transferReferenceController.dispose();
     super.dispose();
+  }
+
+  GteDepositRequest? get _activeManualDeposit {
+    final List<GteDepositRequest> ranked = <GteDepositRequest>[
+      if (_manualDeposit != null) _manualDeposit!,
+      ..._depositRequests,
+    ]..sort((GteDepositRequest left, GteDepositRequest right) {
+      final DateTime leftStamp =
+          left.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      final DateTime rightStamp =
+          right.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return rightStamp.compareTo(leftStamp);
+    });
+    for (final GteDepositRequest deposit in ranked) {
+      if (deposit.status == GteDepositStatus.awaitingPayment ||
+          deposit.status == GteDepositStatus.paymentSubmitted ||
+          deposit.status == GteDepositStatus.underReview) {
+        return deposit;
+      }
+    }
+    return ranked.isEmpty ? null : ranked.first;
   }
 
   Future<void> _launchPaymentLink(String link) async {
@@ -68,8 +113,61 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     }
   }
 
+  Future<void> _refreshDepositRequests() async {
+    setState(() {
+      _isLoadingDeposits = true;
+    });
+    try {
+      final List<GteDepositRequest> deposits =
+          await widget.controller.api.listDepositRequests();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _depositRequests = deposits;
+        _manualDeposit = _resolveManualDeposit(deposits);
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = AppFeedback.messageFor(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingDeposits = false;
+        });
+      }
+    }
+  }
+
+  GteDepositRequest? _resolveManualDeposit(List<GteDepositRequest> deposits) {
+    final List<GteDepositRequest> sorted = List<GteDepositRequest>.from(
+      deposits,
+    )..sort((GteDepositRequest left, GteDepositRequest right) {
+      final DateTime leftStamp =
+          left.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      final DateTime rightStamp =
+          right.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return rightStamp.compareTo(leftStamp);
+    });
+    for (final GteDepositRequest deposit in sorted) {
+      if (deposit.status == GteDepositStatus.awaitingPayment ||
+          deposit.status == GteDepositStatus.paymentSubmitted ||
+          deposit.status == GteDepositStatus.underReview) {
+        return deposit;
+      }
+    }
+    return sorted.isEmpty ? null : sorted.first;
+  }
+
   Future<void> _initiateTopUp() async {
-    final double? amount = double.tryParse(_amountController.text.trim());
+    final double? amount = double.tryParse(
+      _automaticAmountController.text.trim(),
+    );
     if (amount == null || amount <= 0) {
       setState(() {
         _error = 'Enter a valid amount to continue.';
@@ -82,7 +180,12 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     });
     try {
       final GteWalletTopUpSession session = await widget.controller.api
-          .initiateWalletTopUp(GteWalletTopUpInitiateRequest(amount: amount));
+          .initiateWalletTopUp(
+            GteWalletTopUpInitiateRequest(
+              amount: amount,
+              provider: _automaticProvider,
+            ),
+          );
       if (!mounted) {
         return;
       }
@@ -146,13 +249,117 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     }
   }
 
-  void _resetFlow() {
+  Future<void> _createManualDeposit() async {
+    final double? amount = double.tryParse(_manualAmountController.text.trim());
+    if (amount == null || amount <= 0) {
+      setState(() {
+        _error = 'Enter a valid amount for the bank transfer request.';
+      });
+      return;
+    }
     setState(() {
-      _amountController.clear();
+      _error = null;
+      _isCreatingManualDeposit = true;
+    });
+    try {
+      final GteDepositRequest deposit = await widget.controller.api
+          .createDepositRequest(
+            GteDepositCreateRequest(amount: amount, inputUnit: 'fiat'),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _manualDeposit = deposit;
+      });
+      await _refreshDepositRequests();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = AppFeedback.messageFor(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingManualDeposit = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submitManualDeposit() async {
+    final GteDepositRequest? deposit = _activeManualDeposit;
+    if (deposit == null) {
+      return;
+    }
+    setState(() {
+      _error = null;
+      _isSubmittingManualDeposit = true;
+    });
+    try {
+      final GteDepositRequest updated = await widget.controller.api
+          .submitDepositRequest(
+            deposit.id,
+            GteDepositSubmitRequest(
+              payerName:
+                  _payerNameController.text.trim().isEmpty
+                      ? null
+                      : _payerNameController.text.trim(),
+              senderBank:
+                  _senderBankController.text.trim().isEmpty
+                      ? null
+                      : _senderBankController.text.trim(),
+              transferReference:
+                  _transferReferenceController.text.trim().isEmpty
+                      ? null
+                      : _transferReferenceController.text.trim(),
+            ),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _manualDeposit = updated;
+      });
+      _payerNameController.clear();
+      _senderBankController.clear();
+      _transferReferenceController.clear();
+      await _refreshDepositRequests();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = AppFeedback.messageFor(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmittingManualDeposit = false;
+        });
+      }
+    }
+  }
+
+  void _resetAutomaticFlow() {
+    setState(() {
+      _automaticAmountController.clear();
       _error = null;
       _session = null;
       _verification = null;
     });
+  }
+
+  String _providerLabel(String provider) {
+    switch (provider.trim().toLowerCase()) {
+      case 'korapay':
+        return 'KoraPay';
+      case 'paystack':
+      default:
+        return 'Paystack';
+    }
   }
 
   @override
@@ -160,82 +367,128 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     final GteWalletTopUpSession? session = _session;
     final GteWalletTopUpVerificationResult? verification = _verification;
     final GteComplianceStatus? compliance = widget.controller.complianceStatus;
+    final GteDepositRequest? activeDeposit = _activeManualDeposit;
     final bool blocked =
         compliance != null &&
         (compliance.requiredPolicyAcceptancesMissing > 0 ||
             !compliance.canDeposit);
     return Scaffold(
-      appBar: AppBar(title: const Text('Top up wallet')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: <Widget>[
-          if (blocked) ...<Widget>[
+      appBar: AppBar(title: const Text('Fund GTEX wallet')),
+      body: RefreshIndicator(
+        onRefresh: _refreshDepositRequests,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: <Widget>[
+            if (blocked) ...<Widget>[
+              GteSurfacePanel(
+                accentColor: GteShellTheme.accentWarm,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Compliance action required',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      compliance.requiredPolicyAcceptancesMissing == 0
+                          ? 'Complete required policy acceptances to unlock deposits.'
+                          : 'Complete ${compliance.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.tonalIcon(
+                      onPressed: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (_) => GtePolicyComplianceCenterScreen(
+                                  controller: widget.controller,
+                                ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.gavel_outlined),
+                      label: const Text('Open compliance center'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             GteSurfacePanel(
-              accentColor: GteShellTheme.accentWarm,
+              emphasized: true,
+              accentColor: GteShellTheme.accentCapital,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Compliance action required',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    'Choose a funding method',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    compliance.requiredPolicyAcceptancesMissing == 0
-                        ? 'Complete required policy acceptances to unlock deposits.'
-                        : 'Complete ${compliance.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.tonalIcon(
-                    onPressed: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder:
-                              (_) => GtePolicyComplianceCenterScreen(
-                                controller: widget.controller,
-                              ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.gavel_outlined),
-                    label: const Text('Open compliance center'),
+                    'Instant checkout credits GTEX Coin for trading and withdrawals. You can also create a manual bank transfer request when admin enables bank transfer funding.',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-          ],
-          GteSurfacePanel(
-            accentColor: GteShellTheme.accentCapital,
-            emphasized: true,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Fund with Paystack',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Create a payment session, complete payment in Paystack, then verify it here to update your live wallet balance.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
+            const SizedBox(height: 18),
+            GteSurfacePanel(
+              accentColor: GteShellTheme.accentCapital,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Instant payment',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  enabled: !_isSubmitting && session == null,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount',
-                    prefixIcon: Icon(Icons.payments_outlined),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Automatic checkout supports Paystack and KoraPay for GTEX Coin top-ups.',
                   ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _automaticProvider,
+                    decoration: const InputDecoration(
+                      labelText: 'Provider',
+                      prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                    ),
+                    items: _automaticProviders
+                        .map(
+                          (String provider) => DropdownMenuItem<String>(
+                            value: provider,
+                            child: Text(_providerLabel(provider)),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged:
+                        _isSubmitting || session != null
+                            ? null
+                            : (String? value) {
+                              if (value == null) {
+                                return;
+                              }
+                              setState(() {
+                                _automaticProvider = value;
+                              });
+                            },
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _automaticAmountController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    enabled: !_isSubmitting && session == null,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount',
+                      prefixIcon: Icon(Icons.payments_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
                     onPressed:
                         _isSubmitting || session != null
                             ? null
@@ -244,103 +497,240 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     label: Text(
                       _isSubmitting
                           ? 'Creating payment session...'
-                          : 'Continue to Paystack',
+                          : 'Continue to ${_providerLabel(_automaticProvider)}',
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          if (session != null) ...<Widget>[
-            const SizedBox(height: 18),
-            GteSurfacePanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Payment session ready',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 10),
-                  Text('Reference: ${session.reference}'),
-                  const SizedBox(height: 6),
-                  Text('Amount: ${gteFormatCredits(session.amount)}'),
-                  const SizedBox(height: 6),
-                  Text('Status: ${_titleCase(session.status)}'),
-                  if (session.mockMode) ...<Widget>[
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Local payment simulation is active because no Paystack secret key is configured for this environment.',
+            if (session != null) ...<Widget>[
+              const SizedBox(height: 18),
+              GteSurfacePanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Instant payment session',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  ],
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: <Widget>[
-                      FilledButton.icon(
-                        onPressed:
-                            _isVerifying
-                                ? null
-                                : () => _launchPaymentLink(session.paymentLink),
-                        icon: const Icon(Icons.open_in_browser_outlined),
-                        label: const Text('Open Paystack'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _isVerifying ? null : _verifyTopUp,
-                        icon: const Icon(Icons.verified_outlined),
-                        label: Text(
-                          _isVerifying ? 'Verifying...' : 'Verify payment',
+                    const SizedBox(height: 10),
+                    Text('Reference: ${session.reference}'),
+                    Text(
+                      'Amount: ${gteFormatCompetitionAmount(session.amount, session.currency)}',
+                    ),
+                    Text('Provider: ${_providerLabel(session.provider)}'),
+                    Text('Status: ${_titleCase(session.status)}'),
+                    if (session.mockMode)
+                      Padding(
+                        padding: EdgeInsets.only(top: 10),
+                        child: Text(
+                          'Local payment simulation is active because no live ${_providerLabel(session.provider)} secret key is configured for this environment.',
                         ),
                       ),
-                      OutlinedButton(
-                        onPressed:
-                            _isSubmitting || _isVerifying ? null : _resetFlow,
-                        child: const Text('Start again'),
-                      ),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: <Widget>[
+                        FilledButton.tonalIcon(
+                          onPressed:
+                              _isVerifying
+                                  ? null
+                                  : () =>
+                                      _launchPaymentLink(session.paymentLink),
+                          icon: const Icon(Icons.open_in_browser_outlined),
+                          label: Text(
+                            'Open ${_providerLabel(session.provider)}',
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _isVerifying ? null : _verifyTopUp,
+                          icon: const Icon(Icons.verified_outlined),
+                          label: Text(
+                            _isVerifying ? 'Verifying...' : 'Verify payment',
+                          ),
+                        ),
+                        OutlinedButton(
+                          onPressed:
+                              _isSubmitting || _isVerifying
+                                  ? null
+                                  : _resetAutomaticFlow,
+                          child: const Text('Start again'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-          if (verification != null) ...<Widget>[
+            ],
+            if (verification != null) ...<Widget>[
+              const SizedBox(height: 18),
+              GteSurfacePanel(
+                accentColor: GteShellTheme.positive,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Wallet updated',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'New GTEX balance: ${gteFormatCompetitionAmount(verification.wallet.balance, verification.wallet.currency)}',
+                    ),
+                    Text(
+                      'Transaction status: ${_titleCase(verification.transaction.status)}',
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
             GteSurfacePanel(
-              accentColor: GteShellTheme.positive,
+              accentColor: GteShellTheme.accentWarm,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Wallet updated',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    'Bank transfer',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'New balance: ${gteFormatCredits(verification.wallet.balance)}',
+                  const Text(
+                    'Create a manual bank transfer request to receive admin payment details and the locked reference that credits GTEX Coin after review.',
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Transaction status: ${_titleCase(verification.transaction.status)}',
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _manualAmountController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    enabled: !_isCreatingManualDeposit,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount',
+                      prefixIcon: Icon(Icons.account_balance_outlined),
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  FilledButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Back to wallet'),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed:
+                        _isCreatingManualDeposit ? null : _createManualDeposit,
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: Text(
+                      _isCreatingManualDeposit
+                          ? 'Creating request...'
+                          : 'Create bank transfer request',
+                    ),
                   ),
                 ],
               ),
             ),
+            if (activeDeposit != null) ...<Widget>[
+              const SizedBox(height: 18),
+              GteSurfacePanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Active bank transfer request',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    Text('Reference: ${activeDeposit.reference}'),
+                    Text(
+                      'Amount: ${gteFormatFiat(activeDeposit.amountFiat, currency: activeDeposit.currencyCode)}',
+                    ),
+                    Text(
+                      'GTEX Coin credited on approval: ${gteFormatCredits(activeDeposit.amountCoin)}',
+                    ),
+                    Text('Status: ${_titleCase(activeDeposit.status.name)}'),
+                    const SizedBox(height: 10),
+                    Text('Bank: ${activeDeposit.bankName}'),
+                    Text('Account number: ${activeDeposit.bankAccountNumber}'),
+                    Text('Account name: ${activeDeposit.bankAccountName}'),
+                    if (activeDeposit.expiresAt != null)
+                      Text(
+                        'Expires: ${gteFormatDateTime(activeDeposit.expiresAt)}',
+                      ),
+                    if (activeDeposit.status ==
+                        GteDepositStatus.awaitingPayment) ...<Widget>[
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _payerNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Payer name',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _senderBankController,
+                        decoration: const InputDecoration(
+                          labelText: 'Sender bank',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _transferReferenceController,
+                        decoration: const InputDecoration(
+                          labelText: 'Transfer reference',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed:
+                            _isSubmittingManualDeposit
+                                ? null
+                                : _submitManualDeposit,
+                        icon: const Icon(Icons.task_alt_outlined),
+                        label: Text(
+                          _isSubmittingManualDeposit
+                              ? 'Submitting...'
+                              : 'Submit payment details',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            if (_isLoadingDeposits) ...<Widget>[
+              const SizedBox(height: 18),
+              const Center(child: CircularProgressIndicator()),
+            ] else if (_depositRequests.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 18),
+              GteSurfacePanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Recent bank transfer requests',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    ..._depositRequests
+                        .take(3)
+                        .map(
+                          (GteDepositRequest deposit) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Text(
+                              '${deposit.reference} • ${_titleCase(deposit.status.name)} • ${gteFormatFiat(deposit.amountFiat, currency: deposit.currencyCode)}',
+                            ),
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+            ],
+            if (_error != null) ...<Widget>[
+              const SizedBox(height: 18),
+              GteStatePanel(
+                title: 'Funding issue',
+                message: _error!,
+                icon: Icons.warning_amber_rounded,
+              ),
+            ],
           ],
-          if (_error != null) ...<Widget>[
-            const SizedBox(height: 18),
-            GteStatePanel(
-              title: 'Top-up issue',
-              message: _error!,
-              icon: Icons.warning_amber_rounded,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

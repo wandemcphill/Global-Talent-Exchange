@@ -258,21 +258,26 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
         final GteExchangeApiClient exchangeApi = ref.read(
           exchangeApiClientProvider,
         );
-        final GteWalletSummary summary = await exchangeApi.fetchWalletSummary();
+        final List<dynamic> walletPayload = await Future.wait<dynamic>(<
+          Future<dynamic>
+        >[
+          exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.coin),
+          exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.credit),
+          exchangeApi.fetchWalletOverview(),
+          exchangeApi.fetchComplianceStatus(),
+        ]);
+        final GteWalletSummary coinSummary =
+            walletPayload[0] as GteWalletSummary;
+        final GteWalletSummary creditSummary =
+            walletPayload[1] as GteWalletSummary;
         final GteWalletOverview overview =
-            await exchangeApi.fetchWalletOverview();
+            walletPayload[2] as GteWalletOverview;
         final GteComplianceStatus compliance =
-            await exchangeApi.fetchComplianceStatus();
+            walletPayload[3] as GteComplianceStatus;
         wallet = MarketWalletSnapshot(
-          coinBalance:
-              summary.currency == GteLedgerUnit.coin
-                  ? summary.availableBalance
-                  : 0,
-          creditBalance:
-              summary.currency == GteLedgerUnit.credit
-                  ? summary.availableBalance
-                  : 0,
-          totalEquity: summary.totalBalance,
+          coinBalance: coinSummary.availableBalance,
+          creditBalance: creditSummary.availableBalance,
+          totalEquity: coinSummary.totalBalance,
           canTradeMarket: compliance.canTradeMarket,
           canDeposit: compliance.canDeposit,
           canWithdraw: compliance.canWithdrawPlatformRewards,

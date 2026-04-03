@@ -1140,7 +1140,7 @@ class WalletService:
         return LedgerTransactionType.ADJUSTMENT
 
     def get_adaptive_overview(self, session: Session, user: User) -> dict[str, object]:
-        summary = self.get_wallet_summary(session, user)
+        summary = self.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
         requested_statuses = {PayoutStatus.REQUESTED, PayoutStatus.REVIEWING, PayoutStatus.HELD, PayoutStatus.PROCESSING}
         pending_withdrawals = session.scalar(
             select(func.count()).select_from(PayoutRequest).where(
@@ -1488,7 +1488,7 @@ class WalletService:
     def build_portfolio_snapshot(self, session: Session, user: User) -> PortfolioSnapshot:
         from app.portfolio.service import PortfolioService
 
-        summary = self.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
+        summary = self.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
         portfolio_snapshot = PortfolioService(wallet_service=self).build_for_user(session, user)
         return PortfolioSnapshot(
             user_id=user.id,

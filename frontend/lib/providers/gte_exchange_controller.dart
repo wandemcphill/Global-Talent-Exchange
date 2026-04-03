@@ -454,6 +454,84 @@ class GteExchangeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void bindCurrentClub({
+    required String clubId,
+    required String clubName,
+    String? clubSlug,
+  }) {
+    final GteAuthSession? currentSession = session;
+    if (currentSession == null) {
+      return;
+    }
+    final String resolvedClubId = clubId.trim();
+    final String resolvedClubName = clubName.trim();
+    final String? resolvedClubSlug =
+        clubSlug == null || clubSlug.trim().isEmpty ? null : clubSlug.trim();
+    if (resolvedClubId.isEmpty || resolvedClubName.isEmpty) {
+      return;
+    }
+
+    final Map<String, Object?> clubObject = <String, Object?>{
+      'id': resolvedClubId,
+      'club_id': resolvedClubId,
+      'name': resolvedClubName,
+      'club_name': resolvedClubName,
+      if (resolvedClubSlug != null) 'slug': resolvedClubSlug,
+      if (resolvedClubSlug != null) 'club_slug': resolvedClubSlug,
+    };
+    final Map<String, Object?> membership = <String, Object?>{
+      'club_id': resolvedClubId,
+      'club_name': resolvedClubName,
+      if (resolvedClubSlug != null) 'club_slug': resolvedClubSlug,
+      'organization_type': 'club',
+      'is_current': true,
+      'is_primary': true,
+    };
+
+    final Map<String, Object?> sessionJson = Map<String, Object?>.from(
+      currentSession.rawJson,
+    );
+    final Map<String, Object?> userJson = Map<String, Object?>.from(
+      currentSession.user.rawJson,
+    );
+
+    for (final Map<String, Object?> target in <Map<String, Object?>>[
+      sessionJson,
+      userJson,
+    ]) {
+      target['active_organization_type'] = 'club';
+      target['active_organization_id'] = resolvedClubId;
+      target['active_organization_name'] = resolvedClubName;
+      target['current_club_id'] = resolvedClubId;
+      target['current_club_name'] = resolvedClubName;
+      target['club_id'] = resolvedClubId;
+      target['club_name'] = resolvedClubName;
+      if (resolvedClubSlug != null) {
+        target['active_organization_slug'] = resolvedClubSlug;
+        target['current_club_slug'] = resolvedClubSlug;
+        target['club_slug'] = resolvedClubSlug;
+      }
+      target['club'] = clubObject;
+      target['current_club'] = clubObject;
+      target['memberships'] = _mergeClubMemberships(
+        target['memberships'],
+        membership,
+      );
+      target['owned_clubs'] = _mergeClubMemberships(
+        target['owned_clubs'],
+        membership,
+      );
+      target['managed_clubs'] = _mergeClubMemberships(
+        target['managed_clubs'],
+        membership,
+      );
+    }
+
+    sessionJson['user'] = userJson;
+    session = GteAuthSession.fromJson(sessionJson);
+    notifyListeners();
+  }
+
   void updateWeights(MatchWeights newWeights) {
     _weights = newWeights.normalize();
     notifyListeners();
@@ -532,7 +610,7 @@ class GteExchangeController extends ChangeNotifier {
       try {
         final List<dynamic> payload =
             await Future.wait<dynamic>(<Future<dynamic>>[
-              _api.fetchWalletSummary(),
+              _api.fetchWalletSummary(currency: GteLedgerUnit.coin),
               _api.fetchPortfolio(),
               _api.fetchPortfolioSummary(),
             ]);
@@ -851,6 +929,38 @@ class GteExchangeController extends ChangeNotifier {
     }
     return const _PlayerEngagementState(isScouted: false, isShortlisted: false);
   }
+}
+
+List<Object?> _mergeClubMemberships(
+  Object? rawMemberships,
+  Map<String, Object?> membership,
+) {
+  final List<Object?> merged = <Object?>[];
+  bool replaced = false;
+  if (rawMemberships is List) {
+    for (final Object? item in rawMemberships) {
+      if (item is Map) {
+        final Map<String, Object?> existing = item.map(
+          (Object? key, Object? value) =>
+              MapEntry<String, Object?>(key.toString(), value),
+        );
+        final String existingClubId =
+            existing['club_id']?.toString().trim() ??
+            existing['organization_id']?.toString().trim() ??
+            '';
+        if (existingClubId == membership['club_id']) {
+          merged.add(<String, Object?>{...existing, ...membership});
+          replaced = true;
+          continue;
+        }
+      }
+      merged.add(item);
+    }
+  }
+  if (!replaced) {
+    merged.insert(0, membership);
+  }
+  return merged;
 }
 
 class _PlayerEngagementState {

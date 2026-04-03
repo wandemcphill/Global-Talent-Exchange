@@ -114,10 +114,9 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             children: <Widget>[
               GtexHeroBanner(
                 eyebrow: 'COMPETITIONS HUB',
-                title:
-                    'GTEX competitions, creator brackets, and E-Games live here.',
+                title: 'All competitions live here.',
                 description:
-                    'Jump into leagues, cups, live simulations, and creator-led E-Games from one hub.',
+                    'Browse leagues, cups, live simulations, and user-created competitions from one hub.',
                 accent: Colors.deepPurpleAccent,
                 chips: <Widget>[
                   GteMetricChip(
@@ -176,12 +175,12 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        'Why it hits',
+                        'Why this matters',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Qualification, match odds, key moments, injuries, and manager fingerprints should all land here in one matchday flow.',
+                        'Qualification, match odds, key moments, injuries, and bracket status stay in one clear matchday flow.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
@@ -190,9 +189,9 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
               ),
               const SizedBox(height: 20),
               GtexSignalStrip(
-                title: 'Live match center',
+                title: 'Live competitions',
                 subtitle:
-                    'Arena mode tracks which stories are live, which brackets are filling, and which formats are ready to burst into 3-5 minute highlight loops.',
+                    'Track which competitions are live, which brackets are filling, and which formats are ready to start.',
                 accent: Colors.deepPurpleAccent,
                 tiles: <Widget>[
                   GtexSignalTile(
@@ -244,8 +243,8 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                 title: 'Arena pulse',
                 status:
                     widget.controller.discoveryError == null
-                        ? 'Live storylines, bracket states, and replay lanes are humming.'
-                        : 'Arena sync degraded. Last good fixture board remains available.',
+                        ? 'Competition data is up to date.'
+                        : 'Competition sync degraded. The last successful snapshot is still visible.',
                 syncedAt: widget.controller.discoverySyncedAt,
                 accent: Colors.deepPurpleAccent,
                 isRefreshing: widget.controller.isLoadingDiscovery,
@@ -414,8 +413,10 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         )
         .take(2)
         .toList(growable: false);
-    final List<CompetitionSummary> gtexCompetitions =
-        competitions.where(_isGtexCompetition).take(4).toList(growable: false);
+    final List<CompetitionSummary> gtexCompetitions = competitions
+        .where(_isGtexCompetition)
+        .take(4)
+        .toList(growable: false);
     final List<CompetitionSummary> creatorCompetitions = competitions
         .where((CompetitionSummary item) => !_isGtexCompetition(item))
         .take(4)
@@ -858,52 +859,28 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     if (!widget.isAuthenticated) {
       return widget.onOpenLogin;
     }
-    if (widget.isCheckingCreatorAccess) {
-      return null;
-    }
-    if (!widget.canHostCompetitions) {
-      return widget.onOpenCreatorAccessRequest;
-    }
     return _openCreateCompetition;
   }
 
   String _hostLabel() {
     if (!widget.isAuthenticated) {
-      return 'Sign in to host';
+      return 'Sign in to create';
     }
-    if (widget.isCheckingCreatorAccess) {
-      return 'Checking creator access';
-    }
-    if (!widget.canHostCompetitions) {
-      return 'Request creator access to host';
-    }
-    return 'Host Competition';
+    return 'Create competition';
   }
 
   IconData _hostIcon() {
     if (!widget.isAuthenticated) {
       return Icons.login;
     }
-    if (widget.isCheckingCreatorAccess) {
-      return Icons.hourglass_top_outlined;
-    }
-    if (!widget.canHostCompetitions) {
-      return Icons.lock_outline;
-    }
     return Icons.add;
   }
 
   String _hostDescription() {
     if (!widget.isAuthenticated) {
-      return 'Sign in to host your own cup.';
+      return 'Sign in to create your own competition.';
     }
-    if (widget.isCheckingCreatorAccess) {
-      return 'Creator access is being checked before the live host flow is exposed.';
-    }
-    if (!widget.canHostCompetitions) {
-      return 'Request creator access before opening the live host flow. Arena does not late-fail hosting from this primary surface.';
-    }
-    return 'Create a creator competition, publish transparent rules, and share invite codes for private joins.';
+    return 'Create a competition, publish clear rules, and share invite codes for private joins.';
   }
 
   CompetitionSummary? _primaryJoinTarget(
@@ -1267,7 +1244,7 @@ class _LiveFixtureCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${competition.creatorLabel} â€¢ ${competition.safeFormatLabel}',
+                      '${competition.creatorLabel} - ${competition.safeFormatLabel}',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],

@@ -455,7 +455,7 @@ class _GteWithdrawalRequestScreenState
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
-                    labelText: 'Amount (coins)',
+                    labelText: 'Amount (GTEX Coin)',
                     prefixIcon: Icon(Icons.payments_outlined),
                   ),
                 ),

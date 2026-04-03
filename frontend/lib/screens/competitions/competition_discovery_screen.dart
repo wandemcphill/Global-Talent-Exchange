@@ -111,11 +111,11 @@ class _CompetitionDiscoveryScreenState
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
             children: <Widget>[
               GtexHeroBanner(
-                eyebrow: 'LIVE MATCH CENTER',
+                eyebrow: 'COMPETITIONS',
                 title:
-                    'Fixtures, tournaments, and creator-hosted football nights with arena energy.',
+                    'Create, discover, and join football competitions from one screen.',
                 description:
-                    'Competition mode is cinematic on purpose. It prioritizes stories, stakes, fixture flow, and watchability instead of looking like a market terminal.',
+                    'Browse live competitions, review entry details, and publish new tournaments without leaving the main app shell.',
                 accent: GteShellTheme.accentArena,
                 chips: <Widget>[
                   GteMetricChip(
@@ -156,8 +156,7 @@ class _CompetitionDiscoveryScreenState
                     TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText:
-                            'Search creator competition, skill league, or skill cup',
+                        hintText: 'Search competitions, leagues, or cups',
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon:
                             _searchController.text.trim().isEmpty
@@ -173,14 +172,14 @@ class _CompetitionDiscoveryScreenState
                       children: <Widget>[
                         Expanded(
                           child: _ArenaSignalTile(
-                            label: 'Featured fixture',
-                            value: featured.isEmpty ? 'QUEUEING' : 'SPOTLIT',
+                            label: 'Featured',
+                            value: featured.isEmpty ? 'Updating' : 'Available',
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: _ArenaSignalTile(
-                            label: 'Publish state',
+                            label: 'Create access',
                             value: _publishStateLabel(),
                           ),
                         ),
@@ -192,11 +191,11 @@ class _CompetitionDiscoveryScreenState
               const SizedBox(height: 20),
               if (featured.isNotEmpty) ...<Widget>[
                 const GtexSectionHeader(
-                  eyebrow: 'FEATURED NOW',
+                  eyebrow: 'FEATURED',
                   title:
-                      'The headline fixtures and hosted competitions worth opening first.',
+                      'Open the biggest competitions and active fixtures first.',
                   description:
-                      'The live match center leads with story, stakes, and watchability. Featured cards are meant to feel like floodlights, not filters.',
+                      'Featured competitions surface the formats, stakes, and stories most likely to matter right now.',
                   accent: GteShellTheme.accentArena,
                 ),
                 const SizedBox(height: 14),
@@ -223,11 +222,10 @@ class _CompetitionDiscoveryScreenState
               ],
               const SizedBox(height: 20),
               const GtexSectionHeader(
-                eyebrow: 'ARENA BROWSE',
-                title:
-                    'Filter competitions by mood, format, and creator energy.',
+                eyebrow: 'BROWSE',
+                title: 'Filter competitions by format, access, and entry type.',
                 description:
-                    'Browse stays cinematic, but the information architecture is cleaner now. Status, access, and joinability should land in one glance.',
+                    'Status, visibility, and joinability are kept in plain sight so users know what each competition allows.',
                 accent: GteShellTheme.accentArena,
               ),
               const SizedBox(height: 14),
@@ -271,7 +269,7 @@ class _CompetitionDiscoveryScreenState
                       LinearProgressIndicator(),
                       SizedBox(height: 14),
                       Text(
-                        'Refreshing featured fixtures, creator competitions, and the latest join windows so the live match center opens with a crisp card stack.',
+                        'Refreshing competitions, featured fixtures, and the latest join windows.',
                       ),
                     ],
                   ),
@@ -281,8 +279,8 @@ class _CompetitionDiscoveryScreenState
                 GteStatePanel(
                   title: 'Competition discovery unavailable',
                   message:
-                      'The live match center could not confirm a fresh arena board. ${_controller.discoveryError!}',
-                  actionLabel: 'Retry arena feed',
+                      'The app could not load the latest competition feed. ${_controller.discoveryError!}',
+                  actionLabel: 'Retry',
                   onAction: _controller.loadDiscovery,
                   icon: Icons.groups_outlined,
                 )
@@ -293,7 +291,7 @@ class _CompetitionDiscoveryScreenState
                       'Try a different section or clear the search to pull more creator competitions into the spotlight.',
                   actionLabel:
                       _searchController.text.trim().isEmpty
-                          ? 'Reset arena browse'
+                          ? 'Reset filters'
                           : 'Clear search',
                   onAction: () {
                     if (_searchController.text.trim().isNotEmpty) {
@@ -364,24 +362,12 @@ class _CompetitionDiscoveryScreenState
     if (!widget.isAuthenticated) {
       return widget.onOpenLogin;
     }
-    if (widget.isCheckingCreatorAccess) {
-      return null;
-    }
-    if (!widget.canHostCompetitions) {
-      return widget.onOpenCreatorAccessRequest;
-    }
     return _openCreateFlow;
   }
 
   String _createLabel() {
     if (!widget.isAuthenticated) {
-      return 'Sign in to host';
-    }
-    if (widget.isCheckingCreatorAccess) {
-      return 'Checking creator access';
-    }
-    if (!widget.canHostCompetitions) {
-      return 'Request creator access to host';
+      return 'Sign in to create';
     }
     return 'Create competition';
   }
@@ -390,23 +376,11 @@ class _CompetitionDiscoveryScreenState
     if (!widget.isAuthenticated) {
       return Icons.login;
     }
-    if (widget.isCheckingCreatorAccess) {
-      return Icons.hourglass_top_outlined;
-    }
-    if (!widget.canHostCompetitions) {
-      return Icons.lock_outline;
-    }
     return Icons.add;
   }
 
   String _publishStateLabel() {
-    if (!widget.isAuthenticated) {
-      return 'LOCKED';
-    }
-    if (widget.isCheckingCreatorAccess) {
-      return 'CHECKING';
-    }
-    return widget.canHostCompetitions ? 'OPEN' : 'APPROVAL';
+    return widget.isAuthenticated ? 'Open' : 'Sign in';
   }
 }
 

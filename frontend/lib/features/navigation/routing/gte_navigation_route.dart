@@ -17,17 +17,17 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.home:
         return 'Home';
       case GtePrimaryDestination.competitions:
-        return 'Play';
+        return 'Competitions';
       case GtePrimaryDestination.market:
         return 'Market';
       case GtePrimaryDestination.hub:
-        return 'Hub';
+        return 'Community';
       case GtePrimaryDestination.community:
-        return 'Hub';
+        return 'Community';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
-        return 'Portfolio';
+        return 'Wallet';
     }
   }
 
@@ -116,29 +116,29 @@ class GteNavigationRoute {
   });
 
   const GteNavigationRoute.home()
-      : this._(primaryDestination: GtePrimaryDestination.home);
+    : this._(primaryDestination: GtePrimaryDestination.home);
 
   const GteNavigationRoute.market()
-      : this._(primaryDestination: GtePrimaryDestination.market);
+    : this._(primaryDestination: GtePrimaryDestination.market);
 
   const GteNavigationRoute.competitions({
     CompetitionHubDestination destination = CompetitionHubDestination.overview,
   }) : this._(
-          primaryDestination: GtePrimaryDestination.competitions,
-          competitionDestination: destination,
-        );
+         primaryDestination: GtePrimaryDestination.competitions,
+         competitionDestination: destination,
+       );
 
   const GteNavigationRoute.community()
-      : this._(primaryDestination: GtePrimaryDestination.community);
+    : this._(primaryDestination: GtePrimaryDestination.community);
 
   const GteNavigationRoute.hub()
-      : this._(primaryDestination: GtePrimaryDestination.hub);
+    : this._(primaryDestination: GtePrimaryDestination.hub);
 
   const GteNavigationRoute.club()
-      : this._(primaryDestination: GtePrimaryDestination.club);
+    : this._(primaryDestination: GtePrimaryDestination.club);
 
   const GteNavigationRoute.wallet()
-      : this._(primaryDestination: GtePrimaryDestination.wallet);
+    : this._(primaryDestination: GtePrimaryDestination.wallet);
 
   final GtePrimaryDestination primaryDestination;
   final CompetitionHubDestination? competitionDestination;

@@ -8,6 +8,7 @@ import 'clubs/scouting_dashboard_screen.dart';
 import 'clubs/youth_pipeline_screen.dart';
 import '../features/club_identity/jerseys/presentation/club_identity_screen.dart';
 import '../features/club_identity/reputation/presentation/reputation_screen.dart';
+import '../features/club_identity/trophies/data/trophy_cabinet_api_repository.dart';
 import '../features/club_identity/trophies/presentation/trophy_cabinet_screen.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../widgets/gte_surface_panel.dart';
@@ -66,12 +67,14 @@ class GteClubIdentityHubScreen extends StatelessWidget {
                           label: target.clubId,
                         ),
                         _MetaChip(
-                          icon: controller.isAuthenticated
-                              ? Icons.verified
-                              : Icons.person_outline,
-                          label: controller.isAuthenticated
-                              ? 'Signed in'
-                              : 'Guest preview',
+                          icon:
+                              controller.isAuthenticated
+                                  ? Icons.verified
+                                  : Icons.person_outline,
+                          label:
+                              controller.isAuthenticated
+                                  ? 'Signed in'
+                                  : 'Guest preview',
                         ),
                       ],
                     ),
@@ -192,12 +195,13 @@ class GteClubIdentityHubScreen extends StatelessWidget {
   void _openIdentity(BuildContext context, _ClubIdentityTarget target) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => ClubIdentityScreen(
-          clubId: target.clubId,
-          initialClubName: target.clubName,
-          apiBaseUrl: apiBaseUrl,
-          backendMode: backendMode,
-        ),
+        builder:
+            (BuildContext context) => ClubIdentityScreen(
+              clubId: target.clubId,
+              initialClubName: target.clubName,
+              apiBaseUrl: apiBaseUrl,
+              backendMode: backendMode,
+            ),
       ),
     );
   }
@@ -205,12 +209,13 @@ class GteClubIdentityHubScreen extends StatelessWidget {
   void _openReputation(BuildContext context, _ClubIdentityTarget target) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => ClubReputationOverviewScreen(
-          clubId: target.clubId,
-          clubName: target.clubName,
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        ),
+        builder:
+            (BuildContext context) => ClubReputationOverviewScreen(
+              clubId: target.clubId,
+              clubName: target.clubName,
+              baseUrl: apiBaseUrl,
+              mode: backendMode,
+            ),
       ),
     );
   }
@@ -218,10 +223,15 @@ class GteClubIdentityHubScreen extends StatelessWidget {
   void _openTrophies(BuildContext context, _ClubIdentityTarget target) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => TrophyCabinetScreen(
-          clubId: target.clubId,
-          clubName: target.clubName,
-        ),
+        builder:
+            (BuildContext context) => TrophyCabinetScreen(
+              clubId: target.clubId,
+              clubName: target.clubName,
+              repository: TrophyCabinetApiRepository.standard(
+                baseUrl: apiBaseUrl,
+                mode: backendMode,
+              ),
+            ),
       ),
     );
   }
@@ -229,12 +239,13 @@ class GteClubIdentityHubScreen extends StatelessWidget {
   void _openFinances(BuildContext context, _ClubIdentityTarget target) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => ClubFinanceScreen(
-          clubId: target.clubId,
-          clubName: target.clubName,
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        ),
+        builder:
+            (BuildContext context) => ClubFinanceScreen(
+              clubId: target.clubId,
+              clubName: target.clubName,
+              baseUrl: apiBaseUrl,
+              mode: backendMode,
+            ),
       ),
     );
   }
@@ -242,12 +253,13 @@ class GteClubIdentityHubScreen extends StatelessWidget {
   void _openSponsorships(BuildContext context, _ClubIdentityTarget target) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => ClubSponsorshipsScreen(
-          clubId: target.clubId,
-          clubName: target.clubName,
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        ),
+        builder:
+            (BuildContext context) => ClubSponsorshipsScreen(
+              clubId: target.clubId,
+              clubName: target.clubName,
+              baseUrl: apiBaseUrl,
+              mode: backendMode,
+            ),
       ),
     );
   }
@@ -255,12 +267,13 @@ class GteClubIdentityHubScreen extends StatelessWidget {
   void _openAcademy(BuildContext context, _ClubIdentityTarget target) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => AcademyOverviewScreen(
-          clubId: target.clubId,
-          clubName: target.clubName,
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        ),
+        builder:
+            (BuildContext context) => AcademyOverviewScreen(
+              clubId: target.clubId,
+              clubName: target.clubName,
+              baseUrl: apiBaseUrl,
+              mode: backendMode,
+            ),
       ),
     );
   }
@@ -268,12 +281,13 @@ class GteClubIdentityHubScreen extends StatelessWidget {
   void _openScouting(BuildContext context, _ClubIdentityTarget target) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => ScoutingDashboardScreen(
-          clubId: target.clubId,
-          clubName: target.clubName,
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        ),
+        builder:
+            (BuildContext context) => ScoutingDashboardScreen(
+              clubId: target.clubId,
+              clubName: target.clubName,
+              baseUrl: apiBaseUrl,
+              mode: backendMode,
+            ),
       ),
     );
   }
@@ -281,12 +295,13 @@ class GteClubIdentityHubScreen extends StatelessWidget {
   void _openYouthPipeline(BuildContext context, _ClubIdentityTarget target) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => YouthPipelineScreen(
-          clubId: target.clubId,
-          clubName: target.clubName,
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        ),
+        builder:
+            (BuildContext context) => YouthPipelineScreen(
+              clubId: target.clubId,
+              clubName: target.clubName,
+              baseUrl: apiBaseUrl,
+              mode: backendMode,
+            ),
       ),
     );
   }
@@ -331,10 +346,7 @@ class _IdentitySection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
     );
@@ -342,10 +354,7 @@ class _IdentitySection extends StatelessWidget {
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({
-    required this.icon,
-    required this.label,
-  });
+  const _MetaChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -361,10 +370,7 @@ class _MetaChip extends StatelessWidget {
 }
 
 class _ClubIdentityTarget {
-  const _ClubIdentityTarget({
-    required this.clubId,
-    required this.clubName,
-  });
+  const _ClubIdentityTarget({required this.clubId, required this.clubName});
 
   final String clubId;
   final String clubName;
@@ -381,10 +387,7 @@ _ClubIdentityTarget _resolveClubTarget(GteExchangeController controller) {
     );
   }
   if (username != null && username.isNotEmpty) {
-    return _ClubIdentityTarget(
-      clubId: _slugify(username),
-      clubName: username,
-    );
+    return _ClubIdentityTarget(clubId: _slugify(username), clubName: username);
   }
   return const _ClubIdentityTarget(
     clubId: 'royal-lagos-fc',

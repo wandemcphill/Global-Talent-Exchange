@@ -38,14 +38,14 @@ class Match3dRouteScreen extends ConsumerWidget {
       return MatchRouteBlockedScreen(
         title: '3D Match Viewer',
         subtitle:
-            'This Flutter 3D lane opens only for signed-in sessions that include active 3D access.',
+            'This Flutter 3D lane opens for signed-in production sessions after the live match reference is verified.',
         reason:
             session?.isAuthenticated ?? false
-                ? 'Your current session does not include Flutter 3D access for this live match.'
-                : 'Sign in with a session that includes Flutter 3D access to open this live lane.',
+                ? 'The live 3D viewer could not verify your session for this match yet.'
+                : 'Sign in to open the live 3D viewer.',
         detailTitle:
             session?.isAuthenticated ?? false
-                ? '3D access unavailable'
+                ? '3D verification required'
                 : 'Sign in required',
         detailSubtitle:
             'The route stays closed instead of falling back to a believable non-3D viewer.',
@@ -102,7 +102,10 @@ bool _hasQualified3dEntitlement(
   AuthSession? session,
   Match3dUserEntitlement entitlement,
 ) {
-  return (session?.isAuthenticated ?? false) && entitlement.isPremiumUser;
+  return (session?.isAuthenticated ?? false) &&
+      (entitlement.isPremiumUser ||
+          entitlement.premiumCameraAccess ||
+          entitlement.fastReplayAccess);
 }
 
 class _QualifiedMatch3dRouteView extends StatefulWidget {

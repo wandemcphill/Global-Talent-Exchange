@@ -57,11 +57,10 @@ from app.wallets.schemas import (
     WalletTopUpInitiateRequest,
     WalletTopUpInitiateView,
     WalletTopUpVerifyRequest,
-    WalletTopUpVerifyAcceptedView,
+    WalletTopUpVerifyView,
     WalletTransactionRecordView,
 )
 from app.core.pagination import build_pagination_meta, resolve_pagination
-from app.core.task_queue import NullTaskQueueBackend, get_task_queue_backend
 from app.wallets.funding_service import (
     WalletFundingError,
     WalletFundingService,
@@ -93,7 +92,6 @@ from app.treasury.schemas import (
     WithdrawalRequestView as TreasuryWithdrawalRequestView,
 )
 from app.treasury.service import TreasuryConflictError, TreasuryService
-from app.workers.jobs import verify_wallet_top_up_job
 
 router = APIRouter()
 wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])
@@ -484,55 +482,31 @@ def initiate_wallet_top_up(
 
 @public_wallet_router.post(
     "/top-up/verify",
-    response_model=WalletTopUpVerifyAcceptedView,
-    status_code=status.HTTP_202_ACCEPTED,
+    response_model=WalletTopUpVerifyView,
 )
 def verify_wallet_top_up(
     payload: WalletTopUpVerifyRequest,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
-) -> WalletTopUpVerifyAcceptedView:
-    del session
+) -> WalletTopUpVerifyView:
     normalized_reference = payload.reference.strip()
     if not normalized_reference:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="A transaction reference is required.",
         )
-
-    task_queue = get_task_queue_backend(request.app)
-    if isinstance(task_queue, NullTaskQueueBackend):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Wallet verification queue is unavailable.",
-        )
-
-    job_id = f"wallet-top-up-verify:{normalized_reference.lower()}"
-    execution = task_queue.get(job_id)
-    if execution is None:
-        try:
-            execution = task_queue.enqueue(
-                name="wallet.verify_top_up",
-                callable_=verify_wallet_top_up_job,
-                kwargs={"user_id": current_user.id, "reference": normalized_reference},
-                job_id=job_id,
-                timeout_seconds=90,
-                retry_intervals_seconds=(10, 30, 60),
-                owner_user_id=current_user.id,
-                meta={"reference": normalized_reference},
-            )
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Wallet verification queue is unavailable.",
-            ) from exc
-    return WalletTopUpVerifyAcceptedView(
-        job_id=execution.job_id,
-        name=execution.name,
-        status=execution.status,
-        queued_at=execution.queued_at,
-        reference=normalized_reference,
+    service = _build_wallet_funding_service(request)
+    try:
+        with _wallet_transaction_lock(request, user=current_user, operation="wallet_top_up_verify"):
+            result = service.verify_top_up(session, current_user, reference=normalized_reference)
+            session.commit()
+    except WalletFundingError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return WalletTopUpVerifyView(
+        wallet=WalletProfileView.model_validate(result.wallet),
+        transaction=WalletTransactionRecordView.model_validate(result.transaction),
     )
 
 
@@ -561,7 +535,7 @@ def list_wallet_accounts(
 
 @wallet_router.get("/summary", response_model=WalletSummaryView)
 def get_wallet_summary(
-    currency: LedgerUnit = Query(default=LedgerUnit.CREDIT),
+    currency: LedgerUnit = Query(default=LedgerUnit.COIN),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     request: Request = None,
@@ -698,7 +672,7 @@ def get_wallet_overview(
 ) -> WalletOverviewView:
     wallet_service = _build_wallet_service(request)
     treasury_service = _build_treasury_service(request)
-    summary = wallet_service.get_wallet_summary(session, current_user)
+    summary = wallet_service.get_wallet_summary(session, current_user, currency=LedgerUnit.COIN)
     account = wallet_service.get_user_account(session, current_user, summary.currency)
     total_inflow = session.scalar(
         select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(

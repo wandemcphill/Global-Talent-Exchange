@@ -720,36 +720,105 @@ Widget _buildNationalTeamCompetitionsScreen(
     accentColor: const Color(0xFFFFD166),
     load: () async {
       try {
-        final List<dynamic> competitions = await _withApi(
-          dependencies,
-          (dynamic api) =>
-              api.getList('/national-team-engine/competitions', auth: false),
-          () async => <Map<String, Object?>>[
-            <String, Object?>{
-              'id': 'nations-cup',
-              'name': 'Nations Cup',
-              'status': 'active',
-              'entry_count': 24,
-            },
+        final List<Object?> payload = await Future.wait<Object?>(
+          <Future<Object?>>[
+            _withApi(
+              dependencies,
+              (dynamic api) => api.getList(
+                '/national-team-engine/competitions',
+                auth: false,
+              ),
+              () async => <Map<String, Object?>>[
+                <String, Object?>{
+                  'id': 'nations-cup',
+                  'name': 'Nations Cup',
+                  'status': 'active',
+                  'entry_count': 24,
+                },
+              ],
+            ),
+            _withApi(
+              dependencies,
+              (dynamic api) =>
+                  api.getList('/regen-universe/national-regens', auth: false),
+              () async => <Map<String, Object?>>[
+                <String, Object?>{
+                  'id': 'seed-naija-1',
+                  'display_name': 'Kazeem Afolabi',
+                  'country_name': 'Nigeria',
+                  'primary_position': 'RW',
+                  'current_rating': 69,
+                  'potential_rating': 88,
+                  'rarity_tier': 'elite',
+                },
+                <String, Object?>{
+                  'id': 'seed-ghana-1',
+                  'display_name': 'Kojo Mensah',
+                  'country_name': 'Ghana',
+                  'primary_position': 'CB',
+                  'current_rating': 71,
+                  'potential_rating': 87,
+                  'rarity_tier': 'elite',
+                },
+              ],
+            ),
           ],
         );
-        if (competitions.isEmpty) {
+        final List<dynamic> competitions = payload[0] as List<dynamic>;
+        final List<dynamic> nationalRegens = payload[1] as List<dynamic>;
+        if (competitions.isEmpty && nationalRegens.isEmpty) {
           return GteFeatureRouteResult.empty(
-            title: 'No national-team competitions are available',
+            title: 'No national-team pool is available',
             message:
-                'The Nations Cup route is wired, but there are no competitions to list right now.',
+                'National-team competitions and pre-seeded regen categories are currently empty.',
             icon: Icons.flag_outlined,
             accentColor: const Color(0xFFFFD166),
             actionLabel: 'Retry',
           );
         }
-        final Map<String, dynamic> featured = _asMap(competitions.first);
+        final Map<String, dynamic>? featured =
+            competitions.isEmpty ? null : _asMap(competitions.first);
+        final Map<String, List<Map<String, dynamic>>> regensByCountry =
+            <String, List<Map<String, dynamic>>>{};
+        for (final Object? item in nationalRegens) {
+          final Map<String, dynamic> seed = _asMap(item);
+          final String country = _stringFromMap(seed, <String>[
+            'country_name',
+            'countryName',
+          ], fallback: 'Unknown');
+          regensByCountry.putIfAbsent(country, () => <Map<String, dynamic>>[]);
+          regensByCountry[country]!.add(seed);
+        }
+        final List<MapEntry<String, List<Map<String, dynamic>>>>
+        groupedCountries = regensByCountry.entries.toList(growable: false)
+          ..sort(
+            (
+              MapEntry<String, List<Map<String, dynamic>>> left,
+              MapEntry<String, List<Map<String, dynamic>>> right,
+            ) => right.value.length.compareTo(left.value.length),
+          );
+        final List<String> countryHighlights = groupedCountries
+            .take(4)
+            .map((MapEntry<String, List<Map<String, dynamic>>> entry) {
+              final List<String> names = entry.value
+                  .take(3)
+                  .map(
+                    (Map<String, dynamic> seed) => _stringFromMap(
+                      seed,
+                      <String>['display_name', 'displayName'],
+                      fallback: 'Unknown prospect',
+                    ),
+                  )
+                  .toList(growable: false);
+              return '${entry.key}: ${names.join(', ')}';
+            })
+            .toList(growable: false);
         return GteFeatureRouteResult.ready(
           GteFeatureRouteContent(
             eyebrow: 'NATIONAL TEAM',
-            title: 'National-team competitions',
+            title: 'National-team pool',
             description:
-                'Nations Cup routes now mount from the canonical national-team engine.',
+                'National-team competition routes now surface pre-seeded regens by country so the pool is visible before and during tournaments.',
             icon: Icons.flag_outlined,
             accentColor: const Color(0xFFFFD166),
             metrics: <GteFeatureRouteMetric>[
@@ -758,19 +827,31 @@ Widget _buildNationalTeamCompetitionsScreen(
                 value: competitions.length.toString(),
               ),
               GteFeatureRouteMetric(
-                label: 'Featured',
-                value: _stringFromMap(featured, <String>['name', 'title']),
+                label: 'Seeded countries',
+                value: groupedCountries.length.toString(),
               ),
               GteFeatureRouteMetric(
-                label: 'Entries',
-                value: _stringFromMap(featured, <String>[
-                  'entry_count',
-                  'entryCount',
-                ]),
+                label: 'Visible regens',
+                value: nationalRegens.length.toString(),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Featured',
+                value:
+                    featured == null
+                        ? 'National pool'
+                        : _stringFromMap(featured, <String>['name', 'title']),
               ),
             ],
             highlights: <String>[
-              'National-team overview, entry, and history routes are now discoverable from arena and deep links.',
+              if (featured != null)
+                'Current live competition: ${_stringFromMap(featured, <String>['name', 'title'])} with ${_stringFromMap(featured, <String>['entry_count', 'entryCount'])} entries.',
+              if (countryHighlights.isNotEmpty) ...countryHighlights,
+              if (countryHighlights.isEmpty)
+                'National-team overview, entry, and history routes are now discoverable from arena and deep links.',
+            ],
+            notes: <String>[
+              'Pre-seeded regens are now visible under their national-team countries on this route.',
+              'Club-generated prospects continue from the world regen desk and remain tradable once listed on the exchange.',
             ],
           ),
         );

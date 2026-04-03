@@ -154,7 +154,7 @@ class CompetitionDraft {
       format: CompetitionFormat.league,
       visibility: CompetitionVisibility.public,
       entryFee: 5,
-      currency: 'coin',
+      currency: 'credit',
       capacity: 12,
       creatorId: creatorId,
       creatorName: creatorName,
@@ -198,7 +198,7 @@ class CompetitionDraft {
       errors.add('Capacity must stay between 2 and 500 players.');
     }
     if (entryFee < 0 || entryFee > 10000) {
-      errors.add('Entry fee must stay between 0 and 10,000 GTex.');
+      errors.add('Entry fee must stay between 0 and 10,000 Fan Coin.');
     }
     if (platformFeePct < 0 || platformFeePct > 0.20) {
       errors.add('Platform service fee must stay between 0% and 20%.');

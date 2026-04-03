@@ -79,7 +79,10 @@ class GteWalletSummaryCard extends StatelessWidget {
                 Text('Available to deploy', style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 6),
                 Text(
-                  gteFormatCredits(summary.availableBalance),
+                  gteFormatAmountForUnit(
+                    summary.availableBalance,
+                    summary.currency,
+                  ),
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(fontSize: 30),
                 ),
                 const SizedBox(height: 14),
@@ -95,8 +98,8 @@ class GteWalletSummaryCard extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   utilization <= 0
-                      ? 'No GTEX Coin is currently reserved by open orders.'
-                      : '${(utilization * 100).toStringAsFixed(0)}% of total GTEX Coin is reserved by working orders.',
+                      ? 'No ${gteFormatLedgerUnitName(summary.currency)} is currently reserved.'
+                      : '${(utilization * 100).toStringAsFixed(0)}% of total ${gteFormatLedgerUnitName(summary.currency)} is reserved by active commitments.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -109,16 +112,25 @@ class GteWalletSummaryCard extends StatelessWidget {
             children: <Widget>[
               GteMetricChip(
                 label: 'Reserved',
-                value: gteFormatCredits(summary.reservedBalance),
+                value: gteFormatAmountForUnit(
+                  summary.reservedBalance,
+                  summary.currency,
+                ),
                 positive: summary.reservedBalance <= summary.totalBalance,
               ),
               GteMetricChip(
                 label: 'Total balance',
-                value: gteFormatCredits(summary.totalBalance),
+                value: gteFormatAmountForUnit(
+                  summary.totalBalance,
+                  summary.currency,
+                ),
               ),
               GteMetricChip(
                 label: 'Funding state',
-                value: summary.availableBalance > 0 ? 'READY' : 'LOW GTEX',
+                value:
+                    summary.availableBalance > 0
+                        ? 'READY'
+                        : 'LOW ${summary.currency == GteLedgerUnit.coin ? 'GTEX' : 'FAN'}',
                 positive: summary.availableBalance > 0,
               ),
             ],

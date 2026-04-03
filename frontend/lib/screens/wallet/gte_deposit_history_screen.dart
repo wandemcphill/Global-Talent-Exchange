@@ -46,7 +46,7 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wallet transactions'),
+        title: const Text('GTEX wallet activity'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
@@ -54,7 +54,7 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openTopUp,
         icon: const Icon(Icons.add),
-        label: const Text('Top up'),
+        label: const Text('Top up GTEX'),
       ),
       body: FutureBuilder<List<GteWalletTransactionRecord>>(
         future: _transactionsFuture,
@@ -71,8 +71,9 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
           if (transactions.isEmpty) {
             return const Center(
               child: GteStatePanel(
-                title: 'No wallet transactions yet',
-                message: 'Start a top-up to create your first wallet credit.',
+                title: 'No GTEX wallet activity yet',
+                message:
+                    'Top up GTEX Coin or request a withdrawal to start your wallet history.',
                 icon: Icons.account_balance_wallet_outlined,
               ),
             );
@@ -105,7 +106,7 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${_titleCase(transaction.type)} • ${_titleCase(transaction.status)}',
+                        '${_titleCase(transaction.type)} | ${_titleCase(transaction.status)}',
                         style: Theme.of(
                           context,
                         ).textTheme.bodySmall?.copyWith(color: statusColor),

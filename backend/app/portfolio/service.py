@@ -143,7 +143,7 @@ class PortfolioService:
             )
 
         holdings.sort(key=lambda item: (-item.market_value, item.player_id))
-        wallet_summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
+        wallet_summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
         return PortfolioSnapshot(
             holdings=holdings,
             summary=PortfolioSummary(
