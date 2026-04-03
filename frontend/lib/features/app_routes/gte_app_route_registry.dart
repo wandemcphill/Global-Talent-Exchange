@@ -339,6 +339,15 @@ class GteAppRouteRegistry {
         route,
       );
     }
+    if (route is BroadcastDeskRouteData) {
+      return _buildBroadcastDeskScreen(context, liveDependencies);
+    }
+    if (route is GtexJackpotRouteData) {
+      return _buildGtexJackpotScreen(context, liveDependencies);
+    }
+    if (route is ClubAiAssistantRouteData) {
+      return _buildClubAiAssistantScreen(context, liveDependencies, route);
+    }
     if (route is CreatorStadiumClubRouteData) {
       return _buildCreatorStadiumClubScreen(context, liveDependencies, route);
     }

@@ -1151,6 +1151,1160 @@ Widget _buildFootballTransferCenterScreen(
   );
 }
 
+Widget _buildBroadcastDeskScreen(
+  BuildContext context,
+  GteNavigationDependencies dependencies,
+) {
+  return _authenticatedFeatureScreen(
+    dependencies: dependencies,
+    loadingTitle: 'Loading broadcast desk',
+    icon: Icons.podcasts_outlined,
+    accentColor: const Color(0xFF8ED8FF),
+    load: () async {
+      try {
+        final Map<String, dynamic> payload = await _withApi(
+          dependencies,
+          (dynamic api) async {
+            final Map<String, dynamic> home = await api.getMap(
+              '/api/broadcast/home',
+              auth: false,
+            );
+            final List<dynamic> channels = await api.getList(
+              '/api/broadcast/channels',
+            );
+            final List<dynamic> commentaryProfiles = await api.getList(
+              '/api/commentary/profiles',
+              auth: false,
+            );
+            final Map<String, dynamic> featuredChannel = _asMap(
+              home['featured_channel'],
+            );
+            final String? channelId =
+                _stringOrNull(
+                  _pick(featuredChannel, <String>['channel_id', 'channelId']),
+                ) ??
+                _stringOrNull(
+                  _pick(
+                    channels.isEmpty
+                        ? const <String, dynamic>{}
+                        : _asMap(channels.first),
+                    <String>['channel_id', 'channelId'],
+                  ),
+                );
+            Map<String, dynamic> session = <String, dynamic>{};
+            if (channelId != null) {
+              session = _asMap(
+                await api.post('/api/broadcast/channels/$channelId/join'),
+              );
+            }
+            return <String, dynamic>{
+              'home': home,
+              'channels': channels,
+              'commentary_profiles': commentaryProfiles,
+              'session': session,
+            };
+          },
+          () async => <String, dynamic>{
+            'home': <String, Object?>{
+              'featured_channel': <String, Object?>{
+                'channel_id': 'matchday-prime',
+                'name': 'Matchday Prime',
+                'is_live': true,
+                'viewer_count': 18420,
+                'current_program': <String, Object?>{
+                  'match_id': 'fixture-final',
+                  'title': 'GTEX Final',
+                  'subtitle': 'Rivalry night with title implications',
+                  'watch_route': '/match-viewer/fixture-final',
+                  'replay_route': '/replay/fixture-final',
+                },
+              },
+            },
+            'channels': <Map<String, Object?>>[
+              <String, Object?>{
+                'channel_id': 'matchday-prime',
+                'name': 'Matchday Prime',
+                'is_live': true,
+                'viewer_count': 18420,
+                'auto_switch_enabled': true,
+              },
+              <String, Object?>{
+                'channel_id': 'creator-cuts',
+                'name': 'Creator Cuts',
+                'is_live': true,
+                'viewer_count': 6120,
+                'auto_switch_enabled': true,
+              },
+            ],
+            'commentary_profiles': <Map<String, Object?>>[
+              <String, Object?>{
+                'id': 'play-by-play',
+                'name': 'Play by Play',
+                'style': 'sharp',
+              },
+              <String, Object?>{
+                'id': 'analyst',
+                'name': 'Analyst',
+                'style': 'tactical',
+              },
+            ],
+            'session': <String, Object?>{
+              'current_program': <String, Object?>{
+                'match_id': 'fixture-final',
+                'title': 'GTEX Final',
+                'subtitle': 'Rivalry night with title implications',
+              },
+              'director_focus': <String, Object?>{
+                'momentum': 'surging',
+                'focus_target': 'final third',
+                'focus_reason': 'title race drama',
+              },
+              'watch_reward': <String, Object?>{
+                'xp_awarded': 25,
+                'reward_value_coin': '1.5000',
+              },
+              'audio_stem_websocket_path':
+                  '/api/broadcast/channels/matchday-prime/audio/stems/stream?session_id=broadcast-fixture',
+              'match_session': <String, Object?>{
+                'commentary_websocket_path':
+                    '/api/matches/fixture-final/commentary/stream',
+                'audio_stem_websocket_path':
+                    '/api/matches/fixture-final/audio/stems/stream',
+                'sync_strategy': 'deterministic_playback',
+                'sponsored_overlays': <Map<String, Object?>>[
+                  <String, Object?>{'id': 'brand-1'},
+                ],
+                'stadium_ads': <Map<String, Object?>>[
+                  <String, Object?>{'id': 'stadium-1'},
+                ],
+              },
+            },
+          },
+        );
+        final Map<String, dynamic> home = _mapFromMap(payload, <String>[
+          'home',
+        ]);
+        final List<dynamic> channels = _listFromMap(payload, <String>[
+          'channels',
+        ]);
+        final List<dynamic> commentaryProfiles = _listFromMap(payload, <String>[
+          'commentary_profiles',
+          'commentaryProfiles',
+        ]);
+        final Map<String, dynamic> session = _mapFromMap(payload, <String>[
+          'session',
+        ]);
+        final Map<String, dynamic> featuredChannel = _mapFromMap(home, <String>[
+          'featured_channel',
+          'featuredChannel',
+        ]);
+        final Map<String, dynamic> currentProgram = _mapFromMap(
+          session,
+          <String>['current_program', 'currentProgram'],
+        );
+        final Map<String, dynamic> directorFocus = _mapFromMap(
+          session,
+          <String>['director_focus', 'directorFocus'],
+        );
+        final Map<String, dynamic> watchReward = _mapFromMap(session, <String>[
+          'watch_reward',
+          'watchReward',
+        ]);
+        final Map<String, dynamic> matchSession = _mapFromMap(session, <String>[
+          'match_session',
+          'matchSession',
+        ]);
+        final int liveChannels =
+            channels
+                .where((Object? item) => _asMap(item)['is_live'] == true)
+                .length;
+        final List<String> highlights = <String>[
+          if (currentProgram.isNotEmpty)
+            'Current program: ${_stringFromMap(currentProgram, <String>['title'])} - ${_stringFromMap(currentProgram, <String>['subtitle'], fallback: 'Broadcast package is live.')}',
+          if (directorFocus.isNotEmpty)
+            'Director focus: ${_stringFromMap(directorFocus, <String>['momentum'])} momentum on ${_stringFromMap(directorFocus, <String>['focus_target', 'focusTarget'])} because ${_stringFromMap(directorFocus, <String>['focus_reason', 'focusReason'])}.',
+          if (_stringOrNull(
+                _pick(matchSession, <String>['sync_strategy', 'syncStrategy']),
+              ) !=
+              null)
+            'Match session sync strategy: ${_stringFromMap(matchSession, <String>['sync_strategy', 'syncStrategy'])}.',
+          if (_stringOrNull(
+                _pick(matchSession, <String>[
+                  'commentary_websocket_path',
+                  'commentaryWebsocketPath',
+                ]),
+              ) !=
+              null)
+            'Rich commentary transport is mounted for this channel session.',
+          if (_stringOrNull(
+                _pick(matchSession, <String>[
+                  'audio_stem_websocket_path',
+                  'audioStemWebsocketPath',
+                ]),
+              ) !=
+              null)
+            'Audio stem transport is exposed for layered commentary, crowd, and stadium FX.',
+          if (_asList(matchSession['sponsored_overlays']).isNotEmpty ||
+              _asList(matchSession['stadium_ads']).isNotEmpty)
+            'Viewer monetization payload is mounted with ${_asList(matchSession['sponsored_overlays']).length} sponsored overlays and ${_asList(matchSession['stadium_ads']).length} stadium ads.',
+          if (commentaryProfiles.isNotEmpty)
+            'Available commentary profiles: ${commentaryProfiles.take(3).map((Object? item) => _stringFromMap(_asMap(item), <String>['name', 'style'], fallback: 'Commentary profile')).join(', ')}.',
+        ];
+        return GteFeatureRouteResult.ready(
+          GteFeatureRouteContent(
+            eyebrow: 'BROADCAST DESK',
+            title: _stringFromMap(
+              currentProgram.isEmpty ? featuredChannel : currentProgram,
+              <String>['title', 'name'],
+              fallback: 'Live broadcast network',
+            ),
+            description:
+                'This desk now consumes the broadcast-network home, channel join session, director focus, and commentary-profile surfaces that were previously left behind the live shell.',
+            icon: Icons.podcasts_outlined,
+            accentColor: const Color(0xFF8ED8FF),
+            metrics: <GteFeatureRouteMetric>[
+              GteFeatureRouteMetric(
+                label: 'Channels',
+                value: channels.length.toString(),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Live now',
+                value: liveChannels.toString(),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Commentary voices',
+                value: commentaryProfiles.length.toString(),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Watch reward',
+                value:
+                    '${_stringFromMap(watchReward, <String>['xp_awarded', 'xpAwarded'], fallback: '0')} XP / ${_stringFromMap(watchReward, <String>['reward_value_coin', 'rewardValueCoin'], fallback: '0.0000')} coin',
+              ),
+            ],
+            highlights: highlights,
+            notes: <String>[
+              'This route reads /api/broadcast/home, /api/broadcast/channels, /api/broadcast/channels/{channelId}/join, and /api/commentary/profiles directly.',
+              if (_stringOrNull(
+                    _pick(currentProgram, <String>[
+                      'watch_route',
+                      'watchRoute',
+                    ]),
+                  ) !=
+                  null)
+                'Current watch route: ${_stringFromMap(currentProgram, <String>['watch_route', 'watchRoute'])}.',
+              if (_stringOrNull(
+                    _pick(currentProgram, <String>[
+                      'replay_route',
+                      'replayRoute',
+                    ]),
+                  ) !=
+                  null)
+                'Current replay route: ${_stringFromMap(currentProgram, <String>['replay_route', 'replayRoute'])}.',
+            ],
+          ),
+        );
+      } on GteApiException catch (error) {
+        return _featureUnavailable(
+          title: 'Broadcast desk unavailable',
+          icon: Icons.podcasts_outlined,
+          accentColor: const Color(0xFF8ED8FF),
+          error: error,
+        );
+      }
+    },
+  );
+}
+
+Widget _buildGtexJackpotScreen(
+  BuildContext context,
+  GteNavigationDependencies dependencies,
+) {
+  return _publicFeatureScreen(
+    dependencies: dependencies,
+    loadingTitle: 'Loading GTEX jackpot',
+    icon: Icons.celebration_outlined,
+    accentColor: const Color(0xFFFFD166),
+    load: () async {
+      try {
+        final Map<String, dynamic> payload = await _withApi(
+          dependencies,
+          (dynamic api) async {
+            final List<dynamic> live = await Future.wait<dynamic>(
+              <Future<dynamic>>[
+                api.getMap('/jackpot/state', auth: false),
+                api.getList(
+                  '/jackpot/history',
+                  auth: false,
+                  query: const <String, Object?>{'limit': 6},
+                ),
+              ],
+            );
+            return <String, dynamic>{
+              'state': _asMap(live[0]),
+              'history': _asList(live[1]),
+            };
+          },
+          () async => <String, dynamic>{
+            'state': <String, Object?>{
+              'round_number': 12,
+              'status': 'open',
+              'balance': '2450.5000',
+              'threshold_amount': '5000.0000',
+              'contribution_rate': '0.1000',
+              'participant_count': 184,
+              'distribution_mode': 'single_winner',
+              'last_winner_user_id': 'user-41',
+              'last_trigger_mode': 'threshold',
+            },
+            'history': <Map<String, Object?>>[
+              <String, Object?>{
+                'round_number': 11,
+                'status': 'settled',
+                'trigger_mode': 'threshold',
+                'current_balance': '3800.0000',
+                'winning_user_id': 'user-41',
+                'payouts': <Map<String, Object?>>[
+                  <String, Object?>{
+                    'user_id': 'user-41',
+                    'rank': 1,
+                    'payout_amount': '3800.0000',
+                  },
+                ],
+              },
+            ],
+          },
+        );
+        final Map<String, dynamic> state = _mapFromMap(payload, <String>[
+          'state',
+        ]);
+        final List<dynamic> history = _listFromMap(payload, <String>[
+          'history',
+        ]);
+        final Map<String, dynamic> latestRound =
+            history.isEmpty ? const <String, dynamic>{} : _asMap(history.first);
+        final List<dynamic> latestPayouts = _listFromMap(latestRound, <String>[
+          'payouts',
+        ]);
+        final List<String> payoutHighlights = latestPayouts
+            .take(3)
+            .map((Object? item) {
+              final Map<String, dynamic> payout = _asMap(item);
+              return 'Rank ${_stringFromMap(payout, <String>['rank'])}: ${_stringFromMap(payout, <String>['payout_amount', 'payoutAmount'])} coin to ${_stringFromMap(payout, <String>['user_id', 'userId'])}.';
+            })
+            .toList(growable: false);
+        return GteFeatureRouteResult.ready(
+          GteFeatureRouteContent(
+            eyebrow: 'GTEX JACKPOT',
+            title:
+                'Round ${_stringFromMap(state, <String>['round_number', 'roundNumber'])} is ${_stringFromMap(state, <String>['status'])}',
+            description:
+                'The dedicated GTEX lottery runtime is now visible on the frontend instead of being confused with competition jackpot labels.',
+            icon: Icons.celebration_outlined,
+            accentColor: const Color(0xFFFFD166),
+            metrics: <GteFeatureRouteMetric>[
+              GteFeatureRouteMetric(
+                label: 'Balance',
+                value: '${_stringFromMap(state, <String>['balance'])} coin',
+              ),
+              GteFeatureRouteMetric(
+                label: 'Participants',
+                value: _stringFromMap(state, <String>[
+                  'participant_count',
+                  'participantCount',
+                ]),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Trigger',
+                value: _stringFromMap(state, <String>[
+                  'threshold_amount',
+                  'thresholdAmount',
+                ]),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Distribution',
+                value: _humanizeRouteValue(
+                  _stringFromMap(state, <String>[
+                    'distribution_mode',
+                    'distributionMode',
+                  ]),
+                ),
+              ),
+            ],
+            highlights: <String>[
+              'Contribution rate: ${_stringFromMap(state, <String>['contribution_rate', 'contributionRate'])} of qualifying GTEX activity flows into the pool.',
+              if (_stringOrNull(
+                    _pick(state, <String>[
+                      'last_trigger_mode',
+                      'lastTriggerMode',
+                    ]),
+                  ) !=
+                  null)
+                'Last trigger mode: ${_humanizeRouteValue(_stringFromMap(state, <String>['last_trigger_mode', 'lastTriggerMode']))}.',
+              if (_stringOrNull(
+                    _pick(state, <String>[
+                      'last_winner_user_id',
+                      'lastWinnerUserId',
+                    ]),
+                  ) !=
+                  null)
+                'Last visible winner: ${_stringFromMap(state, <String>['last_winner_user_id', 'lastWinnerUserId'])}.',
+              if (latestRound.isNotEmpty)
+                'Latest settled round: ${_stringFromMap(latestRound, <String>['round_number', 'roundNumber'])} via ${_humanizeRouteValue(_stringFromMap(latestRound, <String>['trigger_mode', 'triggerMode'], fallback: 'settlement'))}.',
+              ...payoutHighlights,
+            ],
+            notes: <String>[
+              'This route reads /jackpot/state and /jackpot/history directly from the GTEX runtime.',
+              'Competition prize-pool jackpot labels and the GTEX jackpot are separate systems; this screen exposes the dedicated GTEX one.',
+            ],
+          ),
+        );
+      } on GteApiException catch (error) {
+        return _featureUnavailable(
+          title: 'GTEX jackpot unavailable',
+          icon: Icons.celebration_outlined,
+          accentColor: const Color(0xFFFFD166),
+          error: error,
+        );
+      }
+    },
+  );
+}
+
+String _humanizeRouteValue(String raw) {
+  final String candidate = raw.trim();
+  if (candidate.isEmpty || candidate == '--') {
+    return raw;
+  }
+  return candidate
+      .split(RegExp(r'[_\s-]+'))
+      .where((String part) => part.trim().isNotEmpty)
+      .map(
+        (String part) =>
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+      )
+      .join(' ');
+}
+
+Widget _buildClubAiAssistantScreen(
+  BuildContext context,
+  GteNavigationDependencies dependencies,
+  ClubAiAssistantRouteData route,
+) {
+  return _authenticatedFeatureScreen(
+    dependencies: dependencies,
+    loadingTitle: 'Loading club AI assistant',
+    icon: Icons.smart_toy_outlined,
+    accentColor: const Color(0xFF72F0D8),
+    load: () async {
+      try {
+        final Map<String, dynamic> payload = await _withApi(
+          dependencies,
+          (dynamic api) async {
+            final List<dynamic> live =
+                await Future.wait<dynamic>(<Future<dynamic>>[
+                  api.getMap(
+                    '/api/ai-manager/profiles/${route.clubId}',
+                    auth: false,
+                  ),
+                  api.post(
+                    '/api/ai-manager/autopilot/run',
+                    body: _buildAiAutopilotRequest(
+                      clubId: route.clubId,
+                      clubName: route.clubName ?? route.clubId,
+                    ),
+                    auth: false,
+                  ),
+                  api.post(
+                    '/api/ai-manager/autopilot/live-decision',
+                    body: _buildAiLiveDecisionRequest(clubId: route.clubId),
+                    auth: false,
+                  ),
+                  api.post(
+                    '/api/ai-manager/economy/reward-preview',
+                    body: _buildAiRewardPreviewRequest(),
+                    auth: false,
+                  ),
+                ]);
+            return <String, dynamic>{
+              'profile': _asMap(live[0]),
+              'autopilot': _asMap(live[1]),
+              'live_decision': _asMap(live[2]),
+              'reward_preview': _asMap(live[3]),
+            };
+          },
+          () async => <String, dynamic>{
+            'profile': <String, Object?>{
+              'club_id': route.clubId,
+              'tactical_style': 'balanced',
+              'financial_strategy': 'sustainable',
+            },
+            'autopilot': <String, Object?>{
+              'activation': <String, Object?>{
+                'ai_active': true,
+                'mode': 'autonomous',
+                'summary':
+                    'AI manager is in autonomous mode because the user has been inactive past the offline threshold.',
+              },
+              'squad_plan': <String, Object?>{
+                'formation': '4-3-3',
+                'tempo': 'normal',
+                'pressing': 'medium',
+                'rationale': <String>[
+                  'Attacking variant selected because the squad is stable enough to lean into the manager style.',
+                ],
+              },
+              'transfer_actions': <Map<String, Object?>>[
+                <String, Object?>{
+                  'action': 'promote_youth',
+                  'player_name': 'Kai Forge',
+                  'rationale':
+                      'Strong youth bias promotes an internal prospect instead of forcing another external buy.',
+                },
+              ],
+              'training_plan': <Map<String, Object?>>[
+                <String, Object?>{
+                  'player_name': 'Micah Vale',
+                  'focus': 'development',
+                },
+              ],
+              'finance_actions': <Map<String, Object?>>[
+                <String, Object?>{
+                  'action': 'hold_budget',
+                  'rationale':
+                      'Budget reserve is healthy, so no emergency sale is needed.',
+                },
+              ],
+              'decision_log': <String>[
+                'AI manager is in autonomous mode because the user has been inactive past the offline threshold.',
+              ],
+            },
+            'live_decision': <String, Object?>{
+              'directive': 'increase_pressing',
+              'tempo': 'fast',
+              'pressing': 'high',
+              'substitution_reason': 'Fresh attacking legs are needed.',
+            },
+            'reward_preview': <String, Object?>{
+              'base_reward': 200,
+              'final_reward': 472,
+              'reward_multiplier': 2.36,
+              'blocked_pay_to_win_paths': <String>[
+                'buying wins',
+                'wallet-based stat boosts',
+              ],
+            },
+          },
+        );
+        final Map<String, dynamic> profile = _mapFromMap(payload, <String>[
+          'profile',
+        ]);
+        final Map<String, dynamic> autopilot = _mapFromMap(payload, <String>[
+          'autopilot',
+        ]);
+        final Map<String, dynamic> activation = _mapFromMap(autopilot, <String>[
+          'activation',
+        ]);
+        final Map<String, dynamic> squadPlan = _mapFromMap(autopilot, <String>[
+          'squad_plan',
+          'squadPlan',
+        ]);
+        final List<dynamic> transferActions = _listFromMap(autopilot, <String>[
+          'transfer_actions',
+          'transferActions',
+        ]);
+        final List<dynamic> trainingPlan = _listFromMap(autopilot, <String>[
+          'training_plan',
+          'trainingPlan',
+        ]);
+        final List<dynamic> financeActions = _listFromMap(autopilot, <String>[
+          'finance_actions',
+          'financeActions',
+        ]);
+        final List<dynamic> decisionLog = _listFromMap(autopilot, <String>[
+          'decision_log',
+          'decisionLog',
+        ]);
+        final Map<String, dynamic> liveDecision = _mapFromMap(payload, <String>[
+          'live_decision',
+          'liveDecision',
+        ]);
+        final Map<String, dynamic> rewardPreview = _mapFromMap(
+          payload,
+          <String>['reward_preview', 'rewardPreview'],
+        );
+        final Map<String, dynamic> firstTransfer =
+            transferActions.isEmpty
+                ? const <String, dynamic>{}
+                : _asMap(transferActions.first);
+        final Map<String, dynamic> firstTraining =
+            trainingPlan.isEmpty
+                ? const <String, dynamic>{}
+                : _asMap(trainingPlan.first);
+        final Map<String, dynamic> firstFinance =
+            financeActions.isEmpty
+                ? const <String, dynamic>{}
+                : _asMap(financeActions.first);
+        final List<dynamic> blockedPaths = _listFromMap(rewardPreview, <String>[
+          'blocked_pay_to_win_paths',
+          'blockedPayToWinPaths',
+        ]);
+        return GteFeatureRouteResult.ready(
+          GteFeatureRouteContent(
+            eyebrow: 'AI ASSISTANT',
+            title:
+                route.clubName == null || route.clubName!.trim().isEmpty
+                    ? 'Club AI assistant'
+                    : '${route.clubName} AI assistant',
+            description:
+                'The backend AI manager is now reflected as a routed club surface with profile, autopilot, live decision, and reward policy previews.',
+            icon: Icons.smart_toy_outlined,
+            accentColor: const Color(0xFF72F0D8),
+            metrics: <GteFeatureRouteMetric>[
+              GteFeatureRouteMetric(
+                label: 'Tactical style',
+                value: _humanizeRouteValue(
+                  _stringFromMap(profile, <String>[
+                    'tactical_style',
+                    'tacticalStyle',
+                  ]),
+                ),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Finance',
+                value: _humanizeRouteValue(
+                  _stringFromMap(profile, <String>[
+                    'financial_strategy',
+                    'financialStrategy',
+                  ]),
+                ),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Autopilot mode',
+                value: _humanizeRouteValue(
+                  _stringFromMap(activation, <String>['mode']),
+                ),
+              ),
+              GteFeatureRouteMetric(
+                label: 'Live directive',
+                value: _humanizeRouteValue(
+                  _stringFromMap(liveDecision, <String>['directive']),
+                ),
+              ),
+            ],
+            highlights: <String>[
+              if (decisionLog.isNotEmpty) decisionLog.first.toString(),
+              if (_stringOrNull(_pick(squadPlan, <String>['formation'])) !=
+                  null)
+                'Autopilot squad plan: ${_stringFromMap(squadPlan, <String>['formation'])} with ${_humanizeRouteValue(_stringFromMap(squadPlan, <String>['tempo']))} tempo and ${_humanizeRouteValue(_stringFromMap(squadPlan, <String>['pressing']))} pressing.',
+              if (_listFromMap(squadPlan, <String>['rationale']).isNotEmpty)
+                _listFromMap(squadPlan, <String>['rationale']).first.toString(),
+              if (firstTransfer.isNotEmpty)
+                'Transfer call: ${_humanizeRouteValue(_stringFromMap(firstTransfer, <String>['action']))} ${_stringFromMap(firstTransfer, <String>['player_name', 'playerName'], fallback: '').trim()} ${_stringFromMap(firstTransfer, <String>['rationale'])}'
+                    .trim(),
+              if (firstTraining.isNotEmpty)
+                'Training focus: ${_stringFromMap(firstTraining, <String>['player_name', 'playerName'])} on ${_humanizeRouteValue(_stringFromMap(firstTraining, <String>['focus']))}.',
+              if (firstFinance.isNotEmpty)
+                'Finance posture: ${_humanizeRouteValue(_stringFromMap(firstFinance, <String>['action']))} because ${_stringFromMap(firstFinance, <String>['rationale'])}.',
+              if (_stringOrNull(
+                    _pick(liveDecision, <String>[
+                      'substitution_reason',
+                      'substitutionReason',
+                    ]),
+                  ) !=
+                  null)
+                'Live match switch: ${_stringFromMap(liveDecision, <String>['substitution_reason', 'substitutionReason'])}',
+              'Reward preview: ${_stringFromMap(rewardPreview, <String>['final_reward', 'finalReward'])} final from base ${_stringFromMap(rewardPreview, <String>['base_reward', 'baseReward'])} with multiplier ${_stringFromMap(rewardPreview, <String>['reward_multiplier', 'rewardMultiplier'])}.',
+            ],
+            notes: <String>[
+              'This route runs /api/ai-manager/profiles/{clubId}, /autopilot/run, /autopilot/live-decision, and /economy/reward-preview directly.',
+              if (blockedPaths.isNotEmpty)
+                'Competitive integrity guardrails stay explicit: ${blockedPaths.take(3).join(', ')}.',
+            ],
+          ),
+        );
+      } on GteApiException catch (error) {
+        return _featureUnavailable(
+          title: 'Club AI assistant unavailable',
+          icon: Icons.smart_toy_outlined,
+          accentColor: const Color(0xFF72F0D8),
+          error: error,
+        );
+      }
+    },
+  );
+}
+
+Map<String, Object?> _buildAiAutopilotRequest({
+  required String clubId,
+  required String clubName,
+}) {
+  final List<Map<String, Object?>> squad = _buildAiSquadSeed(
+    clubId: clubId,
+    clubName: clubName,
+  );
+  return <String, Object?>{
+    'club_id': clubId,
+    'user_last_active_hours': 42,
+    'club_strength': 82,
+    'opponent': <String, Object?>{
+      'club_name': '${_buildAiClubAlias(clubName)} Select',
+      'strength': 79,
+      'tactical_style': 'balanced',
+    },
+    'squad': squad,
+    'finance': <String, Object?>{
+      'revenue': 780000,
+      'wage_bill': 420000,
+      'transfer_budget': 250000,
+      'cash_balance': 910000,
+      'scouting_budget': 85000,
+      'training_budget': 65000,
+    },
+    'market': <String, Object?>{
+      'hours_since_last_transfer': 72,
+      'targets': <Map<String, Object?>>[
+        <String, Object?>{
+          'player_id': '$clubId-target-anchor-9',
+          'name': 'Ayo Balance',
+          'position': 'CM',
+          'skill': 80,
+          'potential': 86,
+          'fit_to_tactic': 0.84,
+          'wage_cost': 34000,
+          'asking_price': 175000,
+          'age': 22,
+          'is_free_agent': false,
+        },
+        <String, Object?>{
+          'player_id': '$clubId-target-finisher-10',
+          'name': 'Timo Edge',
+          'position': 'ST',
+          'skill': 78,
+          'potential': 84,
+          'fit_to_tactic': 0.81,
+          'wage_cost': 30000,
+          'asking_price': 150000,
+          'age': 21,
+          'is_free_agent': false,
+        },
+        <String, Object?>{
+          'player_id': '$clubId-target-utility-11',
+          'name': 'Musa Vale',
+          'position': 'RW',
+          'skill': 75,
+          'potential': 82,
+          'fit_to_tactic': 0.76,
+          'wage_cost': 22000,
+          'asking_price': 0,
+          'age': 19,
+          'is_free_agent': true,
+        },
+      ],
+    },
+    'bench_size': 7,
+  };
+}
+
+Map<String, Object?> _buildAiLiveDecisionRequest({required String clubId}) {
+  return <String, Object?>{
+    'club_id': clubId,
+    'minute': 67,
+    'score_for': 1,
+    'score_against': 1,
+    'xg_for': 1.42,
+    'xg_against': 1.11,
+    'possession_share': 0.56,
+    'red_cards_for': 0,
+    'red_cards_against': 0,
+    'average_stamina': 0.63,
+    'average_fatigue': 0.34,
+    'opponent_switched_shape': true,
+    'substitutions_used': 2,
+    'maximum_substitutions': 5,
+  };
+}
+
+Map<String, Object?> _buildAiRewardPreviewRequest() {
+  return <String, Object?>{
+    'base_reward': 350,
+    'difficulty_multiplier': 1.35,
+    'division': 'open',
+    'win_streak': 4,
+    'tournament_stage_weight': 0.2,
+    'entry_fee_pool': 120,
+    'entry_fee_multiplier': 1.0,
+    'ai_active': true,
+    'premium_features_enabled': true,
+  };
+}
+
+List<Map<String, Object?>> _buildAiSquadSeed({
+  required String clubId,
+  required String clubName,
+}) {
+  final String alias = _buildAiClubAlias(clubName);
+  final List<Map<String, Object?>> players = <Map<String, Object?>>[
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'keeper-1',
+      name: '$alias Atlas',
+      primaryPosition: 'GK',
+      secondaryPositions: const <String>[],
+      rating: 82,
+      potential: 86,
+      age: 26,
+      fatigue: 0.17,
+      stamina: 0.79,
+      form: 0.73,
+      injuryRisk: 0.14,
+      wageCost: 52000,
+      transferValue: 340000,
+      morale: 0.72,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'right-back-2',
+      name: 'Kelechi Run',
+      primaryPosition: 'RB',
+      secondaryPositions: const <String>['RWB'],
+      rating: 78,
+      potential: 82,
+      age: 24,
+      fatigue: 0.28,
+      stamina: 0.84,
+      form: 0.68,
+      injuryRisk: 0.19,
+      wageCost: 34000,
+      transferValue: 210000,
+      morale: 0.7,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'center-back-3',
+      name: 'Omar Shield',
+      primaryPosition: 'CB',
+      secondaryPositions: const <String>['RB'],
+      rating: 81,
+      potential: 84,
+      age: 27,
+      fatigue: 0.22,
+      stamina: 0.77,
+      form: 0.74,
+      injuryRisk: 0.13,
+      wageCost: 46000,
+      transferValue: 295000,
+      morale: 0.76,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'center-back-4',
+      name: 'Victor Stone',
+      primaryPosition: 'CB',
+      secondaryPositions: const <String>['DM'],
+      rating: 80,
+      potential: 83,
+      age: 25,
+      fatigue: 0.24,
+      stamina: 0.8,
+      form: 0.71,
+      injuryRisk: 0.16,
+      wageCost: 42000,
+      transferValue: 270000,
+      morale: 0.73,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'left-back-5',
+      name: 'Dara Glide',
+      primaryPosition: 'LB',
+      secondaryPositions: const <String>['LWB'],
+      rating: 77,
+      potential: 81,
+      age: 23,
+      fatigue: 0.29,
+      stamina: 0.86,
+      form: 0.66,
+      injuryRisk: 0.2,
+      wageCost: 32000,
+      transferValue: 205000,
+      morale: 0.69,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'midfield-6',
+      name: 'Seyi Anchor',
+      primaryPosition: 'DM',
+      secondaryPositions: const <String>['CM'],
+      rating: 80,
+      potential: 84,
+      age: 24,
+      fatigue: 0.26,
+      stamina: 0.82,
+      form: 0.75,
+      injuryRisk: 0.12,
+      wageCost: 41000,
+      transferValue: 255000,
+      morale: 0.77,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'midfield-7',
+      name: 'Tobi Pulse',
+      primaryPosition: 'CM',
+      secondaryPositions: const <String>['AM'],
+      rating: 81,
+      potential: 87,
+      age: 22,
+      fatigue: 0.23,
+      stamina: 0.83,
+      form: 0.79,
+      injuryRisk: 0.11,
+      wageCost: 47000,
+      transferValue: 315000,
+      morale: 0.81,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'midfield-8',
+      name: 'Micah Vale',
+      primaryPosition: 'CM',
+      secondaryPositions: const <String>['RW'],
+      rating: 79,
+      potential: 88,
+      age: 20,
+      fatigue: 0.25,
+      stamina: 0.8,
+      form: 0.78,
+      injuryRisk: 0.1,
+      wageCost: 29000,
+      transferValue: 280000,
+      morale: 0.82,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'wing-9',
+      name: 'Enzo Flash',
+      primaryPosition: 'RW',
+      secondaryPositions: const <String>['LW'],
+      rating: 80,
+      potential: 85,
+      age: 23,
+      fatigue: 0.31,
+      stamina: 0.85,
+      form: 0.76,
+      injuryRisk: 0.18,
+      wageCost: 39000,
+      transferValue: 265000,
+      morale: 0.74,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'striker-10',
+      name: 'Kai Forge',
+      primaryPosition: 'ST',
+      secondaryPositions: const <String>['RW'],
+      rating: 83,
+      potential: 87,
+      age: 24,
+      fatigue: 0.27,
+      stamina: 0.81,
+      form: 0.8,
+      injuryRisk: 0.15,
+      wageCost: 56000,
+      transferValue: 360000,
+      morale: 0.79,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'wing-11',
+      name: 'Luka Drift',
+      primaryPosition: 'LW',
+      secondaryPositions: const <String>['AM'],
+      rating: 79,
+      potential: 84,
+      age: 21,
+      fatigue: 0.3,
+      stamina: 0.84,
+      form: 0.72,
+      injuryRisk: 0.17,
+      wageCost: 35000,
+      transferValue: 245000,
+      morale: 0.75,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'bench-12',
+      name: 'Rico Wall',
+      primaryPosition: 'CB',
+      secondaryPositions: const <String>['LB'],
+      rating: 75,
+      potential: 80,
+      age: 28,
+      fatigue: 0.18,
+      stamina: 0.76,
+      form: 0.64,
+      injuryRisk: 0.14,
+      wageCost: 26000,
+      transferValue: 165000,
+      morale: 0.7,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'bench-13',
+      name: 'Noah Craft',
+      primaryPosition: 'CM',
+      secondaryPositions: const <String>['DM'],
+      rating: 74,
+      potential: 79,
+      age: 25,
+      fatigue: 0.16,
+      stamina: 0.78,
+      form: 0.67,
+      injuryRisk: 0.12,
+      wageCost: 23000,
+      transferValue: 150000,
+      morale: 0.71,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'bench-14',
+      name: 'Jules Dash',
+      primaryPosition: 'RW',
+      secondaryPositions: const <String>['LW'],
+      rating: 73,
+      potential: 81,
+      age: 20,
+      fatigue: 0.21,
+      stamina: 0.83,
+      form: 0.69,
+      injuryRisk: 0.12,
+      wageCost: 21000,
+      transferValue: 172000,
+      morale: 0.76,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'bench-15',
+      name: 'Femi Link',
+      primaryPosition: 'AM',
+      secondaryPositions: const <String>['CM'],
+      rating: 76,
+      potential: 82,
+      age: 23,
+      fatigue: 0.19,
+      stamina: 0.79,
+      form: 0.73,
+      injuryRisk: 0.11,
+      wageCost: 27000,
+      transferValue: 188000,
+      morale: 0.78,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'bench-16',
+      name: 'Tade Bolt',
+      primaryPosition: 'ST',
+      secondaryPositions: const <String>['LW'],
+      rating: 77,
+      potential: 83,
+      age: 22,
+      fatigue: 0.24,
+      stamina: 0.82,
+      form: 0.74,
+      injuryRisk: 0.13,
+      wageCost: 30000,
+      transferValue: 205000,
+      morale: 0.77,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'bench-17',
+      name: 'Ibrahim Guard',
+      primaryPosition: 'GK',
+      secondaryPositions: const <String>[],
+      rating: 72,
+      potential: 78,
+      age: 29,
+      fatigue: 0.1,
+      stamina: 0.7,
+      form: 0.63,
+      injuryRisk: 0.09,
+      wageCost: 18000,
+      transferValue: 110000,
+      morale: 0.68,
+    ),
+    _buildAiSquadPlayer(
+      clubId: clubId,
+      suffix: 'bench-18',
+      name: 'Milan Crest',
+      primaryPosition: 'LB',
+      secondaryPositions: const <String>['CB'],
+      rating: 74,
+      potential: 79,
+      age: 24,
+      fatigue: 0.22,
+      stamina: 0.81,
+      form: 0.65,
+      injuryRisk: 0.14,
+      wageCost: 22000,
+      transferValue: 142000,
+      morale: 0.72,
+    ),
+  ];
+  return players;
+}
+
+Map<String, Object?> _buildAiSquadPlayer({
+  required String clubId,
+  required String suffix,
+  required String name,
+  required String primaryPosition,
+  required List<String> secondaryPositions,
+  required int rating,
+  required int potential,
+  required int age,
+  required double fatigue,
+  required double stamina,
+  required double form,
+  required double injuryRisk,
+  required int wageCost,
+  required int transferValue,
+  required double morale,
+}) {
+  return <String, Object?>{
+    'player_id': '$clubId-$suffix',
+    'name': name,
+    'primary_position': primaryPosition,
+    'secondary_positions': secondaryPositions,
+    'rating': rating,
+    'potential': potential,
+    'age': age,
+    'fatigue': fatigue,
+    'stamina': stamina,
+    'form': form,
+    'injury_risk': injuryRisk,
+    'availability': 'available',
+    'wage_cost': wageCost,
+    'transfer_value': transferValue,
+    'morale': morale,
+  };
+}
+
+String _buildAiClubAlias(String clubName) {
+  final List<String> parts = clubName
+      .split(RegExp(r'[\s_-]+'))
+      .where((String part) => part.trim().isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return 'GTEX';
+  }
+  if (parts.length == 1) {
+    final String single = parts.first.trim();
+    return single.length <= 12 ? single : single.substring(0, 12);
+  }
+  return parts.take(2).join(' ');
+}
+
 Widget _buildCreatorStadiumClubScreen(
   BuildContext context,
   GteNavigationDependencies dependencies,

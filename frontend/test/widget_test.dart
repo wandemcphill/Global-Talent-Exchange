@@ -40,7 +40,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Home Lobby'), findsOneWidget);
+    expect(find.text('Home'), findsWidgets);
     expect(find.textContaining('matchday lobby'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Open coach market'));

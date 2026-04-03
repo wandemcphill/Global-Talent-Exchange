@@ -869,6 +869,18 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
               ),
               _buildRouteLauncher(
                 context: context,
+                label: 'Broadcast desk',
+                icon: Icons.podcasts_outlined,
+                route: const BroadcastDeskRouteData(),
+              ),
+              _buildRouteLauncher(
+                context: context,
+                label: 'GTEX jackpot',
+                icon: Icons.celebration_outlined,
+                route: const GtexJackpotRouteData(),
+              ),
+              _buildRouteLauncher(
+                context: context,
                 label: 'Creator share market',
                 icon: Icons.insights_outlined,
                 route: const CreatorShareMarketAdminControlRouteData(),

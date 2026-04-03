@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
@@ -7,7 +9,7 @@ import 'package:gte_frontend/services/match_viewer_mapper.dart';
 
 void main() {
   test(
-    'live match snapshot loader returns fixture data in default fixture mode',
+    'live match snapshot loader returns fixture data in explicit fixture mode',
     () async {
       final CompetitionSummary competition = _buildCompetition(
         id: 'live-feed-truth',
@@ -15,6 +17,10 @@ void main() {
 
       final LiveMatchSnapshot snapshot = await loadLiveMatchSnapshot(
         competition,
+        config: const GteAppConfig(
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+        ),
       );
 
       expect(snapshot.matchId, competition.id);
@@ -39,6 +45,10 @@ void main() {
         competition: competition,
         matchKey: competition.id,
         fallbackSnapshot: snapshot,
+        config: const GteAppConfig(
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+        ),
       );
 
       expect(state.matchId, competition.id);

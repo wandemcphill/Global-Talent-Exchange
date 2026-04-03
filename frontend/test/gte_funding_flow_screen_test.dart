@@ -37,8 +37,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Top up wallet'), findsOneWidget);
-    expect(find.text('Fund with Paystack'), findsOneWidget);
+    expect(find.text('Fund GTEX wallet'), findsOneWidget);
+    expect(find.text('Choose a funding method'), findsOneWidget);
     expect(find.text('Continue to Paystack'), findsOneWidget);
     expect(find.text('Compliance action required'), findsNothing);
 
@@ -56,7 +56,7 @@ void main() {
       find.text('Complete 1 policy items to unlock deposits.'),
       findsOneWidget,
     );
-    expect(find.text('Fund with Paystack'), findsOneWidget);
+    expect(find.text('Instant payment'), findsOneWidget);
   });
 }
 

@@ -44,7 +44,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Club hub'), findsOneWidget);
     expect(find.text('World context'), findsOneWidget);
-    expect(find.text('Owner-only inbox'), findsOneWidget);
+    expect(find.text('Owner offer inbox'), findsOneWidget);
 
     await tester.ensureVisible(find.text('World context'));
     await tester.tap(find.text('World context'));

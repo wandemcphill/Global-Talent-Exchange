@@ -859,12 +859,24 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     if (!widget.isAuthenticated) {
       return widget.onOpenLogin;
     }
+    if (widget.isCheckingCreatorAccess) {
+      return null;
+    }
+    if (!widget.canHostCompetitions) {
+      return widget.onOpenCreatorAccessRequest;
+    }
     return _openCreateCompetition;
   }
 
   String _hostLabel() {
     if (!widget.isAuthenticated) {
       return 'Sign in to create';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Checking creator access';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Request creator access to host';
     }
     return 'Create competition';
   }
@@ -873,12 +885,21 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     if (!widget.isAuthenticated) {
       return Icons.login;
     }
+    if (!widget.canHostCompetitions) {
+      return Icons.how_to_reg_outlined;
+    }
     return Icons.add;
   }
 
   String _hostDescription() {
     if (!widget.isAuthenticated) {
       return 'Sign in to create your own competition.';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Checking whether this account can host creator competitions.';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Creator access must be approved before this account can host competitions.';
     }
     return 'Create a competition, publish clear rules, and share invite codes for private joins.';
   }

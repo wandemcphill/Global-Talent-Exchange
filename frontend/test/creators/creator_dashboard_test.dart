@@ -7,29 +7,7 @@ import 'package:gte_frontend/screens/creators/creator_dashboard_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets(
-    'creator dashboard shows growth summary and creator competitions',
-    (WidgetTester tester) async {
-      final CreatorController controller = CreatorController(
-        api: CreatorApi.fixture(),
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: GteShellTheme.build(),
-          home: CreatorDashboardScreen(controller: controller),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Creator dashboard preview'), findsOneWidget);
-      expect(find.textContaining('preview-only'), findsOneWidget);
-      expect(find.text('Growth summary'), findsNothing);
-      expect(find.text('Spring Scout Sprint'), findsNothing);
-    },
-  );
-
-  testWidgets('creator dashboard opens profile and share surfaces', (
+  testWidgets('creator dashboard shows growth and finance summary', (
     WidgetTester tester,
   ) async {
     final CreatorController controller = CreatorController(
@@ -44,9 +22,33 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Creator dashboard preview'), findsOneWidget);
-    expect(find.text('Profile'), findsNothing);
-    expect(find.text('Share'), findsNothing);
+    expect(find.text('Maya Scout'), findsOneWidget);
+    expect(find.text('Share code: MAYA-GROWTH'), findsOneWidget);
+    expect(find.text('Growth'), findsOneWidget);
+    expect(find.text('Finance'), findsOneWidget);
+  });
+
+  testWidgets('creator dashboard renders current creator growth copy', (
+    WidgetTester tester,
+  ) async {
+    final CreatorController controller = CreatorController(
+      api: CreatorApi.fixture(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: CreatorDashboardScreen(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Community captain for creator competitions'),
+      findsOneWidget,
+    );
+    expect(find.text('+18 qualified joins this week'), findsOneWidget);
+    expect(find.text('39% invite attribution rate'), findsOneWidget);
   });
 
   testWidgets(
@@ -88,9 +90,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Creator dashboard preview'), findsOneWidget);
-      expect(find.text('901 credits'), findsNothing);
-      expect(find.text('999 credits'), findsNothing);
+      expect(find.text('Gift income: 901 Fan Coin'), findsOneWidget);
+      expect(find.text('Wallet available: 999 Fan Coin'), findsOneWidget);
+      expect(find.text('Reward income: 0 Fan Coin'), findsOneWidget);
     },
   );
 }

@@ -8,7 +8,7 @@ import 'package:gte_frontend/screens/referrals/referral_hub_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('creator referral route is preview-only for approved creators', (
+  testWidgets('creator referral route shows live creator community data', (
     WidgetTester tester,
   ) async {
     final ReferralController referralController = ReferralController(
@@ -30,13 +30,15 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
 
-    expect(find.text('Creator referrals preview'), findsOneWidget);
-    expect(find.textContaining('preview-only'), findsOneWidget);
+    expect(find.text('Maya Scout community desk'), findsOneWidget);
+    expect(find.text('Share code: MAYA-GROWTH'), findsOneWidget);
+    expect(find.text('Performance snapshot'), findsOneWidget);
     expect(find.text('Sign in'), findsNothing);
   });
 
-  testWidgets('unauthenticated users still get a sign-in action on preview', (
+  testWidgets('unauthenticated users still get a sign-in action', (
     WidgetTester tester,
   ) async {
     final ReferralController referralController = ReferralController(
@@ -63,7 +65,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Creator referrals preview'), findsOneWidget);
+    expect(find.text('Sign in to open community tools'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
 
     await tester.tap(find.text('Sign in'));
@@ -73,72 +75,73 @@ void main() {
   });
 
   testWidgets(
-      'non-creator users see creator-access gating instead of fixture identities',
-      (WidgetTester tester) async {
-    final ReferralController referralController = ReferralController(
-      api: ReferralApi.fixture(),
-    );
-    final CreatorController creatorController = CreatorController(
-      api: CreatorApi.fixture(),
-    );
-    bool openedCreatorAccess = false;
+    'non-creator users see creator-access gating instead of community data',
+    (WidgetTester tester) async {
+      final ReferralController referralController = ReferralController(
+        api: ReferralApi.fixture(),
+      );
+      final CreatorController creatorController = CreatorController(
+        api: CreatorApi.fixture(),
+      );
+      bool openedCreatorAccess = false;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: ReferralHubScreen(
-          referralController: referralController,
-          creatorController: creatorController,
-          isAuthenticated: true,
-          hasApprovedCreatorAccess: false,
-          isReferralRuntimeAvailable: false,
-          onOpenCreatorAccessRequest: () {
-            openedCreatorAccess = true;
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: ReferralHubScreen(
+            referralController: referralController,
+            creatorController: creatorController,
+            isAuthenticated: true,
+            hasApprovedCreatorAccess: false,
+            isReferralRuntimeAvailable: false,
+            onOpenCreatorAccessRequest: () {
+              openedCreatorAccess = true;
+            },
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Creator referrals preview'), findsOneWidget);
-    expect(find.textContaining('preview-only'), findsOneWidget);
-    expect(find.text('MAYA-GROWTH'), findsNothing);
-    expect(find.text('@maya_scout'), findsNothing);
-    expect(find.text('Creator dashboard'), findsNothing);
-    expect(find.text('Share creator competition'), findsNothing);
-    expect(find.text('Request creator access'), findsNothing);
-    expect(openedCreatorAccess, isFalse);
-  });
+      expect(find.text('Apply for creator access'), findsOneWidget);
+      expect(find.text('Request access'), findsOneWidget);
+      expect(find.text('MAYA-GROWTH'), findsNothing);
+      expect(find.text('Maya Scout community desk'), findsNothing);
+
+      await tester.tap(find.text('Request access'));
+      await tester.pump();
+
+      expect(openedCreatorAccess, isTrue);
+    },
+  );
 
   testWidgets(
-      'approved users see runtime unavailable state outside fixture mode',
-      (WidgetTester tester) async {
-    final ReferralController referralController = ReferralController(
-      api: ReferralApi.fixture(),
-    );
-    final CreatorController creatorController = CreatorController(
-      api: CreatorApi.fixture(),
-    );
+    'approved users still render creator tools when fixture data is present',
+    (WidgetTester tester) async {
+      final ReferralController referralController = ReferralController(
+        api: ReferralApi.fixture(),
+      );
+      final CreatorController creatorController = CreatorController(
+        api: CreatorApi.fixture(),
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: ReferralHubScreen(
-          referralController: referralController,
-          creatorController: creatorController,
-          isAuthenticated: true,
-          hasApprovedCreatorAccess: true,
-          isReferralRuntimeAvailable: false,
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: ReferralHubScreen(
+            referralController: referralController,
+            creatorController: creatorController,
+            isAuthenticated: true,
+            hasApprovedCreatorAccess: true,
+            isReferralRuntimeAvailable: false,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Creator referrals preview'), findsOneWidget);
-    expect(find.textContaining('preview-only'), findsOneWidget);
-    expect(find.text('MAYA-GROWTH'), findsNothing);
-    expect(find.text('@maya_scout'), findsNothing);
-    expect(find.text('Creator dashboard'), findsNothing);
-    expect(find.text('Share creator competition'), findsNothing);
-  });
+      expect(find.text('Maya Scout community desk'), findsOneWidget);
+      expect(find.text('Share code: MAYA-GROWTH'), findsOneWidget);
+      expect(find.text('Performance snapshot'), findsOneWidget);
+      expect(find.text('Referral runtime is not enabled yet'), findsNothing);
+    },
+  );
 }

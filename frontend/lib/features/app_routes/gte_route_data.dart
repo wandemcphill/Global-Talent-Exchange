@@ -1,10 +1,7 @@
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
 
 class GteAppRouteRegistration {
-  const GteAppRouteRegistration({
-    required this.name,
-    required this.path,
-  });
+  const GteAppRouteRegistration({required this.name, required this.path});
 
   final String name;
   final String path;
@@ -39,6 +36,9 @@ class GteAppRouteNames {
   static const String nationalTeamEntry = 'national-team.entry';
   static const String nationalTeamHistory = 'national-team.history';
   static const String footballTransferCenter = 'football.transfer-center';
+  static const String broadcastDesk = 'broadcast.desk';
+  static const String gtexJackpot = 'gtex.jackpot';
+  static const String clubAiAssistant = 'club.ai-assistant';
   static const String creatorStadiumClub = 'creator-stadium.club';
   static const String creatorStadiumMatch = 'creator-stadium.match';
   static const String creatorStadiumAdminControl =
@@ -75,171 +75,183 @@ class GteAppRouteCatalog {
 
   static const List<GteAppRouteRegistration> registrations =
       <GteAppRouteRegistration>[
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.competitionsDiscovery,
-      path: '/competitions',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.competitionCreate,
-      path: '/competitions/create',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.competitionWorldSuperCup,
-      path: '/competitions/world-super-cup',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.competitionDetail,
-      path: '/competitions/:competitionId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.competitionJoin,
-      path: '/competitions/:competitionId/join',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.competitionShare,
-      path: '/competitions/:competitionId/share',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.streamerTournamentsList,
-      path: '/streamer-tournaments',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.streamerTournamentDetail,
-      path: '/streamer-tournaments/:tournamentId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.fanPredictionMatch,
-      path: '/fan-predictions/matches/:matchId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.playerCardsBrowse,
-      path: '/player-cards',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.playerCardDetail,
-      path: '/player-cards/players/:playerId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.playerCardsInventory,
-      path: '/player-cards/inventory',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.creatorShareMarketClub,
-      path: '/creator-share-market/clubs/:clubId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.creatorShareMarketAdminControl,
-      path: '/admin/creator-share-market/control',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubSaleMarketListings,
-      path: '/clubs/sale-market',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubSaleMarketDetail,
-      path: '/clubs/:clubId/sale-market',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubSaleMarketOwnerOffers,
-      path: '/clubs/:clubId/sale-market/offers',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.worldOverview,
-      path: '/world',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.worldClubContext,
-      path: '/world/clubs/:clubId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.worldCompetitionContext,
-      path: '/world/competitions/:competitionId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.nationalTeamCompetitions,
-      path: '/national-team',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.nationalTeamEntry,
-      path: '/national-team/entries/:entryId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.nationalTeamHistory,
-      path: '/national-team/history',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.footballTransferCenter,
-      path: '/football/transfer-center',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.creatorStadiumClub,
-      path: '/creator-stadium/clubs/:clubId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.creatorStadiumMatch,
-      path: '/creator-stadium/matches/:matchId',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.creatorStadiumAdminControl,
-      path: '/admin/creator-stadium/control',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.creatorLeagueFinancialReport,
-      path: '/admin/creator-league/financial-report',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.creatorLeagueSettlements,
-      path: '/admin/creator-league/settlements',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.giftStabilizer,
-      path: '/admin/gift-stabilizer',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityJerseys,
-      path: '/clubs/:clubId/identity/jerseys',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityReputationOverview,
-      path: '/clubs/:clubId/identity/reputation',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityReputationHistory,
-      path: '/clubs/:clubId/identity/reputation/history',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityReputationLeaderboard,
-      path: '/clubs/:clubId/identity/reputation/leaderboard',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityTrophyCabinet,
-      path: '/clubs/:clubId/identity/trophies',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityTrophyTimeline,
-      path: '/clubs/:clubId/identity/trophies/timeline',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityTrophyLeaderboard,
-      path: '/clubs/:clubId/identity/trophies/leaderboard',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityDynastyOverview,
-      path: '/clubs/:clubId/identity/dynasty',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityDynastyHistory,
-      path: '/clubs/:clubId/identity/dynasty/history',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityDynastyLeaderboard,
-      path: '/clubs/:clubId/identity/dynasty/leaderboard',
-    ),
-    GteAppRouteRegistration(
-      name: GteAppRouteNames.clubIdentityReplays,
-      path: '/clubs/:clubId/identity/replays',
-    ),
-  ];
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.competitionsDiscovery,
+          path: '/competitions',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.competitionCreate,
+          path: '/competitions/create',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.competitionWorldSuperCup,
+          path: '/competitions/world-super-cup',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.competitionDetail,
+          path: '/competitions/:competitionId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.competitionJoin,
+          path: '/competitions/:competitionId/join',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.competitionShare,
+          path: '/competitions/:competitionId/share',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.streamerTournamentsList,
+          path: '/streamer-tournaments',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.streamerTournamentDetail,
+          path: '/streamer-tournaments/:tournamentId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.fanPredictionMatch,
+          path: '/fan-predictions/matches/:matchId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.playerCardsBrowse,
+          path: '/player-cards',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.playerCardDetail,
+          path: '/player-cards/players/:playerId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.playerCardsInventory,
+          path: '/player-cards/inventory',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.creatorShareMarketClub,
+          path: '/creator-share-market/clubs/:clubId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.creatorShareMarketAdminControl,
+          path: '/admin/creator-share-market/control',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubSaleMarketListings,
+          path: '/clubs/sale-market',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubSaleMarketDetail,
+          path: '/clubs/:clubId/sale-market',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubSaleMarketOwnerOffers,
+          path: '/clubs/:clubId/sale-market/offers',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.worldOverview,
+          path: '/world',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.worldClubContext,
+          path: '/world/clubs/:clubId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.worldCompetitionContext,
+          path: '/world/competitions/:competitionId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.nationalTeamCompetitions,
+          path: '/national-team',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.nationalTeamEntry,
+          path: '/national-team/entries/:entryId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.nationalTeamHistory,
+          path: '/national-team/history',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.footballTransferCenter,
+          path: '/football/transfer-center',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.broadcastDesk,
+          path: '/broadcast/live',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.gtexJackpot,
+          path: '/gtex/jackpot',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubAiAssistant,
+          path: '/clubs/:clubId/assistant',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.creatorStadiumClub,
+          path: '/creator-stadium/clubs/:clubId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.creatorStadiumMatch,
+          path: '/creator-stadium/matches/:matchId',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.creatorStadiumAdminControl,
+          path: '/admin/creator-stadium/control',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.creatorLeagueFinancialReport,
+          path: '/admin/creator-league/financial-report',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.creatorLeagueSettlements,
+          path: '/admin/creator-league/settlements',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.giftStabilizer,
+          path: '/admin/gift-stabilizer',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityJerseys,
+          path: '/clubs/:clubId/identity/jerseys',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityReputationOverview,
+          path: '/clubs/:clubId/identity/reputation',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityReputationHistory,
+          path: '/clubs/:clubId/identity/reputation/history',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityReputationLeaderboard,
+          path: '/clubs/:clubId/identity/reputation/leaderboard',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityTrophyCabinet,
+          path: '/clubs/:clubId/identity/trophies',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityTrophyTimeline,
+          path: '/clubs/:clubId/identity/trophies/timeline',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityTrophyLeaderboard,
+          path: '/clubs/:clubId/identity/trophies/leaderboard',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityDynastyOverview,
+          path: '/clubs/:clubId/identity/dynasty',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityDynastyHistory,
+          path: '/clubs/:clubId/identity/dynasty/history',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityDynastyLeaderboard,
+          path: '/clubs/:clubId/identity/dynasty/leaderboard',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.clubIdentityReplays,
+          path: '/clubs/:clubId/identity/replays',
+        ),
+      ];
 }
 
 enum GteReplaySurface {
@@ -249,11 +261,7 @@ enum GteReplaySurface {
   worldSuperCupCard,
 }
 
-enum GteTransferCenterTab {
-  windows,
-  media,
-  calendar,
-}
+enum GteTransferCenterTab { windows, media, calendar }
 
 extension GteReplaySurfaceX on GteReplaySurface {
   String get slug {
@@ -330,10 +338,7 @@ abstract class GteAppRouteData {
 }
 
 abstract class GteClubScopedRouteData extends GteAppRouteData {
-  const GteClubScopedRouteData({
-    required this.clubId,
-    this.clubName,
-  });
+  const GteClubScopedRouteData({required this.clubId, this.clubName});
 
   final String clubId;
   final String? clubName;
@@ -341,9 +346,7 @@ abstract class GteClubScopedRouteData extends GteAppRouteData {
   Map<String, String> buildClubQueryParameters({
     Map<String, String> extras = const <String, String>{},
   }) {
-    final Map<String, String> query = <String, String>{
-      ...extras,
-    };
+    final Map<String, String> query = <String, String>{...extras};
     final String? resolvedClubName = _nonEmpty(clubName);
     if (resolvedClubName != null) {
       query['clubName'] = resolvedClubName;
@@ -353,9 +356,7 @@ abstract class GteClubScopedRouteData extends GteAppRouteData {
 }
 
 class CompetitionsDiscoveryRouteData extends GteAppRouteData {
-  const CompetitionsDiscoveryRouteData({
-    this.highlight,
-  });
+  const CompetitionsDiscoveryRouteData({this.highlight});
 
   final String? highlight;
 
@@ -367,9 +368,10 @@ class CompetitionsDiscoveryRouteData extends GteAppRouteData {
     final String? resolvedHighlight = _nonEmpty(highlight);
     return _buildUri(
       path: '/competitions',
-      queryParameters: resolvedHighlight == null
-          ? const <String, String>{}
-          : <String, String>{'highlight': resolvedHighlight},
+      queryParameters:
+          resolvedHighlight == null
+              ? const <String, String>{}
+              : <String, String>{'highlight': resolvedHighlight},
     );
   }
 }
@@ -411,9 +413,10 @@ class CompetitionDetailRouteData extends GteAppRouteData {
     final String? resolvedInviteCode = _nonEmpty(inviteCode);
     return _buildUri(
       path: '/competitions/$competitionId',
-      queryParameters: resolvedInviteCode == null
-          ? const <String, String>{}
-          : <String, String>{'inviteCode': resolvedInviteCode},
+      queryParameters:
+          resolvedInviteCode == null
+              ? const <String, String>{}
+              : <String, String>{'inviteCode': resolvedInviteCode},
     );
   }
 }
@@ -435,17 +438,16 @@ class CompetitionJoinRouteData extends GteAppRouteData {
     final String? resolvedInviteCode = _nonEmpty(inviteCode);
     return _buildUri(
       path: '/competitions/$competitionId/join',
-      queryParameters: resolvedInviteCode == null
-          ? const <String, String>{}
-          : <String, String>{'inviteCode': resolvedInviteCode},
+      queryParameters:
+          resolvedInviteCode == null
+              ? const <String, String>{}
+              : <String, String>{'inviteCode': resolvedInviteCode},
     );
   }
 }
 
 class CompetitionShareRouteData extends GteAppRouteData {
-  const CompetitionShareRouteData({
-    required this.competitionId,
-  });
+  const CompetitionShareRouteData({required this.competitionId});
 
   final String competitionId;
 
@@ -457,19 +459,16 @@ class CompetitionShareRouteData extends GteAppRouteData {
 }
 
 class ClubIdentityJerseysRouteData extends GteClubScopedRouteData {
-  const ClubIdentityJerseysRouteData({
-    required super.clubId,
-    super.clubName,
-  });
+  const ClubIdentityJerseysRouteData({required super.clubId, super.clubName});
 
   @override
   String get name => GteAppRouteNames.clubIdentityJerseys;
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/jerseys',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/identity/jerseys',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class ClubReputationOverviewRouteData extends GteClubScopedRouteData {
@@ -483,25 +482,22 @@ class ClubReputationOverviewRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/reputation',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/identity/reputation',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class ClubReputationHistoryRouteData extends GteClubScopedRouteData {
-  const ClubReputationHistoryRouteData({
-    required super.clubId,
-    super.clubName,
-  });
+  const ClubReputationHistoryRouteData({required super.clubId, super.clubName});
 
   @override
   String get name => GteAppRouteNames.clubIdentityReputationHistory;
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/reputation/history',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/identity/reputation/history',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class ClubReputationLeaderboardRouteData extends GteClubScopedRouteData {
@@ -515,9 +511,9 @@ class ClubReputationLeaderboardRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/reputation/leaderboard',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/identity/reputation/leaderboard',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class ClubTrophyCabinetRouteData extends GteClubScopedRouteData {
@@ -534,13 +530,14 @@ class ClubTrophyCabinetRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/trophies',
-        queryParameters: buildClubQueryParameters(
-          extras: filter == TrophyScopeFilter.all
+    path: '/clubs/$clubId/identity/trophies',
+    queryParameters: buildClubQueryParameters(
+      extras:
+          filter == TrophyScopeFilter.all
               ? const <String, String>{}
               : <String, String>{'scope': filter.name},
-        ),
-      );
+    ),
+  );
 }
 
 class ClubTrophyTimelineRouteData extends GteClubScopedRouteData {
@@ -557,13 +554,14 @@ class ClubTrophyTimelineRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/trophies/timeline',
-        queryParameters: buildClubQueryParameters(
-          extras: filter == TrophyScopeFilter.all
+    path: '/clubs/$clubId/identity/trophies/timeline',
+    queryParameters: buildClubQueryParameters(
+      extras:
+          filter == TrophyScopeFilter.all
               ? const <String, String>{}
               : <String, String>{'scope': filter.name},
-        ),
-      );
+    ),
+  );
 }
 
 class ClubTrophyLeaderboardRouteData extends GteClubScopedRouteData {
@@ -580,45 +578,40 @@ class ClubTrophyLeaderboardRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/trophies/leaderboard',
-        queryParameters: buildClubQueryParameters(
-          extras: filter == TrophyScopeFilter.all
+    path: '/clubs/$clubId/identity/trophies/leaderboard',
+    queryParameters: buildClubQueryParameters(
+      extras:
+          filter == TrophyScopeFilter.all
               ? const <String, String>{}
               : <String, String>{'scope': filter.name},
-        ),
-      );
+    ),
+  );
 }
 
 class ClubDynastyOverviewRouteData extends GteClubScopedRouteData {
-  const ClubDynastyOverviewRouteData({
-    required super.clubId,
-    super.clubName,
-  });
+  const ClubDynastyOverviewRouteData({required super.clubId, super.clubName});
 
   @override
   String get name => GteAppRouteNames.clubIdentityDynastyOverview;
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/dynasty',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/identity/dynasty',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class ClubDynastyHistoryRouteData extends GteClubScopedRouteData {
-  const ClubDynastyHistoryRouteData({
-    required super.clubId,
-    super.clubName,
-  });
+  const ClubDynastyHistoryRouteData({required super.clubId, super.clubName});
 
   @override
   String get name => GteAppRouteNames.clubIdentityDynastyHistory;
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/dynasty/history',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/identity/dynasty/history',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class ClubDynastyLeaderboardRouteData extends GteClubScopedRouteData {
@@ -632,9 +625,9 @@ class ClubDynastyLeaderboardRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/dynasty/leaderboard',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/identity/dynasty/leaderboard',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class ClubReplaysRouteData extends GteClubScopedRouteData {
@@ -651,13 +644,14 @@ class ClubReplaysRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/identity/replays',
-        queryParameters: buildClubQueryParameters(
-          extras: surface == GteReplaySurface.replayCard
+    path: '/clubs/$clubId/identity/replays',
+    queryParameters: buildClubQueryParameters(
+      extras:
+          surface == GteReplaySurface.replayCard
               ? const <String, String>{}
               : <String, String>{'surface': surface.slug},
-        ),
-      );
+    ),
+  );
 }
 
 class StreamerTournamentsListRouteData extends GteAppRouteData {
@@ -671,9 +665,7 @@ class StreamerTournamentsListRouteData extends GteAppRouteData {
 }
 
 class StreamerTournamentDetailRouteData extends GteAppRouteData {
-  const StreamerTournamentDetailRouteData({
-    required this.tournamentId,
-  });
+  const StreamerTournamentDetailRouteData({required this.tournamentId});
 
   final String tournamentId;
 
@@ -685,9 +677,7 @@ class StreamerTournamentDetailRouteData extends GteAppRouteData {
 }
 
 class FanPredictionMatchRouteData extends GteAppRouteData {
-  const FanPredictionMatchRouteData({
-    required this.matchId,
-  });
+  const FanPredictionMatchRouteData({required this.matchId});
 
   final String matchId;
 
@@ -709,9 +699,7 @@ class PlayerCardsBrowseRouteData extends GteAppRouteData {
 }
 
 class PlayerCardDetailRouteData extends GteAppRouteData {
-  const PlayerCardDetailRouteData({
-    required this.playerId,
-  });
+  const PlayerCardDetailRouteData({required this.playerId});
 
   final String playerId;
 
@@ -743,9 +731,9 @@ class CreatorShareMarketClubRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/creator-share-market/clubs/$clubId',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/creator-share-market/clubs/$clubId',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class CreatorShareMarketAdminControlRouteData extends GteAppRouteData {
@@ -769,19 +757,16 @@ class ClubSaleMarketListingsRouteData extends GteAppRouteData {
 }
 
 class ClubSaleMarketDetailRouteData extends GteClubScopedRouteData {
-  const ClubSaleMarketDetailRouteData({
-    required super.clubId,
-    super.clubName,
-  });
+  const ClubSaleMarketDetailRouteData({required super.clubId, super.clubName});
 
   @override
   String get name => GteAppRouteNames.clubSaleMarketDetail;
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/sale-market',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/sale-market',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class ClubSaleMarketOwnerOffersRouteData extends GteClubScopedRouteData {
@@ -795,9 +780,9 @@ class ClubSaleMarketOwnerOffersRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/clubs/$clubId/sale-market/offers',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/clubs/$clubId/sale-market/offers',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class WorldOverviewRouteData extends GteAppRouteData {
@@ -811,25 +796,20 @@ class WorldOverviewRouteData extends GteAppRouteData {
 }
 
 class WorldClubContextRouteData extends GteClubScopedRouteData {
-  const WorldClubContextRouteData({
-    required super.clubId,
-    super.clubName,
-  });
+  const WorldClubContextRouteData({required super.clubId, super.clubName});
 
   @override
   String get name => GteAppRouteNames.worldClubContext;
 
   @override
   Uri toUri() => _buildUri(
-        path: '/world/clubs/$clubId',
-        queryParameters: buildClubQueryParameters(),
-      );
+    path: '/world/clubs/$clubId',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class WorldCompetitionContextRouteData extends GteAppRouteData {
-  const WorldCompetitionContextRouteData({
-    required this.competitionId,
-  });
+  const WorldCompetitionContextRouteData({required this.competitionId});
 
   final String competitionId;
 
@@ -851,9 +831,7 @@ class NationalTeamCompetitionsRouteData extends GteAppRouteData {
 }
 
 class NationalTeamEntryRouteData extends GteAppRouteData {
-  const NationalTeamEntryRouteData({
-    required this.entryId,
-  });
+  const NationalTeamEntryRouteData({required this.entryId});
 
   final String entryId;
 
@@ -886,11 +864,45 @@ class FootballTransferCenterRouteData extends GteAppRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/football/transfer-center',
-        queryParameters: tab == GteTransferCenterTab.windows
+    path: '/football/transfer-center',
+    queryParameters:
+        tab == GteTransferCenterTab.windows
             ? const <String, String>{}
             : <String, String>{'tab': tab.slug},
-      );
+  );
+}
+
+class BroadcastDeskRouteData extends GteAppRouteData {
+  const BroadcastDeskRouteData();
+
+  @override
+  String get name => GteAppRouteNames.broadcastDesk;
+
+  @override
+  Uri toUri() => _buildUri(path: '/broadcast/live');
+}
+
+class GtexJackpotRouteData extends GteAppRouteData {
+  const GtexJackpotRouteData();
+
+  @override
+  String get name => GteAppRouteNames.gtexJackpot;
+
+  @override
+  Uri toUri() => _buildUri(path: '/gtex/jackpot');
+}
+
+class ClubAiAssistantRouteData extends GteClubScopedRouteData {
+  const ClubAiAssistantRouteData({required super.clubId, super.clubName});
+
+  @override
+  String get name => GteAppRouteNames.clubAiAssistant;
+
+  @override
+  Uri toUri() => _buildUri(
+    path: '/clubs/$clubId/assistant',
+    queryParameters: buildClubQueryParameters(),
+  );
 }
 
 class CreatorStadiumClubRouteData extends GteClubScopedRouteData {
@@ -907,19 +919,18 @@ class CreatorStadiumClubRouteData extends GteClubScopedRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/creator-stadium/clubs/$clubId',
-        queryParameters: buildClubQueryParameters(
-          extras: seasonId == null
+    path: '/creator-stadium/clubs/$clubId',
+    queryParameters: buildClubQueryParameters(
+      extras:
+          seasonId == null
               ? const <String, String>{}
               : <String, String>{'seasonId': seasonId!},
-        ),
-      );
+    ),
+  );
 }
 
 class CreatorStadiumMatchRouteData extends GteAppRouteData {
-  const CreatorStadiumMatchRouteData({
-    required this.matchId,
-  });
+  const CreatorStadiumMatchRouteData({required this.matchId});
 
   final String matchId;
 
@@ -941,9 +952,7 @@ class CreatorStadiumAdminControlRouteData extends GteAppRouteData {
 }
 
 class CreatorLeagueFinancialReportRouteData extends GteAppRouteData {
-  const CreatorLeagueFinancialReportRouteData({
-    this.seasonId,
-  });
+  const CreatorLeagueFinancialReportRouteData({this.seasonId});
 
   final String? seasonId;
 
@@ -952,17 +961,16 @@ class CreatorLeagueFinancialReportRouteData extends GteAppRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/admin/creator-league/financial-report',
-        queryParameters: seasonId == null
+    path: '/admin/creator-league/financial-report',
+    queryParameters:
+        seasonId == null
             ? const <String, String>{}
             : <String, String>{'seasonId': seasonId!},
-      );
+  );
 }
 
 class CreatorLeagueSettlementsRouteData extends GteAppRouteData {
-  const CreatorLeagueSettlementsRouteData({
-    this.seasonId,
-  });
+  const CreatorLeagueSettlementsRouteData({this.seasonId});
 
   final String? seasonId;
 
@@ -971,11 +979,12 @@ class CreatorLeagueSettlementsRouteData extends GteAppRouteData {
 
   @override
   Uri toUri() => _buildUri(
-        path: '/admin/creator-league/settlements',
-        queryParameters: seasonId == null
+    path: '/admin/creator-league/settlements',
+    queryParameters:
+        seasonId == null
             ? const <String, String>{}
             : <String, String>{'seasonId': seasonId!},
-      );
+  );
 }
 
 class GiftStabilizerRouteData extends GteAppRouteData {
@@ -1039,8 +1048,9 @@ class GteAppRouteParser {
     final String? clubId = _nonEmpty(pathParameters['clubId']);
     final String? clubName = _nonEmpty(queryParameters['clubName']);
     final String? seasonId = _nonEmpty(queryParameters['seasonId']);
-    final TrophyScopeFilter filter =
-        gteTrophyScopeFilterFromRaw(queryParameters['scope']);
+    final TrophyScopeFilter filter = gteTrophyScopeFilterFromRaw(
+      queryParameters['scope'],
+    );
 
     switch (normalized) {
       case GteAppRouteNames.competitionsDiscovery:
@@ -1052,8 +1062,9 @@ class GteAppRouteParser {
       case GteAppRouteNames.competitionWorldSuperCup:
         return const CompetitionWorldSuperCupRouteData();
       case GteAppRouteNames.competitionDetail:
-        final String? competitionId =
-            _nonEmpty(pathParameters['competitionId']);
+        final String? competitionId = _nonEmpty(
+          pathParameters['competitionId'],
+        );
         if (competitionId == null) {
           return null;
         }
@@ -1062,8 +1073,9 @@ class GteAppRouteParser {
           inviteCode: _nonEmpty(queryParameters['inviteCode']),
         );
       case GteAppRouteNames.competitionJoin:
-        final String? competitionId =
-            _nonEmpty(pathParameters['competitionId']);
+        final String? competitionId = _nonEmpty(
+          pathParameters['competitionId'],
+        );
         if (competitionId == null) {
           return null;
         }
@@ -1072,14 +1084,13 @@ class GteAppRouteParser {
           inviteCode: _nonEmpty(queryParameters['inviteCode']),
         );
       case GteAppRouteNames.competitionShare:
-        final String? competitionId =
-            _nonEmpty(pathParameters['competitionId']);
+        final String? competitionId = _nonEmpty(
+          pathParameters['competitionId'],
+        );
         if (competitionId == null) {
           return null;
         }
-        return CompetitionShareRouteData(
-          competitionId: competitionId,
-        );
+        return CompetitionShareRouteData(competitionId: competitionId);
       case GteAppRouteNames.streamerTournamentsList:
         return const StreamerTournamentsListRouteData();
       case GteAppRouteNames.streamerTournamentDetail:
@@ -1087,9 +1098,7 @@ class GteAppRouteParser {
         if (tournamentId == null) {
           return null;
         }
-        return StreamerTournamentDetailRouteData(
-          tournamentId: tournamentId,
-        );
+        return StreamerTournamentDetailRouteData(tournamentId: tournamentId);
       case GteAppRouteNames.fanPredictionMatch:
         final String? matchId = _nonEmpty(pathParameters['matchId']);
         if (matchId == null) {
@@ -1140,19 +1149,15 @@ class GteAppRouteParser {
         if (clubId == null) {
           return null;
         }
-        return WorldClubContextRouteData(
-          clubId: clubId,
-          clubName: clubName,
-        );
+        return WorldClubContextRouteData(clubId: clubId, clubName: clubName);
       case GteAppRouteNames.worldCompetitionContext:
-        final String? competitionId =
-            _nonEmpty(pathParameters['competitionId']);
+        final String? competitionId = _nonEmpty(
+          pathParameters['competitionId'],
+        );
         if (competitionId == null) {
           return null;
         }
-        return WorldCompetitionContextRouteData(
-          competitionId: competitionId,
-        );
+        return WorldCompetitionContextRouteData(competitionId: competitionId);
       case GteAppRouteNames.nationalTeamCompetitions:
         return const NationalTeamCompetitionsRouteData();
       case GteAppRouteNames.nationalTeamEntry:
@@ -1167,6 +1172,15 @@ class GteAppRouteParser {
         return FootballTransferCenterRouteData(
           tab: gteTransferCenterTabFromRaw(queryParameters['tab']),
         );
+      case GteAppRouteNames.broadcastDesk:
+        return const BroadcastDeskRouteData();
+      case GteAppRouteNames.gtexJackpot:
+        return const GtexJackpotRouteData();
+      case GteAppRouteNames.clubAiAssistant:
+        if (clubId == null) {
+          return null;
+        }
+        return ClubAiAssistantRouteData(clubId: clubId, clubName: clubName);
       case GteAppRouteNames.creatorStadiumClub:
         if (clubId == null) {
           return null;
@@ -1194,10 +1208,7 @@ class GteAppRouteParser {
         if (clubId == null) {
           return null;
         }
-        return ClubIdentityJerseysRouteData(
-          clubId: clubId,
-          clubName: clubName,
-        );
+        return ClubIdentityJerseysRouteData(clubId: clubId, clubName: clubName);
       case GteAppRouteNames.clubIdentityReputationOverview:
         if (clubId == null) {
           return null;
@@ -1253,18 +1264,12 @@ class GteAppRouteParser {
         if (clubId == null) {
           return null;
         }
-        return ClubDynastyOverviewRouteData(
-          clubId: clubId,
-          clubName: clubName,
-        );
+        return ClubDynastyOverviewRouteData(clubId: clubId, clubName: clubName);
       case GteAppRouteNames.clubIdentityDynastyHistory:
         if (clubId == null) {
           return null;
         }
-        return ClubDynastyHistoryRouteData(
-          clubId: clubId,
-          clubName: clubName,
-        );
+        return ClubDynastyHistoryRouteData(clubId: clubId, clubName: clubName);
       case GteAppRouteNames.clubIdentityDynastyLeaderboard:
         if (clubId == null) {
           return null;
@@ -1320,9 +1325,7 @@ class GteAppRouteParser {
           );
         }
         if (segments[2] == 'share') {
-          return CompetitionShareRouteData(
-            competitionId: competitionId,
-          );
+          return CompetitionShareRouteData(competitionId: competitionId);
         }
       }
       return null;
@@ -1333,9 +1336,7 @@ class GteAppRouteParser {
         return const StreamerTournamentsListRouteData();
       }
       if (segments.length == 2) {
-        return StreamerTournamentDetailRouteData(
-          tournamentId: segments[1],
-        );
+        return StreamerTournamentDetailRouteData(tournamentId: segments[1]);
       }
       return null;
     }
@@ -1364,9 +1365,9 @@ class GteAppRouteParser {
         segments[1] == 'clubs') {
       return segments.length == 3
           ? CreatorShareMarketClubRouteData(
-              clubId: segments[2],
-              clubName: _nonEmpty(uri.queryParameters['clubName']),
-            )
+            clubId: segments[2],
+            clubName: _nonEmpty(uri.queryParameters['clubName']),
+          )
           : null;
     }
 
@@ -1381,9 +1382,7 @@ class GteAppRouteParser {
         );
       }
       if (segments.length == 3 && segments[1] == 'competitions') {
-        return WorldCompetitionContextRouteData(
-          competitionId: segments[2],
-        );
+        return WorldCompetitionContextRouteData(competitionId: segments[2]);
       }
       return null;
     }
@@ -1407,6 +1406,18 @@ class GteAppRouteParser {
       return FootballTransferCenterRouteData(
         tab: gteTransferCenterTabFromRaw(uri.queryParameters['tab']),
       );
+    }
+
+    if (segments.length == 2 &&
+        segments.first == 'broadcast' &&
+        segments[1] == 'live') {
+      return const BroadcastDeskRouteData();
+    }
+
+    if (segments.length == 2 &&
+        segments.first == 'gtex' &&
+        segments[1] == 'jackpot') {
+      return const GtexJackpotRouteData();
     }
 
     if (segments.first == 'creator-stadium') {
@@ -1472,6 +1483,12 @@ class GteAppRouteParser {
           clubName: _nonEmpty(uri.queryParameters['clubName']),
         );
       }
+      if (segments.length == 3 && segments[2] == 'assistant') {
+        return ClubAiAssistantRouteData(
+          clubId: segments[1],
+          clubName: _nonEmpty(uri.queryParameters['clubName']),
+        );
+      }
     }
 
     if (segments.length < 4 ||
@@ -1482,16 +1499,14 @@ class GteAppRouteParser {
 
     final String clubId = segments[1];
     final String? clubName = _nonEmpty(uri.queryParameters['clubName']);
-    final TrophyScopeFilter filter =
-        gteTrophyScopeFilterFromRaw(uri.queryParameters['scope']);
+    final TrophyScopeFilter filter = gteTrophyScopeFilterFromRaw(
+      uri.queryParameters['scope'],
+    );
 
     switch (segments[3]) {
       case 'jerseys':
         return segments.length == 4
-            ? ClubIdentityJerseysRouteData(
-                clubId: clubId,
-                clubName: clubName,
-              )
+            ? ClubIdentityJerseysRouteData(clubId: clubId, clubName: clubName)
             : null;
       case 'reputation':
         if (segments.length == 4) {
@@ -1559,12 +1574,10 @@ class GteAppRouteParser {
       case 'replays':
         return segments.length == 4
             ? ClubReplaysRouteData(
-                clubId: clubId,
-                clubName: clubName,
-                surface: gteReplaySurfaceFromRaw(
-                  uri.queryParameters['surface'],
-                ),
-              )
+              clubId: clubId,
+              clubName: clubName,
+              surface: gteReplaySurfaceFromRaw(uri.queryParameters['surface']),
+            )
             : null;
       default:
         return null;

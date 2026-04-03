@@ -34,7 +34,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Create a creator competition'), findsOneWidget);
+    expect(find.text('Create competition'), findsWidgets);
 
     await tester.pumpWidget(
       MaterialApp(

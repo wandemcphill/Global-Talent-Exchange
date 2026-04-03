@@ -36,41 +36,45 @@ void main() {
       expect(appSource, contains("initialPath: '/app/home',"));
     });
 
-    test('navigation shell preserves protected lane order and utility access',
-        () {
-      final String shellSource = _readSource(
-        'lib/features/navigation/presentation/gte_navigation_shell_screen.dart',
-      );
+    test(
+      'navigation shell preserves protected lane order and utility access',
+      () {
+        final String shellSource = _readSource(
+          'lib/features/navigation/presentation/gte_navigation_shell_screen.dart',
+        );
 
-      final int home = _indexOfOrThrow(
-        shellSource,
-        'GtePrimaryDestination.home,',
-      );
-      final int play = _indexOfOrThrow(
-        shellSource,
-        'GtePrimaryDestination.competitions,',
-      );
-      final int market = _indexOfOrThrow(
-        shellSource,
-        'GtePrimaryDestination.market,',
-      );
-      final int hub =
-          _indexOfOrThrow(shellSource, 'GtePrimaryDestination.hub,');
-      final int club = _indexOfOrThrow(
-        shellSource,
-        'GtePrimaryDestination.club,',
-      );
+        final int home = _indexOfOrThrow(
+          shellSource,
+          'GtePrimaryDestination.home,',
+        );
+        final int play = _indexOfOrThrow(
+          shellSource,
+          'GtePrimaryDestination.competitions,',
+        );
+        final int market = _indexOfOrThrow(
+          shellSource,
+          'GtePrimaryDestination.market,',
+        );
+        final int hub = _indexOfOrThrow(
+          shellSource,
+          'GtePrimaryDestination.hub,',
+        );
+        final int club = _indexOfOrThrow(
+          shellSource,
+          'GtePrimaryDestination.club,',
+        );
 
-      expect(home, lessThan(play));
-      expect(play, lessThan(market));
-      expect(market, lessThan(hub));
-      expect(hub, lessThan(club));
-      expect(shellSource, contains('_buildThemePickerAction(context)'));
-      expect(shellSource, contains('_buildCapitalAction()'));
-      expect(shellSource, contains("tooltip: 'Capital room'"));
-      expect(shellSource, contains('GteThemePickerSheet'));
-      expect(shellSource, contains('destination.label,'));
-    });
+        expect(home, lessThan(play));
+        expect(play, lessThan(market));
+        expect(market, lessThan(hub));
+        expect(hub, lessThan(club));
+        expect(shellSource, contains('_buildThemePickerAction(context)'));
+        expect(shellSource, contains('_buildCapitalAction()'));
+        expect(shellSource, contains("tooltip: 'Capital room'"));
+        expect(shellSource, contains('GteThemePickerSheet'));
+        expect(shellSource, contains('destination.label,'));
+      },
+    );
 
     test('home dashboard preserves hero to secondary information order', () {
       final String homeSource = _readSource(
@@ -79,10 +83,14 @@ void main() {
 
       final int hero = _indexOfOrThrow(homeSource, '_HomeHeroPanel(');
       final int status = _indexOfOrThrow(homeSource, 'GteSyncStatusCard(');
-      final int banner =
-          _indexOfOrThrow(homeSource, 'HomeFeaturedEventBanner(');
-      final int majorMoves =
-          _indexOfOrThrow(homeSource, "eyebrow: 'RIGHT NOW'");
+      final int banner = _indexOfOrThrow(
+        homeSource,
+        'HomeFeaturedEventBanner(',
+      );
+      final int majorMoves = _indexOfOrThrow(
+        homeSource,
+        "eyebrow: 'RIGHT NOW'",
+      );
       final int quickActions = _indexOfOrThrow(
         homeSource,
         '_HomeQuickActionsStrip(',
@@ -106,8 +114,9 @@ void main() {
     test('theme registry still exposes five selectable themes', () {
       expect(GteThemeRegistry.themes, hasLength(5));
       expect(
-        GteThemeRegistry.themes
-            .map((GteThemeDefinition definition) => definition.metadata.id),
+        GteThemeRegistry.themes.map(
+          (GteThemeDefinition definition) => definition.metadata.id,
+        ),
         orderedEquals(GteThemeId.values),
       );
     });
@@ -135,8 +144,9 @@ void main() {
       );
     });
 
-    testWidgets('theme picker switches themes and persists selection',
-        (WidgetTester tester) async {
+    testWidgets('theme picker switches themes and persists selection', (
+      WidgetTester tester,
+    ) async {
       final GteMemoryThemeStore store = GteMemoryThemeStore();
       final GteThemeController controller = GteThemeController(store: store);
 
@@ -166,8 +176,9 @@ void main() {
       expect(restored.activeThemeId, GteThemeId.ultraRed);
     });
 
-    testWidgets('wallet overview surface opens against fixture data',
-        (WidgetTester tester) async {
+    testWidgets('wallet overview surface opens against fixture data', (
+      WidgetTester tester,
+    ) async {
       final GteExchangeController controller = GteExchangeController(
         api: GteExchangeApiClient.fixture(),
       );
@@ -179,13 +190,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
 
-      expect(find.text('Club Wallet'), findsOneWidget);
-      expect(find.text('Live wallet balance'), findsOneWidget);
-      expect(find.text('Top up'), findsOneWidget);
+      expect(find.text('Production wallet rails'), findsOneWidget);
+      expect(find.text('GTEX COIN'), findsOneWidget);
+      expect(find.text('Top up GTEX'), findsOneWidget);
     });
 
-    testWidgets('club sale market surface opens against fixture data',
-        (WidgetTester tester) async {
+    testWidgets('club sale market surface opens against fixture data', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: ClubSaleMarketScreen(
@@ -202,7 +214,8 @@ void main() {
       expect(find.text('CLUB SALE MARKET'), findsOneWidget);
       expect(
         find.text(
-            'Public valuations, asking prices, and live deal posture stay readable.'),
+          'Public valuations, asking prices, and live deal posture stay readable.',
+        ),
         findsOneWidget,
       );
     });
@@ -224,21 +237,23 @@ class _ThemePickerHarness extends StatelessWidget {
           return MaterialApp(
             theme: GteShellTheme.build(controller.activeTheme),
             home: Builder(
-              builder: (BuildContext context) => Scaffold(
-                body: Center(
-                  child: FilledButton(
-                    onPressed: () {
-                      showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (BuildContext context) =>
-                            const GteThemePickerSheet(),
-                      );
-                    },
-                    child: const Text('Open theme picker'),
+              builder:
+                  (BuildContext context) => Scaffold(
+                    body: Center(
+                      child: FilledButton(
+                        onPressed: () {
+                          showModalBottomSheet<void>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder:
+                                (BuildContext context) =>
+                                    const GteThemePickerSheet(),
+                          );
+                        },
+                        child: const Text('Open theme picker'),
+                      ),
+                    ),
                   ),
-                ),
-              ),
             ),
           );
         },

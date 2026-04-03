@@ -13,11 +13,12 @@ void main() {
         home: const ClubIdentityScreen(clubId: 'atlas-fc'),
       ),
     );
+    await tester.pumpAndSettle();
 
-    expect(find.text('Club identity preview'), findsOneWidget);
-    expect(find.textContaining('preview-only'), findsOneWidget);
+    expect(find.text('Identity Preview'), findsOneWidget);
+    expect(find.text('Identity surfaces'), findsOneWidget);
     expect(
-      find.textContaining('not connected to a real backend'),
+      find.textContaining('badge, club code, and kit palette'),
       findsOneWidget,
     );
   });

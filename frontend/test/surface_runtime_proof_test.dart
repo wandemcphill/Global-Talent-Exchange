@@ -534,7 +534,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Open simulate'));
       await tester.pumpAndSettle();
-      expect(find.text('Launch simulation'), findsOneWidget);
+      expect(find.text('Simulation sandbox blocked'), findsWidgets);
+      expect(find.text('Launch simulation'), findsNothing);
     },
   );
 }

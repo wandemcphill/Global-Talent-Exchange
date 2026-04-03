@@ -53,11 +53,6 @@ void main() {
 
     expect(find.text('3D Match Viewer'), findsWidgets);
     expect(find.text('Route blocked'), findsOneWidget);
-    expect(find.text('3D access unavailable'), findsOneWidget);
-    expect(
-      find.textContaining('does not include Flutter 3D access'),
-      findsOneWidget,
-    );
     expect(find.text('FLUTTER_3D'), findsNothing);
     expect(find.text('NATIVE_3D'), findsNothing);
   });

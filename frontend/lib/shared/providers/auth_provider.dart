@@ -147,7 +147,7 @@ final Provider<FederationContext?> federationContextProvider =
 final Provider<Match3dUserEntitlement> match3dEntitlementProvider =
     Provider<Match3dUserEntitlement>((Ref ref) {
       final AuthSession? session = ref.watch(authProvider);
-      final bool premium = session?.isAuthenticated ?? false;
+      final bool premium = _hasMatch3dPremiumAccess(session);
       return Match3dUserEntitlement(
         isPremiumUser: premium,
         premiumCameraAccess: premium,
@@ -254,4 +254,14 @@ bool _hasAdminPermission(AuthSession? session, String permission) {
     return false;
   }
   return session.isSuperAdmin || session.hasPermission(permission);
+}
+
+bool _hasMatch3dPremiumAccess(AuthSession? session) {
+  if (session == null || !session.isAuthenticated) {
+    return false;
+  }
+  return session.hasAnyPermission(const <String>[
+    'match_3d_premium',
+    'match_3d_access',
+  ]);
 }

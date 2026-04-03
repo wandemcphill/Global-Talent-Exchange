@@ -58,7 +58,9 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
       body: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, Widget? child) {
-          if (!widget.isAuthenticated) {
+          if (!widget.isAuthenticated ||
+              widget.isCheckingHostEligibility ||
+              !widget.hostEligible) {
             return _buildLockedState();
           }
           final draft = widget.controller.draft;
@@ -345,7 +347,34 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
         ),
       );
     }
-    return const SizedBox.shrink();
+    if (widget.isCheckingHostEligibility) {
+      return const SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 120),
+        child: GteStatePanel(
+          eyebrow: 'HOST ACCESS',
+          title: 'Checking creator access',
+          message:
+              'Confirming whether this account can open the competition builder.',
+          icon: Icons.hourglass_top_outlined,
+          isLoading: true,
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+      child: GteStatePanel(
+        eyebrow: 'HOST ACCESS',
+        title: 'Creator access required to host',
+        message:
+            'This account cannot open the competition builder until creator access is approved.',
+        actionLabel:
+            widget.onOpenCreatorAccessRequest == null
+                ? null
+                : 'Request creator access',
+        onAction: widget.onOpenCreatorAccessRequest,
+        icon: Icons.how_to_reg_outlined,
+      ),
+    );
   }
 
   void _handleNameChanged() {

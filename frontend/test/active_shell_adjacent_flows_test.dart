@@ -42,8 +42,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Portfolio').last);
-      await tester.tap(find.text('Portfolio').last);
+      await tester.tap(find.byTooltip('Capital room'));
       await _pumpUntilText(tester, 'Wallet actions');
       expect(find.text('Wallet actions'), findsOneWidget);
       expect(find.text('Fund wallet'), findsOneWidget);
@@ -91,16 +90,16 @@ void main() {
       );
       await _pumpUntilText(tester, 'Wallet actions');
 
-      expect(find.text('Capital Room'), findsOneWidget);
-      final Finder portfolioNavChip = find.text('Portfolio').last;
-      expect(portfolioNavChip, findsOneWidget);
+      expect(find.text('Capital Room'), findsWidgets);
+      final Finder capitalRoomNavChip = find.text('Capital Room').last;
+      expect(capitalRoomNavChip, findsOneWidget);
 
       await tester.tap(find.text('Home').last);
       await tester.pumpAndSettle();
       expect(find.widgetWithText(FilledButton, 'Enter club'), findsOneWidget);
 
-      await tester.ensureVisible(portfolioNavChip);
-      await tester.tap(portfolioNavChip);
+      await tester.ensureVisible(capitalRoomNavChip);
+      await tester.tap(capitalRoomNavChip);
       await _pumpUntilText(tester, 'Wallet actions');
       expect(find.text('Fund wallet'), findsOneWidget);
     },
@@ -144,8 +143,8 @@ void main() {
       );
       await tester.ensureVisible(walletOverviewButton);
       await tester.tap(walletOverviewButton);
-      await _pumpUntilText(tester, 'Club Wallet');
-      expect(find.text('Club Wallet'), findsOneWidget);
+      await _pumpUntilText(tester, 'Production wallet rails');
+      expect(find.text('Production wallet rails'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');
@@ -156,8 +155,8 @@ void main() {
       );
       await tester.ensureVisible(fundWalletButton);
       await tester.tap(fundWalletButton);
-      await _pumpUntilText(tester, 'Top up wallet');
-      expect(find.text('Fund with Paystack'), findsOneWidget);
+      await _pumpUntilText(tester, 'Fund GTEX wallet');
+      expect(find.text('Continue to Paystack'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');
@@ -180,9 +179,9 @@ void main() {
       );
       await tester.ensureVisible(depositHistoryButton);
       await tester.tap(depositHistoryButton);
-      await _pumpUntilText(tester, 'Wallet transactions');
-      expect(find.text('No wallet transactions yet'), findsOneWidget);
-      expect(find.text('Top up'), findsOneWidget);
+      await _pumpUntilText(tester, 'GTEX wallet activity');
+      expect(find.text('No GTEX wallet activity yet'), findsOneWidget);
+      expect(find.text('Top up GTEX'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');
@@ -307,7 +306,7 @@ void main() {
         find.text('Deposit DEP-1001 submitted. Pending review.'),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Wallet transactions'), findsOneWidget);
+      expect(find.text('GTEX wallet activity'), findsOneWidget);
 
       await tester.pageBack();
       await tester.pumpAndSettle();

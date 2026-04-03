@@ -261,6 +261,18 @@ class ClubHubScreen extends StatelessWidget {
                         onPressed:
                             () => _openRoute(
                               context,
+                              ClubAiAssistantRouteData(
+                                clubId: clubId,
+                                clubName: _resolvedClubName,
+                              ),
+                            ),
+                        icon: Icons.smart_toy_outlined,
+                        label: 'AI assistant',
+                      ),
+                      _buildRouteButton(
+                        onPressed:
+                            () => _openRoute(
+                              context,
                               ClubReplaysRouteData(
                                 clubId: clubId,
                                 clubName: _resolvedClubName,
@@ -446,6 +458,24 @@ class ClubHubScreen extends StatelessWidget {
                             ),
                         icon: Icons.live_tv_outlined,
                         label: 'Streamer tournaments',
+                      ),
+                      _buildRouteButton(
+                        onPressed:
+                            () => _openRoute(
+                              context,
+                              const BroadcastDeskRouteData(),
+                            ),
+                        icon: Icons.podcasts_outlined,
+                        label: 'Broadcast desk',
+                      ),
+                      _buildRouteButton(
+                        onPressed:
+                            () => _openRoute(
+                              context,
+                              const GtexJackpotRouteData(),
+                            ),
+                        icon: Icons.celebration_outlined,
+                        label: 'GTEX jackpot',
                       ),
                     ],
                   ),

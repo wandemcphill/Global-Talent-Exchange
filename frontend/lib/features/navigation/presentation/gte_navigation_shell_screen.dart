@@ -233,7 +233,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: IconButton(
-                          tooltip: 'Creator program',
+                          tooltip: 'Creator access request',
                           onPressed: () => _pushCreatorAccessRequest(context),
                           icon: const Icon(Icons.how_to_reg_outlined),
                         ),
@@ -915,7 +915,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: IconButton(
-        tooltip: 'Wallet',
+        tooltip: 'Capital room',
         onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
         icon: Icon(
           isActive

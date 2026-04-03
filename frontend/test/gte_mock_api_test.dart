@@ -18,7 +18,7 @@ void main() {
     expect(players.last.inTransferRoom, isTrue);
     expect(pulse.transferRoom, hasLength(3));
     expect(pulse.hottestLeague, 'UEFA Club Championship');
-    expect(wallet.currency, GteLedgerUnit.credit);
+    expect(wallet.currency, GteLedgerUnit.coin);
     expect(portfolio.holdings, hasLength(2));
     expect(orders.items, hasLength(2));
   });

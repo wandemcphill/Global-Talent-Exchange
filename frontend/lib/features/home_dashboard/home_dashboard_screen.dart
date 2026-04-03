@@ -393,6 +393,17 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           clubName: clubName,
                         ),
                       ),
+                  onOpenBroadcastDesk:
+                      () => _openFeatureRoute(const BroadcastDeskRouteData()),
+                  onOpenGtexJackpot:
+                      () => _openFeatureRoute(const GtexJackpotRouteData()),
+                  onOpenClubAiAssistant:
+                      () => _openFeatureRoute(
+                        ClubAiAssistantRouteData(
+                          clubId: clubId,
+                          clubName: clubName,
+                        ),
+                      ),
                   onOpenFinanceAdmin:
                       () => _openFeatureRoute(
                         const CreatorLeagueFinancialReportRouteData(),
@@ -693,10 +704,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   String _capitalMetricLabel() {
     final wallet = widget.exchangeController.walletSummary;
     if (wallet != null) {
-      return gteFormatAmountForUnit(
-        wallet.availableBalance,
-        wallet.currency,
-      );
+      return gteFormatAmountForUnit(wallet.availableBalance, wallet.currency);
     }
     final portfolioSummary = widget.exchangeController.portfolioSummary;
     if (portfolioSummary != null) {
@@ -3404,6 +3412,9 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
     required this.onOpenCreatorShareMarket,
     required this.onOpenClubSaleMarket,
     required this.onOpenCreatorStadium,
+    required this.onOpenBroadcastDesk,
+    required this.onOpenGtexJackpot,
+    required this.onOpenClubAiAssistant,
     required this.onOpenFinanceAdmin,
     required this.onOpenGiftStabilizer,
   });
@@ -3417,6 +3428,9 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
   final VoidCallback onOpenCreatorShareMarket;
   final VoidCallback onOpenClubSaleMarket;
   final VoidCallback onOpenCreatorStadium;
+  final VoidCallback onOpenBroadcastDesk;
+  final VoidCallback onOpenGtexJackpot;
+  final VoidCallback onOpenClubAiAssistant;
   final VoidCallback onOpenFinanceAdmin;
   final VoidCallback onOpenGiftStabilizer;
 
@@ -3465,6 +3479,11 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
                 icon: Icons.event_note_outlined,
                 onPressed: onOpenTransferCenter,
               ),
+              _HomeRouteButton(
+                label: 'Broadcast desk',
+                icon: Icons.podcasts_outlined,
+                onPressed: onOpenBroadcastDesk,
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -3491,12 +3510,22 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
                 icon: Icons.storefront_outlined,
                 onPressed: onOpenClubSaleMarket,
               ),
+              _HomeRouteButton(
+                label: 'GTEX jackpot',
+                icon: Icons.celebration_outlined,
+                onPressed: onOpenGtexJackpot,
+              ),
             ],
           ),
           const SizedBox(height: 14),
           _HomeRouteGroup(
             title: 'Club / Creator',
             actions: <Widget>[
+              _HomeRouteButton(
+                label: 'Club AI assistant',
+                icon: Icons.smart_toy_outlined,
+                onPressed: onOpenClubAiAssistant,
+              ),
               _HomeRouteButton(
                 label: 'Creator stadium',
                 icon: Icons.stadium_outlined,
