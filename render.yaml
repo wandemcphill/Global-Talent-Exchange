@@ -3,7 +3,7 @@ services:
   - name: gtex-api
     type: web
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180 --graceful-timeout 120"
     envVars:
@@ -27,7 +27,7 @@ services:
   - name: gtex-web
     type: web
     runtime: static
-    plan: free
+    plan: starter
     buildCommand: "cd frontend && flutter build web"
     staticPublishPath: "frontend/build/web"
 
