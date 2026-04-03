@@ -91,11 +91,9 @@ services:
   - type: redis
     name: gtex-cache
     plan: starter
-    ipAllowList:
-      - source: private
+    ipAllowList: []
 
 databases:
   - name: gtex-postgres
     plan: starter
-    ipAllowList:
-      - source: private
+    ipAllowList: []
