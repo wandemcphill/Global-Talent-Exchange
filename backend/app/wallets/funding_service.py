@@ -118,9 +118,7 @@ class WalletFundingService:
             raise WalletFundingError("Trading is unavailable until wallet compliance is verified.")
         policy = PolicyService(session).get_country_policy_for_user(user=user)
         if not policy.market_trading_enabled:
-            raise WalletFundingError(
-                f"Trading is currently disabled for country policy '{policy.country_code}'."
-            )
+            raise WalletFundingError(f"Trading is currently disabled for country policy '{policy.country_code}'.")
 
     def initiate_top_up(
         self,
@@ -143,9 +141,7 @@ class WalletFundingService:
         wallet = self.ensure_wallet(session, user)
         policy = PolicyService(session).get_country_policy_for_user(user=user)
         if not policy.deposits_enabled:
-            raise WalletFundingError(
-                f"Deposits are currently disabled for country policy '{policy.country_code}'."
-            )
+            raise WalletFundingError(f"Deposits are currently disabled for country policy '{policy.country_code}'.")
 
         settings = self.treasury_service.ensure_settings(session)
         rail_service = WalletRailService(session=session, wallet_service=self.wallet_service)
@@ -186,9 +182,7 @@ class WalletFundingService:
             raise WalletFundingError(f"Unable to create a {provider_label} payment session.") from exc
 
         order.provider_reference = str(
-            payment_session.get("reference")
-            or payment_session.get("payment_reference")
-            or order.provider_reference
+            payment_session.get("reference") or payment_session.get("payment_reference") or order.provider_reference
         )
         raw_payload = dict(order.raw_payload or {})
         raw_payload[f"{normalized_provider}_initialize"] = payment_session
@@ -204,11 +198,7 @@ class WalletFundingService:
         wallet = self.sync_wallet_balance(session, user, wallet=wallet)
         return WalletTopUpSession(
             reference=transaction.reference,
-            payment_link=str(
-                payment_session.get("authorization_url")
-                or payment_session.get("checkout_url")
-                or ""
-            ),
+            payment_link=str(payment_session.get("authorization_url") or payment_session.get("checkout_url") or ""),
             amount=transaction.amount,
             currency=wallet.currency,
             provider=normalized_provider,

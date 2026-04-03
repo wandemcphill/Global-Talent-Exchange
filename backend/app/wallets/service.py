@@ -168,8 +168,9 @@ class WalletService:
     ) -> None:
         defer_session_callback_until_commit(
             session,
-            callback=lambda account_id=account.id, account_code=account.code, owner_user_id=account.owner_user_id,
-            unit=account.unit.value, balance_value=str(balance): self._write_cached_balance(
+            callback=lambda account_id=account.id, account_code=account.code, owner_user_id=account.owner_user_id, unit=account.unit.value, balance_value=str(
+                balance
+            ): self._write_cached_balance(
                 account_id=account_id,
                 account_code=account_code,
                 owner_user_id=owner_user_id,
@@ -283,8 +284,9 @@ class WalletService:
         if self._session_has_pending_state(session):
             defer_session_callback_until_commit(
                 session,
-                callback=lambda resolved_user_id=user_id, resolved_currency=currency,
-                resolved_available=str(available_balance), resolved_reserved=str(reserved_balance): self._write_cached_wallet_summary(
+                callback=lambda resolved_user_id=user_id, resolved_currency=currency, resolved_available=str(
+                    available_balance
+                ), resolved_reserved=str(reserved_balance): self._write_cached_wallet_summary(
                     user_id=resolved_user_id,
                     currency=resolved_currency,
                     available_balance=self._normalize_amount(resolved_available),
@@ -325,8 +327,12 @@ class WalletService:
                     LedgerAccount.kind == LedgerAccountKind.ESCROW,
                 )
             )
-            available_balance = self.get_balance(session, available_account) if available_account is not None else Decimal("0.0000")
-            reserved_balance = self.get_balance(session, escrow_account) if escrow_account is not None else Decimal("0.0000")
+            available_balance = (
+                self.get_balance(session, available_account) if available_account is not None else Decimal("0.0000")
+            )
+            reserved_balance = (
+                self.get_balance(session, escrow_account) if escrow_account is not None else Decimal("0.0000")
+            )
             self._prime_wallet_summary_cache(
                 session,
                 user_id=owner_user_id,
@@ -462,7 +468,9 @@ class WalletService:
             allow_negative=allow_negative,
         )
 
-    def ensure_club_treasury_account(self, session: Session, club_id: str, unit: LedgerUnit = LedgerUnit.COIN) -> LedgerAccount:
+    def ensure_club_treasury_account(
+        self, session: Session, club_id: str, unit: LedgerUnit = LedgerUnit.COIN
+    ) -> LedgerAccount:
         return self._ensure_system_account(
             session,
             code=f"club:{club_id}:{unit.value}:treasury",
@@ -574,9 +582,6 @@ class WalletService:
         )
 
     def ensure_promo_pool_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
-        return self.ensure_rewards_pool_account(session, unit)
-
-    def ensure_promo_pool_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
         code = f"platform:{unit.value}:promo_pool"
         account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
         if account is None:
@@ -673,7 +678,9 @@ class WalletService:
         )
         return event
 
-    def verify_payment_event(self, session: Session, payment_event: PaymentEvent, *, actor: User | None = None) -> PaymentEvent:
+    def verify_payment_event(
+        self, session: Session, payment_event: PaymentEvent, *, actor: User | None = None
+    ) -> PaymentEvent:
         if payment_event.status == PaymentStatus.VERIFIED and payment_event.ledger_transaction_id is not None:
             raise LedgerError("Only pending payment events can be verified.")
         if payment_event.ledger_transaction_id is not None and payment_event.status != PaymentStatus.VERIFIED:
@@ -689,9 +696,7 @@ class WalletService:
         treasury_account = self.ensure_treasury_account(session, payment_event.unit)
         operations_account = self.ensure_operations_account(session, payment_event.unit)
         source_tag = (
-            LedgerSourceTag.MARKET_TOPUP
-            if payment_event.unit == LedgerUnit.COIN
-            else LedgerSourceTag.FANCOIN_PURCHASE
+            LedgerSourceTag.MARKET_TOPUP if payment_event.unit == LedgerUnit.COIN else LedgerSourceTag.FANCOIN_PURCHASE
         )
         entries = self.append_transaction(
             session,
@@ -837,8 +842,6 @@ class WalletService:
             target_amount=quote.target_amount,
         )
 
-
-
     def competition_reward_balance(self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.COIN) -> Decimal:
         account = self.get_user_account(session, user, unit)
         reward_total = session.scalar(
@@ -850,9 +853,13 @@ class WalletService:
         )
         return self._normalize_amount(reward_total)
 
-    def competition_reward_withdrawable_balance(self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.COIN) -> Decimal:
+    def competition_reward_withdrawable_balance(
+        self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.COIN
+    ) -> Decimal:
         rewards_total = self.competition_reward_balance(session, user, unit)
-        requests = session.scalars(select(PayoutRequest).where(PayoutRequest.user_id == user.id, PayoutRequest.unit == unit)).all()
+        requests = session.scalars(
+            select(PayoutRequest).where(PayoutRequest.user_id == user.id, PayoutRequest.unit == unit)
+        ).all()
         reserved_or_paid = Decimal("0.0000")
         for request in requests:
             meta = self._parse_payout_meta(request.notes)
@@ -890,13 +897,19 @@ class WalletService:
         if normalized_amount <= Decimal("0.0000"):
             raise LedgerError("Withdrawal amount must be positive.")
         if source_scope not in {"trade", "competition", "user_hosted_gift", "gtex_competition_gift", "national_reward"}:
-            raise LedgerError("Withdrawal source must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward.")
+            raise LedgerError(
+                "Withdrawal source must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward."
+            )
 
         user_account = self.get_user_account(session, user, unit)
         escrow_account = self.get_user_escrow_account(session, user, unit)
         net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
         fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
-        fee_amount = self._normalize_amount(max((normalized_amount * Decimal(withdrawal_fee_bps) / Decimal(10_000)), self._normalize_amount(minimum_fee)))
+        fee_amount = self._normalize_amount(
+            max(
+                (normalized_amount * Decimal(withdrawal_fee_bps) / Decimal(10_000)), self._normalize_amount(minimum_fee)
+            )
+        )
         total_debit = self._normalize_amount(normalized_amount + fee_amount)
         available_balance = self.get_balance(session, user_account)
         if available_balance < total_debit:
@@ -904,7 +917,9 @@ class WalletService:
         if source_scope == "competition":
             reward_balance = self.competition_reward_withdrawable_balance(session, user, unit)
             if reward_balance < normalized_amount:
-                raise InsufficientBalanceError("Competition reward balance is lower than the requested e-game withdrawal.")
+                raise InsufficientBalanceError(
+                    "Competition reward balance is lower than the requested e-game withdrawal."
+                )
 
         reference = f"payout-request:{generate_uuid()}"
         postings = [
@@ -979,9 +994,13 @@ class WalletService:
             ),
             durable=True,
         )
-        return WithdrawalRequestResult(payout_request=payout_request, fee_amount=fee_amount, total_debit=total_debit, source_scope=source_scope)
+        return WithdrawalRequestResult(
+            payout_request=payout_request, fee_amount=fee_amount, total_debit=total_debit, source_scope=source_scope
+        )
 
-    def complete_payout_request(self, session: Session, payout_request: PayoutRequest, *, actor: User | None = None) -> PayoutRequest:
+    def complete_payout_request(
+        self, session: Session, payout_request: PayoutRequest, *, actor: User | None = None
+    ) -> PayoutRequest:
         if payout_request.settlement_transaction_id is not None:
             return payout_request
         user = session.get(User, payout_request.user_id)
@@ -1032,7 +1051,14 @@ class WalletService:
         payout_request.settlement_transaction_id = entries[0].transaction_id if entries else None
         return payout_request
 
-    def release_payout_request(self, session: Session, payout_request: PayoutRequest, *, actor: User | None = None, failure_reason: str | None = None) -> PayoutRequest:
+    def release_payout_request(
+        self,
+        session: Session,
+        payout_request: PayoutRequest,
+        *,
+        actor: User | None = None,
+        failure_reason: str | None = None,
+    ) -> PayoutRequest:
         if payout_request.settlement_transaction_id is not None:
             return payout_request
         user = session.get(User, payout_request.user_id)
@@ -1141,32 +1167,66 @@ class WalletService:
 
     def get_adaptive_overview(self, session: Session, user: User) -> dict[str, object]:
         summary = self.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
-        requested_statuses = {PayoutStatus.REQUESTED, PayoutStatus.REVIEWING, PayoutStatus.HELD, PayoutStatus.PROCESSING}
-        pending_withdrawals = session.scalar(
-            select(func.count()).select_from(PayoutRequest).where(
-                PayoutRequest.user_id == user.id,
-                PayoutRequest.status.in_(tuple(requested_statuses)),
+        requested_statuses = {
+            PayoutStatus.REQUESTED,
+            PayoutStatus.REVIEWING,
+            PayoutStatus.HELD,
+            PayoutStatus.PROCESSING,
+        }
+        pending_withdrawals = (
+            session.scalar(
+                select(func.count())
+                .select_from(PayoutRequest)
+                .where(
+                    PayoutRequest.user_id == user.id,
+                    PayoutRequest.status.in_(tuple(requested_statuses)),
+                )
             )
-        ) or 0
-        provider_status = {provider.value: 'available' for provider in PaymentProvider}
+            or 0
+        )
+        provider_status = {provider.value: "available" for provider in PaymentProvider}
         insights: list[dict[str, str]] = []
-        if summary.available_balance <= Decimal('0.0000'):
-            insights.append({'label': 'Liquidity posture', 'value': 'Wallet is empty. Deposit or complete a sale to unlock actions.', 'tone': 'warning'})
+        if summary.available_balance <= Decimal("0.0000"):
+            insights.append(
+                {
+                    "label": "Liquidity posture",
+                    "value": "Wallet is empty. Deposit or complete a sale to unlock actions.",
+                    "tone": "warning",
+                }
+            )
         elif summary.reserved_balance > summary.available_balance:
-            insights.append({'label': 'Reserved pressure', 'value': 'Reserved commitments are heavier than free balance. Review open market and withdrawal holds.', 'tone': 'warning'})
+            insights.append(
+                {
+                    "label": "Reserved pressure",
+                    "value": "Reserved commitments are heavier than free balance. Review open market and withdrawal holds.",
+                    "tone": "warning",
+                }
+            )
         else:
-            insights.append({'label': 'Withdrawal readiness', 'value': 'Withdrawable balance is healthy relative to current holds.', 'tone': 'success'})
+            insights.append(
+                {
+                    "label": "Withdrawal readiness",
+                    "value": "Withdrawable balance is healthy relative to current holds.",
+                    "tone": "success",
+                }
+            )
         if pending_withdrawals:
-            insights.append({'label': 'Withdrawal queue', 'value': f'{pending_withdrawals} payout request(s) still moving through review or processing.', 'tone': 'info'})
+            insights.append(
+                {
+                    "label": "Withdrawal queue",
+                    "value": f"{pending_withdrawals} payout request(s) still moving through review or processing.",
+                    "tone": "info",
+                }
+            )
         return {
-            'available_balance': summary.available_balance,
-            'reserved_balance': summary.reserved_balance,
-            'total_balance': summary.total_balance,
-            'currency': summary.currency,
-            'withdrawable_balance': summary.available_balance,
-            'pending_withdrawals': int(pending_withdrawals),
-            'payment_provider_status': provider_status,
-            'insights': insights,
+            "available_balance": summary.available_balance,
+            "reserved_balance": summary.reserved_balance,
+            "total_balance": summary.total_balance,
+            "currency": summary.currency,
+            "withdrawable_balance": summary.available_balance,
+            "pending_withdrawals": int(pending_withdrawals),
+            "payment_provider_status": provider_status,
+            "insights": insights,
         }
 
     def append_transaction(
@@ -1209,11 +1269,7 @@ class WalletService:
             total_by_unit[posting.account.unit] += amount
             delta_by_account[posting.account.id] += amount
 
-        unbalanced_units = {
-            unit: total
-            for unit, total in total_by_unit.items()
-            if total != Decimal("0.0000")
-        }
+        unbalanced_units = {unit: total for unit, total in total_by_unit.items() if total != Decimal("0.0000")}
         if unbalanced_units:
             raise UnbalancedTransactionError("Ledger transactions must net to zero within each ledger unit.")
 
@@ -1246,11 +1302,7 @@ class WalletService:
                 raise InsufficientBalanceError(f"Account {account.code} does not have enough balance.")
 
         transaction_source_tag = source_tag or next(
-            (
-                posting.source_tag
-                for posting in normalized_postings
-                if posting.source_tag is not None
-            ),
+            (posting.source_tag for posting in normalized_postings if posting.source_tag is not None),
             LedgerSourceTag.ADMIN_ADJUSTMENT,
         )
         transaction_record = LedgerTransaction(
@@ -1324,10 +1376,7 @@ class WalletService:
         owner_user_ids = sorted(
             {
                 owner_user_id
-                for owner_user_id in (
-                    account.owner_user_id
-                    for account in accounts_by_id.values()
-                )
+                for owner_user_id in (account.owner_user_id for account in accounts_by_id.values())
                 if owner_user_id
             }
         )
@@ -1393,7 +1442,11 @@ class WalletService:
                     aggregate_id=entry.id,
                     aggregate_type="ledger_entry",
                     producer="wallet_service",
-                    partition_key=entry.account.owner_user_id if entry.account and entry.account.owner_user_id else entry.account_id,
+                    partition_key=(
+                        entry.account.owner_user_id
+                        if entry.account and entry.account.owner_user_id
+                        else entry.account_id
+                    ),
                 ),
             )
         for account_id, balance in updated_balances.items():
@@ -1441,8 +1494,14 @@ class WalletService:
                         "owner_user_id": entry.account.owner_user_id if entry.account is not None else None,
                         "amount": str(entry.amount),
                         "unit": entry.unit.value if hasattr(entry.unit, "value") else str(entry.unit),
-                        "transaction_type": entry.transaction_type.value if hasattr(entry.transaction_type, "value") else str(entry.transaction_type),
-                        "source_tag": entry.source_tag.value if hasattr(entry.source_tag, "value") else str(entry.source_tag),
+                        "transaction_type": (
+                            entry.transaction_type.value
+                            if hasattr(entry.transaction_type, "value")
+                            else str(entry.transaction_type)
+                        ),
+                        "source_tag": (
+                            entry.source_tag.value if hasattr(entry.source_tag, "value") else str(entry.source_tag)
+                        ),
                     }
                     for entry in entries
                 ],
@@ -1462,7 +1521,9 @@ class WalletService:
         self._prime_balance_cache(session, account=account, balance=balance)
         return balance
 
-    def get_wallet_summary(self, session: Session, user: User, *, currency: LedgerUnit = LedgerUnit.CREDIT) -> WalletSummary:
+    def get_wallet_summary(
+        self, session: Session, user: User, *, currency: LedgerUnit = LedgerUnit.CREDIT
+    ) -> WalletSummary:
         if not self._session_has_pending_state(session):
             cached_summary = self._read_cached_wallet_summary(user_id=user.id, currency=currency)
             if cached_summary is not None:
@@ -1719,34 +1780,6 @@ class WalletService:
             ],
             reason=LedgerEntryReason.WITHDRAWAL_HOLD,
             source_tag=source_tag,
-            reference=reference,
-            description=description,
-            actor=user,
-        )
-
-    def release_reserved_position_units(
-        self,
-        session: Session,
-        *,
-        user: User,
-        player_id: str,
-        quantity: Decimal,
-        reference: str,
-        description: str,
-    ) -> list[LedgerEntry]:
-        released_quantity = self._normalize_amount(quantity)
-        if released_quantity <= Decimal("0.0000"):
-            return []
-
-        position_account = self.get_position_account(session, user, player_id)
-        escrow_account = self.get_position_escrow_account(session, user, player_id)
-        return self.append_transaction(
-            session,
-            postings=[
-                LedgerPosting(account=escrow_account, amount=-released_quantity),
-                LedgerPosting(account=position_account, amount=released_quantity),
-            ],
-            reason=LedgerEntryReason.ADJUSTMENT,
             reference=reference,
             description=description,
             actor=user,
