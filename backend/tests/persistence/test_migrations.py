@@ -257,6 +257,60 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("agent_performance_logs")
 
 
+def test_auth_session_rebuild_migration_handles_preexisting_table(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'auth-session-rebuild.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    config = build_alembic_config(database_url)
+
+    command.upgrade(config, "20260401_0079_history_engagement_schema_repair")
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE auth_sessions (
+                    user_id VARCHAR(36) NOT NULL,
+                    refresh_token_hash VARCHAR(128) NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    last_used_at TIMESTAMP,
+                    revoked_at TIMESTAMP,
+                    revocation_reason VARCHAR(120),
+                    device_id VARCHAR(120),
+                    user_agent VARCHAR(512),
+                    ip_address VARCHAR(64),
+                    id VARCHAR(36) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+                )
+                """
+            )
+        )
+
+    inspector = inspect(engine)
+    assert inspector.has_table("auth_sessions")
+    assert inspector.get_indexes("auth_sessions") == []
+
+    command.upgrade(config, "head")
+
+    repaired_inspector = inspect(engine)
+    assert repaired_inspector.has_table("auth_sessions")
+    assert {
+        "ix_auth_sessions_expires_at",
+        "ix_auth_sessions_revoked_at",
+        "ix_auth_sessions_user_id",
+        "ix_auth_sessions_user_id_expires_at",
+    } <= {index["name"] for index in repaired_inspector.get_indexes("auth_sessions")}
+
+    with engine.connect() as connection:
+        versions = connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()
+
+    assert set(versions) == _migration_graph_heads()
+
+    engine.dispose()
+
+
 def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'player-share-repair.db').as_posix()}"
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
