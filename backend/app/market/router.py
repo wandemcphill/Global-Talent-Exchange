@@ -7,11 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_trading_user, get_current_user
 from app.auth.dependencies import get_session
+from app.core.cache_namespaces import PLAYER_MARKETS_CACHE_NAMESPACE
+from app.core.response_cache import get_response_cache
 from app.gtex.runtime import ensure_gtex_runtime
 from app.gtex.schemas import CreatorTradeRequest, CreatorTradeView
 from app.gtex.service import GtexConflictError, GtexError, GtexNotFoundError, GtexValidationError
 from app.market.read_models import MarketSummaryReadModel
 from app.market.projections import MarketSummaryProjector
+from app.market.repositories import build_market_repository
 from app.market.schemas import (
     ListingCreate,
     ListingView,
@@ -49,12 +52,17 @@ from app.services.runtime_control_service import RuntimeControlService
 router = APIRouter(prefix="/market", tags=["market"])
 
 
+def _invalidate_player_markets_cache(request: Request) -> None:
+    get_response_cache(request.app).invalidate(PLAYER_MARKETS_CACHE_NAMESPACE)
+
+
 def get_market_engine(request: Request) -> MarketEngine:
     market_engine = getattr(request.app.state, "market_engine", None)
     if market_engine is None:
         session_factory = getattr(request.app.state, "session_factory", None)
         summary_projector = MarketSummaryProjector(session_factory) if session_factory is not None else None
         market_engine = MarketEngine(
+            repository=build_market_repository(getattr(request.app.state.settings, "redis_url", None)),
             summary_projector=summary_projector,
             cache_backend=getattr(request.app.state, "cache_backend", None),
         )
@@ -303,7 +311,10 @@ def buy_market_position(
             raise_gtex_http_exception(exc)
         return CreatorTradeView.model_validate(trade)
 
-    service = PlayerTokenMarketService(session)
+    service = PlayerTokenMarketService(
+        session,
+        event_publisher=getattr(request.app.state, "event_publisher", None),
+    )
     try:
         result = service.buy_shares(
             actor=current_user,
@@ -315,6 +326,7 @@ def buy_market_position(
 
     session.commit()
     session.refresh(result["holding"])
+    _invalidate_player_markets_cache(request)
     return PlayerSharePurchaseView(
         market=PlayerShareMarketView.model_validate(result["market"]),
         holding=PlayerShareHoldingView.model_validate(result["holding"]),
@@ -347,7 +359,10 @@ def sell_market_position(
             raise_gtex_http_exception(exc)
         return CreatorTradeView.model_validate(trade)
 
-    service = PlayerTokenMarketService(session)
+    service = PlayerTokenMarketService(
+        session,
+        event_publisher=getattr(request.app.state, "event_publisher", None),
+    )
     try:
         result = service.sell_shares(
             actor=current_user,
@@ -359,6 +374,7 @@ def sell_market_position(
 
     session.commit()
     session.refresh(result["holding"])
+    _invalidate_player_markets_cache(request)
     return PlayerShareSaleView(
         market=PlayerShareMarketView.model_validate(result["market"]),
         holding=PlayerShareHoldingView.model_validate(result["holding"]),

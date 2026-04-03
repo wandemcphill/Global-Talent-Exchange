@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from math import ceil
+import time
 from threading import RLock
 from typing import Any
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.cache import HotPathCache
 from app.common.enums.competition_type import CompetitionType
 from app.common.enums.fixture_window import FixtureWindow
 from app.common.enums.replay_visibility import ReplayVisibility
@@ -22,12 +24,14 @@ from app.competition_engine.queue_contracts import (
     PayoutSettlementJob,
     QueuedJobRecord,
 )
+from app.core.cache import CacheBackend, NullCacheBackend
 from app.core.events import DomainEvent, EventPublisher
 from app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContribution, LeagueSeasonState
 from app.leagues.service import LeagueSeasonLifecycleService
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.models.competition_match import CompetitionMatch
+from app.realtime.match_stream_service import MatchStreamService
 from app.services.match_timeline_service import MatchTimelineService
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.match_engine.simulation.models import MatchEventType
@@ -185,6 +189,10 @@ class LocalMatchExecutionWorker:
     league_service: LeagueSeasonLifecycleService = field(default_factory=LeagueSeasonLifecycleService)
     team_factory: SyntheticSquadFactory = field(default_factory=SyntheticSquadFactory)
     session_factory: sessionmaker[Session] | None = None
+    match_stream_service: MatchStreamService | None = None
+    cache_backend: CacheBackend = field(default_factory=NullCacheBackend)
+    stream_update_interval_seconds: float = 3.0
+    stream_cache_ttl_seconds: int = 900
     _completed_match_jobs: set[str] = field(default_factory=set)
     _completed_advancement_jobs: set[str] = field(default_factory=set)
     _completed_notification_jobs: set[str] = field(default_factory=set)
@@ -264,6 +272,7 @@ class LocalMatchExecutionWorker:
                     },
                 )
             )
+            self._stream_live_match(job, replay_payload)
             state = self._apply_competition_result(job, replay_payload)
             self._publish_match_lifecycle_event(
                 "competition.match.result.generated",
@@ -365,6 +374,219 @@ class LocalMatchExecutionWorker:
             )
             self._release_claim(self._completed_match_jobs, claim_key)
             raise
+
+    def _stream_live_match(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        match_id = job.fixture_id
+        home_team_name = job.home_club_name or job.home_club_id or "Home Club"
+        away_team_name = job.away_club_name or job.away_club_id or "Away Club"
+        frames = self._build_live_stream_frames(job, replay_payload)
+        if not frames:
+            return
+
+        cache = HotPathCache(self.cache_backend)
+        cache.clear_match_events(match_id)
+
+        for index, frame in enumerate(frames):
+            self._publish_live_frame(
+                match_id=match_id,
+                home_team_name=home_team_name,
+                away_team_name=away_team_name,
+                frame=frame,
+            )
+            cache.append_match_events(
+                match_id,
+                [self._build_cached_live_event(match_id=match_id, frame=frame)],
+                ttl_seconds=self.stream_cache_ttl_seconds,
+            )
+            cache.set_match_state(
+                match_id,
+                self._build_cached_match_state(
+                    match_id=match_id,
+                    home_team_name=home_team_name,
+                    away_team_name=away_team_name,
+                    frame=frame,
+                    event_count=index + 1,
+                ),
+                ttl_seconds=self.stream_cache_ttl_seconds,
+            )
+            if index < len(frames) - 1 and self.stream_update_interval_seconds > 0:
+                time.sleep(self.stream_update_interval_seconds)
+
+    def _build_live_stream_frames(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> list[dict[str, Any]]:
+        timeline = sorted(
+            self._build_replay_timeline(replay_payload),
+            key=lambda item: (
+                int(item.get("minute") or 0),
+                str(item.get("event_id") or ""),
+            ),
+        )
+        checkpoints = {0, 15, 30, 45, 60, 75, 90}
+        checkpoints.update(int(item.get("minute") or 0) for item in timeline)
+
+        frames: list[dict[str, Any]] = [
+            {
+                "event_id": f"{job.fixture_id}:kickoff",
+                "minute": 0,
+                "event_type": "kickoff",
+                "description": "Kick-off.",
+                "home_score": 0,
+                "away_score": 0,
+                "status": "live",
+                "home_team_name": job.home_club_name or job.home_club_id or "Home Club",
+                "away_team_name": job.away_club_name or job.away_club_id or "Away Club",
+            }
+        ]
+
+        score_home = 0
+        score_away = 0
+        event_index = 0
+        for minute in sorted(checkpoints):
+            while event_index < len(timeline) and int(timeline[event_index].get("minute") or 0) <= minute:
+                event = dict(timeline[event_index])
+                score_home = int(event.get("home_score") or score_home)
+                score_away = int(event.get("away_score") or score_away)
+                event["status"] = "live"
+                frames.append(event)
+                event_index += 1
+
+            if minute <= 0:
+                continue
+
+            frames.append(
+                {
+                    "event_id": f"{job.fixture_id}:score:{minute}",
+                    "minute": minute,
+                    "event_type": "score_update",
+                    "description": f"Score update at {minute} minutes.",
+                    "home_score": score_home,
+                    "away_score": score_away,
+                    "status": "live",
+                    "home_team_name": job.home_club_name or job.home_club_id or "Home Club",
+                    "away_team_name": job.away_club_name or job.away_club_id or "Away Club",
+                }
+            )
+
+        final_summary = replay_payload.summary
+        frames.append(
+            {
+                "event_id": f"{job.fixture_id}:full-time",
+                "minute": max(90, int(replay_payload.timeline.presentation_duration_seconds / 60)),
+                "event_type": "full_time",
+                "description": "Full time.",
+                "home_score": final_summary.home_score,
+                "away_score": final_summary.away_score,
+                "status": "completed",
+                "home_team_name": job.home_club_name or job.home_club_id or "Home Club",
+                "away_team_name": job.away_club_name or job.away_club_id or "Away Club",
+            }
+        )
+        return frames
+
+    def _publish_live_frame(
+        self,
+        *,
+        match_id: str,
+        home_team_name: str,
+        away_team_name: str,
+        frame: dict[str, Any],
+    ) -> dict[str, Any]:
+        service = self.match_stream_service
+        if service is None:
+            return dict(frame)
+        return service.publish_event(
+            match_id,
+            {
+                "event_id": frame.get("event_id"),
+                "type": frame.get("event_type"),
+                "event_type": frame.get("event_type"),
+                "minute": frame.get("minute"),
+                "team_id": frame.get("club_id"),
+                "team_name": frame.get("club_name"),
+                "player_id": frame.get("player_id"),
+                "player_name": frame.get("player_name"),
+                "secondary_player_id": frame.get("secondary_player_id"),
+                "secondary_player_name": frame.get("secondary_player_name"),
+                "description": frame.get("description"),
+                "home_score": frame.get("home_score"),
+                "away_score": frame.get("away_score"),
+                "metadata": {
+                    "status": frame.get("status"),
+                    "home_team_name": home_team_name,
+                    "away_team_name": away_team_name,
+                    "is_penalty": bool(frame.get("is_penalty")),
+                },
+            },
+        )
+
+    def _build_cached_match_state(
+        self,
+        *,
+        match_id: str,
+        home_team_name: str,
+        away_team_name: str,
+        frame: dict[str, Any],
+        event_count: int,
+    ) -> dict[str, Any]:
+        status = str(frame.get("status") or "live").strip().lower()
+        minute = int(frame.get("minute") or 0)
+        return {
+            "match_id": match_id,
+            "channel": f"match:{match_id}:events",
+            "home_team_name": home_team_name,
+            "away_team_name": away_team_name,
+            "is_live": status != "completed",
+            "read_only": True,
+            "spectator_count": 0,
+            "event_count": event_count,
+            "snapshot": {
+                "score": {
+                    "home": int(frame.get("home_score") or 0),
+                    "away": int(frame.get("away_score") or 0),
+                },
+                "possession_estimate": {"home": 50, "away": 50},
+                "current_minute": minute,
+                "momentum_indicator": "steady",
+                "dramatic_event": str(frame.get("event_type") or "") not in {"score_update", "kickoff"},
+                "status": "completed" if status == "completed" else "live",
+                "read_only": True,
+            },
+        }
+
+    @staticmethod
+    def _build_cached_live_event(*, match_id: str, frame: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "match_id": match_id,
+            "event_id": frame.get("event_id"),
+            "source_event_id": frame.get("event_id"),
+            "minute": int(frame.get("minute") or 0),
+            "event_type": frame.get("event_type"),
+            "source_event_type": frame.get("event_type"),
+            "team_id": frame.get("club_id"),
+            "team": frame.get("club_name"),
+            "player_id": frame.get("player_id"),
+            "player": frame.get("player_name"),
+            "secondary_player_id": frame.get("secondary_player_id"),
+            "secondary_player": frame.get("secondary_player_name"),
+            "commentary": frame.get("description"),
+            "home_score": int(frame.get("home_score") or 0),
+            "away_score": int(frame.get("away_score") or 0),
+            "clock_label": f"{int(frame.get('minute') or 0)}'",
+            "is_penalty": bool(frame.get("is_penalty")),
+            "highlight_eligible": str(frame.get("event_type") or "") not in {"score_update", "kickoff"},
+            "metadata": {
+                "status": frame.get("status"),
+                "home_team_name": frame.get("home_team_name"),
+                "away_team_name": frame.get("away_team_name"),
+            },
+        }
 
     def _persist_player_lifecycle_incidents(
         self,
@@ -880,6 +1102,7 @@ class LocalMatchExecutionWorker:
 
 def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWorker:
     session_factory = getattr(app.state, "session_factory", None)
+    settings = getattr(app.state, "settings", None)
     queue_publisher = getattr(app.state, "competition_queue_publisher", None)
     if queue_publisher is None:
         queue_publisher = InMemoryQueuePublisher(event_publisher=app.state.event_publisher)
@@ -892,16 +1115,32 @@ def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWor
 
     worker = getattr(app.state, "match_execution_worker", None)
     if worker is None:
+        match_stream_service = MatchStreamService.from_settings(
+            settings,
+            event_publisher=app.state.event_publisher,
+        )
         worker = LocalMatchExecutionWorker(
             dispatcher=dispatcher,
             event_publisher=app.state.event_publisher,
             session_factory=session_factory,
             team_factory=SyntheticSquadFactory(session_factory=session_factory),
+            match_stream_service=match_stream_service,
+            cache_backend=getattr(app.state, "cache_backend", NullCacheBackend()),
+            stream_update_interval_seconds=getattr(settings, "match_stream_interval_seconds", 3.0),
+            stream_cache_ttl_seconds=getattr(settings, "match_stream_cache_ttl_seconds", 900),
         )
         app.state.match_execution_worker = worker
     else:
         worker.session_factory = session_factory
         worker.team_factory.session_factory = session_factory
+        worker.cache_backend = getattr(app.state, "cache_backend", NullCacheBackend())
+        worker.stream_update_interval_seconds = getattr(settings, "match_stream_interval_seconds", 3.0)
+        worker.stream_cache_ttl_seconds = getattr(settings, "match_stream_cache_ttl_seconds", 900)
+        if worker.match_stream_service is None:
+            worker.match_stream_service = MatchStreamService.from_settings(
+                settings,
+                event_publisher=app.state.event_publisher,
+            )
 
     if not getattr(app.state, "_match_execution_worker_subscribed", False):
         app.state.event_publisher.subscribe(worker.handle_event)

@@ -7,6 +7,7 @@ import 'services/reliability/reliable_event_queue.dart';
 import 'shared/auth/auth_identity_store.dart';
 import 'shared/models/auth_session.dart';
 import 'shared/providers/auth_provider.dart';
+import 'shared/providers/app_realtime_provider.dart';
 import 'shared/providers/live_clients_provider.dart';
 import 'theme/gte_theme_controller.dart';
 import 'theme/gte_theme_registry.dart';
@@ -75,6 +76,7 @@ class _GtexAppState extends ConsumerState<GtexApp> {
   @override
   Widget build(BuildContext context) {
     ref.watch(sessionHydrationProvider);
+    ref.watch(appRealtimeSyncProvider);
     final bool isAuthenticated = ref.watch(isAuthenticatedProvider);
     final exchangeApi = ref.watch(exchangeApiClientProvider);
     gteReliableEventQueue.configure(

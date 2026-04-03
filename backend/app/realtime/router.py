@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import asyncio
-import time
+import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 
@@ -19,7 +19,7 @@ from app.realtime.schemas import (
     WalletRealtimeFraudCaseView,
     WalletRealtimeLedgerEntryView,
 )
-from app.realtime.websocket_gateway import get_match_stream_websocket_gateway
+from app.realtime.service import commentary_topic, match_topic
 from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.service import WalletService
 
@@ -54,186 +54,164 @@ def get_match_gateway(
     snapshot = _build_match_gateway_snapshot(request.app, match_id)
     return MatchGatewayView(
         channel=snapshot.channel,
-        websocket_path=f"/ws/match/{match_id}",
+        websocket_path=f"/realtime/matches/{match_id}/stream",
         snapshot=snapshot,
+    )
+
+
+@realtime_router.websocket("/stream")
+async def realtime_stream(websocket: WebSocket) -> None:
+    user_id, token_provided = _resolve_websocket_user_id(websocket)
+    requested_topics = _requested_topics(websocket)
+    if token_provided and user_id is None:
+        await websocket.close(code=4401)
+        return
+    if user_id is None and _requires_authenticated_scope(requested_topics):
+        await websocket.close(code=4401)
+        return
+    await _run_realtime_stream(
+        websocket,
+        user_id=user_id,
+        topics=requested_topics,
     )
 
 
 @realtime_router.websocket("/wallet/stream")
 async def stream_wallet_updates(websocket: WebSocket) -> None:
-    user_id = _resolve_websocket_user_id(websocket)
+    user_id, _token_provided = _resolve_websocket_user_id(websocket)
     if user_id is None:
         await websocket.close(code=4401)
         return
-
-    app = websocket.scope["app"]
-    realtime = app.state.realtime
-    channel = realtime.wallet_channel(user_id)
-    await websocket.accept()
-    realtime.register_wallet_connection()
-    cursor = realtime.wallet_latest_cursor(user_id)
-    snapshot = _build_wallet_gateway_snapshot(app, user_id)
-    await websocket.send_json(
-        {
-            "channel": channel,
-            "kind": "snapshot",
-            "payload": snapshot.model_dump(mode="json"),
-        }
-    )
-    realtime.record_wallet_delivery()
-    last_heartbeat = time.monotonic()
-    try:
-        while True:
-            events, cursor = realtime.wallet_events_since(user_id, cursor)
-            if events:
-                await websocket.send_json(
-                    {
-                        "channel": channel,
-                        "kind": "events",
-                        "payload": events,
-                    }
-                )
-                realtime.record_wallet_delivery()
-                snapshot = _build_wallet_gateway_snapshot(app, user_id)
-                await websocket.send_json(
-                    {
-                        "channel": channel,
-                        "kind": "snapshot",
-                        "payload": snapshot.model_dump(mode="json"),
-                    }
-                )
-                realtime.record_wallet_delivery()
-                last_heartbeat = time.monotonic()
-            elif time.monotonic() - last_heartbeat >= 15:
-                await websocket.send_json(
-                    {
-                        "channel": channel,
-                        "kind": "heartbeat",
-                        "payload": {"user_id": user_id},
-                    }
-                )
-                realtime.record_wallet_delivery()
-                last_heartbeat = time.monotonic()
-            await asyncio.sleep(0.25)
-    except WebSocketDisconnect:
-        return
-    finally:
-        realtime.unregister_wallet_connection()
-    await websocket.close()
+    await _run_realtime_stream(websocket, user_id=user_id, topics=("wallet",))
 
 
 @realtime_router.websocket("/matches/{match_id}/stream")
 async def stream_match_updates(websocket: WebSocket, match_id: str) -> None:
-    user_id = _resolve_websocket_user_id(websocket)
-    if user_id is None:
+    user_id, token_provided = _resolve_websocket_user_id(websocket)
+    if token_provided and user_id is None:
         await websocket.close(code=4401)
         return
-    del user_id
-
-    app = websocket.scope["app"]
-    realtime = app.state.realtime
-    channel = realtime.match_channel(match_id)
-    await websocket.accept()
-    realtime.register_match_connection()
-    cursor = realtime.match_latest_cursor(match_id)
-    snapshot = _build_match_gateway_snapshot(app, match_id)
-    await websocket.send_json(
-        {
-            "channel": channel,
-            "kind": "snapshot",
-            "payload": snapshot.model_dump(mode="json"),
-        }
+    await _run_realtime_stream(
+        websocket,
+        user_id=user_id,
+        topics=(match_topic(match_id), commentary_topic(match_id)),
     )
-    realtime.record_match_delivery()
-    last_heartbeat = time.monotonic()
-    try:
-        while True:
-            events, cursor = realtime.match_events_since(match_id, cursor)
-            if events:
-                await websocket.send_json(
-                    {
-                        "channel": channel,
-                        "kind": "events",
-                        "payload": events,
-                    }
-                )
-                realtime.record_match_delivery()
-                snapshot = _build_match_gateway_snapshot(app, match_id)
-                await websocket.send_json(
-                    {
-                        "channel": channel,
-                        "kind": "snapshot",
-                        "payload": snapshot.model_dump(mode="json"),
-                    }
-                )
-                realtime.record_match_delivery()
-                last_heartbeat = time.monotonic()
-            elif time.monotonic() - last_heartbeat >= 15:
-                await websocket.send_json(
-                    {
-                        "channel": channel,
-                        "kind": "heartbeat",
-                        "payload": {"match_id": match_id},
-                    }
-                )
-                realtime.record_match_delivery()
-                last_heartbeat = time.monotonic()
-            await asyncio.sleep(0.25)
-    except WebSocketDisconnect:
-        return
-    finally:
-        realtime.unregister_match_connection()
-    await websocket.close()
 
 
 @router.websocket("/ws/match/{match_id}")
 async def stream_live_match_events(websocket: WebSocket, match_id: str) -> None:
-    app = websocket.scope["app"]
-    realtime = app.state.realtime
-    gateway = get_match_stream_websocket_gateway(app)
+    user_id, token_provided = _resolve_websocket_user_id(websocket)
+    if token_provided and user_id is None:
+        await websocket.close(code=4401)
+        return
+    await _run_realtime_stream(
+        websocket,
+        user_id=user_id,
+        topics=(match_topic(match_id), commentary_topic(match_id)),
+    )
 
-    subscription = await gateway.connect(websocket, match_id)
-    realtime.register_match_connection()
+
+async def _run_realtime_stream(
+    websocket: WebSocket,
+    *,
+    user_id: str | None,
+    topics: tuple[str, ...],
+    send_initial_ack: bool = True,
+) -> None:
+    hub = websocket.scope["app"].state.realtime
+    client_id = await hub.connect(websocket, user_id=user_id, topics=topics)
     try:
-        await websocket.send_json(subscription)
-        realtime.record_match_delivery()
+        active_topics = await hub.subscribe(client_id, topics=())
+        if topics and send_initial_ack:
+            await websocket.send_json(
+                {
+                    "type": "subscription_ack",
+                    "data": {"topics": list(active_topics)},
+                }
+            )
         while True:
             message = await websocket.receive()
             if message["type"] == "websocket.disconnect":
                 break
-            text = (message.get("text") or "").strip().lower()
-            if text == "ping":
-                await websocket.send_json({"type": "pong", "match_id": match_id})
-                realtime.record_match_delivery()
+            text = message.get("text")
+            if text is None:
+                continue
+            command = _decode_command(text)
+            command_type = str(command.get("type") or "").strip().lower()
+            if command_type == "ping" or text.strip().lower() == "ping":
+                await websocket.send_json({"type": "pong", "data": {}})
+                continue
+            if command_type == "subscribe":
+                active_topics = await hub.subscribe(client_id, topics=_topics_from_command(command))
+                await websocket.send_json({"type": "subscription_ack", "data": {"topics": list(active_topics)}})
+                continue
+            if command_type == "unsubscribe":
+                active_topics = await hub.unsubscribe(client_id, topics=_topics_from_command(command))
+                await websocket.send_json({"type": "subscription_ack", "data": {"topics": list(active_topics)}})
     except WebSocketDisconnect:
         return
     finally:
-        await gateway.disconnect(websocket, match_id)
-        realtime.unregister_match_connection()
+        await hub.disconnect(client_id)
 
 
-def _resolve_websocket_user_id(websocket: WebSocket) -> str | None:
+def _decode_command(raw: str) -> dict[str, Any]:
+    text = raw.strip()
+    if not text:
+        return {}
+    try:
+        decoded = json.loads(text)
+    except json.JSONDecodeError:
+        return {"type": text.lower()}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+def _topics_from_command(command: dict[str, Any]) -> tuple[str, ...]:
+    topics = command.get("topics")
+    if isinstance(topics, list):
+        return tuple(str(item).strip() for item in topics if str(item).strip())
+    data = command.get("data")
+    if isinstance(data, dict):
+        nested_topics = data.get("topics")
+        if isinstance(nested_topics, list):
+            return tuple(str(item).strip() for item in nested_topics if str(item).strip())
+    return ()
+
+
+def _requested_topics(websocket: WebSocket) -> tuple[str, ...]:
+    raw_topics: list[str] = []
+    raw_topics.extend(websocket.query_params.getlist("topic"))
+    csv_topics = websocket.query_params.get("topics")
+    if csv_topics:
+        raw_topics.extend(item.strip() for item in csv_topics.split(","))
+    return tuple(dict.fromkeys(item for item in raw_topics if item))
+
+
+def _requires_authenticated_scope(topics: tuple[str, ...]) -> bool:
+    return any(topic == "wallet" or topic.startswith("wallet:") for topic in topics)
+
+
+def _resolve_websocket_user_id(websocket: WebSocket) -> tuple[str | None, bool]:
     token = websocket.query_params.get("token")
     authorization = websocket.headers.get("authorization")
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", maxsplit=1)[1].strip()
     if token is None or not token.strip():
-        return None
+        return None, False
     try:
         payload = decode_access_token(token.strip())
     except TokenError:
-        return None
+        return None, True
     subject = str(payload.get("sub") or "").strip()
     if not subject:
-        return None
+        return None, True
     session_factory = getattr(websocket.scope["app"].state, "session_factory", None)
     if session_factory is None:
-        return None
+        return None, True
     with session_factory() as session:
         user = session.get(User, subject)
         if user is None or not user.is_active:
-            return None
-        return user.id
+            return None, True
+        return user.id, True
 
 
 def _build_wallet_gateway_snapshot(app, user_id: str) -> WalletGatewaySnapshotView:
@@ -242,7 +220,7 @@ def _build_wallet_gateway_snapshot(app, user_id: str) -> WalletGatewaySnapshotVi
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Wallet gateway is unavailable.")
 
     realtime = app.state.realtime
-    wallet_service = WalletService()
+    wallet_service = WalletService(event_publisher=getattr(app.state, "event_publisher", None))
     with session_factory() as session:
         user = session.get(User, user_id)
         if user is None:
@@ -308,7 +286,7 @@ def _build_match_gateway_snapshot(app, match_id: str) -> MatchGatewaySnapshotVie
     return MatchGatewaySnapshotView(
         match_id=match_id,
         channel=realtime.match_channel(match_id),
-        latest_cursor=realtime.match_latest_cursor(match_id),
+        latest_cursor=0,
         websocket_connections=metrics.active_match_connections,
         delivered_messages=metrics.delivered_messages,
     )

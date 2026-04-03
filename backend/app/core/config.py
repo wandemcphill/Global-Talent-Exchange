@@ -53,6 +53,49 @@ class SettingsSource(BaseModel):
     redis_url: str | None = Field(default=None, validation_alias="GTE_REDIS_URL")
     redis_event_channel: str = Field(default="gtex.events", validation_alias="GTE_REDIS_EVENT_CHANNEL")
     redis_realtime_channel: str = Field(default="gtex.realtime", validation_alias="GTE_REDIS_REALTIME_CHANNEL")
+    api_cache_enabled: bool = Field(default=True, validation_alias="GTE_API_CACHE_ENABLED")
+    player_markets_cache_ttl_seconds: int = Field(
+        default=5,
+        validation_alias="GTE_PLAYER_MARKETS_CACHE_TTL_SECONDS",
+    )
+    competitions_cache_ttl_seconds: int = Field(
+        default=30,
+        validation_alias="GTE_COMPETITIONS_CACHE_TTL_SECONDS",
+    )
+    regen_universe_cache_ttl_seconds: int = Field(
+        default=15,
+        validation_alias="GTE_REGEN_UNIVERSE_CACHE_TTL_SECONDS",
+    )
+    distributed_rate_limit_enabled: bool = Field(
+        default=True,
+        validation_alias="GTE_DISTRIBUTED_RATE_LIMIT_ENABLED",
+    )
+    api_rate_limit_per_minute: int = Field(default=100, validation_alias="GTE_API_RATE_LIMIT_PER_MINUTE")
+    auth_rate_limit_per_minute: int = Field(default=10, validation_alias="GTE_AUTH_RATE_LIMIT_PER_MINUTE")
+    market_rate_limit_per_minute: int = Field(default=40, validation_alias="GTE_MARKET_RATE_LIMIT_PER_MINUTE")
+    wallet_rate_limit_per_minute: int = Field(default=50, validation_alias="GTE_WALLET_RATE_LIMIT_PER_MINUTE")
+    sensitive_rate_limit_per_minute: int = Field(
+        default=5,
+        validation_alias="GTE_SENSITIVE_RATE_LIMIT_PER_MINUTE",
+    )
+    task_queue_enabled: bool = Field(default=True, validation_alias="GTE_TASK_QUEUE_ENABLED")
+    task_queue_name: str = Field(default="gtex-jobs", validation_alias="GTE_TASK_QUEUE_NAME")
+    task_queue_result_ttl_seconds: int = Field(
+        default=3600,
+        validation_alias="GTE_TASK_QUEUE_RESULT_TTL_SECONDS",
+    )
+    task_queue_failure_ttl_seconds: int = Field(
+        default=86400,
+        validation_alias="GTE_TASK_QUEUE_FAILURE_TTL_SECONDS",
+    )
+    match_stream_interval_seconds: float = Field(
+        default=3.0,
+        validation_alias="GTE_MATCH_STREAM_INTERVAL_SECONDS",
+    )
+    match_stream_cache_ttl_seconds: int = Field(
+        default=900,
+        validation_alias="GTE_MATCH_STREAM_CACHE_TTL_SECONDS",
+    )
     broadcast_delay_seconds: int = Field(default=3, validation_alias="GTE_BROADCAST_DELAY_SECONDS")
     broadcast_presence_ttl_seconds: int = Field(
         default=45,
@@ -705,6 +748,22 @@ class Settings:
     redis_url: str | None
     redis_event_channel: str
     redis_realtime_channel: str
+    api_cache_enabled: bool
+    player_markets_cache_ttl_seconds: int
+    competitions_cache_ttl_seconds: int
+    regen_universe_cache_ttl_seconds: int
+    distributed_rate_limit_enabled: bool
+    api_rate_limit_per_minute: int
+    auth_rate_limit_per_minute: int
+    market_rate_limit_per_minute: int
+    wallet_rate_limit_per_minute: int
+    sensitive_rate_limit_per_minute: int
+    task_queue_enabled: bool
+    task_queue_name: str
+    task_queue_result_ttl_seconds: int
+    task_queue_failure_ttl_seconds: int
+    match_stream_interval_seconds: float
+    match_stream_cache_ttl_seconds: int
     broadcast_delay_seconds: int
     broadcast_presence_ttl_seconds: int
     broadcast_presence_heartbeat_interval_seconds: int
@@ -1960,6 +2019,22 @@ def load_settings(
         redis_url=source.redis_url,
         redis_event_channel=source.redis_event_channel,
         redis_realtime_channel=source.redis_realtime_channel,
+        api_cache_enabled=source.api_cache_enabled,
+        player_markets_cache_ttl_seconds=max(5, min(30, source.player_markets_cache_ttl_seconds)),
+        competitions_cache_ttl_seconds=max(5, min(30, source.competitions_cache_ttl_seconds)),
+        regen_universe_cache_ttl_seconds=max(5, min(30, source.regen_universe_cache_ttl_seconds)),
+        distributed_rate_limit_enabled=source.distributed_rate_limit_enabled,
+        api_rate_limit_per_minute=max(1, source.api_rate_limit_per_minute),
+        auth_rate_limit_per_minute=max(1, source.auth_rate_limit_per_minute),
+        market_rate_limit_per_minute=max(1, source.market_rate_limit_per_minute),
+        wallet_rate_limit_per_minute=max(1, source.wallet_rate_limit_per_minute),
+        sensitive_rate_limit_per_minute=max(1, source.sensitive_rate_limit_per_minute),
+        task_queue_enabled=source.task_queue_enabled,
+        task_queue_name=(source.task_queue_name.strip() or "gtex-jobs"),
+        task_queue_result_ttl_seconds=max(60, source.task_queue_result_ttl_seconds),
+        task_queue_failure_ttl_seconds=max(60, source.task_queue_failure_ttl_seconds),
+        match_stream_interval_seconds=max(0.5, source.match_stream_interval_seconds),
+        match_stream_cache_ttl_seconds=max(60, source.match_stream_cache_ttl_seconds),
         broadcast_delay_seconds=source.broadcast_delay_seconds,
         broadcast_presence_ttl_seconds=source.broadcast_presence_ttl_seconds,
         broadcast_presence_heartbeat_interval_seconds=source.broadcast_presence_heartbeat_interval_seconds,

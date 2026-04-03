@@ -7,6 +7,8 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.event_backbone import defer_event_publish_until_commit
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
 from app.models.base import generate_uuid
@@ -31,9 +33,16 @@ class PlayerTokenMarketError(ValueError):
 
 
 class PlayerTokenMarketService:
-    def __init__(self, session: Session, *, wallet_service: WalletService | None = None) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        wallet_service: WalletService | None = None,
+        event_publisher: EventPublisher | None = None,
+    ) -> None:
         self.session = session
-        self.wallet_service = wallet_service or WalletService()
+        self.wallet_service = wallet_service or WalletService(event_publisher=event_publisher)
+        self.event_publisher = event_publisher or getattr(self.wallet_service, "event_publisher", InMemoryEventPublisher())
 
     def issue_market(
         self,
@@ -263,6 +272,16 @@ class PlayerTokenMarketService:
                 "liquidity_coin": str(liquidity_balance),
             },
         )
+        self._stage_market_trade_event(
+            market=market,
+            actor=actor,
+            event_type="buy",
+            transaction_id=entries[0].transaction_id,
+            share_delta=share_count,
+            executed_price=executed_price,
+            previous_price=previous_price,
+            gross_amount=gross_amount,
+        )
         self.session.flush()
         return {
             "market": self._serialize_market_view(market),
@@ -350,6 +369,16 @@ class PlayerTokenMarketService:
                 "updated_share_price_coin": str(self._amount(market.share_price_coin)),
                 "liquidity_coin": str(liquidity_balance),
             },
+        )
+        self._stage_market_trade_event(
+            market=market,
+            actor=actor,
+            event_type="sell",
+            transaction_id=entries[0].transaction_id,
+            share_delta=-share_count,
+            executed_price=executed_price,
+            previous_price=previous_price,
+            gross_amount=gross_amount,
         )
         self.session.flush()
         return {
@@ -797,6 +826,46 @@ class PlayerTokenMarketService:
                 gross_amount_coin=self._amount(gross_amount_coin),
                 metadata_json=metadata_json or {},
             )
+        )
+
+    def _stage_market_trade_event(
+        self,
+        *,
+        market: PlayerShareMarket,
+        actor: User,
+        event_type: str,
+        transaction_id: str | None,
+        share_delta: int,
+        executed_price: Decimal,
+        previous_price: Decimal,
+        gross_amount: Decimal,
+    ) -> None:
+        event = DomainEvent(
+            name="market.trade.executed",
+            payload={
+                "market_id": market.id,
+                "player_id": market.player_id,
+                "user_id": actor.id,
+                "side": event_type,
+                "share_delta": share_delta,
+                "shares": abs(int(share_delta)),
+                "price": str(self._amount(executed_price)),
+                "previous_price": str(self._amount(previous_price)),
+                "updated_share_price_coin": str(self._amount(market.share_price_coin)),
+                "circulating_shares": int(market.circulating_shares or 0),
+                "total_shares": int(market.total_shares or 0),
+                "transaction_id": transaction_id,
+                "gross_amount": str(self._amount(gross_amount)),
+            },
+            aggregate_id=market.id,
+            aggregate_type="player_share_market",
+            producer="player_token_market",
+            partition_key=market.player_id,
+        )
+        defer_event_publish_until_commit(
+            self.session,
+            publisher=self.event_publisher,
+            event=event,
         )
 
     def _require_admin(self, actor: User) -> None:

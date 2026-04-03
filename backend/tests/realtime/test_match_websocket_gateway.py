@@ -50,17 +50,18 @@ def test_match_websocket_gateway_streams_match_events() -> None:
     client = TestClient(app)
     with client.websocket_connect(f"/realtime/matches/match-42/stream?token={token}") as websocket:
         initial_message = websocket.receive_json()
-        assert initial_message["kind"] == "snapshot"
-        assert initial_message["payload"]["match_id"] == "match-42"
-        assert initial_message["payload"]["latest_cursor"] == 0
+        assert initial_message == {
+            "type": "subscription_ack",
+            "data": {"topics": ["match:match-42", "commentary:match-42"]},
+        }
 
         publisher.publish(
             DomainEvent(
-                name="orchestrator.command.match.start",
+                name="competition.match.execution.started",
                 payload={
-                    "match_id": "match-42",
-                    "match_status": "queued",
-                    "command_name": "StartMatchCommand",
+                    "fixture_id": "match-42",
+                    "competition_id": "competition-42",
+                    "status": "queued",
                 },
                 aggregate_id="match-42",
                 aggregate_type="competition_match",
@@ -68,10 +69,6 @@ def test_match_websocket_gateway_streams_match_events() -> None:
         )
 
         events_message = websocket.receive_json()
-        assert events_message["kind"] == "events"
-        assert events_message["payload"][0]["match_id"] == "match-42"
-        assert events_message["payload"][0]["event_name"] == "orchestrator.command.match.start"
-
-        snapshot_message = websocket.receive_json()
-        assert snapshot_message["kind"] == "snapshot"
-        assert snapshot_message["payload"]["latest_cursor"] == 1
+        assert events_message["type"] == "match_update"
+        assert events_message["data"]["match_id"] == "match-42"
+        assert events_message["data"]["event_name"] == "competition.match.execution.started"

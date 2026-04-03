@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 import pytest
 
 from app.core.database import load_model_modules
+from app.core.events import InMemoryEventPublisher
 from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
 from app.models.base import Base
@@ -157,6 +158,35 @@ def test_player_share_market_sell_flow_updates_holding_and_price(session) -> Non
     assert holding is not None
     assert holding.share_count == 6
     assert events[0].event_type == "sell"
+
+
+def test_player_share_market_trade_publishes_realtime_event_after_commit(session) -> None:
+    publisher = InMemoryEventPublisher()
+    wallet = WalletService(event_publisher=publisher)
+    admin = _create_user(session, user_id="token-publish-admin", role=UserRole.ADMIN)
+    fan = _create_user(session, user_id="token-publish-fan")
+    player = _create_player(session, player_id="player-token-publish")
+    _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
+
+    service = PlayerTokenMarketService(
+        session=session,
+        wallet_service=wallet,
+        event_publisher=publisher,
+    )
+    service.issue_market(
+        actor=admin,
+        player_id=player.id,
+        total_shares=1000,
+        share_price_coin=Decimal("0.1250"),
+    )
+    service.buy_shares(actor=fan, player_id=player.id, share_count=4)
+    session.commit()
+
+    market_events = [event for event in publisher.published_events if event.name == "market.trade.executed"]
+    assert len(market_events) == 1
+    assert market_events[0].payload["player_id"] == player.id
+    assert market_events[0].payload["side"] == "buy"
+    assert market_events[0].payload["shares"] == 4
 
 
 def test_player_share_market_respects_governor_price_caps(session) -> None:

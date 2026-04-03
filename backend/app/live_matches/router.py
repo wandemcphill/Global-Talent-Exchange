@@ -4,7 +4,7 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 
-from app.auth.dependencies import get_current_match_user, get_current_social_user, get_current_user
+from app.auth.dependencies import get_current_match_user, get_current_social_user
 from app.broadcast_network.commentary_service import CommentaryOrchestratorService
 from app.broadcast_rights.service import BroadcastRightsError, BroadcastRightsService
 from app.commentary.schemas import CommentaryStreamResponse
@@ -22,6 +22,7 @@ from app.infinite_league.service import ensure_infinite_league_runtime
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.models.manager_duel import ManagerDuel
 from app.models.user import User
+from app.realtime.service import commentary_topic, match_topic
 from app.replay_archive.service import ensure_replay_archive
 from app.services.device_fingerprint_service import DeviceFingerprintService
 from app.ticketing.service import TicketingError, TicketingService
@@ -396,42 +397,11 @@ async def stream_match(match_id: str, websocket: WebSocket, session_id: str) -> 
         await websocket.close(code=4404)
         return
 
-    await websocket.accept()
-    cursor = 0
-    await websocket.send_json(
-        {
-            "channel": state.channel,
-            "kind": "snapshot",
-            "payload": state.snapshot.model_dump(mode="json"),
-        }
+    await _stream_realtime_topics(
+        websocket,
+        user_id=None,
+        topics=(match_topic(match_id),),
     )
-    try:
-        while True:
-            state = hub.get_state(match_id)
-            if state is None:
-                break
-            events, cursor = hub.get_events_since(match_id, cursor)
-            if events:
-                await websocket.send_json(
-                    {
-                        "channel": state.channel,
-                        "kind": "events",
-                        "payload": [event.model_dump(mode="json") for event in events],
-                    }
-                )
-            await websocket.send_json(
-                {
-                    "channel": state.channel,
-                    "kind": "snapshot",
-                    "payload": state.snapshot.model_dump(mode="json"),
-                }
-            )
-            if not state.is_live and cursor >= state.event_count:
-                break
-            await asyncio.sleep(0.25)
-    except WebSocketDisconnect:
-        return
-    await websocket.close()
 
 
 @legacy_router.websocket("/{match_id}/commentary/stream")
@@ -452,65 +422,11 @@ async def stream_match_commentary(match_id: str, websocket: WebSocket, session_i
         await websocket.close(code=4404)
         return
 
-    await websocket.accept()
-    cursor = 0
-    await websocket.send_json(
-        {
-            "channel": state.channel,
-            "kind": "commentary_snapshot",
-            "payload": _commentary_snapshot_payload(
-                app,
-                hub,
-                match_id=match_id,
-                user_id=spectator_session.user_id,
-                status=state.snapshot.status,
-            ),
-        }
+    await _stream_realtime_topics(
+        websocket,
+        user_id=spectator_session.user_id,
+        topics=(commentary_topic(match_id),),
     )
-    try:
-        while True:
-            state = hub.get_state(match_id)
-            if state is None:
-                break
-            await websocket.send_json(
-                {
-                    "channel": state.channel,
-                    "kind": "commentary_snapshot",
-                    "payload": _commentary_snapshot_payload(
-                        app,
-                        hub,
-                        match_id=match_id,
-                        user_id=spectator_session.user_id,
-                        status=state.snapshot.status,
-                    ),
-                }
-            )
-            events, cursor = hub.get_events_since(match_id, cursor)
-            response = _commentary_response(
-                app,
-                hub,
-                match_id=match_id,
-                user_id=spectator_session.user_id,
-                status=state.snapshot.status,
-                events=events,
-                cursor=cursor,
-                include_audio=False,
-            )
-            commentary = response.events if response is not None else []
-            if commentary:
-                await websocket.send_json(
-                    {
-                        "channel": state.channel,
-                        "kind": "commentary",
-                        "payload": [item.model_dump(mode="json") for item in commentary],
-                    }
-                )
-            if not state.is_live and cursor >= state.event_count:
-                break
-            await asyncio.sleep(0.25)
-    except WebSocketDisconnect:
-        return
-    await websocket.close()
 
 
 @legacy_router.websocket("/{match_id}/audio/stems/stream")
@@ -567,5 +483,28 @@ router.include_router(legacy_router)
 router.include_router(api_router)
 router.include_router(match_router)
 router.include_router(api_match_router)
+
+
+async def _stream_realtime_topics(
+    websocket: WebSocket,
+    *,
+    user_id: str | None,
+    topics: tuple[str, ...],
+) -> None:
+    realtime = websocket.scope["app"].state.realtime
+    client_id = await realtime.connect(websocket, user_id=user_id, topics=topics)
+    try:
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
+            text = (message.get("text") or "").strip().lower()
+            if text == "ping":
+                await websocket.send_json({"type": "pong", "data": {}})
+    except WebSocketDisconnect:
+        return
+    finally:
+        await realtime.disconnect(client_id)
+
 
 __all__ = ["router"]

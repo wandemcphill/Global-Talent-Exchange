@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from threading import Thread
@@ -185,6 +186,8 @@ def register_core(app: FastAPI) -> None:
             )
             runtime_context.initialize(run_migration_check=app.state.run_migration_check)
             bind_application_state(app, context=runtime_context, modules=module_specs)
+            if getattr(app.state, "realtime", None) is not None:
+                app.state.realtime.bind_loop(asyncio.get_running_loop())
             check_db(app)
             check_redis(app)
             runtime_context.metrics.refresh_from_database()
@@ -200,8 +203,6 @@ def register_core(app: FastAPI) -> None:
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
-        from app.realtime.websocket_gateway import shutdown_match_stream_websocket_gateway
-
         runtime_context: Container = app.state.container
         module_specs: tuple[DomainModule, ...] = tuple(getattr(app.state, "module_specs", ()))
         logger.info("app.shutdown.begin")
@@ -211,7 +212,9 @@ def register_core(app: FastAPI) -> None:
         publish_jobs = getattr(app.state, "real_player_bulk_publish_jobs", None)
         if publish_jobs is not None:
             publish_jobs.shutdown(timeout=1.0)
-        await shutdown_match_stream_websocket_gateway(app)
+        realtime = getattr(app.state, "realtime", None)
+        if realtime is not None:
+            await realtime.shutdown()
         run_module_hooks(app, runtime_context, module_specs, phase="shutdown")
         runtime_context.shutdown()
         logger.info("app.shutdown.complete")
@@ -373,6 +376,9 @@ def __getattr__(name: str) -> FastAPI:
     if name == "app":
         return get_asgi_app()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+app: FastAPI
 
 
 __all__ = [

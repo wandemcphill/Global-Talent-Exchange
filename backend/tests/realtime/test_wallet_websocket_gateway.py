@@ -54,7 +54,10 @@ def test_wallet_websocket_gateway_streams_committed_events(tmp_path) -> None:
     client = TestClient(app)
     with client.websocket_connect(f"/realtime/wallet/stream?token={token}") as websocket:
         initial_message = websocket.receive_json()
-        assert initial_message["kind"] == "snapshot"
+        assert initial_message == {
+            "type": "subscription_ack",
+            "data": {"topics": [f"wallet:{user_id}"]},
+        }
 
         with session_factory() as session:
             user = session.get(User, user_id)
@@ -74,11 +77,8 @@ def test_wallet_websocket_gateway_streams_committed_events(tmp_path) -> None:
             session.commit()
 
         events_message = websocket.receive_json()
-        assert events_message["kind"] == "events"
-        event_names = {item["event_name"] for item in events_message["payload"]}
-        assert "wallet.transaction.appended" in event_names
-
-        snapshot_message = websocket.receive_json()
-        assert snapshot_message["kind"] == "snapshot"
+        assert events_message["type"] == "wallet_update"
+        assert events_message["data"]["user_id"] == user_id
+        assert events_message["data"]["unit"] == LedgerUnit.CREDIT.value
 
     engine.dispose()

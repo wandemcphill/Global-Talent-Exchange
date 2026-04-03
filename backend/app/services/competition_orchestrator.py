@@ -6,9 +6,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
 from secrets import token_hex
-from typing import Iterable
+from typing import Any, Iterable
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -149,6 +149,30 @@ class CompetitionOrchestrator:
         self.progression_service = CompetitionProgressionService(self.session)
         self.auto_runner = CompetitionAutoRunner(self.session)
 
+    def _publish_competition_update(
+        self,
+        *,
+        event_name: str,
+        competition: Competition,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        self.event_publisher.publish(
+            DomainEvent(
+                name=event_name,
+                payload={
+                    "competition_id": competition.id,
+                    "status": competition.status,
+                    "stage": competition.stage,
+                    "participant_count": self._participant_count(competition.id),
+                    **dict(extra or {}),
+                },
+                aggregate_id=competition.id,
+                aggregate_type="competition",
+                partition_key=competition.id,
+                producer="competition_orchestrator",
+            )
+        )
+
     def _audit_competition_action(
         self,
         *,
@@ -271,17 +295,15 @@ class CompetitionOrchestrator:
         )
         self.session.commit()
         self.session.refresh(competition)
-        self.event_publisher.publish(
-            DomainEvent(
-                name="competition_created",
-                payload={
-                    "competition_id": competition.id,
-                    "source_type": competition.source_type,
-                    "entry_fee_minor": competition.entry_fee_minor,
-                    "currency": competition.currency,
-                    "reward_pool_type": reward_pool.pool_type,
-                },
-            )
+        self._publish_competition_update(
+            event_name="competition.created",
+            competition=competition,
+            extra={
+                "source_type": competition.source_type,
+                "entry_fee_minor": competition.entry_fee_minor,
+                "currency": competition.currency,
+                "reward_pool_type": reward_pool.pool_type,
+            },
         )
         return self._to_summary(competition)
 
@@ -368,6 +390,10 @@ class CompetitionOrchestrator:
         )
         self.session.commit()
         self.session.refresh(competition)
+        self._publish_competition_update(
+            event_name="competition.updated",
+            competition=competition,
+        )
         return self._to_summary(competition)
 
     def publish(self, competition_id: str, *, open_for_join: bool = True) -> CompetitionSummaryView | None:
@@ -388,6 +414,11 @@ class CompetitionOrchestrator:
         )
         self.session.commit()
         self.session.refresh(competition)
+        self._publish_competition_update(
+            event_name="competition.published",
+            competition=competition,
+            extra={"open_for_join": open_for_join},
+        )
         return self._to_summary(competition)
 
     def get(self, competition_id: str, *, user_id: str | None = None, invite_code: str | None = None) -> CompetitionSummaryView | None:
@@ -592,6 +623,11 @@ class CompetitionOrchestrator:
         self.auto_runner.run_until_idle(competition)
         self.session.commit()
         self.session.refresh(competition)
+        self._publish_competition_update(
+            event_name="competition.joined",
+            competition=competition,
+            extra={"user_id": user_id},
+        )
         return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
 
     def leave(self, competition_id: str, *, user_id: str) -> CompetitionSummaryView | None:
@@ -654,6 +690,11 @@ class CompetitionOrchestrator:
         )
         self.session.commit()
         self.session.refresh(competition)
+        self._publish_competition_update(
+            event_name="competition.left",
+            competition=competition,
+            extra={"user_id": user_id},
+        )
         return self._to_summary(competition, user_id=user_id)
 
     def create_invite(
@@ -1788,7 +1829,6 @@ class CompetitionOrchestrator:
             uses=invite.uses,
             note=(invite.metadata_json or {}).get("note"),
         )
-        visibility_rules = self._build_visibility_rules(competition.id, payload.visibility_rules)
 
     def _validate_against_thread_a_domain(self, payload: CompetitionCreateRequest) -> None:
         if payload.capacity < USER_COMPETITION_MIN_PARTICIPANTS:
@@ -1880,9 +1920,13 @@ def backend_competition_create_request(
 
 
 def get_competition_orchestrator(
+    request: Request,
     session: Session = Depends(get_session),
 ) -> CompetitionOrchestrator:
-    return CompetitionOrchestrator(session=session)
+    return CompetitionOrchestrator(
+        session=session,
+        event_publisher=getattr(request.app.state, "event_publisher", InMemoryEventPublisher()),
+    )
 
 
 __all__ = ["CompetitionActionError", "CompetitionOrchestrator", "get_competition_orchestrator"]

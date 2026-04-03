@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.cache import HotPathCache
 from app.common.enums.match_status import MatchStatus
 from app.core.config import Settings, get_settings
 from app.db import get_session
@@ -300,6 +301,10 @@ def read_post_match_analytics(
 @legacy_router.get("/live-feed/{match_key}", response_model=MatchLiveFeedView)
 @api_router.get("/live-feed/{match_key}", response_model=MatchLiveFeedView)
 def read_match_live_feed(match_key: str, request: Request) -> MatchLiveFeedView:
+    cached_feed = _read_cached_live_feed(request, match_key)
+    if cached_feed is not None:
+        return cached_feed
+
     archive = ensure_replay_archive(request.app)
     record = archive.repository.get_latest_record(f"replay:{match_key}")
     countdown = None
@@ -338,6 +343,88 @@ def read_match_live_feed(match_key: str, request: Request) -> MatchLiveFeedView:
         timeline_events=timeline_events,
         availability=_build_availability(record, timeline_events),
     )
+
+
+def _read_cached_live_feed(request: Request, match_key: str) -> MatchLiveFeedView | None:
+    cache_backend = getattr(request.app.state, "cache_backend", None)
+    if cache_backend is None:
+        return None
+
+    hot_cache = HotPathCache(cache_backend)
+    state = hot_cache.get_match_state(match_key)
+    if not isinstance(state, dict):
+        return None
+
+    events = hot_cache.get_match_events(match_key)
+    timeline_events = []
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        timeline_events.append(
+            MatchLiveFeedEventView(
+                event_id=str(item.get("event_id") or ""),
+                minute=int(item.get("minute") or 0),
+                event_type=str(item.get("event_type") or ""),
+                team_id=item.get("team_id"),
+                team_name=item.get("team"),
+                player_name=item.get("player"),
+                secondary_player_name=item.get("secondary_player"),
+                description=item.get("commentary"),
+                home_score=int(item.get("home_score") or 0),
+                away_score=int(item.get("away_score") or 0),
+                is_penalty=bool(item.get("is_penalty")),
+            )
+        )
+    snapshot = state.get("snapshot") if isinstance(state.get("snapshot"), dict) else {}
+    score = snapshot.get("score") if isinstance(snapshot.get("score"), dict) else {}
+    status_raw = str(snapshot.get("status") or "in_progress").strip().lower()
+    status = MatchStatus.COMPLETED if status_raw == "completed" else MatchStatus.IN_PROGRESS
+    return MatchLiveFeedView(
+        match_id=str(state.get("match_id") or match_key),
+        home_team_name=str(state.get("home_team_name") or _resolve_cached_team_name(events, key="home_team_name", fallback="Home Club")),
+        away_team_name=str(state.get("away_team_name") or _resolve_cached_team_name(events, key="away_team_name", fallback="Away Club")),
+        home_score=int(score.get("home") or 0),
+        away_score=int(score.get("away") or 0),
+        status=status,
+        minute=int(snapshot.get("current_minute") or 0),
+        phase=_phase_from_cached_status(status=status, minute=int(snapshot.get("current_minute") or 0)),
+        timeline_events=timeline_events,
+        availability=MatchMediaAvailabilityView(
+            halftime_analytics_available=False,
+            key_moments_available=bool(timeline_events),
+            highlights_available=bool(timeline_events),
+            replay_available=status is MatchStatus.COMPLETED,
+            archive_available=status is MatchStatus.COMPLETED,
+            download_available=False,
+        ),
+    )
+
+
+def _resolve_cached_team_name(
+    events: list[dict[str, object]],
+    *,
+    key: str,
+    fallback: str,
+) -> str:
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        metadata = item.get("metadata")
+        if isinstance(metadata, dict):
+            value = metadata.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return fallback
+
+
+def _phase_from_cached_status(*, status: MatchStatus, minute: int) -> str:
+    if status is MatchStatus.COMPLETED:
+        return "full_time"
+    if minute == 45:
+        return "halftime"
+    if minute >= 46:
+        return "second_half"
+    return "first_half"
 
 
 @legacy_router.get("/highlights/{match_key}", response_model=MatchHighlightListView)

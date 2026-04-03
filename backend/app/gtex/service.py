@@ -817,6 +817,9 @@ class CreatorMarketService(GtexBaseService):
                 "buyer_id": buyer.id,
                 "shares": str(trade.shares),
                 "price": str(trade.price),
+                "current_price": str(asset.current_price),
+                "available_shares": int(asset.available_shares),
+                "circulating_shares": int(asset.circulating_shares),
                 "gross_amount": str(trade.gross_amount),
                 "anomaly_flag": trade.anomaly_flag,
             },
@@ -951,6 +954,9 @@ class CreatorMarketService(GtexBaseService):
                 "seller_id": seller.id,
                 "shares": str(trade.shares),
                 "price": str(trade.price),
+                "current_price": str(asset.current_price),
+                "available_shares": int(asset.available_shares),
+                "circulating_shares": int(asset.circulating_shares),
                 "gross_amount": str(trade.gross_amount),
                 "anomaly_flag": trade.anomaly_flag,
             },
@@ -2478,17 +2484,3 @@ class AiLeagueService(GtexBaseService):
         if roll < 0.90:
             return "save"
         return "turnover"
-        defer_session_callback_until_commit(
-            session,
-            callback=lambda balance=self._amount(round_record.current_balance): self.state_store.set_decimal(
-                redis_keys.jackpot_balance(),
-                balance,
-            ),
-        )
-        defer_session_callback_until_commit(
-            session,
-            callback=lambda body=dict(payload): self.state_store.set_json(
-                redis_keys.jackpot_trigger_state(),
-                body,
-            ),
-        )

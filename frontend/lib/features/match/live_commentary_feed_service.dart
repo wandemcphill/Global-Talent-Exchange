@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/services/reliability/reliable_event_queue.dart';
 import 'package:gte_frontend/services/reliability/reliable_websocket_manager.dart';
@@ -21,13 +22,22 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
     GteAppConfig? config,
     LiveCommentaryFeedService? fallback,
     LiveMatchSessionService? sessionService,
+    GteExchangeApiClient? api,
   }) : _config = config ?? GteAppConfig.fromEnvironment(),
-       _sessionService = sessionService ?? LiveMatchSessionService(config: config),
-        _fallback = fallback ?? const StaticLiveCommentaryFeedService();
+       _sessionService =
+           sessionService ?? LiveMatchSessionService(config: config),
+       _fallback = fallback ?? const StaticLiveCommentaryFeedService(),
+       _api =
+           api ??
+           GteExchangeApiClient.standard(
+             baseUrl: (config ?? GteAppConfig.fromEnvironment()).apiBaseUrl,
+             mode: (config ?? GteAppConfig.fromEnvironment()).backendMode,
+           );
 
   final GteAppConfig _config;
   final LiveMatchSessionService _sessionService;
   final LiveCommentaryFeedService _fallback;
+  final GteExchangeApiClient _api;
 
   @override
   Stream<List<LiveMatchEvent>> watch({
@@ -40,33 +50,85 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
     return Stream<List<LiveMatchEvent>>.multi((
       MultiStreamController<List<LiveMatchEvent>> controller,
     ) {
-      controller.add(List<LiveMatchEvent>.unmodifiable(_sortEvents(seedEvents)));
+      List<LiveMatchEvent> merged = _sortEvents(seedEvents);
+      controller.add(List<LiveMatchEvent>.unmodifiable(merged));
 
       StreamSubscription<List<LiveMatchEvent>>? relaySubscription;
+      Timer? fallbackTimer;
 
       () async {
         final session = await _sessionService.resolveSession(matchId);
         final Uri? socketUri = _sessionService.resolveWebSocketUri(
           session?.commentaryWebsocketPath,
         );
+        Future<void> pollCommentary() async {
+          final Map<String, Object?> payload = await _api.fetchMatchLiveFeed(
+            matchId,
+          );
+          final List<dynamic> rawTimeline =
+              payload['timeline_events'] is List
+                  ? payload['timeline_events'] as List<dynamic>
+                  : const <dynamic>[];
+          final List<LiveMatchEvent> events = rawTimeline
+              .map(
+                (dynamic value) =>
+                    WebSocketLiveCommentaryFeedService.parseEventValue(
+                      value,
+                      fallbackMinute: merged.isEmpty ? 0 : merged.last.minute,
+                    ),
+              )
+              .whereType<LiveMatchEvent>()
+              .toList(growable: false);
+          if (events.isNotEmpty) {
+            merged = WebSocketLiveCommentaryFeedService._mergeEvents(
+              merged,
+              events,
+            );
+            controller.add(List<LiveMatchEvent>.unmodifiable(merged));
+          }
+        }
+
+        void startFallbackPolling({required bool syncImmediately}) {
+          if (syncImmediately) {
+            unawaited(pollCommentary());
+          }
+          fallbackTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+            unawaited(pollCommentary());
+          });
+        }
+
+        void stopFallbackPolling() {
+          fallbackTimer?.cancel();
+          fallbackTimer = null;
+        }
+
         if (socketUri == null) {
-          relaySubscription = _fallback
-              .watch(matchId: matchId, seedEvents: seedEvents)
-              .listen(
-                (List<LiveMatchEvent> events) => controller.add(events),
-                onError: (_) {},
-              );
+          startFallbackPolling(syncImmediately: true);
           return;
         }
         relaySubscription = WebSocketLiveCommentaryFeedService(
           socketUri: socketUri,
-        ).watch(matchId: matchId, seedEvents: seedEvents).listen(
-              (List<LiveMatchEvent> events) => controller.add(events),
-              onError: (_) {},
-            );
+          onSocketStateChanged: (ReliableWebSocketState state) {
+            if (state == ReliableWebSocketState.connected) {
+              stopFallbackPolling();
+              return;
+            }
+            if (state == ReliableWebSocketState.connecting ||
+                state == ReliableWebSocketState.disconnected ||
+                state == ReliableWebSocketState.reconnecting) {
+              startFallbackPolling(syncImmediately: true);
+            }
+          },
+        ).watch(matchId: matchId, seedEvents: merged).listen((
+          List<LiveMatchEvent> events,
+        ) {
+          merged = events;
+          controller.add(List<LiveMatchEvent>.unmodifiable(merged));
+        }, onError: (_) {});
       }();
 
       controller.onCancel = () async {
+        fallbackTimer?.cancel();
         await relaySubscription?.cancel();
       };
     });
@@ -91,10 +153,12 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
   WebSocketLiveCommentaryFeedService({
     required this.socketUri,
     this.managerFactory,
+    this.onSocketStateChanged,
   });
 
   final Uri socketUri;
   final ReliableWebSocketManager Function(Uri socketUri)? managerFactory;
+  final void Function(ReliableWebSocketState state)? onSocketStateChanged;
 
   @override
   Stream<List<LiveMatchEvent>> watch({
@@ -108,6 +172,7 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
       controller.add(List<LiveMatchEvent>.unmodifiable(merged));
 
       StreamSubscription<dynamic>? subscription;
+      StreamSubscription<ReliableWebSocketState>? stateSubscription;
       final ReliableWebSocketManager manager =
           managerFactory?.call(socketUri) ??
           ReliableWebSocketManager(
@@ -128,10 +193,16 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
         merged = _mergeEvents(merged, incoming);
         controller.add(List<LiveMatchEvent>.unmodifiable(merged));
       }, onError: (_) {});
+      stateSubscription = manager.connectionStates.listen((
+        ReliableWebSocketState state,
+      ) {
+        onSocketStateChanged?.call(state);
+      });
       manager.connect();
 
       controller.onCancel = () async {
         await subscription?.cancel();
+        await stateSubscription?.cancel();
         await manager.dispose();
       };
     });
@@ -149,7 +220,7 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
       return decoded
           .map(
             (Object? value) =>
-                _parseEventValue(value, fallbackMinute: fallbackMinute),
+                parseEventValue(value, fallbackMinute: fallbackMinute),
           )
           .whereType<LiveMatchEvent>()
           .toList(growable: false);
@@ -161,13 +232,13 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
         return embeddedEvents
             .map(
               (Object? value) =>
-                  _parseEventValue(value, fallbackMinute: fallbackMinute),
+                  parseEventValue(value, fallbackMinute: fallbackMinute),
             )
             .whereType<LiveMatchEvent>()
             .toList(growable: false);
       }
     }
-    final LiveMatchEvent? event = _parseEventValue(
+    final LiveMatchEvent? event = parseEventValue(
       decoded,
       fallbackMinute: fallbackMinute,
     );
@@ -189,7 +260,7 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
     return message;
   }
 
-  static LiveMatchEvent? _parseEventValue(
+  static LiveMatchEvent? parseEventValue(
     Object? value, {
     required int fallbackMinute,
   }) {
@@ -235,6 +306,12 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
         _stringValue(payload, 'eventType') ??
         _stringValue(payload, 'type') ??
         '';
+    final String normalizedEventType = eventTypeRaw.trim().toLowerCase();
+    if (normalizedEventType == 'subscription_ack' ||
+        normalizedEventType == 'pong' ||
+        normalizedEventType == 'ping') {
+      return null;
+    }
     final LiveMatchEventType type = _eventTypeFromRaw(eventTypeRaw);
     final String team =
         _stringValue(payload, 'team_name') ??
@@ -256,6 +333,9 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
         _defaultTitleFor(type: type, team: team);
 
     if (title.trim().isEmpty && detail.trim().isEmpty) {
+      return null;
+    }
+    if (normalizedEventType == 'match_update' && detail.trim().isEmpty) {
       return null;
     }
     return LiveMatchEvent(

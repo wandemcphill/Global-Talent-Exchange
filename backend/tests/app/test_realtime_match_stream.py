@@ -159,7 +159,6 @@ def test_match_stream_websocket_endpoint_accepts_connections(realtime_app) -> No
             payload = websocket.receive_json()
 
     assert payload == {
-        "type": "subscribed",
-        "match_id": "match-123",
-        "channel": "match:match-123:events",
+        "type": "subscription_ack",
+        "data": {"topics": ["match:match-123", "commentary:match-123"]},
     }

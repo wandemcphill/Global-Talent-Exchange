@@ -57,6 +57,8 @@ def main() -> None:
         team_factory=SyntheticSquadFactory(session_factory=context.database.session_factory),
         match_stream_service=match_stream_service,
         cache_backend=context.cache_backend,
+        stream_update_interval_seconds=settings.match_stream_interval_seconds,
+        stream_cache_ttl_seconds=settings.match_stream_cache_ttl_seconds,
     )
     replay_archive = ReplayArchiveService(
         spectator_policy=SpectatorVisibilityPolicyService(),
