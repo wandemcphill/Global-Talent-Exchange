@@ -69,33 +69,8 @@ class RegisterRequest(BaseModel):
     def normalize_full_name(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        candidate = value.strip().lower()
-        if not candidate:
-            return None
-        return candidate
-
-    @field_validator("full_name")
-    @classmethod
-    def normalize_full_name(cls, value: str) -> str:
         candidate = value.strip()
         return candidate or None
-
-    @field_validator("phone_number")
-    @classmethod
-    def normalize_phone_number(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        candidate = value.strip()
-        return candidate or None
-
-    @field_validator("region_code")
-    @classmethod
-    def normalize_region_code(cls, value: str) -> str:
-        candidate = value.strip().upper()
-        if not candidate:
-            raise ValueError("Region code is required.")
-        return candidate
-
 
     @field_validator("phone_number")
     @classmethod
@@ -114,8 +89,6 @@ class RegisterRequest(BaseModel):
         if not candidate:
             return None
         return candidate
-
-
 
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")

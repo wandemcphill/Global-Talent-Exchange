@@ -129,6 +129,7 @@ class InMemoryMarketRepository:
 class RedisMarketRepository:
     redis_url: str
     key_prefix: str = "gte:market_repository"
+    client: Redis = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         self.client = Redis.from_url(self.redis_url, decode_responses=True)
