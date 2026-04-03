@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 from alembic import command
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker

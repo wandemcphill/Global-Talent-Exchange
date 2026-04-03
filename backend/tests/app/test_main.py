@@ -78,21 +78,18 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
 
     assert get_session in app.dependency_overrides
     assert health_response.status_code == 200
-    assert health_response.json() == {"status": "ok"}
+    health_payload = health_response.json()
+    assert health_payload["status"] == "ok"
+    assert health_payload["checks"]["api"] == {"status": "ok", "detail": None}
+    assert health_payload["checks"]["database"] == {"status": "ok", "detail": None}
+    assert health_payload["checks"]["redis"] == {"status": "skipped", "detail": "Redis is not configured."}
     assert ready_response.status_code == 200
-    assert ready_response.json() == {
-        "status": "ready",
-        "checks": {
-            "database": {
-                "status": "ok",
-                "detail": None,
-            },
-            "schema": {
-                "status": "ok",
-                "detail": None,
-            },
-        },
-    }
+    ready_payload = ready_response.json()
+    assert ready_payload["status"] == "ready"
+    assert ready_payload["checks"]["api"] == {"status": "ok", "detail": None}
+    assert ready_payload["checks"]["database"] == {"status": "ok", "detail": None}
+    assert ready_payload["checks"]["redis"] == {"status": "skipped", "detail": "Redis is not configured."}
+    assert ready_payload["checks"]["schema"] == {"status": "ok", "detail": None}
     assert version_response.status_code == 200
     assert version_response.json() == {
         "app_name": app.state.settings.app_name,
@@ -247,15 +244,11 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
         response = client.get("/ready")
 
     assert response.status_code == 503
-    assert response.json() == {
-        "status": "not_ready",
-        "checks": {
-            "database": {
-                "status": "error",
-                "detail": "db offline",
-            }
-        },
-    }
+    payload = response.json()
+    assert payload["status"] == "not_ready"
+    assert payload["checks"]["api"] == {"status": "ok", "detail": None}
+    assert payload["checks"]["database"] == {"status": "error", "detail": "db offline"}
+    assert payload["checks"]["redis"] == {"status": "skipped", "detail": "Redis is not configured."}
 
 
 def test_app_startup_fails_when_schema_smoke_fails_even_without_migration_upgrade(monkeypatch, tmp_path) -> None:
@@ -288,15 +281,12 @@ def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(monkeypatch, t
         ready_response = client.get("/ready")
 
     assert ready_response.status_code == 200
-    assert ready_response.json() == {
-        "status": "ready",
-        "checks": {
-            "database": {
-                "status": "ok",
-                "detail": None,
-            }
-        },
-    }
+    payload = ready_response.json()
+    assert payload["status"] == "ready"
+    assert payload["checks"]["api"] == {"status": "ok", "detail": None}
+    assert payload["checks"]["database"] == {"status": "ok", "detail": None}
+    assert payload["checks"]["redis"] == {"status": "skipped", "detail": "Redis is not configured."}
+    assert "schema" not in payload["checks"]
 
 
 @pytest.mark.anyio
@@ -311,7 +301,7 @@ async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and
                     email="fan@example.com",
                     username="fanuser",
                     password="SuperSecret1",
-                    display_name="Fan User",
+                    full_name="Fan User",
                 ),
                 session,
             )
