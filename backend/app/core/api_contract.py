@@ -122,6 +122,8 @@ def register_versioned_route_aliases(app: FastAPI, routes: Iterable[object]) -> 
 def build_versioned_path(path: str) -> str | None:
     if path.startswith(API_VERSION_PREFIX):
         return None
+    if path == "/":
+        return None
     if any(_path_matches_prefix(path, prefix) for prefix in _ALIAS_EXCLUDED_PREFIXES):
         return None
     if path == "/api":

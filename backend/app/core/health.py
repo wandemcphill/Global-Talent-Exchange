@@ -47,6 +47,15 @@ class DiagnosticsResponse(BaseModel):
     scaffolding_gaps: list[str]
 
 
+class RootResponse(BaseModel):
+    status: Literal["ok"]
+    app_name: str
+    docs_url: str
+    health_url: str
+    ready_url: str
+    version_url: str
+
+
 class SystemStatusService:
     def build_health(self, request: Request) -> HealthResponse:
         database = request.app.state.context.database
@@ -100,9 +109,13 @@ class SystemStatusService:
         }
         dependency_notes: list[str] = []
         if not checks["frontend_android_wrapper_jar"]:
-            dependency_notes.append("Flutter-managed Android wrapper JAR is missing. Run 'flutter create . --platforms=android' inside frontend/.")
+            dependency_notes.append(
+                "Flutter-managed Android wrapper JAR is missing. Run 'flutter create . --platforms=android' inside frontend/."
+            )
         if not checks["backend_requirements_txt"]:
-            dependency_notes.append("Python dependency manifest is missing or incomplete. Local setup will be guesswork without it.")
+            dependency_notes.append(
+                "Python dependency manifest is missing or incomplete. Local setup will be guesswork without it."
+            )
         scaffolding_gaps: list[str] = []
         if not (backend_root / "app/main.py").exists():
             scaffolding_gaps.append("Backend entrypoint backend/app/main.py is missing.")
@@ -159,6 +172,19 @@ class SystemStatusService:
 
 def get_system_status_service() -> SystemStatusService:
     return SystemStatusService()
+
+
+@router.api_route("/", methods=["GET", "HEAD"], response_model=RootResponse, include_in_schema=False)
+def read_root(request: Request) -> RootResponse:
+    settings = getattr(request.app.state, "settings", get_settings())
+    return RootResponse(
+        status="ok",
+        app_name=settings.app_name,
+        docs_url="/docs",
+        health_url="/health",
+        ready_url="/ready",
+        version_url="/version",
+    )
 
 
 @router.get("/health", response_model=HealthResponse)
