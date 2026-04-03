@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 import json
 import re
 from typing import Any
 from urllib.parse import parse_qsl, urlencode
 
-from fastapi import FastAPI, Request
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.auth.security import TokenError, decode_access_token
