@@ -458,6 +458,7 @@ def build_market_repository(redis_url: str | None) -> MarketRepository:
     if not redis_url:
         return InMemoryMarketRepository()
     repository = RedisMarketRepository(redis_url)
-    if not repository.ping():
-        raise RuntimeError("Redis-backed market repository is unavailable.")
-    return repository
+    if repository.ping():
+        return repository
+    logger.warning("market_repository.redis_unavailable_falling_back_to_memory")
+    return InMemoryMarketRepository()
