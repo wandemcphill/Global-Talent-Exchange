@@ -233,6 +233,34 @@ def test_app_startup_repairs_schema_when_smoke_detects_stale_database(tmp_path) 
     assert revision == target_head
 
 
+def test_app_startup_repairs_stamped_head_database_with_missing_tables(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_stamped_head_schema_repair.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    target_head = ScriptDirectory.from_config(build_alembic_config(str(engine.url))).get_current_head()
+    assert target_head is not None
+
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL PRIMARY KEY)"))
+        connection.execute(
+            text("INSERT INTO alembic_version (version_num) VALUES (:version_num)"), {"version_num": target_head}
+        )
+
+    app = create_app(engine=engine, run_migration_check=False)
+
+    with TestClient(app) as client:
+        ready_response = client.get("/ready")
+
+    assert ready_response.status_code == 200
+    assert ready_response.json()["status"] == "ready"
+
+    with engine.begin() as connection:
+        connection.execute(text("SELECT COUNT(*) FROM wallets")).scalar_one()
+        connection.execute(text("SELECT COUNT(*) FROM event_outbox")).scalar_one()
+        revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+
+    assert revision == target_head
+
+
 def test_ready_returns_service_unavailable_when_database_check_fails(app_and_engine, monkeypatch) -> None:
     app, _engine = app_and_engine
 
