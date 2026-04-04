@@ -308,6 +308,72 @@ def test_auth_session_rebuild_migration_handles_preexisting_table(tmp_path) -> N
     engine.dispose()
 
 
+def test_wallet_profiles_migration_handles_preexisting_tables(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'wallet-profiles-rebuild.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    config = build_alembic_config(database_url)
+
+    command.upgrade(config, "20260401_0080_auth_session_rebuild")
+
+    with engine.begin() as connection:
+        connection.execute(text("""
+                CREATE TABLE user_wallets (
+                    user_id VARCHAR(36) NOT NULL,
+                    balance NUMERIC(20, 4) DEFAULT '0.0000' NOT NULL,
+                    currency VARCHAR(16) DEFAULT 'credit' NOT NULL,
+                    compliance_status VARCHAR(32) DEFAULT 'verified' NOT NULL,
+                    id VARCHAR(36) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+                )
+                """))
+        connection.execute(text("""
+                CREATE TABLE wallet_transactions (
+                    user_id VARCHAR(36) NOT NULL,
+                    type VARCHAR(16) NOT NULL,
+                    amount NUMERIC(20, 4) NOT NULL,
+                    status VARCHAR(32) DEFAULT 'pending' NOT NULL,
+                    reference VARCHAR(128) NOT NULL,
+                    id VARCHAR(36) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+                )
+                """))
+
+    inspector = inspect(engine)
+    assert inspector.has_table("user_wallets")
+    assert inspector.has_table("wallet_transactions")
+    assert inspector.get_indexes("user_wallets") == []
+    assert inspector.get_indexes("wallet_transactions") == []
+
+    command.upgrade(config, "head")
+
+    repaired_inspector = inspect(engine)
+    assert repaired_inspector.has_table("user_wallets")
+    assert repaired_inspector.has_table("wallet_transactions")
+    assert {
+        "ix_user_wallets_user_id",
+    } <= {index["name"] for index in repaired_inspector.get_indexes("user_wallets")}
+    assert {
+        "ix_wallet_transactions_reference",
+        "ix_wallet_transactions_user_id",
+        "ix_wallet_transactions_status",
+        "ix_wallet_transactions_user_created_at",
+    } <= {index["name"] for index in repaired_inspector.get_indexes("wallet_transactions")}
+
+    with engine.connect() as connection:
+        versions = (
+            connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()
+        )
+
+    assert set(versions) == _migration_graph_heads()
+
+    engine.dispose()
+
+
 def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'player-share-repair.db').as_posix()}"
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
