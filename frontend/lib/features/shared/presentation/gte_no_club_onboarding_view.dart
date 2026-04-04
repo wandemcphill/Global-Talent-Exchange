@@ -45,19 +45,6 @@ class GteNoClubOnboardingView extends StatelessWidget {
           onTap: onCreateClub!,
           prominence: _NoClubActionProminence.primary,
         ),
-      if (onBrowseClubMarket != null)
-        _NoClubActionSpec(
-          eyebrow: 'ALTERNATIVE',
-          chipLabel: 'Own an existing club',
-          title: 'Own an existing club',
-          detail:
-              'Browse clubs available for sale, compare value, and take ownership to unlock club management.',
-          icon: Icons.storefront_outlined,
-          accent: GteShellTheme.accentWarm,
-          actionLabel: 'Open club market',
-          onTap: onBrowseClubMarket!,
-          prominence: _NoClubActionProminence.tonal,
-        ),
       if (onExploreArena != null)
         _NoClubActionSpec(
           eyebrow: 'PLAY NOW',
@@ -67,9 +54,22 @@ class GteNoClubOnboardingView extends StatelessWidget {
               'Open live cups, standings, and football storylines while you decide which club to own or back first.',
           icon: Icons.stadium_outlined,
           accent: GteShellTheme.accentArena,
-          actionLabel: 'Open competitions',
+          actionLabel: 'Explore competitions',
           onTap: onExploreArena!,
           prominence: _NoClubActionProminence.outlined,
+        ),
+      if (onBrowseClubMarket != null)
+        _NoClubActionSpec(
+          eyebrow: 'ALTERNATIVE',
+          chipLabel: 'Own an existing club',
+          title: 'Own an existing club',
+          detail:
+              'Browse clubs available for sale, compare value, and take ownership to unlock club management.',
+          icon: Icons.storefront_outlined,
+          accent: GteShellTheme.accentWarm,
+          actionLabel: 'Browse club market',
+          onTap: onBrowseClubMarket!,
+          prominence: _NoClubActionProminence.tonal,
         ),
       if (onOpenMatchday != null)
         _NoClubActionSpec(
@@ -165,23 +165,23 @@ class GteNoClubOnboardingView extends StatelessWidget {
                     letterSpacing: 1.1,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text(
                   isAuthenticated
                       ? 'This account does not own a club yet'
                       : 'Start with account access, then claim a club',
                   style: Theme.of(context).textTheme.displaySmall,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   isAuthenticated
                       ? 'Create a new club from scratch or take over one already on the market, then come back here to manage identity, trophies, scouting, and matchday operations. You can still enter matchday, the player universe, world/regens, and the GTEX coin wallet right now.'
                       : 'Register or sign in to create a club, but you can already scout the player universe, follow the regen world, open the matchday hub, and inspect the GTEX coin lane before choosing your first club.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 Wrap(spacing: 12, runSpacing: 12, children: overviewChips),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
                 Wrap(spacing: 12, runSpacing: 12, children: overviewActions),
               ],
             ),

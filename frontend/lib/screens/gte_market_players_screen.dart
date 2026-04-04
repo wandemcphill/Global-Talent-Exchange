@@ -549,7 +549,7 @@ class _MarketRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Trading surface split',
+            'Market extensions',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
