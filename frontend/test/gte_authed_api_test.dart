@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 
 void main() {
@@ -146,6 +147,96 @@ void main() {
 
     expect(payload, <String, Object?>{'items': <Object?>[]});
   });
+
+  test(
+    'access-token-only clients recover by refreshing the persisted session',
+    () async {
+      final MemoryAuthSessionStore persistedStore = MemoryAuthSessionStore();
+      await persistedStore.writeSession(
+        const AuthSession(
+          userId: 'user-99',
+          accessToken: 'expired-token',
+          refreshToken: 'refresh-token-99',
+          sessionId: 'session-old',
+        ),
+      );
+      final _QueuedTransport transport = _QueuedTransport(
+        <GteTransportResponse>[
+          const GteTransportResponse(
+            statusCode: 401,
+            body: <String, Object?>{'detail': 'Access token has expired.'},
+          ),
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'success': true,
+              'data': <String, Object?>{
+                'user_id': 'user-99',
+                'access_token': 'fresh-token',
+                'refresh_token': 'refresh-token-100',
+                'session_id': 'session-new',
+                'role': 'user',
+              },
+            },
+          ),
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'success': true,
+              'data': <String, Object?>{
+                'user': <String, Object?>{
+                  'id': 'user-99',
+                  'display_name': 'Ayo',
+                },
+                'club': <String, Object?>{},
+                'wallet': <String, Object?>{},
+                'compliance': <String, Object?>{},
+              },
+            },
+          ),
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'success': true,
+              'data': <String, Object?>{'profile': 'ok'},
+            },
+          ),
+        ],
+      );
+      final GteAuthedApi client = GteAuthedApi(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        accessToken: 'stale-param-token',
+        fallbackAuthSessionStore: persistedStore,
+        mode: GteBackendMode.live,
+      );
+
+      final Map<String, dynamic> payload = await client.getMap(
+        '/api/creators/me/summary',
+      );
+
+      expect(payload, <String, Object?>{'profile': 'ok'});
+      expect(transport.requests, hasLength(4));
+      expect(
+        transport.requests.first.headers['Authorization'],
+        'Bearer expired-token',
+      );
+      expect(transport.requests[1].uri.path, '/api/v1/auth/refresh');
+      expect(
+        transport.requests[2].headers['Authorization'],
+        'Bearer fresh-token',
+      );
+      expect(
+        transport.requests.last.headers['Authorization'],
+        'Bearer fresh-token',
+      );
+      expect((await persistedStore.readSession())?.accessToken, 'fresh-token');
+      expect((await persistedStore.readSession())?.sessionId, 'session-new');
+    },
+  );
 }
 
 String _jwtToken(Map<String, Object?> payload) {
@@ -177,5 +268,21 @@ class _RecordingTransport implements GteTransport {
   Future<GteTransportResponse> send(GteTransportRequest request) async {
     requests.add(request);
     return response;
+  }
+}
+
+class _QueuedTransport implements GteTransport {
+  _QueuedTransport(this.responses);
+
+  final List<GteTransportResponse> responses;
+  final List<GteTransportRequest> requests = <GteTransportRequest>[];
+
+  @override
+  Future<GteTransportResponse> send(GteTransportRequest request) async {
+    requests.add(request);
+    if (responses.isEmpty) {
+      throw StateError('No queued response for ${request.uri}');
+    }
+    return responses.removeAt(0);
   }
 }

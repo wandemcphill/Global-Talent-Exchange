@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -12,7 +13,13 @@ from app.governance_engine.service import GovernanceEngineService
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
-from app.models.governance_engine import GovernanceProposalScope, GovernanceVoteChoice
+from app.models.governance_engine import (
+    GovernanceProposal,
+    GovernanceProposalScope,
+    GovernanceProposalStatus,
+    GovernanceVote,
+    GovernanceVoteChoice,
+)
 from app.models.user import User
 
 
@@ -34,6 +41,21 @@ def _create_user(session, *, user_id: str, email: str, username: str) -> User:
     session.add(user)
     session.flush()
     return user
+
+
+def test_governance_enums_bind_postgres_values_in_lowercase() -> None:
+    dialect = postgresql.dialect()
+
+    scope_processor = GovernanceProposal.__table__.c.scope.type.bind_processor(dialect)
+    status_processor = GovernanceProposal.__table__.c.status.type.bind_processor(dialect)
+    choice_processor = GovernanceVote.__table__.c.choice.type.bind_processor(dialect)
+
+    assert scope_processor is not None
+    assert status_processor is not None
+    assert choice_processor is not None
+    assert scope_processor(GovernanceProposalScope.CLUB) == "club"
+    assert status_processor(GovernanceProposalStatus.OPEN) == "open"
+    assert choice_processor(GovernanceVoteChoice.YES) == "yes"
 
 
 def test_governance_uses_canonical_creator_shares_for_votes_and_panel(session) -> None:
@@ -74,7 +96,9 @@ def test_governance_uses_canonical_creator_shares_for_votes_and_panel(session) -
             shareholder_revenue_share_bps=2000,
             total_purchase_volume_coin=Decimal("50.0000"),
             total_revenue_distributed_coin=Decimal("0.0000"),
-            metadata_json={"governance_policy": {"proposal_share_threshold": 5, "quorum_share_bps": 1000, "max_holder_bps": 1000}},
+            metadata_json={
+                "governance_policy": {"proposal_share_threshold": 5, "quorum_share_bps": 1000, "max_holder_bps": 1000}
+            },
         )
     )
     session.add(

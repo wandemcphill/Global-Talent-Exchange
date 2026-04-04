@@ -12,6 +12,7 @@ class GteAuthedApi {
     this.accessToken,
     this.authSession,
     this.authSessionStore,
+    this.fallbackAuthSessionStore,
     this.onSessionChanged,
     this.deviceId,
     this.mode = GteBackendMode.live,
@@ -22,6 +23,7 @@ class GteAuthedApi {
   final String? accessToken;
   final AuthSession? authSession;
   final AuthSessionStore? authSessionStore;
+  final AuthSessionStore? fallbackAuthSessionStore;
   final Future<void> Function(AuthSession? session)? onSessionChanged;
   final String? deviceId;
   final GteBackendMode mode;
@@ -176,8 +178,18 @@ class GteAuthedApi {
   }
 
   Future<AuthSession?> _readCurrentSession() async {
-    final AuthSession? stored = await authSessionStore?.readSession();
-    return stored ?? authSession;
+    for (final AuthSessionStore store in _sessionStores()) {
+      try {
+        final AuthSession? stored = await store.readSession();
+        if (stored != null) {
+          return stored;
+        }
+      } catch (_) {
+        // Widget tests and fixture-only flows may not have a secure-storage
+        // backend. In that case, fall back to the in-memory session.
+      }
+    }
+    return authSession;
   }
 
   Future<bool> _refreshSession(AuthSession? currentSession) async {
@@ -231,19 +243,53 @@ class GteAuthedApi {
     if (response.statusCode >= 400 || normalizedPayload is! Map) {
       return session;
     }
-    return session.mergeProfile(
-      Map<String, Object?>.from(normalizedPayload),
-    );
+    return session.mergeProfile(Map<String, Object?>.from(normalizedPayload));
   }
 
   Future<void> _persistSession(AuthSession session) async {
-    await authSessionStore?.writeSession(session);
+    for (final AuthSessionStore store in _sessionStores()) {
+      try {
+        await store.writeSession(session);
+      } catch (_) {
+        // Ignore storage backends that are unavailable in the current runtime.
+      }
+    }
     await onSessionChanged?.call(session);
   }
 
   Future<void> _clearSession() async {
-    await authSessionStore?.writeSession(null);
+    for (final AuthSessionStore store in _sessionStores()) {
+      try {
+        await store.writeSession(null);
+      } catch (_) {
+        // Ignore storage backends that are unavailable in the current runtime.
+      }
+    }
     await onSessionChanged?.call(null);
+  }
+
+  List<AuthSessionStore> _sessionStores() {
+    final List<AuthSessionStore> stores = <AuthSessionStore>[];
+
+    void addStore(AuthSessionStore? store) {
+      if (store == null) {
+        return;
+      }
+      if (stores.any((AuthSessionStore item) => identical(item, store))) {
+        return;
+      }
+      stores.add(store);
+    }
+
+    addStore(authSessionStore);
+    addStore(fallbackAuthSessionStore);
+    final String resolvedAccessToken = (accessToken ?? '').trim();
+    if (resolvedAccessToken.isNotEmpty &&
+        authSessionStore == null &&
+        fallbackAuthSessionStore == null) {
+      addStore(SecureAuthSessionStore());
+    }
+    return stores;
   }
 }
 

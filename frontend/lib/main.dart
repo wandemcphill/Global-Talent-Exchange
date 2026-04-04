@@ -10,6 +10,7 @@ import 'data/gte_models.dart';
 import 'providers/gte_exchange_controller.dart';
 import 'shared/auth/auth_identity_store.dart';
 import 'shared/models/auth_session.dart';
+import 'shared/providers/auth_provider.dart';
 import 'theme/gte_theme_controller.dart';
 import 'theme/gte_theme_registry.dart';
 
@@ -45,6 +46,13 @@ Future<void> main() async {
 
   runApp(
     ProviderScope(
+      overrides: [
+        authSessionStoreProvider.overrideWithValue(authSessionStore),
+        deviceIdentityStoreProvider.overrideWithValue(
+          SecureDeviceIdentityStore(),
+        ),
+        initialAuthSessionProvider.overrideWithValue(storedSession),
+      ],
       child: GtexApp(themeController: themeController),
     ),
   );

@@ -27,16 +27,36 @@ class GovernanceVoteChoice(str, Enum):
     ABSTAIN = "abstain"
 
 
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [str(member.value) for member in enum_cls]
+
+
 class GovernanceProposal(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "governance_proposals"
 
-    club_id: Mapped[str | None] = mapped_column(ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=True, index=True)
-    proposer_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    club_id: Mapped[str | None] = mapped_column(
+        ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    proposer_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     scope: Mapped[GovernanceProposalScope] = mapped_column(
-        SqlEnum(GovernanceProposalScope, name="governanceproposalscope"), nullable=False, default=GovernanceProposalScope.CLUB
+        SqlEnum(
+            GovernanceProposalScope,
+            name="governanceproposalscope",
+            values_callable=_enum_values,
+        ),
+        nullable=False,
+        default=GovernanceProposalScope.CLUB,
     )
     status: Mapped[GovernanceProposalStatus] = mapped_column(
-        SqlEnum(GovernanceProposalStatus, name="governanceproposalstatus"), nullable=False, default=GovernanceProposalStatus.OPEN
+        SqlEnum(
+            GovernanceProposalStatus,
+            name="governanceproposalstatus",
+            values_callable=_enum_values,
+        ),
+        nullable=False,
+        default=GovernanceProposalStatus.OPEN,
     )
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
@@ -55,14 +75,23 @@ class GovernanceProposal(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 class GovernanceVote(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "governance_votes"
-    __table_args__ = (
-        UniqueConstraint("proposal_id", "voter_user_id", name="uq_governance_votes_proposal_user"),
-    )
+    __table_args__ = (UniqueConstraint("proposal_id", "voter_user_id", name="uq_governance_votes_proposal_user"),)
 
-    proposal_id: Mapped[str] = mapped_column(ForeignKey("governance_proposals.id", ondelete="CASCADE"), nullable=False, index=True)
+    proposal_id: Mapped[str] = mapped_column(
+        ForeignKey("governance_proposals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     voter_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    club_id: Mapped[str | None] = mapped_column(ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=True, index=True)
-    choice: Mapped[GovernanceVoteChoice] = mapped_column(SqlEnum(GovernanceVoteChoice, name="governancevotechoice"), nullable=False)
+    club_id: Mapped[str | None] = mapped_column(
+        ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    choice: Mapped[GovernanceVoteChoice] = mapped_column(
+        SqlEnum(
+            GovernanceVoteChoice,
+            name="governancevotechoice",
+            values_callable=_enum_values,
+        ),
+        nullable=False,
+    )
     token_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     influence_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
