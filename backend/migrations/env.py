@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from alembic import context
-from sqlalchemy import create_engine, pool
+from sqlalchemy import create_engine, pool, text
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -50,6 +50,32 @@ if config.config_file_name is not None:
 target_metadata = get_target_metadata()
 
 
+def _ensure_alembic_version_capacity(connection) -> None:
+    """Widen Alembic's version column before long revision IDs are applied."""
+    version_type = connection.execute(
+        text(
+            """
+            SELECT data_type, character_maximum_length
+            FROM information_schema.columns
+            WHERE table_name = 'alembic_version'
+              AND column_name = 'version_num'
+            """
+        )
+    ).fetchone()
+    if version_type is None:
+        return
+
+    data_type, max_length = version_type
+    if data_type != "character varying":
+        return
+    if max_length is not None and max_length >= 255:
+        return
+
+    connection.execute(
+        text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)")
+    )
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -71,6 +97,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        _ensure_alembic_version_capacity(connection)
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
