@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/gte_app_config.dart';
 import 'app/gte_frontend_app.dart';
@@ -10,7 +11,10 @@ import 'providers/gte_exchange_controller.dart';
 import 'shared/auth/auth_identity_store.dart';
 import 'shared/models/auth_session.dart';
 import 'theme/gte_theme_controller.dart';
-import 'theme/gte_theme_metadata.dart';
+import 'theme/gte_theme_registry.dart';
+
+late GteAppConfig _bootstrapConfig;
+late GteExchangeController _bootstrapController;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +23,7 @@ Future<void> main() async {
   final AuthSession? storedSession = await authSessionStore.readSession();
   // Ship the richer GTEX football shell by default on web builds.
   final GteThemeController themeController = await GteThemeController.bootstrap(
-    initialThemeId: GteThemeId.foundersBlack,
+    initialThemeId: GteThemeRegistry.defaultTheme.metadata.id,
   );
   final GteExchangeController controller = GteExchangeController(
     api: GteExchangeApiClient.standard(
@@ -30,16 +34,40 @@ Future<void> main() async {
   );
   if (storedSession != null) {
     controller.session = GteAuthSession.fromJson(
-      storedSession.rawJson.isNotEmpty ? storedSession.rawJson : storedSession.toJson(),
+      storedSession.rawJson.isNotEmpty
+          ? storedSession.rawJson
+          : storedSession.toJson(),
     );
     unawaited(controller.refreshAccount());
   }
+  _bootstrapConfig = appConfig;
+  _bootstrapController = controller;
 
   runApp(
-    GteFrontendApp(
-      config: appConfig,
-      themeController: themeController,
-      controller: controller,
+    ProviderScope(
+      child: GtexApp(themeController: themeController),
     ),
   );
+}
+
+class GtexApp extends StatelessWidget {
+  const GtexApp({
+    super.key,
+    this.themeController,
+    this.config,
+    this.controller,
+  });
+
+  final GteThemeController? themeController;
+  final GteAppConfig? config;
+  final GteExchangeController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteFrontendApp(
+      config: config ?? _bootstrapConfig,
+      controller: controller ?? _bootstrapController,
+      themeController: themeController,
+    );
+  }
 }
