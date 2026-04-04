@@ -147,11 +147,12 @@ final Provider<FederationContext?> federationContextProvider =
 final Provider<Match3dUserEntitlement> match3dEntitlementProvider =
     Provider<Match3dUserEntitlement>((Ref ref) {
       final AuthSession? session = ref.watch(authProvider);
+      final bool signedIn = session?.isAuthenticated ?? false;
       final bool premium = _hasMatch3dPremiumAccess(session);
       return Match3dUserEntitlement(
         isPremiumUser: premium,
-        premiumCameraAccess: premium,
-        fastReplayAccess: premium,
+        premiumCameraAccess: signedIn,
+        fastReplayAccess: signedIn,
       );
     });
 

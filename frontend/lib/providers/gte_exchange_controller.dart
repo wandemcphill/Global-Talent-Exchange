@@ -117,6 +117,14 @@ class GteExchangeController extends ChangeNotifier {
   bool isExecutingAdminBuyback(String orderId) =>
       _executingAdminBuybackOrderIds.contains(orderId);
 
+  void syncSession(GteAuthSession? nextSession) {
+    if (_sessionsEquivalent(session, nextSession)) {
+      return;
+    }
+    session = nextSession;
+    notifyListeners();
+  }
+
   bool get hasLoadedOrders =>
       isLoadingOrders ||
       _hasLoadedOrdersOnce ||
@@ -169,6 +177,31 @@ class GteExchangeController extends ChangeNotifier {
     });
     _bootstrapFuture = task;
     return task;
+  }
+
+  bool _sessionsEquivalent(GteAuthSession? left, GteAuthSession? right) {
+    if (identical(left, right)) {
+      return true;
+    }
+    if (left == null || right == null) {
+      return left == right;
+    }
+    if (left.accessToken != right.accessToken ||
+        left.refreshToken != right.refreshToken ||
+        left.sessionId != right.sessionId ||
+        left.user.id != right.user.id ||
+        left.user.role != right.user.role) {
+      return false;
+    }
+    if (left.permissions.length != right.permissions.length) {
+      return false;
+    }
+    for (int index = 0; index < left.permissions.length; index += 1) {
+      if (left.permissions[index] != right.permissions[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> loadMarket({

@@ -35,7 +35,7 @@ void main() {
   });
 
   testWidgets(
-    'non-entitled route blocks before the live viewer contract bootstraps',
+    'signed-in standard sessions still mount the Flutter 3D lane',
     (WidgetTester tester) async {
       final _FakeViewerRepository repository = _FakeViewerRepository(
         viewState: _routeViewState(matchId: 'live-match-001'),
@@ -57,10 +57,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('3D Match Viewer'), findsWidgets);
-      expect(find.text('Route blocked'), findsOneWidget);
-      expect(find.text('FLUTTER_3D'), findsNothing);
-      expect(repository.bootstrapCalls, 0);
-      expect(repository.viewStateCalls, 0);
+      expect(find.text('Route blocked'), findsNothing);
+      expect(find.text('FLUTTER_3D'), findsOneWidget);
+      expect(repository.bootstrapCalls, 1);
+      expect(repository.viewStateCalls, 1);
     },
   );
 
@@ -85,7 +85,7 @@ void main() {
     expect(find.text('FLUTTER_3D'), findsNothing);
   });
 
-  testWidgets('claim loss while on route tears the lane down safely', (
+  testWidgets('sign-out while on route tears the lane down safely', (
     WidgetTester tester,
   ) async {
     final _FakeViewerRepository repository = _FakeViewerRepository(
@@ -115,15 +115,7 @@ void main() {
 
     await container
         .read(appSessionControllerProvider.notifier)
-        .updateSession(
-          const AuthSession(
-            userId: 'basic-user',
-            accessToken: 'token-2',
-            refreshToken: 'refresh-token-2',
-            sessionId: 'session-2',
-            role: 'user',
-          ),
-        );
+        .updateSession(null);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 

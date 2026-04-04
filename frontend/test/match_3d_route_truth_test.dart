@@ -32,7 +32,7 @@ void main() {
     expect(find.text('Route blocked'), findsNothing);
   });
 
-  testWidgets('3D route blocks honestly when entitlement is missing', (
+  testWidgets('3D route stays honest for signed-in standard sessions', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -52,8 +52,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('3D Match Viewer'), findsWidgets);
-    expect(find.text('Route blocked'), findsOneWidget);
-    expect(find.text('FLUTTER_3D'), findsNothing);
+    expect(find.text('Route blocked'), findsNothing);
+    expect(find.text('FLUTTER_3D'), findsOneWidget);
     expect(find.text('NATIVE_3D'), findsNothing);
   });
 }
