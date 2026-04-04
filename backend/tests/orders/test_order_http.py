@@ -636,30 +636,45 @@ def test_order_book_endpoint_returns_aggregated_depth(api_context) -> None:
     _grant_position(session, seller_two, player_id=player.id, quantity=Decimal("1"))
 
     auth_state["user"] = buyer_one
-    assert client.post(
-        "/api/orders",
-        json={"player_id": player.id, "side": "buy", "quantity": 5, "max_price": 10},
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/orders",
+            json={"player_id": player.id, "side": "buy", "quantity": 5, "max_price": 10},
+        ).status_code
+        == 201
+    )
     auth_state["user"] = buyer_two
-    assert client.post(
-        "/api/orders",
-        json={"player_id": player.id, "side": "buy", "quantity": 3, "max_price": 10},
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/orders",
+            json={"player_id": player.id, "side": "buy", "quantity": 3, "max_price": 10},
+        ).status_code
+        == 201
+    )
     auth_state["user"] = buyer_three
-    assert client.post(
-        "/api/orders",
-        json={"player_id": player.id, "side": "buy", "quantity": 2, "max_price": 9},
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/orders",
+            json={"player_id": player.id, "side": "buy", "quantity": 2, "max_price": 9},
+        ).status_code
+        == 201
+    )
     auth_state["user"] = seller_one
-    assert client.post(
-        "/api/orders",
-        json={"player_id": player.id, "side": "sell", "quantity": 4, "max_price": 11},
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/orders",
+            json={"player_id": player.id, "side": "sell", "quantity": 4, "max_price": 11},
+        ).status_code
+        == 201
+    )
     auth_state["user"] = seller_two
-    assert client.post(
-        "/api/orders",
-        json={"player_id": player.id, "side": "sell", "quantity": 1, "max_price": 12},
-    ).status_code == 201
+    assert (
+        client.post(
+            "/api/orders",
+            json={"player_id": player.id, "side": "sell", "quantity": 1, "max_price": 12},
+        ).status_code
+        == 201
+    )
 
     response = client.get(f"/api/orders/book/{player.id}")
 
@@ -815,9 +830,7 @@ def test_admin_buyback_preview_and_execution_follow_p2p_window(api_context) -> N
     _grant_position(session, seller, player_id=player.id, quantity=Decimal("2"))
     session.execute(text("UPDATE ledger_entries SET created_at = DATETIME('now', '-8 days')"))
     session.commit()
-    session.execute(
-        text("ALTER TABLE users ADD COLUMN nationality VARCHAR(120)")
-    )
+    session.execute(text("ALTER TABLE users ADD COLUMN nationality VARCHAR(120)"))
     session.commit()
     session.execute(
         text("UPDATE users SET nationality = 'Nigeria' WHERE id = :user_id"),

@@ -408,8 +408,7 @@ def test_auth_expired_token_refresh_works_and_invalid_token_is_rejected(
     )
     assert invalid_response.status_code == 401
     assert (
-        "invalid" in _error_message(invalid_response).lower()
-        or "session" in _error_message(invalid_response).lower()
+        "invalid" in _error_message(invalid_response).lower() or "session" in _error_message(invalid_response).lower()
     )
 
 
