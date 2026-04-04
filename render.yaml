@@ -22,9 +22,9 @@ services:
       - key: GTE_RUN_MIGRATION_CHECK
         value: "false"
       - key: GTE_AUTH_SECRET
-        generateValue: true
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
-        generateValue: true
+        sync: false
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "false"
       - key: GTE_TASK_QUEUE_ENABLED
