@@ -51,15 +51,14 @@ services:
     startCommand: "cd backend && python -m app.workers.rq_worker_main"
     envVars:
       - key: DATABASE_URL
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: DATABASE_URL
+        fromDatabase:
+          name: gtex-postgres
+          property: connectionString
       - key: GTE_REDIS_URL
         fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_REDIS_URL
+          type: redis
+          name: gtex-cache
+          property: connectionString
       - key: GTE_AUTH_SECRET
         fromService:
           type: web
@@ -86,15 +85,14 @@ services:
     startCommand: "cd backend && python -m app.backbone.simulation_worker_main"
     envVars:
       - key: DATABASE_URL
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: DATABASE_URL
+        fromDatabase:
+          name: gtex-postgres
+          property: connectionString
       - key: GTE_REDIS_URL
         fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_REDIS_URL
+          type: redis
+          name: gtex-cache
+          property: connectionString
       - key: GTE_AUTH_SECRET
         fromService:
           type: web
@@ -119,15 +117,14 @@ services:
     startCommand: "cd backend && python -m app.backbone.outbox_relay_main"
     envVars:
       - key: DATABASE_URL
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: DATABASE_URL
+        fromDatabase:
+          name: gtex-postgres
+          property: connectionString
       - key: GTE_REDIS_URL
         fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_REDIS_URL
+          type: redis
+          name: gtex-cache
+          property: connectionString
       - key: GTE_AUTH_SECRET
         fromService:
           type: web
