@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from threading import Event as ThreadEvent
 
 from app.backbone.kafka import KafkaJsonConsumer
@@ -17,6 +18,13 @@ from app.replay_archive.persistence import DatabaseReplayArchiveRepository
 from app.replay_archive.policy import SpectatorVisibilityPolicyService
 from app.replay_archive.service import ReplayArchiveService
 
+logger = logging.getLogger(__name__)
+
+
+def _park_disabled_worker(*, reason: str) -> None:
+    logger.warning("simulation_worker.idle reason=%s", reason)
+    ThreadEvent().wait()
+
 
 def main() -> None:
     settings = get_settings()
@@ -30,7 +38,11 @@ def main() -> None:
         environment=settings.app_env,
     )
     if not settings.kafka_simulation_consumer_enabled:
-        raise RuntimeError("Simulation worker is disabled. Set GTE_KAFKA_SIMULATION_CONSUMER_ENABLED=true.")
+        _park_disabled_worker(reason="consumer_disabled")
+        return
+    if not settings.kafka_brokers:
+        _park_disabled_worker(reason="no_kafka_brokers")
+        return
     try:
         context = build_application_context(settings=settings)
         configure_tracing(
