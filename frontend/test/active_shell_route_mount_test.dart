@@ -26,7 +26,7 @@ import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets(
-    'router mounts blocked 2D routes, live broadcast, gated Flutter 3D, and admin redirect',
+    'router mounts live 2D routes, live broadcast, gated Flutter 3D, and admin redirect',
     (WidgetTester tester) async {
       final ProviderContainer container = _buildContainer(
         session: const AuthSession(
@@ -52,7 +52,7 @@ void main() {
       router.go(AppRoutes.matchesViewerLocation('live-match-001'));
       await tester.pumpAndSettle();
       expect(find.text('2D Match Viewer'), findsWidgets);
-      expect(find.text('Route blocked'), findsOneWidget);
+      expect(find.text('Route blocked'), findsNothing);
 
       router.go(AppRoutes.matchesBroadcastLocation('live-match-001'));
       await tester.pumpAndSettle();

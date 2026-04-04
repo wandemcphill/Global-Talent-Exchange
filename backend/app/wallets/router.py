@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pathlib import Path
 import json
 from decimal import Decimal
+from typing import Annotated
 from fastapi.routing import APIRoute
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -437,7 +438,7 @@ def get_wallet_profile(
 
 @public_wallet_router.get("/transactions", response_model=list[WalletTransactionRecordView])
 def list_wallet_transactions(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_wallet_user),
     request: Request = None,

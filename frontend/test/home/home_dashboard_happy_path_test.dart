@@ -53,9 +53,11 @@ void main() {
       expect(find.text('HOME ONBOARDING'), findsNothing);
       expect(find.text('Create or join a club to unlock Home'), findsNothing);
 
+      final Finder scrollable = find.byType(Scrollable).first;
+
       await tester.dragUntilVisible(
         find.text('NEXT MATCH'),
-        find.byType(SingleChildScrollView).first,
+        scrollable,
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
@@ -64,7 +66,7 @@ void main() {
 
       await tester.dragUntilVisible(
         find.textContaining('Ibadan Lions FC go in with'),
-        find.byType(SingleChildScrollView).first,
+        scrollable,
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
@@ -73,7 +75,7 @@ void main() {
 
       await tester.dragUntilVisible(
         find.text('RISING STARS'),
-        find.byType(SingleChildScrollView).first,
+        scrollable,
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
@@ -84,13 +86,13 @@ void main() {
       expect(find.byKey(const Key('home-regen-scouting-feed')), findsOneWidget);
 
       await tester.dragUntilVisible(
-        find.text('RECENT REPLAY'),
-        find.byType(SingleChildScrollView).first,
+        find.text('MATCHDAY BRIEF'),
+        scrollable,
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('RECENT REPLAY'), findsOneWidget);
+      expect(find.text('MATCHDAY BRIEF'), findsOneWidget);
     },
   );
 }

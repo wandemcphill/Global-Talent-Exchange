@@ -60,6 +60,7 @@ class RiskControlService:
         side: TradeSide | str,
         quantity: Decimal,
         price: Decimal,
+        cash_unit: LedgerUnit = LedgerUnit.COIN,
         use_reserved_balance: bool = False,
     ) -> tuple[TradeSide, Decimal, Decimal, Decimal]:
         try:
@@ -77,9 +78,9 @@ class RiskControlService:
         gross_amount = self._normalize_amount(normalized_quantity * normalized_price)
         if normalized_side is TradeSide.BUY:
             available_balance = (
-                self.wallet_service.get_reserved_cash_balance(session, user, unit=LedgerUnit.CREDIT)
+                self.wallet_service.get_reserved_cash_balance(session, user, unit=cash_unit)
                 if use_reserved_balance
-                else self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT).available_balance
+                else self.wallet_service.get_wallet_summary(session, user, currency=cash_unit).available_balance
             )
             if available_balance < gross_amount:
                 raise InsufficientCashError(

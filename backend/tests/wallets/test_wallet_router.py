@@ -206,8 +206,8 @@ def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> 
     stored_transaction = session.scalar(
         select(WalletTransactionRecord).where(WalletTransactionRecord.reference == initiated.reference)
     )
-    assert verified.wallet.balance == Decimal("250.0000")
-    assert verified.wallet.currency == "credit"
+    assert verified.wallet.balance == Decimal("246.2500")
+    assert verified.wallet.currency == "coin"
     assert verified.transaction.status == "verified"
     assert stored_transaction is not None
     assert stored_transaction.status == "verified"

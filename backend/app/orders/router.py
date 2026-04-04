@@ -28,12 +28,15 @@ api_router = APIRouter(prefix="/api/orders")
 
 
 def _build_order_service(request: Request | None) -> OrderService:
-    if request is not None and hasattr(request.app.state, "event_publisher"):
-        return OrderService(
-            event_publisher=request.app.state.event_publisher,
-            settings=getattr(request.app.state, "settings", None),
-        )
-    return OrderService()
+    if request is None:
+        return OrderService()
+
+    event_publisher = getattr(request.app.state, "event_publisher", None)
+    settings = getattr(request.app.state, "settings", None)
+    return OrderService(
+        event_publisher=event_publisher,
+        settings=settings,
+    )
 
 
 def _build_order_view(service: OrderService, session: Session, order) -> OrderView:

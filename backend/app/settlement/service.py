@@ -65,6 +65,7 @@ class SettlementService:
             side=execution.side,
             quantity=execution.quantity,
             price=execution.price,
+            cash_unit=LedgerUnit.COIN,
         )
         reference = execution.order_id or execution.execution_id
         if side is TradeSide.BUY:
@@ -139,6 +140,7 @@ class SettlementService:
             side=execution.side,
             quantity=execution.quantity,
             price=execution.price,
+            cash_unit=LedgerUnit.COIN,
             use_reserved_balance=use_reserved_balance,
         )
 

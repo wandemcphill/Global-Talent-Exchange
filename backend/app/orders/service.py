@@ -77,6 +77,7 @@ class OrderService:
                 side=TradeSide(side.value),
                 quantity=quantity,
                 price=max_price,
+                cash_unit=LedgerUnit.COIN,
             )
         except RiskValidationError as exc:
             raise OrderPlacementError(str(exc)) from exc

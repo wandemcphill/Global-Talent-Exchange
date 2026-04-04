@@ -126,7 +126,7 @@ class WalletFundingService:
         user: User,
         *,
         amount: Decimal,
-        input_unit: str = "fiat",
+        input_unit: str = "coin",
         provider: str = "paystack",
         callback_url: str | None = None,
     ) -> WalletTopUpSession:

@@ -20,12 +20,8 @@ class Match3dRouteScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final String resolvedMatchKey = matchKey.trim();
     final AuthSession? session = ref.watch(authProvider);
-    final Match3dUserEntitlement baseEntitlement = ref.watch(
+    final Match3dUserEntitlement entitlement = ref.watch(
       match3dEntitlementProvider,
-    );
-    final Match3dUserEntitlement entitlement = _routeEntitlement(
-      session,
-      baseEntitlement,
     );
     if (resolvedMatchKey.isEmpty) {
       return const MatchRouteBlockedScreen(
@@ -48,6 +44,18 @@ class Match3dRouteScreen extends ConsumerWidget {
         detailTitle: 'Sign in required',
         detailSubtitle:
             'Guest sessions stay blocked; signed-in sessions can enter the mounted Flutter 3D lane.',
+      );
+    }
+    if (!_canOpen3dRoute(entitlement, resolvedMatchKey)) {
+      return const MatchRouteBlockedScreen(
+        title: '3D Match Viewer',
+        subtitle:
+            'This Flutter 3D lane only opens for premium sessions or users who already hold a match-specific 3D unlock.',
+        reason:
+            'The 3D lane stayed closed because this session does not have a premium entitlement or a verified 3D unlock for the selected match.',
+        detailTitle: 'Premium access required',
+        detailSubtitle:
+            'Upgrade into the Flutter 3D lane first, then reopen the routed match session.',
       );
     }
 
@@ -80,35 +88,29 @@ class Match3dRouteScreen extends ConsumerWidget {
             capability: MatchViewerCapability.flutter3d,
           ),
       error:
-          (Object error, StackTrace stackTrace) => MatchRouteCapabilityOverlay(
-            capability: MatchViewerCapability.flutter3d,
-            status: DataSourceStatus.demo,
-            child: _FallbackMatch3dRouteView(
-              matchKey: resolvedMatchKey,
-              reason: AppFeedback.messageFor(
-                error,
-                fallback:
-                    'The live Flutter 3D lane is unavailable for this match right now.',
-              ),
-              entitlement: entitlement,
+          (Object error, StackTrace stackTrace) => MatchRouteBlockedScreen(
+            title: '3D Match Viewer',
+            subtitle:
+                'This Flutter 3D lane only opens when the routed live match payload verifies cleanly.',
+            reason: AppFeedback.messageFor(
+              error,
+              fallback:
+                  'The live Flutter 3D lane is unavailable for this match right now.',
             ),
+            detailTitle: 'Viewer contract unavailable',
+            detailSubtitle:
+                'The selected match did not pass the live 3D verification checks, so the route stayed closed instead of mounting a misleading fallback.',
           ),
     );
   }
 }
 
-Match3dUserEntitlement _routeEntitlement(
-  AuthSession? session,
-  Match3dUserEntitlement entitlement,
-) {
-  if (!(session?.isAuthenticated ?? false)) {
-    return entitlement;
-  }
-  return entitlement.copyWith(
-    isPremiumUser: true,
-    premiumCameraAccess: true,
-    fastReplayAccess: true,
-  );
+bool _canOpen3dRoute(Match3dUserEntitlement entitlement, String resolvedMatchKey) {
+  return entitlement.isPremiumUser ||
+      entitlement.premiumCameraAccess ||
+      entitlement.fastReplayAccess ||
+      entitlement.hasUnlockedMatch(resolvedMatchKey) ||
+      entitlement.tournamentBoostCompetitionIds.isNotEmpty;
 }
 
 class _QualifiedMatch3dRouteView extends StatefulWidget {
@@ -178,31 +180,6 @@ class _QualifiedMatch3dRouteViewState
         widget.matchKey,
         continuationToken: continuationToken,
       ),
-    );
-  }
-}
-
-class _FallbackMatch3dRouteView extends StatelessWidget {
-  const _FallbackMatch3dRouteView({
-    required this.matchKey,
-    required this.reason,
-    required this.entitlement,
-  });
-
-  final String matchKey;
-  final String reason;
-  final Match3dUserEntitlement entitlement;
-
-  @override
-  Widget build(BuildContext context) {
-    return GtexMatch3dScreen(
-      competition: buildLiveViewerCompetition(matchKey, <String, Object?>{
-        'title': '3D Match Viewer',
-        'fallback_reason': reason,
-      }),
-      matchKey: matchKey,
-      entitlement: entitlement,
-      preferFallback: true,
     );
   }
 }

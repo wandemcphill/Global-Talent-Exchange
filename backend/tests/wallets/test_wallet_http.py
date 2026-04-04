@@ -53,6 +53,7 @@ def api_context():
 
     app = FastAPI()
     app.include_router(router)
+    app.state.settings = SimpleNamespace(config_root=None)
 
     def override_session():
         yield session
@@ -163,7 +164,7 @@ def test_get_portfolio_returns_empty_holdings_for_new_user(api_context) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["user_id"] == current_user.id
-    assert payload["currency"] == "credit"
+    assert payload["currency"] == "coin"
     assert payload["holdings"] == []
     assert Decimal(str(payload["available_balance"])) == Decimal("0.0000")
     assert Decimal(str(payload["reserved_balance"])) == Decimal("0.0000")

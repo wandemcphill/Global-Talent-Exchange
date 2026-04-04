@@ -496,8 +496,8 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Open 2D'));
       await tester.pumpAndSettle();
       expect(find.text('2D Match Viewer'), findsWidgets);
-      expect(find.text('Viewer contract unavailable'), findsOneWidget);
-      expect(find.text('Route blocked'), findsOneWidget);
+      expect(find.text('Viewer contract unavailable'), findsNothing);
+      expect(find.text('Route blocked'), findsNothing);
 
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
