@@ -3,6 +3,7 @@ services:
   - name: gtex-api
     type: web
     runtime: python
+    region: frankfurt
     plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     preDeployCommand: "cd backend && alembic -c migrations/alembic.ini upgrade head"
@@ -46,6 +47,7 @@ services:
   - name: gtex-rq-worker
     type: worker
     runtime: python
+    region: frankfurt
     plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.workers.rq_worker_main"
@@ -82,6 +84,7 @@ services:
   - name: gtex-simulation-worker
     type: worker
     runtime: python
+    region: frankfurt
     plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.backbone.simulation_worker_main"
@@ -116,6 +119,7 @@ services:
   - name: gtex-outbox-relay
     type: worker
     runtime: python
+    region: frankfurt
     plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.backbone.outbox_relay_main"
@@ -147,12 +151,14 @@ services:
         value: "true"
 
   # 🔴 Redis
-  - type: redis
+  - type: keyvalue
     name: gtex-cache
+    region: frankfurt
     plan: starter
     ipAllowList: []
 
 databases:
   - name: gtex-postgres
+    region: frankfurt
     plan: basic-256mb
     ipAllowList: []
