@@ -188,8 +188,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
             : const EdgeInsets.fromLTRB(20, 12, 20, 0);
     final double sectionGap = compactViewport ? 0 : 8;
-    final bool showShellStatusCard =
-        _route.primaryDestination != GtePrimaryDestination.home;
+    const bool showShellStatusCard = true;
     return Container(
       decoration: gteBackdropDecoration(),
       child: Scaffold(
@@ -1034,7 +1033,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         return GteSyncStatusCard(
           title: 'Platform overview',
           status:
-              'Home keeps the most important actions for your account in one place.',
+              'Home is now surfacing the live GTEX runtime and the account lane you are actually connected to.',
+          detail:
+              'Runtime ${_runtimeModeLabel()} on ${_apiHostLabel()} - ${_runtimeAudienceLabel()}',
           syncedAt: widget.controller.marketSyncedAt,
           accent: accent,
           isRefreshing: widget.controller.isBootstrapping,
@@ -1061,6 +1062,39 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   String? _canonicalClubName() {
     return _identity().clubName;
+  }
+
+  String _apiHostLabel() {
+    final Uri? uri = Uri.tryParse(widget.apiBaseUrl.trim());
+    final String? host = uri?.host.trim();
+    if (host != null && host.isNotEmpty) {
+      return host;
+    }
+    final String raw = widget.apiBaseUrl.trim();
+    if (raw.isEmpty) {
+      return 'not configured';
+    }
+    return raw.replaceFirst(RegExp(r'^https?://'), '');
+  }
+
+  String _runtimeModeLabel() {
+    switch (_liveBackendMode) {
+      case GteBackendMode.live:
+        return 'live';
+      case GteBackendMode.fixture:
+        return 'fixture';
+      case GteBackendMode.liveThenFixture:
+        return 'hybrid';
+    }
+  }
+
+  String _runtimeAudienceLabel() {
+    final bool hasClubScope = (_canonicalClubId()?.trim().isNotEmpty ?? false);
+    final String accessLabel =
+        widget.controller.isAuthenticated ? 'signed-in access' : 'guest access';
+    final String clubLabel =
+        hasClubScope ? 'club scope ready' : 'club scope pending';
+    return '$accessLabel, $clubLabel';
   }
 
   Future<void> _openCreateClubFlow() async {

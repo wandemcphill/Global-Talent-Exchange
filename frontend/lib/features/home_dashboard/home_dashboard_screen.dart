@@ -221,6 +221,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                _HomeRuntimeSignalPanel(
+                  backendMode: widget.backendMode,
+                  apiHostLabel: _apiHostLabel(),
+                  narrative: _runtimeNarrative(hasClubScope: true),
+                  isAuthenticated: widget.exchangeController.isAuthenticated,
+                  hasClubScope: true,
+                  capitalLabel: _capitalMetricLabel(),
+                  isSyncing:
+                      clubController.isLoading ||
+                      competitionController.isLoadingDiscovery,
+                ),
+                const SizedBox(height: 16),
                 GteSyncStatusCard(
                   title: 'App-wide premium sync',
                   status:
@@ -742,6 +755,40 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return 'Guest user';
   }
 
+  String _apiHostLabel() {
+    final Uri? uri = Uri.tryParse(widget.apiBaseUrl.trim());
+    final String? host = uri?.host.trim();
+    if (host != null && host.isNotEmpty) {
+      return host;
+    }
+    final String raw = widget.apiBaseUrl.trim();
+    if (raw.isEmpty) {
+      return 'not configured';
+    }
+    return raw.replaceFirst(RegExp(r'^https?://'), '');
+  }
+
+  String _backendModeLabel() {
+    switch (widget.backendMode) {
+      case GteBackendMode.live:
+        return 'Live stack';
+      case GteBackendMode.fixture:
+        return 'Fixture preview';
+      case GteBackendMode.liveThenFixture:
+        return 'Hybrid fallback';
+    }
+  }
+
+  String _runtimeNarrative({required bool hasClubScope}) {
+    final String accessLabel =
+        widget.exchangeController.isAuthenticated
+            ? 'signed-in account'
+            : 'guest access';
+    final String clubLabel =
+        hasClubScope ? 'club routes open' : 'club setup next';
+    return '${_backendModeLabel()} is wired to ${_apiHostLabel()} for this session, with $accessLabel and $clubLabel.';
+  }
+
   String _formatClubName(String clubId) {
     return clubId
         .split(RegExp(r'[-_]+'))
@@ -932,6 +979,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          _HomeRuntimeSignalPanel(
+            backendMode: widget.backendMode,
+            apiHostLabel: _apiHostLabel(),
+            narrative: _runtimeNarrative(hasClubScope: false),
+            isAuthenticated: widget.exchangeController.isAuthenticated,
+            hasClubScope: false,
+            capitalLabel: _capitalMetricLabel(),
+            isSyncing: widget.exchangeController.isBootstrapping,
           ),
           const SizedBox(height: 20),
           LayoutBuilder(
@@ -1212,6 +1269,104 @@ class _HomeHeroPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _HomeRuntimeSignalPanel extends StatelessWidget {
+  const _HomeRuntimeSignalPanel({
+    required this.backendMode,
+    required this.apiHostLabel,
+    required this.narrative,
+    required this.isAuthenticated,
+    required this.hasClubScope,
+    required this.capitalLabel,
+    required this.isSyncing,
+  });
+
+  final GteBackendMode backendMode;
+  final String apiHostLabel;
+  final String narrative;
+  final bool isAuthenticated;
+  final bool hasClubScope;
+  final String capitalLabel;
+  final bool isSyncing;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool liveMode = backendMode == GteBackendMode.live;
+    final Color accent =
+        liveMode ? GteShellTheme.accentCapital : GteShellTheme.accentWarm;
+    return GteSurfacePanel(
+      accentColor: accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'LIVE RUNTIME SIGNAL',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: accent, letterSpacing: 1.1),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            liveMode
+                ? 'This shell is riding the live GTEX stack.'
+                : 'This shell is running a non-live runtime path.',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(narrative, style: Theme.of(context).textTheme.bodyLarge),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              GteMetricChip(
+                label: 'Runtime',
+                value: _runtimeLabel(),
+                positive: liveMode,
+              ),
+              GteMetricChip(
+                label: 'API Host',
+                value: apiHostLabel,
+                positive: true,
+              ),
+              GteMetricChip(
+                label: 'Access',
+                value: isAuthenticated ? 'Signed in' : 'Guest',
+                positive: isAuthenticated,
+              ),
+              GteMetricChip(
+                label: 'Club Scope',
+                value: hasClubScope ? 'Club ready' : 'Onboarding',
+                positive: hasClubScope,
+              ),
+              GteMetricChip(
+                label: 'Capital',
+                value: capitalLabel,
+                positive: true,
+              ),
+              GteMetricChip(
+                label: 'Sync Rail',
+                value: isSyncing ? 'Syncing' : 'Stable',
+                positive: !isSyncing,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _runtimeLabel() {
+    switch (backendMode) {
+      case GteBackendMode.live:
+        return 'Live';
+      case GteBackendMode.fixture:
+        return 'Fixture';
+      case GteBackendMode.liveThenFixture:
+        return 'Hybrid';
+    }
   }
 }
 
