@@ -33,7 +33,6 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   Future<List<Object?>> _loadWallet() {
     return Future.wait<Object?>(<Future<Object?>>[
       widget.controller.api.fetchWalletSummary(currency: GteLedgerUnit.coin),
-      widget.controller.api.fetchWalletSummary(currency: GteLedgerUnit.credit),
       widget.controller.api.listWalletTransactions(limit: 8),
       widget.controller.api.fetchWithdrawalEligibility(),
     ]);
@@ -296,7 +295,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
               !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (!snapshot.hasData || snapshot.data!.length < 4) {
+          if (!snapshot.hasData || snapshot.data!.length < 3) {
             return const Center(
               child: GteStatePanel(
                 title: 'Wallets unavailable',
@@ -308,12 +307,10 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
 
           final GteWalletSummary tradeWallet =
               snapshot.data![0] as GteWalletSummary;
-          final GteWalletSummary fanWallet =
-              snapshot.data![1] as GteWalletSummary;
           final List<GteWalletTransactionRecord> transactions =
-              snapshot.data![2] as List<GteWalletTransactionRecord>;
+              snapshot.data![1] as List<GteWalletTransactionRecord>;
           final GteWithdrawalEligibility eligibility =
-              snapshot.data![3] as GteWithdrawalEligibility;
+              snapshot.data![2] as GteWithdrawalEligibility;
 
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -327,12 +324,12 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Production wallet rails',
+                        'GTEX Coin wallet',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'GTEX Coin funds player trading and withdrawals. Fan Coin covers gifting and user-hosted competition creation.',
+                        'Top up GTEX Coin, buy player assets, and withdraw verified balances from one live wallet lane.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
@@ -347,16 +344,6 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                             detail: 'Trading and withdrawal balance',
                             accent: GteShellTheme.accentCapital,
                           ),
-                          const SizedBox(width: 12),
-                          _BalanceTile(
-                            label: 'Fan Coin',
-                            value: gteFormatAmountForUnit(
-                              fanWallet.availableBalance,
-                              fanWallet.currency,
-                            ),
-                            detail: 'Gifting and hosted competitions',
-                            accent: GteShellTheme.accentWarm,
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -370,8 +357,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                           ),
                           const SizedBox(width: 12),
                           _MetricTile(
-                            label: 'Fan conversion',
-                            value: 'GTEX only',
+                            label: 'Trading rail',
+                            value: 'GTEX Coin only',
                           ),
                         ],
                       ),
@@ -389,11 +376,6 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                             onPressed: _openWithdrawals,
                             icon: const Icon(Icons.outbox_outlined),
                             label: const Text('Withdraw'),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: _openConvertToFanCoin,
-                            icon: const Icon(Icons.swap_horiz_outlined),
-                            label: const Text('Convert to Fan Coin'),
                           ),
                           OutlinedButton.icon(
                             onPressed: _openTransactions,
@@ -416,15 +398,15 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'Fan Coin cannot be converted into GTEX Coin.',
+                        'GTEX Coin is the only live wallet currency in this shell.',
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'User-hosted competitions spend Fan Coin. Player trading uses GTEX Coin.',
+                        'Player trading, portfolio settlement, and withdrawals all clear through GTEX Coin.',
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'GTEX competition winnings settle into the GTEX wallet and use the same withdrawal rail.',
+                        'Competition winnings and wallet top-ups settle into the same GTEX withdrawal rail.',
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -454,7 +436,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                         const GteStatePanel(
                           title: 'No wallet activity yet',
                           message:
-                              'Top up GTEX Coin, convert to Fan Coin, or request a withdrawal to create wallet history.',
+                              'Top up GTEX Coin or request a withdrawal to create wallet history.',
                           icon: Icons.payments_outlined,
                         )
                       else

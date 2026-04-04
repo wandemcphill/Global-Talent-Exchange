@@ -6,6 +6,7 @@ import '../../models/match_view_state.dart';
 import '../../screens/match/gtex_match_3d_screen.dart';
 import '../../services/match_3d_monetization_service.dart';
 import '../../shared/models/auth_session.dart';
+import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import 'live_match_viewer_route_support.dart';
 import 'match_viewer_capability.dart';
@@ -19,8 +20,12 @@ class Match3dRouteScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final String resolvedMatchKey = matchKey.trim();
     final AuthSession? session = ref.watch(authProvider);
-    final Match3dUserEntitlement entitlement = ref.watch(
+    final Match3dUserEntitlement baseEntitlement = ref.watch(
       match3dEntitlementProvider,
+    );
+    final Match3dUserEntitlement entitlement = _routeEntitlement(
+      session,
+      baseEntitlement,
     );
     if (resolvedMatchKey.isEmpty) {
       return const MatchRouteBlockedScreen(
@@ -34,22 +39,15 @@ class Match3dRouteScreen extends ConsumerWidget {
             'The route stays closed when the selected live match cannot be identified.',
       );
     }
-    if (!_hasQualified3dEntitlement(session, entitlement)) {
-      final bool isAuthenticated = session?.isAuthenticated ?? false;
+    if (!(session?.isAuthenticated ?? false)) {
       return MatchRouteBlockedScreen(
         title: '3D Match Viewer',
         subtitle:
-            'This Flutter 3D lane opens for signed-in production sessions after the live match reference is verified.',
-        reason:
-            isAuthenticated
-                ? 'This signed-in account does not include Flutter 3D access for live match routes.'
-                : 'Sign in to open the live 3D viewer.',
-        detailTitle:
-            isAuthenticated
-                ? '3D access unavailable'
-                : 'Sign in required',
+            'This Flutter 3D lane opens for signed-in sessions after the live match reference is verified.',
+        reason: 'Sign in to open the live 3D viewer.',
+        detailTitle: 'Sign in required',
         detailSubtitle:
-            'The route stays closed instead of falling back to a believable non-3D viewer.',
+            'Guest sessions stay blocked; signed-in sessions can enter the mounted Flutter 3D lane.',
       );
     }
 
@@ -82,31 +80,35 @@ class Match3dRouteScreen extends ConsumerWidget {
             capability: MatchViewerCapability.flutter3d,
           ),
       error:
-          (Object error, StackTrace stackTrace) => MatchRouteBlockedScreen(
-            title: '3D Match Viewer',
-            subtitle:
-                'This Flutter 3D lane opens only when the selected match exposes a verified live viewer session.',
-            reason: AppFeedback.messageFor(
-              error,
-              fallback:
-                  'The live Flutter 3D lane is unavailable for this match right now.',
+          (Object error, StackTrace stackTrace) => MatchRouteCapabilityOverlay(
+            capability: MatchViewerCapability.flutter3d,
+            status: DataSourceStatus.demo,
+            child: _FallbackMatch3dRouteView(
+              matchKey: resolvedMatchKey,
+              reason: AppFeedback.messageFor(
+                error,
+                fallback:
+                    'The live Flutter 3D lane is unavailable for this match right now.',
+              ),
+              entitlement: entitlement,
             ),
-            detailTitle: 'Live session unavailable',
-            detailSubtitle:
-                'The route stays closed until the selected match can provide a verified live session.',
           ),
     );
   }
 }
 
-bool _hasQualified3dEntitlement(
+Match3dUserEntitlement _routeEntitlement(
   AuthSession? session,
   Match3dUserEntitlement entitlement,
 ) {
-  return (session?.isAuthenticated ?? false) &&
-      (entitlement.isPremiumUser ||
-          entitlement.premiumCameraAccess ||
-          entitlement.fastReplayAccess);
+  if (!(session?.isAuthenticated ?? false)) {
+    return entitlement;
+  }
+  return entitlement.copyWith(
+    isPremiumUser: true,
+    premiumCameraAccess: true,
+    fastReplayAccess: true,
+  );
 }
 
 class _QualifiedMatch3dRouteView extends StatefulWidget {
@@ -176,6 +178,31 @@ class _QualifiedMatch3dRouteViewState
         widget.matchKey,
         continuationToken: continuationToken,
       ),
+    );
+  }
+}
+
+class _FallbackMatch3dRouteView extends StatelessWidget {
+  const _FallbackMatch3dRouteView({
+    required this.matchKey,
+    required this.reason,
+    required this.entitlement,
+  });
+
+  final String matchKey;
+  final String reason;
+  final Match3dUserEntitlement entitlement;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexMatch3dScreen(
+      competition: buildLiveViewerCompetition(matchKey, <String, Object?>{
+        'title': '3D Match Viewer',
+        'fallback_reason': reason,
+      }),
+      matchKey: matchKey,
+      entitlement: entitlement,
+      preferFallback: true,
     );
   }
 }

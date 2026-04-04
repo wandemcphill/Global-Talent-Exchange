@@ -21,7 +21,6 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
-import 'package:gte_frontend/widgets/match_3d/monetization/gifting_overlay.dart';
 import 'package:gte_frontend/widgets/match_3d/monetization/match_3d_upgrade_prompt.dart';
 import 'package:gte_frontend/widgets/match_3d/monetization/premium_controls.dart';
 
@@ -315,23 +314,6 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     _pushOverlayBurst(result.overlayBurst);
   }
 
-  Future<void> _sendGift(double amount, MatchViewState viewState) async {
-    final Match3dActionResult result = await _ensureMonetizationService()
-        .sendCoinGift(amount, _buildMatchContext(viewState));
-    _setStatusMessage(result.message);
-    _pushOverlayBurst(result.overlayBurst);
-  }
-
-  Future<void> _sendReaction(
-    Match3dReaction reaction,
-    MatchViewState viewState,
-  ) async {
-    final Match3dActionResult result = _ensureMonetizationService()
-        .sendReaction(reaction, _buildMatchContext(viewState));
-    _setStatusMessage(result.message);
-    _pushOverlayBurst(result.overlayBurst);
-  }
-
   Future<void> _claimRewardedAd(MatchAdPlacement placement) async {
     final Match3dActionResult result = await _ensureMonetizationService()
         .claimRewardedAd(
@@ -467,9 +449,6 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                     activeEvent?.commentary.trim().isNotEmpty == true
                         ? activeEvent!.commentary
                         : 'Match telemetry, tactical context, and the latest scene cue stay pinned here.';
-                final bool showSupportControls =
-                    monetizationService.effectiveEntitlement.isPremiumUser ||
-                    monetizationService.availableCoinBalance > 0;
                 return LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
                     final bool wide = constraints.maxWidth >= 1040;
@@ -594,25 +573,6 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                                     key: const Key('match-ad-live-banner'),
                                     brand: liveBannerPlacement.brand,
                                     message: liveBannerPlacement.message,
-                                  ),
-                                ),
-                              if (showSupportControls)
-                                Positioned.fill(
-                                  child: GiftingOverlay(
-                                    activeBursts: _overlayBursts,
-                                    overflowCount:
-                                        _overlayBursts.length > 3
-                                            ? _overlayBursts.length - 3
-                                            : 0,
-                                    availableCoins:
-                                        monetizationService
-                                            .availableCoinBalance,
-                                    onSendGift:
-                                        (double amount) =>
-                                            _sendGift(amount, viewState),
-                                    onSendReaction:
-                                        (Match3dReaction reaction) =>
-                                            _sendReaction(reaction, viewState),
                                   ),
                                 ),
                             ],

@@ -380,52 +380,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                 Expanded(
                   child: PageStorage(
                     bucket: _pageStorageBucket,
-                    child: IndexedStack(
-                      index: _currentDestinationIndex(),
-                      children: <Widget>[
-                        _buildHomeDestination(),
-                        GteCompetitionsHubScreen(
-                          key: const PageStorageKey<String>('competitions-hub'),
-                          controller: _competitionController,
-                          currentDestination:
-                              _route.effectiveCompetitionDestination,
-                          onDestinationChanged: _openCompetitionDestination,
-                          isAuthenticated: widget.controller.isAuthenticated,
-                          isCheckingCreatorAccess: _isCheckingCreatorAccess,
-                          canHostCompetitions: _canHostCompetitions,
-                          onOpenLogin:
-                              () => _openLogin(
-                                targetRoute: GteNavigationRoute.competitions(
-                                  destination:
-                                      _route.effectiveCompetitionDestination,
-                                ),
-                              ),
-                          onOpenCreatorAccessRequest:
-                              () => _pushCreatorAccessRequest(context),
-                          navigationDependencies: _navigationDependencies(),
-                        ),
-                        GteMarketPlayersScreen(
-                          key: const PageStorageKey<String>('market-screen'),
-                          controller: widget.controller,
-                          onOpenPlayer: _openPlayer,
-                          onOpenLogin:
-                              () => _openLogin(
-                                targetRoute: const GteNavigationRoute.market(),
-                              ),
-                          navigationDependencies: _navigationDependencies(),
-                        ),
-                        _buildHubDestination(),
-                        _buildClubDestination(),
-                        GtePortfolioScreen(
-                          key: const PageStorageKey<String>('portfolio-screen'),
-                          controller: widget.controller,
-                          onOpenPlayer: _openPlayer,
-                          onOpenLogin:
-                              () => _openLogin(
-                                targetRoute: const GteNavigationRoute.wallet(),
-                              ),
-                        ),
-                      ],
+                    child: KeyedSubtree(
+                      key: ValueKey<String>(
+                        'shell-${_route.primaryDestination.name}',
+                      ),
+                      child: _buildCurrentDestination(),
                     ),
                   ),
                 ),
@@ -737,6 +696,65 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       onOpenLogin:
           () => _openLogin(targetRoute: const GteNavigationRoute.hub()),
       onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
+    );
+  }
+
+  Widget _buildCurrentDestination() {
+    switch (_route.primaryDestination) {
+      case GtePrimaryDestination.home:
+        return _buildHomeDestination();
+      case GtePrimaryDestination.competitions:
+        return _buildCompetitionsDestination();
+      case GtePrimaryDestination.market:
+        return _buildMarketDestination();
+      case GtePrimaryDestination.hub:
+      case GtePrimaryDestination.community:
+        return _buildHubDestination();
+      case GtePrimaryDestination.club:
+        return _buildClubDestination();
+      case GtePrimaryDestination.wallet:
+        return _buildWalletDestination();
+    }
+  }
+
+  Widget _buildCompetitionsDestination() {
+    return GteCompetitionsHubScreen(
+      key: const PageStorageKey<String>('competitions-hub'),
+      controller: _competitionController,
+      currentDestination: _route.effectiveCompetitionDestination,
+      onDestinationChanged: _openCompetitionDestination,
+      isAuthenticated: widget.controller.isAuthenticated,
+      isCheckingCreatorAccess: _isCheckingCreatorAccess,
+      canHostCompetitions: _canHostCompetitions,
+      onOpenLogin:
+          () => _openLogin(
+            targetRoute: GteNavigationRoute.competitions(
+              destination: _route.effectiveCompetitionDestination,
+            ),
+          ),
+      onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
+      navigationDependencies: _navigationDependencies(),
+    );
+  }
+
+  Widget _buildMarketDestination() {
+    return GteMarketPlayersScreen(
+      key: const PageStorageKey<String>('market-screen'),
+      controller: widget.controller,
+      onOpenPlayer: _openPlayer,
+      onOpenLogin:
+          () => _openLogin(targetRoute: const GteNavigationRoute.market()),
+      navigationDependencies: _navigationDependencies(),
+    );
+  }
+
+  Widget _buildWalletDestination() {
+    return GtePortfolioScreen(
+      key: const PageStorageKey<String>('portfolio-screen'),
+      controller: widget.controller,
+      onOpenPlayer: _openPlayer,
+      onOpenLogin:
+          () => _openLogin(targetRoute: const GteNavigationRoute.wallet()),
     );
   }
 

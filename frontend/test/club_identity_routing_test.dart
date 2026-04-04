@@ -36,24 +36,40 @@ void main() {
           apiBaseUrl: 'http://127.0.0.1:8000',
           backendMode: GteBackendMode.fixture,
         ),
+        initialPath: '/app/club',
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Club').last);
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.text('Club hub'));
     expect(find.text('Club hub'), findsOneWidget);
     expect(find.text('World context'), findsOneWidget);
     expect(find.text('Owner offer inbox'), findsOneWidget);
 
     await tester.ensureVisible(find.text('World context'));
     await tester.tap(find.text('World context'));
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.textContaining('canonical football-world simulation'),
+    );
     expect(
       find.textContaining('canonical football-world simulation'),
       findsOneWidget,
     );
   });
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 120,
+}) async {
+  for (int pump = 0; pump < maxPumps; pump += 1) {
+    await tester.pump(step);
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  expect(finder, findsOneWidget);
 }
 
 GteAuthSession _authenticatedSession({

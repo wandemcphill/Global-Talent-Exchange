@@ -718,7 +718,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Open gift stabilizer'));
-    await tester.pumpAndSettle();
+    await _pumpUntilText(tester, 'Gift economy stabilizer');
 
     expect(find.text('Gift economy stabilizer'), findsOneWidget);
   });

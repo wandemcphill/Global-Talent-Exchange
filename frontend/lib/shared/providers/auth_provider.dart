@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/gte_app_config.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_authed_api.dart';
-import '../../data/gte_http_transport.dart';
+import '../../features/shared/data/gte_feature_support.dart';
 import '../../services/match_3d_monetization_service.dart';
 import '../auth/auth_identity_store.dart';
 import '../models/auth_presentation.dart';
@@ -174,7 +174,7 @@ final Provider<GteAuthedApi> authedApiProvider = Provider<GteAuthedApi>(
       baseUrl: ref.watch(apiBaseUrlProvider),
       mode: ref.watch(criticalBackendModeProvider),
     ),
-    transport: GteHttpTransport(),
+    transport: createModeAwareTransport(ref.watch(criticalBackendModeProvider)),
     authSession: ref.watch(authProvider),
     authSessionStore: ref.watch(authSessionStoreProvider),
     onSessionChanged:

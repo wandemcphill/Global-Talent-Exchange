@@ -22,11 +22,13 @@ class GteFrontendApp extends StatefulWidget {
     this.controller,
     this.config,
     this.themeController,
+    this.initialPath = '/app/home',
   });
 
   final GteExchangeController? controller;
   final GteAppConfig? config;
   final GteThemeController? themeController;
+  final String initialPath;
 
   @override
   State<GteFrontendApp> createState() => _GteFrontendAppState();
@@ -145,7 +147,8 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
               controller: _controller,
               apiBaseUrl: _config.apiBaseUrl,
               backendMode: activeBackendMode,
-              initialPath: '/app/home',
+              initialPath:
+                  widget.initialPath.isEmpty ? '/app/home' : widget.initialPath,
             ),
             onGenerateRoute: (RouteSettings settings) {
               final String? name = settings.name;

@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
-import 'gte_http_transport.dart';
+import '../features/shared/data/gte_feature_support.dart';
 import '../models/creator_models.dart';
 
 class CreatorApi {
@@ -24,7 +24,7 @@ class CreatorApi {
     return CreatorApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
-        transport: GteHttpTransport(),
+        transport: createModeAwareTransport(mode),
         accessToken: accessToken,
         mode: mode,
       ),
@@ -46,7 +46,7 @@ class CreatorApi {
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.fixture,
         ),
-        transport: GteHttpTransport(),
+        transport: createModeAwareTransport(GteBackendMode.fixture),
         accessToken: 'fixture-token',
         mode: GteBackendMode.fixture,
       ),
@@ -64,7 +64,7 @@ class CreatorApi {
     }
     if (creatorId != 'me') {
       return client.withFallback<CreatorProfile>(() async {
-        final Map<String, dynamic> payload = await client.getMap(
+        final Map<String, dynamic> payload = await _getMapWithLegacyFallback(
           '/api/creators/$creatorId',
           auth: false,
         );
@@ -107,7 +107,7 @@ class CreatorApi {
       return fixtures.copilotAnalysis(draft);
     }
     return client.withFallback<CreatorCopilotAnalysis>(() async {
-      final Object? response = await client.post(
+      final Object? response = await _postWithLegacyFallback(
         '/api/creators/me/copilot/analyze',
         body: draft.toJson(),
       );
@@ -127,20 +127,20 @@ class CreatorApi {
     if (client.mode == GteBackendMode.fixture) {
       return fixtures.financeSummary();
     }
-    final Map<String, dynamic> financePayload = await client.getMap(
+    final Map<String, dynamic> financePayload = await _getMapWithLegacyFallback(
       '/api/creators/me/finance',
     );
     return _creatorFinanceFromJson(financePayload);
   }
 
   Future<CreatorProfile> _fetchCurrentCreatorProfile() async {
-    final Map<String, dynamic> summaryPayload = await client.getMap(
+    final Map<String, dynamic> summaryPayload = await _getMapWithLegacyFallback(
       '/api/creators/me/summary',
     );
-    final List<dynamic> competitionsPayload = await client.getList(
+    final List<dynamic> competitionsPayload = await _getListWithLegacyFallback(
       '/api/creators/me/competitions',
     );
-    final Map<String, dynamic> financePayload = await client.getMap(
+    final Map<String, dynamic> financePayload = await _getMapWithLegacyFallback(
       '/api/creators/me/finance',
     );
     return _buildProfileFromSummary(
@@ -150,6 +150,63 @@ class CreatorApi {
       baseUrl: baseUrl,
     );
   }
+
+  Future<Map<String, dynamic>> _getMapWithLegacyFallback(
+    String path, {
+    bool auth = true,
+  }) async {
+    return _withLegacyNotFoundFallback<Map<String, dynamic>>(
+      path,
+      (String resolvedPath) => client.getMap(resolvedPath, auth: auth),
+    );
+  }
+
+  Future<List<dynamic>> _getListWithLegacyFallback(
+    String path, {
+    bool auth = true,
+  }) async {
+    return _withLegacyNotFoundFallback<List<dynamic>>(
+      path,
+      (String resolvedPath) => client.getList(resolvedPath, auth: auth),
+    );
+  }
+
+  Future<Object?> _postWithLegacyFallback(
+    String path, {
+    required Object? body,
+    bool auth = true,
+  }) async {
+    return _withLegacyNotFoundFallback<Object?>(
+      path,
+      (String resolvedPath) => client.post(
+        resolvedPath,
+        body: body,
+        auth: auth,
+      ),
+    );
+  }
+
+  Future<T> _withLegacyNotFoundFallback<T>(
+    String path,
+    Future<T> Function(String path) action,
+  ) async {
+    try {
+      return await action(path);
+    } on GteApiException catch (error) {
+      if (error.type != GteApiErrorType.notFound || _isAbsoluteUrl(path)) {
+        rethrow;
+      }
+      return action(_legacyAbsolutePath(path));
+    }
+  }
+
+  String _legacyAbsolutePath(String path) {
+    return '${_normalizedBase(baseUrl)}$path';
+  }
+}
+
+bool _isAbsoluteUrl(String path) {
+  return path.startsWith('http://') || path.startsWith('https://');
 }
 
 CreatorProfile _buildProfileFromSummary(

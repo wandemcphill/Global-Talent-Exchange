@@ -4,13 +4,12 @@ import 'package:flutter/widgets.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/shared/data/gte_feature_support.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_api_repository.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_repository.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_dto.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_repository.dart';
-import 'package:gte_frontend/features/club_identity/jerseys/data/jersey_variant_dto.dart';
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
@@ -221,7 +220,7 @@ class GteNavigationDependencies {
   GteAuthedApi createAuthedApi({String? overrideAccessToken}) {
     return GteAuthedApi(
       config: GteRepositoryConfig(baseUrl: apiBaseUrl, mode: backendMode),
-      transport: GteHttpTransport(),
+      transport: createModeAwareTransport(backendMode),
       accessToken: overrideAccessToken ?? accessToken,
       mode: backendMode,
     );
@@ -236,9 +235,6 @@ class GteNavigationGuardResolver {
   Future<GteGuardResolution> resolve(GteAppRouteData route) async {
     if (route is CompetitionWorldSuperCupRouteData) {
       return _resolveWorldSuperCup(route);
-    }
-    if (route is ClubReplaysRouteData) {
-      return _resolveReplayPreview(route);
     }
     return GteGuardResolution(route: route);
   }
@@ -281,33 +277,6 @@ class GteNavigationGuardResolver {
     );
   }
 
-  Future<GteGuardResolution> _resolveReplayPreview(
-    ClubReplaysRouteData route,
-  ) async {
-    ClubIdentityDto? identity;
-    try {
-      identity = await dependencies
-          .createClubIdentityRepository()
-          .fetchIdentity(route.clubId);
-    } catch (_) {
-      return GteGuardResolution(route: route);
-    }
-
-    final bool hasSetup =
-        await (dependencies.hasIdentitySetup?.call(route.clubId, identity) ??
-            _defaultHasIdentitySetup(identity));
-    if (hasSetup) {
-      return GteGuardResolution(route: route);
-    }
-    return GteGuardResolution(
-      route: ClubIdentityJerseysRouteData(
-        clubId: route.clubId,
-        clubName: route.clubName ?? identity.clubName,
-      ),
-      fallbackReason: GteNavigationFallbackReason.missingIdentitySetup,
-      message: 'Set up club identity before opening replay surfaces.',
-    );
-  }
 }
 
 CompetitionSummary? _findWorldSuperCupCompetition(
@@ -341,22 +310,3 @@ bool _isWorldSuperCupActive(CompetitionSummary competition) {
   }
 }
 
-bool _defaultHasIdentitySetup(ClubIdentityDto? identity) {
-  if (identity == null) {
-    return false;
-  }
-  if (identity.clubName.trim().isEmpty ||
-      identity.shortClubCode.trim().isEmpty) {
-    return false;
-  }
-  if (identity.badgeProfile.initials.trim().isEmpty) {
-    return false;
-  }
-  return identity.jerseySet.all.every(_hasReadableKitConfiguration);
-}
-
-bool _hasReadableKitConfiguration(JerseyVariantDto variant) {
-  return variant.primaryColor.trim().isNotEmpty &&
-      variant.secondaryColor.trim().isNotEmpty &&
-      variant.accentColor.trim().isNotEmpty;
-}

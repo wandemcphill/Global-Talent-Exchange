@@ -11,8 +11,6 @@ import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_screen.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/era_history_screen.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_identity_screen.dart';
-import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_identity_controller.dart';
-import 'package:gte_frontend/features/club_identity/jerseys/presentation/identity_preview_screen.dart';
 import 'package:gte_frontend/features/club_identity/reputation/presentation/prestige_leaderboard_screen.dart';
 import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_controller.dart';
 import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_history_screen.dart';
@@ -27,6 +25,7 @@ import 'package:gte_frontend/features/creator_stadium_monetization/creator_stadi
 import 'package:gte_frontend/features/fan_prediction/fan_prediction.dart';
 import 'package:gte_frontend/features/football_world_simulation/football_world_simulation.dart';
 import 'package:gte_frontend/features/gift_economy_admin/gift_economy_admin.dart';
+import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/player_card_marketplace/player_card_marketplace.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/streamer_tournament_engine.dart';
@@ -256,7 +255,7 @@ class GteAppRouteRegistry {
       );
     }
     if (route is ClubReplaysRouteData) {
-      return _ReplayPreviewRouteScreen(
+      return GteLiveMatchHubRouteScreen(
         dependencies: dependencies,
         clubId: route.clubId,
         clubName: route.clubName,
@@ -717,86 +716,6 @@ class _ReputationSubscreenRouteScreenState
       );
     }
     return widget.builder(_controller);
-  }
-}
-
-class _ReplayPreviewRouteScreen extends StatefulWidget {
-  const _ReplayPreviewRouteScreen({
-    required this.dependencies,
-    required this.clubId,
-    this.clubName,
-  });
-
-  final GteNavigationDependencies dependencies;
-  final String clubId;
-  final String? clubName;
-
-  @override
-  State<_ReplayPreviewRouteScreen> createState() =>
-      _ReplayPreviewRouteScreenState();
-}
-
-class _ReplayPreviewRouteScreenState extends State<_ReplayPreviewRouteScreen> {
-  late final ClubIdentityController _controller;
-  String? _errorMessage;
-  bool _isReady = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = ClubIdentityController(
-      clubId: widget.clubId,
-      initialClubName: widget.clubName,
-      repository: widget.dependencies.createClubIdentityRepository(),
-    );
-    _prime();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _prime() async {
-    setState(() {
-      _isReady = false;
-      _errorMessage = null;
-    });
-    try {
-      await _controller.load();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isReady = true;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorMessage = AppFeedback.messageFor(error);
-        _isReady = true;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_isReady && _controller.identity == null) {
-      return const _RouteLoadingScreen(title: 'Loading replay surfaces');
-    }
-    if (_errorMessage != null && _controller.identity == null) {
-      return _RouteStateScreen(
-        title: 'Replay preview unavailable',
-        message: _errorMessage!,
-        actionLabel: 'Retry',
-        onAction: _prime,
-        icon: Icons.slideshow_outlined,
-      );
-    }
-    return IdentityPreviewScreen(controller: _controller);
   }
 }
 
