@@ -36,6 +36,7 @@ from app.models.player_cards import (
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_contract import PlayerContract
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.player_token_market import PlayerShareMarket
 from app.models.regen import (
     AcademyCandidate,
     AcademyIntakeBatch,
@@ -118,6 +119,7 @@ def session() -> Iterator[Session]:
             PlayerCardListing.__table__,
             PlayerCardOwnerHistory.__table__,
             PlayerCardSale.__table__,
+            PlayerShareMarket.__table__,
             PlayerContract.__table__,
             PlayerCareerEntry.__table__,
             PlayerLifecycleEvent.__table__,

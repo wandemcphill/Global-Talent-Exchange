@@ -43,7 +43,8 @@ void main() {
     expect(find.text('Home'), findsWidgets);
     expect(find.textContaining('matchday lobby'), findsOneWidget);
     expect(find.text('App-wide premium sync'), findsOneWidget);
-    expect(find.text('Open coach market'), findsOneWidget);
+    expect(find.text('Market'), findsWidgets);
+    expect(find.text('Club'), findsWidgets);
   });
 }
 

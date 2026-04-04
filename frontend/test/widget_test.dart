@@ -43,8 +43,12 @@ void main() {
     expect(find.text('Home'), findsWidgets);
     expect(find.textContaining('matchday lobby'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Open coach market'));
-    await tester.tap(find.text('Open coach market'));
+    final Finder marketNavChip = find.ancestor(
+      of: find.text('Market').last,
+      matching: find.byType(InkWell),
+    );
+    await tester.ensureVisible(marketNavChip);
+    await tester.tap(marketNavChip);
     await tester.pumpAndSettle();
 
     expect(find.text('Transfer market'), findsOneWidget);

@@ -87,8 +87,8 @@ def _create_player(session, *, provider_external_id: str = "player-order-1") -> 
 
 def _fund_user(session, current_user, *, amount: Decimal) -> None:
     wallet_service = WalletService()
-    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.CREDIT)
-    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
     wallet_service.append_transaction(
         session,
         postings=[
@@ -97,7 +97,7 @@ def _fund_user(session, current_user, *, amount: Decimal) -> None:
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference=f"fund-{current_user.id}",
-        description="Seed wallet credits for testing",
+        description="Seed wallet coin balance for testing",
         actor=current_user,
     )
     session.commit()
@@ -287,7 +287,11 @@ def test_admin_buyback_preview_and_execution_follow_p2p_window(api_context) -> N
     assert Decimal(str(execution_payload["total"])) == Decimal("27.0000")
     assert Decimal(str(execution_payload["order"]["remaining_quantity"])) == Decimal("0.0000")
 
-    wallet_summary = WalletService().get_wallet_summary(session, seller)
+    wallet_summary = WalletService().get_wallet_summary(
+        session,
+        seller,
+        currency=LedgerUnit(execution_payload["order"]["currency"]),
+    )
     assert wallet_summary.available_balance == Decimal("27.0000")
     assert wallet_summary.reserved_balance == Decimal("0.0000")
     assert WalletService().get_position_quantity(session, seller, player.id) == Decimal("0.0000")
@@ -568,7 +572,11 @@ def test_cancel_partially_filled_order_releases_remaining_hold(api_context) -> N
         "order.executed",
     }
 
-    wallet_summary = WalletService().get_wallet_summary(session, buyer)
+    wallet_summary = WalletService().get_wallet_summary(
+        session,
+        buyer,
+        currency=LedgerUnit.COIN,
+    )
     assert wallet_summary.available_balance == Decimal("60.0000")
     assert wallet_summary.reserved_balance == Decimal("0.0000")
     assert wallet_summary.total_balance == Decimal("60.0000")
@@ -834,7 +842,7 @@ def test_admin_buyback_preview_and_execution_follow_p2p_window(api_context) -> N
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
     assert preview_payload["eligible"] is False
-    assert "P2P remains the priority" in preview_payload["reasons"][0]
+    assert "p2p remains the default path" in preview_payload["reasons"][0].lower()
 
     session.execute(
         text(
@@ -849,14 +857,18 @@ def test_admin_buyback_preview_and_execution_follow_p2p_window(api_context) -> N
     matured_preview = matured_preview_response.json()
     assert matured_preview["eligible"] is True
     assert Decimal(matured_preview["admin_total"]) > Decimal("0")
-    assert Decimal(matured_preview["expected_p2p_total"]) > Decimal(matured_preview["admin_total"])
+    assert Decimal(matured_preview["estimated_p2p_total"]) > Decimal(matured_preview["admin_total"])
 
     execute_response = client.post(f"/api/orders/{order_id}/admin-buyback")
     assert execute_response.status_code == 200
     execution_payload = execute_response.json()
     assert execution_payload["order"]["status"] == "filled"
     assert execution_payload["preview"]["eligible"] is True
-    assert execution_payload["execution_id"].startswith("admin-buyback:")
+    assert Decimal(str(execution_payload["total"])) == Decimal(str(execution_payload["preview"]["admin_total"]))
 
-    wallet_summary = WalletService().get_wallet_summary(session, seller)
+    wallet_summary = WalletService().get_wallet_summary(
+        session,
+        seller,
+        currency=LedgerUnit(execution_payload["order"]["currency"]),
+    )
     assert wallet_summary.available_balance == Decimal(str(execution_payload["preview"]["admin_total"]))

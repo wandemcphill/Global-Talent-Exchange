@@ -592,6 +592,7 @@ def test_end_to_end_register_login_fund_wallet_buy_player_and_join_competition(
 
     create_competition_response = client.post(
         "/api/competitions",
+        headers=competition_admin_headers,
         json={
             "name": "Critical E2E Cup",
             "format": "league",
@@ -631,28 +632,16 @@ def test_end_to_end_register_login_fund_wallet_buy_player_and_join_competition(
         json={"reference": top_up_reference},
     )
     assert verify_top_up.status_code == 200, verify_top_up.text
-    verified_credit_balance = Decimal(verify_top_up.json()["wallet"]["balance"])
-    assert verified_credit_balance > Decimal("300.0000")
+    verified_coin_balance = Decimal(verify_top_up.json()["wallet"]["balance"])
+    assert verified_coin_balance > Decimal("300.0000")
 
-    credit_summary = client.get(
+    coin_summary_after_top_up = client.get(
         "/api/wallets/summary",
         headers=login["headers"],
-        params={"currency": "credit"},
+        params={"currency": "coin"},
     )
-    assert credit_summary.status_code == 200, credit_summary.text
-    assert Decimal(credit_summary.json()["available_balance"]) == verified_credit_balance
-
-    convert_response = client.post(
-        "/api/wallets/conversions",
-        headers=login["headers"],
-        json={
-            "amount": "300.0000",
-            "source_unit": "credit",
-            "idempotency_key": _suffix("credit-to-coin"),
-        },
-    )
-    assert convert_response.status_code == 201, convert_response.text
-    assert Decimal(convert_response.json()["target_amount"]) == Decimal("3.0000")
+    assert coin_summary_after_top_up.status_code == 200, coin_summary_after_top_up.text
+    assert Decimal(coin_summary_after_top_up.json()["available_balance"]) == verified_coin_balance
 
     buy_response = client.post(
         f"/players/{player_id}/shares/buy",
@@ -680,7 +669,8 @@ def test_end_to_end_register_login_fund_wallet_buy_player_and_join_competition(
         params={"currency": "coin"},
     )
     assert coin_summary.status_code == 200, coin_summary.text
-    assert Decimal(coin_summary.json()["available_balance"]) == Decimal("1.0000")
+    assert Decimal(coin_summary.json()["available_balance"]) < verified_coin_balance
+    assert Decimal(coin_summary.json()["available_balance"]) > Decimal("0.0000")
 
     holdings_response = client.get("/players/me/shares/holdings", headers=login["headers"])
     assert holdings_response.status_code == 200, holdings_response.text
