@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/app_feedback.dart';
 import '../../data/gte_models.dart';
 import '../../providers/gte_exchange_controller.dart';
 import '../../widgets/gte_formatters.dart';
@@ -76,214 +75,11 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
     await _refresh();
   }
 
-  Future<void> _openConvertToFanCoin() async {
-    final TextEditingController amountController = TextEditingController();
-    bool converted = false;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (BuildContext context) {
-        GteWalletConversionQuote? quote;
-        String? error;
-        bool isQuoting = false;
-        bool isSubmitting = false;
-
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter modalSetState) {
-            Future<void> previewQuote() async {
-              final double? amount = double.tryParse(
-                amountController.text.trim(),
-              );
-              if (amount == null || amount <= 0) {
-                modalSetState(() {
-                  error = 'Enter a valid GTEX Coin amount to preview.';
-                  quote = null;
-                });
-                return;
-              }
-              modalSetState(() {
-                error = null;
-                isQuoting = true;
-              });
-              try {
-                final GteWalletConversionQuote response = await widget
-                    .controller
-                    .api
-                    .quoteWalletConversion(
-                      GteWalletConversionQuoteRequest(amount: amount),
-                    );
-                modalSetState(() {
-                  quote = response;
-                });
-              } catch (conversionError) {
-                modalSetState(() {
-                  error = AppFeedback.messageFor(conversionError);
-                  quote = null;
-                });
-              } finally {
-                if (context.mounted) {
-                  modalSetState(() {
-                    isQuoting = false;
-                  });
-                }
-              }
-            }
-
-            Future<void> submitConversion() async {
-              final double? amount = double.tryParse(
-                amountController.text.trim(),
-              );
-              if (amount == null || amount <= 0) {
-                modalSetState(() {
-                  error = 'Enter a valid GTEX Coin amount to convert.';
-                });
-                return;
-              }
-              if (quote == null) {
-                modalSetState(() {
-                  error = 'Preview the conversion before submitting.';
-                });
-                return;
-              }
-              modalSetState(() {
-                error = null;
-                isSubmitting = true;
-              });
-              try {
-                await widget.controller.api.createWalletConversion(
-                  GteWalletConversionRequest(amount: amount),
-                );
-                converted = true;
-                if (!context.mounted) {
-                  return;
-                }
-                Navigator.of(context).pop();
-              } catch (conversionError) {
-                modalSetState(() {
-                  error = AppFeedback.messageFor(conversionError);
-                });
-              } finally {
-                if (context.mounted) {
-                  modalSetState(() {
-                    isSubmitting = false;
-                  });
-                }
-              }
-            }
-
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                20,
-                20,
-                20 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Convert GTEX to Fan Coin',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Fan Coin is for gifting and user-hosted competition spending. Fan Coin cannot be converted back into GTEX Coin.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'GTEX Coin amount',
-                      prefixIcon: Icon(Icons.compare_arrows_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (quote case final GteWalletConversionQuote preview)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: GteShellTheme.panelStrong.withValues(alpha: 0.7),
-                        border: Border.all(
-                          color: GteShellTheme.accentCapital.withValues(
-                            alpha: 0.18,
-                          ),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            'Preview',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${gteFormatAmountForUnit(preview.sourceAmount, preview.sourceUnit)} -> ${gteFormatAmountForUnit(preview.targetAmount, preview.targetUnit)}',
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Rate: 1 GTEX Coin = ${preview.rate.toStringAsFixed(0)} Fan Coin',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (error != null) ...<Widget>[
-                    const SizedBox(height: 14),
-                    GteStatePanel(
-                      title: 'Conversion unavailable',
-                      message: error!,
-                      icon: Icons.warning_amber_rounded,
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: <Widget>[
-                      FilledButton.tonalIcon(
-                        onPressed:
-                            isQuoting || isSubmitting ? null : previewQuote,
-                        icon: const Icon(Icons.preview_outlined),
-                        label: Text(
-                          isQuoting ? 'Previewing...' : 'Preview conversion',
-                        ),
-                      ),
-                      FilledButton.icon(
-                        onPressed:
-                            isQuoting || isSubmitting ? null : submitConversion,
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: Text(
-                          isSubmitting ? 'Converting...' : 'Convert now',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-    amountController.dispose();
-    if (converted) {
-      await _refresh();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wallets'),
+        title: const Text('GTEX wallet'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
@@ -298,8 +94,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
           if (!snapshot.hasData || snapshot.data!.length < 3) {
             return const Center(
               child: GteStatePanel(
-                title: 'Wallets unavailable',
-                message: 'Unable to load the wallet balances right now.',
+                title: 'GTEX wallet unavailable',
+                message: 'Unable to load the GTEX wallet balances right now.',
                 icon: Icons.account_balance_wallet_outlined,
               ),
             );

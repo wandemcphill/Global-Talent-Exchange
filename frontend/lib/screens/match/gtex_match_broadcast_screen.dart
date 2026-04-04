@@ -11,7 +11,6 @@ import 'package:gte_frontend/models/platform/gtex_platform_experience.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_broadcast_hud_layer.dart';
-import 'package:gte_frontend/widgets/match/broadcast/gtex_gifting_sheet.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_match_broadcast_app_bar.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_match_canvas_layer.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_tv_mode_shell.dart';
@@ -311,22 +310,6 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
         current.lastFrame.timeSeconds == next.lastFrame.timeSeconds;
   }
 
-  void _showGiftSheet() {
-    GtexGiftingSheet.show(
-      context,
-      onSelected: (double amount) {
-        if (!mounted) {
-          return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${amount.toStringAsFixed(0)} Fan Coin gift queued'),
-          ),
-        );
-      },
-    );
-  }
-
   void _toggleViewType(GtexMatchBroadcastController controller) {
     if (!controller.canUsePseudo3D) {
       return;
@@ -402,7 +385,7 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
               onTogglePause: controller.togglePause,
               onCycleSpeed: controller.cycleSpeed,
               onReplay: controller.replay,
-              onGiftTap: _showGiftSheet,
+              onGiftTap: () {},
               onOpenHighlights: widget.onOpenHighlights,
             ),
           ],

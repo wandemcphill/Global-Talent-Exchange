@@ -784,7 +784,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Use this dashboard to control payment availability, competition operations, bank-transfer details, manual deposit review, and direct GTEX or Fan Coin wallet funding.',
+            'Use this dashboard to control payment availability, competition operations, bank-transfer details, manual deposit review, and direct GTEX Coin wallet funding.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),

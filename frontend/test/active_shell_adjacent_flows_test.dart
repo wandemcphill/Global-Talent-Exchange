@@ -143,8 +143,8 @@ void main() {
       );
       await tester.ensureVisible(walletOverviewButton);
       await tester.tap(walletOverviewButton);
-      await _pumpUntilText(tester, 'Production wallet rails');
-      expect(find.text('Production wallet rails'), findsOneWidget);
+      await _pumpUntilText(tester, 'GTEX Coin wallet');
+      expect(find.text('GTEX Coin wallet'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');

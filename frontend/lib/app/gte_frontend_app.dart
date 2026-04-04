@@ -143,13 +143,20 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
             debugShowCheckedModeBanner: false,
             title: 'GTEX Football Universe',
             theme: GteShellTheme.build(_themeController.activeTheme),
-            home: GteExchangeShellScreen.fromPath(
-              controller: _controller,
-              apiBaseUrl: _config.apiBaseUrl,
-              backendMode: activeBackendMode,
-              initialPath:
-                  widget.initialPath.isEmpty ? '/app/home' : widget.initialPath,
-            ),
+            home:
+                widget.initialPath.isEmpty
+                    ? GteExchangeShellScreen.fromPath(
+                      controller: _controller,
+                      apiBaseUrl: _config.apiBaseUrl,
+                      backendMode: activeBackendMode,
+                      initialPath: '/app/home',
+                    )
+                    : GteExchangeShellScreen.fromPath(
+                      controller: _controller,
+                      apiBaseUrl: _config.apiBaseUrl,
+                      backendMode: activeBackendMode,
+                      initialPath: widget.initialPath,
+                    ),
             onGenerateRoute: (RouteSettings settings) {
               final String? name = settings.name;
               if (name != null && name.startsWith('/app')) {

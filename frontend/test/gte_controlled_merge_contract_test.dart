@@ -190,7 +190,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
 
-      expect(find.text('Production wallet rails'), findsOneWidget);
+      expect(find.text('GTEX Coin wallet'), findsOneWidget);
       expect(find.text('GTEX COIN'), findsOneWidget);
       expect(find.text('Top up GTEX'), findsOneWidget);
     });

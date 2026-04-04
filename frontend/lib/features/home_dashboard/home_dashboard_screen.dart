@@ -428,7 +428,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 _HomeSectionHeading(
                   eyebrow: 'QUIETER SIGNALS',
                   title:
-                      'Replays and alerts still matter, just without hijacking the dashboard.',
+                      'Match stories and alerts stay visible without hijacking the dashboard.',
                   detail:
                       'These cards stay visible for storylines, reminders, and follow-up actions once the primary route is clear.',
                 ),
@@ -1111,6 +1111,22 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       competitions: competitionController.competitions,
     );
     if (target == _HomeLinkTarget.replays) {
+      final GteNavigationDependencies? dependencies =
+          widget.navigationDependencies;
+      final String? canonicalClubId = widget.clubId?.trim();
+      if (dependencies != null &&
+          canonicalClubId != null &&
+          canonicalClubId.isNotEmpty) {
+        await GteNavigationHelpers.pushRoute(
+          context,
+          route: ClubReplaysRouteData(
+            clubId: canonicalClubId,
+            clubName: clubName,
+          ),
+          dependencies: dependencies,
+        );
+        return;
+      }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder:
@@ -1473,39 +1489,39 @@ class _HomeQuickActionsStrip extends StatelessWidget {
             onTap: onOpenCompetitions,
           ),
           _HomeActionCard(
-            eyebrow: 'COACHES',
-            title: 'Scout free coaches',
+            eyebrow: 'MARKET',
+            title: 'Trade players + regens',
             detail:
                 isAuthenticated
-                    ? 'Open the coach market, claim standard coaches for free, and track elite and legendary copy scarcity before the board dries up.'
-                    : 'Coach discovery is live in GTEX. Sign in to claim free coaches and chase the scarce elite and legendary copies.',
-            icon: Icons.manage_accounts_outlined,
-            accent: GteShellTheme.accentWarm,
-            badge: 'Free',
+                    ? 'Open the player market to scout real players, regen upside, and the current quote tape from one execution lane.'
+                    : 'The player market is visible in guest mode. Sign in when you are ready to buy, fund GTEX Coin, and hold assets.',
+            icon: Icons.person_search_outlined,
+            accent: GteShellTheme.accent,
+            badge: 'Live',
             actionLabel:
-                isAuthenticated ? 'Open coach market' : 'Sign in for coaches',
-            onTap: isAuthenticated ? onOpenMarket : onOpenLogin,
+                isAuthenticated ? 'Open player market' : 'Preview market',
+            onTap: onOpenMarket ?? onOpenLogin,
           ),
           _HomeActionCard(
-            eyebrow: isAuthenticated ? 'REPLAYS' : 'UNLOCK',
+            eyebrow: isAuthenticated ? 'MATCHDAY' : 'ACCESS',
             title:
                 isAuthenticated
-                    ? 'Return to the storylines'
-                    : 'Sign in for execution',
+                    ? 'Open the live match hub'
+                    : 'Create or sign in',
             detail:
                 isAuthenticated
-                    ? 'Recent match stories, turning points, and notifications stay one tap away.'
-                    : 'Guest mode previews the shell. Sign in to unlock wallet, order rails, and writable club actions.',
+                    ? '2D, broadcast, and Flutter 3D lanes stay one route away from Home instead of hiding behind replay-only detours.'
+                    : 'Open the auth lane to create an account, fund GTEX Coin, buy players, and bind a real club workspace.',
             icon:
                 isAuthenticated
-                    ? Icons.play_circle_outline
+                    ? Icons.live_tv_outlined
                     : Icons.lock_open_outlined,
             accent:
                 isAuthenticated
-                    ? GteShellTheme.accentWarm
+                    ? GteShellTheme.accentArena
                     : GteShellTheme.accentCapital,
             badge: isAuthenticated ? 'Tap' : 'Secure',
-            actionLabel: isAuthenticated ? 'Open replays' : 'Sign in',
+            actionLabel: isAuthenticated ? 'Open matchday' : 'Create account',
             onTap: isAuthenticated ? onOpenReplays : onOpenLogin,
           ),
         ];
@@ -2329,7 +2345,7 @@ class _HomeReplayHubScreen extends StatelessWidget {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Recent replays')),
+        appBar: AppBar(title: const Text('Matchday stories')),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
           children: <Widget>[
@@ -2339,12 +2355,12 @@ class _HomeReplayHubScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    '$clubName replay deck',
+                    '$clubName matchday deck',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Replay cards follow the same club story Home is surfacing: recent honors, reputation spikes, and the moments worth replaying again.',
+                    'Matchday cards follow the same club story Home is surfacing: recent honors, reputation spikes, and the moments worth revisiting.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
@@ -2684,7 +2700,7 @@ class _HomeSnapshot {
               ? '$userLabel, the exchange is moving.'
               : 'Home is ready for $resolvedClubName.',
       heroSubtitle:
-          'Next match, cups, replays, and club momentum are all live from Home.',
+          'Next match, cups, matchday stories, and club momentum are all live from Home.',
       prestigeLabel: prestigeLabel,
       totalHonors: totalHonors,
       openCompetitionCount: openCompetitionCount,
@@ -2844,7 +2860,7 @@ class _HomeSnapshot {
         target: _HomeLinkTarget.competitions,
       ),
       recentReplay: _HomeCardData(
-        eyebrow: 'Recent Replay',
+        eyebrow: 'Matchday brief',
         title: replays.first.title,
         summary: replays.first.summary,
         detail: replays.first.caption,
@@ -2859,14 +2875,14 @@ class _HomeSnapshot {
           MapEntry<String, String>('Focus', replays.first.focusLabel),
         ],
         highlights: replays.first.highlights,
-        actionLabel: 'Open replays',
+        actionLabel: 'Open matchday',
         target: _HomeLinkTarget.replays,
       ),
       notificationsSummary: _HomeCardData(
         eyebrow: 'Notifications Summary',
         title: '${notifications.length} fresh signals',
         summary:
-            'Club, competition, and replay updates are grouped into one Home queue so the next decision is immediate.',
+            'Club, competition, and matchday updates are grouped into one Home queue so the next decision is immediate.',
         detail:
             isAuthenticated
                 ? 'Signed in sessions keep the club pulse and competition pulse aligned.'
@@ -3198,7 +3214,7 @@ List<_HomeReplayEntry> _buildReplayEntries({
     )) {
       entries.add(
         _HomeReplayEntry(
-          title: '${honor.trophyName} replay',
+          title: '${honor.trophyName} story',
           summary: honor.finalResultSummary,
           caption: '${honor.seasonLabel} • ${honor.competitionRegion}',
           trackLabel:
@@ -3222,7 +3238,7 @@ List<_HomeReplayEntry> _buildReplayEntries({
         .take(2)) {
       entries.add(
         _HomeReplayEntry(
-          title: '${event.title} replay',
+          title: '${event.title} story',
           summary: event.description,
           caption: event.seasonLabel,
           trackLabel: event.category.label,
@@ -3241,15 +3257,15 @@ List<_HomeReplayEntry> _buildReplayEntries({
   if (entries.isEmpty) {
     entries.add(
       _HomeReplayEntry(
-        title: '$resolvedClubName replay hub',
+        title: '$resolvedClubName matchday hub',
         summary:
-            'Home will pin the strongest replay card here once the next club moment lands.',
+            'Home will pin the strongest matchday card here once the next club moment lands.',
         caption: 'Club pulse',
         trackLabel: 'Home',
         focusLabel: 'Preview',
         occurredAt: DateTime.now().toUtc(),
         highlights: const <String>[
-          'Replay cards are ready for trophies, league swings, and prestige spikes.',
+          'Matchday cards are ready for trophies, league swings, and prestige spikes.',
         ],
       ),
     );
@@ -3310,7 +3326,7 @@ List<String> _buildNotifications({
       '${league.name} is ${_competitionStatusLabel(league.status).toLowerCase()} with ${_spotsLabel(league)} still moving.',
     'Fast Cup countdown is live for ${_formatDayTime(fastCupStart)}.',
     '${matchPreview.stageLabel} locks in ${_relativeLabel(matchPreview.kickoff, DateTime.now().toUtc())}.',
-    'Replay stack refreshed with ${replays.first.title}.',
+    'Matchday stack refreshed with ${replays.first.title}.',
     isAuthenticated
         ? 'Live session is active for club and competition actions.'
         : 'Sign in to turn preview signals into live account alerts.',

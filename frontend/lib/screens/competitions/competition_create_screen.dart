@@ -170,7 +170,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'User-hosted competition stakes settle in Fan Coin so gifting, community play, and trading capital remain separated.',
+                      'User-hosted competition stakes settle in GTEX Coin so funding, rewards, and player trading stay on one wallet rail.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
