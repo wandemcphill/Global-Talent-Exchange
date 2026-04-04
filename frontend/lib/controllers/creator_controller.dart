@@ -31,6 +31,7 @@ class CreatorController extends ChangeNotifier {
   CreatorCompetitionShareData? competitionShare;
   CreatorCopilotDraft? copilotDraft;
   CreatorCopilotAnalysis? copilotAnalysis;
+  bool creatorProfileUnavailable = false;
 
   bool get hasData => profile != null;
   DateTime? get syncedAt => _syncSystem.lastSyncedAt;
@@ -56,6 +57,7 @@ class CreatorController extends ChangeNotifier {
     final int requestId = _loadGate.begin();
     isLoading = true;
     errorMessage = null;
+    creatorProfileUnavailable = false;
     notifyListeners();
 
     try {
@@ -88,8 +90,22 @@ class CreatorController extends ChangeNotifier {
         await analyzeCopilot(force: true);
       }
       errorMessage = null;
+      creatorProfileUnavailable = false;
     } catch (error) {
       if (_loadGate.isActive(requestId)) {
+        if (error is GteApiException &&
+            error.type == GteApiErrorType.notFound &&
+            creatorId == 'me') {
+          profile = null;
+          financeSummary = null;
+          competitionShare = null;
+          copilotDraft = null;
+          copilotAnalysis = null;
+          errorMessage = null;
+          creatorProfileUnavailable = true;
+          return;
+        }
+        creatorProfileUnavailable = false;
         errorMessage = AppFeedback.messageFor(error);
       }
     } finally {

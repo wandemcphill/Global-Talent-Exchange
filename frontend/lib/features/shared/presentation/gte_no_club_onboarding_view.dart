@@ -5,61 +5,50 @@ import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 class GteNoClubOnboardingView extends StatelessWidget {
   const GteNoClubOnboardingView({
     super.key,
+    this.isAuthenticated = true,
     this.onCreateClub,
     this.onBrowseClubMarket,
     this.onExploreArena,
+    this.onOpenMatchday,
+    this.onOpenPlayerUniverse,
+    this.onOpenWorld,
+    this.onOpenWallet,
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 120),
   });
 
+  final bool isAuthenticated;
   final VoidCallback? onCreateClub;
   final VoidCallback? onBrowseClubMarket;
   final VoidCallback? onExploreArena;
+  final VoidCallback? onOpenMatchday;
+  final VoidCallback? onOpenPlayerUniverse;
+  final VoidCallback? onOpenWorld;
+  final VoidCallback? onOpenWallet;
   final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> overviewChips = <Widget>[
-      if (onCreateClub != null) const Chip(label: Text('1. Create your club')),
-      if (onBrowseClubMarket != null)
-        const Chip(label: Text('2. Own an existing club')),
-      if (onExploreArena != null)
-        const Chip(label: Text('3. Explore competitions')),
-    ];
-    final List<Widget> overviewActions = <Widget>[
+    final List<_NoClubActionSpec> actions = <_NoClubActionSpec>[
       if (onCreateClub != null)
-        FilledButton.icon(
-          onPressed: onCreateClub,
-          icon: const Icon(Icons.add_circle_outline),
-          label: const Text('Create your club'),
-        ),
-      if (onBrowseClubMarket != null)
-        FilledButton.tonalIcon(
-          onPressed: onBrowseClubMarket,
-          icon: const Icon(Icons.storefront_outlined),
-          label: const Text('Browse club market'),
-        ),
-      if (onExploreArena != null)
-        OutlinedButton.icon(
-          onPressed: onExploreArena,
-          icon: const Icon(Icons.stadium_outlined),
-          label: const Text('Explore competitions'),
-        ),
-    ];
-    final List<Widget> cards = <Widget>[
-      if (onCreateClub != null)
-        _NoClubActionCard(
-          eyebrow: 'FIRST STEP',
-          title: 'Create your club',
+        _NoClubActionSpec(
+          eyebrow: isAuthenticated ? 'FOUNDATION' : 'START HERE',
+          chipLabel: isAuthenticated ? 'Create your club' : 'Create account',
+          title:
+              isAuthenticated ? 'Create your club' : 'Create your GTEX account',
           detail:
-              'Launch a live club workspace, set the badge and palette later, and unlock identity, trophy, scouting, and competition routes immediately.',
+              isAuthenticated
+                  ? 'Launch a live club workspace, set the badge and palette later, and unlock identity, trophy, scouting, and competition routes immediately.'
+                  : 'Register or sign in first, then create a club from scratch when you are ready to own a full football workspace.',
           icon: Icons.add_circle_outline,
           accent: GteShellTheme.accentClub,
-          actionLabel: 'Create club',
+          actionLabel: isAuthenticated ? 'Create club' : 'Sign in or register',
           onTap: onCreateClub!,
+          prominence: _NoClubActionProminence.primary,
         ),
       if (onBrowseClubMarket != null)
-        _NoClubActionCard(
+        _NoClubActionSpec(
           eyebrow: 'ALTERNATIVE',
+          chipLabel: 'Own an existing club',
           title: 'Own an existing club',
           detail:
               'Browse clubs available for sale, compare value, and take ownership to unlock club management.',
@@ -67,19 +56,96 @@ class GteNoClubOnboardingView extends StatelessWidget {
           accent: GteShellTheme.accentWarm,
           actionLabel: 'Open club market',
           onTap: onBrowseClubMarket!,
+          prominence: _NoClubActionProminence.tonal,
         ),
       if (onExploreArena != null)
-        _NoClubActionCard(
-          eyebrow: 'ALSO AVAILABLE',
+        _NoClubActionSpec(
+          eyebrow: 'PLAY NOW',
+          chipLabel: 'Explore competitions',
           title: 'Explore competitions',
           detail:
-              'Join competitions while you decide which club to own or back first.',
+              'Open live cups, standings, and football storylines while you decide which club to own or back first.',
           icon: Icons.stadium_outlined,
           accent: GteShellTheme.accentArena,
           actionLabel: 'Open competitions',
           onTap: onExploreArena!,
+          prominence: _NoClubActionProminence.outlined,
+        ),
+      if (onOpenMatchday != null)
+        _NoClubActionSpec(
+          eyebrow: 'MATCHDAY',
+          chipLabel: 'Open matchday hub',
+          title: 'Play matchday lanes',
+          detail:
+              'Enter the routed 2D viewer, broadcast desk, and Flutter 3D lane from the live matchday hub even before you own a club.',
+          icon: Icons.sports_soccer_outlined,
+          accent: GteShellTheme.accentArena,
+          actionLabel: 'Open matchday',
+          onTap: onOpenMatchday!,
+          prominence: _NoClubActionProminence.tonal,
+        ),
+      if (onOpenPlayerUniverse != null)
+        _NoClubActionSpec(
+          eyebrow: 'PLAYER UNIVERSE',
+          chipLabel: 'Scout players',
+          title: 'Scout players and digital assets',
+          detail:
+              'Jump into the broader player-card marketplace so real players, listings, and card inventory stay reachable from day one.',
+          icon: Icons.person_search_outlined,
+          accent: GteShellTheme.accent,
+          actionLabel: 'Open player universe',
+          onTap: onOpenPlayerUniverse!,
+          prominence: _NoClubActionProminence.tonal,
+        ),
+      if (onOpenWorld != null)
+        _NoClubActionSpec(
+          eyebrow: 'WORLD ENGINE',
+          chipLabel: 'Open regen universe',
+          title: 'Open the regen universe',
+          detail:
+              'Follow rising stars, national regens, scouting feed, and world-building context before you commit to a club.',
+          icon: Icons.public_outlined,
+          accent: GteShellTheme.accentCommunity,
+          actionLabel: 'Open world',
+          onTap: onOpenWorld!,
+          prominence: _NoClubActionProminence.tonal,
+        ),
+      if (onOpenWallet != null)
+        _NoClubActionSpec(
+          eyebrow: 'TREASURY',
+          chipLabel: 'Open GTEX coin wallet',
+          title: 'Open the GTEX coin wallet',
+          detail:
+              'Top-up and wallet posture live in the GTEX coin lane, so funding remains visible before you start buying players.',
+          icon: Icons.account_balance_wallet_outlined,
+          accent: GteShellTheme.accentCapital,
+          actionLabel: 'Open wallet',
+          onTap: onOpenWallet!,
+          prominence: _NoClubActionProminence.outlined,
         ),
     ];
+    final List<Widget> overviewChips = <Widget>[
+      for (int index = 0; index < actions.length; index++)
+        Chip(label: Text('${index + 1}. ${actions[index].chipLabel}')),
+    ];
+    final List<Widget> overviewActions = actions
+        .map(
+          (_NoClubActionSpec action) => _OverviewActionButton(action: action),
+        )
+        .toList(growable: false);
+    final List<Widget> cards = actions
+        .map(
+          (_NoClubActionSpec action) => _NoClubActionCard(
+            eyebrow: action.eyebrow,
+            title: action.title,
+            detail: action.detail,
+            icon: action.icon,
+            accent: action.accent,
+            actionLabel: action.actionLabel,
+            onTap: action.onTap,
+          ),
+        )
+        .toList(growable: false);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: padding,
@@ -101,12 +167,16 @@ class GteNoClubOnboardingView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'This account does not own a club yet',
+                  isAuthenticated
+                      ? 'This account does not own a club yet'
+                      : 'Start with account access, then claim a club',
                   style: Theme.of(context).textTheme.displaySmall,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Create a new club from scratch or take over one already on the market, then come back here to manage identity, trophies, scouting, and matchday operations.',
+                  isAuthenticated
+                      ? 'Create a new club from scratch or take over one already on the market, then come back here to manage identity, trophies, scouting, and matchday operations. You can still enter matchday, the player universe, world/regens, and the GTEX coin wallet right now.'
+                      : 'Register or sign in to create a club, but you can already scout the player universe, follow the regen world, open the matchday hub, and inspect the GTEX coin lane before choosing your first club.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 18),
@@ -152,6 +222,62 @@ class GteNoClubOnboardingView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OverviewActionButton extends StatelessWidget {
+  const _OverviewActionButton({required this.action});
+
+  final _NoClubActionSpec action;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (action.prominence) {
+      case _NoClubActionProminence.primary:
+        return FilledButton.icon(
+          onPressed: action.onTap,
+          icon: Icon(action.icon),
+          label: Text(action.actionLabel),
+        );
+      case _NoClubActionProminence.tonal:
+        return FilledButton.tonalIcon(
+          onPressed: action.onTap,
+          icon: Icon(action.icon),
+          label: Text(action.actionLabel),
+        );
+      case _NoClubActionProminence.outlined:
+        return OutlinedButton.icon(
+          onPressed: action.onTap,
+          icon: Icon(action.icon),
+          label: Text(action.actionLabel),
+        );
+    }
+  }
+}
+
+enum _NoClubActionProminence { primary, tonal, outlined }
+
+class _NoClubActionSpec {
+  const _NoClubActionSpec({
+    required this.eyebrow,
+    required this.chipLabel,
+    required this.title,
+    required this.detail,
+    required this.icon,
+    required this.accent,
+    required this.actionLabel,
+    required this.onTap,
+    required this.prominence,
+  });
+
+  final String eyebrow;
+  final String chipLabel;
+  final String title;
+  final String detail;
+  final IconData icon;
+  final Color accent;
+  final String actionLabel;
+  final VoidCallback onTap;
+  final _NoClubActionProminence prominence;
 }
 
 class _NoClubActionCard extends StatelessWidget {

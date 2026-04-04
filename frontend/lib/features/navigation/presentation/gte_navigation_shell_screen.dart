@@ -16,6 +16,7 @@ import 'package:gte_frontend/features/club_hub/presentation/club_hub_screen.dart
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/home_dashboard/home_dashboard_screen.dart';
+import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/shared/presentation/gte_no_club_onboarding_view.dart';
@@ -418,28 +419,23 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   Widget _buildClubDestination() {
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
-      if (!widget.controller.isAuthenticated) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: GteStatePanel(
-            eyebrow: 'CLUB SCOPE',
-            title: 'Sign in to open club routes',
-            message:
-                'Guest access does not expose a canonical club. Sign in to continue with a real club workspace or browse club-market routes first.',
-            icon: Icons.login_outlined,
-            accentColor: _routeAccentFor(context, GtePrimaryDestination.club),
-            actionLabel: 'Sign in',
-            onAction:
-                () => _openLogin(targetRoute: const GteNavigationRoute.club()),
-          ),
-        );
-      }
       return GteNoClubOnboardingView(
-        onCreateClub: _openCreateClubFlow,
+        isAuthenticated: widget.controller.isAuthenticated,
+        onCreateClub:
+            widget.controller.isAuthenticated
+                ? _openCreateClubFlow
+                : () =>
+                    _openLogin(targetRoute: const GteNavigationRoute.club()),
         onBrowseClubMarket:
             () => _openFeatureRoute(const ClubSaleMarketListingsRouteData()),
         onExploreArena:
             () => _openPrimaryDestination(GtePrimaryDestination.competitions),
+        onOpenMatchday: _openNoClubMatchdayHub,
+        onOpenPlayerUniverse:
+            () => _openFeatureRoute(const PlayerCardsBrowseRouteData()),
+        onOpenWorld: () => _openFeatureRoute(const WorldOverviewRouteData()),
+        onOpenWallet:
+            () => _openPrimaryDestination(GtePrimaryDestination.wallet),
       );
     }
     return ClubHubScreen(
@@ -734,6 +730,18 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           ),
       onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
       navigationDependencies: _navigationDependencies(),
+    );
+  }
+
+  void _openNoClubMatchdayHub() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder:
+            (BuildContext context) => GteLiveMatchHubRouteScreen(
+              dependencies: _navigationDependencies(),
+              clubName: 'GTEX Matchday',
+            ),
+      ),
     );
   }
 

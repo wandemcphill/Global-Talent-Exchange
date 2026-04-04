@@ -132,17 +132,25 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (profile == null) {
+          final bool creatorProfileUnavailable =
+              widget.creatorController.creatorProfileUnavailable;
           return Padding(
             padding: const EdgeInsets.all(20),
             child: GteStatePanel(
-              eyebrow: 'COMMUNITY DATA',
-              title: 'Community tools are unavailable',
+              eyebrow:
+                  creatorProfileUnavailable ? 'CREATOR LANE' : 'COMMUNITY DATA',
+              title:
+                  creatorProfileUnavailable
+                      ? 'Creator profile is not live yet'
+                      : 'Community tools are unavailable',
               message:
-                  widget.creatorController.errorMessage ??
-                  'Creator data is still syncing.',
+                  creatorProfileUnavailable
+                      ? 'This account can still use player trading, matchday, world/regens, and GTEX coin, but the creator community desk has not been provisioned yet.'
+                      : widget.creatorController.errorMessage ??
+                          'Creator data is still syncing.',
               icon: Icons.groups_outlined,
               accentColor: GteShellTheme.accentCommunity,
-              actionLabel: 'Retry',
+              actionLabel: creatorProfileUnavailable ? 'Refresh' : 'Retry',
               onAction: _refresh,
             ),
           );

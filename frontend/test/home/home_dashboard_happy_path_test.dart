@@ -95,29 +95,76 @@ void main() {
       expect(find.text('MATCHDAY BRIEF'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'no-club home still exposes live matchday, player, world, and GTEX wallet lanes',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1600, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'user-lagos',
+        userName: 'Lagos Scout',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: HomeDashboardScreen(
+            exchangeController: controller,
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+            onOpenWalletTab: () {},
+            onOpenCompetitionsTab: () {},
+            navigationDependencies: const GteNavigationDependencies(
+              apiBaseUrl: 'http://127.0.0.1:8000',
+              backendMode: GteBackendMode.fixture,
+              currentUserId: 'user-lagos',
+              currentUserName: 'Lagos Scout',
+              isAuthenticated: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('This account does not own a club yet'), findsOneWidget);
+      expect(find.text('Open player universe'), findsWidgets);
+      expect(find.text('Open world'), findsWidgets);
+      expect(find.text('Open matchday'), findsWidgets);
+      expect(find.text('Open wallet'), findsWidgets);
+    },
+  );
 }
 
 GteAuthSession _authenticatedSession({
   required String userId,
   required String userName,
-  required String clubId,
-  required String clubName,
+  String? clubId,
+  String? clubName,
 }) {
   return GteAuthSession.fromJson(<String, Object?>{
     'access_token': 'test-token',
     'session_id': 'session-$userId',
     'token_type': 'bearer',
     'expires_in': 3600,
-    'current_club_id': clubId,
-    'current_club_name': clubName,
+    if (clubId != null) 'current_club_id': clubId,
+    if (clubName != null) 'current_club_name': clubName,
     'user': <String, Object?>{
       'id': userId,
       'email': '$userId@gtex.test',
       'username': userId,
       'display_name': userName,
       'role': 'user',
-      'current_club_id': clubId,
-      'current_club_name': clubName,
+      if (clubId != null) 'current_club_id': clubId,
+      if (clubName != null) 'current_club_name': clubName,
     },
   });
 }

@@ -144,4 +144,56 @@ void main() {
       expect(find.text('Referral runtime is not enabled yet'), findsNothing);
     },
   );
+
+  testWidgets(
+    'approved users without a live creator profile get a clean provisioning state',
+    (WidgetTester tester) async {
+      final ReferralController referralController = ReferralController(
+        api: ReferralApi.fixture(),
+      );
+      final CreatorController creatorController =
+          _MissingProfileCreatorController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: ReferralHubScreen(
+            referralController: referralController,
+            creatorController: creatorController,
+            isAuthenticated: true,
+            hasApprovedCreatorAccess: true,
+            isReferralRuntimeAvailable: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Creator profile is not live yet'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'player trading, matchday, world/regens, and GTEX coin',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Retry'), findsNothing);
+      expect(find.text('Refresh'), findsOneWidget);
+    },
+  );
+}
+
+class _MissingProfileCreatorController extends CreatorController {
+  _MissingProfileCreatorController() : super(api: CreatorApi.fixture());
+
+  @override
+  Future<void> load({String creatorId = 'me', bool force = false}) async {
+    isLoading = false;
+    profile = null;
+    financeSummary = null;
+    competitionShare = null;
+    copilotDraft = null;
+    copilotAnalysis = null;
+    errorMessage = null;
+    creatorProfileUnavailable = true;
+    notifyListeners();
+  }
 }

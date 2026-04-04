@@ -9,6 +9,7 @@ import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile_dto.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_types.dart';
+import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_models.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
@@ -863,167 +864,60 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     };
   }
 
+  VoidCallback? _playerUniverseOnboardingAction() {
+    if (widget.navigationDependencies != null) {
+      return () {
+        _openFeatureRoute(const PlayerCardsBrowseRouteData());
+      };
+    }
+    return widget.onOpenMarketTab ??
+        (widget.exchangeController.isAuthenticated ? null : widget.onOpenLogin);
+  }
+
+  VoidCallback? _worldOnboardingAction() {
+    if (widget.navigationDependencies == null) {
+      return null;
+    }
+    return () {
+      _openFeatureRoute(const WorldOverviewRouteData());
+    };
+  }
+
+  VoidCallback? _walletOnboardingAction() {
+    return widget.onOpenWalletTab ??
+        (widget.exchangeController.isAuthenticated ? null : widget.onOpenLogin);
+  }
+
+  VoidCallback? _matchdayOnboardingAction() {
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
+    if (dependencies == null) {
+      return _arenaOnboardingAction();
+    }
+    return () {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder:
+              (BuildContext context) => GteLiveMatchHubRouteScreen(
+                dependencies: dependencies,
+                clubName: 'GTEX Matchday',
+              ),
+        ),
+      );
+    };
+  }
+
   Widget _buildNoClubState() {
     final bool isAuthenticated = widget.exchangeController.isAuthenticated;
-    if (isAuthenticated) {
-      return GteNoClubOnboardingView(
-        onCreateClub: _createClubOnboardingAction(),
-        onBrowseClubMarket: _browseClubMarketOnboardingAction(),
-        onExploreArena: _arenaOnboardingAction(),
-      );
-    }
-    final VoidCallback? createClubAction = _createClubOnboardingAction();
-    final VoidCallback? browseClubAction = _browseClubMarketOnboardingAction();
-    final VoidCallback? arenaAction = _arenaOnboardingAction();
-    final List<Widget> cards = <Widget>[
-      _HomeActionCard(
-        eyebrow: 'STEP 1',
-        title: 'Create Club',
-        detail:
-            isAuthenticated
-                ? 'Create a club from Home to unlock identity, trophies, and live matchday operations.'
-                : 'Sign in, then start your first club to unlock Home, trophies, and matchday stories.',
-        icon: Icons.add_circle_outline,
-        accent: GteShellTheme.accent,
-        badge: 'Start',
-        actionLabel: 'Create Club',
-        onTap: createClubAction,
-      ),
-      _HomeActionCard(
-        eyebrow: 'STEP 2',
-        title: 'Own an Existing Club',
-        detail:
-            'Browse clubs already available for sale, compare their current position, and step straight into a live owner workspace.',
-        icon: Icons.storefront_outlined,
-        accent: GteShellTheme.accentWarm,
-        badge: 'Own',
-        actionLabel: 'Open Club Market',
-        onTap: browseClubAction,
-      ),
-      if (arenaAction != null)
-        _HomeActionCard(
-          eyebrow: 'OPTIONAL',
-          title: 'Explore Arena',
-          detail:
-              'Jump into cups and live match nights while you decide which club to back first.',
-          icon: Icons.stadium_outlined,
-          accent: GteShellTheme.accentArena,
-          badge: 'Live',
-          actionLabel: 'Explore Arena',
-          onTap: arenaAction,
-        ),
-    ];
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          GteSurfacePanel(
-            emphasized: true,
-            accentColor: GteShellTheme.accent,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'HOME ONBOARDING',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: GteShellTheme.accent,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  isAuthenticated
-                      ? 'Create or join a club to unlock Home'
-                      : 'Sign in, then build or join a club',
-                  style: Theme.of(context).textTheme.displaySmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isAuthenticated
-                      ? 'Create a club from scratch or step into one already listed on the market, then use Home as the command surface for your sporting and commercial journey.'
-                      : 'Scout the lobby first, then sign in to create a club or buy one already on the market. That unlocks the full Home crowd.',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: <Widget>[
-                    Chip(label: const Text('1. Create Club')),
-                    Chip(label: const Text('2. Own an Existing Club')),
-                    if (arenaAction != null)
-                      const Chip(label: Text('3. Explore Arena')),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: <Widget>[
-                    FilledButton(
-                      onPressed: createClubAction,
-                      child: const Text('Create Club'),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: browseClubAction,
-                      child: const Text('Open Club Market'),
-                    ),
-                    if (arenaAction != null)
-                      OutlinedButton(
-                        onPressed: arenaAction,
-                        child: const Text('Explore Arena'),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          _HomeRuntimeSignalPanel(
-            backendMode: widget.backendMode,
-            apiHostLabel: _apiHostLabel(),
-            narrative: _runtimeNarrative(hasClubScope: false),
-            isAuthenticated: widget.exchangeController.isAuthenticated,
-            hasClubScope: false,
-            capitalLabel: _capitalMetricLabel(),
-            isSyncing: widget.exchangeController.isBootstrapping,
-          ),
-          const SizedBox(height: 20),
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              if (constraints.maxWidth < 820) {
-                return Column(
-                  children: cards
-                      .map(
-                        (Widget child) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: child,
-                        ),
-                      )
-                      .toList(growable: false),
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: cards
-                    .map(
-                      (Widget child) => Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            right: child == cards.last ? 0 : 12,
-                          ),
-                          child: child,
-                        ),
-                      ),
-                    )
-                    .toList(growable: false),
-              );
-            },
-          ),
-        ],
-      ),
+    return GteNoClubOnboardingView(
+      isAuthenticated: isAuthenticated,
+      onCreateClub: _createClubOnboardingAction(),
+      onBrowseClubMarket: _browseClubMarketOnboardingAction(),
+      onExploreArena: _arenaOnboardingAction(),
+      onOpenMatchday: _matchdayOnboardingAction(),
+      onOpenPlayerUniverse: _playerUniverseOnboardingAction(),
+      onOpenWorld: _worldOnboardingAction(),
+      onOpenWallet: _walletOnboardingAction(),
     );
   }
 
