@@ -18,6 +18,10 @@ services:
           property: connectionString
       - key: GTE_APP_ENV
         value: production
+      - key: GTE_AUTH_SECRET
+        generateValue: true
+      - key: GTE_MEDIA_SIGNING_SECRET
+        generateValue: true
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "true"
       - key: GTE_TASK_QUEUE_ENABLED
@@ -47,6 +51,16 @@ services:
           type: redis
           name: gtex-cache
           property: connectionString
+      - key: GTE_AUTH_SECRET
+        fromService:
+          type: web
+          name: gtex-api
+          envVarKey: GTE_AUTH_SECRET
+      - key: GTE_MEDIA_SIGNING_SECRET
+        fromService:
+          type: web
+          name: gtex-api
+          envVarKey: GTE_MEDIA_SIGNING_SECRET
       - key: GTE_TASK_QUEUE_ENABLED
         value: "true"
 
@@ -67,6 +81,16 @@ services:
           type: redis
           name: gtex-cache
           property: connectionString
+      - key: GTE_AUTH_SECRET
+        fromService:
+          type: web
+          name: gtex-api
+          envVarKey: GTE_AUTH_SECRET
+      - key: GTE_MEDIA_SIGNING_SECRET
+        fromService:
+          type: web
+          name: gtex-api
+          envVarKey: GTE_MEDIA_SIGNING_SECRET
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "true"
 
@@ -87,6 +111,16 @@ services:
           type: redis
           name: gtex-cache
           property: connectionString
+      - key: GTE_AUTH_SECRET
+        fromService:
+          type: web
+          name: gtex-api
+          envVarKey: GTE_AUTH_SECRET
+      - key: GTE_MEDIA_SIGNING_SECRET
+        fromService:
+          type: web
+          name: gtex-api
+          envVarKey: GTE_MEDIA_SIGNING_SECRET
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "true"
 
