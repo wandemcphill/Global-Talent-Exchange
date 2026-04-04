@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from alembic import context
-from sqlalchemy import create_engine, pool, text
+from sqlalchemy import Column, MetaData, String, Table, create_engine, inspect, pool, text
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -48,26 +48,44 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = get_target_metadata()
+ALEMBIC_VERSION_TABLE = "alembic_version"
+ALEMBIC_VERSION_COLUMN = "version_num"
+ALEMBIC_VERSION_LENGTH = 255
 
 
 def _ensure_alembic_version_capacity(connection) -> None:
     """Widen Alembic's version column before long revision IDs are applied."""
-    version_type = connection.execute(text("""
-            SELECT data_type, character_maximum_length
-            FROM information_schema.columns
-            WHERE table_name = 'alembic_version'
-              AND column_name = 'version_num'
-            """)).fetchone()
-    if version_type is None:
+    if connection.dialect.name == "sqlite":
         return
 
-    data_type, max_length = version_type
-    if data_type != "character varying":
-        return
-    if max_length is not None and max_length >= 255:
+    inspector = inspect(connection)
+    if not inspector.has_table(ALEMBIC_VERSION_TABLE):
+        Table(
+            ALEMBIC_VERSION_TABLE,
+            MetaData(),
+            Column(ALEMBIC_VERSION_COLUMN, String(ALEMBIC_VERSION_LENGTH), nullable=False, primary_key=True),
+        ).create(bind=connection)
         return
 
-    connection.execute(text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)"))
+    version_column = next(
+        (
+            column
+            for column in inspector.get_columns(ALEMBIC_VERSION_TABLE)
+            if column.get("name") == ALEMBIC_VERSION_COLUMN
+        ),
+        None,
+    )
+    if version_column is None:
+        return
+
+    version_type = version_column.get("type")
+    max_length = getattr(version_type, "length", None)
+    if max_length is not None and max_length >= ALEMBIC_VERSION_LENGTH:
+        return
+
+    connection.execute(
+        text(f"ALTER TABLE {ALEMBIC_VERSION_TABLE} ALTER COLUMN {ALEMBIC_VERSION_COLUMN} TYPE VARCHAR(255)")
+    )
 
 
 def run_migrations_offline() -> None:
