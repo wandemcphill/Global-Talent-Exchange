@@ -5,8 +5,8 @@ services:
     runtime: python
     plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
-    preDeployCommand: "python -m alembic -c backend/migrations/alembic.ini upgrade head"
-    startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180 --graceful-timeout 120"
+    preDeployCommand: "cd backend && alembic -c migrations/alembic.ini upgrade head"
+    startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -59,6 +59,8 @@ services:
           type: redis
           name: gtex-cache
           property: connectionString
+      - key: GTE_APP_ENV
+        value: production
       - key: GTE_AUTH_SECRET
         fromService:
           type: web
@@ -93,6 +95,8 @@ services:
           type: redis
           name: gtex-cache
           property: connectionString
+      - key: GTE_APP_ENV
+        value: production
       - key: GTE_AUTH_SECRET
         fromService:
           type: web
@@ -125,6 +129,8 @@ services:
           type: redis
           name: gtex-cache
           property: connectionString
+      - key: GTE_APP_ENV
+        value: production
       - key: GTE_AUTH_SECRET
         fromService:
           type: web
