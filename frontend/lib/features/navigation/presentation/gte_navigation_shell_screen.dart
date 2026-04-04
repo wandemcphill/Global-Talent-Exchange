@@ -979,7 +979,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           title: 'Transfer market',
           status:
               widget.controller.marketError == null
-                  ? 'Quotes, order rails, and price tape are ready.'
+                  ? 'Real players, regens, GTEX Coin order rails, and live pricing are ready.'
                   : 'Market feed degraded. Last good tape is still visible.',
           syncedAt: widget.controller.marketSyncedAt,
           accent: accent,

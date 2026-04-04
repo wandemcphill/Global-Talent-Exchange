@@ -275,7 +275,7 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.matchesViewer,
     state: AppRouteSurfaceState.hidden,
     summary:
-        'Deep 2D viewer route that now resolves to an explicit blocked surface.',
+        'Deep 2D viewer route that opens the qualified live viewer session or a truthful fallback when the session feed is unavailable.',
   ),
   AppRouteSurface(
     label: 'Broadcast+ Viewer',
@@ -302,7 +302,7 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.matchesSpectate,
     state: AppRouteSurfaceState.hidden,
     summary:
-        'Deep manual spectate route that now resolves to an explicit blocked surface.',
+        'Deep manual spectate route reserved for explicit live spectate sessions and truthful fallback playback.',
   ),
   AppRouteSurface(
     label: 'Simulation',

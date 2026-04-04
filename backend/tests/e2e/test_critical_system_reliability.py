@@ -32,6 +32,15 @@ def _auth_headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
+def _error_message(response) -> str:
+    payload = response.json()
+    if isinstance(payload, dict):
+        value = payload.get("detail") or payload.get("message") or payload.get("code")
+        if value is not None:
+            return str(value)
+    return response.text
+
+
 def _register_user(client, *, prefix: str) -> dict[str, object]:
     email = f"{_suffix(prefix)}@example.com"
     response = client.post(
@@ -370,7 +379,7 @@ def test_auth_expired_token_refresh_works_and_invalid_token_is_rejected(
         headers=_auth_headers(expired_access_token),
     )
     assert expired_response.status_code == 401
-    assert "expired" in expired_response.json()["detail"].lower()
+    assert "expired" in _error_message(expired_response).lower()
 
     refresh_response = client.post(
         "/auth/refresh",
@@ -399,7 +408,8 @@ def test_auth_expired_token_refresh_works_and_invalid_token_is_rejected(
     )
     assert invalid_response.status_code == 401
     assert (
-        "invalid" in invalid_response.json()["detail"].lower() or "session" in invalid_response.json()["detail"].lower()
+        "invalid" in _error_message(invalid_response).lower()
+        or "session" in _error_message(invalid_response).lower()
     )
 
 

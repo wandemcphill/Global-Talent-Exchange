@@ -68,7 +68,7 @@ void main() {
   });
 
   testWidgets(
-    'premium users bypass the paywall and spectator mode hides replay controls',
+    'premium users bypass the paywall and spectator mode keeps gifting hidden',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1440, 1200);
       tester.view.devicePixelRatio = 1;
@@ -105,11 +105,11 @@ void main() {
       expect(find.text('Pro Manager'), findsWidgets);
       expect(find.textContaining('Watch in Cinematic Mode'), findsNothing);
       expect(find.widgetWithText(FilledButton, 'Restart'), findsNothing);
-      expect(find.textContaining('Gift'), findsOneWidget);
+      expect(find.textContaining('Gift'), findsNothing);
     },
   );
 
-  testWidgets('gifting and fallback to 2D stay non-disruptive', (
+  testWidgets('fallback to 2D stays non-disruptive when gifting is disabled', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 1200);
@@ -147,13 +147,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(find.byType(Gtex3dScene), findsOneWidget);
-
-    await tester.tap(find.textContaining('Gift'));
-    await _pumpForOverlayTransition(tester);
-    await tester.tap(find.text('0.1 coin'));
-    await tester.pump();
-
-    expect(find.text('0.1 coin gift'), findsOneWidget);
+    expect(find.textContaining('Gift'), findsNothing);
     expect(find.text('Pause'), findsOneWidget);
 
     monetization.fallbackToTwoD(reason: Match3dFailureReason.performanceDrop);

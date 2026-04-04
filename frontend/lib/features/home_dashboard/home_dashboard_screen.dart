@@ -1490,11 +1490,11 @@ class _HomeQuickActionsStrip extends StatelessWidget {
           ),
           _HomeActionCard(
             eyebrow: 'MARKET',
-            title: 'Trade players + regens',
+            title: 'Trade real players + regens',
             detail:
                 isAuthenticated
-                    ? 'Open the player market to scout real players, regen upside, and the current quote tape from one execution lane.'
-                    : 'The player market is visible in guest mode. Sign in when you are ready to buy, fund GTEX Coin, and hold assets.',
+                    ? 'Open the player market to scout real players, regen upside, GTEX Coin pricing, and the current quote tape from one execution lane.'
+                    : 'The player market is visible in guest mode. Sign in when you are ready to buy players, fund GTEX Coin, and hold assets.',
             icon: Icons.person_search_outlined,
             accent: GteShellTheme.accent,
             badge: 'Live',
@@ -1506,7 +1506,7 @@ class _HomeQuickActionsStrip extends StatelessWidget {
             eyebrow: isAuthenticated ? 'MATCHDAY' : 'ACCESS',
             title:
                 isAuthenticated
-                    ? 'Open the live match hub'
+                    ? 'Play live 2D, broadcast, or 3D'
                     : 'Create or sign in',
             detail:
                 isAuthenticated
