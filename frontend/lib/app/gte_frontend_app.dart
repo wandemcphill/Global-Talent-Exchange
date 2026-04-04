@@ -139,7 +139,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
         builder: (BuildContext context, Widget? child) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Global Talent Exchange',
+            title: 'GTEX Football Universe',
             theme: GteShellTheme.build(_themeController.activeTheme),
             home: GteExchangeShellScreen.fromPath(
               controller: _controller,

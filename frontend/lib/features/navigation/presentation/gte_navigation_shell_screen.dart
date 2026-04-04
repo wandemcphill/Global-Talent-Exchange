@@ -504,9 +504,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           padding: const EdgeInsets.all(20),
           child: GteStatePanel(
             eyebrow: 'CLUB SCOPE',
-            title: 'Sign in to open club-scoped home',
+            title: 'Sign in to open Club HQ',
             message:
-                'Guest access does not expose a canonical club. Sign in to continue with a real club context or create one first.',
+                'Guest access does not expose a canonical club yet. Sign in to continue with a real badge, wallet, market lane, and world state.',
             icon: Icons.login_outlined,
             accentColor: _routeAccentFor(context, GtePrimaryDestination.home),
             actionLabel: 'Sign in',
@@ -715,9 +715,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         padding: const EdgeInsets.all(20),
         child: GteStatePanel(
           eyebrow: 'HUB ACCESS',
-          title: 'Sign in to open Hub',
+          title: 'Sign in to open Creator Hub',
           message:
-              'Hub keeps creator invites, referral milestones, and community momentum in one lane. Sign in to load the live data behind it.',
+              'Creator Hub keeps invites, referral milestones, and community momentum in one live lane. Sign in to load the data behind it.',
           icon: Icons.groups_outlined,
           accentColor: const Color(0xFF5FE3A1),
           actionLabel: 'Sign in',
@@ -1002,7 +1002,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.club:
         return GteSyncStatusCard(
-          title: 'Club',
+          title: 'Club operations',
           status:
               'Club management opens here once this account owns or is linked to a club.',
           syncedAt: widget.controller.marketSyncedAt,
@@ -1012,7 +1012,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.wallet:
         return GteSyncStatusCard(
-          title: 'Wallet',
+          title: 'Wallet & capital',
           status:
               widget.controller.isAuthenticated
                   ? 'Balances, holdings, and transaction records are up to date.'
@@ -1031,9 +1031,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.home:
         return GteSyncStatusCard(
-          title: 'Platform overview',
+          title: 'Club HQ',
           status:
-              'Home is now surfacing the live GTEX runtime and the account lane you are actually connected to.',
+              'Club HQ surfaces the live GTEX football runtime, your active club lane, and the routes that actually drive play, market, and world progression.',
           detail:
               'Runtime ${_runtimeModeLabel()} on ${_apiHostLabel()} - ${_runtimeAudienceLabel()}',
           syncedAt: widget.controller.marketSyncedAt,
