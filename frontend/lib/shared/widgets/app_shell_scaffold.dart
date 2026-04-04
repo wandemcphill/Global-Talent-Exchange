@@ -35,6 +35,9 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
         appDestinations[navigationShell.currentIndex];
     final Size screenSize = MediaQuery.sizeOf(context);
     final bool useRail = screenSize.width >= AppBreakpoints.medium;
+    final bool showRuntimePill = screenSize.width >= AppBreakpoints.medium;
+    final bool showThemePill = screenSize.width >= AppBreakpoints.expanded;
+    final bool showOperatorLabel = screenSize.width >= AppBreakpoints.expanded;
 
     return AppBackground(
       child: Scaffold(
@@ -44,18 +47,22 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
           titleSpacing: spacingMD,
           title: _ShellTitle(destination: destination),
           actions: <Widget>[
-            _SignalPill(
-              icon: Icons.cloud_done_rounded,
-              label: _runtimePillLabel(appConfig),
-              tone: theme.primaryColor,
-            ),
-            const SizedBox(width: spacingSM),
-            _SignalPill(
-              icon: Icons.fiber_manual_record_rounded,
-              label: theme.metadata.label,
-              tone: visuals.heroAccent,
-            ),
-            const SizedBox(width: spacingSM),
+            if (showRuntimePill) ...<Widget>[
+              _SignalPill(
+                icon: Icons.cloud_done_rounded,
+                label: _runtimePillLabel(appConfig),
+                tone: theme.primaryColor,
+              ),
+              const SizedBox(width: spacingSM),
+            ],
+            if (showThemePill) ...<Widget>[
+              _SignalPill(
+                icon: Icons.fiber_manual_record_rounded,
+                label: theme.metadata.label,
+                tone: visuals.heroAccent,
+              ),
+              const SizedBox(width: spacingSM),
+            ],
             _NotificationChip(count: auth.notifications),
             const SizedBox(width: spacingSM),
             Container(
@@ -88,7 +95,7 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
                     radius: 14,
                     backgroundImage: AssetImage(auth.avatarAsset),
                   ),
-                  if (screenSize.width >= AppBreakpoints.compact) ...<Widget>[
+                  if (showOperatorLabel) ...<Widget>[
                     const SizedBox(width: spacingSM),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
