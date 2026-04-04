@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/gte_app_config.dart';
 import '../../core/app_feedback.dart';
 import '../../features/competitions/live_competitions_provider.dart';
 import '../../features/profile/live_profile_provider.dart';
 import '../../features/tasks/live_tasks_provider.dart';
 import '../../features/transfer_market/live_market_provider.dart';
 import '../../features/world/live_world_provider.dart';
+import '../../data/gte_api_repository.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -22,6 +24,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final GteAppConfig appConfig = GteAppConfig.fromEnvironment();
     final AsyncValue<ProfileData> profileValue = ref.watch(profileDataProvider);
     final AsyncValue<CompetitionHubData> competitionsValue = ref.watch(
       competitionHubProvider,
@@ -46,6 +49,8 @@ class HomeScreen extends ConsumerWidget {
     final CompetitionHubData? competitions = competitionsValue.asData?.value;
     final MarketDashboardData? market = marketValue.asData?.value;
     final LiveTasksData? tasks = tasksValue.asData?.value;
+    final String runtimeHost = _runtimeHostLabel(appConfig.apiBaseUrl);
+    final String runtimeMode = _runtimeModeLabel(appConfig.backendMode);
 
     return AppPageLayout(
       title: 'Home',
@@ -151,6 +156,50 @@ class HomeScreen extends ConsumerWidget {
                 label: const Text('Sign in'),
               ),
           ],
+        ),
+        GtexSectionPanel(
+          eyebrow: 'DEPLOYMENT SIGNAL',
+          title: 'This web shell is wired to the live runtime you deployed',
+          subtitle:
+              'If the deploy is correct, this panel changes immediately because it reads the active web build configuration rather than hidden fixture text.',
+          accentColor: GteShellTheme.accentCapital,
+          emphasized: true,
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              GtexStatTile(
+                label: 'Runtime',
+                value: runtimeMode,
+                support: 'Derived from GTE_BACKEND_MODE',
+                tone: GtexSurfaceTone.live,
+              ),
+              GtexStatTile(
+                label: 'API Host',
+                value: runtimeHost,
+                support: 'Derived from GTE_API_BASE_URL',
+                tone: GtexSurfaceTone.info,
+              ),
+              GtexStatTile(
+                label: 'Auth lane',
+                value: authenticated ? 'Signed in' : 'Guest',
+                support:
+                    authenticated
+                        ? 'Live session controls unlocked'
+                        : 'Guest safeguards still active',
+                tone:
+                    authenticated
+                        ? GtexSurfaceTone.success
+                        : GtexSurfaceTone.warning,
+              ),
+              GtexStatTile(
+                label: 'Route deck',
+                value: '${appDestinations.length} primary lanes',
+                support: 'Home, Matches, Market, World, and Profile',
+                tone: GtexSurfaceTone.warning,
+              ),
+            ],
+          ),
         ),
         GtexSectionPanel(
           eyebrow: 'ROUTE DECK',
@@ -378,6 +427,30 @@ class HomeScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+String _runtimeHostLabel(String apiBaseUrl) {
+  final Uri? uri = Uri.tryParse(apiBaseUrl.trim());
+  final String? host = uri?.host.trim();
+  if (host != null && host.isNotEmpty) {
+    return host;
+  }
+  final String raw = apiBaseUrl.trim();
+  if (raw.isEmpty) {
+    return 'not configured';
+  }
+  return raw.replaceFirst(RegExp(r'^https?://'), '');
+}
+
+String _runtimeModeLabel(GteBackendMode backendMode) {
+  switch (backendMode) {
+    case GteBackendMode.live:
+      return 'Live';
+    case GteBackendMode.fixture:
+      return 'Fixture';
+    case GteBackendMode.liveThenFixture:
+      return 'Hybrid';
   }
 }
 

@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/gte_app_config.dart';
 import '../../core/constants/app_breakpoints.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../data/gte_api_repository.dart';
 import '../../navigation/app_destinations.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../providers/auth_provider.dart';
@@ -24,6 +26,7 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authPresentationProvider);
+    final GteAppConfig appConfig = GteAppConfig.fromEnvironment();
     final tokens = GteShellTheme.tokensOf(context);
     final visuals = GteShellTheme.visualsOf(context);
     final theme = GteShellTheme.definitionOf(context);
@@ -41,6 +44,12 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
           titleSpacing: spacingMD,
           title: _ShellTitle(destination: destination),
           actions: <Widget>[
+            _SignalPill(
+              icon: Icons.cloud_done_rounded,
+              label: _runtimePillLabel(appConfig),
+              tone: theme.primaryColor,
+            ),
+            const SizedBox(width: spacingSM),
             _SignalPill(
               icon: Icons.fiber_manual_record_rounded,
               label: theme.metadata.label,
@@ -145,6 +154,20 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
       initialLocation: index == widget.navigationShell.currentIndex,
     );
   }
+}
+
+String _runtimePillLabel(GteAppConfig appConfig) {
+  final String mode = switch (appConfig.backendMode) {
+    GteBackendMode.live => 'LIVE',
+    GteBackendMode.fixture => 'FIXTURE',
+    GteBackendMode.liveThenFixture => 'HYBRID',
+  };
+  final Uri? uri = Uri.tryParse(appConfig.apiBaseUrl.trim());
+  final String host =
+      uri?.host.trim().isNotEmpty == true
+          ? uri!.host.trim()
+          : appConfig.apiBaseUrl.trim().replaceFirst(RegExp(r'^https?://'), '');
+  return '$mode · $host';
 }
 
 class _ShellTitle extends StatelessWidget {
