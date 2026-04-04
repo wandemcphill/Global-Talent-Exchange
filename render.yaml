@@ -27,7 +27,6 @@ services:
   - name: gtex-web
     type: web
     runtime: static
-    plan: starter
     buildCommand: "cd frontend && flutter build web"
     staticPublishPath: "frontend/build/web"
 
