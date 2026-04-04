@@ -74,9 +74,10 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               title:
                   'A football asset terminal built for speed, conviction, and clean execution.',
               description:
-                  'Trade mode stays dense and analytical. Quotes, movement, liquidity signals, and player profiles take center stage while the e-game arena lives on a different wavelength.',
+                  'This screen is the real-player transfer desk. Quotes, movement, liquidity signals, and player profiles stay front and center here, while the broader player-card universe and regen/world discovery live one route away.',
               accent: GteShellTheme.accent,
               chips: <Widget>[
+                const GteMetricChip(label: 'Surface', value: 'REAL PLAYERS'),
                 GteMetricChip(
                   label: 'Visible',
                   value: _filteredPlayers.length.toString(),
@@ -99,6 +100,15 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                   icon: const Icon(Icons.refresh),
                   label: const Text('Refresh tape'),
                 ),
+                if (widget.navigationDependencies != null)
+                  FilledButton.tonalIcon(
+                    onPressed:
+                        () => _openFeatureRoute(
+                          const PlayerCardsBrowseRouteData(),
+                        ),
+                    icon: const Icon(Icons.style_outlined),
+                    label: const Text('Player universe'),
+                  ),
                 if (!widget.controller.isAuthenticated)
                   FilledButton.icon(
                     onPressed: widget.onOpenLogin,
@@ -218,6 +228,8 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               _MarketRoutePanel(
                 onOpenPlayerCards:
                     () => _openFeatureRoute(const PlayerCardsBrowseRouteData()),
+                onOpenWorld:
+                    () => _openFeatureRoute(const WorldOverviewRouteData()),
                 onOpenCreatorShareMarket: _openCreatorShareMarketRoute,
                 onOpenClubSaleMarket:
                     () => _openFeatureRoute(
@@ -519,11 +531,13 @@ String _deskBiasLabel(List<GteMarketPlayerListItem> players) {
 class _MarketRoutePanel extends StatelessWidget {
   const _MarketRoutePanel({
     required this.onOpenPlayerCards,
+    required this.onOpenWorld,
     required this.onOpenCreatorShareMarket,
     required this.onOpenClubSaleMarket,
   });
 
   final VoidCallback onOpenPlayerCards;
+  final VoidCallback onOpenWorld;
   final VoidCallback onOpenCreatorShareMarket;
   final VoidCallback onOpenClubSaleMarket;
 
@@ -535,12 +549,12 @@ class _MarketRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Market extensions',
+            'Trading surface split',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'Card, creator-share, and club-sale deep links sit beside the trading floor instead of becoming new shell tabs.',
+            'The trading floor you are on now is the real-player desk. Use the routes below when you want the broader player-card universe, regen/world context, creator equity, or club ownership markets.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -551,7 +565,12 @@ class _MarketRoutePanel extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onOpenPlayerCards,
                 icon: const Icon(Icons.style_outlined),
-                label: const Text('Player cards'),
+                label: const Text('Player universe'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenWorld,
+                icon: const Icon(Icons.public_outlined),
+                label: const Text('Regen world'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenCreatorShareMarket,

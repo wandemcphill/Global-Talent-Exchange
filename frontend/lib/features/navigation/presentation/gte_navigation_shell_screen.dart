@@ -940,7 +940,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: IconButton(
-        tooltip: 'Capital room',
+        tooltip: 'GTEX coin wallet',
         onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
         icon: Icon(
           isActive
@@ -1038,7 +1038,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.wallet:
         return GteSyncStatusCard(
-          title: 'Wallet & capital',
+          title: 'Wallet & GTEX coin',
           status:
               widget.controller.isAuthenticated
                   ? 'Balances, holdings, and transaction records are up to date.'

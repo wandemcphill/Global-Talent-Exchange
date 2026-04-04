@@ -27,7 +27,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
-        return 'Capital Room';
+        return 'GTEX Coin';
     }
   }
 
