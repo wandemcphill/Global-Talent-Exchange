@@ -6,7 +6,7 @@ from decimal import Decimal
 import json
 from typing import Any
 
-from sqlalchemy import Boolean, Integer, Numeric, String, and_, case, cast, func, literal, or_, select, union_all
+from sqlalchemy import Integer, Numeric, String, and_, case, cast, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.core.config import (
@@ -55,7 +55,6 @@ from app.services.avatar_service import AvatarIdentityInput, AvatarService
 from app.value_engine.authority import authoritative_reference_credits
 from app.value_engine.scoring import credits_from_real_world_value
 from app.wallets.service import LedgerPosting, WalletService
-
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 FREE_LOAN_FLOOR_RATIO = Decimal("0.05")
@@ -320,12 +319,21 @@ class PlayerCardMarketplaceService:
         if row is None:
             raise PlayerCardNotFoundError("Player card was not found.")
         card, tier, player, current_club_name, average_rating, summary_payload = row
-        is_regen = card.card_variant.lower().startswith("regen") or self.session.scalar(
-            select(RegenProfile.id).where(RegenProfile.linked_unique_card_id == card.id).limit(1)
-        ) is not None
-        is_creator_linked = self.session.scalar(
-            select(CreatorCard.id).where(CreatorCard.player_id == player.id, CreatorCard.status == "active").limit(1)
-        ) is not None
+        is_regen = (
+            card.card_variant.lower().startswith("regen")
+            or self.session.scalar(
+                select(RegenProfile.id).where(RegenProfile.linked_unique_card_id == card.id).limit(1)
+            )
+            is not None
+        )
+        is_creator_linked = (
+            self.session.scalar(
+                select(CreatorCard.id)
+                .where(CreatorCard.player_id == player.id, CreatorCard.status == "active")
+                .limit(1)
+            )
+            is not None
+        )
         asset_origin = "regen_newgen" if is_regen else "creator_linked" if is_creator_linked else "standard"
         return {
             "card": card,
@@ -346,7 +354,9 @@ class PlayerCardMarketplaceService:
         summary = self.session.get(PlayerSummaryReadModel, context["player"].id)
         authoritative_value = authoritative_reference_credits(
             summary=summary,
-            summary_payload=summary.summary_json if summary is not None and isinstance(summary.summary_json, dict) else {},
+            summary_payload=(
+                summary.summary_json if summary is not None and isinstance(summary.summary_json, dict) else {}
+            ),
         )
         if authoritative_value is not None:
             return self._normalize_amount(authoritative_value)
@@ -356,7 +366,9 @@ class PlayerCardMarketplaceService:
             )
         if context["player"].market_value_eur and context["player"].market_value_eur > 0:
             return self._normalize_amount(credits_from_real_world_value(context["player"].market_value_eur))
-        if context["tier"].base_mint_price_credits and Decimal(str(context["tier"].base_mint_price_credits)) > Decimal("0"):
+        if context["tier"].base_mint_price_credits and Decimal(str(context["tier"].base_mint_price_credits)) > Decimal(
+            "0"
+        ):
             return self._normalize_amount(context["tier"].base_mint_price_credits)
         return Decimal("1.0000")
 
@@ -430,7 +442,11 @@ class PlayerCardMarketplaceService:
                     return self._normalize_amount(value), f"market_snapshot.{field_name}", sale_count
 
         summary = self.session.get(PlayerSummaryReadModel, context["player"].id)
-        if summary is not None and summary.current_value_credits and Decimal(str(summary.current_value_credits)) > Decimal("0"):
+        if (
+            summary is not None
+            and summary.current_value_credits
+            and Decimal(str(summary.current_value_credits)) > Decimal("0")
+        ):
             return self._normalize_amount(summary.current_value_credits), "player_summary.current_value", sale_count
 
         return self._base_value_credits(context), "tier_or_value_fallback", sale_count
@@ -527,13 +543,16 @@ class PlayerCardMarketplaceService:
             rating = self._coerce_float(fallback_rating) or 0.0
         if rating is None:
             rating = 0.0
-        mistakes = self._find_numeric_value(
-            stats_payload,
-            "mistakes",
-            "errors",
-            "errors_leading_to_goal",
-            "defensive_errors",
-        ) or 0.0
+        mistakes = (
+            self._find_numeric_value(
+                stats_payload,
+                "mistakes",
+                "errors",
+                "errors_leading_to_goal",
+                "defensive_errors",
+            )
+            or 0.0
+        )
         return round((goals * 2.0) + (assists * 1.5) + (rating * 1.2) - mistakes, 4)
 
     def _record_market_snapshot(self, player_id: str) -> None:
@@ -546,7 +565,9 @@ class PlayerCardMarketplaceService:
             .order_by(PlayerCardSale.created_at.desc())
         ).all()
         total_quantity = sum(int(row.quantity) for row in sales_rows)
-        weighted_total = sum(self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows)
+        weighted_total = sum(
+            self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows
+        )
         avg_price = None
         high_price = None
         low_price = None
@@ -566,20 +587,25 @@ class PlayerCardMarketplaceService:
                 or_(PlayerCardListing.expires_at.is_(None), PlayerCardListing.expires_at > now),
             )
         )
-        listing_count = self.session.scalar(
-            select(func.count(PlayerCardListing.id))
-            .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
-            .where(
-                PlayerCard.player_id == player_id,
-                PlayerCardListing.status == "open",
-                or_(PlayerCardListing.expires_at.is_(None), PlayerCardListing.expires_at > now),
+        listing_count = (
+            self.session.scalar(
+                select(func.count(PlayerCardListing.id))
+                .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
+                .where(
+                    PlayerCard.player_id == player_id,
+                    PlayerCardListing.status == "open",
+                    or_(PlayerCardListing.expires_at.is_(None), PlayerCardListing.expires_at > now),
+                )
             )
-        ) or 0
+            or 0
+        )
 
         snapshot = PlayerMarketValueSnapshot(
             player_id=player_id,
             as_of=now,
-            last_trade_price_credits=float(self._normalize_amount(sales_rows[0].price_per_card_credits)) if sales_rows else None,
+            last_trade_price_credits=(
+                float(self._normalize_amount(sales_rows[0].price_per_card_credits)) if sales_rows else None
+            ),
             avg_trade_price_credits=float(avg_price) if avg_price is not None else None,
             volume_24h=int(total_quantity),
             listing_floor_price_credits=float(self._normalize_amount(floor_price)) if floor_price is not None else None,
@@ -602,7 +628,9 @@ class PlayerCardMarketplaceService:
         total_quantity = sum(int(row.quantity) for row in sales_rows)
         if total_quantity <= 0:
             return None
-        weighted_total = sum(self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows)
+        weighted_total = sum(
+            self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows
+        )
         return self._normalize_amount(weighted_total / Decimal(total_quantity))
 
     def _update_momentum(self, player_id: str) -> None:
@@ -643,9 +671,7 @@ class PlayerCardMarketplaceService:
 
         players = {
             player.id: player
-            for player in self.session.scalars(
-                select(Player).where(Player.id.in_(player_id_filter))
-            ).all()
+            for player in self.session.scalars(select(Player).where(Player.id.in_(player_id_filter))).all()
         }
         summaries = {
             summary.player_id: summary
@@ -658,7 +684,11 @@ class PlayerCardMarketplaceService:
         for snapshot in self.session.scalars(
             select(PlayerMarketValueSnapshot)
             .where(PlayerMarketValueSnapshot.player_id.in_(player_id_filter))
-            .order_by(PlayerMarketValueSnapshot.player_id.asc(), PlayerMarketValueSnapshot.as_of.desc(), PlayerMarketValueSnapshot.created_at.desc())
+            .order_by(
+                PlayerMarketValueSnapshot.player_id.asc(),
+                PlayerMarketValueSnapshot.as_of.desc(),
+                PlayerMarketValueSnapshot.created_at.desc(),
+            )
         ).all():
             latest_market_snapshots.setdefault(snapshot.player_id, snapshot)
 
@@ -666,7 +696,11 @@ class PlayerCardMarketplaceService:
         for snapshot in self.session.scalars(
             select(PlayerStatsSnapshot)
             .where(PlayerStatsSnapshot.player_id.in_(player_id_filter))
-            .order_by(PlayerStatsSnapshot.player_id.asc(), PlayerStatsSnapshot.as_of.desc(), PlayerStatsSnapshot.created_at.desc())
+            .order_by(
+                PlayerStatsSnapshot.player_id.asc(),
+                PlayerStatsSnapshot.as_of.desc(),
+                PlayerStatsSnapshot.created_at.desc(),
+            )
         ).all():
             latest_stats_snapshots.setdefault(snapshot.player_id, snapshot)
 
@@ -748,7 +782,11 @@ class PlayerCardMarketplaceService:
             )
             performance_score = self._performance_score(
                 stats_payload=latest_stats.stats_json if latest_stats is not None else None,
-                fallback_rating=float(summary.average_rating) if summary is not None and summary.average_rating is not None else None,
+                fallback_rating=(
+                    float(summary.average_rating)
+                    if summary is not None and summary.average_rating is not None
+                    else None
+                ),
             )
             buy_volume = buy_volume_map.get(player_id, 0)
             sell_volume = sell_volume_map.get(player_id, 0)
@@ -954,8 +992,7 @@ class PlayerCardMarketplaceService:
             price_ratio = self._normalize_amount(sale_price / reference_price)
         anomaly_ratio = Decimal(str(config.price_spike_alert_ratio))
         if reference_price > Decimal("0") and (
-            sale_price > reference_price * anomaly_ratio
-            or sale_price < reference_price / anomaly_ratio
+            sale_price > reference_price * anomaly_ratio or sale_price < reference_price / anomaly_ratio
         ):
             direction = "spike" if sale_price > reference_price else "dump"
             risk_service.create_system_event(
@@ -978,21 +1015,24 @@ class PlayerCardMarketplaceService:
             )
             signals.append("price_anomaly")
 
-        pair_count = self.session.scalar(
-            select(func.count(PlayerCardSale.id)).where(
-                PlayerCardSale.created_at >= now - timedelta(hours=config.pair_trade_lookback_hours),
-                or_(
-                    and_(
-                        PlayerCardSale.seller_user_id == sale.seller_user_id,
-                        PlayerCardSale.buyer_user_id == sale.buyer_user_id,
+        pair_count = (
+            self.session.scalar(
+                select(func.count(PlayerCardSale.id)).where(
+                    PlayerCardSale.created_at >= now - timedelta(hours=config.pair_trade_lookback_hours),
+                    or_(
+                        and_(
+                            PlayerCardSale.seller_user_id == sale.seller_user_id,
+                            PlayerCardSale.buyer_user_id == sale.buyer_user_id,
+                        ),
+                        and_(
+                            PlayerCardSale.seller_user_id == sale.buyer_user_id,
+                            PlayerCardSale.buyer_user_id == sale.seller_user_id,
+                        ),
                     ),
-                    and_(
-                        PlayerCardSale.seller_user_id == sale.buyer_user_id,
-                        PlayerCardSale.buyer_user_id == sale.seller_user_id,
-                    ),
-                ),
+                )
             )
-        ) or 0
+            or 0
+        )
         if pair_count >= config.pair_trade_alert_threshold:
             pair_subject = ":".join(sorted((sale.seller_user_id, sale.buyer_user_id)))
             for user_id in (sale.seller_user_id, sale.buyer_user_id):
@@ -1014,12 +1054,15 @@ class PlayerCardMarketplaceService:
                 )
             signals.append("repeated_pair_trade")
 
-        asset_churn_count = self.session.scalar(
-            select(func.count(PlayerCardSale.id)).where(
-                PlayerCardSale.player_card_id == sale.player_card_id,
-                PlayerCardSale.created_at >= now - timedelta(hours=config.asset_churn_window_hours),
+        asset_churn_count = (
+            self.session.scalar(
+                select(func.count(PlayerCardSale.id)).where(
+                    PlayerCardSale.player_card_id == sale.player_card_id,
+                    PlayerCardSale.created_at >= now - timedelta(hours=config.asset_churn_window_hours),
+                )
             )
-        ) or 0
+            or 0
+        )
         if asset_churn_count >= config.asset_churn_alert_threshold:
             risk_service.create_system_event(
                 actor_user_id=None,
@@ -1053,7 +1096,9 @@ class PlayerCardMarketplaceService:
         if len(recent_sales) == 3:
             unique_users = {row.seller_user_id for row in recent_sales} | {row.buyer_user_id for row in recent_sales}
             directions = [(row.seller_user_id, row.buyer_user_id) for row in recent_sales]
-            circular_trade_detected = len(unique_users) == 2 and directions[0] == directions[2] and directions[0] != directions[1]
+            circular_trade_detected = (
+                len(unique_users) == 2 and directions[0] == directions[2] and directions[0] != directions[1]
+            )
             if circular_trade_detected:
                 loop_subject = f"loop:{sale.player_card_id}:{now:%Y%m%d%H}"
                 for user_id in (sale.seller_user_id, sale.buyer_user_id):
@@ -1073,14 +1118,17 @@ class PlayerCardMarketplaceService:
                     )
                 signals.append("circular_trade")
 
-        volume_cluster_count = self.session.scalar(
-            select(func.count(PlayerCardSale.id))
-            .join(PlayerCard, PlayerCardSale.player_card_id == PlayerCard.id)
-            .where(
-                PlayerCard.player_id == context["player"].id,
-                PlayerCardSale.created_at >= now - timedelta(minutes=config.volume_cluster_window_minutes),
+        volume_cluster_count = (
+            self.session.scalar(
+                select(func.count(PlayerCardSale.id))
+                .join(PlayerCard, PlayerCardSale.player_card_id == PlayerCard.id)
+                .where(
+                    PlayerCard.player_id == context["player"].id,
+                    PlayerCardSale.created_at >= now - timedelta(minutes=config.volume_cluster_window_minutes),
+                )
             )
-        ) or 0
+            or 0
+        )
         if volume_cluster_count >= config.volume_cluster_trade_threshold:
             risk_service.create_system_event(
                 actor_user_id=None,
@@ -1134,26 +1182,32 @@ class PlayerCardMarketplaceService:
         }
 
     def _ensure_borrower_has_no_player_version(self, user_id: str, player_id: str) -> None:
-        held_version = self.session.scalar(
-            select(func.count(PlayerCardHolding.id))
-            .join(PlayerCard, PlayerCard.id == PlayerCardHolding.player_card_id)
-            .where(
-                PlayerCardHolding.owner_user_id == user_id,
-                PlayerCardHolding.quantity_total > 0,
-                PlayerCard.player_id == player_id,
+        held_version = (
+            self.session.scalar(
+                select(func.count(PlayerCardHolding.id))
+                .join(PlayerCard, PlayerCard.id == PlayerCardHolding.player_card_id)
+                .where(
+                    PlayerCardHolding.owner_user_id == user_id,
+                    PlayerCardHolding.quantity_total > 0,
+                    PlayerCard.player_id == player_id,
+                )
             )
-        ) or 0
+            or 0
+        )
         if held_version > 0:
             raise PlayerCardValidationError("You already control a version of this player.")
-        active_loan = self.session.scalar(
-            select(func.count(CardLoanContract.id))
-            .join(PlayerCard, PlayerCard.id == CardLoanContract.player_card_id)
-            .where(
-                CardLoanContract.borrower_user_id == user_id,
-                CardLoanContract.status.in_(("accepted_pending_settlement", "active")),
-                PlayerCard.player_id == player_id,
+        active_loan = (
+            self.session.scalar(
+                select(func.count(CardLoanContract.id))
+                .join(PlayerCard, PlayerCard.id == CardLoanContract.player_card_id)
+                .where(
+                    CardLoanContract.borrower_user_id == user_id,
+                    CardLoanContract.status.in_(("accepted_pending_settlement", "active")),
+                    PlayerCard.player_id == player_id,
+                )
             )
-        ) or 0
+            or 0
+        )
         if active_loan > 0:
             raise PlayerCardValidationError("You already have a loan workflow in progress for this player.")
 
@@ -1176,7 +1230,9 @@ class PlayerCardMarketplaceService:
             raise PlayerCardValidationError("This loan cannot be used in the requested squad scope.")
 
     def _asset_origin_expr(self):
-        regen_exists = select(RegenProfile.id).where(RegenProfile.linked_unique_card_id == PlayerCard.id).limit(1).exists()
+        regen_exists = (
+            select(RegenProfile.id).where(RegenProfile.linked_unique_card_id == PlayerCard.id).limit(1).exists()
+        )
         creator_exists = (
             select(CreatorCard.id)
             .where(CreatorCard.player_id == PlayerCard.player_id, CreatorCard.status == "active")
@@ -1203,12 +1259,42 @@ class PlayerCardMarketplaceService:
         tier_code = func.lower(func.coalesce(PlayerCardTier.code, ""))
         tier_name = func.lower(func.coalesce(PlayerCardTier.name, ""))
         edition_code = func.lower(func.coalesce(PlayerCard.edition_code, ""))
-        alias_exact = select(PlayerAlias.id).where(PlayerAlias.player_id == Player.id, func.lower(PlayerAlias.alias) == normalized).limit(1).exists()
-        alias_prefix = select(PlayerAlias.id).where(PlayerAlias.player_id == Player.id, func.lower(PlayerAlias.alias).like(f"{normalized}%")).limit(1).exists()
-        alias_contains = select(PlayerAlias.id).where(PlayerAlias.player_id == Player.id, func.lower(PlayerAlias.alias).like(f"%{normalized}%")).limit(1).exists()
-        moniker_exact = select(PlayerMoniker.id).where(PlayerMoniker.player_id == Player.id, func.lower(PlayerMoniker.moniker) == normalized).limit(1).exists()
-        moniker_prefix = select(PlayerMoniker.id).where(PlayerMoniker.player_id == Player.id, func.lower(PlayerMoniker.moniker).like(f"{normalized}%")).limit(1).exists()
-        moniker_contains = select(PlayerMoniker.id).where(PlayerMoniker.player_id == Player.id, func.lower(PlayerMoniker.moniker).like(f"%{normalized}%")).limit(1).exists()
+        alias_exact = (
+            select(PlayerAlias.id)
+            .where(PlayerAlias.player_id == Player.id, func.lower(PlayerAlias.alias) == normalized)
+            .limit(1)
+            .exists()
+        )
+        alias_prefix = (
+            select(PlayerAlias.id)
+            .where(PlayerAlias.player_id == Player.id, func.lower(PlayerAlias.alias).like(f"{normalized}%"))
+            .limit(1)
+            .exists()
+        )
+        alias_contains = (
+            select(PlayerAlias.id)
+            .where(PlayerAlias.player_id == Player.id, func.lower(PlayerAlias.alias).like(f"%{normalized}%"))
+            .limit(1)
+            .exists()
+        )
+        moniker_exact = (
+            select(PlayerMoniker.id)
+            .where(PlayerMoniker.player_id == Player.id, func.lower(PlayerMoniker.moniker) == normalized)
+            .limit(1)
+            .exists()
+        )
+        moniker_prefix = (
+            select(PlayerMoniker.id)
+            .where(PlayerMoniker.player_id == Player.id, func.lower(PlayerMoniker.moniker).like(f"{normalized}%"))
+            .limit(1)
+            .exists()
+        )
+        moniker_contains = (
+            select(PlayerMoniker.id)
+            .where(PlayerMoniker.player_id == Player.id, func.lower(PlayerMoniker.moniker).like(f"%{normalized}%"))
+            .limit(1)
+            .exists()
+        )
         filter_expr = or_(
             full_name.like(f"%{normalized}%"),
             short_name.like(f"%{normalized}%"),
@@ -1279,7 +1365,11 @@ class PlayerCardMarketplaceService:
         if search and search.strip():
             filters.append(search_filter)
         if club:
-            filters.append(func.lower(func.coalesce(PlayerSummaryReadModel.current_club_name, "")).like(f"%{club.strip().lower()}%"))
+            filters.append(
+                func.lower(func.coalesce(PlayerSummaryReadModel.current_club_name, "")).like(
+                    f"%{club.strip().lower()}%"
+                )
+            )
         if position:
             normalized_position = position.strip().lower()
             filters.append(
@@ -1700,7 +1790,15 @@ class PlayerCardMarketplaceService:
                 )
             )
         if normalized_listing_type in {None, "swap"} and all(
-            value is None for value in (sale_price_min, sale_price_max, loan_fee_min, loan_fee_max, loan_duration_min, loan_duration_max)
+            value is None
+            for value in (
+                sale_price_min,
+                sale_price_max,
+                loan_fee_min,
+                loan_fee_max,
+                loan_duration_min,
+                loan_duration_max,
+            )
         ):
             queries.append(
                 self._build_swap_search_query(
@@ -1729,19 +1827,26 @@ class PlayerCardMarketplaceService:
         null_rating = case((listings_subquery.c.average_rating.is_(None), 1), else_=0)
         null_price = case((listings_subquery.c.search_price.is_(None), 1), else_=0)
         if normalized_sort == "relevance" and search:
-            statement = statement.order_by(listings_subquery.c.search_rank.asc(), null_rating.asc(), listings_subquery.c.average_rating.desc(), listings_subquery.c.created_at.desc())
+            statement = statement.order_by(
+                listings_subquery.c.search_rank.asc(),
+                null_rating.asc(),
+                listings_subquery.c.average_rating.desc(),
+                listings_subquery.c.created_at.desc(),
+            )
         elif normalized_sort == "newest" or (normalized_sort == "relevance" and not search):
             statement = statement.order_by(listings_subquery.c.created_at.desc())
         elif normalized_sort == "cheapest":
-            statement = statement.order_by(null_price.asc(), listings_subquery.c.search_price.asc(), listings_subquery.c.created_at.desc())
+            statement = statement.order_by(
+                null_price.asc(), listings_subquery.c.search_price.asc(), listings_subquery.c.created_at.desc()
+            )
         else:
-            statement = statement.order_by(null_rating.asc(), listings_subquery.c.average_rating.desc(), listings_subquery.c.created_at.desc())
+            statement = statement.order_by(
+                null_rating.asc(), listings_subquery.c.average_rating.desc(), listings_subquery.c.created_at.desc()
+            )
 
         rows = self.session.execute(statement.offset(offset).limit(limit)).mappings().all()
         latest_value_overrides = {
-            str(row["player_id"]): row.get("latest_value_credits")
-            for row in rows
-            if row.get("player_id") is not None
+            str(row["player_id"]): row.get("latest_value_credits") for row in rows if row.get("player_id") is not None
         }
         price_engine_cache = self._build_price_engine_map(
             [str(row["player_id"]) for row in rows if row.get("player_id") is not None],
@@ -1751,10 +1856,7 @@ class PlayerCardMarketplaceService:
             "total": total,
             "limit": limit,
             "offset": offset,
-            "items": [
-                self._search_listing_payload(dict(row), price_engine_cache=price_engine_cache)
-                for row in rows
-            ],
+            "items": [self._search_listing_payload(dict(row), price_engine_cache=price_engine_cache) for row in rows],
         }
 
     def _sale_listing_payload(self, listing: PlayerCardListing, context: dict[str, Any]) -> dict[str, Any]:
@@ -1774,7 +1876,9 @@ class PlayerCardMarketplaceService:
             "edition_code": context["card"].edition_code,
             "listing_owner_user_id": listing.seller_user_id,
             "status": listing.status,
-            "availability": "available" if listing.status == "open" and not self._is_expired(listing.expires_at) else "unavailable",
+            "availability": (
+                "available" if listing.status == "open" and not self._is_expired(listing.expires_at) else "unavailable"
+            ),
             "is_negotiable": listing.is_negotiable,
             "asset_origin": context["asset_origin"],
             "is_regen_newgen": context["is_regen_newgen"],
@@ -1846,7 +1950,9 @@ class PlayerCardMarketplaceService:
             metadata_json={"source": "marketplace_v2"},
         )
         self.session.add(listing)
-        self._append_card_history(player_card_id, "marketplace.sale.listed", actor.id, metadata={"listing_id": listing.listing_id})
+        self._append_card_history(
+            player_card_id, "marketplace.sale.listed", actor.id, metadata={"listing_id": listing.listing_id}
+        )
         self._append_owner_history(
             player_card_id,
             from_user_id=actor.id,
@@ -1976,7 +2082,9 @@ class PlayerCardMarketplaceService:
             event_type="marketplace_sale_settled",
             reference_id=sale.sale_id,
         )
-        self._append_card_history(listing.player_card_id, "marketplace.sale.settled", actor.id, metadata={"sale_id": sale.sale_id})
+        self._append_card_history(
+            listing.player_card_id, "marketplace.sale.settled", actor.id, metadata={"sale_id": sale.sale_id}
+        )
         self._audit(
             listing_type="sale",
             action="sale_settled",
@@ -1985,7 +2093,12 @@ class PlayerCardMarketplaceService:
             listing_id=listing.listing_id,
             status_from=previous_status,
             status_to=listing.status,
-            payload={"sale_id": sale.sale_id, "gross_credits": str(gross), "fee_credits": str(fee), "seller_net_credits": str(seller_net)},
+            payload={
+                "sale_id": sale.sale_id,
+                "gross_credits": str(gross),
+                "fee_credits": str(fee),
+                "seller_net_credits": str(seller_net),
+            },
         )
         self.session.flush()
         sale.integrity_flags_json = self._run_sale_integrity_checks(context, sale)
@@ -2178,7 +2291,14 @@ class PlayerCardMarketplaceService:
             metadata_json={"source": "marketplace_v2"},
         )
         self.session.add(listing)
-        self._audit(listing_type="loan", action="listing_created", actor_user_id=actor.id, player_card_id=player_card_id, listing_id=listing.id, status_to="open")
+        self._audit(
+            listing_type="loan",
+            action="listing_created",
+            actor_user_id=actor.id,
+            player_card_id=player_card_id,
+            listing_id=listing.id,
+            status_to="open",
+        )
         self.session.flush()
         return self._loan_listing_payload(listing, context)
 
@@ -2193,7 +2313,15 @@ class PlayerCardMarketplaceService:
         previous_status = listing.status
         listing.available_slots = 0
         listing.status = "cancelled"
-        self._audit(listing_type="loan", action="listing_cancelled", actor_user_id=actor.id, player_card_id=listing.player_card_id, listing_id=listing.id, status_from=previous_status, status_to=listing.status)
+        self._audit(
+            listing_type="loan",
+            action="listing_cancelled",
+            actor_user_id=actor.id,
+            player_card_id=listing.player_card_id,
+            listing_id=listing.id,
+            status_from=previous_status,
+            status_to=listing.status,
+        )
         self.session.flush()
         return self._loan_listing_payload(listing, self._get_card_context(listing.player_card_id))
 
@@ -2217,11 +2345,14 @@ class PlayerCardMarketplaceService:
         if proposed_loan_fee_credits < Decimal("0"):
             raise PlayerCardValidationError("Loan fee cannot be negative.")
         if not listing.is_negotiable and (
-            proposed_duration_days != listing.duration_days or self._normalize_amount(proposed_loan_fee_credits) != self._normalize_amount(listing.loan_fee_credits)
+            proposed_duration_days != listing.duration_days
+            or self._normalize_amount(proposed_loan_fee_credits) != self._normalize_amount(listing.loan_fee_credits)
         ):
             raise PlayerCardValidationError("This loan listing is not negotiable.")
 
-        self._ensure_borrower_has_no_player_version(actor.id, self._get_card_context(listing.player_card_id)["player"].id)
+        self._ensure_borrower_has_no_player_version(
+            actor.id, self._get_card_context(listing.player_card_id)["player"].id
+        )
         negotiation = CardLoanNegotiation(
             listing_id=listing.id,
             player_card_id=listing.player_card_id,
@@ -2237,7 +2368,15 @@ class PlayerCardMarketplaceService:
             metadata_json={},
         )
         self.session.add(negotiation)
-        self._audit(listing_type="loan", action="negotiation_created", actor_user_id=actor.id, player_card_id=listing.player_card_id, listing_id=listing.id, negotiation_id=negotiation.id, status_to="pending")
+        self._audit(
+            listing_type="loan",
+            action="negotiation_created",
+            actor_user_id=actor.id,
+            player_card_id=listing.player_card_id,
+            listing_id=listing.id,
+            negotiation_id=negotiation.id,
+            status_to="pending",
+        )
         self.session.flush()
         return self._loan_negotiation_payload(negotiation)
 
@@ -2277,7 +2416,16 @@ class PlayerCardMarketplaceService:
             metadata_json={},
         )
         self.session.add(counter)
-        self._audit(listing_type="loan", action="negotiation_countered", actor_user_id=actor.id, player_card_id=negotiation.player_card_id, listing_id=negotiation.listing_id, negotiation_id=counter.id, status_from="countered", status_to="pending")
+        self._audit(
+            listing_type="loan",
+            action="negotiation_countered",
+            actor_user_id=actor.id,
+            player_card_id=negotiation.player_card_id,
+            listing_id=negotiation.listing_id,
+            negotiation_id=counter.id,
+            status_from="countered",
+            status_to="pending",
+        )
         self.session.flush()
         return self._loan_negotiation_payload(counter)
 
@@ -2314,7 +2462,10 @@ class PlayerCardMarketplaceService:
             accepted_at=accepted_at,
             borrowed_at=accepted_at,
             due_at=accepted_at + timedelta(days=negotiation.proposed_duration_days),
-            accepted_terms_json={"requested_terms": dict(negotiation.requested_terms_json or {}), "listing_terms": dict(listing.terms_json or {})},
+            accepted_terms_json={
+                "requested_terms": dict(negotiation.requested_terms_json or {}),
+                "listing_terms": dict(listing.terms_json or {}),
+            },
             borrower_rights_json=self._resolved_borrower_rights(listing, negotiation.proposed_duration_days),
             lender_rights_json=self._default_lender_rights(),
             lender_restrictions_json=self._resolved_lender_restrictions(listing),
@@ -2322,7 +2473,17 @@ class PlayerCardMarketplaceService:
             metadata_json={"asset_origin": context["asset_origin"]},
         )
         self.session.add(contract)
-        self._audit(listing_type="loan", action="negotiation_accepted", actor_user_id=actor.id, player_card_id=listing.player_card_id, listing_id=listing.id, negotiation_id=negotiation.id, loan_contract_id=contract.id, status_from="pending", status_to="accepted_pending_settlement")
+        self._audit(
+            listing_type="loan",
+            action="negotiation_accepted",
+            actor_user_id=actor.id,
+            player_card_id=listing.player_card_id,
+            listing_id=listing.id,
+            negotiation_id=negotiation.id,
+            loan_contract_id=contract.id,
+            status_from="pending",
+            status_to="accepted_pending_settlement",
+        )
         self.session.flush()
         return self._loan_contract_payload(contract, context)
 
@@ -2342,9 +2503,21 @@ class PlayerCardMarketplaceService:
         self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=self.wallet_service.get_user_account(self.session, borrower, LedgerUnit.CREDIT), amount=-effective_fee, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
-                LedgerPosting(account=self.wallet_service.get_user_account(self.session, lender, LedgerUnit.CREDIT), amount=lender_net, source_tag=LedgerSourceTag.PLAYER_CARD_SALE),
-                LedgerPosting(account=self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT), amount=platform_fee, source_tag=LedgerSourceTag.TRADING_FEE_BURN),
+                LedgerPosting(
+                    account=self.wallet_service.get_user_account(self.session, borrower, LedgerUnit.CREDIT),
+                    amount=-effective_fee,
+                    source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
+                ),
+                LedgerPosting(
+                    account=self.wallet_service.get_user_account(self.session, lender, LedgerUnit.CREDIT),
+                    amount=lender_net,
+                    source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
+                ),
+                LedgerPosting(
+                    account=self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT),
+                    amount=platform_fee,
+                    source_tag=LedgerSourceTag.TRADING_FEE_BURN,
+                ),
             ],
             reason=self.wallet_service.trade_settlement_reason,
             reference=settlement_reference,
@@ -2358,7 +2531,16 @@ class PlayerCardMarketplaceService:
         contract.settled_at = now
         contract.borrowed_at = now
         contract.due_at = now + timedelta(days=contract.loan_duration_days)
-        self._audit(listing_type="loan", action="contract_settled", actor_user_id=actor.id, player_card_id=contract.player_card_id, listing_id=contract.listing_id, loan_contract_id=contract.id, status_from="accepted_pending_settlement", status_to="active")
+        self._audit(
+            listing_type="loan",
+            action="contract_settled",
+            actor_user_id=actor.id,
+            player_card_id=contract.player_card_id,
+            listing_id=contract.listing_id,
+            loan_contract_id=contract.id,
+            status_from="accepted_pending_settlement",
+            status_to="active",
+        )
         self.session.flush()
         return self._loan_contract_payload(contract, self._get_card_context(contract.player_card_id))
 
@@ -2366,7 +2548,10 @@ class PlayerCardMarketplaceService:
         contract = self._get_loan_contract(contract_id)
         if contract.status != "active":
             raise PlayerCardValidationError("Only active loan contracts can be returned.")
-        if actor.id not in {contract.owner_user_id, contract.borrower_user_id} and actor.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        if actor.id not in {contract.owner_user_id, contract.borrower_user_id} and actor.role not in {
+            UserRole.ADMIN,
+            UserRole.SUPER_ADMIN,
+        }:
             raise PlayerCardPermissionError("Only the lender, borrower, or an admin can return this loan contract.")
         listing = self._get_loan_listing(contract.listing_id)
         holding = self._get_holding(contract.owner_user_id, contract.player_card_id)
@@ -2379,7 +2564,16 @@ class PlayerCardMarketplaceService:
             listing.available_slots = min(listing.total_slots, listing.available_slots + 1)
         else:
             holding.quantity_reserved = max(holding.quantity_reserved - 1, 0)
-        self._audit(listing_type="loan", action="contract_returned", actor_user_id=actor.id, player_card_id=contract.player_card_id, listing_id=contract.listing_id, loan_contract_id=contract.id, status_from=previous_status, status_to=contract.status)
+        self._audit(
+            listing_type="loan",
+            action="contract_returned",
+            actor_user_id=actor.id,
+            player_card_id=contract.player_card_id,
+            listing_id=contract.listing_id,
+            loan_contract_id=contract.id,
+            status_from=previous_status,
+            status_to=contract.status,
+        )
         self.session.flush()
         return self._loan_contract_payload(contract, self._get_card_context(contract.player_card_id))
 
@@ -2387,7 +2581,9 @@ class PlayerCardMarketplaceService:
         stmt = select(CardLoanContract)
         normalized_role = None if role is None else role.strip().lower()
         if normalized_role in {None, "all"}:
-            stmt = stmt.where(or_(CardLoanContract.borrower_user_id == actor.id, CardLoanContract.owner_user_id == actor.id))
+            stmt = stmt.where(
+                or_(CardLoanContract.borrower_user_id == actor.id, CardLoanContract.owner_user_id == actor.id)
+            )
         elif normalized_role == "borrower":
             stmt = stmt.where(CardLoanContract.borrower_user_id == actor.id)
         elif normalized_role == "lender":
@@ -2399,7 +2595,10 @@ class PlayerCardMarketplaceService:
         contracts = list(self.session.scalars(stmt.order_by(CardLoanContract.created_at.desc())).all())
         return {
             "total": len(contracts),
-            "items": [self._loan_contract_payload(contract, self._get_card_context(contract.player_card_id)) for contract in contracts],
+            "items": [
+                self._loan_contract_payload(contract, self._get_card_context(contract.player_card_id))
+                for contract in contracts
+            ],
         }
 
     def validate_contract_usage(
@@ -2502,7 +2701,9 @@ class PlayerCardMarketplaceService:
         if self._available_holding_quantity(holding) < 1:
             raise PlayerCardValidationError("No unreserved card quantity is available to list for swap.")
         if requested_player_card_id and requested_player_id:
-            raise PlayerCardValidationError("Provide either a requested player card id or requested player id, not both.")
+            raise PlayerCardValidationError(
+                "Provide either a requested player card id or requested player id, not both."
+            )
 
         holding.quantity_reserved += 1
         listing = CardSwapListing(
@@ -2518,7 +2719,14 @@ class PlayerCardMarketplaceService:
             metadata_json={"source": "marketplace_v2"},
         )
         self.session.add(listing)
-        self._audit(listing_type="swap", action="listing_created", actor_user_id=actor.id, player_card_id=player_card_id, listing_id=listing.id, status_to="open")
+        self._audit(
+            listing_type="swap",
+            action="listing_created",
+            actor_user_id=actor.id,
+            player_card_id=player_card_id,
+            listing_id=listing.id,
+            status_to="open",
+        )
         self.session.flush()
         return self._swap_listing_payload(listing, context)
 
@@ -2532,7 +2740,15 @@ class PlayerCardMarketplaceService:
         holding.quantity_reserved = max(holding.quantity_reserved - 1, 0)
         previous_status = listing.status
         listing.status = "cancelled"
-        self._audit(listing_type="swap", action="listing_cancelled", actor_user_id=actor.id, player_card_id=listing.player_card_id, listing_id=listing.id, status_from=previous_status, status_to=listing.status)
+        self._audit(
+            listing_type="swap",
+            action="listing_cancelled",
+            actor_user_id=actor.id,
+            player_card_id=listing.player_card_id,
+            listing_id=listing.id,
+            status_from=previous_status,
+            status_to=listing.status,
+        )
         self.session.flush()
         return self._swap_listing_payload(listing, self._get_card_context(listing.player_card_id))
 
@@ -2591,6 +2807,15 @@ class PlayerCardMarketplaceService:
             metadata_json={"source": "marketplace_v2"},
         )
         self.session.add(execution)
-        self._audit(listing_type="swap", action="swap_executed", actor_user_id=actor.id, player_card_id=listing.player_card_id, listing_id=listing.id, swap_execution_id=execution.id, status_from=previous_status, status_to=listing.status)
+        self._audit(
+            listing_type="swap",
+            action="swap_executed",
+            actor_user_id=actor.id,
+            player_card_id=listing.player_card_id,
+            listing_id=listing.id,
+            swap_execution_id=execution.id,
+            status_from=previous_status,
+            status_to=listing.status,
+        )
         self.session.flush()
         return self._swap_execution_payload(execution)

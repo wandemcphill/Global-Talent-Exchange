@@ -63,7 +63,9 @@ def get_service(request: Request, session: Session = Depends(get_session)) -> Pl
         if event_publisher
         else WalletService(cache_backend=cache_backend)
     )
-    return PlayerCardMarketService(session=session, wallet_service=wallet_service, event_publisher=event_publisher or InMemoryEventPublisher())
+    return PlayerCardMarketService(
+        session=session, wallet_service=wallet_service, event_publisher=event_publisher or InMemoryEventPublisher()
+    )
 
 
 def get_loan_service(request: Request, session: Session = Depends(get_session)) -> CardLoanService:
@@ -126,7 +128,9 @@ def list_players(
 
 
 @router.get("/players/{player_id}", response_model=PlayerCardPlayerDetailView)
-def get_player_detail(player_id: str, service: PlayerCardMarketService = Depends(get_service)) -> PlayerCardPlayerDetailView:
+def get_player_detail(
+    player_id: str, service: PlayerCardMarketService = Depends(get_service)
+) -> PlayerCardPlayerDetailView:
     try:
         detail = service.get_player_detail(player_id=player_id)
     except PlayerCardMarketError as exc:
@@ -135,7 +139,9 @@ def get_player_detail(player_id: str, service: PlayerCardMarketService = Depends
 
 
 @router.get("/inventory", response_model=list[PlayerCardHoldingView])
-def list_inventory(current_user: User = Depends(get_current_user), service: PlayerCardMarketService = Depends(get_service)) -> list[PlayerCardHoldingView]:
+def list_inventory(
+    current_user: User = Depends(get_current_user), service: PlayerCardMarketService = Depends(get_service)
+) -> list[PlayerCardHoldingView]:
     inventory = service.list_inventory(actor=current_user)
     return [PlayerCardHoldingView.model_validate(item) for item in inventory]
 
@@ -153,7 +159,9 @@ def list_listings(
 
 
 @router.get("/listings/mine", response_model=list[PlayerCardListingView])
-def list_my_listings(current_user: User = Depends(get_current_user), service: PlayerCardMarketService = Depends(get_service)) -> list[PlayerCardListingView]:
+def list_my_listings(
+    current_user: User = Depends(get_current_user), service: PlayerCardMarketService = Depends(get_service)
+) -> list[PlayerCardListingView]:
     listings = service.list_listings(status="open", seller_user_id=current_user.id)
     return [PlayerCardListingView.model_validate(item) for item in listings]
 
@@ -508,7 +516,9 @@ def buy_marketplace_sale_listing(
     return PlayerCardMarketplaceSaleExecutionView.model_validate(sale)
 
 
-@router.post("/marketplace/loans", response_model=PlayerCardMarketplaceLoanListingView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/marketplace/loans", response_model=PlayerCardMarketplaceLoanListingView, status_code=status.HTTP_201_CREATED
+)
 def create_marketplace_loan_listing(
     payload: PlayerCardMarketplaceLoanListingCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -534,7 +544,11 @@ def cancel_marketplace_loan_listing(
     return PlayerCardMarketplaceLoanListingView.model_validate(listing)
 
 
-@router.post("/marketplace/loans/{listing_id}/negotiations", response_model=PlayerCardMarketplaceLoanNegotiationView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/marketplace/loans/{listing_id}/negotiations",
+    response_model=PlayerCardMarketplaceLoanNegotiationView,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_marketplace_loan_negotiation(
     listing_id: str,
     payload: PlayerCardMarketplaceLoanNegotiationCreateRequest,
@@ -548,7 +562,9 @@ def create_marketplace_loan_negotiation(
     return PlayerCardMarketplaceLoanNegotiationView.model_validate(negotiation)
 
 
-@router.post("/marketplace/loans/negotiations/{negotiation_id}/counter", response_model=PlayerCardMarketplaceLoanNegotiationView)
+@router.post(
+    "/marketplace/loans/negotiations/{negotiation_id}/counter", response_model=PlayerCardMarketplaceLoanNegotiationView
+)
 def counter_marketplace_loan_negotiation(
     negotiation_id: str,
     payload: PlayerCardMarketplaceLoanNegotiationCreateRequest,
@@ -556,13 +572,17 @@ def counter_marketplace_loan_negotiation(
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
 ) -> PlayerCardMarketplaceLoanNegotiationView:
     try:
-        negotiation = service.counter_loan_negotiation(actor=current_user, negotiation_id=negotiation_id, **payload.model_dump())
+        negotiation = service.counter_loan_negotiation(
+            actor=current_user, negotiation_id=negotiation_id, **payload.model_dump()
+        )
     except PlayerCardMarketError as exc:
         raise_player_card_http(exc)
     return PlayerCardMarketplaceLoanNegotiationView.model_validate(negotiation)
 
 
-@router.post("/marketplace/loans/negotiations/{negotiation_id}/accept", response_model=PlayerCardMarketplaceLoanContractView)
+@router.post(
+    "/marketplace/loans/negotiations/{negotiation_id}/accept", response_model=PlayerCardMarketplaceLoanContractView
+)
 def accept_marketplace_loan_negotiation(
     negotiation_id: str,
     current_user: User = Depends(get_current_user),
@@ -617,7 +637,9 @@ def return_marketplace_loan_contract(
     return PlayerCardMarketplaceLoanContractView.model_validate(contract)
 
 
-@router.post("/marketplace/swaps", response_model=PlayerCardMarketplaceSwapListingView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/marketplace/swaps", response_model=PlayerCardMarketplaceSwapListingView, status_code=status.HTTP_201_CREATED
+)
 def create_marketplace_swap_listing(
     payload: PlayerCardMarketplaceSwapListingCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -651,14 +673,18 @@ def execute_marketplace_swap_listing(
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
 ) -> PlayerCardMarketplaceSwapExecutionView:
     try:
-        execution = service.execute_swap_listing(actor=current_user, listing_id=listing_id, counterparty_player_card_id=payload.counterparty_player_card_id)
+        execution = service.execute_swap_listing(
+            actor=current_user, listing_id=listing_id, counterparty_player_card_id=payload.counterparty_player_card_id
+        )
     except PlayerCardMarketError as exc:
         raise_player_card_http(exc)
     return PlayerCardMarketplaceSwapExecutionView.model_validate(execution)
 
 
 @router.get("/watchlist", response_model=list[PlayerCardWatchlistView])
-def list_watchlist(current_user: User = Depends(get_current_user), service: PlayerCardMarketService = Depends(get_service)) -> list[PlayerCardWatchlistView]:
+def list_watchlist(
+    current_user: User = Depends(get_current_user), service: PlayerCardMarketService = Depends(get_service)
+) -> list[PlayerCardWatchlistView]:
     items = service.list_watchlist(actor=current_user)
     return [PlayerCardWatchlistView.model_validate(item) for item in items]
 
@@ -702,7 +728,9 @@ def add_watchlist(
     service: PlayerCardMarketService = Depends(get_service),
 ) -> PlayerCardWatchlistView:
     try:
-        watch = service.add_watchlist(actor=current_user, player_id=payload.player_id, player_card_id=payload.player_card_id, notes=payload.notes)
+        watch = service.add_watchlist(
+            actor=current_user, player_id=payload.player_id, player_card_id=payload.player_card_id, notes=payload.notes
+        )
     except PlayerCardMarketError as exc:
         raise_player_card_http(exc)
     return PlayerCardWatchlistView.model_validate(watch)
