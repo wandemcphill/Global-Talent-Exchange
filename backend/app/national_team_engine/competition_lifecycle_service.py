@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from hashlib import sha256
 import math
 import random
@@ -327,12 +327,14 @@ class NationalCompetitionLifecycleService:
     @staticmethod
     def _validate_submission_window(competition: NationalTeamCompetition) -> None:
         now = utcnow()
-        if competition.entry_opens_at is not None and competition.entry_opens_at > now:
+        entry_opens_at = NationalCompetitionLifecycleService._as_utc_datetime(competition.entry_opens_at)
+        entry_closes_at = NationalCompetitionLifecycleService._as_utc_datetime(competition.entry_closes_at)
+        if entry_opens_at is not None and entry_opens_at > now:
             raise NationalCompetitionLifecycleError(
                 "Competition entry is not open yet.",
                 reason="competition_entry_not_open",
             )
-        if competition.entry_closes_at is not None and competition.entry_closes_at < now:
+        if entry_closes_at is not None and entry_closes_at < now:
             raise NationalCompetitionLifecycleError(
                 "Competition entry is closed.",
                 reason="competition_entry_closed",
@@ -349,6 +351,14 @@ class NationalCompetitionLifecycleService:
                 "Competition entries are locked once qualifiers have started.",
                 reason="entry_locked",
             )
+
+    @staticmethod
+    def _as_utc_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
     def _competition_profile(self, competition: NationalTeamCompetition) -> dict[str, Any]:
         family = infer_competition_family(

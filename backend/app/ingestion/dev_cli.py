@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -10,7 +11,13 @@ from typing import Any, Sequence
 
 from sqlalchemy.engine.url import make_url
 
-from app.core.config import DEFAULT_DATABASE_URL, PROJECT_ROOT
+from app.core.config import (
+    DEFAULT_DATABASE_URL,
+    PROJECT_ROOT,
+    UNSAFE_SECRET_PLACEHOLDERS,
+    load_settings,
+    reset_settings_cache,
+)
 from app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
 from app.ingestion.demo_bootstrap import (
     DEFAULT_DEMO_BATCH_SIZE,
@@ -21,6 +28,7 @@ from app.ingestion.demo_bootstrap import (
     DEFAULT_DEMO_SIGNAL_PROVIDER,
     seed_demo_data,
 )
+from app.ingestion.demo_visibility import seed_world_visibility_data
 from app.simulation.service import (
     DEFAULT_ILLIQUID_PLAYER_COUNT,
     DEFAULT_LIQUID_PLAYER_COUNT,
@@ -33,15 +41,60 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescrip
     pass
 
 
+_LOCAL_DEMO_AUTH_SECRET = "gtex-local-demo-auth-secret-20260405"
+_LOCAL_DEMO_MEDIA_SECRET = "gtex-local-demo-media-secret-20260405"
+
+
 DEV_CLI_EPILOG = """Common local demo flows:
   Fresh demo market:
     python backend/scripts/dev.py rebuild-demo-market --seed 20260311
     python backend/scripts/dev.py runserver --demo-simulation --seed 20260311
 
+  Refresh world visibility data without resetting the seeded market:
+    python backend/scripts/dev.py seed-world-visibility --seed 20260311
+
   Refresh exchange activity without rebuilding the seeded player universe:
     python backend/scripts/dev.py seed-demo-liquidity --seed 20260311
     python backend/scripts/dev.py simulation-ticks --count 5 --start-tick 1 --seed 20260311
 """
+
+
+def _seed_local_secret(environ: dict[str, str], *, name: str, fallback: str) -> None:
+    value = environ.get(name, "").strip()
+    if not value or value.lower() in UNSAFE_SECRET_PLACEHOLDERS:
+        environ[name] = fallback
+
+
+def _build_local_demo_environ(*, database_url: str) -> dict[str, str]:
+    environ = dict(os.environ)
+    environ["DATABASE_URL"] = database_url
+    environ["GTE_DATABASE_URL"] = database_url
+    _seed_local_secret(environ, name="GTE_AUTH_SECRET", fallback=_LOCAL_DEMO_AUTH_SECRET)
+    _seed_local_secret(
+        environ,
+        name="GTE_MEDIA_SIGNING_SECRET",
+        fallback=_LOCAL_DEMO_MEDIA_SECRET,
+    )
+    return environ
+
+
+@contextmanager
+def _local_demo_environment(*, database_url: str):
+    overrides = _build_local_demo_environ(database_url=database_url)
+    tracked_keys = ("DATABASE_URL", "GTE_DATABASE_URL", "GTE_AUTH_SECRET", "GTE_MEDIA_SIGNING_SECRET")
+    previous = {key: os.environ.get(key) for key in tracked_keys}
+    try:
+        for key in tracked_keys:
+            os.environ[key] = overrides[key]
+        reset_settings_cache()
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        reset_settings_cache()
 
 
 def resolve_sqlite_database_path(database_url: str) -> Path | None:
@@ -98,19 +151,22 @@ def bootstrap_demo_database(
     illiquid_player_count: int = DEFAULT_ILLIQUID_PLAYER_COUNT,
 ) -> dict[str, Any]:
     removed_paths = [str(path) for path in reset_local_database(database_url)] if reset_db else []
-    heads = list(migrate_database(database_url))
-    summary = seed_demo_data(
-        database_url=database_url,
-        player_target_count=player_count,
-        provider_name=provider,
-        signal_provider=signal_provider,
-        demo_password=password,
-        random_seed=seed,
-        batch_size=batch_size,
-        with_liquidity=with_liquidity,
-        liquid_player_count=liquid_player_count,
-        illiquid_player_count=illiquid_player_count,
-    )
+    with _local_demo_environment(database_url=database_url):
+        heads = list(migrate_database(database_url))
+        resolved_settings = load_settings(environ=_build_local_demo_environ(database_url=database_url))
+        summary = seed_demo_data(
+            database_url=database_url,
+            settings=resolved_settings,
+            player_target_count=player_count,
+            provider_name=provider,
+            signal_provider=signal_provider,
+            demo_password=password,
+            random_seed=seed,
+            batch_size=batch_size,
+            with_liquidity=with_liquidity,
+            liquid_player_count=liquid_player_count,
+            illiquid_player_count=illiquid_player_count,
+        )
     return {
         "removed_paths": removed_paths,
         "migration_heads": heads,
@@ -125,19 +181,33 @@ def seed_demo_liquidity_database(
     liquid_player_count: int,
     illiquid_player_count: int,
 ) -> dict[str, Any]:
-    engine = create_database_engine(database_url)
-    try:
-        ensure_database_schema_current(engine)
-        summary = DemoMarketSimulationService(
-            session_factory=create_session_factory(engine),
-        ).seed_demo_liquidity(
-            random_seed=seed,
-            liquid_player_count=liquid_player_count,
-            illiquid_player_count=illiquid_player_count,
+    with _local_demo_environment(database_url=database_url):
+        engine = create_database_engine(database_url)
+        try:
+            ensure_database_schema_current(engine)
+            summary = DemoMarketSimulationService(
+                session_factory=create_session_factory(engine),
+            ).seed_demo_liquidity(
+                random_seed=seed,
+                liquid_player_count=liquid_player_count,
+                illiquid_player_count=illiquid_player_count,
+            )
+            return summary.to_dict()
+        finally:
+            engine.dispose()
+
+
+def seed_world_visibility_database(
+    *,
+    database_url: str,
+    provider: str,
+) -> dict[str, Any]:
+    with _local_demo_environment(database_url=database_url):
+        summary = seed_world_visibility_data(
+            database_url=database_url,
+            provider_name=provider,
         )
         return summary.to_dict()
-    finally:
-        engine.dispose()
 
 
 def run_simulation_tick_database(
@@ -148,20 +218,21 @@ def run_simulation_tick_database(
     liquid_player_count: int,
     illiquid_player_count: int,
 ) -> dict[str, Any]:
-    engine = create_database_engine(database_url)
-    try:
-        ensure_database_schema_current(engine)
-        summary = DemoMarketSimulationService(
-            session_factory=create_session_factory(engine),
-        ).run_simulation_tick(
-            tick_number=tick_number,
-            random_seed=seed,
-            liquid_player_count=liquid_player_count,
-            illiquid_player_count=illiquid_player_count,
-        )
-        return summary.to_dict()
-    finally:
-        engine.dispose()
+    with _local_demo_environment(database_url=database_url):
+        engine = create_database_engine(database_url)
+        try:
+            ensure_database_schema_current(engine)
+            summary = DemoMarketSimulationService(
+                session_factory=create_session_factory(engine),
+            ).run_simulation_tick(
+                tick_number=tick_number,
+                random_seed=seed,
+                liquid_player_count=liquid_player_count,
+                illiquid_player_count=illiquid_player_count,
+            )
+            return summary.to_dict()
+        finally:
+            engine.dispose()
 
 
 def run_simulation_ticks_database(
@@ -173,25 +244,26 @@ def run_simulation_ticks_database(
     liquid_player_count: int,
     illiquid_player_count: int,
 ) -> dict[str, Any]:
-    engine = create_database_engine(database_url)
-    try:
-        ensure_database_schema_current(engine)
-        summaries = DemoMarketSimulationService(
-            session_factory=create_session_factory(engine),
-        ).run_simulation_ticks(
-            tick_count=tick_count,
-            start_tick=start_tick,
-            random_seed=seed,
-            liquid_player_count=liquid_player_count,
-            illiquid_player_count=illiquid_player_count,
-        )
-        return {
-            "tick_count": tick_count,
-            "start_tick": start_tick,
-            "summaries": [summary.to_dict() for summary in summaries],
-        }
-    finally:
-        engine.dispose()
+    with _local_demo_environment(database_url=database_url):
+        engine = create_database_engine(database_url)
+        try:
+            ensure_database_schema_current(engine)
+            summaries = DemoMarketSimulationService(
+                session_factory=create_session_factory(engine),
+            ).run_simulation_ticks(
+                tick_count=tick_count,
+                start_tick=start_tick,
+                random_seed=seed,
+                liquid_player_count=liquid_player_count,
+                illiquid_player_count=illiquid_player_count,
+            )
+            return {
+                "tick_count": tick_count,
+                "start_tick": start_tick,
+                "summaries": [summary.to_dict() for summary in summaries],
+            }
+        finally:
+            engine.dispose()
 
 
 def rebuild_demo_market(
@@ -206,7 +278,7 @@ def rebuild_demo_market(
     liquid_player_count: int,
     illiquid_player_count: int,
 ) -> dict[str, Any]:
-    return bootstrap_demo_database(
+    bootstrap_result = bootstrap_demo_database(
         database_url=database_url,
         player_count=player_count,
         provider=provider,
@@ -219,6 +291,11 @@ def rebuild_demo_market(
         liquid_player_count=liquid_player_count,
         illiquid_player_count=illiquid_player_count,
     )
+    bootstrap_result["world_visibility_seed"] = seed_world_visibility_database(
+        database_url=database_url,
+        provider=provider,
+    )
+    return bootstrap_result
 
 
 def run_backend_server(
@@ -254,8 +331,7 @@ def run_backend_server(
         command.append("--factory")
     if reload_enabled:
         command.append("--reload")
-    environment = os.environ.copy()
-    environment["GTE_DATABASE_URL"] = database_url
+    environment = _build_local_demo_environ(database_url=database_url)
     if demo_simulation:
         environment["GTE_DEMO_SIMULATION_ENABLED"] = "1"
         environment["GTE_DEMO_SIMULATION_BOOTSTRAP"] = "1" if demo_bootstrap else "0"
@@ -351,6 +427,16 @@ def build_parser() -> argparse.ArgumentParser:
     liquidity_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to receive liquid demo markets.")
     liquidity_parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players to receive illiquid demo markets.")
 
+    world_visibility_parser = subparsers.add_parser(
+        "seed-world-visibility",
+        help="Seed the world, transfer, federation, regen, and national-team demo visibility layer.",
+        description="Refresh only the world visibility dataset needed by the current Flutter feature surfaces.",
+        formatter_class=_HelpFormatter,
+    )
+    world_visibility_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
+    world_visibility_parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug already written onto demo player records.")
+    world_visibility_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Reserved for parity with other demo commands; the world visibility layer is deterministic.")
+
     tick_parser = subparsers.add_parser(
         "simulation-tick",
         help="Run one deterministic simulation tick against the current demo market.",
@@ -435,18 +521,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "seed-demo":
-        summary = seed_demo_data(
-            database_url=args.database_url,
-            player_target_count=args.player_count,
-            provider_name=args.provider,
-            signal_provider=args.signal_provider,
-            demo_password=args.password,
-            random_seed=args.seed,
-            batch_size=args.batch_size,
-            with_liquidity=args.with_liquidity,
-            liquid_player_count=args.liquid_player_count,
-            illiquid_player_count=args.illiquid_player_count,
-        )
+        with _local_demo_environment(database_url=args.database_url):
+            summary = seed_demo_data(
+                database_url=args.database_url,
+                settings=load_settings(environ=_build_local_demo_environ(database_url=args.database_url)),
+                player_target_count=args.player_count,
+                provider_name=args.provider,
+                signal_provider=args.signal_provider,
+                demo_password=args.password,
+                random_seed=args.seed,
+                batch_size=args.batch_size,
+                with_liquidity=args.with_liquidity,
+                liquid_player_count=args.liquid_player_count,
+                illiquid_player_count=args.illiquid_player_count,
+            )
         print(json.dumps(summary.to_dict(), indent=2, default=str))
         return 0
 
@@ -473,6 +561,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             seed=args.seed,
             liquid_player_count=args.liquid_player_count,
             illiquid_player_count=args.illiquid_player_count,
+        )
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+
+    if args.command == "seed-world-visibility":
+        result = seed_world_visibility_database(
+            database_url=args.database_url,
+            provider=args.provider,
         )
         print(json.dumps(result, indent=2, default=str))
         return 0
@@ -546,4 +642,5 @@ __all__ = [
     "run_simulation_tick_database",
     "run_simulation_ticks_database",
     "seed_demo_liquidity_database",
+    "seed_world_visibility_database",
 ]

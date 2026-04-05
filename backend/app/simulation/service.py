@@ -21,7 +21,7 @@ from app.market.service import MarketEngine
 from app.matching.models import TradeExecution
 from app.matching.service import MatchingService
 from app.models.user import User, UserRole
-from app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerUnit
+from app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.orders.models import Order, OrderSide, OrderStatus
 from app.orders.service import OrderService
 from app.players.read_models import PlayerSummaryReadModel

@@ -27,9 +27,14 @@ from app.ingestion.dev_cli import (
     run_simulation_tick_database,
     run_simulation_ticks_database,
     seed_demo_liquidity_database,
+    seed_world_visibility_database,
 )
 from app.ingestion.models import Player
 from app.matching.models import TradeExecution
+from app.models.agent_marketplace import AgentMarketplaceListing
+from app.models.federation import Federation
+from app.models.national_team import NationalTeamCompetition
+from app.models.transfer_market import TransferListing
 from app.models.user import User
 from app.models.wallet import PaymentEvent
 from app.orders.models import Order
@@ -160,6 +165,76 @@ def test_run_simulation_tick_database_writes_expected_records(tmp_path: Path) ->
     assert summary["players_touched"]
 
 
+def test_rebuild_demo_market_seeds_world_visibility_counts(tmp_path: Path) -> None:
+    database_path = tmp_path / "rebuild-world-visibility.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+
+    result = rebuild_demo_market(
+        database_url=database_url,
+        player_count=10,
+        provider="cli-demo",
+        signal_provider="cli-demo-signals",
+        password=DEFAULT_DEMO_PASSWORD,
+        seed=20260311,
+        batch_size=5,
+        liquid_player_count=3,
+        illiquid_player_count=1,
+    )
+
+    assert result["world_visibility_seed"]["marketplace_listing_count"] > 0
+    assert result["world_visibility_seed"]["transfer_listing_count"] > 0
+    assert result["world_visibility_seed"]["federation_count"] > 0
+    assert result["world_visibility_seed"]["national_team_competition_count"] > 0
+
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        with SessionLocal() as session:
+            assert session.scalar(select(func.count()).select_from(AgentMarketplaceListing)) > 0
+            assert session.scalar(select(func.count()).select_from(TransferListing)) > 0
+            assert session.scalar(select(func.count()).select_from(Federation)) > 0
+            assert session.scalar(select(func.count()).select_from(NationalTeamCompetition)) > 0
+    finally:
+        engine.dispose()
+
+
+def test_seed_world_visibility_database_refreshes_bootstrapped_db(tmp_path: Path) -> None:
+    database_path = tmp_path / "seed-world-visibility.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+
+    bootstrap_demo_database(
+        database_url=database_url,
+        player_count=10,
+        provider="cli-demo",
+        signal_provider="cli-demo-signals",
+        password=DEFAULT_DEMO_PASSWORD,
+        seed=20260311,
+        batch_size=5,
+        reset_db=True,
+        with_liquidity=True,
+        liquid_player_count=3,
+        illiquid_player_count=1,
+    )
+
+    summary = seed_world_visibility_database(
+        database_url=database_url,
+        provider="cli-demo",
+    )
+    second_summary = seed_world_visibility_database(
+        database_url=database_url,
+        provider="cli-demo",
+    )
+
+    assert summary["marketplace_listing_count"] > 0
+    assert summary["transfer_listing_count"] > 0
+    assert summary["federation_count"] > 0
+    assert summary["national_team_competition_count"] > 0
+    assert second_summary["marketplace_listing_count"] == summary["marketplace_listing_count"]
+    assert second_summary["transfer_listing_count"] == summary["transfer_listing_count"]
+    assert second_summary["federation_count"] == summary["federation_count"]
+    assert second_summary["national_team_competition_count"] == summary["national_team_competition_count"]
+
+
 def test_run_simulation_ticks_database_is_deterministic_for_same_seed(tmp_path: Path) -> None:
     first_database_url = f"sqlite+pysqlite:///{(tmp_path / 'tick-seed-first.db').as_posix()}"
     second_database_url = f"sqlite+pysqlite:///{(tmp_path / 'tick-seed-second.db').as_posix()}"
@@ -263,6 +338,7 @@ def test_build_parser_help_includes_demo_operator_examples() -> None:
 
     assert "Fresh demo market:" in help_output
     assert "rebuild-demo-market --seed 20260311" in help_output
+    assert "seed-world-visibility --seed 20260311" in help_output
     assert "simulation-ticks --count 5 --start-tick 1 --seed 20260311" in help_output
 
 
@@ -274,6 +350,7 @@ def test_build_parser_supports_required_dev_commands() -> None:
     assert parser.parse_args(["seed-demo"]).command == "seed-demo"
     assert parser.parse_args(["bootstrap-demo"]).command == "bootstrap-demo"
     assert parser.parse_args(["seed-demo-liquidity"]).command == "seed-demo-liquidity"
+    assert parser.parse_args(["seed-world-visibility"]).command == "seed-world-visibility"
     assert parser.parse_args(["simulation-tick"]).command == "simulation-tick"
     assert parser.parse_args(["simulation-ticks"]).command == "simulation-ticks"
     assert parser.parse_args(["rebuild-demo-market"]).command == "rebuild-demo-market"

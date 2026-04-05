@@ -12,12 +12,13 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.append(str(BACKEND_DIR))
 
-from app.core.config import reset_settings_cache  # noqa: E402
-from app.db import get_database_url, get_target_metadata, load_model_modules  # noqa: E402
+from app.core.config import normalize_database_url, reset_settings_cache  # noqa: E402
+from app.db import get_target_metadata, load_model_modules  # noqa: E402
 
 config = context.config
 _database_url_override = config.get_main_option("sqlalchemy.url").strip() or None
 _previous_database_url = os.environ.get("DATABASE_URL")
+_previous_gte_database_url = os.environ.get("GTE_DATABASE_URL")
 _restore_database_url_override = False
 
 
@@ -26,6 +27,7 @@ def _apply_database_url_override() -> None:
     if _database_url_override is None:
         return
     os.environ["DATABASE_URL"] = _database_url_override
+    os.environ["GTE_DATABASE_URL"] = _database_url_override
     reset_settings_cache()
     _restore_database_url_override = True
 
@@ -37,12 +39,27 @@ def _restore_database_url() -> None:
         os.environ.pop("DATABASE_URL", None)
     else:
         os.environ["DATABASE_URL"] = _previous_database_url
+    if _previous_gte_database_url is None:
+        os.environ.pop("GTE_DATABASE_URL", None)
+    else:
+        os.environ["GTE_DATABASE_URL"] = _previous_gte_database_url
     reset_settings_cache()
+
+
+def _effective_database_url() -> str:
+    for candidate in (
+        _database_url_override,
+        os.environ.get("DATABASE_URL"),
+        os.environ.get("GTE_DATABASE_URL"),
+    ):
+        if candidate and candidate.strip():
+            return normalize_database_url(candidate)
+    raise RuntimeError("Alembic requires sqlalchemy.url, DATABASE_URL, or GTE_DATABASE_URL.")
 
 
 _apply_database_url_override()
 load_model_modules()
-config.set_main_option("sqlalchemy.url", get_database_url())
+config.set_main_option("sqlalchemy.url", _effective_database_url())
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -104,7 +121,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     connectable = create_engine(
-        get_database_url(),
+        _effective_database_url(),
         poolclass=pool.NullPool,
     )
 
