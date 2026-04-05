@@ -67,7 +67,7 @@ For the full local setup, smoke-test matrix, migration freeze notes, and Android
 
 ## Fast path
 
-Reset the local SQLite DB, migrate to head, seed demo users/players/holdings, and add demo exchange liquidity:
+Reset the local SQLite DB, migrate to head, seed the full demo exchange plus world-visibility slice, then boot the demo simulation runtime:
 
 ```powershell
 python backend/scripts/dev.py rebuild-demo-market
@@ -86,6 +86,10 @@ This creates:
 - seeded buy ladders and sell ladders in the exchange order book
 - seeded trade executions for ticker volume/history
 - 30 higher-activity and 60 thinner-book seeded player markets for local demos and tests
+- seeded agent marketplace listings for `/marketplace/players`
+- seeded transfer-center listings, watchlist activity, and negotiation context for `/api/transfer-market/*`
+- seeded federations, rankings, governance state, and regional tournament rollups
+- seeded regen seasons, awards, tracking, and national-team competition visibility
 
 Canonical demo supply bands:
 
@@ -97,15 +101,21 @@ Canonical demo supply bands:
 
 Default demo credentials:
 
-- `fan@demo.gte.local` / `DemoPass123`
-- `scout@demo.gte.local` / `DemoPass123`
-- `admin@demo.gte.local` / `DemoPass123`
+- `seed.fan@gte.local` / `DemoPass123`
+- `seed.scout@gte.local` / `DemoPass123`
+- `seed.admin@gte.local` / `DemoPass123`
 
-The canonical local QA path is `rebuild-demo-market` followed by `runserver --demo-simulation`. The rebuild command writes the exchange-side state into the database, and `runserver --demo-simulation` replays that seeded market into the in-memory market engine so `/api/market/ticker/{player_id}` shows spread and volume immediately on boot.
+The canonical local QA path is `rebuild-demo-market` followed by `runserver --demo-simulation`. The rebuild command writes both the exchange state and the live world-visibility state into the database, and `runserver --demo-simulation` replays the seeded market into the in-memory market engine so `/api/market/ticker/{player_id}` shows spread and volume immediately on boot.
+
+Refresh-only world visibility after a rebuild or a manual DB tweak:
+
+```powershell
+python backend/scripts/dev.py seed-world-visibility
+```
 
 ## Demo operator runbook
 
-Use the same `--seed` across rebuild, liquidity, ticks, and `runserver --demo-simulation` when you want repeatable QA data and screenshots.
+Use the same `--seed` across rebuild, world-visibility refreshes, ticks, and `runserver --demo-simulation` when you want repeatable QA data and screenshots.
 
 Full clean-room operator workflow:
 
@@ -113,15 +123,20 @@ Full clean-room operator workflow:
 python backend/scripts/dev.py reset-db
 python backend/scripts/dev.py migrate
 python backend/scripts/dev.py rebuild-demo-market --seed 20260311
-python backend/scripts/dev.py seed-demo-liquidity --seed 20260311
-python backend/scripts/dev.py simulation-ticks --count 5 --start-tick 1 --seed 20260311
 python backend/scripts/dev.py runserver --demo-simulation --seed 20260311
+```
+
+Refresh only the world/demo visibility slice without resetting the database:
+
+```powershell
+python backend/scripts/dev.py seed-world-visibility --seed 20260311
 ```
 
 Notes:
 
-- `rebuild-demo-market` already resets the SQLite database, migrates to head, seeds demo users/players/holdings, and adds demo liquidity. Use the explicit `reset-db` and `migrate` steps when you want to verify the database lifecycle or recover a dirty local DB.
+- `rebuild-demo-market` already resets the SQLite database, migrates to head, seeds demo users/players/holdings, seeds exchange liquidity, and restores the world-visibility routes used by the current Flutter surfaces. Use the explicit `reset-db` and `migrate` steps when you want to verify the database lifecycle or recover a dirty local DB.
 - `bootstrap-demo` and `backend/scripts/bootstrap_demo.py` remain available as low-level/manual seed entry points, but the canonical launch/test seed path is the two-command `rebuild-demo-market` plus `runserver --demo-simulation` flow above.
+- `seed-world-visibility` is idempotent and safe to rerun when you want to refresh the player marketplace, transfer center, federations, national teams, and regen visibility without resetting the DB.
 - `seed-demo-liquidity` is safe to rerun after a rebuild when you want to refresh only the exchange-side order book and trade history.
 - If you run tick commands from a separate terminal, restart `runserver --demo-simulation` afterwards so the in-memory ticker projection replays the updated database state.
 
@@ -135,6 +150,7 @@ python backend/scripts/dev.py migrate
 python backend/scripts/dev.py seed-demo
 python backend/scripts/dev.py bootstrap-demo
 python backend/scripts/dev.py seed-demo-liquidity
+python backend/scripts/dev.py seed-world-visibility
 python backend/scripts/dev.py simulation-tick
 python backend/scripts/dev.py simulation-ticks
 python backend/scripts/dev.py rebuild-demo-market
@@ -147,6 +163,7 @@ Useful variants:
 ```powershell
 python backend/scripts/dev.py bootstrap-demo --player-count 12 --with-liquidity
 python backend/scripts/dev.py seed-demo-liquidity --liquid-player-count 3 --illiquid-player-count 1
+python backend/scripts/dev.py seed-world-visibility --seed 20260311
 python backend/scripts/dev.py simulation-tick --tick-number 1
 python backend/scripts/dev.py simulation-ticks --count 5 --start-tick 2
 python backend/scripts/dev.py runserver --demo-simulation --host 127.0.0.1 --port 8000 --reload
@@ -172,6 +189,13 @@ If you already have the demo users and player universe loaded, seed only the exc
 
 ```powershell
 python backend/scripts/dev.py seed-demo-liquidity
+python backend/scripts/dev.py runserver --demo-simulation
+```
+
+If you already have the demo market but the world-facing surfaces are empty, refresh only the live visibility slice:
+
+```powershell
+python backend/scripts/dev.py seed-world-visibility
 python backend/scripts/dev.py runserver --demo-simulation
 ```
 
