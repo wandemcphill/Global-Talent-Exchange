@@ -199,6 +199,42 @@ def test_match_viewer_route_builds_live_hub_fallback_when_no_stored_metadata_exi
     assert session_payload["presentation_package"]["away"]["team_name"]
 
 
+def test_match_viewer_session_reuses_the_same_canonical_timeline_as_the_public_view() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=43))
+    base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
+    _insert_match(
+        session_factory,
+        replay_payload.match_id,
+        metadata_json={"match_viewer": base_view.model_dump(mode="json")},
+    )
+
+    with TestClient(app) as client:
+        timeline = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+        session = client.get(f"/api/match-viewer/{replay_payload.match_id}/session")
+
+    assert timeline.status_code == 200
+    assert session.status_code == 200
+    timeline_payload = timeline.json()
+    session_payload = session.json()
+    assert timeline_payload["home_team"] == session_payload["home_team"]
+    assert timeline_payload["away_team"] == session_payload["away_team"]
+    segment_start = float(session_payload["segment_start_seconds"])
+    segment_end = float(session_payload["segment_end_seconds"])
+    assert segment_start == 0.0
+    assert segment_end <= float(timeline_payload["duration_seconds"])
+    assert session_payload["events"] == [
+        event
+        for event in timeline_payload["events"]
+        if segment_start <= float(event["time_seconds"]) <= segment_end
+    ]
+    assert session_payload["frames"] == [
+        frame
+        for frame in timeline_payload["frames"]
+        if segment_start <= float(frame["time_seconds"]) <= segment_end
+    ]
+
+
 def test_broadcast_home_and_match_viewer_resolve_the_same_live_match_key() -> None:
     app, _ = _build_app()
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=39))

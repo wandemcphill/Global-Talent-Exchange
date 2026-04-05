@@ -32,6 +32,22 @@ void main() {
   });
 
   testWidgets(
+    'broadcast route reuses the bootstrapped session on first mount',
+    (WidgetTester tester) async {
+      final _FakeViewerRepository repository = _FakeViewerRepository(
+        viewState: buildBroadcastTestViewState(),
+        bootstrapInitialViewState: buildBroadcastTestViewState(),
+      );
+
+      await tester.pumpWidget(_buildWidget(repository: repository));
+      await tester.pumpAndSettle();
+
+      expect(repository.loadViewStateCalls, 0);
+      expect(find.text('Broadcast Package'), findsWidgets);
+    },
+  );
+
+  testWidgets(
     'broadcast route degrades cleanly when optional buckets are absent',
     (WidgetTester tester) async {
       final MatchPresentationPackage reducedPackage = MatchPresentationPackage(
@@ -95,7 +111,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       _buildWidget(
-        repository: const _FakeViewerRepository(
+        repository: _FakeViewerRepository(
           error: GteApiException(
             type: GteApiErrorType.notFound,
             message: 'Match viewer payload for blocked-match was not found.',
@@ -123,16 +139,23 @@ Widget _buildWidget({required LiveMatchViewerRepository repository}) {
 }
 
 class _FakeViewerRepository implements LiveMatchViewerRepository {
-  const _FakeViewerRepository({this.viewState, this.error});
+  _FakeViewerRepository({
+    this.viewState,
+    this.error,
+    this.bootstrapInitialViewState,
+  });
 
   final MatchViewState? viewState;
   final Object? error;
+  final MatchViewState? bootstrapInitialViewState;
+  int loadViewStateCalls = 0;
 
   @override
   Future<MatchViewState> loadViewState(
     String matchKey, {
     String? continuationToken,
   }) async {
+    loadViewStateCalls += 1;
     if (error != null) {
       throw error!;
     }
@@ -147,6 +170,7 @@ class _FakeViewerRepository implements LiveMatchViewerRepository {
     return LiveMatchViewerBootstrap(
       matchKey: matchKey,
       viewer: const <String, Object?>{'title': 'Broadcast route fixture'},
+      initialViewState: bootstrapInitialViewState,
       competition: CompetitionSummary(
         id: matchKey,
         name: 'Broadcast Route Fixture',

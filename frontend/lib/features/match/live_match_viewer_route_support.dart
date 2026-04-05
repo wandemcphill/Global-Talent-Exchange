@@ -23,11 +23,13 @@ class LiveMatchViewerBootstrap {
     required this.matchKey,
     required this.viewer,
     required this.competition,
+    this.initialViewState,
   });
 
   final String matchKey;
   final JsonMap viewer;
   final CompetitionSummary competition;
+  final MatchViewState? initialViewState;
 }
 
 class LiveMatchViewerQualifiedRoute {
@@ -64,10 +66,12 @@ class ApiLiveMatchViewerRepository implements LiveMatchViewerRepository {
       '/api/match-viewer/$matchKey',
       '/match-viewer/$matchKey',
     ], auth: false);
-    await _fetchFirstMap(api, <String>[
-      '/api/match-viewer/$matchKey/session',
-      '/match-viewer/$matchKey/session',
-    ], auth: false);
+    final MatchViewState initialViewState = MatchViewState.fromJson(
+      await _fetchFirstMap(api, <String>[
+        '/api/match-viewer/$matchKey/session',
+        '/match-viewer/$matchKey/session',
+      ], auth: false),
+    );
     if (isAuthenticated) {
       try {
         await api.post('/api/matches/$matchKey/spectate');
@@ -79,6 +83,7 @@ class ApiLiveMatchViewerRepository implements LiveMatchViewerRepository {
       matchKey: matchKey,
       viewer: viewer,
       competition: buildLiveViewerCompetition(matchKey, viewer),
+      initialViewState: initialViewState,
     );
   }
 
@@ -118,27 +123,26 @@ final liveMatchViewerBootstrapProvider = FutureProvider.autoDispose
           .resolveBootstrap(matchKey);
     });
 
-final liveMatchViewerQualifiedRouteProvider = FutureProvider.autoDispose
-    .family<LiveMatchViewerQualifiedRoute, String>((
-      Ref ref,
-      String matchKey,
-    ) async {
-      final LiveMatchViewerRepository repository = ref.watch(
-        liveMatchViewerRepositoryProvider,
-      );
-      final LiveMatchViewerBootstrap bootstrap = await repository
-          .resolveBootstrap(matchKey);
-      final MatchViewState initialViewState = await repository.loadViewState(
-        matchKey,
-      );
-      return LiveMatchViewerQualifiedRoute(
-        bootstrap: bootstrap,
-        initialViewState: qualifyLiveMatchViewerState(
-          matchKey: matchKey,
-          state: initialViewState,
-        ),
-      );
-    });
+final liveMatchViewerQualifiedRouteProvider = FutureProvider.autoDispose.family<
+  LiveMatchViewerQualifiedRoute,
+  String
+>((Ref ref, String matchKey) async {
+  final LiveMatchViewerRepository repository = ref.watch(
+    liveMatchViewerRepositoryProvider,
+  );
+  final LiveMatchViewerBootstrap bootstrap = await repository.resolveBootstrap(
+    matchKey,
+  );
+  final MatchViewState initialViewState =
+      bootstrap.initialViewState ?? await repository.loadViewState(matchKey);
+  return LiveMatchViewerQualifiedRoute(
+    bootstrap: bootstrap,
+    initialViewState: qualifyLiveMatchViewerState(
+      matchKey: matchKey,
+      state: initialViewState,
+    ),
+  );
+});
 
 Future<LiveMatchViewerBootstrap> resolveLiveMatchViewerBootstrap(
   WidgetRef ref,

@@ -26,6 +26,7 @@ class MatchBroadcastScreen extends ConsumerWidget {
           child: BroadcastPackageScreen(
             matchKey: matchKey,
             competition: value.competition,
+            initialViewState: value.initialViewState,
             viewStateLoader: () => repository.loadViewState(matchKey),
           ),
         );

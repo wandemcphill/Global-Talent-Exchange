@@ -33,11 +33,13 @@ class BroadcastPackageScreen extends StatefulWidget {
     required this.matchKey,
     required this.competition,
     required this.viewStateLoader,
+    this.initialViewState,
   });
 
   final String matchKey;
   final CompetitionSummary competition;
   final BroadcastPackageViewStateLoader viewStateLoader;
+  final MatchViewState? initialViewState;
 
   @override
   State<BroadcastPackageScreen> createState() => _BroadcastPackageScreenState();
@@ -58,7 +60,7 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
   @override
   void initState() {
     super.initState();
-    _viewStateFuture = widget.viewStateLoader();
+    _viewStateFuture = _resolveViewState();
     _sceneTimer = Timer.periodic(_sceneTick, (_) {
       if (!mounted) {
         return;
@@ -67,6 +69,19 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
         _packageSeconds += _sceneTick.inMilliseconds / 1000;
       });
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant BroadcastPackageScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.matchKey == widget.matchKey &&
+        identical(oldWidget.initialViewState, widget.initialViewState)) {
+      return;
+    }
+    _controller?.dispose();
+    _controller = null;
+    _packageSeconds = 0;
+    _viewStateFuture = _resolveViewState();
   }
 
   @override
@@ -83,6 +98,14 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
       _packageSeconds = 0;
       _viewStateFuture = widget.viewStateLoader();
     });
+  }
+
+  Future<MatchViewState> _resolveViewState() {
+    final MatchViewState? initialViewState = widget.initialViewState;
+    if (initialViewState != null) {
+      return Future<MatchViewState>.value(initialViewState);
+    }
+    return widget.viewStateLoader();
   }
 
   void _restartPackage() {

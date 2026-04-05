@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
@@ -16,6 +18,14 @@ from app.services.match_viewer_scaling_service import MatchViewerScalingService
 from app.services.match_timeline_service import MatchTimelineService
 
 router = APIRouter(prefix="/match-viewer", tags=["match-viewer"])
+
+
+@dataclass(slots=True)
+class _ResolvedMatchViewerContext:
+    canonical_view: MatchViewStateView
+    metadata_json: dict[str, object]
+    fairness_metadata: dict[str, object] | None
+    match: CompetitionMatch | None
 
 
 def get_match_timeline_service() -> MatchTimelineService:
@@ -154,6 +164,54 @@ def _resolve_live_view_state(
     return None
 
 
+def _resolve_match_viewer_context(
+    *,
+    match_key: str,
+    request: Request,
+    session: Session,
+    service: MatchTimelineService,
+) -> _ResolvedMatchViewerContext | None:
+    match = session.get(CompetitionMatch, match_key)
+    metadata_json = dict(match.metadata_json or {}) if match is not None else {}
+    if match is not None:
+        stored = metadata_json.get("match_viewer")
+        fairness = metadata_json.get("fairness")
+        if isinstance(stored, dict):
+            return _ResolvedMatchViewerContext(
+                canonical_view=MatchViewStateView.model_validate(stored),
+                metadata_json=metadata_json,
+                fairness_metadata=fairness if isinstance(fairness, dict) else None,
+                match=match,
+            )
+
+    replay_archive = ensure_replay_archive(request.app)
+    replay_key = match_key if match_key.startswith("replay:") else f"replay:{match_key}"
+    record = replay_archive.repository.get_latest_record(replay_key)
+    if record is not None:
+        return _ResolvedMatchViewerContext(
+            canonical_view=service.build_from_archive_record(record),
+            metadata_json={},
+            fairness_metadata=None,
+            match=None,
+        )
+
+    live_view = _resolve_live_view_state(
+        match_key=match_key,
+        request=request,
+        match=match,
+        service=service,
+    )
+    if live_view is None:
+        return None
+    canonical_view, live_metadata = live_view
+    return _ResolvedMatchViewerContext(
+        canonical_view=canonical_view,
+        metadata_json=live_metadata,
+        fairness_metadata=None,
+        match=match,
+    )
+
+
 @router.get("/{match_key}", response_model=MatchViewStateView)
 def read_match_viewer_timeline(
     match_key: str,
@@ -166,90 +224,55 @@ def read_match_viewer_timeline(
     presentation_service: MatchViewerPresentationService = Depends(get_match_viewer_presentation_service),
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
 ) -> MatchViewStateView:
-    match = session.get(CompetitionMatch, match_key)
-    if match is not None:
-        stored = (match.metadata_json or {}).get("match_viewer")
-        fairness = (match.metadata_json or {}).get("fairness")
-        if isinstance(stored, dict):
-            base_view = MatchViewStateView.model_validate(stored)
-            if isinstance(fairness, dict):
-                try:
-                    secured = integrity_service.build_viewer_session(
-                        match_id=match_key,
-                        view_state=scaling_service.transform(base_view, mode=mode),
-                        fairness_metadata=fairness,
-                        mode=mode,
-                        canonical_view_state=base_view,
-                    )
-                    secured = _attach_presentation(
-                        secured,
-                        match_key=match_key,
-                        presentation_service=presentation_service,
-                        metadata_json=match.metadata_json or {},
-                        match=match,
-                    )
-                    return _attach_monetization(
-                        secured,
-                        match_key=match_key,
-                        ad_engine=ad_engine,
-                        metadata_json=match.metadata_json or {},
-                    )
-                except MatchIntegrityViolation as exc:
-                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
-            transformed = _attach_presentation(
-                scaling_service.transform(base_view, mode=mode),
-                match_key=match_key,
-                presentation_service=presentation_service,
-                metadata_json=match.metadata_json or {},
-                match=match,
-            )
-            return _attach_monetization(
-                transformed,
-                match_key=match_key,
-                ad_engine=ad_engine,
-                metadata_json=match.metadata_json or {},
-            )
-
-    replay_archive = ensure_replay_archive(request.app)
-    replay_key = match_key if match_key.startswith("replay:") else f"replay:{match_key}"
-    record = replay_archive.repository.get_latest_record(replay_key)
-    if record is not None:
-        transformed = _attach_presentation(
-            scaling_service.transform(service.build_from_archive_record(record), mode=mode),
-            match_key=match_key,
-            presentation_service=presentation_service,
-        )
-        return _attach_monetization(
-            transformed,
-            match_key=match_key,
-            ad_engine=ad_engine,
-        )
-
-    live_view = _resolve_live_view_state(
+    resolved = _resolve_match_viewer_context(
         match_key=match_key,
         request=request,
-        match=match,
+        session=session,
         service=service,
     )
-    if live_view is not None:
-        base_view, metadata_json = live_view
-        transformed = _attach_presentation(
-            scaling_service.transform(base_view, mode=mode),
-            match_key=match_key,
-            presentation_service=presentation_service,
-            metadata_json=metadata_json,
-            match=match,
-        )
-        return _attach_monetization(
-            transformed,
-            match_key=match_key,
-            ad_engine=ad_engine,
-            metadata_json=metadata_json,
+    if resolved is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Match viewer payload for {match_key} was not found.",
         )
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Match viewer payload for {match_key} was not found.",
+    if resolved.fairness_metadata is not None:
+        try:
+            secured = integrity_service.build_viewer_session(
+                match_id=match_key,
+                view_state=scaling_service.transform(resolved.canonical_view, mode=mode),
+                fairness_metadata=resolved.fairness_metadata,
+                mode=mode,
+                canonical_view_state=resolved.canonical_view,
+            )
+            secured = _attach_presentation(
+                secured,
+                match_key=match_key,
+                presentation_service=presentation_service,
+                metadata_json=resolved.metadata_json,
+                match=resolved.match,
+            )
+            return _attach_monetization(
+                secured,
+                match_key=match_key,
+                ad_engine=ad_engine,
+                metadata_json=resolved.metadata_json,
+            )
+        except MatchIntegrityViolation as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
+
+    transformed = _attach_presentation(
+        scaling_service.transform(resolved.canonical_view, mode=mode),
+        match_key=match_key,
+        presentation_service=presentation_service,
+        metadata_json=resolved.metadata_json,
+        match=resolved.match,
+    )
+    return _attach_monetization(
+        transformed,
+        match_key=match_key,
+        ad_engine=ad_engine,
+        metadata_json=resolved.metadata_json,
     )
 
 
@@ -266,103 +289,45 @@ def read_match_viewer_session(
     presentation_service: MatchViewerPresentationService = Depends(get_match_viewer_presentation_service),
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
 ) -> MatchViewerSessionView:
-    match = session.get(CompetitionMatch, match_key)
-    if match is not None:
-        stored = (match.metadata_json or {}).get("match_viewer")
-        fairness = (match.metadata_json or {}).get("fairness")
-        if isinstance(stored, dict):
-            canonical_view = MatchViewStateView.model_validate(stored)
-            base_view = scaling_service.transform(canonical_view, mode=mode)
-            try:
-                secured = integrity_service.build_viewer_session(
-                    match_id=match_key,
-                    view_state=base_view,
-                    fairness_metadata=fairness if isinstance(fairness, dict) else None,
-                    mode=mode,
-                    continuation_token=token,
-                    canonical_view_state=canonical_view,
-                )
-                secured = _attach_presentation(
-                    secured,
-                    match_key=match_key,
-                    presentation_service=presentation_service,
-                    metadata_json=match.metadata_json or {},
-                    match=match,
-                )
-                return MatchViewerSessionView.model_validate(
-                    _attach_monetization(
-                        secured,
-                        match_key=match_key,
-                        ad_engine=ad_engine,
-                        metadata_json=match.metadata_json or {},
-                    ).model_dump(mode="json")
-                )
-            except MatchIntegrityViolation as exc:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
-
-    replay_archive = ensure_replay_archive(request.app)
-    replay_key = match_key if match_key.startswith("replay:") else f"replay:{match_key}"
-    record = replay_archive.repository.get_latest_record(replay_key)
-    if record is not None:
-        base_view = scaling_service.transform(service.build_from_archive_record(record), mode=mode)
-        try:
-            secured = integrity_service.build_viewer_session(
-                match_id=match_key,
-                view_state=base_view,
-                fairness_metadata=None,
-                mode=mode,
-                continuation_token=token,
-            )
-            secured = _attach_presentation(
-                secured,
-                match_key=match_key,
-                presentation_service=presentation_service,
-            )
-            return MatchViewerSessionView.model_validate(
-                _attach_monetization(
-                    secured,
-                    match_key=match_key,
-                    ad_engine=ad_engine,
-                ).model_dump(mode="json")
-            )
-        except MatchIntegrityViolation as exc:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
-
-    live_view = _resolve_live_view_state(
+    resolved = _resolve_match_viewer_context(
         match_key=match_key,
         request=request,
-        match=match,
+        session=session,
         service=service,
     )
-    if live_view is not None:
-        base_view, metadata_json = live_view
+    if resolved is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Match viewer payload for {match_key} was not found.",
+        )
+
+    base_view = scaling_service.transform(resolved.canonical_view, mode=mode)
+    try:
         secured = integrity_service.build_viewer_session(
             match_id=match_key,
-            view_state=scaling_service.transform(base_view, mode=mode),
-            fairness_metadata=None,
+            view_state=base_view,
+            fairness_metadata=resolved.fairness_metadata,
             mode=mode,
             continuation_token=token,
+            canonical_view_state=resolved.canonical_view,
         )
         secured = _attach_presentation(
             secured,
             match_key=match_key,
             presentation_service=presentation_service,
-            metadata_json=metadata_json,
-            match=match,
+            metadata_json=resolved.metadata_json,
+            match=resolved.match,
         )
         return MatchViewerSessionView.model_validate(
             _attach_monetization(
                 secured,
                 match_key=match_key,
                 ad_engine=ad_engine,
-                metadata_json=metadata_json,
+                metadata_json=resolved.metadata_json,
             ).model_dump(mode="json")
         )
-
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Match viewer payload for {match_key} was not found.",
-    )
+    except MatchIntegrityViolation as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
 
 
 __all__ = [
