@@ -55,9 +55,10 @@ List<T> parseList<T>(
 }
 
 List<JsonMap> jsonMapList(Object? value, {String label = 'payload'}) {
-  return jsonList(value, label: label)
-      .map((Object? item) => jsonMap(item, label: label))
-      .toList(growable: false);
+  return jsonList(
+    value,
+    label: label,
+  ).map((Object? item) => jsonMap(item, label: label)).toList(growable: false);
 }
 
 String? stringOrNullValue(Object? value) {
@@ -68,17 +69,11 @@ String? stringOrNullValue(Object? value) {
   return parsed.isEmpty ? null : parsed;
 }
 
-String stringValue(
-  Object? value, {
-  String fallback = '',
-}) {
+String stringValue(Object? value, {String fallback = ''}) {
   return stringOrNullValue(value) ?? fallback;
 }
 
-double numberValue(
-  Object? value, {
-  double fallback = 0,
-}) {
+double numberValue(Object? value, {double fallback = 0}) {
   if (value == null) {
     return fallback;
   }
@@ -88,10 +83,7 @@ double numberValue(
   return double.tryParse(value.toString()) ?? fallback;
 }
 
-int intValue(
-  Object? value, {
-  int fallback = 0,
-}) {
+int intValue(Object? value, {int fallback = 0}) {
   if (value == null) {
     return fallback;
   }
@@ -104,10 +96,7 @@ int intValue(
   return int.tryParse(value.toString()) ?? fallback;
 }
 
-bool boolValue(
-  Object? value, {
-  bool fallback = false,
-}) {
+bool boolValue(Object? value, {bool fallback = false}) {
   if (value == null) {
     return fallback;
   }
@@ -174,6 +163,10 @@ bool isNotFoundError(Object error) {
   return error is GteApiException && error.type == GteApiErrorType.notFound;
 }
 
+bool isUnauthorizedError(Object error) {
+  return error is GteApiException && error.type == GteApiErrorType.unauthorized;
+}
+
 class _FeatureFixtureTransport implements GteTransport {
   _FeatureFixtureTransport.seed()
     : _giftCatalog = <JsonMap>[
@@ -210,7 +203,8 @@ class _FeatureFixtureTransport implements GteTransport {
           'id': 'combo-rule-legacy-1',
           'rule_key': 'legacy_combo',
           'title': 'Legacy combo disabled',
-          'description': 'Gift combo amplification is disabled in the live GTEX Coin runtime.',
+          'description':
+              'Gift combo amplification is disabled in the live GTEX Coin runtime.',
           'min_combo_count': 2,
           'window_seconds': 120,
           'bonus_bps': 0,
@@ -260,8 +254,12 @@ class _FeatureFixtureTransport implements GteTransport {
               'Technical combinations, brave rest-defense, and elastic final-third rotations.',
           'supporter_traits_json': <String>['expressive', 'demanding'],
           'rivalry_themes_json': <String>['heritage', 'continental_ambition'],
-          'talent_archetypes_json': <String>['playmakers', 'press-resistant_fullbacks'],
-          'climate_notes': 'Fast pitches and warm conditions favor daring possession.',
+          'talent_archetypes_json': <String>[
+            'playmakers',
+            'press-resistant_fullbacks',
+          ],
+          'climate_notes':
+              'Fast pitches and warm conditions favor daring possession.',
           'active': true,
           'metadata_json': <String, Object?>{'focus': 'regen_universe'},
         },
@@ -314,12 +312,8 @@ class _FeatureFixtureTransport implements GteTransport {
             'divisions': 3,
             'continental_slots': 4,
           },
-          'rules_json': <String, Object?>{
-            'region_label': 'West Africa',
-          },
-          'metadata_json': <String, Object?>{
-            'region_label': 'West Africa',
-          },
+          'rules_json': <String, Object?>{'region_label': 'West Africa'},
+          'metadata_json': <String, Object?>{'region_label': 'West Africa'},
           'competitions_json': <Object?>[
             <String, Object?>{
               'competition_id': 'competition-west-africa-cup',
@@ -338,12 +332,8 @@ class _FeatureFixtureTransport implements GteTransport {
             'divisions': 1,
             'continental_slots': 8,
           },
-          'rules_json': <String, Object?>{
-            'region_label': 'Global',
-          },
-          'metadata_json': <String, Object?>{
-            'region_label': 'Global',
-          },
+          'rules_json': <String, Object?>{'region_label': 'Global'},
+          'metadata_json': <String, Object?>{'region_label': 'Global'},
           'competitions_json': <Object?>[
             <String, Object?>{
               'competition_id': 'competition-global-champions',
@@ -387,26 +377,26 @@ class _FeatureFixtureTransport implements GteTransport {
       return _ok(_filterActive(_comboRules, request.uri, fallback: true));
     }
     if (method == 'POST' && path == '/admin/economy/gift-combo-rules') {
-      return _ok(_upsertByKey(_comboRules, _requestMap(request.body), 'rule_key'));
+      return _ok(
+        _upsertByKey(_comboRules, _requestMap(request.body), 'rule_key'),
+      );
     }
     if (method == 'GET' && path == '/admin/economy/burn-events') {
       return _ok(_limitList(_burnEvents, request.uri));
     }
     if (method == 'GET' && path == '/world/cultures') {
-      return _ok(_limitList(_filterActive(_cultures, request.uri), request.uri));
+      return _ok(
+        _limitList(_filterActive(_cultures, request.uri), request.uri),
+      );
     }
     if (method == 'PUT' && path.startsWith('/admin/world/cultures/')) {
       final String cultureKey = path.substring('/admin/world/cultures/'.length);
       return _ok(
-        _upsertByKey(
-          _cultures,
-          <String, Object?>{
-            ..._requestMap(request.body),
-            'culture_key': cultureKey,
-            'id': 'culture-$cultureKey',
-          },
-          'culture_key',
-        ),
+        _upsertByKey(_cultures, <String, Object?>{
+          ..._requestMap(request.body),
+          'culture_key': cultureKey,
+          'id': 'culture-$cultureKey',
+        }, 'culture_key'),
       );
     }
     if (method == 'GET' && path == '/federations') {
@@ -417,8 +407,12 @@ class _FeatureFixtureTransport implements GteTransport {
         path.endsWith('/memberships')) {
       return _ok(_joinFederation(path, _requestMap(request.body)));
     }
-    if (method == 'GET' && path.startsWith('/world/clubs/') && path.endsWith('/context')) {
-      return _ok(_clubContextFor(_extractScopedId(path, '/world/clubs/', '/context')));
+    if (method == 'GET' &&
+        path.startsWith('/world/clubs/') &&
+        path.endsWith('/context')) {
+      return _ok(
+        _clubContextFor(_extractScopedId(path, '/world/clubs/', '/context')),
+      );
     }
     if (method == 'PUT' &&
         path.startsWith('/admin/world/clubs/') &&
@@ -460,27 +454,25 @@ class _FeatureFixtureTransport implements GteTransport {
       final String slug = path.substring('/admin/world/narratives/'.length);
       final JsonMap requestBody = _requestMap(request.body);
       return _ok(
-        _upsertByKey(
-          _narratives,
-          <String, Object?>{
-            ...requestBody,
-            'id': 'narrative-$slug',
-            'slug': slug,
-            'scope_type':
-                stringValue(requestBody['club_id']).isNotEmpty
-                    ? 'club'
-                    : stringValue(requestBody['competition_id']).isNotEmpty
-                        ? 'competition'
-                        : 'global',
-          },
-          'slug',
-        ),
+        _upsertByKey(_narratives, <String, Object?>{
+          ...requestBody,
+          'id': 'narrative-$slug',
+          'slug': slug,
+          'scope_type':
+              stringValue(requestBody['club_id']).isNotEmpty
+                  ? 'club'
+                  : stringValue(requestBody['competition_id']).isNotEmpty
+                  ? 'competition'
+                  : 'global',
+        }, 'slug'),
       );
     }
 
     return const GteTransportResponse(
       statusCode: 404,
-      body: <String, Object?>{'detail': 'Fixture feature route not implemented.'},
+      body: <String, Object?>{
+        'detail': 'Fixture feature route not implemented.',
+      },
     );
   }
 
@@ -501,9 +493,7 @@ class _FeatureFixtureTransport implements GteTransport {
   }
 
   List<JsonMap> _limitList(List<JsonMap> items, Uri uri) {
-    final int? limit = int.tryParse(
-      uri.queryParameters['limit']?.trim() ?? '',
-    );
+    final int? limit = int.tryParse(uri.queryParameters['limit']?.trim() ?? '');
     if (limit == null || limit <= 0 || limit >= items.length) {
       return List<JsonMap>.from(items, growable: false);
     }
@@ -519,9 +509,11 @@ class _FeatureFixtureTransport implements GteTransport {
     final bool requireActive =
         activeOnly == null
             ? fallback
-            : !<String>{'0', 'false', 'no'}.contains(
-              activeOnly.trim().toLowerCase(),
-            );
+            : !<String>{
+              '0',
+              'false',
+              'no',
+            }.contains(activeOnly.trim().toLowerCase());
     if (!requireActive) {
       return List<JsonMap>.from(items, growable: false);
     }
@@ -535,18 +527,19 @@ class _FeatureFixtureTransport implements GteTransport {
     final String clubId = (uri.queryParameters['club_id'] ?? '').trim();
     final String competitionId =
         (uri.queryParameters['competition_id'] ?? '').trim();
-    return _narratives.where((JsonMap item) {
-      if (clubId.isNotEmpty && stringValue(item['club_id']) != clubId) {
-        return false;
-      }
-      if (competitionId.isNotEmpty &&
-          stringValue(item['competition_id']) != competitionId) {
-        return false;
-      }
-      return true;
-    }).map((JsonMap item) => Map<String, Object?>.from(item)).toList(
-      growable: false,
-    );
+    return _narratives
+        .where((JsonMap item) {
+          if (clubId.isNotEmpty && stringValue(item['club_id']) != clubId) {
+            return false;
+          }
+          if (competitionId.isNotEmpty &&
+              stringValue(item['competition_id']) != competitionId) {
+            return false;
+          }
+          return true;
+        })
+        .map((JsonMap item) => Map<String, Object?>.from(item))
+        .toList(growable: false);
   }
 
   JsonMap _upsertByKey(List<JsonMap> items, JsonMap request, String keyField) {
@@ -617,9 +610,7 @@ class _FeatureFixtureTransport implements GteTransport {
         'format': 'cup',
         'stage': 'quarterfinal',
         'participant_count': 8,
-        'active_narratives': <Object?>[
-          _narratives.last,
-        ],
+        'active_narratives': <Object?>[_narratives.last],
         'simulation_hooks': <Object?>[
           <String, Object?>{
             'hook': 'fixture_pressure',

@@ -117,10 +117,10 @@ class TransferCenterApi {
     try {
       return await client.getMap(
         '/api/transfer-market/listings/$listingId/negotiation',
-        auth: false,
+        auth: true,
       );
     } catch (error) {
-      if (isNotFoundError(error)) {
+      if (isNotFoundError(error) || isUnauthorizedError(error)) {
         return null;
       }
       rethrow;

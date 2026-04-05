@@ -739,8 +739,13 @@ Widget _buildNationalTeamCompetitionsScreen(
             ),
             _withApi(
               dependencies,
-              (dynamic api) =>
-                  api.getList('/regen-universe/national-regens', auth: false),
+              (dynamic api) async {
+                final Map<String, dynamic> payload = await api.getMap(
+                  '/regen-universe/national-regens',
+                  auth: false,
+                );
+                return _asList(payload['items']);
+              },
               () async => <Map<String, Object?>>[
                 <String, Object?>{
                   'id': 'seed-naija-1',

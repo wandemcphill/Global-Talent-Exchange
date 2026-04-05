@@ -133,7 +133,7 @@ class NationalTeamsApi {
     int? ageMax = 17,
     String? preseedBatch = 'u17_batch',
   }) async {
-    final List<dynamic> payload = await client.getList(
+    final JsonMap payload = await client.getMap(
       '/regen-universe/national-regens',
       auth: false,
       query: compactQuery(<String, Object?>{
@@ -143,9 +143,7 @@ class NationalTeamsApi {
         'preseed_batch': preseedBatch,
       }),
     );
-    return payload
-        .map((dynamic item) => jsonMap(item, label: 'national regen seed'))
-        .toList(growable: false);
+    return jsonMapList(payload['items'], label: 'national regen seed');
   }
 
   Future<JsonMap> buildAutoSquad({

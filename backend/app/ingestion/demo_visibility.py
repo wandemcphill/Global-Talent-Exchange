@@ -522,14 +522,25 @@ class DemoWorldVisibilitySeeder:
                 "coach_stance": "approve",
                 "coach_reason": "Fits the tactical transition lane immediately.",
                 "player_decision_json": {
+                    "interest_level": "high",
+                    "preferences": {
+                        "competition_level": "continental",
+                        "role": "important_player",
+                    },
                     "action": "delay",
-                    "score": 71.5,
+                    "decision_score": 71.5,
                     "concerns": ["Wants a stronger appearance bonus."],
+                    "component_scores": {
+                        "wage_offer": 68.0,
+                        "expected_role": 76.0,
+                        "club_trajectory": 70.5,
+                    },
                 },
                 "coach_opinion_json": {
                     "stance": "approve",
                     "reason": "The player fixes the left-sided creation gap.",
                     "tactical_fit": 79.0,
+                    "squad_depth_fit": 72.0,
                     "personality_fit": 74.0,
                 },
                 "concerns_json": ["Wage structure under review", "Agent wants appearance upside"],
@@ -539,10 +550,11 @@ class DemoWorldVisibilitySeeder:
                     "agent_negotiation": {
                         "action": "counter_offer",
                         "demands": ["Appearance bonus", "Release clause clarity"],
-                        "confidence_score": 78.0,
+                        "clauses": {
+                            "bonus_terms": "Appearance bonus plus resale ladder.",
+                        },
+                        "notes": "Counter-offer seeded for transfer center detail validation.",
                     },
-                    "notes": "Counter-offer seeded for transfer center detail validation.",
-                    "bonus_terms": "Appearance bonus plus resale ladder.",
                 },
             },
         )
