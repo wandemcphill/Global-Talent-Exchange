@@ -340,7 +340,7 @@ def test_wallet_conversion_cannot_create_negative_balance(client, app_session_fa
         },
     )
     assert convert_response.status_code == 409
-    assert "does not have enough balance" in convert_response.json()["detail"]
+    assert "does not have enough balance" in _error_message(convert_response).lower()
 
     summary_response = client.get(
         "/api/wallets/summary",

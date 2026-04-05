@@ -62,9 +62,7 @@ def _require_manage_competitions_permission(request: Request, actor: User) -> No
             detail="Admin access is required for this action.",
         )
     service = AdminGodModeService(
-        wallet_service=WalletService(
-            cache_backend=getattr(request.app.state, "cache_backend", None)
-        )
+        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
     )
     try:
         state = service._load_state(request.app)
@@ -95,14 +93,14 @@ def _require_manage_competitions_or_creator(
     actor: User,
     competition: Competition,
 ) -> None:
-    if competition.host_user_id == actor.id and not _is_platform_competition(
-        competition.source_type
-    ):
+    if competition.host_user_id == actor.id and not _is_platform_competition(competition.source_type):
         return
     _require_manage_competitions_permission(request, actor)
 
 
-@router.post("", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED
+)
 def create_competition(
     payload: CompetitionCreateRequest,
     _: User = Depends(get_current_user),
@@ -111,12 +109,17 @@ def create_competition(
     return _handle_competition_errors(lambda: orchestrator.create(payload))
 
 
-@router.post("/create", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/create",
+    response_model=CompetitionSummaryView,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_competition_alias(
     payload: CompetitionCreateRequest,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    return create_competition(payload, orchestrator)
+    return _handle_competition_errors(lambda: orchestrator.create(payload))
 
 
 @router.patch("/{competition_id}", response_model=CompetitionSummaryView, response_model_exclude_none=True)
@@ -150,7 +153,9 @@ def publish_competition(
     return result
 
 
-@router.get("/players/{subject_id}/progression", response_model=CompetitionProgressionView, response_model_exclude_none=True)
+@router.get(
+    "/players/{subject_id}/progression", response_model=CompetitionProgressionView, response_model_exclude_none=True
+)
 def get_competition_progression(
     subject_id: str,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
@@ -239,11 +244,7 @@ def _join_competition_response(
             detail="Authenticated user does not match competition join payload.",
         )
     resolved_user_id = current_user.id
-    resolved_user_name = (
-        payload.user_name
-        or current_user.display_name
-        or current_user.username
-    )
+    resolved_user_name = payload.user_name or current_user.display_name or current_user.username
     result = _handle_competition_errors(
         lambda: orchestrator.join(
             competition_id,
@@ -255,7 +256,9 @@ def _join_competition_response(
     if result is None:
         raise _not_found(competition_id)
     if not result.join_eligibility.eligible:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.join_eligibility.reason or "join_not_allowed")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=result.join_eligibility.reason or "join_not_allowed"
+        )
     return result
 
 
@@ -304,7 +307,9 @@ def list_competition_invites(
     return result
 
 
-@router.post("/{competition_id}/invites/accept", response_model=CompetitionSummaryView, response_model_exclude_none=True)
+@router.post(
+    "/{competition_id}/invites/accept", response_model=CompetitionSummaryView, response_model_exclude_none=True
+)
 def accept_competition_invite(
     competition_id: str,
     payload: CompetitionInviteAcceptRequest,
@@ -330,7 +335,9 @@ def get_competition_summary(
     return result
 
 
-@router.get("/{competition_id}/financials", response_model=CompetitionFinancialSummaryView, response_model_exclude_none=True)
+@router.get(
+    "/{competition_id}/financials", response_model=CompetitionFinancialSummaryView, response_model_exclude_none=True
+)
 def get_competition_financials(
     competition_id: str,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
@@ -491,7 +498,11 @@ def get_schedule_job_status(
     return result
 
 
-@router.post("/{competition_id}/matches/{match_id}/events", response_model=CompetitionMatchEventView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{competition_id}/matches/{match_id}/events",
+    response_model=CompetitionMatchEventView,
+    status_code=status.HTTP_201_CREATED,
+)
 def record_match_event(
     competition_id: str,
     match_id: str,
