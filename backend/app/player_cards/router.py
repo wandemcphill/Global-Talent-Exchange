@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, get_session
+from app.core.app_state import get_optional_app_settings
 from app.models.user import User
 from app.player_cards.schemas import (
     PlayerCardHoldingView,
@@ -99,7 +100,7 @@ def get_marketplace_service(request: Request, session: Session = Depends(get_ses
         session=session,
         wallet_service=wallet_service,
         event_publisher=event_publisher or InMemoryEventPublisher(),
-        settings=request.app.state.settings,
+        settings=get_optional_app_settings(request.app),
     )
 
 
@@ -712,12 +713,12 @@ def remove_watchlist(
     watchlist_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketService = Depends(get_service),
-) -> None:
+) -> Response:
     try:
         service.remove_watchlist(actor=current_user, watchlist_id=watchlist_id)
     except PlayerCardMarketError as exc:
         raise_player_card_http(exc)
-    return None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 api_router = APIRouter(prefix="/api")

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
+from app.core.app_state import get_optional_app_settings
 from app.core.cache_namespaces import PLAYER_MARKETS_CACHE_NAMESPACE
 from app.core.pagination import build_pagination_meta, resolve_pagination
 from app.core.response_cache import get_response_cache
@@ -167,8 +168,8 @@ def list_player_share_markets(
     session: Session = Depends(get_session),
 ) -> PlayerShareMarketListView:
     params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
-    settings = request.app.state.settings
-    if settings.api_cache_enabled:
+    settings = get_optional_app_settings(request.app)
+    if settings is not None and settings.api_cache_enabled:
         cached_payload = get_response_cache(request.app).get_json(
             namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
             route=request.url.path,
@@ -186,7 +187,7 @@ def list_player_share_markets(
         raise_player_token_market_http_exception(exc)
     payload["pagination"] = build_pagination_meta(params=params, total=payload["total"]).model_dump(mode="json")
     response = PlayerShareMarketListView.model_validate(payload)
-    if settings.api_cache_enabled:
+    if settings is not None and settings.api_cache_enabled:
         get_response_cache(request.app).set_json(
             namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
             route=request.url.path,

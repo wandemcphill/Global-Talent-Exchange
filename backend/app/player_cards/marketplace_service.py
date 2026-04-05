@@ -9,7 +9,13 @@ from typing import Any
 from sqlalchemy import Boolean, Integer, Numeric, String, and_, case, cast, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session
 
-from app.core.config import PlayerCardMarketIntegrityConfig, Settings, get_settings
+from app.core.config import (
+    DEFAULT_CONFIG_ROOT,
+    PlayerCardMarketIntegrityConfig,
+    Settings,
+    get_settings,
+    load_player_card_market_integrity_config,
+)
 from app.core.events import EventPublisher, InMemoryEventPublisher
 from app.ingestion.models import Player
 from app.integrity_engine.service import IntegrityEngineService
@@ -116,7 +122,7 @@ class PlayerCardMarketplaceService:
     session: Session
     wallet_service: WalletService = field(default_factory=WalletService)
     event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
-    settings: Settings = field(default_factory=get_settings)
+    settings: Settings | None = field(default_factory=get_settings)
     avatar_service: AvatarService = field(default_factory=AvatarService)
 
     @staticmethod
@@ -361,7 +367,9 @@ class PlayerCardMarketplaceService:
         return format(value.quantize(AMOUNT_QUANTUM), "f")
 
     def _market_integrity_config(self) -> PlayerCardMarketIntegrityConfig:
-        return self.settings.player_card_market_integrity
+        if self.settings is not None:
+            return self.settings.player_card_market_integrity
+        return load_player_card_market_integrity_config(DEFAULT_CONFIG_ROOT)
 
     def _recent_player_trade_average(
         self,
