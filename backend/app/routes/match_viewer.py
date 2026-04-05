@@ -338,4 +338,3 @@ __all__ = [
     "get_match_viewer_scaling_service",
     "router",
 ]
-

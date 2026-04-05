@@ -224,14 +224,10 @@ def test_match_viewer_session_reuses_the_same_canonical_timeline_as_the_public_v
     assert segment_start == 0.0
     assert segment_end <= float(timeline_payload["duration_seconds"])
     assert session_payload["events"] == [
-        event
-        for event in timeline_payload["events"]
-        if segment_start <= float(event["time_seconds"]) <= segment_end
+        event for event in timeline_payload["events"] if segment_start <= float(event["time_seconds"]) <= segment_end
     ]
     assert session_payload["frames"] == [
-        frame
-        for frame in timeline_payload["frames"]
-        if segment_start <= float(frame["time_seconds"]) <= segment_end
+        frame for frame in timeline_payload["frames"] if segment_start <= float(frame["time_seconds"]) <= segment_end
     ]
 
 
@@ -246,9 +242,7 @@ def test_broadcast_home_and_match_viewer_resolve_the_same_live_match_key() -> No
 
         assert broadcast_home.status_code == 200
         home_payload = broadcast_home.json()
-        live_channel = next(
-            channel for channel in home_payload["channels"] if channel["channel_id"] == "live"
-        )
+        live_channel = next(channel for channel in home_payload["channels"] if channel["channel_id"] == "live")
         assert live_channel["current_program"] is not None
         match_key = live_channel["current_program"]["match_id"]
 
