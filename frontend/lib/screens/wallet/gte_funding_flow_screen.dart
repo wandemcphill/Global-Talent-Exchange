@@ -43,8 +43,10 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   String? _error;
   GteWalletTopUpSession? _session;
   GteWalletTopUpVerificationResult? _verification;
+  GteWalletOverview? _walletOverview;
   List<GteDepositRequest> _depositRequests = <GteDepositRequest>[];
   GteDepositRequest? _manualDeposit;
+  bool _isLoadingWalletOverview = false;
 
   @override
   void initState() {
@@ -56,14 +58,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       if (!mounted || !widget.controller.isAuthenticated) {
         return;
       }
-      widget.controller.refreshCompliance().whenComplete(() {
-        if (!mounted || !_awaitingInitialComplianceCheck) {
-          return;
-        }
-        setState(() {
-          _awaitingInitialComplianceCheck = false;
-        });
-      });
+      _refreshFundingContext();
       _refreshDepositRequests();
     });
   }
@@ -143,6 +138,45 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     }
   }
 
+  Future<void> _refreshFundingContext() async {
+    setState(() {
+      _isLoadingWalletOverview = true;
+    });
+    try {
+      final Future<void> complianceTask = widget.controller.refreshCompliance();
+      final GteWalletOverview overview =
+          await widget.controller.api.fetchWalletOverview();
+      await complianceTask;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _walletOverview = overview;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = AppFeedback.messageFor(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingWalletOverview = false;
+          _awaitingInitialComplianceCheck = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshFundingSurface() async {
+    await Future.wait<void>(<Future<void>>[
+      _refreshFundingContext(),
+      _refreshDepositRequests(),
+    ]);
+  }
+
   GteDepositRequest? _resolveManualDeposit(List<GteDepositRequest> deposits) {
     final List<GteDepositRequest> sorted = List<GteDepositRequest>.from(
       deposits,
@@ -171,6 +205,20 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     if (amount == null || amount <= 0) {
       setState(() {
         _error = 'Enter a valid amount to continue.';
+      });
+      return;
+    }
+    if (!_providerSupportsCheckout(_automaticProvider)) {
+      setState(() {
+        _error = _providerRestrictionMessage(_automaticProvider);
+      });
+      return;
+    }
+    if (_automaticProvider == 'korapay' &&
+        amount != amount.truncateToDouble()) {
+      setState(() {
+        _error =
+            'KoraPay currently accepts whole-number NGN amounts. Enter a whole number like 5000.';
       });
       return;
     }
@@ -226,7 +274,10 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
           .controller
           .api
           .verifyWalletTopUp(session.reference);
-      await widget.controller.loadPortfolio();
+      await Future.wait<void>(<Future<void>>[
+        widget.controller.loadPortfolio(),
+        _refreshFundingSurface(),
+      ]);
       if (!mounted) {
         return;
       }
@@ -272,7 +323,10 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       setState(() {
         _manualDeposit = deposit;
       });
-      await _refreshDepositRequests();
+      await Future.wait<void>(<Future<void>>[
+        _refreshDepositRequests(),
+        _refreshFundingContext(),
+      ]);
     } catch (error) {
       if (!mounted) {
         return;
@@ -326,7 +380,10 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       _payerNameController.clear();
       _senderBankController.clear();
       _transferReferenceController.clear();
-      await _refreshDepositRequests();
+      await Future.wait<void>(<Future<void>>[
+        _refreshDepositRequests(),
+        _refreshFundingContext(),
+      ]);
     } catch (error) {
       if (!mounted) {
         return;
@@ -362,20 +419,75 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     }
   }
 
+  String _providerStatus(String provider) {
+    return _walletOverview?.paymentProviderStatus[provider
+            .trim()
+            .toLowerCase()] ??
+        'unknown';
+  }
+
+  bool _providerSupportsCheckout(String provider) {
+    final String status = _providerStatus(provider);
+    return status == 'ready' || status == 'mock';
+  }
+
+  String _providerRestrictionMessage(String provider) {
+    final String label = _providerLabel(provider);
+    switch (_providerStatus(provider)) {
+      case 'blocked':
+        return 'Instant gateway funding is currently disabled for this wallet. Use the bank transfer rail below.';
+      case 'unavailable':
+        return '$label is unavailable until live gateway credentials are configured.';
+      default:
+        return '$label checkout is not ready yet. Refresh the wallet state and try again.';
+    }
+  }
+
+  String _providerStatusSummary(String provider) {
+    final String label = _providerLabel(provider);
+    switch (_providerStatus(provider)) {
+      case 'ready':
+        return '$label checkout is ready for live funding.';
+      case 'mock':
+        return '$label is available in local simulation mode for this environment.';
+      case 'blocked':
+        return 'Instant gateway funding is currently routed away from $label. Use bank transfer below.';
+      case 'unavailable':
+        return '$label is unavailable until live gateway credentials are configured.';
+      default:
+        return 'Loading current $label funding status...';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final GteWalletTopUpSession? session = _session;
     final GteWalletTopUpVerificationResult? verification = _verification;
+    final GteWalletOverview? walletOverview = _walletOverview;
     final GteComplianceStatus? compliance = widget.controller.complianceStatus;
     final GteDepositRequest? activeDeposit = _activeManualDeposit;
     final bool blocked =
         compliance != null &&
         (compliance.requiredPolicyAcceptancesMissing > 0 ||
             !compliance.canDeposit);
+    final String blockedMessage =
+        compliance == null
+            ? 'Wallet funding is currently unavailable.'
+            : compliance.requiredPolicyAcceptancesMissing > 0
+            ? compliance.requiredPolicyAcceptancesMissing == 1
+                ? 'Complete 1 policy item to unlock deposits.'
+                : 'Complete ${compliance.requiredPolicyAcceptancesMissing} policy items to unlock deposits.'
+            : walletOverview?.policyBlockReason ??
+                'Deposits are currently restricted for this wallet configuration.';
+    final bool instantFundingReady =
+        !_isLoadingWalletOverview &&
+        !blocked &&
+        _providerSupportsCheckout(_automaticProvider) &&
+        session == null;
     return Scaffold(
       appBar: AppBar(title: const Text('Fund GTEX wallet')),
       body: RefreshIndicator(
-        onRefresh: _refreshDepositRequests,
+        onRefresh: _refreshFundingSurface,
         child: ListView(
           padding: const EdgeInsets.all(20),
           physics: const AlwaysScrollableScrollPhysics(),
@@ -391,11 +503,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      compliance.requiredPolicyAcceptancesMissing == 0
-                          ? 'Complete required policy acceptances to unlock deposits.'
-                          : 'Complete ${compliance.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
-                    ),
+                    Text(blockedMessage),
                     const SizedBox(height: 12),
                     FilledButton.tonalIcon(
                       onPressed: () async {
@@ -407,6 +515,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                                 ),
                           ),
                         );
+                        await _refreshFundingContext();
                       },
                       icon: const Icon(Icons.gavel_outlined),
                       label: const Text('Open compliance center'),
@@ -445,9 +554,20 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Automatic checkout supports Paystack and KoraPay for GTEX Coin top-ups.',
+                  Text(
+                    walletOverview == null
+                        ? 'Loading the live funding rail and gateway availability.'
+                        : walletOverview.depositMode == 'gateway'
+                        ? 'Automatic checkout supports Paystack and KoraPay for GTEX Coin top-ups.'
+                        : 'Instant checkout is currently unavailable because funding is routed through manual bank transfer review.',
                   ),
+                  if (walletOverview != null) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(
+                      _providerStatusSummary(_automaticProvider),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: _automaticProvider,
@@ -478,19 +598,23 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _automaticAmountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                    keyboardType: TextInputType.numberWithOptions(
+                      decimal: _automaticProvider != 'korapay',
                     ),
                     enabled: !_isSubmitting && session == null,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Amount',
-                      prefixIcon: Icon(Icons.payments_outlined),
+                      helperText:
+                          _automaticProvider == 'korapay'
+                              ? 'KoraPay currently accepts whole-number NGN amounts.'
+                              : 'Enter the GTEX top-up amount to route through the selected gateway.',
+                      prefixIcon: const Icon(Icons.payments_outlined),
                     ),
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
                     onPressed:
-                        _isSubmitting || session != null
+                        _isSubmitting || !instantFundingReady
                             ? null
                             : _initiateTopUp,
                     icon: const Icon(Icons.open_in_new_outlined),

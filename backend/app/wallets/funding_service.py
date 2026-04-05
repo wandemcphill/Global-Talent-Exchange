@@ -259,6 +259,17 @@ class WalletFundingService:
         wallet = self.sync_wallet_balance(session, user, wallet=wallet)
         return WalletTopUpVerificationResult(wallet=wallet, transaction=transaction)
 
+    def payment_provider_status(self, *, gateway_enabled: bool = True) -> dict[str, str]:
+        if not gateway_enabled:
+            return {
+                "paystack": "blocked",
+                "korapay": "blocked",
+            }
+        return {
+            "paystack": "ready" if self._paystack_secret() else "mock",
+            "korapay": "ready" if self._korapay_secret() else "unavailable",
+        }
+
     def _initialize_paystack_transaction(
         self,
         *,

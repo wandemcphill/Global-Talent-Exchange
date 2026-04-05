@@ -399,6 +399,37 @@ def _selected_payout_mode(policy: dict[str, object]) -> str:
     return "gateway"
 
 
+def _join_human_labels(labels: list[str]) -> str:
+    if not labels:
+        return ""
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) == 2:
+        return f"{labels[0]} and {labels[1]}"
+    return f"{', '.join(labels[:-1])}, and {labels[-1]}"
+
+
+def _policy_block_reason(*, compliance_policy: object, missing_policies: list[object]) -> str | None:
+    if missing_policies:
+        return (
+            f"Complete {len(missing_policies)} required policy acceptance(s) to unlock "
+            "funding, trading, and withdrawals."
+        )
+    blocked_actions: list[str] = []
+    if not bool(getattr(compliance_policy, "deposits_enabled", True)):
+        blocked_actions.append("funding")
+    if not bool(getattr(compliance_policy, "market_trading_enabled", True)):
+        blocked_actions.append("market trading")
+    if not bool(getattr(compliance_policy, "platform_reward_withdrawals_enabled", True)):
+        blocked_actions.append("withdrawals")
+    if not blocked_actions:
+        return None
+    action_text = _join_human_labels(blocked_actions)
+    verb = "is" if len(blocked_actions) == 1 else "are"
+    country_code = getattr(compliance_policy, "country_code", "GLOBAL")
+    return f"{action_text.capitalize()} {verb} currently restricted for country policy '{country_code}'."
+
+
 def _require_gateway_deposit(
     *,
     request: Request | None,
@@ -609,6 +640,7 @@ def get_wallet_adaptive_overview(
     request: Request = None,
 ) -> WalletAdaptiveOverviewView:
     service = _build_wallet_service(request)
+    funding_service = _build_wallet_funding_service(request)
     overview = service.get_adaptive_overview(session, current_user)
     policy = _build_withdrawal_policy_snapshot(request)
     treasury = _build_treasury_service(request)
@@ -616,15 +648,26 @@ def get_wallet_adaptive_overview(
     policy_service = PolicyService(session)
     compliance_policy = policy_service.get_country_policy_for_user(user=current_user)
     missing_policies = policy_service.list_missing_acceptances(user_id=current_user.id)
+    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
+    payout_mode = (
+        "bank_transfer"
+        if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
+        else _selected_payout_mode(policy)
+    )
+    policy_block_reason = _policy_block_reason(
+        compliance_policy=compliance_policy,
+        missing_policies=missing_policies,
+    )
     overview["competition_reward_balance"] = service.competition_reward_balance(session, current_user)
     overview["competition_reward_withdrawable_balance"] = service.competition_reward_withdrawable_balance(
         session, current_user
     )
     overview.update(policy)
     overview["country_code"] = compliance_policy.country_code
+    overview["payment_provider_status"] = funding_service.payment_provider_status(
+        gateway_enabled=deposit_mode == "gateway" and policy_block_reason is None
+    )
     insights = list(overview.get("insights") or [])
-    payout_mode = "bank_transfer" if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID} else "gateway"
-    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else "gateway"
     insights.append(
         {
             "label": "Deposit rail",
@@ -661,6 +704,14 @@ def get_wallet_adaptive_overview(
                 "tone": "warning",
             }
         )
+    if policy_block_reason is not None and not missing_policies:
+        insights.append(
+            {
+                "label": "Current restriction",
+                "value": policy_block_reason,
+                "tone": "warning",
+            }
+        )
     overview["insights"] = insights
     return WalletAdaptiveOverviewView(**overview)
 
@@ -672,7 +723,23 @@ def get_wallet_overview(
     request: Request = None,
 ) -> WalletOverviewView:
     wallet_service = _build_wallet_service(request)
+    funding_service = _build_wallet_funding_service(request)
     treasury_service = _build_treasury_service(request)
+    settings = treasury_service.ensure_settings(session)
+    policy = _build_withdrawal_policy_snapshot(request)
+    policy_service = PolicyService(session)
+    compliance_policy = policy_service.get_country_policy_for_user(user=current_user)
+    missing_policies = policy_service.list_missing_acceptances(user_id=current_user.id)
+    policy_block_reason = _policy_block_reason(
+        compliance_policy=compliance_policy,
+        missing_policies=missing_policies,
+    )
+    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
+    withdrawal_mode = (
+        "bank_transfer"
+        if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
+        else _selected_payout_mode(policy)
+    )
     summary = wallet_service.get_wallet_summary(session, current_user, currency=LedgerUnit.COIN)
     account = wallet_service.get_user_account(session, current_user, summary.currency)
     total_inflow = session.scalar(
@@ -718,6 +785,15 @@ def get_wallet_overview(
         total_outflow=abs(Decimal(total_outflow or 0)),
         withdrawable_now=eligibility.withdrawable_now,
         currency=summary.currency,
+        country_code=compliance_policy.country_code,
+        required_policy_acceptances_missing=len(missing_policies),
+        policy_blocked=policy_block_reason is not None,
+        policy_block_reason=policy_block_reason,
+        deposit_mode=deposit_mode,
+        withdrawal_mode=withdrawal_mode,
+        payment_provider_status=funding_service.payment_provider_status(
+            gateway_enabled=deposit_mode == "gateway" and policy_block_reason is None
+        ),
     )
 
 

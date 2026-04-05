@@ -541,6 +541,13 @@ class WalletOverviewView(BaseModel):
     total_outflow: Decimal
     withdrawable_now: Decimal
     currency: LedgerUnit
+    country_code: str = "GLOBAL"
+    required_policy_acceptances_missing: int = 0
+    policy_blocked: bool = False
+    policy_block_reason: str | None = None
+    deposit_mode: str = "bank_transfer"
+    withdrawal_mode: str = "bank_transfer"
+    payment_provider_status: dict[str, str] = Field(default_factory=dict)
 
 
 class WalletProfileView(BaseModel):

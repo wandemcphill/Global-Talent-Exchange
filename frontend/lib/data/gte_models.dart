@@ -971,6 +971,9 @@ class GteWalletOverview {
     this.requiredPolicyAcceptancesMissing = 0,
     this.policyBlocked = false,
     this.policyBlockReason,
+    this.depositMode = 'bank_transfer',
+    this.withdrawalMode = 'bank_transfer',
+    this.paymentProviderStatus = const <String, String>{},
   });
 
   final double availableBalance;
@@ -984,11 +987,21 @@ class GteWalletOverview {
   final int requiredPolicyAcceptancesMissing;
   final bool policyBlocked;
   final String? policyBlockReason;
+  final String depositMode;
+  final String withdrawalMode;
+  final Map<String, String> paymentProviderStatus;
 
   factory GteWalletOverview.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
       value,
       label: 'wallet overview',
+    );
+    final Map<String, Object?> providerStatusJson = GteJson.map(
+      GteJson.value(json, <String>[
+        'payment_provider_status',
+        'paymentProviderStatus',
+      ]),
+      label: 'wallet provider status',
     );
     return GteWalletOverview(
       availableBalance: GteJson.number(json, <String>[
@@ -1034,6 +1047,20 @@ class GteWalletOverview {
         'policy_block_reason',
         'policyBlockReason',
       ]),
+      depositMode: GteJson.string(json, <String>[
+        'deposit_mode',
+        'depositMode',
+      ], fallback: 'bank_transfer'),
+      withdrawalMode: GteJson.string(json, <String>[
+        'withdrawal_mode',
+        'withdrawalMode',
+      ], fallback: 'bank_transfer'),
+      paymentProviderStatus: Map<String, String>.unmodifiable(
+        providerStatusJson.map(
+          (String key, Object? providerValue) =>
+              MapEntry(key, providerValue?.toString() ?? 'unknown'),
+        ),
+      ),
     );
   }
 }

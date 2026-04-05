@@ -421,6 +421,33 @@ def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> Non
     assert labels["E-game cash-out"] == "Enabled"
 
 
+def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_context, monkeypatch) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
+    _enable_automatic_deposits(session)
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    (client.app.state.settings.config_root / "admin_god_mode.json").write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/wallets/overview")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["country_code"] == "NG"
+    assert payload["required_policy_acceptances_missing"] == 0
+    assert payload["policy_blocked"] is False
+    assert payload["deposit_mode"] == "gateway"
+    assert payload["withdrawal_mode"] == "bank_transfer"
+    assert payload["payment_provider_status"]["paystack"] == "mock"
+    assert payload["payment_provider_status"]["korapay"] == "unavailable"
+
+
 def test_wallet_overview_handles_missing_country_policy_rows(api_context) -> None:
     client, session, current_user = api_context
     policy_service = PolicyService(session)

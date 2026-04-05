@@ -12,66 +12,63 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
   testWidgets(
-      'funding screen repaints into compliance-gated state after deferred refresh',
-      (WidgetTester tester) async {
-    _setLargeViewport(tester);
+    'funding screen repaints into compliance-gated state after deferred refresh',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
 
-    final GteExchangeController controller = GteExchangeController(
-      api: _fixtureClient(
-        _BlockedComplianceApi(
-          latency: const Duration(milliseconds: 10),
+      final GteExchangeController controller = GteExchangeController(
+        api: _fixtureClient(
+          _BlockedComplianceApi(latency: const Duration(milliseconds: 10)),
         ),
-      ),
-    );
-    controller.session = _authenticatedSession(
-      userId: 'fixture-user',
-      userName: 'Ayo Martins',
-      clubId: 'ibadan-lions',
-      clubName: 'Ibadan Lions FC',
-    );
+      );
+      controller.session = _authenticatedSession(
+        userId: 'fixture-user',
+        userName: 'Ayo Martins',
+        clubId: 'ibadan-lions',
+        clubName: 'Ibadan Lions FC',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GteFundWalletScreen(controller: controller),
-      ),
-    );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteFundWalletScreen(controller: controller),
+        ),
+      );
 
-    expect(find.text('Fund GTEX wallet'), findsOneWidget);
-    expect(find.text('Choose a funding method'), findsOneWidget);
-    expect(find.text('Continue to Paystack'), findsOneWidget);
-    expect(find.text('Compliance action required'), findsNothing);
+      expect(find.text('Fund GTEX wallet'), findsOneWidget);
+      expect(find.text('Choose a funding method'), findsOneWidget);
+      expect(find.text('Continue to Paystack'), findsOneWidget);
+      expect(find.text('Compliance action required'), findsNothing);
 
-    await _pumpUntil(
-      tester,
-      () =>
-          controller.complianceStatus != null &&
-          controller.complianceStatus!.canDeposit == false &&
-          !controller.isLoadingCompliance,
-    );
+      await _pumpUntil(
+        tester,
+        () =>
+            controller.complianceStatus != null &&
+            controller.complianceStatus!.canDeposit == false &&
+            !controller.isLoadingCompliance,
+      );
 
-    expect(find.text('Compliance action required'), findsOneWidget);
-    expect(find.text('Open compliance center'), findsOneWidget);
-    expect(
-      find.text('Complete 1 policy items to unlock deposits.'),
-      findsOneWidget,
-    );
-    expect(find.text('Instant payment'), findsOneWidget);
-  });
+      expect(find.text('Compliance action required'), findsOneWidget);
+      expect(find.text('Open compliance center'), findsOneWidget);
+      expect(
+        find.text('Complete 1 policy item to unlock deposits.'),
+        findsOneWidget,
+      );
+      expect(find.text('Instant payment'), findsOneWidget);
+    },
+  );
 }
 
 class _BlockedComplianceApi extends GteMockApi {
-  _BlockedComplianceApi({
-    super.latency = Duration.zero,
-  });
+  _BlockedComplianceApi({super.latency = Duration.zero});
 
   static const GtePolicyRequirementSummary _missingRequirement =
       GtePolicyRequirementSummary(
-    documentKey: 'wallet-policy',
-    title: 'Wallet policy acceptance',
-    versionLabel: 'v2',
-    isMandatory: true,
-  );
+        documentKey: 'wallet-policy',
+        title: 'Wallet policy acceptance',
+        versionLabel: 'v2',
+        isMandatory: true,
+      );
 
   static const List<GtePolicyRequirementSummary> _missingRequirements =
       <GtePolicyRequirementSummary>[_missingRequirement];
@@ -115,24 +112,22 @@ GteAuthSession _authenticatedSession({
   String? clubId,
   String? clubName,
 }) {
-  return GteAuthSession.fromJson(
-    <String, Object?>{
-      'access_token': 'test-token',
-      'token_type': 'bearer',
-      'expires_in': 3600,
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'test-token',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    if (clubId != null) 'current_club_id': clubId,
+    if (clubName != null) 'current_club_name': clubName,
+    'user': <String, Object?>{
+      'id': userId,
+      'email': '$userId@gtex.test',
+      'username': userId,
+      'display_name': userName,
+      'role': 'user',
       if (clubId != null) 'current_club_id': clubId,
       if (clubName != null) 'current_club_name': clubName,
-      'user': <String, Object?>{
-        'id': userId,
-        'email': '$userId@gtex.test',
-        'username': userId,
-        'display_name': userName,
-        'role': 'user',
-        if (clubId != null) 'current_club_id': clubId,
-        if (clubName != null) 'current_club_name': clubName,
-      },
     },
-  );
+  });
 }
 
 GteExchangeApiClient _fixtureClient(GteMockApi repository) {

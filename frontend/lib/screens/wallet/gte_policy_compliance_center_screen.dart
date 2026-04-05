@@ -9,10 +9,7 @@ import '../../widgets/gte_surface_panel.dart';
 import '../onboarding/gte_region_selection_screen.dart';
 
 class GtePolicyComplianceCenterScreen extends StatefulWidget {
-  const GtePolicyComplianceCenterScreen({
-    super.key,
-    required this.controller,
-  });
+  const GtePolicyComplianceCenterScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -47,9 +44,14 @@ class _GtePolicyComplianceCenterScreenState
   }
 
   Future<void> _refresh() async {
+    final Future<_PolicyCenterBundle> bundleFuture = _loadBundle();
     setState(() {
-      _bundleFuture = _loadBundle();
+      _bundleFuture = bundleFuture;
     });
+    await Future.wait<Object?>(<Future<Object?>>[
+      bundleFuture,
+      widget.controller.refreshCompliance(),
+    ]);
   }
 
   Future<void> _acceptDocument(GtePolicyDocumentSummary document) async {
@@ -61,16 +63,16 @@ class _GtePolicyComplianceCenterScreenState
       _acceptingKeys.add(document.documentKey);
     });
     try {
-      await widget.controller.api
-          .acceptPolicyDocument(document.documentKey, versionLabel);
+      await widget.controller.api.acceptPolicyDocument(
+        document.documentKey,
+        versionLabel,
+      );
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${document.title} accepted.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${document.title} accepted.')));
       await _refresh();
     } finally {
       if (mounted) {
@@ -82,8 +84,8 @@ class _GtePolicyComplianceCenterScreenState
   }
 
   Future<void> _showDocument(GtePolicyDocumentSummary document) async {
-    final GtePolicyDocumentDetail detail =
-        await widget.controller.api.fetchPolicyDocument(document.documentKey);
+    final GtePolicyDocumentDetail detail = await widget.controller.api
+        .fetchPolicyDocument(document.documentKey);
     if (!mounted) {
       return;
     }
@@ -121,7 +123,9 @@ class _GtePolicyComplianceCenterScreenState
                 const SizedBox(height: 16),
                 Expanded(
                   child: SingleChildScrollView(
-                    child: Text(detail.bodyMarkdown ?? 'No policy text published.'),
+                    child: Text(
+                      detail.bodyMarkdown ?? 'No policy text published.',
+                    ),
                   ),
                 ),
               ],
@@ -143,7 +147,10 @@ class _GtePolicyComplianceCenterScreenState
       ),
       body: FutureBuilder<_PolicyCenterBundle>(
         future: _bundleFuture,
-        builder: (BuildContext context, AsyncSnapshot<_PolicyCenterBundle> snapshot) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<_PolicyCenterBundle> snapshot,
+        ) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -151,15 +158,17 @@ class _GtePolicyComplianceCenterScreenState
             return const Center(
               child: GteStatePanel(
                 title: 'Compliance center unavailable',
-                message: 'Unable to load policy and compliance details right now.',
+                message:
+                    'Unable to load policy and compliance details right now.',
                 icon: Icons.gavel_outlined,
               ),
             );
           }
           final _PolicyCenterBundle bundle = snapshot.data!;
-          final Set<String> acceptedKeys = bundle.acceptances
-              .map((GtePolicyAcceptanceSummary item) => item.documentKey)
-              .toSet();
+          final Set<String> acceptedKeys =
+              bundle.acceptances
+                  .map((GtePolicyAcceptanceSummary item) => item.documentKey)
+                  .toSet();
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
@@ -170,8 +179,10 @@ class _GtePolicyComplianceCenterScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Your access status',
-                          style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Your access status',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         bundle.compliance.hasMissingRequiredPolicies
@@ -190,17 +201,24 @@ class _GtePolicyComplianceCenterScreenState
                           ),
                           _StatusChip(
                             label: 'Deposits',
-                            value: bundle.compliance.canDeposit ? 'Open' : 'Blocked',
+                            value:
+                                bundle.compliance.canDeposit
+                                    ? 'Open'
+                                    : 'Blocked',
                           ),
                           _StatusChip(
                             label: 'Market',
-                            value: bundle.compliance.canTradeMarket ? 'Open' : 'Blocked',
+                            value:
+                                bundle.compliance.canTradeMarket
+                                    ? 'Open'
+                                    : 'Blocked',
                           ),
                           _StatusChip(
                             label: 'Withdrawals',
-                            value: bundle.compliance.canWithdrawPlatformRewards
-                                ? 'Open'
-                                : 'Blocked',
+                            value:
+                                bundle.compliance.canWithdrawPlatformRewards
+                                    ? 'Open'
+                                    : 'Blocked',
                           ),
                         ],
                       ),
@@ -209,10 +227,12 @@ class _GtePolicyComplianceCenterScreenState
                         onPressed: () async {
                           await Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => GteRegionSelectionScreen(
-                                controller: widget.controller,
-                                currentCountry: bundle.compliance.countryCode,
-                              ),
+                              builder:
+                                  (_) => GteRegionSelectionScreen(
+                                    controller: widget.controller,
+                                    currentCountry:
+                                        bundle.compliance.countryCode,
+                                  ),
                             ),
                           );
                           await _refresh();
@@ -225,14 +245,17 @@ class _GtePolicyComplianceCenterScreenState
                 ),
                 const SizedBox(height: 18),
                 GteSurfacePanel(
-                  accentColor: bundle.compliance.hasMissingRequiredPolicies
-                      ? GteShellTheme.accentWarm
-                      : GteShellTheme.accentCommunity,
+                  accentColor:
+                      bundle.compliance.hasMissingRequiredPolicies
+                          ? GteShellTheme.accentWarm
+                          : GteShellTheme.accentCommunity,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Mandatory acceptances',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Mandatory acceptances',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         bundle.compliance.missingPolicyAcceptances.isEmpty
@@ -247,8 +270,10 @@ class _GtePolicyComplianceCenterScreenState
                             padding: const EdgeInsets.only(bottom: 10),
                             child: Row(
                               children: <Widget>[
-                                const Icon(Icons.warning_amber_outlined,
-                                    size: 18),
+                                const Icon(
+                                  Icons.warning_amber_outlined,
+                                  size: 18,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -267,82 +292,96 @@ class _GtePolicyComplianceCenterScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Policy documents',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Policy documents',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 12),
-                      ...bundle.documents.map(
-                        (GtePolicyDocumentSummary document) {
-                          final bool accepted =
-                              acceptedKeys.contains(document.documentKey);
-                          final bool isBusy =
-                              _acceptingKeys.contains(document.documentKey);
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: Colors.white.withValues(alpha: 0.03),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: Text(document.title,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium),
-                                      ),
-                                      if (document.isMandatory)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            borderRadius:
-                                                BorderRadius.circular(999),
-                                            color: Colors.orange
-                                                .withValues(alpha: 0.14),
-                                          ),
-                                          child: const Text('Required'),
-                                        ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Latest: ${document.latestVersion?.versionLabel ?? 'Unpublished'}',
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    children: <Widget>[
-                                      OutlinedButton(
-                                        onPressed: () => _showDocument(document),
-                                        child: const Text('Read'),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      FilledButton(
-                                        onPressed: accepted || isBusy
-                                            ? null
-                                            : () => _acceptDocument(document),
-                                        child: Text(accepted
-                                            ? 'Accepted'
-                                            : isBusy
-                                                ? 'Saving...'
-                                                : 'Accept'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                      ...bundle.documents.map((
+                        GtePolicyDocumentSummary document,
+                      ) {
+                        final bool accepted = acceptedKeys.contains(
+                          document.documentKey,
+                        );
+                        final bool isBusy = _acceptingKeys.contains(
+                          document.documentKey,
+                        );
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.white.withValues(alpha: 0.03),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08),
                               ),
                             ),
-                          );
-                        },
-                      ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: Text(
+                                        document.title,
+                                        style:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                      ),
+                                    ),
+                                    if (document.isMandatory)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                          color: Colors.orange.withValues(
+                                            alpha: 0.14,
+                                          ),
+                                        ),
+                                        child: const Text('Required'),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Latest: ${document.latestVersion?.versionLabel ?? 'Unpublished'}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: <Widget>[
+                                    OutlinedButton(
+                                      onPressed: () => _showDocument(document),
+                                      child: const Text('Read'),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    FilledButton(
+                                      onPressed:
+                                          accepted || isBusy
+                                              ? null
+                                              : () => _acceptDocument(document),
+                                      child: Text(
+                                        accepted
+                                            ? 'Accepted'
+                                            : isBusy
+                                            ? 'Saving...'
+                                            : 'Accept',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
                     ],
                   ),
                 ),

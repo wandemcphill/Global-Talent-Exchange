@@ -8,6 +8,7 @@ import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
 import 'gte_deposit_history_screen.dart';
 import 'gte_funding_flow_screen.dart';
+import 'gte_policy_compliance_center_screen.dart';
 import 'gte_withdrawal_flow_screen.dart';
 
 class GteWalletOverviewScreen extends StatefulWidget {
@@ -31,7 +32,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
 
   Future<List<Object?>> _loadWallet() {
     return Future.wait<Object?>(<Future<Object?>>[
-      widget.controller.api.fetchWalletSummary(currency: GteLedgerUnit.coin),
+      widget.controller.api.fetchWalletOverview(),
       widget.controller.api.listWalletTransactions(limit: 8),
       widget.controller.api.fetchWithdrawalEligibility(),
     ]);
@@ -67,11 +68,22 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder:
-            (_) => GteWithdrawalEligibilityScreen(
-              controller: widget.controller,
-            ),
+            (_) =>
+                GteWithdrawalEligibilityScreen(controller: widget.controller),
       ),
     );
+    await _refresh();
+  }
+
+  Future<void> _openComplianceCenter() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder:
+            (_) =>
+                GtePolicyComplianceCenterScreen(controller: widget.controller),
+      ),
+    );
+    await widget.controller.refreshCompliance();
     await _refresh();
   }
 
@@ -101,12 +113,32 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
             );
           }
 
-          final GteWalletSummary tradeWallet =
-              snapshot.data![0] as GteWalletSummary;
+          final GteWalletOverview overview =
+              snapshot.data![0] as GteWalletOverview;
           final List<GteWalletTransactionRecord> transactions =
               snapshot.data![1] as List<GteWalletTransactionRecord>;
           final GteWithdrawalEligibility eligibility =
               snapshot.data![2] as GteWithdrawalEligibility;
+          final String restrictionMessage =
+              overview.policyBlocked
+                  ? overview.policyBlockReason ??
+                      'Complete the outstanding compliance review before wallet actions resume.'
+                  : eligibility.policyBlocked
+                  ? eligibility.policyBlockReason ??
+                      'Policy action is required before wallet withdrawals are enabled.'
+                  : eligibility.requiresKyc
+                  ? 'KYC is still required before withdrawals are enabled.'
+                  : eligibility.requiresBankAccount
+                  ? 'Add an active bank account before requesting withdrawals.'
+                  : overview.depositMode != 'gateway'
+                  ? 'Instant funding is currently routed through manual bank transfer review.'
+                  : 'Wallet compliance is ready for live funding and withdrawals.';
+          final bool showRestrictionPanel =
+              overview.policyBlocked ||
+              eligibility.policyBlocked ||
+              eligibility.requiresKyc ||
+              eligibility.requiresBankAccount ||
+              overview.depositMode != 'gateway';
 
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -134,8 +166,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                           _BalanceTile(
                             label: 'GTEX Coin',
                             value: gteFormatAmountForUnit(
-                              tradeWallet.availableBalance,
-                              tradeWallet.currency,
+                              overview.availableBalance,
+                              overview.currency,
                             ),
                             detail: 'Trading and withdrawal balance',
                             accent: GteShellTheme.accentCapital,
@@ -153,8 +185,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                           ),
                           const SizedBox(width: 12),
                           _MetricTile(
-                            label: 'Trading rail',
-                            value: 'GTEX Coin only',
+                            label: 'Funding rail',
+                            value: _railLabel(overview.depositMode),
                           ),
                         ],
                       ),
@@ -183,6 +215,63 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                     ],
                   ),
                 ),
+                if (showRestrictionPanel) ...<Widget>[
+                  const SizedBox(height: 18),
+                  GteSurfacePanel(
+                    accentColor: GteShellTheme.accentWarm,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Current restrictions',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(restrictionMessage),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: <Widget>[
+                            _RestrictionChip(
+                              label: 'Country',
+                              value: overview.countryCode ?? 'GLOBAL',
+                            ),
+                            _RestrictionChip(
+                              label: 'Deposit rail',
+                              value: _railLabel(overview.depositMode),
+                            ),
+                            _RestrictionChip(
+                              label: 'Paystack',
+                              value: _providerStatusLabel(
+                                overview.paymentProviderStatus['paystack'],
+                              ),
+                            ),
+                            _RestrictionChip(
+                              label: 'KoraPay',
+                              value: _providerStatusLabel(
+                                overview.paymentProviderStatus['korapay'],
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (overview.requiredPolicyAcceptancesMissing >
+                            0) ...<Widget>[
+                          const SizedBox(height: 12),
+                          FilledButton.tonalIcon(
+                            onPressed: _openComplianceCenter,
+                            icon: const Icon(Icons.gavel_outlined),
+                            label: Text(
+                              overview.requiredPolicyAcceptancesMissing == 1
+                                  ? 'Complete compliance review'
+                                  : 'Complete ${overview.requiredPolicyAcceptancesMissing} compliance items',
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 18),
                 GteSurfacePanel(
                   child: Column(
@@ -201,19 +290,12 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                         'Player trading, portfolio settlement, and withdrawals all clear through GTEX Coin.',
                       ),
                       const SizedBox(height: 6),
-                      const Text(
-                        'Competition winnings and wallet top-ups settle into the same GTEX withdrawal rail.',
+                      Text(
+                        'Deposit rail: ${_railLabel(overview.depositMode)}. Withdrawal rail: ${_railLabel(overview.withdrawalMode)}.',
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        eligibility.policyBlocked
-                            ? eligibility.policyBlockReason ??
-                                'Policy action is required before full withdrawal access is enabled.'
-                            : eligibility.requiresKyc
-                            ? 'KYC is still required before withdrawals are enabled.'
-                            : eligibility.requiresBankAccount
-                            ? 'Add an active bank account before requesting withdrawals.'
-                            : 'Wallet compliance is ready for live funding and withdrawals.',
+                        'Instant provider status: Paystack ${_providerStatusLabel(overview.paymentProviderStatus['paystack'])}, KoraPay ${_providerStatusLabel(overview.paymentProviderStatus['korapay'])}.',
                       ),
                     ],
                   ),
@@ -333,6 +415,41 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
+class _RestrictionChip extends StatelessWidget {
+  const _RestrictionChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: GteShellTheme.panelStrong.withValues(alpha: 0.6),
+        border: Border.all(
+          color: GteShellTheme.accentWarm.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              letterSpacing: 0.8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(value, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+}
+
 class _WalletTransactionTile extends StatelessWidget {
   const _WalletTransactionTile({required this.transaction});
 
@@ -396,6 +513,31 @@ class _WalletTransactionTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+String _railLabel(String mode) {
+  switch (mode.trim().toLowerCase()) {
+    case 'gateway':
+      return 'Automatic gateway';
+    case 'bank_transfer':
+    default:
+      return 'Bank transfer review';
+  }
+}
+
+String _providerStatusLabel(String? status) {
+  switch ((status ?? '').trim().toLowerCase()) {
+    case 'ready':
+      return 'Ready';
+    case 'mock':
+      return 'Simulation';
+    case 'blocked':
+      return 'Blocked';
+    case 'unavailable':
+      return 'Unavailable';
+    default:
+      return 'Unknown';
   }
 }
 

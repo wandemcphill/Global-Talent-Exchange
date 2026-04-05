@@ -543,8 +543,7 @@ class GteMockApi implements GteApiRepository {
           id: 'ledger-${++_ledgerSequence}',
           amount: existing.reservedAmount,
           reason: 'order_cancel_release',
-          description:
-              'Released GTEX Coin from cancelled order ${existing.id}',
+          description: 'Released GTEX Coin from cancelled order ${existing.id}',
           createdAt: timestamp,
         ),
       );
@@ -684,7 +683,9 @@ class GteMockApi implements GteApiRepository {
     GteLedgerUnit currency = GteLedgerUnit.coin,
   }) async {
     await _delay();
-    return currency == GteLedgerUnit.credit ? _fanWalletSummary : _walletSummary;
+    return currency == GteLedgerUnit.credit
+        ? _fanWalletSummary
+        : _walletSummary;
   }
 
   @override
@@ -2372,6 +2373,21 @@ class GteMockApi implements GteApiRepository {
         _computeWithdrawalEligibility();
     final List<GtePolicyRequirementSummary> missing =
         _currentMissingPolicyRequirements();
+    final String depositMode =
+        _treasurySettings.depositMode == GtePaymentMode.automatic
+            ? 'gateway'
+            : 'bank_transfer';
+    final String withdrawalMode =
+        _treasurySettings.withdrawalMode == GtePaymentMode.automatic
+            ? 'gateway'
+            : 'bank_transfer';
+    final Map<String, String> paymentProviderStatus =
+        depositMode == 'gateway'
+            ? const <String, String>{'paystack': 'mock', 'korapay': 'mock'}
+            : const <String, String>{
+              'paystack': 'blocked',
+              'korapay': 'blocked',
+            };
     return GteWalletOverview(
       availableBalance: _walletSummary.availableBalance,
       pendingDeposits: pendingDeposits,
@@ -2387,6 +2403,9 @@ class GteMockApi implements GteApiRepository {
           missing.isEmpty
               ? null
               : 'Accept the latest required policy documents to unlock full wallet access.',
+      depositMode: depositMode,
+      withdrawalMode: withdrawalMode,
+      paymentProviderStatus: paymentProviderStatus,
     );
   }
 
