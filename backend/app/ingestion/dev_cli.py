@@ -312,11 +312,7 @@ def run_backend_server(
     illiquid_player_count: int,
     database_url: str,
 ) -> int:
-    app_target = (
-        "app.simulation.app_factory:create_demo_simulation_app"
-        if demo_simulation
-        else "app.main:app"
-    )
+    app_target = "app.simulation.app_factory:create_demo_simulation_app" if demo_simulation else "app.main:app"
     command = [
         sys.executable,
         "-m",
@@ -388,15 +384,57 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HelpFormatter,
     )
     seed_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
-    seed_parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
-    seed_parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
-    seed_parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    seed_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic QA users for login flows.")
-    seed_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable seeded users, players, holdings, and liquidity.")
-    seed_parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
-    seed_parser.add_argument("--with-liquidity", action=argparse.BooleanOptionalAction, default=False, help="Also seed deterministic exchange-side liquidity and trade history.")
-    seed_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to receive liquid demo markets.")
-    seed_parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players to receive illiquid demo markets.")
+    seed_parser.add_argument(
+        "--player-count",
+        type=int,
+        default=DEFAULT_DEMO_PLAYER_COUNT,
+        help="Number of demo players to seed into the local universe.",
+    )
+    seed_parser.add_argument(
+        "--provider",
+        default=DEFAULT_DEMO_PROVIDER_NAME,
+        help="Synthetic provider slug written onto demo player records.",
+    )
+    seed_parser.add_argument(
+        "--signal-provider",
+        default=DEFAULT_DEMO_SIGNAL_PROVIDER,
+        help="Synthetic provider slug written onto demo market signals.",
+    )
+    seed_parser.add_argument(
+        "--password",
+        default=DEFAULT_DEMO_PASSWORD,
+        help="Password assigned to the local synthetic QA users for login flows.",
+    )
+    seed_parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_DEMO_RANDOM_SEED,
+        help="Deterministic seed for repeatable seeded users, players, holdings, and liquidity.",
+    )
+    seed_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_DEMO_BATCH_SIZE,
+        help="Batch size used while seeding the demo player universe.",
+    )
+    seed_parser.add_argument(
+        "--with-liquidity",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Also seed deterministic exchange-side liquidity and trade history.",
+    )
+    seed_parser.add_argument(
+        "--liquid-player-count",
+        type=int,
+        default=DEFAULT_LIQUID_PLAYER_COUNT,
+        help="Number of high-activity players to receive liquid demo markets.",
+    )
+    seed_parser.add_argument(
+        "--illiquid-player-count",
+        type=int,
+        default=DEFAULT_ILLIQUID_PLAYER_COUNT,
+        help="Number of low-activity players to receive illiquid demo markets.",
+    )
 
     bootstrap_parser = subparsers.add_parser(
         "bootstrap-demo",
@@ -405,16 +443,60 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HelpFormatter,
     )
     bootstrap_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
-    bootstrap_parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
-    bootstrap_parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
-    bootstrap_parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    bootstrap_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic QA users for login flows.")
-    bootstrap_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable demo data.")
-    bootstrap_parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
-    bootstrap_parser.add_argument("--reset-db", action=argparse.BooleanOptionalAction, default=True, help="Delete the SQLite database file before migrating and seeding.")
-    bootstrap_parser.add_argument("--with-liquidity", action=argparse.BooleanOptionalAction, default=False, help="Also seed deterministic exchange-side liquidity and trade history.")
-    bootstrap_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to receive liquid demo markets.")
-    bootstrap_parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players to receive illiquid demo markets.")
+    bootstrap_parser.add_argument(
+        "--player-count",
+        type=int,
+        default=DEFAULT_DEMO_PLAYER_COUNT,
+        help="Number of demo players to seed into the local universe.",
+    )
+    bootstrap_parser.add_argument(
+        "--provider",
+        default=DEFAULT_DEMO_PROVIDER_NAME,
+        help="Synthetic provider slug written onto demo player records.",
+    )
+    bootstrap_parser.add_argument(
+        "--signal-provider",
+        default=DEFAULT_DEMO_SIGNAL_PROVIDER,
+        help="Synthetic provider slug written onto demo market signals.",
+    )
+    bootstrap_parser.add_argument(
+        "--password",
+        default=DEFAULT_DEMO_PASSWORD,
+        help="Password assigned to the local synthetic QA users for login flows.",
+    )
+    bootstrap_parser.add_argument(
+        "--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable demo data."
+    )
+    bootstrap_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_DEMO_BATCH_SIZE,
+        help="Batch size used while seeding the demo player universe.",
+    )
+    bootstrap_parser.add_argument(
+        "--reset-db",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Delete the SQLite database file before migrating and seeding.",
+    )
+    bootstrap_parser.add_argument(
+        "--with-liquidity",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Also seed deterministic exchange-side liquidity and trade history.",
+    )
+    bootstrap_parser.add_argument(
+        "--liquid-player-count",
+        type=int,
+        default=DEFAULT_LIQUID_PLAYER_COUNT,
+        help="Number of high-activity players to receive liquid demo markets.",
+    )
+    bootstrap_parser.add_argument(
+        "--illiquid-player-count",
+        type=int,
+        default=DEFAULT_ILLIQUID_PLAYER_COUNT,
+        help="Number of low-activity players to receive illiquid demo markets.",
+    )
 
     liquidity_parser = subparsers.add_parser(
         "seed-demo-liquidity",
@@ -423,9 +505,24 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HelpFormatter,
     )
     liquidity_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
-    liquidity_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable order ladders and seeded trades.")
-    liquidity_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to receive liquid demo markets.")
-    liquidity_parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players to receive illiquid demo markets.")
+    liquidity_parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_DEMO_RANDOM_SEED,
+        help="Deterministic seed for repeatable order ladders and seeded trades.",
+    )
+    liquidity_parser.add_argument(
+        "--liquid-player-count",
+        type=int,
+        default=DEFAULT_LIQUID_PLAYER_COUNT,
+        help="Number of high-activity players to receive liquid demo markets.",
+    )
+    liquidity_parser.add_argument(
+        "--illiquid-player-count",
+        type=int,
+        default=DEFAULT_ILLIQUID_PLAYER_COUNT,
+        help="Number of low-activity players to receive illiquid demo markets.",
+    )
 
     world_visibility_parser = subparsers.add_parser(
         "seed-world-visibility",
@@ -434,8 +531,17 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HelpFormatter,
     )
     world_visibility_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
-    world_visibility_parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug already written onto demo player records.")
-    world_visibility_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Reserved for parity with other demo commands; the world visibility layer is deterministic.")
+    world_visibility_parser.add_argument(
+        "--provider",
+        default=DEFAULT_DEMO_PROVIDER_NAME,
+        help="Synthetic provider slug already written onto demo player records.",
+    )
+    world_visibility_parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_DEMO_RANDOM_SEED,
+        help="Reserved for parity with other demo commands; the world visibility layer is deterministic.",
+    )
 
     tick_parser = subparsers.add_parser(
         "simulation-tick",
@@ -444,10 +550,30 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HelpFormatter,
     )
     tick_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
-    tick_parser.add_argument("--tick-number", type=int, default=1, help="1-based tick number. Combined with --seed to keep output repeatable.")
-    tick_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable simulation output.")
-    tick_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players expected in the demo market.")
-    tick_parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players expected in the demo market.")
+    tick_parser.add_argument(
+        "--tick-number",
+        type=int,
+        default=1,
+        help="1-based tick number. Combined with --seed to keep output repeatable.",
+    )
+    tick_parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_DEMO_RANDOM_SEED,
+        help="Deterministic seed for repeatable simulation output.",
+    )
+    tick_parser.add_argument(
+        "--liquid-player-count",
+        type=int,
+        default=DEFAULT_LIQUID_PLAYER_COUNT,
+        help="Number of high-activity players expected in the demo market.",
+    )
+    tick_parser.add_argument(
+        "--illiquid-player-count",
+        type=int,
+        default=DEFAULT_ILLIQUID_PLAYER_COUNT,
+        help="Number of low-activity players expected in the demo market.",
+    )
 
     ticks_parser = subparsers.add_parser(
         "simulation-ticks",
@@ -457,10 +583,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ticks_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
     ticks_parser.add_argument("--count", type=int, default=DEFAULT_TICK_COUNT, help="Number of ticks to run.")
-    ticks_parser.add_argument("--start-tick", type=int, default=1, help="1-based tick number to use for the first generated tick.")
-    ticks_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable simulation output.")
-    ticks_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players expected in the demo market.")
-    ticks_parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players expected in the demo market.")
+    ticks_parser.add_argument(
+        "--start-tick", type=int, default=1, help="1-based tick number to use for the first generated tick."
+    )
+    ticks_parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_DEMO_RANDOM_SEED,
+        help="Deterministic seed for repeatable simulation output.",
+    )
+    ticks_parser.add_argument(
+        "--liquid-player-count",
+        type=int,
+        default=DEFAULT_LIQUID_PLAYER_COUNT,
+        help="Number of high-activity players expected in the demo market.",
+    )
+    ticks_parser.add_argument(
+        "--illiquid-player-count",
+        type=int,
+        default=DEFAULT_ILLIQUID_PLAYER_COUNT,
+        help="Number of low-activity players expected in the demo market.",
+    )
 
     rebuild_parser = subparsers.add_parser(
         "rebuild-demo-market",
@@ -469,14 +612,51 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HelpFormatter,
     )
     rebuild_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
-    rebuild_parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
-    rebuild_parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
-    rebuild_parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    rebuild_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic QA users for login flows.")
-    rebuild_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable demo data and liquidity.")
-    rebuild_parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
-    rebuild_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to receive liquid demo markets.")
-    rebuild_parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players to receive illiquid demo markets.")
+    rebuild_parser.add_argument(
+        "--player-count",
+        type=int,
+        default=DEFAULT_DEMO_PLAYER_COUNT,
+        help="Number of demo players to seed into the local universe.",
+    )
+    rebuild_parser.add_argument(
+        "--provider",
+        default=DEFAULT_DEMO_PROVIDER_NAME,
+        help="Synthetic provider slug written onto demo player records.",
+    )
+    rebuild_parser.add_argument(
+        "--signal-provider",
+        default=DEFAULT_DEMO_SIGNAL_PROVIDER,
+        help="Synthetic provider slug written onto demo market signals.",
+    )
+    rebuild_parser.add_argument(
+        "--password",
+        default=DEFAULT_DEMO_PASSWORD,
+        help="Password assigned to the local synthetic QA users for login flows.",
+    )
+    rebuild_parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_DEMO_RANDOM_SEED,
+        help="Deterministic seed for repeatable demo data and liquidity.",
+    )
+    rebuild_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_DEMO_BATCH_SIZE,
+        help="Batch size used while seeding the demo player universe.",
+    )
+    rebuild_parser.add_argument(
+        "--liquid-player-count",
+        type=int,
+        default=DEFAULT_LIQUID_PLAYER_COUNT,
+        help="Number of high-activity players to receive liquid demo markets.",
+    )
+    rebuild_parser.add_argument(
+        "--illiquid-player-count",
+        type=int,
+        default=DEFAULT_ILLIQUID_PLAYER_COUNT,
+        help="Number of low-activity players to receive illiquid demo markets.",
+    )
 
     runserver_parser = subparsers.add_parser(
         "runserver",
@@ -487,14 +667,54 @@ def build_parser() -> argparse.ArgumentParser:
     runserver_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
     runserver_parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind.")
     runserver_parser.add_argument("--port", type=int, default=8000, help="Port to bind.")
-    runserver_parser.add_argument("--reload", action=argparse.BooleanOptionalAction, default=True, help="Enable uvicorn autoreload for local development.")
-    runserver_parser.add_argument("--demo-simulation", action=argparse.BooleanOptionalAction, default=False, help="Use the demo simulation app factory so the in-memory market engine replays seeded data on boot.")
-    runserver_parser.add_argument("--demo-bootstrap", action=argparse.BooleanOptionalAction, default=False, help="Seed synthetic QA users, wallets, holdings, and players during app startup before replaying the market.")
-    runserver_parser.add_argument("--demo-seed-liquidity-on-boot", action=argparse.BooleanOptionalAction, default=False, help="Refresh exchange-side liquidity on app boot instead of only replaying the database state.")
-    runserver_parser.add_argument("--demo-player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Player count used only when --demo-bootstrap is enabled.")
-    runserver_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed used for demo bootstrap and simulation replay settings.")
-    runserver_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to replay or seed into the in-memory market engine.")
-    runserver_parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players to replay or seed into the in-memory market engine.")
+    runserver_parser.add_argument(
+        "--reload",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable uvicorn autoreload for local development.",
+    )
+    runserver_parser.add_argument(
+        "--demo-simulation",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use the demo simulation app factory so the in-memory market engine replays seeded data on boot.",
+    )
+    runserver_parser.add_argument(
+        "--demo-bootstrap",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Seed synthetic QA users, wallets, holdings, and players during app startup before replaying the market.",
+    )
+    runserver_parser.add_argument(
+        "--demo-seed-liquidity-on-boot",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Refresh exchange-side liquidity on app boot instead of only replaying the database state.",
+    )
+    runserver_parser.add_argument(
+        "--demo-player-count",
+        type=int,
+        default=DEFAULT_DEMO_PLAYER_COUNT,
+        help="Player count used only when --demo-bootstrap is enabled.",
+    )
+    runserver_parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_DEMO_RANDOM_SEED,
+        help="Deterministic seed used for demo bootstrap and simulation replay settings.",
+    )
+    runserver_parser.add_argument(
+        "--liquid-player-count",
+        type=int,
+        default=DEFAULT_LIQUID_PLAYER_COUNT,
+        help="Number of high-activity players to replay or seed into the in-memory market engine.",
+    )
+    runserver_parser.add_argument(
+        "--illiquid-player-count",
+        type=int,
+        default=DEFAULT_ILLIQUID_PLAYER_COUNT,
+        help="Number of low-activity players to replay or seed into the in-memory market engine.",
+    )
 
     test_parser = subparsers.add_parser(
         "test",
@@ -502,7 +722,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Pass through to pytest from the repository root.",
         formatter_class=_HelpFormatter,
     )
-    test_parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="Arguments passed straight through to pytest.")
+    test_parser.add_argument(
+        "pytest_args", nargs=argparse.REMAINDER, help="Arguments passed straight through to pytest."
+    )
 
     return parser
 

@@ -91,9 +91,10 @@ def test_bootstrap_demo_database_seeds_file_backed_sqlite(tmp_path: Path) -> Non
     try:
         with SessionLocal() as session:
             assert session.scalar(select(func.count()).select_from(User)) == 3
-            assert session.scalar(
-                select(func.count()).select_from(Player).where(Player.source_provider == "cli-demo")
-            ) == 10
+            assert (
+                session.scalar(select(func.count()).select_from(Player).where(Player.source_provider == "cli-demo"))
+                == 10
+            )
             assert session.scalar(select(func.count()).select_from(PaymentEvent)) == 3
             assert session.scalar(select(func.count()).select_from(PlayerValueSnapshotRecord)) == 20
     finally:

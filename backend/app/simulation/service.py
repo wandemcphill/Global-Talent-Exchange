@@ -11,10 +11,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.auth.security import hash_password
 from app.auth.service import AuthService
 from app.core.events import EventPublisher, InMemoryEventPublisher
-from app.ingestion.demo_discoverability import (
-    CANONICAL_ILLIQUID_PLAYER_COUNT,
-    CANONICAL_LIQUID_PLAYER_COUNT,
-)
 from app.ingestion.models import Player
 from app.ledger.models import LedgerEventRecord
 from app.market.service import MarketEngine
@@ -196,7 +192,9 @@ class DemoMarketSimulationService:
                 wallet_service=wallet_service,
                 demo_password=demo_password,
             )
-            self._reset_simulation_exchange_state(session, simulation_users=simulation_users, wallet_service=wallet_service)
+            self._reset_simulation_exchange_state(
+                session, simulation_users=simulation_users, wallet_service=wallet_service
+            )
             profiles = self._select_player_profiles(
                 session,
                 liquid_player_count=liquid_player_count,
@@ -234,7 +232,11 @@ class DemoMarketSimulationService:
                 order_book = matching_service.build_order_book(session, player_id=profile.player_id)
                 best_bid = order_book.bids[0].price if order_book.bids else None
                 best_ask = order_book.asks[0].price if order_book.asks else None
-                spread = self._normalize_amount(best_ask - best_bid) if best_bid is not None and best_ask is not None else None
+                spread = (
+                    self._normalize_amount(best_ask - best_bid)
+                    if best_bid is not None and best_ask is not None
+                    else None
+                )
                 player_summaries.append(
                     SeededPlayerSummary(
                         player_id=profile.player_id,
@@ -259,8 +261,12 @@ class DemoMarketSimulationService:
             sell_orders_seeded=sell_orders_seeded,
             trade_executions_seeded=trade_executions_seeded,
             simulation_users=tuple(user.username for user in simulation_users),
-            liquid_player_id=next((item.player_id for item in player_summaries if item.liquidity_label == "liquid"), None),
-            illiquid_player_id=next((item.player_id for item in player_summaries if item.liquidity_label == "illiquid"), None),
+            liquid_player_id=next(
+                (item.player_id for item in player_summaries if item.liquidity_label == "liquid"), None
+            ),
+            illiquid_player_id=next(
+                (item.player_id for item in player_summaries if item.liquidity_label == "illiquid"), None
+            ),
             players=tuple(player_summaries),
         )
 
@@ -284,9 +290,13 @@ class DemoMarketSimulationService:
                 illiquid_player_count=illiquid_player_count,
             )
             if not profiles:
-                raise SimulationSeedError("No tradable players were found. Seed demo data before running simulation ticks.")
+                raise SimulationSeedError(
+                    "No tradable players were found. Seed demo data before running simulation ticks."
+                )
             if len(simulation_users) < 2:
-                raise SimulationSeedError("Simulation users are missing. Run seed_demo_liquidity before simulation ticks.")
+                raise SimulationSeedError(
+                    "Simulation users are missing. Run seed_demo_liquidity before simulation ticks."
+                )
 
             orders_created = 0
             trades_created = 0
@@ -331,7 +341,9 @@ class DemoMarketSimulationService:
                 trades_created += 1
                 touched.append(profile.player_id)
 
-                resting_bid = max(Decimal("1.0000"), self._normalize_amount(price - Decimal(profile.activity_intensity)))
+                resting_bid = max(
+                    Decimal("1.0000"), self._normalize_amount(price - Decimal(profile.activity_intensity))
+                )
                 resting_ask = self._normalize_amount(price + Decimal(profile.activity_intensity))
                 self._ensure_user_position_inventory(
                     session,
@@ -408,7 +420,10 @@ class DemoMarketSimulationService:
                 .where(TradeExecution.player_id.in_(tuple(player_ids)))
                 .order_by(TradeExecution.created_at.asc(), TradeExecution.id.asc())
             ).all()
-            order_book_by_player = {profile.player_id: MatchingService().build_order_book(session, player_id=profile.player_id) for profile in profiles}
+            order_book_by_player = {
+                profile.player_id: MatchingService().build_order_book(session, player_id=profile.player_id)
+                for profile in profiles
+            }
 
         player_summaries: list[SeededPlayerSummary] = []
         for profile in profiles:
@@ -475,7 +490,9 @@ class DemoMarketSimulationService:
 
             best_bid = order_book.bids[0].price if order_book.bids else None
             best_ask = order_book.asks[0].price if order_book.asks else None
-            spread = self._normalize_amount(best_ask - best_bid) if best_bid is not None and best_ask is not None else None
+            spread = (
+                self._normalize_amount(best_ask - best_bid) if best_bid is not None and best_ask is not None else None
+            )
             player_summaries.append(
                 SeededPlayerSummary(
                     player_id=profile.player_id,
@@ -498,8 +515,12 @@ class DemoMarketSimulationService:
             sell_orders_seeded=sum(item.open_ask_levels for item in player_summaries),
             trade_executions_seeded=sum(item.trade_executions_seeded for item in player_summaries),
             simulation_users=tuple(spec.username for spec in SIMULATION_USER_SPECS),
-            liquid_player_id=next((item.player_id for item in player_summaries if item.liquidity_label == "liquid"), None),
-            illiquid_player_id=next((item.player_id for item in player_summaries if item.liquidity_label == "illiquid"), None),
+            liquid_player_id=next(
+                (item.player_id for item in player_summaries if item.liquidity_label == "liquid"), None
+            ),
+            illiquid_player_id=next(
+                (item.player_id for item in player_summaries if item.liquidity_label == "illiquid"), None
+            ),
             players=tuple(player_summaries),
         )
 
@@ -544,10 +565,7 @@ class DemoMarketSimulationService:
         return tuple(users)
 
     def _load_simulation_users(self, session: Session) -> tuple[User, ...]:
-        users = [
-            session.scalar(select(User).where(User.username == spec.username))
-            for spec in SIMULATION_USER_SPECS
-        ]
+        users = [session.scalar(select(User).where(User.username == spec.username)) for spec in SIMULATION_USER_SPECS]
         return tuple(user for user in users if user is not None)
 
     def _reset_simulation_exchange_state(
@@ -561,11 +579,7 @@ class DemoMarketSimulationService:
         if not user_ids:
             return
 
-        order_ids = tuple(
-            session.scalars(
-                select(Order.id).where(Order.user_id.in_(user_ids))
-            )
-        )
+        order_ids = tuple(session.scalars(select(Order.id).where(Order.user_id.in_(user_ids))))
         if order_ids:
             session.execute(
                 delete(TradeExecution).where(
@@ -659,7 +673,9 @@ class DemoMarketSimulationService:
             seller = simulation_users[(index * 2) % len(simulation_users)]
             buyer = simulation_users[(index * 2 + 1) % len(simulation_users)]
             price_adjustment = rng.randint(-profile.activity_intensity, profile.activity_intensity)
-            trade_price = max(Decimal("1.0000"), self._normalize_amount(profile.reference_price + Decimal(price_adjustment)))
+            trade_price = max(
+                Decimal("1.0000"), self._normalize_amount(profile.reference_price + Decimal(price_adjustment))
+            )
             quantity = Decimal(profile.activity_intensity)
             self._ensure_user_position_inventory(
                 session,

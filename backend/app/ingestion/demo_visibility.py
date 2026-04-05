@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import delete, func, or_, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
 from app.core.config import DEFAULT_DATABASE_URL
@@ -33,7 +33,13 @@ from app.models.federation import (
     FederationVoteType,
 )
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
-from app.models.national_team_tournament import StadiumAd, StadiumAdPlacement, StoryEvent, StoryEventType, TournamentTheme
+from app.models.national_team_tournament import (
+    StadiumAd,
+    StadiumAdPlacement,
+    StoryEvent,
+    StoryEventType,
+    TournamentTheme,
+)
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.transfer_market import (
     ClubTeamDynamics,
@@ -193,7 +199,9 @@ class DemoWorldVisibilitySeeder:
         users = self._load_demo_users()
         countries = self._resolve_seed_countries()
         clubs = self._upsert_demo_clubs(users=users, countries=countries)
-        seeded_players = self._assign_players_to_demo_clubs(provider_name=provider_name, clubs=clubs, countries=countries)
+        seeded_players = self._assign_players_to_demo_clubs(
+            provider_name=provider_name, clubs=clubs, countries=countries
+        )
         self._seed_marketplace(seed_players=seeded_players, users=users)
         self._seed_transfer_market(seed_players=seeded_players, clubs=clubs)
         self._seed_federations(users=users, clubs=clubs, countries=countries)
@@ -302,7 +310,9 @@ class DemoWorldVisibilitySeeder:
         clubs: dict[str, ClubProfile],
         countries: dict[str, Country],
     ) -> dict[str, list[Player]]:
-        def load_rows(*, provider_filter: str | None, require_real_players: bool) -> list[tuple[Player, Country | None]]:
+        def load_rows(
+            *, provider_filter: str | None, require_real_players: bool
+        ) -> list[tuple[Player, Country | None]]:
             statement = (
                 select(Player, Country)
                 .outerjoin(Country, Country.id == Player.country_id)
@@ -369,11 +379,7 @@ class DemoWorldVisibilitySeeder:
         return assignments
 
     def _seed_marketplace(self, *, seed_players: dict[str, list[Player]], users: dict[str, User]) -> None:
-        listing_players = (
-            seed_players["fan"][:2]
-            + seed_players["scout"][:2]
-            + seed_players["admin"][:2]
-        )
+        listing_players = seed_players["fan"][:2] + seed_players["scout"][:2] + seed_players["admin"][:2]
         asking_types = (
             AgentAskingType.TRANSFER,
             AgentAskingType.TRIAL,
@@ -383,6 +389,8 @@ class DemoWorldVisibilitySeeder:
             AgentAskingType.TRANSFER,
         )
         for index, player in enumerate(listing_players):
+            player.is_real_player = True
+            player.is_tradable = True
             listing = self.session.scalar(
                 select(AgentMarketplaceListing).where(AgentMarketplaceListing.player_id == player.id)
             )
@@ -687,7 +695,9 @@ class DemoWorldVisibilitySeeder:
 
         listing = self.session.get(TransferListing, listing_id)
         if listing is None:
-            listing = TransferListing(id=listing_id, player_id=player.id, selling_club_id=selling_club.id, expires_at=expires_at)
+            listing = TransferListing(
+                id=listing_id, player_id=player.id, selling_club_id=selling_club.id, expires_at=expires_at
+            )
             self.session.add(listing)
 
         listing.player_id = player.id
@@ -774,7 +784,9 @@ class DemoWorldVisibilitySeeder:
         self.session.execute(delete(FederationVote).where(FederationVote.federation_id == federation_id))
         self.session.execute(delete(FederationProposal).where(FederationProposal.federation_id == federation_id))
         self.session.execute(delete(FederationSanction).where(FederationSanction.federation_id == federation_id))
-        self.session.execute(delete(FederationTreasuryEntry).where(FederationTreasuryEntry.federation_id == federation_id))
+        self.session.execute(
+            delete(FederationTreasuryEntry).where(FederationTreasuryEntry.federation_id == federation_id)
+        )
         self.session.execute(delete(FederationMembership).where(FederationMembership.federation_id == federation_id))
         self.session.execute(delete(FederationLeague).where(FederationLeague.federation_id == federation_id))
 
@@ -926,8 +938,7 @@ class DemoWorldVisibilitySeeder:
                 gross_amount=Decimal("2400000.0000"),
                 federation_share=Decimal("360000.0000"),
                 club_distribution_json=[
-                    {"club_id": member_club.id, "amount": "680000.0000"}
-                    for member_club in member_clubs
+                    {"club_id": member_club.id, "amount": "680000.0000"} for member_club in member_clubs
                 ],
                 metadata_json={"seed_source": DEMO_WORLD_VISIBILITY_SOURCE},
             )
@@ -955,9 +966,7 @@ class DemoWorldVisibilitySeeder:
             ).all()
         )
         if len(seeds) < 18:
-            raise ValueError(
-                f"Demo visibility expected at least 18 national regen seeds for '{country_code}'."
-            )
+            raise ValueError(f"Demo visibility expected at least 18 national regen seeds for '{country_code}'.")
 
         squad: list[dict[str, Any]] = []
         for shirt_number, seed in enumerate(seeds, start=1):
@@ -985,9 +994,7 @@ class DemoWorldVisibilitySeeder:
     def _upsert_national_team_theme(self, *, competition: NationalTeamCompetition) -> None:
         theme = self.session.get(TournamentTheme, _NATIONAL_TEAM_THEME_ID)
         if theme is None:
-            theme = self.session.scalar(
-                select(TournamentTheme).where(TournamentTheme.competition_id == competition.id)
-            )
+            theme = self.session.scalar(select(TournamentTheme).where(TournamentTheme.competition_id == competition.id))
         if theme is None:
             theme = TournamentTheme(id=_NATIONAL_TEAM_THEME_ID, competition_id=competition.id)
             self.session.add(theme)
@@ -1078,9 +1085,7 @@ class DemoWorldVisibilitySeeder:
             }
 
     def _upsert_player_decision_profile(self, player: Player, *, preferred_country_code: str) -> None:
-        profile = self.session.scalar(
-            select(PlayerDecisionProfile).where(PlayerDecisionProfile.player_id == player.id)
-        )
+        profile = self.session.scalar(select(PlayerDecisionProfile).where(PlayerDecisionProfile.player_id == player.id))
         if profile is None:
             profile = PlayerDecisionProfile(player_id=player.id)
             self.session.add(profile)
@@ -1143,9 +1148,7 @@ class DemoWorldVisibilitySeeder:
         }
 
     def _upsert_team_dynamics(self, *, club: ClubProfile, leader_player_ids: list[str]) -> None:
-        dynamics = self.session.scalar(
-            select(ClubTeamDynamics).where(ClubTeamDynamics.club_id == club.id)
-        )
+        dynamics = self.session.scalar(select(ClubTeamDynamics).where(ClubTeamDynamics.club_id == club.id))
         if dynamics is None:
             dynamics = ClubTeamDynamics(club_id=club.id)
             self.session.add(dynamics)
@@ -1241,10 +1244,7 @@ class DemoWorldVisibilitySeeder:
         )
 
         club_count = int(
-            self.session.scalar(
-                select(func.count()).select_from(ClubProfile).where(ClubProfile.id.in_(club_ids))
-            )
-            or 0
+            self.session.scalar(select(func.count()).select_from(ClubProfile).where(ClubProfile.id.in_(club_ids))) or 0
         )
         marketplace_listing_count = int(
             self.session.scalar(
@@ -1280,9 +1280,7 @@ class DemoWorldVisibilitySeeder:
             or 0
         )
         federation_count = int(
-            self.session.scalar(
-                select(func.count()).select_from(Federation).where(Federation.id.in_(federation_ids))
-            )
+            self.session.scalar(select(func.count()).select_from(Federation).where(Federation.id.in_(federation_ids)))
             or 0
         )
         federation_membership_count = int(
@@ -1302,16 +1300,13 @@ class DemoWorldVisibilitySeeder:
             or 0
         )
         national_team_competition_count = int(
-            self.session.scalar(select(func.count()).select_from(NationalTeamCompetition))
-            or 0
+            self.session.scalar(select(func.count()).select_from(NationalTeamCompetition)) or 0
         )
         national_team_entry_count = int(
-            self.session.scalar(select(func.count()).select_from(NationalTeamCompetitionEntry))
-            or 0
+            self.session.scalar(select(func.count()).select_from(NationalTeamCompetitionEntry)) or 0
         )
         national_team_ranking_count = int(
-            self.session.scalar(select(func.count()).select_from(NationalTeamCountryRanking))
-            or 0
+            self.session.scalar(select(func.count()).select_from(NationalTeamCountryRanking)) or 0
         )
         national_regen_seed_count = int(
             self.session.scalar(
@@ -1321,14 +1316,8 @@ class DemoWorldVisibilitySeeder:
             )
             or 0
         )
-        regen_season_count = int(
-            self.session.scalar(select(func.count()).select_from(RegenSeason))
-            or 0
-        )
-        regen_award_definition_count = int(
-            self.session.scalar(select(func.count()).select_from(RegenAward))
-            or 0
-        )
+        regen_season_count = int(self.session.scalar(select(func.count()).select_from(RegenSeason)) or 0)
+        regen_award_definition_count = int(self.session.scalar(select(func.count()).select_from(RegenAward)) or 0)
         return DemoWorldVisibilitySummary(
             club_count=club_count,
             marketplace_listing_count=marketplace_listing_count,
@@ -1358,13 +1347,7 @@ class DemoWorldVisibilitySeeder:
         raise ValueError(f"Country '{country.id}' is missing a usable code.")
 
     def _transfer_price(self, player: Player, *, factor: str) -> Decimal:
-        base_value = Decimal(
-            str(
-                player.current_market_reference_value
-                or player.market_value_eur
-                or 7_500_000
-            )
-        )
+        base_value = Decimal(str(player.current_market_reference_value or player.market_value_eur or 7_500_000))
         return max(
             Decimal("150000.00"),
             (base_value * Decimal(factor)).quantize(Decimal("0.01")),

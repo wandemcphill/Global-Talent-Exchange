@@ -494,7 +494,9 @@ class NationalCompetitionLifecycleService:
                     "player_id": player_id,
                     "player_name": player_name,
                     "country_code": country_code,
-                    "date_of_birth": date_of_birth.isoformat() if hasattr(date_of_birth, "isoformat") else date_of_birth,
+                    "date_of_birth": (
+                        date_of_birth.isoformat() if hasattr(date_of_birth, "isoformat") else date_of_birth
+                    ),
                     "age": explicit_age,
                     "resolved_age": resolved_age,
                     "overall_rating": max(40, min(int(overall_rating or 70), 99)),
@@ -625,7 +627,9 @@ class NationalCompetitionLifecycleService:
         return "tournament"
 
     @staticmethod
-    def _schedule_plan(*, profile: dict[str, Any], has_pre_qualifier: bool, has_qualifier: bool) -> list[dict[str, Any]]:
+    def _schedule_plan(
+        *, profile: dict[str, Any], has_pre_qualifier: bool, has_qualifier: bool
+    ) -> list[dict[str, Any]]:
         week = int(profile["preferred_cycle_week"])
         plan: list[dict[str, Any]] = []
         if has_pre_qualifier:
@@ -685,11 +689,15 @@ class NationalCompetitionLifecycleService:
                     if home is None:
                         assert away is not None
                         winners.append(away)
-                        matches.append(self._bye_match(stage="pre_qualifier", round_label=f"round_{round_number}", winner=away))
+                        matches.append(
+                            self._bye_match(stage="pre_qualifier", round_label=f"round_{round_number}", winner=away)
+                        )
                         continue
                     if away is None:
                         winners.append(home)
-                        matches.append(self._bye_match(stage="pre_qualifier", round_label=f"round_{round_number}", winner=home))
+                        matches.append(
+                            self._bye_match(stage="pre_qualifier", round_label=f"round_{round_number}", winner=home)
+                        )
                         continue
                     match = self._simulate_match(
                         competition=competition,
@@ -752,11 +760,7 @@ class NationalCompetitionLifecycleService:
             advance_per_group=1,
             best_third_slots=0,
         )
-        all_rows = [
-            dict(row)
-            for group in group_results
-            for row in group["standings"]
-        ]
+        all_rows = [dict(row) for group in group_results for row in group["standings"]]
 
         all_rows.sort(
             key=lambda row: (
@@ -817,7 +821,9 @@ class NationalCompetitionLifecycleService:
         )
         knockout_entry_ids = [row["entry_id"] for row in ranked_rows]
         knockout_entries = {entry.id: entry for entry in entries}
-        bracket_entries = [knockout_entries[entry_id] for entry_id in knockout_entry_ids if entry_id in knockout_entries]
+        bracket_entries = [
+            knockout_entries[entry_id] for entry_id in knockout_entry_ids if entry_id in knockout_entries
+        ]
         knockout_rounds, champion_id = self._run_knockout(
             competition=competition,
             stage_code="tournament",
