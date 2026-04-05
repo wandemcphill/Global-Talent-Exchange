@@ -41,8 +41,8 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescrip
     pass
 
 
-_LOCAL_DEMO_AUTH_SECRET = "gtex-local-demo-auth-secret-20260405"
-_LOCAL_DEMO_MEDIA_SECRET = "gtex-local-demo-media-secret-20260405"
+_LOCAL_DEMO_AUTH_SECRET = "gtex-local-demo-auth-secret-20260405"  # pragma: allowlist secret
+_LOCAL_DEMO_MEDIA_SECRET = "gtex-local-demo-media-secret-20260405"  # pragma: allowlist secret
 
 
 DEV_CLI_EPILOG = """Common local demo flows:
