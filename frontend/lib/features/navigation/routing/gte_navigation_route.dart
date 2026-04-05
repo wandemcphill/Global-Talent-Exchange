@@ -19,7 +19,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.competitions:
         return 'Competitions';
       case GtePrimaryDestination.market:
-        return 'Market';
+        return 'Scouting';
       case GtePrimaryDestination.hub:
         return 'Community';
       case GtePrimaryDestination.community:
@@ -27,7 +27,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
-        return 'Capital Room';
+        return 'Funds';
     }
   }
 

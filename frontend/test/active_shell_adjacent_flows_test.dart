@@ -42,7 +42,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Capital room'));
+      await tester.tap(find.byTooltip('Club funds'));
       await _pumpUntilText(tester, 'Wallet actions');
       expect(find.text('Wallet actions'), findsOneWidget);
       expect(find.text('Fund wallet'), findsOneWidget);
@@ -90,16 +90,16 @@ void main() {
       );
       await _pumpUntilText(tester, 'Wallet actions');
 
-      expect(find.text('Capital Room'), findsWidgets);
-      final Finder capitalRoomNavChip = find.text('Capital Room').last;
-      expect(capitalRoomNavChip, findsOneWidget);
+      expect(find.text('Funds'), findsWidgets);
+      final Finder fundsNavChip = find.text('Funds').last;
+      expect(fundsNavChip, findsOneWidget);
 
       await tester.tap(find.text('Home').last);
       await tester.pumpAndSettle();
       expect(find.widgetWithText(FilledButton, 'Enter club'), findsOneWidget);
 
-      await tester.ensureVisible(capitalRoomNavChip);
-      await tester.tap(capitalRoomNavChip);
+      await tester.ensureVisible(fundsNavChip);
+      await tester.tap(fundsNavChip);
       await _pumpUntilText(tester, 'Wallet actions');
       expect(find.text('Fund wallet'), findsOneWidget);
     },

@@ -126,7 +126,7 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'Home',
     location: AppRoutes.home,
     state: AppRouteSurfaceState.live,
-    summary: 'Live command center with routed summaries and launch points.',
+    summary: 'Live home route with clear summaries and launch points.',
     primaryNav: true,
   ),
   AppRouteSurface(
@@ -146,11 +146,11 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Market',
+    label: 'Scouting',
     location: AppRoutes.market,
     state: AppRouteSurfaceState.live,
     summary:
-        'Live player-share, wallet, and market summary workflows with a dedicated transfer center route.',
+        'Live player market and transfer workflows with a dedicated transfer center route.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -295,7 +295,7 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.matchesNativeThreeD,
     state: AppRouteSurfaceState.placeholder,
     summary:
-        'Visible truth route only. Native 3D remains coming soon until a verified bridge ships.',
+        'Visible truth route only. Android now has a verified native bridge behind the routed 3D lane, but the dedicated native-only route still needs a live match contract.',
   ),
   AppRouteSurface(
     label: '2D Spectate Probe',
@@ -329,7 +329,7 @@ AppDestination _primaryDestinationFor(AppRouteSurface surface) {
       location: AppRoutes.home,
       icon: Icons.home_outlined,
       selectedIcon: Icons.home_rounded,
-      subtitle: 'Command Center',
+      subtitle: 'Club HQ',
       surfaceState: AppRouteSurfaceState.live,
     ),
     AppRoutes.matches => const AppDestination(
@@ -341,11 +341,11 @@ AppDestination _primaryDestinationFor(AppRouteSurface surface) {
       surfaceState: AppRouteSurfaceState.live,
     ),
     AppRoutes.market => const AppDestination(
-      label: 'Market',
+      label: 'Scouting',
       location: AppRoutes.market,
       icon: Icons.storefront_outlined,
       selectedIcon: Icons.storefront_rounded,
-      subtitle: 'Market & Transfer Desk',
+      subtitle: 'Player Market & Transfers',
       surfaceState: AppRouteSurfaceState.live,
     ),
     AppRoutes.world => const AppDestination(
@@ -353,7 +353,7 @@ AppDestination _primaryDestinationFor(AppRouteSurface surface) {
       location: AppRoutes.world,
       icon: Icons.public_outlined,
       selectedIcon: Icons.public_rounded,
-      subtitle: 'World Operations',
+      subtitle: 'World & Regens',
       surfaceState: AppRouteSurfaceState.live,
     ),
     AppRoutes.profile => const AppDestination(
@@ -361,7 +361,7 @@ AppDestination _primaryDestinationFor(AppRouteSurface surface) {
       location: AppRoutes.profile,
       icon: Icons.person_outline_rounded,
       selectedIcon: Icons.person_rounded,
-      subtitle: 'Operator Profile',
+      subtitle: 'Account',
       surfaceState: AppRouteSurfaceState.live,
     ),
     _ =>

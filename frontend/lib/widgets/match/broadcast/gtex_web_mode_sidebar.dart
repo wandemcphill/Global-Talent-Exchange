@@ -39,9 +39,9 @@ class GtexWebModeSidebar extends StatelessWidget {
                 Text(matchTitle, style: const TextStyle(color: Colors.white70)),
                 const SizedBox(height: 16),
                 const _SidebarCard(
-                  title: 'Trading Desk',
+                  title: 'Match Control',
                   body:
-                      'Advanced stats, sentiment, and creator trading stay pinned while the live feed runs.',
+                      'Advanced stats, fan pulse, and creator tools stay pinned while the live feed runs.',
                 ),
                 const SizedBox(height: 12),
                 _SidebarCard(

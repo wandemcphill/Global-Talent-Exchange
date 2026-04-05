@@ -8,8 +8,9 @@ import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('login surface hides seeded credentials on first render',
-      (WidgetTester tester) async {
+  testWidgets('login surface hides seeded credentials on first render', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -39,8 +40,9 @@ void main() {
     expect(fields[1].controller?.text, isEmpty);
   });
 
-  testWidgets('login surface exposes creator access request entry',
-      (WidgetTester tester) async {
+  testWidgets('login surface exposes creator access request entry', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -71,63 +73,64 @@ void main() {
   });
 
   testWidgets(
-      'authenticated login surface avoids unlocked copy when capital actions stay restricted',
-      (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1600, 2200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
+    'authenticated login surface avoids unlocked copy when account actions stay restricted',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1600, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-    controller.session = _authenticatedSession(
-      userId: 'fixture-user',
-      userName: 'Ayo Martins',
-      clubId: 'ibadan-lions',
-      clubName: 'Ibadan Lions FC',
-    );
-    controller.complianceStatus = const GteComplianceStatus(
-      countryCode: 'NG',
-      countryPolicyBucket: 'regulated_market_disabled',
-      depositsEnabled: true,
-      marketTradingEnabled: false,
-      platformRewardWithdrawalsEnabled: false,
-      requiredPolicyAcceptancesMissing: 1,
-      missingPolicyAcceptances: <GtePolicyRequirementSummary>[
-        GtePolicyRequirementSummary(
-          documentKey: 'wallet-policy',
-          title: 'Wallet policy acceptance',
-          versionLabel: 'v2',
-          isMandatory: true,
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'fixture-user',
+        userName: 'Ayo Martins',
+        clubId: 'ibadan-lions',
+        clubName: 'Ibadan Lions FC',
+      );
+      controller.complianceStatus = const GteComplianceStatus(
+        countryCode: 'NG',
+        countryPolicyBucket: 'regulated_market_disabled',
+        depositsEnabled: true,
+        marketTradingEnabled: false,
+        platformRewardWithdrawalsEnabled: false,
+        requiredPolicyAcceptancesMissing: 1,
+        missingPolicyAcceptances: <GtePolicyRequirementSummary>[
+          GtePolicyRequirementSummary(
+            documentKey: 'wallet-policy',
+            title: 'Wallet policy acceptance',
+            versionLabel: 'v2',
+            isMandatory: true,
+          ),
+        ],
+        canDeposit: false,
+        canWithdrawPlatformRewards: false,
+        canTradeMarket: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteLoginScreen(controller: controller),
         ),
-      ],
-      canDeposit: false,
-      canWithdrawPlatformRewards: false,
-      canTradeMarket: false,
-    );
+      );
+      await tester.pumpAndSettle();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GteLoginScreen(controller: controller),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Session active'), findsOneWidget);
-    expect(find.text('Mission confirmed'), findsNothing);
-    expect(
-      find.text(
-        'Active session for fixture-user. GTEX access is live, but some capital actions remain restricted until compliance clears this account.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Compliance action required'), findsOneWidget);
-    expect(find.text('Open compliance center'), findsOneWidget);
-  });
+      expect(find.text('Session active'), findsOneWidget);
+      expect(find.text('You are in'), findsNothing);
+      expect(
+        find.text(
+          'You are signed in as fixture-user. Some account actions are still limited until compliance review finishes.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Compliance action required'), findsOneWidget);
+      expect(find.text('Open compliance center'), findsOneWidget);
+    },
+  );
 }
 
 GteAuthSession _authenticatedSession({
@@ -136,23 +139,21 @@ GteAuthSession _authenticatedSession({
   String? clubId,
   String? clubName,
 }) {
-  return GteAuthSession.fromJson(
-    <String, Object?>{
-      'access_token': 'test-token',
-      'session_id': 'test-session',
-      'token_type': 'bearer',
-      'expires_in': 3600,
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'test-token',
+    'session_id': 'test-session',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    if (clubId != null) 'current_club_id': clubId,
+    if (clubName != null) 'current_club_name': clubName,
+    'user': <String, Object?>{
+      'id': userId,
+      'email': '$userId@gtex.test',
+      'username': userId,
+      'display_name': userName,
+      'role': 'user',
       if (clubId != null) 'current_club_id': clubId,
       if (clubName != null) 'current_club_name': clubName,
-      'user': <String, Object?>{
-        'id': userId,
-        'email': '$userId@gtex.test',
-        'username': userId,
-        'display_name': userName,
-        'role': 'user',
-        if (clubId != null) 'current_club_id': clubId,
-        if (clubName != null) 'current_club_name': clubName,
-      },
     },
-  );
+  });
 }

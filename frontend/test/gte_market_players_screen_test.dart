@@ -9,7 +9,7 @@ import 'package:gte_frontend/screens/gte_market_players_screen.dart';
 
 void main() {
   testWidgets(
-    'trading floor keeps the card layout stable on narrow viewports',
+    'player market keeps the card layout stable on narrow viewports',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -65,17 +65,17 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 
-      expect(find.text('TRADING FLOOR'), findsOneWidget);
-      expect(find.text('Desk pulse'), findsOneWidget);
-      expect(find.text('MARKET LENS'), findsOneWidget);
-      expect(find.text('PRICE BOARD'), findsOneWidget);
+      expect(find.text('PLAYER MARKET'), findsOneWidget);
+      expect(find.text('Board pulse'), findsOneWidget);
+      expect(find.text('FILTERS'), findsOneWidget);
+      expect(find.text('PLAYER BOARD'), findsOneWidget);
       expect(find.text('Ayo Forward'), findsOneWidget);
       expect(find.text('Mina Creator'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('trading floor loads more pages from the tape CTA', (
+  testWidgets('player market loads more pages from the board CTA', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -106,11 +106,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Load more from tape'));
+    await tester.ensureVisible(find.text('Load more players'));
     await tester.pumpAndSettle();
-    expect(find.text('Load more from tape'), findsOneWidget);
+    expect(find.text('Load more players'), findsOneWidget);
 
-    await tester.tap(find.text('Load more from tape'));
+    await tester.tap(find.text('Load more players'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
 
@@ -125,7 +125,7 @@ void main() {
     );
   });
 
-  testWidgets('trading floor lens chips filter the visible tape', (
+  testWidgets('player market filters the visible board with focus chips', (
     WidgetTester tester,
   ) async {
     final GteExchangeController controller = GteExchangeController(
@@ -190,9 +190,9 @@ void main() {
     expect(find.text('Ayo Forward'), findsNothing);
     expect(find.text('Mina Creator'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Heat 1'));
+    await tester.ensureVisible(find.text('Watchlist 1'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Heat 1'));
+    await tester.tap(find.text('Watchlist 1'));
     await tester.pumpAndSettle();
 
     expect(find.text('Ayo Forward'), findsOneWidget);

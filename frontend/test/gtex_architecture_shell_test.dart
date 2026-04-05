@@ -42,19 +42,19 @@ void main() {
 
     expect(find.text('Home'), findsWidgets);
     expect(find.textContaining('matchday lobby'), findsOneWidget);
-    expect(find.text('App-wide premium sync'), findsOneWidget);
-    expect(find.text('Market'), findsWidgets);
+    expect(find.text('App-wide sync'), findsOneWidget);
+    expect(find.text('Scouting'), findsWidgets);
 
     final Finder marketNavChip = find.ancestor(
-      of: find.text('Market').last,
+      of: find.text('Scouting').last,
       matching: find.byType(InkWell),
     );
     await tester.ensureVisible(marketNavChip);
     await tester.tap(marketNavChip);
     await tester.pumpAndSettle();
 
-    expect(find.text('Transfer market'), findsOneWidget);
-    expect(find.text('TRADING FLOOR'), findsOneWidget);
+    expect(find.text('Player market'), findsOneWidget);
+    expect(find.text('PLAYER MARKET'), findsOneWidget);
     expect(
       find.text('Search player, club, nationality, or position'),
       findsOneWidget,

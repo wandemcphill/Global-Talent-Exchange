@@ -470,7 +470,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 32));
 
     expect(find.byKey(GtexWebModeSidebar.sidebarKey), findsOneWidget);
-    expect(find.text('Trading Desk'), findsOneWidget);
+    expect(find.text('Match Control'), findsOneWidget);
     expect(find.byType(AppBar), findsOneWidget);
   });
 }

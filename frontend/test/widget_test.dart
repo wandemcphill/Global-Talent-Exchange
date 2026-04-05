@@ -44,14 +44,14 @@ void main() {
     expect(find.textContaining('matchday lobby'), findsOneWidget);
 
     final Finder marketNavChip = find.ancestor(
-      of: find.text('Market').last,
+      of: find.text('Scouting').last,
       matching: find.byType(InkWell),
     );
     await tester.ensureVisible(marketNavChip);
     await tester.tap(marketNavChip);
     await tester.pumpAndSettle();
 
-    expect(find.text('Transfer market'), findsOneWidget);
+    expect(find.text('Player market'), findsOneWidget);
     expect(
       find.text('Search player, club, nationality, or position'),
       findsOneWidget,

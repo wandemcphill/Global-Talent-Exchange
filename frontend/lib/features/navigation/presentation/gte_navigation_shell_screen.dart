@@ -461,7 +461,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             eyebrow: 'CLUB SCOPE',
             title: 'Sign in to open Club HQ',
             message:
-                'Guest access does not expose a canonical club yet. Sign in to continue with a real badge, wallet, market lane, and world state.',
+                'Guest access does not expose a canonical club yet. Sign in to continue with a real badge, club funds, scouting lane, and world state.',
             icon: Icons.login_outlined,
             accentColor: _routeAccentFor(context, GtePrimaryDestination.home),
             actionLabel: 'Sign in',
@@ -940,7 +940,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: IconButton(
-        tooltip: 'Capital room',
+        tooltip: 'Club funds',
         onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
         icon: Icon(
           isActive
@@ -984,11 +984,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.market:
         return GteSyncStatusCard(
-          title: 'Transfer market',
+          title: 'Player market',
           status:
               widget.controller.marketError == null
-                  ? 'Real players, regens, GTEX Coin order rails, and live pricing are ready.'
-                  : 'Market feed degraded. Last good tape is still visible.',
+                  ? 'Players, regens, prices, and club context are ready.'
+                  : 'Player board degraded. The last confirmed board is still visible.',
           syncedAt: widget.controller.marketSyncedAt,
           accent: accent,
           isRefreshing: widget.controller.isLoadingMarket,
@@ -1038,11 +1038,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.wallet:
         return GteSyncStatusCard(
-          title: 'Wallet & GTEX coin',
+          title: 'Club funds',
           status:
               widget.controller.isAuthenticated
-                  ? 'Balances, holdings, and transaction records are up to date.'
-                  : 'Sign in to add funds, buy GTEX Coin, and manage balances.',
+                  ? 'Balance, player holdings, and activity records are up to date.'
+                  : 'Sign in to view funds, holdings, and account activity.',
           syncedAt:
               widget.controller.portfolioSyncedAt ??
               widget.controller.ordersSyncedAt,
@@ -1057,9 +1057,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.home:
         return GteSyncStatusCard(
-          title: 'Club HQ',
+          title: 'Home sync',
           status:
-              'Club HQ surfaces the live GTEX football runtime, your active club lane, and the routes that actually drive play, market, and world progression.',
+              'Home keeps your club, matchday, scouting, and world routes aligned.',
           detail:
               'Runtime ${_runtimeModeLabel()} on ${_apiHostLabel()} - ${_runtimeAudienceLabel()}',
           syncedAt: widget.controller.marketSyncedAt,

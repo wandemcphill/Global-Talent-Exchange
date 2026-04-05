@@ -44,7 +44,7 @@ class _ProfileSignupScreenState extends ConsumerState<ProfileSignupScreen> {
     return AppPageLayout(
       title: 'Create Account',
       subtitle:
-          'Account creation uses the live auth flow and writes the active-shell session payload directly to the secure session store.',
+          'Create an account to save your club, join competitions, and keep your progress.',
       trailing: const DataSourceBadge(status: DataSourceStatus.live),
       children: <Widget>[
         Card(

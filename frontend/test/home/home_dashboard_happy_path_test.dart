@@ -135,11 +135,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('This account does not own a club yet'), findsOneWidget);
-      expect(find.text('Open player universe'), findsWidgets);
+      expect(find.text('This account has no club yet'), findsOneWidget);
+      expect(find.text('Scout players'), findsWidgets);
       expect(find.text('Open world'), findsWidgets);
       expect(find.text('Open matchday'), findsWidgets);
-      expect(find.text('Open wallet'), findsWidgets);
+      expect(find.text('Open funds'), findsWidgets);
     },
   );
 }

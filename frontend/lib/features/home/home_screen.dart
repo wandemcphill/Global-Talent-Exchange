@@ -55,20 +55,19 @@ class HomeScreen extends ConsumerWidget {
     return AppPageLayout(
       title: 'Home',
       subtitle:
-          'Premium command center for live session truth, market activity, world discovery, competitions, and engagement loops.',
+          'A clear football home for your session, scouting, world discovery, competitions, and live challenges.',
       trailing: DataSourceBadge(
         status: blocked ? DataSourceStatus.blocked : DataSourceStatus.live,
       ),
       children: <Widget>[
         GtexHeroPanel(
-          eyebrow:
-              authenticated ? 'LIVE COMMAND CENTER' : 'GUEST COMMAND CENTER',
+          eyebrow: authenticated ? 'LIVE HOME' : 'GUEST HOME',
           title:
               authenticated
-                  ? 'Operate the football-tech stack from one surface.'
-                  : 'Survey the live GTEX stack before signing in.',
+                  ? 'Everything important in your football world, one step away.'
+                  : 'See the live football world before you sign in.',
           description:
-              'The shipped home route aggregates live session, market, world, competition, and task signals without synthetic stand-ins or hidden blocked states.',
+              'Home brings together your session, scouting, world, competitions, and live challenges without burying the next best move.',
           metrics: <Widget>[
             GtexStatTile(
               label: 'Session',
@@ -97,15 +96,15 @@ class HomeScreen extends ConsumerWidget {
               tone: GtexSurfaceTone.info,
             ),
             GtexStatTile(
-              label: 'Market',
+              label: 'Scouting',
               value:
                   market == null
                       ? '...'
                       : '${market.playerShares.length} shares / ${market.transferListings.length} listings',
               support:
                   market?.wallet == null
-                      ? 'Wallet state not loaded'
-                      : 'Wallet equity ${market!.wallet!.totalEquity.toStringAsFixed(0)}',
+                      ? 'Funds not loaded yet'
+                      : 'Funds ${market!.wallet!.totalEquity.toStringAsFixed(0)}',
               tone: GtexSurfaceTone.success,
             ),
             GtexStatTile(
@@ -159,9 +158,9 @@ class HomeScreen extends ConsumerWidget {
         ),
         GtexSectionPanel(
           eyebrow: 'DEPLOYMENT SIGNAL',
-          title: 'This web shell is wired to the live runtime you deployed',
+          title: 'This web shell is wired to the runtime you deployed',
           subtitle:
-              'If the deploy is correct, this panel changes immediately because it reads the active web build configuration rather than hidden fixture text.',
+              'This panel reflects the active web build configuration instead of hidden fixture text.',
           accentColor: GteShellTheme.accentCapital,
           emphasized: true,
           child: Wrap(
@@ -181,7 +180,7 @@ class HomeScreen extends ConsumerWidget {
                 tone: GtexSurfaceTone.info,
               ),
               GtexStatTile(
-                label: 'Auth lane',
+                label: 'Access',
                 value: authenticated ? 'Signed in' : 'Guest',
                 support:
                     authenticated
@@ -193,19 +192,19 @@ class HomeScreen extends ConsumerWidget {
                         : GtexSurfaceTone.warning,
               ),
               GtexStatTile(
-                label: 'Route deck',
+                label: 'Routes',
                 value: '${appDestinations.length} primary lanes',
-                support: 'Home, Matches, Market, World, and Profile',
+                support: 'Home, Matches, Scouting, World, and Profile',
                 tone: GtexSurfaceTone.warning,
               ),
             ],
           ),
         ),
         GtexSectionPanel(
-          eyebrow: 'ROUTE DECK',
-          title: 'Wave 1 modules are mounted in the active shell',
+          eyebrow: 'LIVE ROUTES',
+          title: 'Core football routes are mounted in the active shell',
           subtitle:
-              'Federations, national teams, and the transfer center are promoted out of summary-card purgatory and into explicit live routes.',
+              'Federations, national teams, and the transfer center live as first-class routes instead of being buried in summaries.',
           child: Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -232,7 +231,7 @@ class HomeScreen extends ConsumerWidget {
           value: profileValue,
           title: 'Session',
           subtitle:
-              'Identity, follower gravity, and club context stay live-backed.',
+              'Identity, follower signal, and club context stay live-backed.',
           builder: (BuildContext context, ProfileData data) {
             final String label =
                 data.authenticated
@@ -303,8 +302,8 @@ class HomeScreen extends ConsumerWidget {
         ),
         _AsyncSummaryPanel<MarketDashboardData>(
           value: marketValue,
-          title: 'Market Pulse',
-          subtitle: 'Bloomberg-style live summary across shares and transfers.',
+          title: 'Scouting Pulse',
+          subtitle: 'A live read on players, transfers, and account readiness.',
           builder: (BuildContext context, MarketDashboardData data) {
             return Wrap(
               spacing: 12,
@@ -319,17 +318,17 @@ class HomeScreen extends ConsumerWidget {
                 GtexStatTile(
                   label: 'Listings',
                   value: '${data.transferListings.length}',
-                  support: 'Transfer market inventory',
+                  support: 'Transfer listings',
                   tone: GtexSurfaceTone.info,
                 ),
                 GtexStatTile(
                   label: 'Holdings',
                   value: '${data.holdings.length}',
-                  support: 'Live share positions',
+                  support: 'Tracked player positions',
                   tone: GtexSurfaceTone.success,
                 ),
                 GtexStatTile(
-                  label: 'Wallet',
+                  label: 'Funds',
                   value:
                       data.wallet == null
                           ? (authenticated ? 'Refreshing' : 'Login required')
@@ -337,8 +336,8 @@ class HomeScreen extends ConsumerWidget {
                   support:
                       data.wallet == null
                           ? (authenticated
-                              ? 'Session bootstrap is syncing wallet access'
-                              : 'Sign in to load wallet access')
+                              ? 'Session bootstrap is syncing funds access'
+                              : 'Sign in to load funds access')
                           : data.wallet!.complianceMessage,
                   tone:
                       data.wallet == null

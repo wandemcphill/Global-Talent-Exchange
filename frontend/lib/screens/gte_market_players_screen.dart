@@ -70,20 +70,19 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             GtexHeroBanner(
-              eyebrow: 'TRADING FLOOR',
-              title:
-                  'A football asset terminal built for speed, conviction, and clean execution.',
+              eyebrow: 'PLAYER MARKET',
+              title: 'Scout players and make your next squad move.',
               description:
-                  'This screen is the real-player transfer desk. Quotes, movement, liquidity signals, and player profiles stay front and center here, while the broader player-card universe and regen/world discovery live one route away.',
+                  'This is the live player board. Form, club context, value, and movement stay readable here so you can move from scouting to signing without terminal-style noise.',
               accent: GteShellTheme.accent,
               chips: <Widget>[
-                const GteMetricChip(label: 'Surface', value: 'REAL PLAYERS'),
+                const GteMetricChip(label: 'Board', value: 'REAL PLAYERS'),
                 GteMetricChip(
                   label: 'Visible',
                   value: _filteredPlayers.length.toString(),
                 ),
                 GteMetricChip(
-                  label: 'Tape size',
+                  label: 'Pool size',
                   value: (widget.controller.marketPage?.total ?? 0).toString(),
                 ),
                 GteMetricChip(
@@ -91,14 +90,14 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                   value: widget.controller.isAuthenticated ? 'LIVE' : 'PREVIEW',
                   positive: widget.controller.isAuthenticated,
                 ),
-                GteMetricChip(label: 'Lens', value: _lensLabel(_selectedLens)),
+                GteMetricChip(label: 'Focus', value: _lensLabel(_selectedLens)),
               ],
               actions: <Widget>[
                 FilledButton.tonalIcon(
                   onPressed:
                       widget.controller.isLoadingMarket ? null : _refresh,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh tape'),
+                  label: const Text('Refresh board'),
                 ),
                 if (widget.navigationDependencies != null)
                   FilledButton.tonalIcon(
@@ -113,7 +112,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                   FilledButton.icon(
                     onPressed: widget.onOpenLogin,
                     icon: const Icon(Icons.login),
-                    label: const Text('Sign in to trade'),
+                    label: const Text('Sign in to make moves'),
                   ),
               ],
               sidePanel: Column(
@@ -151,22 +150,22 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                     children: <Widget>[
                       Expanded(
                         child: _MiniTerminalTile(
-                          label: 'Execution',
+                          label: 'Access',
                           value:
                               widget.controller.isAuthenticated
-                                  ? 'ARMED'
-                                  : 'LOGIN',
+                                  ? 'READY'
+                                  : 'PREVIEW',
                           accent: GteShellTheme.accent,
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _MiniTerminalTile(
-                          label: 'Wallet link',
+                          label: 'Club funds',
                           value:
                               widget.controller.walletSummary == null
                                   ? 'PENDING'
-                                  : 'SYNCED',
+                                  : 'READY',
                           accent: GteShellTheme.accentWarm,
                         ),
                       ),
@@ -177,16 +176,16 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             ),
             const SizedBox(height: 20),
             GtexSignalStrip(
-              title: 'Desk pulse',
+              title: 'Board pulse',
               subtitle:
-                  'Trade mode keeps a tighter heartbeat than the arena. These signals tell you whether the tape is rising, cooling, or just waiting for better liquidity.',
+                  'These signals tell you whether the board is rising, cooling, or simply waiting for more activity.',
               accent: GteShellTheme.accent,
               tiles: <Widget>[
                 GtexSignalTile(
-                  label: 'Momentum bias',
+                  label: 'Form swing',
                   value: _deskBiasLabel(widget.controller.players),
                   caption:
-                      'A quick read on whether more visible assets are being bid up or leaning into softer offers.',
+                      'A quick read on whether more visible players are pushing upward or cooling off.',
                   icon: Icons.trending_up_rounded,
                   color: GteShellTheme.accent,
                 ),
@@ -194,18 +193,18 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                   label: 'Coverage',
                   value: '${widget.controller.players.length} TRACKED',
                   caption:
-                      'What you see on this tape is scan-first. Thin books stay visible instead of being airbrushed away.',
+                      'The board stays scan-first. Thin activity still stays visible instead of being hidden.',
                   icon: Icons.view_kanban_outlined,
                   color: GteShellTheme.accentWarm,
                 ),
                 GtexSignalTile(
-                  label: 'Execution posture',
+                  label: 'Move status',
                   value:
                       widget.controller.isAuthenticated
-                          ? 'ORDER ENTRY READY'
+                          ? 'READY TO SIGN'
                           : 'SCOUT MODE',
                   caption:
-                      'Sign-in unlocks order tickets, wallet linkage, and portfolio-aware confirmation flows.',
+                      'Sign-in unlocks move tickets, club funds, and account-aware confirmation flows.',
                   icon: Icons.bolt_outlined,
                   color: const Color(0xFF8DD9FF),
                 ),
@@ -213,11 +212,11 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             ),
             const SizedBox(height: 20),
             GteSyncStatusCard(
-              title: 'Tape health',
+              title: 'Player board health',
               status:
                   widget.controller.marketError == null
-                      ? 'Price discovery, scouting context, and execution hints are in rhythm.'
-                      : 'Feed degraded. Last confirmed tape remains visible for review.',
+                      ? 'Player discovery, club context, and move hints are in sync.'
+                      : 'Feed degraded. The last confirmed board remains visible for review.',
               syncedAt: widget.controller.marketSyncedAt,
               accent: GteShellTheme.accent,
               isRefreshing: widget.controller.isLoadingMarket,
@@ -239,10 +238,10 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             ],
             const SizedBox(height: 20),
             const GtexSectionHeader(
-              eyebrow: 'MARKET LENS',
-              title: 'Focus the tape before you dive into individual assets.',
+              eyebrow: 'FILTERS',
+              title: 'Focus the board before you choose a player.',
               description:
-                  'The lens bar keeps the trading floor tight. Filter for risers, dips, or high-interest names without drifting into arena-style browsing.',
+                  'Use filters to narrow the board without burying the live story.',
               accent: GteShellTheme.accent,
             ),
             const SizedBox(height: 14),
@@ -257,11 +256,10 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             ),
             const SizedBox(height: 20),
             const GtexSectionHeader(
-              eyebrow: 'DESK CONTEXT',
-              title:
-                  'Read the tape before you place conviction behind a click.',
+              eyebrow: 'BOARD NOTES',
+              title: 'A few signals before you commit to a move.',
               description:
-                  'These notes keep the trading floor honest about liquidity, execution posture, and how much of the price is truly tradable right now.',
+                  'These notes keep the board honest about depth, access, and how much action is really there right now.',
               accent: GteShellTheme.accent,
             ),
             const SizedBox(height: 14),
@@ -270,21 +268,21 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               runSpacing: 12,
               children: <Widget>[
                 _DeskSignalCard(
-                  title: 'Tape mood',
+                  title: 'Board mood',
                   body:
                       widget.controller.players.isEmpty
-                          ? 'Waiting for price feed.'
-                          : 'Quotes are flowing and the desk is scan-ready.',
+                          ? 'Waiting for fresh player activity.'
+                          : 'The board is live and ready to scan.',
                 ),
                 _DeskSignalCard(
-                  title: 'Liquidity note',
+                  title: 'Depth note',
                   body:
-                      'Thin books stay visible instead of being disguised. You can see where conviction is real.',
+                      'Thin activity stays visible instead of being disguised. You can see where movement is real.',
                 ),
                 _DeskSignalCard(
-                  title: 'Execution policy',
+                  title: 'Access note',
                   body:
-                      'Guests can scout the tape. Signed-in users get order entry, wallet context, and portfolio sync.',
+                      'Guests can scout the board. Signed-in users get move tickets, funds context, and account sync.',
                 ),
               ],
             ),
@@ -312,15 +310,15 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             ],
             const SizedBox(height: 20),
             GtexSectionHeader(
-              eyebrow: 'PRICE BOARD',
+              eyebrow: 'PLAYER BOARD',
               title:
                   _filteredPlayers.isEmpty
                       ? 'The board needs another look.'
                       : 'Scan the board and pick your next entry.',
               description:
                   _filteredPlayers.isEmpty
-                      ? 'When the market is thin, the app keeps the state explicit instead of pretending the tape is full. Refresh, widen the lens, or clear the search to keep moving.'
-                      : 'Trading cards stay compact, signal-rich, and execution-aware so the floor feels different from the live match center.',
+                      ? 'When the board is thin, the app keeps it explicit. Refresh, widen the filter, or clear the search to keep moving.'
+                      : 'Cards stay compact and readable so this page feels like football scouting, not a finance terminal.',
               accent: GteShellTheme.accent,
             ),
             const SizedBox(height: 14),
@@ -332,14 +330,14 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     GtexSectionBadge(
-                      label: 'LOADING TAPE',
+                      label: 'LOADING BOARD',
                       color: GteShellTheme.accent,
                     ),
                     SizedBox(height: 14),
                     LinearProgressIndicator(),
                     SizedBox(height: 14),
                     Text(
-                      'Refreshing player discovery, liquidity hints, and the latest visible movement so the board opens with a clean snapshot.',
+                      'Refreshing player discovery, form cues, and the latest movement so the board opens with a clean snapshot.',
                     ),
                   ],
                 ),
@@ -347,23 +345,23 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             else if (widget.controller.marketError != null &&
                 widget.controller.players.isEmpty)
               GteStatePanel(
-                title: 'Market unavailable',
+                title: 'Player board unavailable',
                 message:
-                    'The trading floor could not confirm a fresh board. ${widget.controller.marketError!}',
+                    'The app could not confirm a fresh player board. ${widget.controller.marketError!}',
                 actionLabel: 'Retry board',
                 onAction: _refresh,
                 icon: Icons.warning_amber_rounded,
               )
             else if (_filteredPlayers.isEmpty)
               GteStatePanel(
-                title: 'No players match this tape view',
+                title: 'No players match this filter',
                 message:
                     _searchController.text.trim().isEmpty
-                        ? 'This lens is currently quiet. Switch the market lens or pull to refresh the board.'
+                        ? 'This filter is quiet right now. Switch focus or refresh the board.'
                         : 'No players matched "${_searchController.text.trim()}" in the ${_lensLabel(_selectedLens).toLowerCase()} view.',
                 actionLabel:
                     _searchController.text.trim().isEmpty
-                        ? 'Reset lens'
+                        ? 'Reset filter'
                         : 'Clear search',
                 onAction: () {
                   if (_searchController.text.trim().isNotEmpty) {
@@ -399,7 +397,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                       reset: false,
                     );
                   },
-                  child: const Text('Load more from tape'),
+                  child: const Text('Load more players'),
                 ),
               ),
             ],
@@ -439,13 +437,13 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
   String _lensLabel(_MarketLens lens) {
     switch (lens) {
       case _MarketLens.all:
-        return 'FULL TAPE';
+        return 'FULL BOARD';
       case _MarketLens.risers:
         return 'RISERS';
       case _MarketLens.fallers:
         return 'DIPS';
       case _MarketLens.highInterest:
-        return 'HEAT';
+        return 'WATCHLIST';
     }
   }
 
@@ -525,7 +523,7 @@ String _deskBiasLabel(List<GteMarketPlayerListItem> players) {
   if (risers == fallers) {
     return 'BALANCED';
   }
-  return risers > fallers ? 'RISK ON' : 'COOLING';
+  return risers > fallers ? 'RISING' : 'COOLING';
 }
 
 class _MarketRoutePanel extends StatelessWidget {
@@ -549,12 +547,12 @@ class _MarketRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Market extensions',
+            'More ways to explore',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'The trading floor you are on now is the real-player desk. Use the routes below when you want the broader player-card universe, regen/world context, creator equity, or club ownership markets.',
+            'This page focuses on live player scouting. Use the routes below for the broader player-card universe, regen world, creator economy, or club ownership.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -606,7 +604,7 @@ class _MarketLensBar extends StatelessWidget {
     final List<({String label, _MarketLens lens, String value})> options =
         <({String label, _MarketLens lens, String value})>[
           (
-            label: 'All tape',
+            label: 'All players',
             lens: _MarketLens.all,
             value: counts.total.toString(),
           ),
@@ -621,7 +619,7 @@ class _MarketLensBar extends StatelessWidget {
             value: counts.fallers.toString(),
           ),
           (
-            label: 'Heat',
+            label: 'Watchlist',
             lens: _MarketLens.highInterest,
             value: counts.highInterest.toString(),
           ),

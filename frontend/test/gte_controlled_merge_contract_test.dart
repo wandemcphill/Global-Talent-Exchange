@@ -70,7 +70,7 @@ void main() {
         expect(hub, lessThan(club));
         expect(shellSource, contains('_buildThemePickerAction(context)'));
         expect(shellSource, contains('_buildCapitalAction()'));
-        expect(shellSource, contains("tooltip: 'Capital room'"));
+        expect(shellSource, contains("tooltip: 'Club funds'"));
         expect(shellSource, contains('GteThemePickerSheet'));
         expect(shellSource, contains('destination.label,'));
       },

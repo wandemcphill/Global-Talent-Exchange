@@ -190,8 +190,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   title: '$clubName matchday lobby',
                   subtitle:
                       widget.exchangeController.isAuthenticated
-                          ? 'Your club, capital room, and next football story now live in one place.'
-                          : 'Preview the football universe first, then sign in to trade, fund, and manage the badge.',
+                          ? 'Your club, budget, and next football story all live in one place.'
+                          : 'Preview the football world first, then sign in to build your club, scout talent, and manage your badge.',
                   capitalLabel: _capitalMetricLabel(),
                   liveLabel: _livePulseLabel(snapshot),
                   isAuthenticated: widget.exchangeController.isAuthenticated,
@@ -209,12 +209,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       label: 'Honors',
                       value: snapshot.totalHonors.toString(),
                     ),
+                    GteMetricChip(label: 'Funds', value: _capitalMetricLabel()),
                     GteMetricChip(
-                      label: 'Capital',
-                      value: _capitalMetricLabel(),
-                    ),
-                    GteMetricChip(
-                      label: 'Orders',
+                      label: 'Pending',
                       value:
                           widget.exchangeController.openOrders.length
                               .toString(),
@@ -236,11 +233,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 GteSyncStatusCard(
-                  title: 'App-wide premium sync',
+                  title: 'App-wide sync',
                   status:
                       widget.exchangeController.isAuthenticated
-                          ? 'Market, play, hub, club, and capital layers are stitched into one premium shell.'
-                          : 'Guest access is live. Sign in to unlock trading, capital execution, and writable club actions.',
+                          ? 'Matchday, scouting, club, and creator tools stay connected in one clear shell.'
+                          : 'Guest access is live. Sign in to unlock your club, scouting actions, and editable spaces.',
                   syncedAt: widget.exchangeController.marketSyncedAt,
                   accent: GteShellTheme.accent,
                   isRefreshing:
@@ -275,10 +272,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const SizedBox(height: 20),
                 _HomeSectionHeading(
                   eyebrow: 'RIGHT NOW',
-                  title:
-                      'The control deck keeps the next best move in plain sight.',
+                  title: 'The next best move stays in plain sight.',
                   detail:
-                      'Top cards are reserved for the most actionable club and match context. The quieter signals live below so the home screen stays premium instead of crowded.',
+                      'Top cards show the biggest live story first. Quieter signals sit lower so Home stays clear, not crowded.',
                 ),
                 const SizedBox(height: 14),
                 LayoutBuilder(
@@ -1167,7 +1163,7 @@ class _HomeHeroPanel extends StatelessWidget {
                 FilledButton.tonalIcon(
                   onPressed: onOpenWallet,
                   icon: const Icon(Icons.account_balance_wallet_outlined),
-                  label: const Text('Capital room'),
+                  label: const Text('Club funds'),
                 ),
               if (!isAuthenticated && onOpenLogin != null)
                 OutlinedButton(
@@ -1252,7 +1248,7 @@ class _HomeRuntimeSignalPanel extends StatelessWidget {
                 positive: hasClubScope,
               ),
               GteMetricChip(
-                label: 'Capital',
+                label: 'Funds',
                 value: capitalLabel,
                 positive: true,
               ),
@@ -1384,16 +1380,16 @@ class _HomeQuickActionsStrip extends StatelessWidget {
           ),
           _HomeActionCard(
             eyebrow: 'MARKET',
-            title: 'Trade real players + regens',
+            title: 'Scout players and rising regens',
             detail:
                 isAuthenticated
-                    ? 'Open the player market to scout real players, regen upside, GTEX Coin pricing, and the current quote tape from one execution lane.'
-                    : 'The player market is visible in guest mode. Sign in when you are ready to buy players, fund GTEX Coin, and hold assets.',
+                    ? 'Open the player market to compare form, upside, and value without leaving the football world.'
+                    : 'The player market is visible in guest mode. Sign in when you are ready to make moves and save them to your account.',
             icon: Icons.person_search_outlined,
             accent: GteShellTheme.accent,
             badge: 'Live',
             actionLabel:
-                isAuthenticated ? 'Open player market' : 'Preview market',
+                isAuthenticated ? 'Open player market' : 'Preview scouting',
             onTap: onOpenMarket ?? onOpenLogin,
           ),
           _HomeActionCard(
@@ -1405,7 +1401,7 @@ class _HomeQuickActionsStrip extends StatelessWidget {
             detail:
                 isAuthenticated
                     ? '2D, broadcast, and Flutter 3D lanes stay one route away from Home instead of hiding behind replay-only detours.'
-                    : 'Open the auth lane to create an account, fund GTEX Coin, buy players, and bind a real club workspace.',
+                    : 'Create an account to save your club, track players, and unlock the full football world.',
             icon:
                 isAuthenticated
                     ? Icons.live_tv_outlined
@@ -1552,7 +1548,7 @@ class _HomeJourneyPanel extends StatelessWidget {
     final String message =
         isAuthenticated
             ? 'There are $openCompetitionCount open competition lanes and $notificationCount alerts waiting. Use Home to move with intent instead of bouncing between tabs.'
-            : 'Browse the shell, inspect market and arena context, then sign in when you are ready to trade, fund, and save club changes.';
+            : 'Browse the shell, inspect scouting and matchday, then sign in when you are ready to save your club and make live moves.';
     return GteSurfacePanel(
       accentColor:
           isAuthenticated ? GteShellTheme.accent : GteShellTheme.accentCapital,

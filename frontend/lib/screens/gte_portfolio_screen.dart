@@ -37,29 +37,28 @@ class GtePortfolioScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
         children: <Widget>[
           GtexHeroBanner(
-            eyebrow: 'GTEX COIN',
-            title:
-                'The GTEX coin lane stays calm, legible, and protected until you are ready to trade for real.',
+            eyebrow: 'CLUB FUNDS',
+            title: 'Your club funds stay protected until you sign in.',
             description:
-                'Guest mode shows the layout, but not live balances or executable funds. Sign in to unlock the actual capital stack.',
+                'Guest mode shows the layout, not live balances. Sign in to view your balance, player holdings, and account history.',
             accent: GteShellTheme.accentCapital,
             chips: const <Widget>[
               GteMetricChip(label: 'Mode', value: 'PREVIEW'),
-              GteMetricChip(label: 'Funding', value: 'LOCKED'),
-              GteMetricChip(label: 'Ledger', value: 'PRIVATE'),
+              GteMetricChip(label: 'Balance', value: 'LOCKED'),
+              GteMetricChip(label: 'Activity', value: 'PRIVATE'),
             ],
             actions: <Widget>[
               FilledButton(
                 onPressed: onOpenLogin,
-                child: const Text('Open login'),
+                child: const Text('Sign in'),
               ),
             ],
           ),
           const SizedBox(height: 20),
           const GteStatePanel(
-            title: 'Protected capital surfaces',
+            title: 'Protected account area',
             message:
-                'Portfolio, wallet, and order routes are protected. Sign in to load balances, holdings, and ledger detail.',
+                'Funds, holdings, and account history are protected. Sign in to continue.',
             icon: Icons.lock_outline,
           ),
         ],
@@ -75,11 +74,11 @@ class GtePortfolioScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             GtexHeroBanner(
-              eyebrow: 'GTEX COIN',
+              eyebrow: 'CLUB FUNDS',
               title:
-                  'GTEX Coin, holdings, open orders, and funding trust all live on one calm deck.',
+                  'Funds, player holdings, and pending moves live on one clear page.',
               description:
-                  'Portfolio mode is deliberately cleaner than trading and quieter than the arena. It should feel bank-grade, transparent, and ready for action without drama.',
+                  'This page is quieter than scouting and matchday by design. Check budget, holdings, and recent activity without finance-terminal noise.',
               accent: GteShellTheme.accentCapital,
               chips: <Widget>[
                 GteMetricChip(
@@ -110,18 +109,18 @@ class GtePortfolioScreen extends StatelessWidget {
               sidePanel: Column(
                 children: <Widget>[
                   _CapitalSignalRow(
-                    leftLabel: 'Funding state',
+                    leftLabel: 'Balance',
                     leftValue:
                         controller.walletSummary == null ? 'SYNCING' : 'READY',
-                    rightLabel: 'Order rail',
+                    rightLabel: 'Pending moves',
                     rightValue:
                         controller.openOrders.isEmpty ? 'QUIET' : 'ACTIVE',
                   ),
                   const SizedBox(height: 12),
                   _CapitalSignalRow(
-                    leftLabel: 'Holdings',
+                    leftLabel: 'Players held',
                     leftValue: '${controller.portfolio?.holdings.length ?? 0}',
-                    rightLabel: 'Risk view',
+                    rightLabel: 'Status',
                     rightValue:
                         controller.portfolioSummary == null ? 'WAIT' : 'CLEAR',
                   ),
@@ -150,11 +149,11 @@ class GtePortfolioScreen extends StatelessWidget {
             ],
             const SizedBox(height: 20),
             GteSyncStatusCard(
-              title: 'Funds and ledger confidence',
+              title: 'Account sync',
               status:
                   controller.isAuthenticated
-                      ? 'Balances, holdings, and order state are being reconciled together.'
-                      : 'Guest preview is active. Sign in to unlock wallet funding and live ledger updates.',
+                      ? 'Balance, holdings, and move history are updating together.'
+                      : 'Guest preview is active. Sign in to unlock funds and live account updates.',
               syncedAt:
                   controller.portfolioSyncedAt ?? controller.ordersSyncedAt,
               accent: GteShellTheme.accentCapital,

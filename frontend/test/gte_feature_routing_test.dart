@@ -259,7 +259,7 @@ void main() {
 
       expect(find.byType(HomeDashboardScreen), findsOneWidget);
       expect(find.text('CLUB SETUP'), findsOneWidget);
-      expect(find.text('This account does not own a club yet'), findsOneWidget);
+      expect(find.text('This account has no club yet'), findsOneWidget);
       expect(find.text('No canonical club is selected'), findsNothing);
       expect(find.text('Create or join a club to unlock Home'), findsNothing);
       expect(
@@ -383,7 +383,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('CLUB SETUP'), findsOneWidget);
-      expect(find.text('This account does not own a club yet'), findsOneWidget);
+      expect(find.text('This account has no club yet'), findsOneWidget);
       final Finder browseClubMarketButton =
           find.widgetWithText(FilledButton, 'Browse club market').first;
       final Finder exploreCompetitionsButton =
@@ -453,7 +453,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('CLUB SETUP'), findsOneWidget);
-      expect(find.text('This account does not own a club yet'), findsOneWidget);
+      expect(find.text('This account has no club yet'), findsOneWidget);
       expect(find.text('Open home'), findsNothing);
       expect(find.text('No canonical club is selected'), findsNothing);
 
@@ -497,9 +497,9 @@ void main() {
         ),
       ),
     );
-    await _pumpUntilText(tester, 'Market extensions');
+    await _pumpUntilText(tester, 'More ways to explore');
 
-    expect(find.text('Market extensions'), findsOneWidget);
+    expect(find.text('More ways to explore'), findsOneWidget);
 
     final Finder clubSaleMarketButton = find.text('Club sale market');
     await tester.ensureVisible(clubSaleMarketButton);
@@ -527,7 +527,7 @@ void main() {
         ),
       ),
     );
-    await _pumpUntilText(tester, 'Market extensions');
+    await _pumpUntilText(tester, 'More ways to explore');
 
     final Finder creatorSharesButton = find.text('Creator shares');
     await tester.ensureVisible(creatorSharesButton);
@@ -562,7 +562,7 @@ void main() {
           ),
         ),
       );
-      await _pumpUntilText(tester, 'Market extensions');
+      await _pumpUntilText(tester, 'More ways to explore');
 
       final Finder creatorSharesButton = find.text('Creator shares');
       await tester.ensureVisible(creatorSharesButton);

@@ -7,21 +7,20 @@ import 'gte_shell_theme.dart';
 import 'gte_surface_panel.dart';
 
 class GteWalletSummaryCard extends StatelessWidget {
-  const GteWalletSummaryCard({
-    super.key,
-    required this.summary,
-  });
+  const GteWalletSummaryCard({super.key, required this.summary});
 
   final GteWalletSummary summary;
 
   @override
   Widget build(BuildContext context) {
-    final double utilization = summary.totalBalance <= 0
-        ? 0
-        : (summary.reservedBalance / summary.totalBalance).clamp(0, 1);
-    final double freeRatio = summary.totalBalance <= 0
-        ? 0
-        : (summary.availableBalance / summary.totalBalance).clamp(0, 1);
+    final double utilization =
+        summary.totalBalance <= 0
+            ? 0
+            : (summary.reservedBalance / summary.totalBalance).clamp(0, 1);
+    final double freeRatio =
+        summary.totalBalance <= 0
+            ? 0
+            : (summary.availableBalance / summary.totalBalance).clamp(0, 1);
 
     return GteSurfacePanel(
       emphasized: true,
@@ -36,25 +35,35 @@ class GteWalletSummaryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text('Wallet summary', style: Theme.of(context).textTheme.headlineSmall),
+                    Text(
+                      'Funds summary',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                     const SizedBox(height: 8),
                     Text(
-                      'Capital state for funding, reserves, and execution readiness.',
+                      'Available balance, reserved balance, and readiness for your next move.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   color: GteShellTheme.accentCapital.withValues(alpha: 0.12),
-                  border: Border.all(color: GteShellTheme.accentCapital.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: GteShellTheme.accentCapital.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Text(
                   gteFormatLedgerUnitName(summary.currency).toUpperCase(),
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: GteShellTheme.accentCapital),
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: GteShellTheme.accentCapital,
+                  ),
                 ),
               ),
             ],
@@ -76,14 +85,19 @@ class GteWalletSummaryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Available to deploy', style: Theme.of(context).textTheme.bodyMedium),
+                Text(
+                  'Available now',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
                 const SizedBox(height: 6),
                 Text(
                   gteFormatAmountForUnit(
                     summary.availableBalance,
                     summary.currency,
                   ),
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(fontSize: 30),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.displaySmall?.copyWith(fontSize: 30),
                 ),
                 const SizedBox(height: 14),
                 ClipRRect(
@@ -92,14 +106,16 @@ class GteWalletSummaryCard extends StatelessWidget {
                     value: freeRatio,
                     minHeight: 10,
                     backgroundColor: Colors.white.withValues(alpha: 0.06),
-                    valueColor: AlwaysStoppedAnimation<Color>(GteShellTheme.accentCapital),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      GteShellTheme.accentCapital,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   utilization <= 0
                       ? 'No ${gteFormatLedgerUnitName(summary.currency)} is currently reserved.'
-                      : '${(utilization * 100).toStringAsFixed(0)}% of total ${gteFormatLedgerUnitName(summary.currency)} is reserved by active commitments.',
+                      : '${(utilization * 100).toStringAsFixed(0)}% of total ${gteFormatLedgerUnitName(summary.currency)} is tied to pending moves.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -111,7 +127,7 @@ class GteWalletSummaryCard extends StatelessWidget {
             runSpacing: 12,
             children: <Widget>[
               GteMetricChip(
-                label: 'Reserved',
+                label: 'Pending',
                 value: gteFormatAmountForUnit(
                   summary.reservedBalance,
                   summary.currency,
@@ -119,18 +135,15 @@ class GteWalletSummaryCard extends StatelessWidget {
                 positive: summary.reservedBalance <= summary.totalBalance,
               ),
               GteMetricChip(
-                label: 'Total balance',
+                label: 'Total',
                 value: gteFormatAmountForUnit(
                   summary.totalBalance,
                   summary.currency,
                 ),
               ),
               GteMetricChip(
-                label: 'Funding state',
-                value:
-                    summary.availableBalance > 0
-                        ? 'READY'
-                        : 'LOW ${summary.currency == GteLedgerUnit.coin ? 'GTEX' : 'FAN'}',
+                label: 'Funds state',
+                value: summary.availableBalance > 0 ? 'READY' : 'LOW BALANCE',
                 positive: summary.availableBalance > 0,
               ),
             ],

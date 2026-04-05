@@ -70,11 +70,11 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                               title:
                                   hasRestrictedAccess
                                       ? 'Session active'
-                                      : 'Mission confirmed',
+                                      : 'You are in',
                               message:
                                   hasRestrictedAccess
-                                      ? 'Active session for ${widget.controller.session!.user.username}. GTEX access is live, but some capital actions remain restricted until compliance clears this account.'
-                                      : 'Active session for ${widget.controller.session!.user.username}. The exchange floor, e-game arena, and control tower are now unlocked for this account.',
+                                      ? 'You are signed in as ${widget.controller.session!.user.username}. Some account actions are still limited until compliance review finishes.'
+                                      : 'You are signed in as ${widget.controller.session!.user.username}. Your club, matchday, and scouting spaces are ready.',
                               actionLabel: 'Enter GTEX',
                               onAction: () {
                                 Navigator.of(context).pop(true);
@@ -117,10 +117,10 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                     const SizedBox(height: 8),
                                     Text(
                                       requiresPolicyAction
-                                          ? 'Complete the required policy acceptances to unlock deposits, withdrawals, and trading.'
+                                          ? 'Complete the required policy acceptances to unlock deposits, withdrawals, and player-market actions.'
                                           : hasRestrictedAccess
-                                          ? 'This session is active, but one or more capital actions remain restricted for this region or policy bucket.'
-                                          : 'All required policies are accepted. Wallet actions are cleared to proceed.',
+                                          ? 'This session is active, but some account actions are limited for this region or review state.'
+                                          : 'All required policies are accepted. Account actions are ready.',
                                     ),
                                     const SizedBox(height: 12),
                                     Wrap(
@@ -134,14 +134,14 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                         _SignalPill(
                                           label:
                                               compliance.canTradeMarket
-                                                  ? 'Trading enabled'
-                                                  : 'Trading review needed',
+                                                  ? 'Player moves enabled'
+                                                  : 'Player moves limited',
                                         ),
                                         _SignalPill(
                                           label:
                                               compliance.canDeposit
-                                                  ? 'Deposits enabled'
-                                                  : 'Deposit review needed',
+                                                  ? 'Add funds enabled'
+                                                  : 'Add funds limited',
                                         ),
                                         _SignalPill(
                                           label:
@@ -200,12 +200,12 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                             const GtexWordmark(showTagline: false),
                             const SizedBox(height: 22),
                             Text(
-                              'Own the market. Run the matchday universe.',
+                              'Build your club. Scout the world. Step into matchday.',
                               style: Theme.of(context).textTheme.displaySmall,
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'GTEX is where football talent trading, squad building, manager scarcity, and cinematic e-game competition meet in one seamless app. Users should know the point instantly. This screen now says it with a floodlight, not a whisper.',
+                              'GTEX is a football world, not a trading terminal. The app brings club-building, player discovery, competitions, and live match moments into one clear flow.',
                               style: Theme.of(context).textTheme.bodyLarge,
                             ),
                             const SizedBox(height: 22),
@@ -213,12 +213,10 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                               spacing: 10,
                               runSpacing: 10,
                               children: const <Widget>[
-                                _SignalPill(label: 'Trade player upside'),
-                                _SignalPill(label: 'Hire scarce managers'),
-                                _SignalPill(label: 'Run adaptive competitions'),
-                                _SignalPill(
-                                  label: 'Watch 3-5 min match stories',
-                                ),
+                                _SignalPill(label: 'Build your club'),
+                                _SignalPill(label: 'Scout new talent'),
+                                _SignalPill(label: 'Play live matchday'),
+                                _SignalPill(label: 'Follow rising stars'),
                               ],
                             ),
                             const SizedBox(height: 22),
@@ -227,24 +225,24 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  Text('Choose your opening move'),
+                                  Text('Choose your starting point'),
                                   SizedBox(height: 10),
                                   Wrap(
                                     spacing: 10,
                                     runSpacing: 10,
                                     children: <Widget>[
                                       _OpeningMoveChip(
-                                        label: '1. Sign in and trade instantly',
+                                        label:
+                                            '1. Sign in and return to your club',
                                         accent: GteShellTheme.accent,
                                       ),
                                       _OpeningMoveChip(
-                                        label:
-                                            '2. Preview the live match center',
+                                        label: '2. Scout the live player board',
                                         accent: GteShellTheme.accentArena,
                                       ),
                                       _OpeningMoveChip(
                                         label:
-                                            '3. Unlock wallet + portfolio control',
+                                            '3. Check matchday and world stories',
                                         accent: GteShellTheme.accentCapital,
                                       ),
                                     ],
@@ -254,20 +252,20 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                             ),
                             const SizedBox(height: 22),
                             const GtexSignalStrip(
-                              title: 'Three product lanes, one brand spine',
+                              title: 'One football world, three clear lanes',
                               subtitle:
-                                  'GTEX should feel premium from the first frame. The market reads like a terminal, the arena reads like match night, and the wallet reads like a control room.',
+                                  'Scouting, matchday, and funds each have a distinct role, but they work as one product.',
                               tiles: <Widget>[
                                 GtexSignalTile(
-                                  label: 'Trade',
-                                  value: 'FAST TAPE',
+                                  label: 'Club',
+                                  value: 'YOUR CREST',
                                   caption:
-                                      'Dense, analytical, and execution-led.',
+                                      'Identity, progression, and your home base.',
                                   icon: Icons.show_chart,
                                   color: GteShellTheme.accent,
                                 ),
                                 GtexSignalTile(
-                                  label: 'Arena',
+                                  label: 'Matchday',
                                   value: 'LIVE STORY',
                                   caption:
                                       'Fixtures, highlights, and bracket energy.',
@@ -275,10 +273,10 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   color: GteShellTheme.accentArena,
                                 ),
                                 GtexSignalTile(
-                                  label: 'Capital',
-                                  value: 'TRUST LAYER',
+                                  label: 'Funds',
+                                  value: 'READY BALANCE',
                                   caption:
-                                      'Balances, orders, and control signals.',
+                                      'Balance, moves, and protected account tools.',
                                   icon: Icons.account_balance_wallet_outlined,
                                   color: GteShellTheme.accentCapital,
                                 ),
@@ -293,24 +291,24 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   Text('What opens after login'),
                                   SizedBox(height: 10),
                                   _BulletLine(
-                                    icon: Icons.show_chart,
+                                    icon: Icons.shield_outlined,
                                     text:
-                                        'A high-speed trading floor for player assets and market depth.',
+                                        'Club HQ with your badge, schedule, and progression.',
+                                  ),
+                                  _BulletLine(
+                                    icon: Icons.person_search_outlined,
+                                    text:
+                                        'A player board for scouting, comparing, and making moves.',
                                   ),
                                   _BulletLine(
                                     icon: Icons.stadium_outlined,
                                     text:
-                                        'A separate e-game arena built for fixtures, highlights, and competitive tension.',
-                                  ),
-                                  _BulletLine(
-                                    icon: Icons.psychology_alt_outlined,
-                                    text:
-                                        'Managers and coaches with real tactical fingerprints, not cardboard cut-outs.',
+                                        'Matchday and highlights that keep the season alive.',
                                   ),
                                   _BulletLine(
                                     icon: Icons.admin_panel_settings_outlined,
                                     text:
-                                        'Admins use this same login. Role assignment happens invisibly and securely on the backend.',
+                                        'If your role allows it, creator and admin tools appear automatically.',
                                   ),
                                 ],
                               ),
@@ -341,7 +339,7 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'One doorway for users, managers, admins, and super admins. Access unfolds after authentication.',
+                                          'One sign-in for players, managers, creators, and admins. The app reveals only what this account can use.',
                                           style:
                                               Theme.of(
                                                 context,
@@ -433,7 +431,7 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                     Text('Guest preview'),
                                     SizedBox(height: 8),
                                     Text(
-                                      'You can explore the shell before login, but order entry, wallet actions, and protected creator or admin controls stay locked until authentication succeeds.',
+                                      'You can explore the shell before login, but live moves, club editing, and protected creator or admin tools stay locked until authentication succeeds.',
                                     ),
                                   ],
                                 ),

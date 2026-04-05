@@ -71,10 +71,10 @@ class _GteExchangePlayerDetailScreenState
               return const Padding(
                 padding: EdgeInsets.all(20),
                 child: GteStatePanel(
-                  eyebrow: 'TRADING FLOOR',
-                  title: 'Loading player market intelligence',
+                  eyebrow: 'PLAYER MARKET',
+                  title: 'Loading player scouting view',
                   message:
-                      'Price formation, liquidity cues, and recent execution context are being assembled for this asset.',
+                      'Form, value, movement, and live context are being assembled for this player.',
                   icon: Icons.candlestick_chart,
                   accentColor: GteShellTheme.accent,
                   isLoading: true,
@@ -87,7 +87,8 @@ class _GteExchangePlayerDetailScreenState
                 padding: const EdgeInsets.all(20),
                 child: GteStatePanel(
                   title: 'Player unavailable',
-                  message: widget.controller.playerError ??
+                  message:
+                      widget.controller.playerError ??
                       'Unable to load this player.',
                   actionLabel: 'Retry',
                   onAction: () {
@@ -98,8 +99,9 @@ class _GteExchangePlayerDetailScreenState
               );
             }
 
-            final GteOrderRecord? order =
-                widget.controller.orderForPlayer(widget.playerId);
+            final GteOrderRecord? order = widget.controller.orderForPlayer(
+              widget.playerId,
+            );
             _maybeLoadAdminBuybackPreview(order);
             return RefreshIndicator(
               onRefresh: _refreshSnapshot,
@@ -124,11 +126,11 @@ class _GteExchangePlayerDetailScreenState
                     _buildHero(context, snapshot, order),
                     const SizedBox(height: 20),
                     const GtexSectionHeader(
-                      eyebrow: 'MARKET INTELLIGENCE',
+                      eyebrow: 'PLAYER READ',
                       title:
-                          'Know what is model-led, quote-led, and actually executable.',
+                          'See what is projected, what is live, and what is actionable.',
                       description:
-                          'Player detail should read like an asset intelligence screen. These panels explain whether price confidence is real, fragile, or still forming.',
+                          'Player detail should stay readable. These panels explain how strong the live signal is before you make a move.',
                       accent: GteShellTheme.accent,
                     ),
                     const SizedBox(height: 14),
@@ -170,10 +172,9 @@ class _GteExchangePlayerDetailScreenState
                             .adminBuybackPreviewForOrder(order.id),
                         isLoadingAdminBuybackPreview: widget.controller
                             .isLoadingAdminBuybackPreview(order.id),
-                        isExecutingAdminBuyback:
-                            widget.controller.isExecutingAdminBuyback(order.id),
-                        adminBuybackError:
-                            widget.controller.adminBuybackError,
+                        isExecutingAdminBuyback: widget.controller
+                            .isExecutingAdminBuyback(order.id),
+                        adminBuybackError: widget.controller.adminBuybackError,
                         onRefresh: () {
                           _refreshOrder(order);
                         },
@@ -248,8 +249,10 @@ class _GteExchangePlayerDetailScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(identity.playerName,
-                        style: Theme.of(context).textTheme.displaySmall),
+                    Text(
+                      identity.playerName,
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       identityLine.join(' | '),
@@ -267,11 +270,12 @@ class _GteExchangePlayerDetailScreenState
               ),
               const SizedBox(width: 16),
               FilledButton(
-                onPressed: widget.controller.isAuthenticated
-                    ? () {
-                        _openTicket();
-                      }
-                    : widget.onRequireLogin,
+                onPressed:
+                    widget.controller.isAuthenticated
+                        ? () {
+                          _openTicket();
+                        }
+                        : widget.onRequireLogin,
                 child: Text(
                   widget.controller.isAuthenticated
                       ? 'Place order'
@@ -314,14 +318,15 @@ class _GteExchangePlayerDetailScreenState
               GteMetricChip(
                 label: 'Reference',
                 value: gteFormatNullableCredits(
-                    snapshot.ticker.referencePrice ??
-                        value.currentValueCredits),
+                  snapshot.ticker.referencePrice ?? value.currentValueCredits,
+                ),
               ),
               if (widget.controller.walletSummary != null)
                 GteMetricChip(
                   label: 'GTEX Coin',
                   value: gteFormatCredits(
-                      widget.controller.walletSummary!.availableBalance),
+                    widget.controller.walletSummary!.availableBalance,
+                  ),
                 ),
               if (holding != null)
                 GteMetricChip(
@@ -345,16 +350,19 @@ class _GteExchangePlayerDetailScreenState
               children: <Widget>[
                 _DetailSignalChip(
                   label: 'Executable zone',
-                  value: marketProfile.quotedMarketPriceCredits == null
-                      ? 'Indicative only'
-                      : gteFormatNullableCredits(
-                          marketProfile.quotedMarketPriceCredits),
+                  value:
+                      marketProfile.quotedMarketPriceCredits == null
+                          ? 'Indicative only'
+                          : gteFormatNullableCredits(
+                            marketProfile.quotedMarketPriceCredits,
+                          ),
                   accent: GteShellTheme.accent,
                 ),
                 _DetailSignalChip(
                   label: 'Trusted trade',
                   value: gteFormatNullableCredits(
-                      marketProfile.trustedTradePriceCredits),
+                    marketProfile.trustedTradePriceCredits,
+                  ),
                   accent: GteShellTheme.accentWarm,
                 ),
                 _DetailSignalChip(
@@ -380,7 +388,9 @@ class _GteExchangePlayerDetailScreenState
   }
 
   Widget _buildMarketEdge(
-      BuildContext context, GtePlayerMarketSnapshot snapshot) {
+    BuildContext context,
+    GtePlayerMarketSnapshot snapshot,
+  ) {
     final GteMarketPlayerMarketProfile profile = snapshot.detail.marketProfile;
     final GteMarketPlayerValue value = snapshot.detail.value;
     final List<Widget> cards = <Widget>[
@@ -390,51 +400,62 @@ class _GteExchangePlayerDetailScreenState
             'Separate indicative values from executable prices so the user can tell the difference between model confidence and tradable reality.',
         pills: <Widget>[
           GteMetricChip(
-              label: 'Current',
-              value: gteFormatCredits(value.currentValueCredits)),
+            label: 'Current',
+            value: gteFormatCredits(value.currentValueCredits),
+          ),
           GteMetricChip(
-              label: 'Football truth',
-              value: gteFormatNullableCredits(value.footballTruthValueCredits)),
+            label: 'Football truth',
+            value: gteFormatNullableCredits(value.footballTruthValueCredits),
+          ),
           GteMetricChip(
-              label: 'Signal value',
-              value: gteFormatNullableCredits(value.marketSignalValueCredits)),
+            label: 'Signal value',
+            value: gteFormatNullableCredits(value.marketSignalValueCredits),
+          ),
         ],
       ),
       _MarketEdgeCard(
         title: 'Liquidity map',
-        body: profile.quotedMarketPriceCredits == null
-            ? 'The book is still forming. Treat this as a scouting screen until executable prices appear.'
-            : 'Executable prices are visible. Use the ticket to compare quote quality with your available balance.',
+        body:
+            profile.quotedMarketPriceCredits == null
+                ? 'The book is still forming. Treat this as a scouting screen until executable prices appear.'
+                : 'Executable prices are visible. Use the ticket to compare quote quality with your available balance.',
         pills: <Widget>[
           GteMetricChip(
-              label: 'Band',
-              value: (profile.liquidityBand ?? 'forming').toUpperCase()),
+            label: 'Band',
+            value: (profile.liquidityBand ?? 'forming').toUpperCase(),
+          ),
           GteMetricChip(
-              label: 'Supply',
-              value: (profile.supplyTier ?? 'emerging').toUpperCase()),
+            label: 'Supply',
+            value: (profile.supplyTier ?? 'emerging').toUpperCase(),
+          ),
           GteMetricChip(
-              label: 'Top 3 share',
-              value: profile.top3HolderSharePct == null
-                  ? '--'
-                  : '${profile.top3HolderSharePct!.toStringAsFixed(0)}%'),
+            label: 'Top 3 share',
+            value:
+                profile.top3HolderSharePct == null
+                    ? '--'
+                    : '${profile.top3HolderSharePct!.toStringAsFixed(0)}%',
+          ),
         ],
       ),
       _MarketEdgeCard(
         title: 'Trading note',
-        body: profile.tradeTrustScore != null && profile.tradeTrustScore! >= 7
-            ? 'Trust is healthy enough for cleaner execution cues.'
-            : 'Trust is still developing. Check spread, visible depth, and order book balance before stepping in.',
+        body:
+            profile.tradeTrustScore != null && profile.tradeTrustScore! >= 7
+                ? 'Trust is healthy enough for cleaner execution cues.'
+                : 'Trust is still developing. Check spread, visible depth, and order book balance before stepping in.',
         pills: <Widget>[
           GteMetricChip(
-              label: 'Trust score',
-              value: profile.tradeTrustScore?.toStringAsFixed(1) ?? '--'),
+            label: 'Trust score',
+            value: profile.tradeTrustScore?.toStringAsFixed(1) ?? '--',
+          ),
           GteMetricChip(
-              label: 'Snapshot mark',
-              value:
-                  gteFormatNullableCredits(profile.snapshotMarketPriceCredits)),
+            label: 'Snapshot mark',
+            value: gteFormatNullableCredits(profile.snapshotMarketPriceCredits),
+          ),
           GteMetricChip(
-              label: 'Published card',
-              value: gteFormatNullableCredits(value.publishedCardValueCredits)),
+            label: 'Published card',
+            value: gteFormatNullableCredits(value.publishedCardValueCredits),
+          ),
         ],
       ),
     ];
@@ -455,10 +476,12 @@ class _GteExchangePlayerDetailScreenState
             if (stacked) {
               return Column(
                 children: cards
-                    .map((Widget card) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: card,
-                        ))
+                    .map(
+                      (Widget card) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: card,
+                      ),
+                    )
                     .toList(growable: false),
               );
             }
@@ -485,8 +508,10 @@ class _GteExchangePlayerDetailScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Lifecycle snapshot',
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Lifecycle snapshot',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
@@ -513,15 +538,18 @@ class _GteExchangePlayerDetailScreenState
           ),
           if (lifecycle.recentEvents.isNotEmpty) ...<Widget>[
             const SizedBox(height: 16),
-            Text('Recent lifecycle events',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Recent lifecycle events',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
-            ...lifecycle.recentEvents
-                .take(3)
-                .map((GteLifecycleEventItem event) {
-              final String dateLabel = event.occurredOn == null
-                  ? ''
-                  : '${event.occurredOn!.year}-${event.occurredOn!.month.toString().padLeft(2, '0')}-${event.occurredOn!.day.toString().padLeft(2, '0')}';
+            ...lifecycle.recentEvents.take(3).map((
+              GteLifecycleEventItem event,
+            ) {
+              final String dateLabel =
+                  event.occurredOn == null
+                      ? ''
+                      : '${event.occurredOn!.year}-${event.occurredOn!.month.toString().padLeft(2, '0')}-${event.occurredOn!.day.toString().padLeft(2, '0')}';
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
@@ -551,7 +579,8 @@ class _GteExchangePlayerDetailScreenState
   }
 
   Widget _buildTicker(BuildContext context, GtePlayerMarketSnapshot snapshot) {
-    final bool hasLiveQuote = snapshot.ticker.lastPrice != null ||
+    final bool hasLiveQuote =
+        snapshot.ticker.lastPrice != null ||
         snapshot.ticker.bestBid != null ||
         snapshot.ticker.bestAsk != null ||
         snapshot.ticker.referencePrice != null;
@@ -603,8 +632,9 @@ class _GteExchangePlayerDetailScreenState
                 ),
                 GteMetricChip(
                   label: 'Day change',
-                  value:
-                      gteFormatMovement(snapshot.ticker.dayChangePercent / 100),
+                  value: gteFormatMovement(
+                    snapshot.ticker.dayChangePercent / 100,
+                  ),
                   positive: snapshot.ticker.dayChangePercent >= 0,
                 ),
                 GteMetricChip(
@@ -643,8 +673,10 @@ class _GteExchangePlayerDetailScreenState
           Row(
             children: <Widget>[
               Expanded(
-                child: Text('Candles',
-                    style: Theme.of(context).textTheme.headlineSmall),
+                child: Text(
+                  'Candles',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
               ),
               Flexible(
                 child: Wrap(
@@ -655,7 +687,8 @@ class _GteExchangePlayerDetailScreenState
                       .map(
                         (String interval) => ChoiceChip(
                           label: Text(interval),
-                          selected: interval ==
+                          selected:
+                              interval ==
                               widget.controller.selectedCandleInterval,
                           onSelected: (bool selected) {
                             if (selected) {
@@ -745,8 +778,11 @@ class _GteExchangePlayerDetailScreenState
   }
 
   Widget _buildOrderBook(
-      BuildContext context, GtePlayerMarketSnapshot snapshot) {
-    final bool hasVisibleLevels = snapshot.orderBook.bids.isNotEmpty ||
+    BuildContext context,
+    GtePlayerMarketSnapshot snapshot,
+  ) {
+    final bool hasVisibleLevels =
+        snapshot.orderBook.bids.isNotEmpty ||
         snapshot.orderBook.asks.isNotEmpty;
     final bool isOneSided =
         snapshot.orderBook.bids.isEmpty || snapshot.orderBook.asks.isEmpty;
@@ -758,8 +794,10 @@ class _GteExchangePlayerDetailScreenState
           Row(
             children: <Widget>[
               Expanded(
-                child: Text('Order book',
-                    style: Theme.of(context).textTheme.headlineSmall),
+                child: Text(
+                  'Order book',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
               ),
               Text(
                 gteFormatDateTime(snapshot.orderBook.generatedAt),
@@ -812,11 +850,7 @@ class _GteExchangePlayerDetailScreenState
                 }
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    bids,
-                    const SizedBox(height: 20),
-                    asks,
-                  ],
+                  children: <Widget>[bids, const SizedBox(height: 20), asks],
                 );
               },
             ),
@@ -860,8 +894,9 @@ class _GteExchangePlayerDetailScreenState
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content:
-            Text('Order accepted for ${snapshot.detail.identity.playerName}.'),
+        content: Text(
+          'Order accepted for ${snapshot.detail.identity.playerName}.',
+        ),
       ),
     );
   }
@@ -877,36 +912,40 @@ class _GteExchangePlayerDetailScreenState
   }
 
   Future<void> _refreshOrder(GteOrderRecord order) async {
-    final GteOrderRecord? refreshed =
-        await widget.controller.refreshOrder(order.id);
+    final GteOrderRecord? refreshed = await widget.controller.refreshOrder(
+      order.id,
+    );
     if (!mounted || refreshed == null) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-            'Order status refreshed: ${gteFormatOrderStatus(refreshed.status.name)}.'),
+          'Order status refreshed: ${gteFormatOrderStatus(refreshed.status.name)}.',
+        ),
       ),
     );
   }
 
   Future<void> _cancelOrder(GteOrderRecord order) async {
-    final GteOrderRecord? cancelled =
-        await widget.controller.cancelOrder(order.id);
+    final GteOrderRecord? cancelled = await widget.controller.cancelOrder(
+      order.id,
+    );
     if (!mounted || cancelled == null) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-            'Order updated: ${gteFormatOrderStatus(cancelled.status.name)}.'),
+          'Order updated: ${gteFormatOrderStatus(cancelled.status.name)}.',
+        ),
       ),
     );
   }
 
   Future<void> _executeAdminBuyback(GteOrderRecord order) async {
-    final GteAdminBuybackExecution? execution =
-        await widget.controller.executeAdminBuyback(order.id);
+    final GteAdminBuybackExecution? execution = await widget.controller
+        .executeAdminBuyback(order.id);
     if (!mounted || execution == null) {
       return;
     }
@@ -965,11 +1004,12 @@ class _DetailSignalChip extends StatelessWidget {
         children: <Widget>[
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 4),
-          Text(value,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(color: accent)),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: accent),
+          ),
         ],
       ),
     );
@@ -1006,10 +1046,7 @@ class _MarketEdgeCard extends StatelessWidget {
 }
 
 class _OrderBookColumn extends StatelessWidget {
-  const _OrderBookColumn({
-    required this.title,
-    required this.levels,
-  });
+  const _OrderBookColumn({required this.title, required this.levels});
 
   final String title;
   final List<GteOrderBookLevel> levels;
@@ -1022,22 +1059,30 @@ class _OrderBookColumn extends StatelessWidget {
         Text(title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 14),
         if (levels.isEmpty)
-          Text('No visible levels.',
-              style: Theme.of(context).textTheme.bodyMedium)
+          Text(
+            'No visible levels.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          )
         else ...<Widget>[
           Row(
             children: <Widget>[
               Expanded(
-                child: Text('Price',
-                    style: Theme.of(context).textTheme.bodyMedium),
+                child: Text(
+                  'Price',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
               Expanded(
-                child:
-                    Text('Qty', style: Theme.of(context).textTheme.bodyMedium),
+                child: Text(
+                  'Qty',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
               Expanded(
-                child: Text('Orders',
-                    style: Theme.of(context).textTheme.bodyMedium),
+                child: Text(
+                  'Orders',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
             ],
           ),
@@ -1061,10 +1106,7 @@ class _OrderBookColumn extends StatelessWidget {
 }
 
 class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({
-    required this.icon,
-    required this.message,
-  });
+  const _InlineNotice({required this.icon, required this.message});
 
   final IconData icon;
   final String message;
@@ -1075,16 +1117,10 @@ class _InlineNotice extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon),
-          ),
+          Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon)),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
           ),
         ],
       ),

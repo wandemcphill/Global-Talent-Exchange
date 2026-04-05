@@ -38,7 +38,7 @@ class _ProfileLoginScreenState extends ConsumerState<ProfileLoginScreen> {
     return AppPageLayout(
       title: 'Sign In',
       subtitle:
-          'This screen uses the live auth client and persists the richer active-shell session context.',
+          'Sign in to sync your club, save progress, and unlock live actions.',
       trailing: const DataSourceBadge(status: DataSourceStatus.live),
       children: <Widget>[
         Card(
@@ -49,7 +49,7 @@ class _ProfileLoginScreenState extends ConsumerState<ProfileLoginScreen> {
               children: <Widget>[
                 if (authenticated)
                   const Text(
-                    'This session is already authenticated. You can return to Profile or continue with a different account after signing out.',
+                    'You are already signed in. Return to Profile, or sign out first to switch accounts.',
                   )
                 else ...<Widget>[
                   TextField(

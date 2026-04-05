@@ -37,8 +37,8 @@ class GteNoClubOnboardingView extends StatelessWidget {
               isAuthenticated ? 'Create your club' : 'Create your GTEX account',
           detail:
               isAuthenticated
-                  ? 'Launch a live club workspace, set the badge and palette later, and unlock identity, trophy, scouting, and competition routes immediately.'
-                  : 'Register or sign in first, then create a club from scratch when you are ready to own a full football workspace.',
+                  ? 'Launch your club now and shape the badge later. Identity, trophies, scouting, and competitions open as soon as the club exists.'
+                  : 'Register or sign in first, then create a club when you are ready to own a full football world.',
           icon: Icons.add_circle_outline,
           accent: GteShellTheme.accentClub,
           actionLabel: isAuthenticated ? 'Create club' : 'Sign in or register',
@@ -64,7 +64,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
           chipLabel: 'Own an existing club',
           title: 'Own an existing club',
           detail:
-              'Browse clubs available for sale, compare value, and take ownership to unlock club management.',
+              'Browse clubs available for takeover and step straight into management.',
           icon: Icons.storefront_outlined,
           accent: GteShellTheme.accentWarm,
           actionLabel: 'Browse club market',
@@ -77,7 +77,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
           chipLabel: 'Open matchday hub',
           title: 'Play matchday lanes',
           detail:
-              'Enter the routed 2D viewer, broadcast desk, and Flutter 3D lane from the live matchday hub even before you own a club.',
+              'Enter the routed 2D viewer, broadcast view, and Flutter 3D lane even before you own a club.',
           icon: Icons.sports_soccer_outlined,
           accent: GteShellTheme.accentArena,
           actionLabel: 'Open matchday',
@@ -88,12 +88,12 @@ class GteNoClubOnboardingView extends StatelessWidget {
         _NoClubActionSpec(
           eyebrow: 'PLAYER UNIVERSE',
           chipLabel: 'Scout players',
-          title: 'Scout players and digital assets',
+          title: 'Scout players and build a shortlist',
           detail:
-              'Jump into the broader player-card marketplace so real players, listings, and card inventory stay reachable from day one.',
+              'Jump into the player universe so real players, listings, and breakout prospects stay easy to browse from day one.',
           icon: Icons.person_search_outlined,
           accent: GteShellTheme.accent,
-          actionLabel: 'Open player universe',
+          actionLabel: 'Scout players',
           onTap: onOpenPlayerUniverse!,
           prominence: _NoClubActionProminence.tonal,
         ),
@@ -103,7 +103,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
           chipLabel: 'Open regen universe',
           title: 'Open the regen universe',
           detail:
-              'Follow rising stars, national regens, scouting feed, and world-building context before you commit to a club.',
+              'Follow rising stars, national regens, and world stories before you commit to a club.',
           icon: Icons.public_outlined,
           accent: GteShellTheme.accentCommunity,
           actionLabel: 'Open world',
@@ -112,14 +112,14 @@ class GteNoClubOnboardingView extends StatelessWidget {
         ),
       if (onOpenWallet != null)
         _NoClubActionSpec(
-          eyebrow: 'TREASURY',
-          chipLabel: 'Open GTEX coin wallet',
-          title: 'Open the GTEX coin wallet',
+          eyebrow: 'FUNDS',
+          chipLabel: 'Open club funds',
+          title: 'Open club funds',
           detail:
-              'Top-up and wallet posture live in the GTEX coin lane, so funding remains visible before you start buying players.',
+              'Your balance, top-ups, and account readiness live here before you start making player moves.',
           icon: Icons.account_balance_wallet_outlined,
           accent: GteShellTheme.accentCapital,
-          actionLabel: 'Open wallet',
+          actionLabel: 'Open funds',
           onTap: onOpenWallet!,
           prominence: _NoClubActionProminence.outlined,
         ),
@@ -168,15 +168,15 @@ class GteNoClubOnboardingView extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   isAuthenticated
-                      ? 'This account does not own a club yet'
-                      : 'Start with account access, then claim a club',
+                      ? 'This account has no club yet'
+                      : 'Start with an account, then choose a club',
                   style: Theme.of(context).textTheme.displaySmall,
                 ),
                 const SizedBox(height: 6),
                 Text(
                   isAuthenticated
-                      ? 'Create a new club from scratch or take over one already on the market, then come back here to manage identity, trophies, scouting, and matchday operations. You can still enter matchday, the player universe, world/regens, and the GTEX coin wallet right now.'
-                      : 'Register or sign in to create a club, but you can already scout the player universe, follow the regen world, open the matchday hub, and inspect the GTEX coin lane before choosing your first club.',
+                      ? 'Create a new club or take over an existing one, then come back here to manage identity, trophies, scouting, and matchday. You can still explore matchday, players, the world, and funds right now.'
+                      : 'Register or sign in to create a club, but you can already scout players, follow the regen world, open matchday, and inspect your funds before choosing your first club.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 14),
