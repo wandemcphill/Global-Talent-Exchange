@@ -347,7 +347,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Send FanCoin support to creators and squads without touching market balances.',
+                          'Send GTEX Coin support to creators and squads without touching player-market positions.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 12),
@@ -357,7 +357,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                                   ? () {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Fan support queued.'),
+                                        content: Text(
+                                          'GTEX Coin support queued.',
+                                        ),
                                       ),
                                     );
                                   }
@@ -365,7 +367,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                           icon: const Icon(Icons.card_giftcard_outlined),
                           label: Text(
                             widget.isAuthenticated
-                                ? 'Send FanCoin support'
+                                ? 'Send GTEX Coin support'
                                 : 'Sign in to support',
                           ),
                         ),
@@ -531,5 +533,4 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
       ),
     );
   }
-
 }

@@ -41,7 +41,7 @@ String gteFormatCompetitionAmount(double value, [String currency = 'credit']) {
 }
 
 String gteFormatFanCoins(double value) {
-  return _gteFormatUnitAmount(value, 'Fan Coin');
+  return _gteFormatUnitAmount(value, 'GTEX Coin');
 }
 
 String gteFormatFanCoin(double value) {
@@ -51,7 +51,7 @@ String gteFormatFanCoin(double value) {
 String gteFormatLedgerUnitName(GteLedgerUnit unit) {
   switch (unit) {
     case GteLedgerUnit.credit:
-      return 'Fan Coin';
+      return 'GTEX Coin';
     case GteLedgerUnit.coin:
       return 'GTEX Coin';
     case GteLedgerUnit.unknown:
@@ -94,10 +94,11 @@ String gteFormatDate(DateTime? value) {
 }
 
 String gteFormatOrderStatus(String rawStatus) {
-  final String spaced =
-      rawStatus.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
-    return '${match.group(1)} ${match.group(2)}';
-  }).replaceAll('_', ' ');
+  final String spaced = rawStatus
+      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
+        return '${match.group(1)} ${match.group(2)}';
+      })
+      .replaceAll('_', ' ');
   return spaced.toUpperCase();
 }
 

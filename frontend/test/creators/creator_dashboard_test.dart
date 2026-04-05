@@ -90,9 +90,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Gift income: 901 Fan Coin'), findsOneWidget);
-      expect(find.text('Wallet available: 999 Fan Coin'), findsOneWidget);
-      expect(find.text('Reward income: 0 Fan Coin'), findsOneWidget);
+      expect(find.text('Gift income: 901 GTEX Coin'), findsOneWidget);
+      expect(find.text('Wallet available: 999 GTEX Coin'), findsOneWidget);
+      expect(find.text('Reward income: 0 GTEX Coin'), findsOneWidget);
     },
   );
 }

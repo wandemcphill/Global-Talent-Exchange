@@ -940,7 +940,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: IconButton(
-        tooltip: 'GTEX coin wallet',
+        tooltip: 'Capital room',
         onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
         icon: Icon(
           isActive

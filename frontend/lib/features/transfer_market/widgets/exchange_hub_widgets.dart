@@ -62,7 +62,7 @@ class ExchangeWalletDashboardCard extends StatelessWidget {
                           color: AppColors.primary,
                         ),
                         _PillLabel(
-                          label: 'Closed-loop Fan Coin',
+                          label: 'GTEX Coin runtime',
                           color: AppColors.gold,
                         ),
                       ],
@@ -807,7 +807,7 @@ class _BalanceDeck extends StatelessWidget {
               const SizedBox(width: spacingMD),
               Expanded(
                 child: _BalanceStat(
-                  label: 'Fan Coin',
+                  label: 'Matchday spend',
                   value: AppFormatters.fanCoin(state.fanCoinBalance),
                   accent: AppColors.gold,
                 ),
@@ -865,8 +865,9 @@ class _WalletActions extends StatelessWidget {
         _ActionButton(
           buttonKey: const Key('wallet-action-convert'),
           icon: Icons.sync_alt_rounded,
-          label: 'Convert',
-          caption: 'Move GTex into Fan Coin for closed-loop spend.',
+          label: 'Allocate',
+          caption:
+              'GTEX Coin is the live wallet unit. Allocate spend without switching currencies.',
           accent: const Color(0xFF8FB3FF),
           onTap: onConvert,
         ),
@@ -1131,12 +1132,12 @@ class _ConvertFlowSheetState extends State<ConvertFlowSheet> {
     final double safeValue = _amount.clamp(1, maxAmount).toDouble();
     final int fanCoin = (safeValue * 100).round();
     return _SheetFrame(
-      title: 'Convert GTex',
+      title: 'Allocate GTEX Coin',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Move GTex into closed-loop Fan Coin for matchday experiences, gifting, and cosmetics.',
+            'GTEX Coin is the only live wallet currency. Use this control to earmark a matchday spend amount without introducing a second coin.',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
@@ -1155,7 +1156,7 @@ class _ConvertFlowSheetState extends State<ConvertFlowSheet> {
           ),
           const SizedBox(height: spacingSM),
           Text(
-            '${AppFormatters.gtex(safeValue)} → $fanCoin Fan Coin',
+            '${AppFormatters.gtex(safeValue)} reserved | $fanCoin spend points',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: spacingLG),
@@ -1164,7 +1165,7 @@ class _ConvertFlowSheetState extends State<ConvertFlowSheet> {
             child: FilledButton.icon(
               onPressed: () => widget.onSubmit(safeValue),
               icon: const Icon(Icons.sync_alt_rounded),
-              label: const Text('Convert now'),
+              label: const Text('Allocate now'),
             ),
           ),
         ],

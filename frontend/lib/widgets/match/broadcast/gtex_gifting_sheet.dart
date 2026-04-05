@@ -41,7 +41,7 @@ class GtexGiftingSheet extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Match gifting runs on Fan Coin. These controls stay wired as clean integration hooks for live settlement.',
+              'Match support runs on GTEX Coin. These controls stay wired as clean integration hooks for live settlement.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
@@ -58,7 +58,7 @@ class GtexGiftingSheet extends StatelessWidget {
                         onSelected(option.amount);
                       },
                       child: Text(
-                        '${option.label} - ${option.amount.toStringAsFixed(0)} Fan Coin',
+                        '${option.label} - ${option.amount.toStringAsFixed(0)} GTEX Coin',
                       ),
                     );
                   })

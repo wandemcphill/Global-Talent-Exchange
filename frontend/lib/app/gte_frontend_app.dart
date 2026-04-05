@@ -44,7 +44,9 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   late final GteThemeController _themeController;
   late final bool _ownsThemeController;
   ProviderContainer? _providerContainer;
+  ProviderContainer? _ownedProviderContainer;
   ProviderSubscription<AuthSession?>? _authSessionSubscription;
+  bool _usesOwnedProviderContainer = false;
   bool _syncingFromController = false;
   bool _syncingFromProvider = false;
 
@@ -86,6 +88,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   @override
   void dispose() {
     _authSessionSubscription?.close();
+    _ownedProviderContainer?.dispose();
     _controller.removeListener(_handleControllerChanged);
     if (_ownsController) {
       _controller.dispose();
@@ -99,16 +102,16 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final ProviderContainer container = ProviderScope.containerOf(
-      context,
-      listen: false,
-    );
-    if (identical(_providerContainer, container)) {
+    final ({ProviderContainer container, bool owned}) providerBinding =
+        _resolveProviderBinding();
+    if (identical(_providerContainer, providerBinding.container) &&
+        _usesOwnedProviderContainer == providerBinding.owned) {
       return;
     }
     _authSessionSubscription?.close();
-    _providerContainer = container;
-    _authSessionSubscription = container.listen<AuthSession?>(
+    _providerContainer = providerBinding.container;
+    _usesOwnedProviderContainer = providerBinding.owned;
+    _authSessionSubscription = providerBinding.container.listen<AuthSession?>(
       appSessionControllerProvider,
       (AuthSession? _, AuthSession? next) {
         _syncProviderSessionIntoController(next);
@@ -165,7 +168,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       dependencies: dependencies,
     );
 
-    return GteThemeControllerScope(
+    final Widget app = GteThemeControllerScope(
       controller: _themeController,
       child: AnimatedBuilder(
         animation: _themeController,
@@ -210,6 +213,13 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
         },
       ),
     );
+    if (_usesOwnedProviderContainer && _providerContainer != null) {
+      return UncontrolledProviderScope(
+        container: _providerContainer!,
+        child: app,
+      );
+    }
+    return app;
   }
 
   void _handleControllerChanged() {
@@ -249,6 +259,18 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
     _syncingFromProvider = true;
     _controller.syncSession(next);
     _syncingFromProvider = false;
+  }
+
+  ({ProviderContainer container, bool owned}) _resolveProviderBinding() {
+    try {
+      return (
+        container: ProviderScope.containerOf(context, listen: false),
+        owned: false,
+      );
+    } on StateError {
+      _ownedProviderContainer ??= ProviderContainer();
+      return (container: _ownedProviderContainer!, owned: true);
+    }
   }
 }
 

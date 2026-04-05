@@ -588,11 +588,11 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
         ),
         WalletActivityEntry(
           id: 'activity-convert',
-          title: 'Fan Coin conversion',
-          subtitle: 'Converted 2 GTex for watch-party spending.',
-          amountLabel: '+200 Fan Coin',
+          title: 'Matchday spend reserve',
+          subtitle: 'Allocated 2 GTex for watch-party spending.',
+          amountLabel: '+200 spend points',
           timeLabel: 'Today',
-          statusLabel: 'Closed-loop',
+          statusLabel: 'Allocated',
           tone: WalletActivityTone.neutral,
         ),
         WalletActivityEntry(
@@ -698,16 +698,19 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
       recentActivity: _prependActivity(
         WalletActivityEntry(
           id: 'activity-convert-${state.marketTick}',
-          title: 'GTex to Fan Coin',
-          subtitle: 'Closed-loop currency converted for in-app spend only.',
-          amountLabel: '+$fanCoin Fan Coin',
+          title: 'GTEX Coin allocation',
+          subtitle:
+              'Wallet balance earmarked for in-app spend without switching currency lanes.',
+          amountLabel: '+$fanCoin spend points',
           timeLabel: 'Now',
-          statusLabel: 'Closed-loop',
+          statusLabel: 'Allocated',
           tone: WalletActivityTone.neutral,
         ),
       ),
     );
-    return const ExchangeActionResult(message: 'Fan Coin balance updated.');
+    return const ExchangeActionResult(
+      message: 'GTEX Coin spend reserve updated.',
+    );
   }
 
   ExchangeActionResult requestWithdrawal(double amountGtex) {
