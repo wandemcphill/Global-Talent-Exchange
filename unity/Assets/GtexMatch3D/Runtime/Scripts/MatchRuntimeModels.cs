@@ -170,6 +170,48 @@ namespace Gtex.Match3D.Runtime
     }
 
     [Serializable]
+    public sealed class MatchLiveFeedDto
+    {
+        public string match_id;
+        public string home_team_name;
+        public string away_team_name;
+        public int home_score;
+        public int away_score;
+        public string status;
+        public int minute;
+        public string phase;
+        public MatchLiveFeedEventDto[] timeline_events;
+        public MatchLiveFeedAvailabilityDto availability;
+    }
+
+    [Serializable]
+    public sealed class MatchLiveFeedEventDto
+    {
+        public string event_id;
+        public int minute;
+        public string event_type;
+        public string team_id;
+        public string team_name;
+        public string player_name;
+        public string secondary_player_name;
+        public string description;
+        public int home_score;
+        public int away_score;
+        public bool is_penalty;
+    }
+
+    [Serializable]
+    public sealed class MatchLiveFeedAvailabilityDto
+    {
+        public bool halftime_analytics_available;
+        public bool key_moments_available;
+        public bool highlights_available;
+        public bool replay_available;
+        public bool archive_available;
+        public bool download_available;
+    }
+
+    [Serializable]
     public sealed class MatchTeamIdentityDto
     {
         public string teamId;
@@ -388,6 +430,24 @@ namespace Gtex.Match3D.Runtime
             }
         }
 
+        public static MatchLiveFeedDto DeserializeLiveFeed(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonUtility.FromJson<MatchLiveFeedDto>(json);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("Failed to parse live feed payload.\n" + exception);
+                return null;
+            }
+        }
+
         public static MatchNativeSessionDescriptorDto DeserializeSessionDescriptor(string json)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -443,6 +503,11 @@ namespace Gtex.Match3D.Runtime
         }
 
         public static string SerializeRuntimeInfo(MatchNativeRuntimeInfoDto payload)
+        {
+            return Serialize(payload);
+        }
+
+        public static string SerializeSceneSync(MatchSceneSyncPayload payload)
         {
             return Serialize(payload);
         }

@@ -106,6 +106,17 @@ namespace Gtex.Match3D.Runtime
             _targetPosition = targetPosition;
         }
 
+        public void MoveTo(Vector3 targetPosition, Vector3 velocity, float spinAmount)
+        {
+            _targetPosition = targetPosition;
+            _targetVelocity = velocity;
+            _spin = spinAmount;
+            if (velocity.sqrMagnitude > 0.0001f)
+            {
+                _targetRotation = Quaternion.LookRotation(velocity.normalized, Vector3.up);
+            }
+        }
+
         public void ApplyShot(Vector3 velocity, float spinAmount)
         {
             _targetVelocity = velocity;
@@ -113,6 +124,27 @@ namespace Gtex.Match3D.Runtime
             if (velocity.sqrMagnitude > 0.0001f)
             {
                 _targetRotation = Quaternion.LookRotation(velocity.normalized, Vector3.up);
+            }
+        }
+
+        public void ApplySimulationPose(
+            Vector3 position,
+            Vector3 velocity,
+            float spinAmount,
+            bool immediate)
+        {
+            _targetPosition = position;
+            _targetVelocity = velocity;
+            _spin = spinAmount;
+
+            if (velocity.sqrMagnitude > 0.0001f)
+            {
+                _targetRotation = Quaternion.LookRotation(velocity.normalized, Vector3.up);
+            }
+
+            if (immediate)
+            {
+                SnapTo(_targetPosition, _targetRotation);
             }
         }
 

@@ -8,6 +8,15 @@ namespace Gtex.Match3D.Runtime
 
         public float LengthMeters { get; private set; } = 105f;
         public float WidthMeters { get; private set; } = 68f;
+        public float HalfLength
+        {
+            get { return LengthMeters * 0.5f; }
+        }
+
+        public float HalfWidth
+        {
+            get { return WidthMeters * 0.5f; }
+        }
 
         private void Awake()
         {
@@ -48,6 +57,15 @@ namespace Gtex.Match3D.Runtime
         {
             surfaceTransform = target;
             ApplyDimensions(LengthMeters, WidthMeters);
+        }
+
+        public Vector3 ToWorldPosition(float normalizedX, float normalizedY, float elevation = 0f)
+        {
+            float clampedX = Mathf.Clamp(normalizedX, 0f, 100f);
+            float clampedY = Mathf.Clamp(normalizedY, 0f, 100f);
+            float worldX = ((clampedX / 100f) * LengthMeters) - HalfLength;
+            float worldZ = ((clampedY / 100f) * WidthMeters) - HalfWidth;
+            return new Vector3(worldX, elevation, worldZ);
         }
     }
 }

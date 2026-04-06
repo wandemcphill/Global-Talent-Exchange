@@ -8,11 +8,13 @@ namespace Gtex.Match3D.Runtime
         [SerializeField] private bool bootstrapOnAwake = true;
         [SerializeField] private MatchController matchController;
         [SerializeField] private FlutterUnityBridge flutterUnityBridge;
+        [SerializeField] private MatchLiveBridge matchLiveBridge;
         [SerializeField] private PitchController pitchController;
         [SerializeField] private BallController ballController;
         [SerializeField] private CameraController cameraController;
         [SerializeField] private Transform playersRoot;
         [SerializeField] private PlayerController playerPrototype;
+        [SerializeField] private MatchOverlayController overlayController;
         [SerializeField] private ReplayRecorder replayRecorder;
         [SerializeField] private ReplayPlayer replayPlayer;
 
@@ -32,6 +34,7 @@ namespace Gtex.Match3D.Runtime
             playersRoot = EnsureChild("Players");
             Transform camerasRoot = EnsureChild("Cameras");
             Transform lightingRoot = EnsureChild("Lighting");
+            Transform overlayRoot = EnsureChild("Overlay");
             Transform controllerRoot = EnsureChild("MatchController");
 
             pitchController = EnsurePitch(pitchRoot);
@@ -39,11 +42,16 @@ namespace Gtex.Match3D.Runtime
             cameraController = EnsureCamera(camerasRoot);
             EnsureLighting(lightingRoot);
             playerPrototype = EnsurePlayerPrototype(playersRoot);
+            overlayController = EnsureOverlay(overlayRoot);
 
             matchController = EnsureComponent<MatchController>(controllerRoot.gameObject);
             replayRecorder = EnsureComponent<ReplayRecorder>(controllerRoot.gameObject);
             replayPlayer = EnsureComponent<ReplayPlayer>(controllerRoot.gameObject);
             flutterUnityBridge = EnsureComponent<FlutterUnityBridge>(controllerRoot.gameObject);
+            if (matchLiveBridge == null)
+            {
+                matchLiveBridge = GetComponent<MatchLiveBridge>();
+            }
 
             matchController.ConfigureScene(
                 pitchController,
@@ -51,11 +59,17 @@ namespace Gtex.Match3D.Runtime
                 cameraController,
                 playersRoot,
                 playerPrototype,
+                overlayController,
                 replayRecorder,
                 replayPlayer);
 
             flutterUnityBridge.SetController(matchController);
             replayPlayer.SetMatchController(matchController);
+            if (matchLiveBridge != null)
+            {
+                matchController.SetLiveFeedPlaybackEnabled(false);
+                matchLiveBridge.Configure(matchController, flutterUnityBridge);
+            }
         }
 
         private Transform EnsureChild(string childName)
@@ -183,6 +197,17 @@ namespace Gtex.Match3D.Runtime
             PlayerController controller = playerObject.AddComponent<PlayerController>();
             playerObject.SetActive(false);
             return controller;
+        }
+
+        private MatchOverlayController EnsureOverlay(Transform overlayRoot)
+        {
+            MatchOverlayController existing = overlayRoot.GetComponent<MatchOverlayController>();
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            return overlayRoot.gameObject.AddComponent<MatchOverlayController>();
         }
 
         private static T EnsureComponent<T>(GameObject target) where T : Component

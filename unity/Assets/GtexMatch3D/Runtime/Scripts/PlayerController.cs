@@ -162,6 +162,45 @@ namespace Gtex.Match3D.Runtime
             }
         }
 
+        public void ApplySimulationPose(
+            string entityId,
+            string teamId,
+            string side,
+            string label,
+            int shirtNumber,
+            Vector3 position,
+            Quaternion rotation,
+            float speedRatio,
+            bool highlighted,
+            bool hasPossession,
+            bool immediate)
+        {
+            EntityId = entityId;
+            PlayerId = StripEntityPrefix(entityId);
+            TeamId = teamId;
+            Side = side;
+            PlayerLabel = label;
+            ShirtNumber = shirtNumber;
+
+            _targetPosition = position;
+            _targetRotation = rotation;
+            _targetVelocity = (position - transform.position) * Mathf.Max(1f, speedRatio);
+            _speedRatio = Mathf.Clamp01(speedRatio);
+            _highlighted = highlighted;
+            _hasPossession = hasPossession;
+
+            if (immediate || Vector3.Distance(transform.position, _targetPosition) > 8f)
+            {
+                SnapTo(_targetPosition, _targetRotation);
+            }
+
+            gameObject.name = string.IsNullOrWhiteSpace(label) ? entityId : label;
+            gameObject.SetActive(true);
+
+            ApplyVisualState(side, highlighted, hasPossession);
+            PlayAnimation(ResolveLocomotionState(speedRatio), immediate ? 0.01f : 0.12f);
+        }
+
         public void PlayAnimation(string runtimeState, float blendDuration = 0.20f)
         {
             if (animator == null || string.IsNullOrWhiteSpace(runtimeState))
@@ -322,6 +361,21 @@ namespace Gtex.Match3D.Runtime
             }
 
             return runtimeState;
+        }
+
+        private static string ResolveLocomotionState(float speedRatio)
+        {
+            if (speedRatio >= 0.8f)
+            {
+                return "sprint";
+            }
+
+            if (speedRatio >= 0.2f)
+            {
+                return "run";
+            }
+
+            return "idle";
         }
 
         private static string StripEntityPrefix(string entityId)

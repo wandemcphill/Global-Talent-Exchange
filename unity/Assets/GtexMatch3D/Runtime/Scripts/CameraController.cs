@@ -13,6 +13,8 @@ namespace Gtex.Match3D.Runtime
         [SerializeField] private float goalboxFov = 36f;
         [SerializeField] private float tacticalFov = 58f;
         [SerializeField] private float cinematicFov = 38f;
+        [SerializeField] private Vector3 liveFollowOffset = new Vector3(-14f, 22f, -18f);
+        [SerializeField] private float livePitchPadding = 4f;
 
         private Camera _camera;
         private Vector3 _targetPosition;
@@ -22,6 +24,8 @@ namespace Gtex.Match3D.Runtime
         private Transform _trackedBall;
         private Transform _primaryFocus;
         private Transform _secondaryFocus;
+        private PitchController _trackedPitch;
+        private bool _liveBallFollowEnabled;
 
         private void Awake()
         {
@@ -32,6 +36,12 @@ namespace Gtex.Match3D.Runtime
 
         private void LateUpdate()
         {
+            if (_liveBallFollowEnabled && _trackedBall != null)
+            {
+                _targetPosition = ResolveLiveFollowPosition(_trackedBall.position);
+                _lookTarget = Vector3.Lerp(_lookTarget, _trackedBall.position, DampingFactor(9f, Time.deltaTime));
+            }
+
             float moveFactor = DampingFactor(positionLerpSpeed, Time.deltaTime);
             float rotateFactor = DampingFactor(rotationLerpSpeed, Time.deltaTime);
             transform.position = Vector3.Lerp(transform.position, _targetPosition, moveFactor);
@@ -59,6 +69,32 @@ namespace Gtex.Match3D.Runtime
             }
 
             UpdateFieldOfView();
+        }
+
+        public void EnableLiveBallFollow(Transform ballTransform, PitchController pitchController, bool immediate)
+        {
+            _trackedBall = ballTransform;
+            _trackedPitch = pitchController;
+            _mode = "followBall";
+            _projectionPreset = "broadcast";
+            _liveBallFollowEnabled = true;
+            if (ballTransform == null)
+            {
+                return;
+            }
+
+            _lookTarget = ballTransform.position;
+            _targetPosition = ResolveLiveFollowPosition(ballTransform.position);
+            if (immediate)
+            {
+                transform.position = _targetPosition;
+                FocusPoint(_lookTarget, true);
+            }
+        }
+
+        public void DisableLiveBallFollow()
+        {
+            _liveBallFollowEnabled = false;
         }
 
         public void ApplyRig(
@@ -180,6 +216,25 @@ namespace Gtex.Match3D.Runtime
             }
 
             _camera.fieldOfView = Mathf.Lerp(_camera.fieldOfView, targetFov, DampingFactor(6f, Time.unscaledDeltaTime));
+        }
+
+        private Vector3 ResolveLiveFollowPosition(Vector3 focusPoint)
+        {
+            Vector3 desiredPosition = focusPoint + liveFollowOffset;
+            if (_trackedPitch == null)
+            {
+                return desiredPosition;
+            }
+
+            desiredPosition.x = Mathf.Clamp(
+                desiredPosition.x,
+                -_trackedPitch.HalfLength - livePitchPadding,
+                _trackedPitch.HalfLength + livePitchPadding);
+            desiredPosition.z = Mathf.Clamp(
+                desiredPosition.z,
+                -_trackedPitch.HalfWidth - livePitchPadding,
+                _trackedPitch.HalfWidth + livePitchPadding);
+            return desiredPosition;
         }
 
         private static float DampingFactor(float speed, float deltaTime)
