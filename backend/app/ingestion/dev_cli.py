@@ -331,9 +331,7 @@ def run_backend_server(
     backend_import_root = str(PROJECT_ROOT / "backend")
     existing_pythonpath = environment.get("PYTHONPATH", "").strip()
     environment["PYTHONPATH"] = (
-        backend_import_root
-        if not existing_pythonpath
-        else f"{backend_import_root}{os.pathsep}{existing_pythonpath}"
+        backend_import_root if not existing_pythonpath else f"{backend_import_root}{os.pathsep}{existing_pythonpath}"
     )
     if demo_simulation:
         environment["GTE_DEMO_SIMULATION_ENABLED"] = "1"
