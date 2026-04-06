@@ -6,6 +6,7 @@ import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/widgets/match/pseudo3d/gtex_pseudo3d_camera_viewport.dart';
 import 'package:gte_frontend/widgets/match/pseudo3d/gtex_pseudo3d_pitch.dart';
 import 'package:gte_frontend/widgets/match/pseudo3d/gtex_pseudo3d_players_layer.dart';
+import 'package:gte_frontend/widgets/match/pseudo3d/gtex_pseudo3d_telemetry.dart';
 
 class GtexPseudo3DMatchCanvas extends StatelessWidget {
   const GtexPseudo3DMatchCanvas({
@@ -19,22 +20,32 @@ class GtexPseudo3DMatchCanvas extends StatelessWidget {
   final MatchTimelineFrame frame;
   final GtexBroadcastHudState hudState;
 
+  static GtexPseudo3DTelemetryStyle describeTelemetryStyle({
+    required MatchTimelineFrame frame,
+    required GtexMatchRenderMode mode,
+  }) {
+    return GtexPseudo3DTelemetryStyle.fromFrame(frame: frame, mode: mode);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final GtexPseudo3DTelemetryStyle telemetryStyle = describeTelemetryStyle(
+      frame: frame,
+      mode: hudState.mode,
+    );
     return RepaintBoundary(
       child: AspectRatio(
         aspectRatio: 105 / 68,
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            gradient: const LinearGradient(
+            border: Border.all(
+              color: Colors.white.withValues(alpha: telemetryStyle.borderAlpha),
+            ),
+            gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: <Color>[
-                Color(0xFF102433),
-                Color(0xFF07131D),
-              ],
+              colors: telemetryStyle.stadiumGradient,
             ),
           ),
           child: ClipRRect(
@@ -48,13 +59,15 @@ class GtexPseudo3DMatchCanvas extends StatelessWidget {
                 final double normalizedY =
                     ((frame.ball.position.y - 50) / 50).clamp(-1, 1).toDouble();
                 final double zoom = (1.01 +
-                        hudState.mode.cameraZoomBias +
+                        telemetryStyle.cameraZoomBias +
                         (hudState.varOverlay != null ? 0.05 : 0) +
                         (hudState.eventOverlay != null ? 0.03 : 0))
                     .clamp(1.01, 1.18);
                 final Offset pan = Offset(
-                  -normalizedX * constraints.maxWidth * 0.07,
-                  -normalizedY * constraints.maxHeight * 0.04,
+                  ((-normalizedX * 0.06) - telemetryStyle.cameraLeadX * 0.22) *
+                      constraints.maxWidth,
+                  ((-normalizedY * 0.03) - telemetryStyle.cameraLeadY * 0.16) *
+                      constraints.maxHeight,
                 );
                 return GtexPseudo3DCameraViewport(
                   zoom: zoom,
@@ -62,12 +75,17 @@ class GtexPseudo3DMatchCanvas extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: <Widget>[
-                      GtexPseudo3DPitch(projection: projection),
+                      GtexPseudo3DPitch(
+                        projection: projection,
+                        telemetryStyle: telemetryStyle,
+                        frame: frame,
+                      ),
                       IgnorePointer(
                         child: GtexPseudo3DPlayersLayer(
                           viewState: viewState,
                           frame: frame,
                           projection: projection,
+                          telemetryStyle: telemetryStyle,
                         ),
                       ),
                     ],

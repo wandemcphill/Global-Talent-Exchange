@@ -323,6 +323,46 @@ void main() {
     expect(fulltime.summaryBoard?.title, 'Full-time recap');
     expect(fulltime.showSummaryBoard, isTrue);
   });
+
+  test('scene director uses backend telemetry for live pressure framing', () {
+    final MatchViewState viewState = buildBroadcastTestViewState();
+    final MatchPresentationPackage package = buildBroadcastTestPackage();
+    final MatchTimelineFrame frame = viewState.frames[1].copyWith(
+      possessionPhase: MatchPossessionPhase.boxAttack,
+      transitionState: MatchTransitionState.homeBreak,
+      dangerZone: 'box',
+      pressureIndex: 0.88,
+      compactnessHome: 0.72,
+      compactnessAway: 0.39,
+      frameTags: const <String>['counter', 'box_entry'],
+      ball: viewState.frames[1].ball.copyWith(
+        position: const MatchViewerPoint(x: 82, y: 44),
+      ),
+    );
+
+    final MatchEnginePresentationState presentation = _resolve(
+      viewState: viewState,
+      package: package,
+      frame: frame,
+      playbackSeconds: frame.timeSeconds,
+    );
+
+    expect(presentation.eventMapping, MatchSceneEventMapping.chance_creation);
+    expect(
+      presentation.sceneState,
+      MatchEngineCameraPreset.attacking_third_right,
+    );
+    expect(presentation.phaseLabel, 'Box attack');
+    expect(presentation.stateLabel, 'Counter break');
+    expect(presentation.pressureLabel, 'Red Zone');
+    expect(presentation.transitionLabel, 'Home Break');
+    expect(presentation.dangerLabel, 'Box Threat');
+    expect(presentation.scorebugEventLabel, 'Box threat');
+    expect(presentation.lowerThirdHeadline, 'Box attack');
+    expect(presentation.lowerThirdDetail, contains('reached the box'));
+    expect(presentation.homeShape.compactness, closeTo(0.72, 0.001));
+    expect(presentation.awayShape.compactness, closeTo(0.39, 0.001));
+  });
 }
 
 MatchEnginePresentationState _resolve({

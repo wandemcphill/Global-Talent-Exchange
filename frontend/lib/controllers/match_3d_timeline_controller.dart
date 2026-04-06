@@ -419,7 +419,12 @@ class Match3dTimelineController extends ChangeNotifier {
     final bool structuredPhase =
         frame.phase == MatchViewerPhase.setPiece ||
         frame.possessionPhase == MatchPossessionPhase.restart ||
+        frame.possessionPhase == MatchPossessionPhase.setPiece ||
         frame.possessionPhase == MatchPossessionPhase.stoppage ||
+        frame.possessionPhase == MatchPossessionPhase.deadBall ||
+        frame.transitionState == MatchTransitionState.stopped ||
+        frame.frameTags.contains('restart') ||
+        frame.frameTags.contains('set_piece') ||
         segment.event?.type == MatchViewerEventType.substitution;
     final BallEntity provisionalBall = _resolveBallEntity(
       frame: frame,
@@ -437,6 +442,7 @@ class Match3dTimelineController extends ChangeNotifier {
             startFrame: startPlayer,
             targetFrame: endPlayer,
             runPattern: _runPatternForPlayer(
+              frame: frame,
               player: player,
               possessionSide: possessionSide,
               ownerPlayerId: frame.ball.ownerPlayerId,
@@ -588,7 +594,7 @@ class Match3dTimelineController extends ChangeNotifier {
     return BallTrajectoryType.carry;
   }
 
-  double _attackDirectionFor({
+  static double _attackDirectionFor({
     required MatchTimelineFrame frame,
     required MatchViewerSide possessionSide,
   }) {
@@ -618,23 +624,59 @@ class Match3dTimelineController extends ChangeNotifier {
         injections.isEmpty ? null : injections.first;
     final MatchEvent? leadEvent = viewState.eventById(leadInjection?.id);
     final String? ownerPlayerId = frame.ball.ownerPlayerId;
+    final MatchViewerSide resolvedPossessionSide =
+        _playerSideForId(frame.players, ownerPlayerId) ??
+        _sideForTeamId(leadEvent?.teamId) ??
+        segment.possessionSide;
+    final MatchPossessionPhase resolvedPossessionPhase =
+        frame.possessionPhase ?? _possessionPhaseForStage(segment.stage);
+    final MatchTransitionState resolvedTransitionState =
+        frame.transitionState ??
+        _transitionStateForFrame(
+          frame: frame,
+          segment: segment,
+          possessionSide: resolvedPossessionSide,
+        );
     return frame.copyWith(
       clockMinute: _clockCompression.resolve(
         rawClockMinute: frame.clockMinute,
         positionSeconds: frame.timeSeconds,
         phase: frame.phase,
       ),
-      possessionSide:
-          _playerSideForId(frame.players, ownerPlayerId) ??
-          _sideForTeamId(leadEvent?.teamId) ??
-          segment.possessionSide,
+      possessionSide: resolvedPossessionSide,
       activeEventId: leadEvent?.id ?? frame.activeEventId ?? segment.event?.id,
       eventBanner:
           leadInjection?.bannerText ??
           frame.eventBanner ??
           segment.event?.bannerText,
       overlayText: frame.overlayText ?? leadInjection?.bannerText,
-      possessionPhase: _possessionPhaseForStage(segment.stage),
+      possessionPhase: resolvedPossessionPhase,
+      transitionState: resolvedTransitionState,
+      dangerZone:
+          frame.dangerZone ??
+          _dangerZoneForFrame(
+            frame: frame,
+            possessionSide: resolvedPossessionSide,
+            transitionState: resolvedTransitionState,
+          ),
+      pressureIndex:
+          frame.pressureIndex ??
+          _pressureIndexForFrame(
+            frame: frame,
+            segment: segment,
+            leadEvent: leadEvent,
+            transitionState: resolvedTransitionState,
+          ),
+      frameTags: _mergeFrameTags(
+        frame.frameTags,
+        _derivedFrameTags(
+          frame: frame,
+          segment: segment,
+          injections: injections,
+          possessionPhase: resolvedPossessionPhase,
+          transitionState: resolvedTransitionState,
+        ),
+      ),
       sequenceId: segment.sequenceId,
       sequenceProgress:
           segment.sequenceEndTime <= segment.sequenceStartTime
@@ -996,6 +1038,163 @@ class Match3dTimelineController extends ChangeNotifier {
     };
   }
 
+  static MatchTransitionState _transitionStateForFrame({
+    required MatchTimelineFrame frame,
+    required _TimelineSegment segment,
+    required MatchViewerSide possessionSide,
+  }) {
+    if (frame.phase == MatchViewerPhase.halftime ||
+        frame.phase == MatchViewerPhase.fulltime ||
+        segment.stage == _SegmentStage.hold) {
+      return MatchTransitionState.stopped;
+    }
+    if (segment.stage == _SegmentStage.reset ||
+        frame.possessionPhase == MatchPossessionPhase.restart ||
+        frame.possessionPhase == MatchPossessionPhase.setPiece) {
+      return possessionSide == MatchViewerSide.home
+          ? MatchTransitionState.homeReset
+          : MatchTransitionState.awayReset;
+    }
+    if (segment.stage == _SegmentStage.buildUp &&
+        frame.possessionPhase == MatchPossessionPhase.transition) {
+      return possessionSide == MatchViewerSide.home
+          ? MatchTransitionState.homeBreak
+          : MatchTransitionState.awayBreak;
+    }
+    return MatchTransitionState.stable;
+  }
+
+  static String? _dangerZoneForFrame({
+    required MatchTimelineFrame frame,
+    required MatchViewerSide possessionSide,
+    required MatchTransitionState transitionState,
+  }) {
+    if (frame.phase == MatchViewerPhase.halftime ||
+        frame.phase == MatchViewerPhase.fulltime) {
+      return 'stopped';
+    }
+    if (frame.possessionPhase == MatchPossessionPhase.boxAttack) {
+      return 'box';
+    }
+    if (frame.possessionPhase == MatchPossessionPhase.finalThird ||
+        transitionState.isBreak) {
+      return 'final_third';
+    }
+    final double attackDirection = _attackDirectionFor(
+      frame: frame,
+      possessionSide: possessionSide,
+    );
+    final double forwardProgress =
+        (frame.ball.position.x - 50) * attackDirection;
+    if (forwardProgress >= 28) {
+      return 'box';
+    }
+    if (forwardProgress >= 16) {
+      return 'final_third';
+    }
+    if (frame.possessionPhase == MatchPossessionPhase.transition) {
+      return 'middle_third';
+    }
+    return null;
+  }
+
+  static double _pressureIndexForFrame({
+    required MatchTimelineFrame frame,
+    required _TimelineSegment segment,
+    required MatchEvent? leadEvent,
+    required MatchTransitionState transitionState,
+  }) {
+    double pressure = 0.34;
+    pressure += switch (frame.possessionPhase) {
+      MatchPossessionPhase.boxAttack => 0.34,
+      MatchPossessionPhase.finalThird => 0.24,
+      MatchPossessionPhase.attack => 0.16,
+      MatchPossessionPhase.transition => 0.18,
+      MatchPossessionPhase.setPiece => 0.22,
+      MatchPossessionPhase.restart => 0.08,
+      MatchPossessionPhase.deadBall || MatchPossessionPhase.stoppage => -0.08,
+      MatchPossessionPhase.buildUp => 0.10,
+      MatchPossessionPhase.control => 0.04,
+      MatchPossessionPhase.recovery => 0.02,
+      null => 0,
+    };
+    pressure += switch (segment.stage) {
+      _SegmentStage.event => 0.16,
+      _SegmentStage.buildUp => 0.08,
+      _SegmentStage.postEvent => 0.04,
+      _SegmentStage.reset => 0.02,
+      _SegmentStage.hold => -0.10,
+      _SegmentStage.openPlay => 0,
+    };
+    if (transitionState.isBreak) {
+      pressure += 0.12;
+    }
+    if (leadEvent != null) {
+      pressure += (leadEvent.emphasisLevel.clamp(1, 3) - 1) * 0.08;
+      if (leadEvent.type == MatchViewerEventType.goal ||
+          leadEvent.type == MatchViewerEventType.save ||
+          leadEvent.type == MatchViewerEventType.miss ||
+          leadEvent.type == MatchViewerEventType.penalty) {
+        pressure += 0.12;
+      }
+    }
+    return pressure.clamp(0.08, 1.0).toDouble();
+  }
+
+  static List<String> _derivedFrameTags({
+    required MatchTimelineFrame frame,
+    required _TimelineSegment segment,
+    required List<MatchTimelineInjection> injections,
+    required MatchPossessionPhase possessionPhase,
+    required MatchTransitionState transitionState,
+  }) {
+    final Set<String> tags = <String>{...frame.frameTags};
+    if (transitionState.isBreak) {
+      tags.add('counter');
+    }
+    if (transitionState.isReset) {
+      tags.add('restart');
+    }
+    if (transitionState == MatchTransitionState.stopped) {
+      tags.add('stoppage');
+    }
+    if (possessionPhase == MatchPossessionPhase.setPiece ||
+        frame.phase == MatchViewerPhase.setPiece) {
+      tags.add('set_piece');
+    }
+    if (possessionPhase == MatchPossessionPhase.boxAttack) {
+      tags.add('box_entry');
+    }
+    if (frame.possessionSide == MatchViewerSide.home &&
+        frame.homeScore < frame.awayScore) {
+      tags.add('chasing_game');
+    } else if (frame.possessionSide == MatchViewerSide.away &&
+        frame.awayScore < frame.homeScore) {
+      tags.add('chasing_game');
+    }
+    if (segment.stage == _SegmentStage.event) {
+      tags.add('event_window');
+    }
+    for (final MatchTimelineInjection injection in injections) {
+      tags.add(injection.type.name);
+    }
+    return tags.toList(growable: false);
+  }
+
+  static List<String> _mergeFrameTags(
+    List<String> current,
+    List<String> derived,
+  ) {
+    final Set<String> seen = <String>{};
+    final List<String> ordered = <String>[];
+    for (final String tag in <String>[...current, ...derived]) {
+      if (seen.add(tag)) {
+        ordered.add(tag);
+      }
+    }
+    return ordered;
+  }
+
   static MatchPlaybackStage _playbackStageForSegment(_SegmentStage stage) {
     return switch (stage) {
       _SegmentStage.reset => MatchPlaybackStage.reset,
@@ -1156,15 +1355,31 @@ class Match3dTimelineController extends ChangeNotifier {
   }
 
   static PlayerRunPattern _runPatternForPlayer({
+    required MatchTimelineFrame frame,
     required MatchViewerPlayerFrame player,
     required MatchViewerSide possessionSide,
     required String? ownerPlayerId,
   }) {
+    final bool highPressure = (frame.pressureIndex ?? 0) >= 0.66;
+    final bool aggressiveBuild =
+        frame.possessionPhase == MatchPossessionPhase.finalThird ||
+        frame.possessionPhase == MatchPossessionPhase.boxAttack ||
+        frame.transitionState?.isBreak == true;
     if (player.side != possessionSide) {
       return PlayerRunPattern.defend;
     }
     if (player.playerId == ownerPlayerId ||
         player.line == MatchPlayerLine.attack) {
+      return PlayerRunPattern.attack;
+    }
+    if (aggressiveBuild &&
+        player.line != MatchPlayerLine.goalkeeper &&
+        player.line != MatchPlayerLine.defense) {
+      return PlayerRunPattern.attack;
+    }
+    if (highPressure &&
+        player.line == MatchPlayerLine.midfield &&
+        frame.frameTags.contains('counter')) {
       return PlayerRunPattern.attack;
     }
     return PlayerRunPattern.support;

@@ -86,6 +86,18 @@ def test_match_viewer_route_scales_stored_payload_by_mode() -> None:
     assert standard.status_code == 200
     assert standard.json()["match_mode"] == MatchMode.STANDARD.value
     assert 420 <= standard.json()["duration_seconds"] <= 600
+    first_frame = standard.json()["frames"][0]
+    first_player = first_frame["players"][0]
+    assert "pressure_index" in first_frame
+    assert "compactness_home" in first_frame
+    assert "frame_tags" in first_frame
+    assert "animation_state" in first_player
+    assert "speed_ratio" in first_player
+    assert "blend_factor" in first_player
+    assert "stamina_pct" in first_player
+    assert "has_possession" in first_player
+    assert "facing" in first_player
+    assert "velocity" in first_player
 
 
 def test_match_viewer_route_scales_archive_fallback_by_mode() -> None:

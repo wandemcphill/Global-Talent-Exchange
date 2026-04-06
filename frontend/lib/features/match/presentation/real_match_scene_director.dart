@@ -76,6 +76,7 @@ class RealMatchSceneDirector {
       ratingLeaders: ratingLeaders,
       lowerThirdHeadline: _headline(
         activeEvent: activeEvent,
+        frame: frame,
         sceneState: sceneState,
         eventMapping: eventMapping,
       ),
@@ -87,7 +88,12 @@ class RealMatchSceneDirector {
       ),
       lowerThirdTrailing:
           activeEvent?.clockLabel ?? _clockLabel(frame.clockMinute),
-      scorebugEventLabel: banner?.label ?? _scorebugEventLabel(activeEvent),
+      scorebugEventLabel:
+          banner?.label ?? _scorebugEventLabel(activeEvent, frame),
+      pressureIndex: frame.pressureIndex,
+      dangerZone: frame.dangerZone,
+      transitionState: frame.transitionState,
+      frameTags: frame.frameTags,
       banner: banner,
       summaryBoard: summaryBoard,
     );
@@ -125,7 +131,7 @@ class RealMatchSceneDirector {
         case MatchViewerEventType.fulltime:
           return MatchSceneEventMapping.fulltime;
         case MatchViewerEventType.attack:
-          return _isFinalThird(frame, frame.possessionSide)
+          return _isChanceCreation(frame)
               ? MatchSceneEventMapping.chance_creation
               : MatchSceneEventMapping.possession_phase;
         case MatchViewerEventType.neutral:
@@ -141,13 +147,13 @@ class RealMatchSceneDirector {
     if (frame.phase == MatchViewerPhase.kickoff) {
       return MatchSceneEventMapping.kickoff;
     }
-    if (frame.phase == MatchViewerPhase.setPiece) {
+    if (_isSetPieceTelemetry(frame)) {
       return _setPieceMapping(null, frame: frame);
     }
     if (_looksLikeShot(frame.ball.state)) {
       return MatchSceneEventMapping.shot;
     }
-    if (_isFinalThird(frame, frame.possessionSide)) {
+    if (_isChanceCreation(frame)) {
       return MatchSceneEventMapping.chance_creation;
     }
     return MatchSceneEventMapping.possession_phase;
@@ -194,11 +200,31 @@ class RealMatchSceneDirector {
       case MatchSceneEventMapping.substitution:
         return MatchEngineCameraPreset.tactical_high;
       case MatchSceneEventMapping.chance_creation:
+        if (_isReplayStage(frame)) {
+          return MatchEngineCameraPreset.goal_replay;
+        }
+        if (frame.transitionState?.isBreak == true && !_isDangerMoment(frame)) {
+          return MatchEngineCameraPreset.stadium_wide;
+        }
         return _attackingThirdScene(frame);
       case MatchSceneEventMapping.possession_phase:
+        if (_isSetPieceTelemetry(frame)) {
+          return _setPieceScene(frame);
+        }
+        if (frame.transitionState?.isBreak == true) {
+          return MatchEngineCameraPreset.stadium_wide;
+        }
+        if (_isDangerMoment(frame)) {
+          return _attackingThirdScene(frame);
+        }
         if (frame.possessionPhase == MatchPossessionPhase.recovery ||
             frame.possessionPhase == MatchPossessionPhase.stoppage ||
+            frame.possessionPhase == MatchPossessionPhase.deadBall ||
+            frame.transitionState == MatchTransitionState.stopped ||
             frame.stage == MatchPlaybackStage.hold) {
+          return MatchEngineCameraPreset.defensive_block;
+        }
+        if ((frame.pressureIndex ?? 0) >= 0.72) {
           return MatchEngineCameraPreset.defensive_block;
         }
         return MatchEngineCameraPreset.tactical_high;
@@ -294,7 +320,12 @@ class RealMatchSceneDirector {
     final MatchEngineShapeLane attackLane = lanes[3];
     final double depth =
         (attackLane.averageX - defenseLane.averageX).abs().toDouble();
-    final double compactness = (1 - (depth / 62)).clamp(0.16, 0.96).toDouble();
+    final double derivedCompactness =
+        (1 - (depth / 62)).clamp(0.16, 0.96).toDouble();
+    final double compactness =
+        side == MatchViewerSide.home
+            ? (frame.compactnessHome ?? derivedCompactness)
+            : (frame.compactnessAway ?? derivedCompactness);
     return MatchEngineTeamShape(
       teamId: viewState.teamForSide(side).teamId,
       side: side,
@@ -553,19 +584,15 @@ class RealMatchSceneDirector {
     required MatchTimelineFrame frame,
     required MatchSceneEventMapping eventMapping,
   }) {
-    if (eventMapping == MatchSceneEventMapping.possession_phase) {
-      return switch (frame.possessionPhase) {
-        MatchPossessionPhase.restart => 'Restart shape',
-        MatchPossessionPhase.control => 'Settled possession',
-        MatchPossessionPhase.buildUp => 'Build-up shape',
-        MatchPossessionPhase.attack => 'Final-third circulation',
-        MatchPossessionPhase.recovery => 'Defensive recovery',
-        MatchPossessionPhase.stoppage => 'Transition pause',
-        null => 'Settled possession',
-      };
-    }
-    if (eventMapping == MatchSceneEventMapping.chance_creation) {
-      return 'Chance creation';
+    final String? possessionLabel = _possessionPhaseLabel(
+      frame.possessionPhase,
+    );
+    if (eventMapping == MatchSceneEventMapping.possession_phase ||
+        eventMapping == MatchSceneEventMapping.chance_creation) {
+      return possessionLabel ??
+          (eventMapping == MatchSceneEventMapping.chance_creation
+              ? 'Chance creation'
+              : 'Settled possession');
     }
     return switch (eventMapping) {
       MatchSceneEventMapping.kickoff => 'Kickoff',
@@ -589,6 +616,30 @@ class RealMatchSceneDirector {
     required MatchTimelineFrame frame,
     required MatchSceneEventMapping eventMapping,
   }) {
+    if (frame.transitionState == MatchTransitionState.stopped ||
+        frame.possessionPhase == MatchPossessionPhase.deadBall ||
+        frame.possessionPhase == MatchPossessionPhase.stoppage) {
+      return 'Stoppage';
+    }
+    if (frame.transitionState?.isReset == true ||
+        frame.possessionPhase == MatchPossessionPhase.restart ||
+        frame.possessionPhase == MatchPossessionPhase.setPiece) {
+      return 'Restart ready';
+    }
+    if (frame.transitionState?.isBreak == true) {
+      return 'Counter break';
+    }
+    if (frame.possessionPhase == MatchPossessionPhase.boxAttack ||
+        frame.dangerZone == 'box') {
+      return 'Box pressure';
+    }
+    if (frame.possessionPhase == MatchPossessionPhase.finalThird ||
+        frame.dangerZone == 'final_third') {
+      return 'Final-third squeeze';
+    }
+    if ((frame.pressureIndex ?? 0) >= 0.68) {
+      return 'High pressure';
+    }
     if (frame.possessionPhase == MatchPossessionPhase.control) {
       return 'Shape control';
     }
@@ -601,11 +652,8 @@ class RealMatchSceneDirector {
     if (frame.possessionPhase == MatchPossessionPhase.attack) {
       return 'Overload building';
     }
-    if (frame.possessionPhase == MatchPossessionPhase.restart) {
-      return 'Restart ready';
-    }
-    if (frame.possessionPhase == MatchPossessionPhase.stoppage) {
-      return 'Transition pause';
+    if (frame.possessionPhase == MatchPossessionPhase.transition) {
+      return 'Transition surge';
     }
     return switch (eventMapping) {
       MatchSceneEventMapping.kickoff => 'Restart',
@@ -661,11 +709,27 @@ class RealMatchSceneDirector {
 
   static String _headline({
     required MatchEvent? activeEvent,
+    required MatchTimelineFrame frame,
     required MatchEngineCameraPreset sceneState,
     required MatchSceneEventMapping eventMapping,
   }) {
     if (activeEvent != null && activeEvent.bannerText.trim().isNotEmpty) {
       return activeEvent.bannerText;
+    }
+    if (_isSetPieceTelemetry(frame)) {
+      return 'Set-piece pressure';
+    }
+    if (frame.dangerZone == 'box' ||
+        frame.possessionPhase == MatchPossessionPhase.boxAttack) {
+      return 'Box attack';
+    }
+    if (frame.transitionState?.isBreak == true) {
+      return frame.possessionSide == MatchViewerSide.home
+          ? 'Home break developing'
+          : 'Away break developing';
+    }
+    if ((frame.pressureIndex ?? 0) >= 0.68) {
+      return 'Pressure building';
     }
     return switch (eventMapping) {
       MatchSceneEventMapping.possession_phase => 'Match control',
@@ -713,18 +777,39 @@ class RealMatchSceneDirector {
       MatchViewerPhase.kickoff =>
         'The match opens with the tactical structure visible from the first restart.',
       MatchViewerPhase.setPiece =>
-        'Set-piece modules stay hidden when the payload does not expose more detail.',
+        'Restart telemetry now drives the shape and delivery setup around the ball.',
       MatchViewerPhase.halftime =>
         'Halftime analysis is limited on this payload.',
       MatchViewerPhase.fulltime =>
         'Full-time analysis is limited on this payload.',
       MatchViewerPhase.openPlay =>
-        'Live tactical detail is shown only when the current payload exposes it.',
+        'Live tactical detail follows the current backend pressure, danger, and shape signals.',
     };
   }
 
-  static String? _scorebugEventLabel(MatchEvent? activeEvent) {
+  static String? _scorebugEventLabel(
+    MatchEvent? activeEvent,
+    MatchTimelineFrame frame,
+  ) {
     if (activeEvent == null || activeEvent.bannerText.trim().isEmpty) {
+      if (frame.eventBanner?.trim().isNotEmpty == true) {
+        return frame.eventBanner;
+      }
+      if (_isSetPieceTelemetry(frame)) {
+        return 'Set-piece';
+      }
+      if (frame.dangerZone == 'box' ||
+          frame.possessionPhase == MatchPossessionPhase.boxAttack) {
+        return 'Box threat';
+      }
+      if (frame.transitionState?.isBreak == true) {
+        return frame.possessionSide == MatchViewerSide.home
+            ? 'Home break'
+            : 'Away break';
+      }
+      if ((frame.pressureIndex ?? 0) >= 0.68) {
+        return 'High pressure';
+      }
       return null;
     }
     return activeEvent.bannerText;
@@ -796,12 +881,88 @@ class RealMatchSceneDirector {
         'Halftime analysis is limited on this payload.',
       MatchSceneEventMapping.fulltime =>
         'Full-time analysis is limited on this payload.',
-      MatchSceneEventMapping.possession_phase => '',
-      MatchSceneEventMapping.chance_creation => '',
+      MatchSceneEventMapping.possession_phase => _telemetryFallbackDetail(
+        frame,
+        includeDanger: false,
+      ),
+      MatchSceneEventMapping.chance_creation => _telemetryFallbackDetail(
+        frame,
+        includeDanger: true,
+      ),
       MatchSceneEventMapping.foul =>
         'Play pauses while the defensive block regains shape around the restart.',
       MatchSceneEventMapping.booking =>
         'The referee intervention slows the tempo while players reset their positions.',
+    };
+  }
+
+  static String _telemetryFallbackDetail(
+    MatchTimelineFrame frame, {
+    required bool includeDanger,
+  }) {
+    if (includeDanger &&
+        (frame.dangerZone == 'box' ||
+            frame.possessionPhase == MatchPossessionPhase.boxAttack)) {
+      return 'The move has reached the box and the block is collapsing toward the six-yard lane.';
+    }
+    if (includeDanger &&
+        (frame.dangerZone == 'final_third' ||
+            frame.possessionPhase == MatchPossessionPhase.finalThird)) {
+      return 'The attack pins the defensive unit in the final third and probes for the release ball.';
+    }
+    if (_isSetPieceTelemetry(frame)) {
+      return 'Restart spacing is locked in while delivery runners and the defensive line reset around the ball.';
+    }
+    if (frame.transitionState?.isBreak == true) {
+      return 'Transition speed is stretching the shape as support runners join the break and the recovering line turns toward goal.';
+    }
+    if ((frame.pressureIndex ?? 0) >= 0.68) {
+      return 'Pressure is climbing around the ball as the compact block squeezes the available passing lanes.';
+    }
+    return 'Both teams settle into shape while the possession side controls the tempo between the lines.';
+  }
+
+  static bool _isChanceCreation(MatchTimelineFrame frame) {
+    return frame.possessionPhase == MatchPossessionPhase.attack ||
+        frame.possessionPhase == MatchPossessionPhase.finalThird ||
+        frame.possessionPhase == MatchPossessionPhase.boxAttack ||
+        frame.dangerZone == 'final_third' ||
+        frame.dangerZone == 'box' ||
+        frame.frameTags.contains('box_entry') ||
+        (_isFinalThird(frame, frame.possessionSide) &&
+            (frame.pressureIndex ?? 0) >= 0.44);
+  }
+
+  static bool _isDangerMoment(MatchTimelineFrame frame) {
+    return frame.dangerZone == 'box' ||
+        frame.dangerZone == 'final_third' ||
+        frame.possessionPhase == MatchPossessionPhase.finalThird ||
+        frame.possessionPhase == MatchPossessionPhase.boxAttack ||
+        frame.frameTags.contains('box_entry');
+  }
+
+  static bool _isSetPieceTelemetry(MatchTimelineFrame frame) {
+    return frame.phase == MatchViewerPhase.setPiece ||
+        frame.possessionPhase == MatchPossessionPhase.restart ||
+        frame.possessionPhase == MatchPossessionPhase.setPiece ||
+        frame.transitionState?.isReset == true ||
+        frame.frameTags.contains('set_piece');
+  }
+
+  static String? _possessionPhaseLabel(MatchPossessionPhase? phase) {
+    return switch (phase) {
+      MatchPossessionPhase.restart => 'Restart shape',
+      MatchPossessionPhase.control => 'Settled possession',
+      MatchPossessionPhase.buildUp => 'Build-up shape',
+      MatchPossessionPhase.transition => 'Transition break',
+      MatchPossessionPhase.attack => 'Attacking phase',
+      MatchPossessionPhase.finalThird => 'Final-third pressure',
+      MatchPossessionPhase.boxAttack => 'Box attack',
+      MatchPossessionPhase.setPiece => 'Set-piece shape',
+      MatchPossessionPhase.recovery => 'Defensive recovery',
+      MatchPossessionPhase.stoppage => 'Transition pause',
+      MatchPossessionPhase.deadBall => 'Dead-ball reset',
+      null => null,
     };
   }
 }

@@ -9,6 +9,7 @@ import 'package:gte_frontend/features/match/presentation/widgets/player_ratings_
 import 'package:gte_frontend/features/match/presentation/widgets/real_match_scorebug_widget.dart';
 import 'package:gte_frontend/features/match/presentation/widgets/real_match_tactical_hud_widget.dart';
 import 'package:gte_frontend/models/match_event.dart';
+import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/real_match_engine_presentation.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
@@ -51,7 +52,15 @@ void main() {
     final MatchEnginePresentationState presentation =
         RealMatchSceneDirector.resolve(
           viewState: viewState,
-          frame: viewState.frames[2],
+          frame: viewState.frames[2].copyWith(
+            possessionPhase: MatchPossessionPhase.boxAttack,
+            transitionState: MatchTransitionState.homeBreak,
+            dangerZone: 'box',
+            pressureIndex: 0.88,
+            compactnessHome: 0.72,
+            compactnessAway: 0.39,
+            frameTags: const <String>['counter', 'box_entry'],
+          ),
           package: package,
           activeEvent: goal.copyWith(
             primaryPlayerName: 'Nnamdi',
@@ -80,6 +89,8 @@ void main() {
     expect(find.text('LAG'), findsOneWidget);
     expect(find.text('ABJ'), findsOneWidget);
     expect(find.textContaining('Possession focus: Nnamdi'), findsOneWidget);
+    expect(find.text('RED ZONE'), findsOneWidget);
+    expect(find.text('COMPACT'), findsNWidgets(2));
     expect(find.byKey(const Key('player-ratings-strip')), findsOneWidget);
     expect(find.text('Nnamdi'), findsOneWidget);
     expect(find.text('8.1'), findsOneWidget);

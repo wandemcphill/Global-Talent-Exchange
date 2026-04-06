@@ -20,7 +20,7 @@ import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
+import 'package:gte_frontend/widgets/match_3d/native_match_3d_surface.dart';
 import 'package:gte_frontend/widgets/match_3d/monetization/match_3d_upgrade_prompt.dart';
 import 'package:gte_frontend/widgets/match_3d/monetization/premium_controls.dart';
 
@@ -74,6 +74,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   Match3dMonetizationService? _monetizationService;
   bool _ownsMonetizationService = false;
   String? _statusMessage;
+  String? _nativeRuntimeStatusMessage;
   final List<Match3dOverlayBurst> _overlayBursts = <Match3dOverlayBurst>[];
 
   RenderMode get _requestedRenderMode {
@@ -134,6 +135,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     setState(() {
       _viewStateFuture = _load();
       _statusMessage = null;
+      _nativeRuntimeStatusMessage = null;
       _overlayBursts.clear();
     });
   }
@@ -229,6 +231,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     });
   }
 
+  void _setNativeRuntimeStatusMessage(String? message) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _nativeRuntimeStatusMessage = message;
+    });
+  }
+
   void _pushOverlayBurst(Match3dOverlayBurst? burst) {
     if (!mounted || burst == null) {
       return;
@@ -249,6 +260,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
         _ensureMonetizationService();
     final Match3dMatchContext matchContext = _buildMatchContext(viewState);
     if (mode != RenderMode.threeD) {
+      _setNativeRuntimeStatusMessage(null);
       monetizationService.selectRenderMode(mode);
       return;
     }
@@ -441,14 +453,8 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                   playbackSeconds: controller.positionSeconds,
                 );
                 final String commentaryHeadline =
-                    activeEvent?.bannerText.trim().isNotEmpty == true
-                        ? activeEvent!.bannerText
-                        : controller.displayFrame.overlayText ??
-                            presentation.sceneLabel;
-                final String commentaryDetail =
-                    activeEvent?.commentary.trim().isNotEmpty == true
-                        ? activeEvent!.commentary
-                        : 'Match telemetry, tactical context, and the latest scene cue stay pinned here.';
+                    presentation.lowerThirdHeadline;
+                final String commentaryDetail = presentation.lowerThirdDetail;
                 return LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
                     final bool wide = constraints.maxWidth >= 1040;
@@ -468,7 +474,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                                   child: RepaintBoundary(
                                     child:
                                         showThreeD
-                                            ? Gtex3dScene(
+                                            ? NativeMatch3dSurface(
                                               viewState: viewState,
                                               frame: controller.displayFrame,
                                               activeEvent: activeEvent,
@@ -477,6 +483,8 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                                                     .cameraPreset,
                                               ),
                                               bridge: widget.engineBridge,
+                                              onRuntimeStatusMessageChanged:
+                                                  _setNativeRuntimeStatusMessage,
                                             )
                                             : Pitch2dWidget(
                                               viewState: viewState,
@@ -503,9 +511,10 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                                       phaseLabel: presentation.phaseLabel,
                                       stateLabel: presentation.stateLabel,
                                       cameraLabel: presentation.cameraLabel,
-                                      eventLabel: activeEvent?.bannerText,
+                                      eventLabel:
+                                          presentation.scorebugEventLabel,
                                       competitionLabel: widget.competition.name,
-                                      detailLabel: presentation.sceneLabel,
+                                      detailLabel: presentation.telemetryLabel,
                                     ),
                                     const SizedBox(height: 12),
                                     Align(
@@ -518,9 +527,11 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                                           headline: commentaryHeadline,
                                           detail: commentaryDetail,
                                           label: presentation.stateLabel,
-                                          trailing: presentation.cameraLabel,
+                                          trailing: presentation.pressureLabel,
                                           accentColor:
-                                              GteShellTheme.accentArena,
+                                              presentation.isDangerMoment
+                                                  ? const Color(0xFFF97066)
+                                                  : GteShellTheme.accentArena,
                                         ),
                                       ),
                                     ),
@@ -609,6 +620,10 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                         ],
                         if (_statusMessage != null) ...<Widget>[
                           _StatusCard(message: _statusMessage!),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_nativeRuntimeStatusMessage != null) ...<Widget>[
+                          _StatusCard(message: _nativeRuntimeStatusMessage!),
                           const SizedBox(height: 12),
                         ],
                         PremiumControls(

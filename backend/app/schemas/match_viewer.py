@@ -65,9 +65,42 @@ class MatchViewerPlayerState(StrEnum):
     SENT_OFF = "sent_off"
 
 
+class MatchViewerAnimationState(StrEnum):
+    IDLE = "idle"
+    JOG = "jog"
+    RUN = "run"
+    SPRINT = "sprint"
+    PASS = "pass"
+    SHOOT = "shoot"
+    PRESS = "press"
+    SAVE = "save"
+    CELEBRATE = "celebrate"
+    SET_PIECE = "set_piece"
+    SENT_OFF = "sent_off"
+
+
 class MatchViewerSide(StrEnum):
     HOME = "home"
     AWAY = "away"
+
+
+class MatchViewerPossessionPhase(StrEnum):
+    RESTART = "restart"
+    BUILD_UP = "build_up"
+    TRANSITION = "transition"
+    FINAL_THIRD = "final_third"
+    BOX_ATTACK = "box_attack"
+    SET_PIECE = "set_piece"
+    DEAD_BALL = "dead_ball"
+
+
+class MatchViewerTransitionState(StrEnum):
+    STABLE = "stable"
+    HOME_BREAK = "home_break"
+    AWAY_BREAK = "away_break"
+    HOME_RESET = "home_reset"
+    AWAY_RESET = "away_reset"
+    STOPPED = "stopped"
 
 
 class MatchMode(StrEnum):
@@ -79,6 +112,11 @@ class MatchMode(StrEnum):
 class MatchViewerPointView(CommonSchema):
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
+
+
+class MatchViewerVector2View(CommonSchema):
+    x: float = 0.0
+    y: float = 0.0
 
 
 class MatchViewerVector3View(CommonSchema):
@@ -112,6 +150,13 @@ class MatchViewerPlayerFrameView(CommonSchema):
     highlighted: bool = False
     position: MatchViewerPointView
     anchor_position: MatchViewerPointView
+    animation_state: MatchViewerAnimationState = MatchViewerAnimationState.IDLE
+    speed_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
+    blend_factor: float = Field(default=0.0, ge=0.0, le=1.0)
+    stamina_pct: float = Field(default=100.0, ge=0.0, le=100.0)
+    has_possession: bool = False
+    facing: MatchViewerVector2View = Field(default_factory=MatchViewerVector2View)
+    velocity: MatchViewerVector2View = Field(default_factory=MatchViewerVector2View)
 
 
 class MatchViewerBallFrameView(CommonSchema):
@@ -170,6 +215,13 @@ class MatchTimelineFrameView(CommonSchema):
     playback_rate: float = Field(default=1.0, ge=0.05, le=4.0)
     flag_animation: bool = False
     celebration_team_id: str | None = None
+    possession_phase: MatchViewerPossessionPhase = MatchViewerPossessionPhase.BUILD_UP
+    transition_state: MatchViewerTransitionState = MatchViewerTransitionState.STABLE
+    danger_zone: str | None = None
+    pressure_index: float = Field(default=0.0, ge=0.0, le=1.0)
+    compactness_home: float = Field(default=0.5, ge=0.0, le=1.0)
+    compactness_away: float = Field(default=0.5, ge=0.0, le=1.0)
+    frame_tags: list[str] = Field(default_factory=list)
     players: list[MatchViewerPlayerFrameView] = Field(default_factory=list)
     ball: MatchViewerBallFrameView
 

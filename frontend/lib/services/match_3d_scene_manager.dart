@@ -226,10 +226,19 @@ class Match3dSceneManager {
     MatchTimelineFrame frame,
     MatchViewerPlayerFrame player,
   ) {
+    final bool aggressivePhase =
+        frame.possessionPhase == MatchPossessionPhase.finalThird ||
+        frame.possessionPhase == MatchPossessionPhase.boxAttack ||
+        frame.transitionState?.isBreak == true;
     if (frame.ball.ownerPlayerId == player.playerId) {
       return runtime_player.PlayerRunPattern.attack;
     }
     if (player.side == frame.possessionSide) {
+      if (aggressivePhase &&
+          player.line != MatchPlayerLine.goalkeeper &&
+          player.line != MatchPlayerLine.defense) {
+        return runtime_player.PlayerRunPattern.attack;
+      }
       return player.state == MatchViewerPlayerState.attacking
           ? runtime_player.PlayerRunPattern.attack
           : runtime_player.PlayerRunPattern.support;
@@ -384,6 +393,16 @@ class Match3dSceneManager {
         return Match3dAnimationState.pass;
       case MatchPlayerAnimationState.shoot:
         return Match3dAnimationState.shoot;
+      case MatchPlayerAnimationState.press:
+        return Match3dAnimationState.tackle;
+      case MatchPlayerAnimationState.save:
+        return Match3dAnimationState.intercept;
+      case MatchPlayerAnimationState.celebrate:
+        return Match3dAnimationState.celebrate;
+      case MatchPlayerAnimationState.setPiece:
+        return Match3dAnimationState.pass;
+      case MatchPlayerAnimationState.sentOff:
+        return Match3dAnimationState.recover;
       case MatchPlayerAnimationState.tackle:
         return Match3dAnimationState.tackle;
       case MatchPlayerAnimationState.intercept:
@@ -622,13 +641,12 @@ class Match3dSceneManager {
     final Match3dVector3 target = _worldPosition(ball.currentPosition);
     final double attackDirection = _attackDirection(frame);
     final Match3dCameraMode mode = action.cameraMode;
-    final MatchEngineCameraPreset resolvedPreset =
-        mode == Match3dCameraMode.cinematic
-            ? MatchEngineCameraPreset.goal_replay
-            : mode == Match3dCameraMode.tactical &&
-                requestedCameraPreset == MatchEngineCameraPreset.stadium_wide
-            ? MatchEngineCameraPreset.tactical_high
-            : requestedCameraPreset;
+    final MatchEngineCameraPreset resolvedPreset = _projectionPresetForFrame(
+      frame: frame,
+      requestedCameraPreset: requestedCameraPreset,
+      action: action,
+      target: target,
+    );
     final Match3dVector3 offset = switch (resolvedPreset) {
       MatchEngineCameraPreset.stadium_wide => Match3dVector3(
         x: -20 * attackDirection,
@@ -742,15 +760,19 @@ class Match3dSceneManager {
                 .toDouble();
     final double depth =
         (lanes[3].averageX - lanes[1].averageX).abs().toDouble();
+    final double derivedCompactness =
+        (1 - (depth / 62)).clamp(0.16, 0.96).toDouble();
+    final double compactness =
+        side == MatchViewerSide.home
+            ? (frame.compactnessHome ?? derivedCompactness)
+            : (frame.compactnessAway ?? derivedCompactness);
     return MatchEngineTeamShape(
       teamId: viewState.teamForSide(side).teamId,
       side: side,
       formation: viewState.teamForSide(side).formation,
       width: double.parse(width.toStringAsFixed(1)),
       depth: double.parse(depth.toStringAsFixed(1)),
-      compactness: double.parse(
-        (1 - (depth / 62)).clamp(0.16, 0.96).toStringAsFixed(3),
-      ),
+      compactness: double.parse(compactness.toStringAsFixed(3)),
       inPossession: frame.possessionSide == side,
       lanes: lanes,
     );
@@ -849,6 +871,7 @@ class Match3dSceneManager {
     final List<Match3dMotionPrediction> motionPredictions = players
         .map(
           (runtime_player.PlayerEntity player) => _motionPrediction(
+            frame: frame,
             player: player,
             players: players,
             ball: ball,
@@ -881,6 +904,7 @@ class Match3dSceneManager {
   }
 
   Match3dMotionPrediction _motionPrediction({
+    required MatchTimelineFrame frame,
     required runtime_player.PlayerEntity player,
     required List<runtime_player.PlayerEntity> players,
     required runtime_ball.BallEntity ball,
@@ -905,8 +929,22 @@ class Match3dSceneManager {
       player.currentPosition,
       ball.currentPosition,
     );
-    final double pressure =
+    final double localPressure =
         (1 - (nearestDefenderDistance / 30).clamp(0, 1)).toDouble();
+    final double framePressure = frame.pressureIndex ?? localPressure;
+    final double pressure = _clampDouble(
+      (localPressure * 0.55) + (framePressure * 0.45),
+      0,
+      1,
+    );
+    final bool attackingSide = player.side == frame.possessionSide;
+    final bool dangerMoment =
+        frame.dangerZone == 'box' ||
+        frame.possessionPhase == MatchPossessionPhase.boxAttack ||
+        frame.frameTags.contains('box_entry');
+    final bool breakMoment =
+        frame.transitionState?.isBreak == true ||
+        frame.possessionPhase == MatchPossessionPhase.transition;
     double shootScore =
         player.hasPossession &&
                 activeEvent != null &&
@@ -923,6 +961,24 @@ class Match3dSceneManager {
         (pressure * 0.22);
     double runScore =
         0.30 + (((1 - player.speedRatio).clamp(0, 1)) * 0.24) + 0.08;
+    if (dangerMoment && attackingSide) {
+      sprintScore += 0.08;
+      if (player.hasPossession || player.line == MatchPlayerLine.attack) {
+        shootScore += 0.16;
+      }
+    }
+    if (breakMoment) {
+      sprintScore += attackingSide ? 0.14 : 0.08;
+      runScore += attackingSide ? 0.02 : 0.05;
+    }
+    if (!attackingSide && pressure >= 0.62) {
+      sprintScore += 0.06;
+    }
+    if (frame.frameTags.contains('set_piece') &&
+        attackingSide &&
+        player.line == MatchPlayerLine.attack) {
+      shootScore += 0.08;
+    }
     if (!player.active) {
       shootScore = 0;
       sprintScore = 0;
@@ -956,6 +1012,12 @@ class Match3dSceneManager {
     required MatchEvent? activeEvent,
   }) {
     final MatchEvent? event = activeEvent;
+    final double pressureSignal = frame.pressureIndex ?? 0.34;
+    final bool dangerMoment =
+        frame.dangerZone == 'box' ||
+        frame.possessionPhase == MatchPossessionPhase.finalThird ||
+        frame.possessionPhase == MatchPossessionPhase.boxAttack ||
+        frame.transitionState?.isBreak == true;
     final String line =
         event?.commentary.trim().isNotEmpty == true
             ? event!.commentary
@@ -967,19 +1029,35 @@ class Match3dSceneManager {
             event.type == MatchViewerEventType.miss ||
             event.type == MatchViewerEventType.redCard);
     final double intensity = _clampDouble(
-      ((event?.emphasisLevel ?? 1) / 3) + (headline ? 0.2 : 0),
+      ((event?.emphasisLevel ?? 1) / 3) +
+          (pressureSignal * 0.34) +
+          (headline ? 0.18 : 0) +
+          (dangerMoment ? 0.08 : 0),
       0.2,
       1,
     );
     return Match3dCommentaryCue(
       line: line,
-      tone: event?.playbackProfile ?? 'tactical',
-      commentator: headline ? 'lead' : 'analyst',
+      tone:
+          event?.playbackProfile ??
+          (frame.frameTags.contains('set_piece')
+              ? 'set_piece'
+              : frame.transitionState?.isBreak == true
+              ? 'transition'
+              : pressureSignal >= 0.62
+              ? 'urgent'
+              : 'tactical'),
+      commentator: headline || dangerMoment ? 'lead' : 'analyst',
       language: 'en',
       intensity: double.parse(intensity.toStringAsFixed(3)),
       ttsReady: line.trim().isNotEmpty,
       banterLayer: event?.secondaryPlayerId != null && headline,
-      audioChannel: headline ? 'headline' : 'match_bed',
+      audioChannel:
+          headline
+              ? 'headline'
+              : dangerMoment
+              ? 'danger'
+              : 'match_bed',
     );
   }
 
@@ -995,17 +1073,35 @@ class Match3dSceneManager {
         (activeEvent.type == MatchViewerEventType.goal ||
             activeEvent.type == MatchViewerEventType.miss ||
             activeEvent.type == MatchViewerEventType.redCard);
+    final double pressureSignal = frame.pressureIndex ?? 0.34;
+    final bool dangerMoment =
+        frame.dangerZone == 'box' ||
+        frame.frameTags.contains('box_entry') ||
+        frame.transitionState?.isBreak == true;
+    final bool structuredMoment =
+        frame.possessionPhase == MatchPossessionPhase.setPiece ||
+        frame.frameTags.contains('set_piece');
     final int scoreDelta = frame.homeScore - frame.awayScore;
     double homeIntensity =
-        0.52 +
-        (frame.possessionSide == MatchViewerSide.home ? 0.05 : 0) +
-        (scoreDelta > 0 ? math.min(scoreDelta * 0.05, 0.12) : 0) +
-        (homeSpike && explosiveMoment ? 0.12 : 0);
-    double awayIntensity =
         0.46 +
+        (frame.possessionSide == MatchViewerSide.home ? 0.05 : 0) +
+        (pressureSignal * 0.16) +
+        (scoreDelta > 0 ? math.min(scoreDelta * 0.05, 0.12) : 0) +
+        (homeSpike && explosiveMoment ? 0.12 : 0) +
+        (dangerMoment && frame.possessionSide == MatchViewerSide.home
+            ? 0.08
+            : 0) +
+        (structuredMoment ? 0.03 : 0);
+    double awayIntensity =
+        0.42 +
         (frame.possessionSide == MatchViewerSide.away ? 0.05 : 0) +
+        (pressureSignal * 0.16) +
         (scoreDelta < 0 ? math.min(scoreDelta.abs() * 0.05, 0.12) : 0) +
-        (awaySpike && explosiveMoment ? 0.12 : 0);
+        (awaySpike && explosiveMoment ? 0.12 : 0) +
+        (dangerMoment && frame.possessionSide == MatchViewerSide.away
+            ? 0.08
+            : 0) +
+        (structuredMoment ? 0.03 : 0);
     if (homeSpike && explosiveMoment) {
       awayIntensity -= 0.06;
     }
@@ -1020,9 +1116,11 @@ class Match3dSceneManager {
             : MatchViewerSide.away;
     return Match3dCrowdState(
       profile:
-          explosiveMoment
+          explosiveMoment || pressureSignal >= 0.82 || frame.dangerZone == 'box'
               ? 'explosive'
-              : viewState.matchMode == MatchMode.cinematic
+              : dangerMoment ||
+                  structuredMoment ||
+                  viewState.matchMode == MatchMode.cinematic
               ? 'charged'
               : 'standard',
       homeIntensity: double.parse(homeIntensity.toStringAsFixed(3)),
@@ -1033,13 +1131,79 @@ class Match3dSceneManager {
       ),
       hostility: double.parse(
         _clampDouble(
-          (homeIntensity - awayIntensity).abs() + (explosiveMoment ? 0.1 : 0),
+          (homeIntensity - awayIntensity).abs() +
+              (explosiveMoment ? 0.1 : 0) +
+              (pressureSignal * 0.16),
           0,
           1,
         ).toStringAsFixed(3),
       ),
-      spike: explosiveMoment,
+      spike: explosiveMoment || pressureSignal >= 0.76 || dangerMoment,
     );
+  }
+
+  MatchEngineCameraPreset _projectionPresetForFrame({
+    required MatchTimelineFrame frame,
+    required MatchEngineCameraPreset requestedCameraPreset,
+    required Match3dSceneAction action,
+    required Match3dVector3 target,
+  }) {
+    if (frame.phase == MatchViewerPhase.halftime) {
+      return MatchEngineCameraPreset.halftime_board;
+    }
+    if (frame.phase == MatchViewerPhase.fulltime) {
+      return MatchEngineCameraPreset.fulltime_board;
+    }
+    if (action.cameraMode == Match3dCameraMode.cinematic) {
+      return MatchEngineCameraPreset.goal_replay;
+    }
+    if (_isSetPieceFrame(frame)) {
+      return _setPiecePreset(target);
+    }
+    if (_isDangerFrame(frame)) {
+      return _attackingThirdPreset(target);
+    }
+    if (frame.transitionState?.isBreak == true ||
+        frame.possessionPhase == MatchPossessionPhase.transition) {
+      return MatchEngineCameraPreset.stadium_wide;
+    }
+    if ((frame.pressureIndex ?? 0) >= 0.72 &&
+        action.cameraMode == Match3dCameraMode.tactical) {
+      return MatchEngineCameraPreset.defensive_block;
+    }
+    if (action.cameraMode == Match3dCameraMode.tactical &&
+        requestedCameraPreset == MatchEngineCameraPreset.stadium_wide) {
+      return MatchEngineCameraPreset.tactical_high;
+    }
+    return requestedCameraPreset;
+  }
+
+  bool _isSetPieceFrame(MatchTimelineFrame frame) {
+    return frame.phase == MatchViewerPhase.setPiece ||
+        frame.possessionPhase == MatchPossessionPhase.restart ||
+        frame.possessionPhase == MatchPossessionPhase.setPiece ||
+        frame.transitionState?.isReset == true ||
+        frame.frameTags.contains('set_piece');
+  }
+
+  bool _isDangerFrame(MatchTimelineFrame frame) {
+    return frame.dangerZone == 'box' ||
+        frame.dangerZone == 'final_third' ||
+        frame.possessionPhase == MatchPossessionPhase.finalThird ||
+        frame.possessionPhase == MatchPossessionPhase.boxAttack ||
+        frame.frameTags.contains('box_entry');
+  }
+
+  MatchEngineCameraPreset _setPiecePreset(Match3dVector3 target) {
+    return target.z < 0
+        ? MatchEngineCameraPreset.set_piece_left
+        : MatchEngineCameraPreset.set_piece_right;
+  }
+
+  MatchEngineCameraPreset _attackingThirdPreset(Match3dVector3 target) {
+    return target.z < 0
+        ? MatchEngineCameraPreset.attacking_third_left
+        : MatchEngineCameraPreset.attacking_third_right;
   }
 
   double _ballSpin(runtime_ball.BallEntity ball) {

@@ -3,6 +3,7 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
+import 'package:gte_frontend/widgets/match/pseudo3d/gtex_pseudo3d_telemetry.dart';
 
 class GtexPseudo3DProjectedPoint {
   const GtexPseudo3DProjectedPoint({
@@ -62,10 +63,14 @@ class GtexPseudo3DPitchProjection {
   }) {
     final MatchViewerPoint topLeftPoint = MatchViewerPoint(x: left, y: top);
     final MatchViewerPoint topRightPoint = MatchViewerPoint(x: right, y: top);
-    final MatchViewerPoint bottomRightPoint =
-        MatchViewerPoint(x: right, y: bottom);
-    final MatchViewerPoint bottomLeftPoint =
-        MatchViewerPoint(x: left, y: bottom);
+    final MatchViewerPoint bottomRightPoint = MatchViewerPoint(
+      x: right,
+      y: bottom,
+    );
+    final MatchViewerPoint bottomLeftPoint = MatchViewerPoint(
+      x: left,
+      y: bottom,
+    );
     return Path()
       ..moveTo(project(topLeftPoint).offset.dx, project(topLeftPoint).offset.dy)
       ..lineTo(
@@ -125,15 +130,23 @@ class GtexPseudo3DPitch extends StatelessWidget {
   const GtexPseudo3DPitch({
     super.key,
     required this.projection,
+    required this.telemetryStyle,
+    required this.frame,
   });
 
   final GtexPseudo3DPitchProjection projection;
+  final GtexPseudo3DTelemetryStyle telemetryStyle;
+  final MatchTimelineFrame frame;
 
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: CustomPaint(
-        painter: _GtexPseudo3DPitchPainter(projection),
+        painter: _GtexPseudo3DPitchPainter(
+          projection,
+          telemetryStyle: telemetryStyle,
+          frame: frame,
+        ),
         child: const SizedBox.expand(),
       ),
     );
@@ -141,40 +154,64 @@ class GtexPseudo3DPitch extends StatelessWidget {
 }
 
 class _GtexPseudo3DPitchPainter extends CustomPainter {
-  const _GtexPseudo3DPitchPainter(this.projection);
+  const _GtexPseudo3DPitchPainter(
+    this.projection, {
+    required this.telemetryStyle,
+    required this.frame,
+  });
 
   final GtexPseudo3DPitchProjection projection;
+  final GtexPseudo3DTelemetryStyle telemetryStyle;
+  final MatchTimelineFrame frame;
 
   @override
   void paint(Canvas canvas, Size size) {
     final Rect bounds = Offset.zero & size;
-    final Paint stadiumPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: <Color>[
-          Color(0xFF112433),
-          Color(0xFF08131D),
-        ],
-      ).createShader(bounds);
+    final Paint stadiumPaint =
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: telemetryStyle.stadiumGradient,
+          ).createShader(bounds);
     canvas.drawRect(bounds, stadiumPaint);
 
-    final Path field = Path()
-      ..moveTo(projection.topLeft.dx, projection.topLeft.dy)
-      ..lineTo(projection.topRight.dx, projection.topRight.dy)
-      ..lineTo(projection.bottomRight.dx, projection.bottomRight.dy)
-      ..lineTo(projection.bottomLeft.dx, projection.bottomLeft.dy)
-      ..close();
+    final Paint crowdGlowPaint =
+        Paint()
+          ..shader = RadialGradient(
+            center: Alignment.topCenter,
+            radius: 1.1,
+            colors: <Color>[
+              telemetryStyle.accentColor.withValues(
+                alpha: telemetryStyle.crowdGlowAlpha,
+              ),
+              Colors.transparent,
+            ],
+          ).createShader(
+            Rect.fromLTWH(
+              size.width * 0.08,
+              -size.height * 0.24,
+              size.width * 0.84,
+              size.height * 0.72,
+            ),
+          );
+    canvas.drawRect(bounds, crowdGlowPaint);
 
-    final Paint grassPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: <Color>[
-          Color(0xFF1E7A45),
-          Color(0xFF0E4D2D),
-        ],
-      ).createShader(bounds);
+    final Path field =
+        Path()
+          ..moveTo(projection.topLeft.dx, projection.topLeft.dy)
+          ..lineTo(projection.topRight.dx, projection.topRight.dy)
+          ..lineTo(projection.bottomRight.dx, projection.bottomRight.dy)
+          ..lineTo(projection.bottomLeft.dx, projection.bottomLeft.dy)
+          ..close();
+
+    final Paint grassPaint =
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: telemetryStyle.grassGradient,
+          ).createShader(bounds);
     canvas.drawPath(field, grassPaint);
 
     final Paint stripePaint = Paint()..style = PaintingStyle.fill;
@@ -182,22 +219,30 @@ class _GtexPseudo3DPitchPainter extends CustomPainter {
       final double top = stripe * 10;
       final double bottom = top + 10;
       stripePaint.color =
-          stripe.isEven ? const Color(0x12000000) : const Color(0x0DFFFFFF);
+          stripe.isEven
+              ? Colors.black.withValues(alpha: telemetryStyle.stripeDarkAlpha)
+              : Colors.white.withValues(alpha: telemetryStyle.stripeLightAlpha);
       canvas.drawPath(
-        projection.rectPath(
-          left: 0,
-          top: top,
-          right: 100,
-          bottom: bottom,
-        ),
+        projection.rectPath(left: 0, top: top, right: 100, bottom: bottom),
         stripePaint,
       );
     }
 
-    final Paint linePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.86)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    if (telemetryStyle.showDangerOverlay) {
+      _drawDangerOverlay(canvas);
+    }
+    if (telemetryStyle.showTransitionLane) {
+      _drawTransitionLane(canvas);
+    }
+    if (telemetryStyle.showSetPieceOverlay) {
+      _drawSetPieceFocus(canvas);
+    }
+
+    final Paint linePaint =
+        Paint()
+          ..color = Colors.white.withValues(alpha: telemetryStyle.lineAlpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2;
 
     canvas.drawPath(field, linePaint);
     canvas.drawPath(
@@ -234,21 +279,164 @@ class _GtexPseudo3DPitchPainter extends CustomPainter {
 
     final Paint dotPaint = Paint()..color = Colors.white.withValues(alpha: 0.9);
     canvas.drawCircle(
-        projection.project(const MatchViewerPoint(x: 50, y: 50)).offset,
-        3,
-        dotPaint);
+      projection.project(const MatchViewerPoint(x: 50, y: 50)).offset,
+      3,
+      dotPaint,
+    );
     canvas.drawCircle(
-        projection.project(const MatchViewerPoint(x: 11, y: 50)).offset,
-        2.6,
-        dotPaint);
+      projection.project(const MatchViewerPoint(x: 11, y: 50)).offset,
+      2.6,
+      dotPaint,
+    );
     canvas.drawCircle(
-        projection.project(const MatchViewerPoint(x: 89, y: 50)).offset,
-        2.6,
-        dotPaint);
+      projection.project(const MatchViewerPoint(x: 89, y: 50)).offset,
+      2.6,
+      dotPaint,
+    );
+  }
+
+  void _drawDangerOverlay(Canvas canvas) {
+    final Paint finalThirdPaint =
+        Paint()
+          ..color = telemetryStyle.accentColor.withValues(
+            alpha: telemetryStyle.showBoxOverlay ? 0.18 : 0.12,
+          );
+    final double left = telemetryStyle.attacksRight ? 63 : 0;
+    final double right = telemetryStyle.attacksRight ? 100 : 37;
+    canvas.drawPath(
+      projection.rectPath(left: left, top: 0, right: right, bottom: 100),
+      finalThirdPaint,
+    );
+    if (!telemetryStyle.showBoxOverlay) {
+      return;
+    }
+    final Paint boxPaint =
+        Paint()
+          ..color = const Color(
+            0xFFF04438,
+          ).withValues(alpha: 0.16 + (telemetryStyle.pressureIndex * 0.08));
+    canvas.drawPath(
+      projection.rectPath(
+        left: telemetryStyle.attacksRight ? 84 : 0,
+        top: 21,
+        right: telemetryStyle.attacksRight ? 100 : 16,
+        bottom: 79,
+      ),
+      boxPaint,
+    );
+  }
+
+  void _drawTransitionLane(Canvas canvas) {
+    final double centerY = frame.ball.position.y;
+    final double laneHalf = 7 + (telemetryStyle.pressureIndex * 5);
+    final double startX = 50;
+    final double endX = telemetryStyle.attacksRight ? 96 : 4;
+    final Path lane =
+        Path()
+          ..moveTo(
+            projection
+                .project(MatchViewerPoint(x: startX, y: centerY - laneHalf))
+                .offset
+                .dx,
+            projection
+                .project(MatchViewerPoint(x: startX, y: centerY - laneHalf))
+                .offset
+                .dy,
+          )
+          ..lineTo(
+            projection
+                .project(MatchViewerPoint(x: startX, y: centerY + laneHalf))
+                .offset
+                .dx,
+            projection
+                .project(MatchViewerPoint(x: startX, y: centerY + laneHalf))
+                .offset
+                .dy,
+          )
+          ..lineTo(
+            projection
+                .project(
+                  MatchViewerPoint(x: endX, y: centerY + (laneHalf * 1.5)),
+                )
+                .offset
+                .dx,
+            projection
+                .project(
+                  MatchViewerPoint(x: endX, y: centerY + (laneHalf * 1.5)),
+                )
+                .offset
+                .dy,
+          )
+          ..lineTo(
+            projection
+                .project(
+                  MatchViewerPoint(x: endX, y: centerY - (laneHalf * 1.5)),
+                )
+                .offset
+                .dx,
+            projection
+                .project(
+                  MatchViewerPoint(x: endX, y: centerY - (laneHalf * 1.5)),
+                )
+                .offset
+                .dy,
+          )
+          ..close();
+    final Rect shaderBounds = Rect.fromLTWH(
+      0,
+      projection
+          .project(
+            MatchViewerPoint(x: 50, y: (centerY - laneHalf).clamp(0, 100)),
+          )
+          .offset
+          .dy,
+      projection.size.width,
+      projection.size.height * 0.45,
+    );
+    final Paint lanePaint =
+        Paint()
+          ..shader = LinearGradient(
+            begin:
+                telemetryStyle.attacksRight
+                    ? Alignment.centerLeft
+                    : Alignment.centerRight,
+            end:
+                telemetryStyle.attacksRight
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+            colors: <Color>[
+              Colors.transparent,
+              telemetryStyle.accentColor.withValues(
+                alpha: 0.10 + (telemetryStyle.pressureIndex * 0.12),
+              ),
+            ],
+          ).createShader(shaderBounds);
+    canvas.drawPath(lane, lanePaint);
+  }
+
+  void _drawSetPieceFocus(Canvas canvas) {
+    final MatchViewerPoint center = frame.ball.position;
+    final Paint fillPaint =
+        Paint()..color = telemetryStyle.accentColor.withValues(alpha: 0.12);
+    final Paint ringPaint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = telemetryStyle.accentColor.withValues(alpha: 0.28);
+    canvas.drawPath(
+      projection.circlePath(center: center, radiusX: 8, radiusY: 8),
+      fillPaint,
+    );
+    canvas.drawPath(
+      projection.circlePath(center: center, radiusX: 11, radiusY: 11),
+      ringPaint,
+    );
   }
 
   @override
   bool shouldRepaint(covariant _GtexPseudo3DPitchPainter oldDelegate) {
-    return oldDelegate.projection.size != projection.size;
+    return oldDelegate.projection.size != projection.size ||
+        oldDelegate.telemetryStyle != telemetryStyle ||
+        oldDelegate.frame != frame;
   }
 }

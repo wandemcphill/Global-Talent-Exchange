@@ -78,6 +78,12 @@ def test_viewer_timeline_consumes_render_contract_for_camera_and_ball_states() -
     assert any(frame.camera_preset in {MatchViewerCameraPreset.BOX_ZOOM, MatchViewerCameraPreset.GOAL_CELEBRATION} for frame in goal_frames)
     assert any(frame.ball.state in {"shot", "cross", "lob"} for frame in goal_frames)
     assert any(frame.playback_rate <= 0.5 for frame in goal_frames)
+    assert any(frame.pressure_index > 0.0 for frame in goal_frames)
+    assert any(
+        player.animation_state.value in {"shoot", "celebrate", "run", "sprint"}
+        for frame in goal_frames
+        for player in frame.players
+    )
 
 
 def test_render_contract_exposes_trajectory_spin_and_viewer_ball_height() -> None:

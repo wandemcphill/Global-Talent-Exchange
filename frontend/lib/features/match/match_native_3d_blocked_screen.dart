@@ -20,7 +20,7 @@ class MatchNative3dBlockedScreen extends StatelessWidget {
     return AppPageLayout(
       title: 'Native 3D',
       subtitle:
-          'Coming soon. The active Flutter shell does not have a verified native 3D runtime mounted, so this route stays disclosed instead of pretending support exists.',
+          'Coming soon. The dedicated native-only route is still disclosed until it can open against a specific live match session.',
       trailing: Wrap(
         spacing: spacingSM,
         runSpacing: spacingSM,
@@ -60,7 +60,7 @@ class MatchNative3dBlockedScreen extends StatelessWidget {
               ),
               const SizedBox(height: spacingMD),
               const Text(
-                'The repo contains Flutter-rendered match viewers, but the active shipped shell does not mount a verified native MethodChannel/EventChannel bridge for match_3d and match_3d/events. Use the Flutter 3D route for the existing in-app 3D surface.',
+                'The Android host now mounts a verified native match_3d bridge and native renderer behind the routed 3D lane when available. This preview route stays blocked until a native-only route is wired to a specific live match session instead of a placeholder surface.',
               ),
             ],
           ),

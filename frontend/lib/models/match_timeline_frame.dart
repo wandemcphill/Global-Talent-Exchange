@@ -23,6 +23,11 @@ enum MatchPlayerAnimationState {
   control,
   pass,
   shoot,
+  press,
+  save,
+  celebrate,
+  setPiece,
+  sentOff,
   tackle,
   intercept,
   recover,
@@ -36,9 +41,23 @@ enum MatchPossessionPhase {
   restart,
   control,
   buildUp,
+  transition,
   attack,
+  finalThird,
+  boxAttack,
+  setPiece,
   recovery,
   stoppage,
+  deadBall,
+}
+
+enum MatchTransitionState {
+  stable,
+  homeBreak,
+  awayBreak,
+  homeReset,
+  awayReset,
+  stopped,
 }
 
 enum MatchTimelineInjectionType {
@@ -117,6 +136,20 @@ MatchPlayerAnimationState matchPlayerAnimationStateFromString(String value) {
       return MatchPlayerAnimationState.pass;
     case 'shoot':
       return MatchPlayerAnimationState.shoot;
+    case 'press':
+      return MatchPlayerAnimationState.press;
+    case 'save':
+      return MatchPlayerAnimationState.save;
+    case 'celebrate':
+      return MatchPlayerAnimationState.celebrate;
+    case 'set_piece':
+    case 'set-piece':
+    case 'set piece':
+      return MatchPlayerAnimationState.setPiece;
+    case 'sent_off':
+    case 'sent-off':
+    case 'sent off':
+      return MatchPlayerAnimationState.sentOff;
     case 'tackle':
       return MatchPlayerAnimationState.tackle;
     case 'intercept':
@@ -137,6 +170,11 @@ extension MatchPlayerAnimationStateX on MatchPlayerAnimationState {
     MatchPlayerAnimationState.control => 'Control',
     MatchPlayerAnimationState.pass => 'Pass',
     MatchPlayerAnimationState.shoot => 'Shoot',
+    MatchPlayerAnimationState.press => 'Press',
+    MatchPlayerAnimationState.save => 'Save',
+    MatchPlayerAnimationState.celebrate => 'Celebrate',
+    MatchPlayerAnimationState.setPiece => 'Set Piece',
+    MatchPlayerAnimationState.sentOff => 'Sent Off',
     MatchPlayerAnimationState.tackle => 'Tackle',
     MatchPlayerAnimationState.intercept => 'Intercept',
     MatchPlayerAnimationState.recover => 'Recover',
@@ -183,15 +221,68 @@ MatchPossessionPhase matchPossessionPhaseFromString(String value) {
     case 'buildupp':
     case 'buildup':
       return MatchPossessionPhase.buildUp;
+    case 'transition':
+      return MatchPossessionPhase.transition;
     case 'attack':
       return MatchPossessionPhase.attack;
+    case 'final_third':
+    case 'final-third':
+    case 'final third':
+      return MatchPossessionPhase.finalThird;
+    case 'box_attack':
+    case 'box-attack':
+    case 'box attack':
+      return MatchPossessionPhase.boxAttack;
+    case 'set_piece':
+    case 'set-piece':
+    case 'set piece':
+      return MatchPossessionPhase.setPiece;
     case 'recovery':
       return MatchPossessionPhase.recovery;
     case 'stoppage':
       return MatchPossessionPhase.stoppage;
+    case 'dead_ball':
+    case 'dead-ball':
+    case 'dead ball':
+      return MatchPossessionPhase.deadBall;
     default:
       return MatchPossessionPhase.control;
   }
+}
+
+MatchTransitionState matchTransitionStateFromString(String value) {
+  switch (value.trim().toLowerCase()) {
+    case 'home_break':
+    case 'home-break':
+    case 'home break':
+      return MatchTransitionState.homeBreak;
+    case 'away_break':
+    case 'away-break':
+    case 'away break':
+      return MatchTransitionState.awayBreak;
+    case 'home_reset':
+    case 'home-reset':
+    case 'home reset':
+      return MatchTransitionState.homeReset;
+    case 'away_reset':
+    case 'away-reset':
+    case 'away reset':
+      return MatchTransitionState.awayReset;
+    case 'stopped':
+      return MatchTransitionState.stopped;
+    default:
+      return MatchTransitionState.stable;
+  }
+}
+
+extension MatchTransitionStateX on MatchTransitionState {
+  bool get isBreak =>
+      this == MatchTransitionState.homeBreak ||
+      this == MatchTransitionState.awayBreak;
+
+  bool get isReset =>
+      this == MatchTransitionState.homeReset ||
+      this == MatchTransitionState.awayReset;
 }
 
 MatchTimelineInjectionType matchTimelineInjectionTypeFromString(String value) {
@@ -553,6 +644,12 @@ class MatchTimelineFrame {
     this.flagAnimation = false,
     this.celebrationTeamId,
     this.possessionPhase,
+    this.transitionState,
+    this.dangerZone,
+    this.pressureIndex,
+    this.compactnessHome,
+    this.compactnessAway,
+    this.frameTags = const <String>[],
     this.sequenceId,
     this.sequenceProgress,
     this.isSynthetic = false,
@@ -577,6 +674,12 @@ class MatchTimelineFrame {
   final bool flagAnimation;
   final String? celebrationTeamId;
   final MatchPossessionPhase? possessionPhase;
+  final MatchTransitionState? transitionState;
+  final String? dangerZone;
+  final double? pressureIndex;
+  final double? compactnessHome;
+  final double? compactnessAway;
+  final List<String> frameTags;
   final String? sequenceId;
   final double? sequenceProgress;
   final bool isSynthetic;
@@ -600,6 +703,14 @@ class MatchTimelineFrame {
     );
     final String? possessionPhaseValue = _stringOrNull(
       GteJson.value(json, <String>['possession_phase', 'possessionPhase']),
+    );
+    final String? transitionStateValue = _stringOrNull(
+      GteJson.value(json, <String>['transition_state', 'transitionState']),
+    );
+    final List<Object?> rawFrameTags = GteJson.list(
+      GteJson.value(json, <String>['frame_tags', 'frameTags']) ??
+          const <Object?>[],
+      label: 'match frame tags',
     );
     return MatchTimelineFrame(
       id: GteJson.string(json, <String>['frame_id', 'frameId']),
@@ -667,6 +778,26 @@ class MatchTimelineFrame {
           possessionPhaseValue == null
               ? null
               : matchPossessionPhaseFromString(possessionPhaseValue),
+      transitionState:
+          transitionStateValue == null
+              ? null
+              : matchTransitionStateFromString(transitionStateValue),
+      dangerZone: _stringOrNull(
+        GteJson.value(json, <String>['danger_zone', 'dangerZone']),
+      ),
+      pressureIndex: _numberOrNull(
+        GteJson.value(json, <String>['pressure_index', 'pressureIndex']),
+      ),
+      compactnessHome: _numberOrNull(
+        GteJson.value(json, <String>['compactness_home', 'compactnessHome']),
+      ),
+      compactnessAway: _numberOrNull(
+        GteJson.value(json, <String>['compactness_away', 'compactnessAway']),
+      ),
+      frameTags: rawFrameTags
+          .map((Object? item) => item?.toString().trim() ?? '')
+          .where((String item) => item.isNotEmpty)
+          .toList(growable: false),
       sequenceId: GteJson.stringOrNull(json, <String>[
         'sequence_id',
         'sequenceId',
@@ -709,6 +840,12 @@ class MatchTimelineFrame {
     bool? flagAnimation,
     Object? celebrationTeamId = _matchTimelineUnset,
     Object? possessionPhase = _matchTimelineUnset,
+    Object? transitionState = _matchTimelineUnset,
+    Object? dangerZone = _matchTimelineUnset,
+    Object? pressureIndex = _matchTimelineUnset,
+    Object? compactnessHome = _matchTimelineUnset,
+    Object? compactnessAway = _matchTimelineUnset,
+    Object? frameTags = _matchTimelineUnset,
     Object? sequenceId = _matchTimelineUnset,
     Object? sequenceProgress = _matchTimelineUnset,
     bool? isSynthetic,
@@ -750,6 +887,30 @@ class MatchTimelineFrame {
           identical(possessionPhase, _matchTimelineUnset)
               ? this.possessionPhase
               : possessionPhase as MatchPossessionPhase?,
+      transitionState:
+          identical(transitionState, _matchTimelineUnset)
+              ? this.transitionState
+              : transitionState as MatchTransitionState?,
+      dangerZone:
+          identical(dangerZone, _matchTimelineUnset)
+              ? this.dangerZone
+              : dangerZone as String?,
+      pressureIndex:
+          identical(pressureIndex, _matchTimelineUnset)
+              ? this.pressureIndex
+              : pressureIndex as double?,
+      compactnessHome:
+          identical(compactnessHome, _matchTimelineUnset)
+              ? this.compactnessHome
+              : compactnessHome as double?,
+      compactnessAway:
+          identical(compactnessAway, _matchTimelineUnset)
+              ? this.compactnessAway
+              : compactnessAway as double?,
+      frameTags:
+          identical(frameTags, _matchTimelineUnset)
+              ? this.frameTags
+              : frameTags as List<String>,
       sequenceId:
           identical(sequenceId, _matchTimelineUnset)
               ? this.sequenceId
@@ -823,6 +984,28 @@ class MatchTimelineFrame {
         resolvedT,
         resolvedChangeover,
       ),
+      transitionState: _interpolatedTransitionState(
+        next,
+        resolvedT,
+        resolvedChangeover,
+      ),
+      dangerZone: _interpolatedDangerZone(next, resolvedT, resolvedChangeover),
+      pressureIndex: _interpolatedNullableNumber(
+        pressureIndex,
+        next.pressureIndex,
+        resolvedT,
+      ),
+      compactnessHome: _interpolatedNullableNumber(
+        compactnessHome,
+        next.compactnessHome,
+        resolvedT,
+      ),
+      compactnessAway: _interpolatedNullableNumber(
+        compactnessAway,
+        next.compactnessAway,
+        resolvedT,
+      ),
+      frameTags: _mergedFrameTags(next, resolvedT, resolvedChangeover),
       sequenceId: resolvedT < resolvedChangeover ? sequenceId : next.sequenceId,
       sequenceProgress: _interpolatedSequenceProgress(next, resolvedT),
       isSynthetic:
@@ -859,6 +1042,28 @@ class MatchTimelineFrame {
     return t < changeoverT ? possessionPhase : next.possessionPhase;
   }
 
+  MatchTransitionState? _interpolatedTransitionState(
+    MatchTimelineFrame next,
+    double t,
+    double changeoverT,
+  ) {
+    if (transitionState == next.transitionState) {
+      return transitionState;
+    }
+    return t < changeoverT ? transitionState : next.transitionState;
+  }
+
+  String? _interpolatedDangerZone(
+    MatchTimelineFrame next,
+    double t,
+    double changeoverT,
+  ) {
+    if (dangerZone == next.dangerZone) {
+      return dangerZone;
+    }
+    return t < changeoverT ? dangerZone : next.dangerZone;
+  }
+
   double? _interpolatedSequenceProgress(MatchTimelineFrame next, double t) {
     final double? start = sequenceProgress;
     final double? end = next.sequenceProgress;
@@ -866,6 +1071,22 @@ class MatchTimelineFrame {
       return start + ((end - start) * t);
     }
     return t < 0.5 ? start : end;
+  }
+
+  List<String> _mergedFrameTags(
+    MatchTimelineFrame next,
+    double t,
+    double changeoverT,
+  ) {
+    if (frameTags.isEmpty) {
+      return next.frameTags;
+    }
+    if (next.frameTags.isEmpty) {
+      return frameTags;
+    }
+    final List<String> preferred = t < changeoverT ? frameTags : next.frameTags;
+    final List<String> alternate = t < changeoverT ? next.frameTags : frameTags;
+    return _dedupeStrings(<String>[...preferred, ...alternate]);
   }
 
   List<MatchViewerPlayerFrame> _interpolatedPlayers(
@@ -985,6 +1206,13 @@ double _clampUnit(double value) {
   return value.clamp(0.0, 1.0).toDouble();
 }
 
+double? _interpolatedNullableNumber(double? start, double? end, double t) {
+  if (start != null && end != null) {
+    return start + ((end - start) * t);
+  }
+  return t < 0.5 ? start : end;
+}
+
 List<String> _orderedPlayerIds(
   List<MatchViewerPlayerFrame> leftPlayers,
   List<MatchViewerPlayerFrame> rightPlayers,
@@ -1013,4 +1241,15 @@ List<MatchTimelineInjection> _dedupeInjections(
     unique[injection.id] = injection;
   }
   return unique.values.toList(growable: false);
+}
+
+List<String> _dedupeStrings(List<String> values) {
+  final Set<String> seen = <String>{};
+  final List<String> ordered = <String>[];
+  for (final String value in values) {
+    if (seen.add(value)) {
+      ordered.add(value);
+    }
+  }
+  return ordered;
 }

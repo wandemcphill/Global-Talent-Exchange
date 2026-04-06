@@ -1,0 +1,524 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:gte_frontend/models/ball_entity.dart' as runtime_ball;
+import 'package:gte_frontend/models/match_3d_native_session.dart';
+import 'package:gte_frontend/models/match_event.dart';
+import 'package:gte_frontend/models/match_timeline_frame.dart';
+import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/models/player_entity.dart' as runtime_player;
+import 'package:gte_frontend/models/real_match_engine_presentation.dart';
+import 'package:gte_frontend/services/match_3d_bridge.dart';
+import 'package:gte_frontend/widgets/match_3d/entities/pitch_entity.dart';
+import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
+
+class NativeMatch3dSurface extends StatefulWidget {
+  const NativeMatch3dSurface({
+    super.key,
+    required this.viewState,
+    required this.frame,
+    this.activeEvent,
+    this.cameraPreset = MatchEngineCameraPreset.tactical_high,
+    this.bridge,
+    this.runtimePlayers,
+    this.runtimeBall,
+    this.showRuntimeBadge = true,
+    this.onRuntimeStatusMessageChanged,
+  });
+
+  static const Key runtimeBadgeKey = Key('native-match-3d-runtime-badge');
+
+  final MatchViewState viewState;
+  final MatchTimelineFrame frame;
+  final MatchEvent? activeEvent;
+  final MatchEngineCameraPreset cameraPreset;
+  final Match3DBridge? bridge;
+  final Iterable<runtime_player.PlayerEntity>? runtimePlayers;
+  final runtime_ball.BallEntity? runtimeBall;
+  final bool showRuntimeBadge;
+  final ValueChanged<String?>? onRuntimeStatusMessageChanged;
+
+  static Match3dNativeSessionDescriptor describeSession({
+    required MatchViewState viewState,
+    required MatchTimelineFrame frame,
+    MatchEngineCameraPreset cameraPreset =
+        MatchEngineCameraPreset.tactical_high,
+  }) {
+    final int expectedPlayerCount =
+        frame.players
+            .where(
+              (player) =>
+                  player.active ||
+                  player.state == MatchViewerPlayerState.sentOff,
+            )
+            .length;
+    return Match3dNativeSessionDescriptor(
+      sessionId: 'native_match_3d:${viewState.matchId}',
+      matchId: viewState.matchId,
+      source: viewState.source,
+      homeTeamId: viewState.homeTeam.teamId,
+      homeTeamName: viewState.homeTeam.teamName,
+      awayTeamId: viewState.awayTeam.teamId,
+      awayTeamName: viewState.awayTeam.teamName,
+      initialFrameId: frame.id,
+      initialClockMinute: frame.clockMinute,
+      initialPhase: frame.phase.name,
+      initialCameraPreset: cameraPreset.name,
+      expectedPlayerCount: expectedPlayerCount,
+      deterministicSeed: viewState.deterministicSeed,
+    );
+  }
+
+  @override
+  State<NativeMatch3dSurface> createState() => _NativeMatch3dSurfaceState();
+}
+
+class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
+  Match3DBridge? _bridge;
+  bool _nativeAvailable = false;
+  bool _hasProbedNativeAvailability = false;
+  String? _sessionId;
+  String? _reportedRuntimeStatusMessage;
+  StreamSubscription<dynamic>? _runtimeEventsSubscription;
+  Match3dNativeRuntimeInfo _runtimeInfo =
+      const Match3dNativeRuntimeInfo.unavailable();
+  Match3dNativeSessionState? _runtimeSessionState;
+  Match3dNativeRuntimeEventType _lastRuntimeEventType =
+      Match3dNativeRuntimeEventType.unknown;
+  bool _closingSession = false;
+  bool _unexpectedSessionClosed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bridge = widget.bridge;
+    _subscribeToRuntimeEvents();
+    unawaited(_probeNativeAvailability());
+  }
+
+  @override
+  void didUpdateWidget(covariant NativeMatch3dSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.bridge, widget.bridge)) {
+      final Match3DBridge? previousBridge = _bridge;
+      _bridge = widget.bridge;
+      _subscribeToRuntimeEvents();
+      unawaited(_reinitializeBridge(previousBridge));
+      return;
+    }
+    if (oldWidget.viewState.matchId != widget.viewState.matchId) {
+      unawaited(_reopenNativeSession());
+    } else if (_nativeAvailable &&
+        (oldWidget.viewState != widget.viewState ||
+            oldWidget.frame != widget.frame ||
+            oldWidget.activeEvent != widget.activeEvent ||
+            oldWidget.cameraPreset != widget.cameraPreset ||
+            oldWidget.runtimePlayers != widget.runtimePlayers ||
+            oldWidget.runtimeBall != widget.runtimeBall)) {
+      unawaited(_syncNativeFrame());
+    }
+  }
+
+  Future<void> _probeNativeAvailability() async {
+    final Match3DBridge? bridge = _bridge;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      if (mounted) {
+        setState(() {
+          _nativeAvailable = false;
+          _hasProbedNativeAvailability = true;
+          _runtimeInfo = const Match3dNativeRuntimeInfo.unavailable();
+          _runtimeSessionState = null;
+        });
+      }
+      _publishRuntimeStatusMessage(null);
+      return;
+    }
+    final Match3dNativeRuntimeInfo runtimeInfo =
+        bridge == null
+            ? const Match3dNativeRuntimeInfo.unavailable()
+            : await bridge.getRuntimeInfo();
+    final Match3dNativeSessionState? sessionState =
+        runtimeInfo.available && runtimeInfo.supportsSessions && bridge != null
+            ? await bridge.getSessionState()
+            : null;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _nativeAvailable = runtimeInfo.available;
+      _hasProbedNativeAvailability = true;
+      _runtimeInfo = runtimeInfo;
+      _runtimeSessionState = sessionState;
+      _lastRuntimeEventType = Match3dNativeRuntimeEventType.runtimeReady;
+      _unexpectedSessionClosed = false;
+    });
+    _publishRuntimeStatusMessage(_deriveRuntimeStatusMessage());
+    if (runtimeInfo.available) {
+      await _ensureNativeSession();
+      await _syncNativeFrame();
+    }
+  }
+
+  @override
+  void dispose() {
+    _closingSession = true;
+    unawaited(_runtimeEventsSubscription?.cancel() ?? Future<void>.value());
+    _runtimeEventsSubscription = null;
+    unawaited(_closeNativeSession(bridge: _bridge));
+    super.dispose();
+  }
+
+  Future<void> _reinitializeBridge(Match3DBridge? previousBridge) async {
+    await _closeNativeSession(bridge: previousBridge);
+    if (!mounted) {
+      return;
+    }
+    await _probeNativeAvailability();
+  }
+
+  Future<void> _reopenNativeSession() async {
+    await _closeNativeSession();
+    if (!mounted) {
+      return;
+    }
+    await _ensureNativeSession();
+    await _syncNativeFrame();
+  }
+
+  Future<String?> _ensureNativeSession() async {
+    if (!_nativeAvailable) {
+      return null;
+    }
+    final Match3DBridge? bridge = _bridge;
+    if (bridge == null) {
+      return null;
+    }
+    final Match3dNativeSessionDescriptor descriptor =
+        NativeMatch3dSurface.describeSession(
+          viewState: widget.viewState,
+          frame: widget.frame,
+          cameraPreset: widget.cameraPreset,
+        );
+    if (_sessionId == descriptor.sessionId) {
+      return _sessionId;
+    }
+    if (_sessionId != null && _sessionId != descriptor.sessionId) {
+      await _closeNativeSession();
+    }
+    final Match3dNativeSessionState state = await bridge.openSession(
+      descriptor,
+    );
+    _sessionId =
+        state.sessionId.isNotEmpty ? state.sessionId : descriptor.sessionId;
+    return _sessionId;
+  }
+
+  Future<void> _closeNativeSession({Match3DBridge? bridge}) async {
+    final Match3DBridge? resolvedBridge = bridge ?? _bridge;
+    final String? sessionId = _sessionId;
+    _sessionId = null;
+    if (resolvedBridge == null || sessionId == null || sessionId.isEmpty) {
+      return;
+    }
+    _closingSession = true;
+    await resolvedBridge.closeSession(sessionId: sessionId);
+    _closingSession = false;
+  }
+
+  Future<void> _syncNativeFrame() async {
+    final Match3DBridge? bridge = _bridge;
+    if (bridge == null) {
+      return;
+    }
+    final String? sessionId = await _ensureNativeSession();
+    final sceneGraph = Gtex3dScene.describeGraph(
+      viewState: widget.viewState,
+      frame: widget.frame,
+      activeEvent: widget.activeEvent,
+      cameraPreset: widget.cameraPreset,
+      runtimePlayers: widget.runtimePlayers,
+      runtimeBall: widget.runtimeBall,
+    );
+    await bridge.syncFrame(
+      sceneGraph: sceneGraph,
+      activeEvent: widget.activeEvent,
+      sessionId: sessionId,
+    );
+  }
+
+  void _subscribeToRuntimeEvents() {
+    unawaited(_runtimeEventsSubscription?.cancel() ?? Future<void>.value());
+    final Match3DBridge? bridge = _bridge;
+    if (bridge == null ||
+        kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android) {
+      _runtimeEventsSubscription = null;
+      return;
+    }
+    _runtimeEventsSubscription = bridge.events.listen(_handleRuntimeEvent);
+  }
+
+  void _handleRuntimeEvent(dynamic event) {
+    final Match3dNativeRuntimeEvent runtimeEvent =
+        Match3dNativeRuntimeEvent.fromMap(event);
+    if (runtimeEvent.type == Match3dNativeRuntimeEventType.unknown ||
+        !mounted) {
+      return;
+    }
+    final bool unexpectedSessionClose =
+        runtimeEvent.type == Match3dNativeRuntimeEventType.sessionClosed &&
+        !_closingSession;
+    setState(() {
+      _runtimeInfo = runtimeEvent.runtimeInfo;
+      _runtimeSessionState = runtimeEvent.sessionState ?? _runtimeSessionState;
+      _lastRuntimeEventType = runtimeEvent.type;
+      _hasProbedNativeAvailability = true;
+      if (runtimeEvent.type == Match3dNativeRuntimeEventType.sessionOpened ||
+          runtimeEvent.type == Match3dNativeRuntimeEventType.runtimeReady) {
+        _unexpectedSessionClosed = false;
+      }
+      if (unexpectedSessionClose) {
+        _nativeAvailable = false;
+        _unexpectedSessionClosed = true;
+      }
+    });
+    _publishRuntimeStatusMessage(
+      unexpectedSessionClose
+          ? 'Native 3D session closed; Flutter 3D fallback active.'
+          : _deriveRuntimeStatusMessage(),
+    );
+  }
+
+  void _publishRuntimeStatusMessage(String? message) {
+    if (_reportedRuntimeStatusMessage == message) {
+      return;
+    }
+    _reportedRuntimeStatusMessage = message;
+    widget.onRuntimeStatusMessageChanged?.call(message);
+  }
+
+  String? _deriveRuntimeStatusMessage() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return null;
+    }
+    if (_bridge == null || !_hasProbedNativeAvailability) {
+      return null;
+    }
+    if (_unexpectedSessionClosed) {
+      return 'Native 3D session closed; Flutter 3D fallback active.';
+    }
+    if (!_nativeAvailable) {
+      return 'Native Android 3D unavailable; Flutter 3D fallback active.';
+    }
+    final Match3dNativeSessionState? sessionState = _runtimeSessionState;
+    if (sessionState != null &&
+        sessionState.isOpen &&
+        !sessionState.platformViewAttached) {
+      return 'Native 3D session opened; waiting for the Android surface.';
+    }
+    if (sessionState != null &&
+        sessionState.isOpen &&
+        sessionState.ackCount == 0) {
+      return 'Native 3D session opened; waiting for the first native frame sync.';
+    }
+    return null;
+  }
+
+  bool get _showRuntimeBadge {
+    if (!widget.showRuntimeBadge ||
+        kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android ||
+        _bridge == null) {
+      return false;
+    }
+    return !_hasProbedNativeAvailability ||
+        _nativeAvailable ||
+        (_hasProbedNativeAvailability && !_nativeAvailable);
+  }
+
+  _RuntimeBadgeStyle get _runtimeBadgeStyle {
+    if (!_hasProbedNativeAvailability) {
+      return const _RuntimeBadgeStyle(
+        label: 'Native 3D Checking',
+        backgroundColor: Color(0xCC0F2A3B),
+        borderColor: Color(0xFF53B1FD),
+      );
+    }
+    if (!_nativeAvailable) {
+      return const _RuntimeBadgeStyle(
+        label: 'Flutter 3D Fallback',
+        backgroundColor: Color(0xCC7A271A),
+        borderColor: Color(0xFFF97066),
+      );
+    }
+    final Match3dNativeSessionState? sessionState = _runtimeSessionState;
+    final bool platformViewAttached =
+        sessionState?.platformViewAttached ?? _runtimeInfo.platformViewAttached;
+    final int ackCount = sessionState?.ackCount ?? _runtimeInfo.ackCount;
+    if (sessionState?.lifecycle == Match3dNativeSessionLifecycle.closed) {
+      return const _RuntimeBadgeStyle(
+        label: 'Native 3D Closed',
+        backgroundColor: Color(0xCC7A271A),
+        borderColor: Color(0xFFF97066),
+      );
+    }
+    if (ackCount > 0 && platformViewAttached) {
+      return const _RuntimeBadgeStyle(
+        label: 'Native 3D Live',
+        backgroundColor: Color(0xCC134E3A),
+        borderColor: Color(0xFF22C55E),
+      );
+    }
+    if (sessionState?.isOpen ?? false) {
+      return _RuntimeBadgeStyle(
+        label:
+            platformViewAttached ? 'Native 3D Syncing' : 'Native 3D Mounting',
+        backgroundColor: const Color(0xCC0F2A3B),
+        borderColor:
+            platformViewAttached
+                ? const Color(0xFFFDB022)
+                : const Color(0xFF53B1FD),
+      );
+    }
+    return const _RuntimeBadgeStyle(
+      label: 'Native 3D Ready',
+      backgroundColor: Color(0xCC0F2A3B),
+      borderColor: Color(0xFF53B1FD),
+    );
+  }
+
+  Widget _wrapWithRuntimeBadge(Widget child) {
+    if (!_showRuntimeBadge) {
+      return child;
+    }
+    final _RuntimeBadgeStyle badgeStyle = _runtimeBadgeStyle;
+    return Stack(
+      children: <Widget>[
+        child,
+        Positioned(
+          top: 14,
+          right: 14,
+          child: _NativeMatch3dRuntimeBadge(
+            key: NativeMatch3dSurface.runtimeBadgeKey,
+            style: badgeStyle,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNativeShell({required Widget child}) {
+    return AspectRatio(
+      aspectRatio: PitchEntity.aspectRatio,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[Color(0xFF0D1A22), Color(0xFF09131B)],
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        _bridge != null &&
+        !_hasProbedNativeAvailability) {
+      return _wrapWithRuntimeBadge(
+        _buildNativeShell(
+          child: const Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.4),
+            ),
+          ),
+        ),
+      );
+    }
+    if (_nativeAvailable &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      return _wrapWithRuntimeBadge(
+        _buildNativeShell(
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(
+                child: AndroidView(
+                  viewType: 'match_3d/native_view',
+                  hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final Match3DBridge? fallbackBridge =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+            ? null
+            : widget.bridge;
+    return _wrapWithRuntimeBadge(
+      Gtex3dScene(
+        viewState: widget.viewState,
+        frame: widget.frame,
+        activeEvent: widget.activeEvent,
+        cameraPreset: widget.cameraPreset,
+        bridge: fallbackBridge,
+        runtimePlayers: widget.runtimePlayers,
+        runtimeBall: widget.runtimeBall,
+      ),
+    );
+  }
+}
+
+class _RuntimeBadgeStyle {
+  const _RuntimeBadgeStyle({
+    required this.label,
+    required this.backgroundColor,
+    required this.borderColor,
+  });
+
+  final String label;
+  final Color backgroundColor;
+  final Color borderColor;
+}
+
+class _NativeMatch3dRuntimeBadge extends StatelessWidget {
+  const _NativeMatch3dRuntimeBadge({super.key, required this.style});
+
+  final _RuntimeBadgeStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: style.backgroundColor,
+        border: Border.all(color: style.borderColor.withValues(alpha: 0.92)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Text(
+          style.label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -114,14 +114,18 @@ namespace Gtex.Match3D.Runtime
             SyncPlayers(payload, immediate);
 
             MatchSceneNodeDto ballNode = payload.FindEntity("ball") ?? payload.FindFirstEntityOfType("ball");
-            if (ball != null && ballNode != null)
+            if (ball != null)
             {
-                bool treatAsShot = payload.action != null &&
-                                   (string.Equals(payload.action.type, "shot", StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(payload.action.type, "goal", StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(payload.action.type, "save", StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(payload.action.type, "miss", StringComparison.OrdinalIgnoreCase));
-                ball.ApplySceneNode(ballNode, immediate, treatAsShot);
+                ball.gameObject.SetActive(ballNode != null);
+                if (ballNode != null)
+                {
+                    bool treatAsShot = payload.action != null &&
+                                       (string.Equals(payload.action.type, "shot", StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(payload.action.type, "goal", StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(payload.action.type, "save", StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(payload.action.type, "miss", StringComparison.OrdinalIgnoreCase));
+                    ball.ApplySceneNode(ballNode, immediate, treatAsShot);
+                }
             }
 
             if (cameraController != null && payload.camera != null)
@@ -221,6 +225,34 @@ namespace Gtex.Match3D.Runtime
             }
         }
 
+        public void ClearScene()
+        {
+            _hasSceneSync = false;
+            _replayMode = false;
+            _lastFrameId = null;
+            _lastActionKey = null;
+            _lastEventId = null;
+            _lastMarkedReplayEventId = null;
+
+            if (replayPlayer != null && replayPlayer.IsPlaying)
+            {
+                replayPlayer.Stop();
+            }
+
+            foreach (KeyValuePair<string, PlayerController> entry in players)
+            {
+                if (entry.Value != null)
+                {
+                    entry.Value.gameObject.SetActive(false);
+                }
+            }
+
+            if (ball != null)
+            {
+                ball.gameObject.SetActive(false);
+            }
+        }
+
         public void ApplyReplayFrame(ReplayFrameData frame, bool immediate)
         {
             if (frame == null)
@@ -258,6 +290,7 @@ namespace Gtex.Match3D.Runtime
 
             if (ball != null)
             {
+                ball.gameObject.SetActive(true);
                 ball.ApplyReplayFrame(frame.ball, immediate);
             }
 

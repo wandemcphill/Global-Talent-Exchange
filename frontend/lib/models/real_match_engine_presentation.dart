@@ -219,6 +219,10 @@ class MatchEnginePresentationState {
     required this.lowerThirdDetail,
     required this.lowerThirdTrailing,
     required this.scorebugEventLabel,
+    required this.pressureIndex,
+    required this.dangerZone,
+    required this.transitionState,
+    required this.frameTags,
     this.banner,
     this.summaryBoard,
   });
@@ -242,6 +246,10 @@ class MatchEnginePresentationState {
   final String lowerThirdDetail;
   final String lowerThirdTrailing;
   final String? scorebugEventLabel;
+  final double? pressureIndex;
+  final String? dangerZone;
+  final MatchTransitionState? transitionState;
+  final List<String> frameTags;
   final MatchEngineBanner? banner;
   final MatchEngineSummaryBoard? summaryBoard;
 
@@ -254,4 +262,61 @@ class MatchEnginePresentationState {
   bool get isReplayMoment => moment == MatchEnginePresentationMoment.replay;
 
   bool get isRecapMoment => moment == MatchEnginePresentationMoment.recap;
+
+  bool get isDangerMoment =>
+      dangerZone == 'box' ||
+      dangerZone == 'final_third' ||
+      frameTags.contains('box_entry') ||
+      pressureIndex != null && pressureIndex! >= 0.72;
+
+  bool get isSetPieceMoment =>
+      frameTags.contains('set_piece') ||
+      transitionState?.isReset == true ||
+      dangerZone == 'set_piece';
+
+  String get pressureLabel {
+    final double value = pressureIndex ?? 0;
+    if (value >= 0.84) {
+      return 'Red Zone';
+    }
+    if (value >= 0.68) {
+      return 'High Pressure';
+    }
+    if (value >= 0.46) {
+      return 'Building';
+    }
+    return 'Settled';
+  }
+
+  String get dangerLabel {
+    return switch (dangerZone) {
+      'box' => 'Box Threat',
+      'final_third' => 'Final Third',
+      'middle_third' => 'Transition Lane',
+      'set_piece' => 'Set Piece',
+      'stopped' => 'Stoppage',
+      _ =>
+        isSetPieceMoment
+            ? 'Set Piece'
+            : transitionState?.isBreak == true
+            ? 'Breakaway'
+            : 'Open Play',
+    };
+  }
+
+  String get transitionLabel {
+    return switch (transitionState) {
+      MatchTransitionState.homeBreak => 'Home Break',
+      MatchTransitionState.awayBreak => 'Away Break',
+      MatchTransitionState.homeReset => 'Home Reset',
+      MatchTransitionState.awayReset => 'Away Reset',
+      MatchTransitionState.stopped => 'Stopped',
+      MatchTransitionState.stable || null =>
+        pressureIndex != null && pressureIndex! >= 0.68
+            ? 'Pressure Build'
+            : 'Stable',
+    };
+  }
+
+  String get telemetryLabel => '$dangerLabel · $pressureLabel';
 }

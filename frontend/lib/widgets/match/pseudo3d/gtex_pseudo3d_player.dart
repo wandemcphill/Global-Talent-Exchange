@@ -1,47 +1,110 @@
 import 'package:flutter/material.dart';
 
+@immutable
+class GtexPseudo3DPlayerVisualStyle {
+  const GtexPseudo3DPlayerVisualStyle({
+    required this.bodyColor,
+    required this.trimColor,
+    required this.outlineColor,
+    required this.glowColor,
+    required this.scaleMultiplier,
+    required this.borderWidth,
+    required this.showHalo,
+    required this.showPulseRing,
+    required this.showBadge,
+    required this.badgeColor,
+    required this.labelColor,
+    required this.shadowOpacity,
+  });
+
+  final Color bodyColor;
+  final Color trimColor;
+  final Color outlineColor;
+  final Color glowColor;
+  final double scaleMultiplier;
+  final double borderWidth;
+  final bool showHalo;
+  final bool showPulseRing;
+  final bool showBadge;
+  final Color badgeColor;
+  final Color labelColor;
+  final double shadowOpacity;
+}
+
 class GtexPseudo3DPlayer extends StatelessWidget {
   const GtexPseudo3DPlayer({
     super.key,
-    required this.primaryColor,
-    required this.trimColor,
     required this.scale,
-    required this.highlighted,
     required this.label,
+    required this.style,
   });
 
-  final Color primaryColor;
-  final Color trimColor;
+  static const Key haloKey = Key('pseudo3d-player-halo');
+  static const Key pulseRingKey = Key('pseudo3d-player-pulse-ring');
+  static const Key bodyKey = Key('pseudo3d-player-body');
+  static const Key badgeKey = Key('pseudo3d-player-badge');
+
   final double scale;
-  final bool highlighted;
   final String label;
+  final GtexPseudo3DPlayerVisualStyle style;
 
   @override
   Widget build(BuildContext context) {
-    final double width = 18 * scale;
-    final double height = 40 * scale;
-    final Color glowColor =
-        highlighted ? trimColor.withValues(alpha: 0.35) : Colors.transparent;
+    final double width = 18 * scale * style.scaleMultiplier;
+    final double height = 40 * scale * style.scaleMultiplier;
     return SizedBox(
       width: width,
       height: height,
       child: Stack(
         alignment: Alignment.bottomCenter,
         children: <Widget>[
+          if (style.showHalo)
+            Positioned(
+              key: haloKey,
+              bottom: height * 0.12,
+              child: Container(
+                width: width * 1.34,
+                height: height * 0.62,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(width),
+                  color: style.glowColor,
+                ),
+              ),
+            ),
+          if (style.showPulseRing)
+            Positioned(
+              key: pulseRingKey,
+              bottom: height * 0.20,
+              child: Container(
+                width: width * 1.16,
+                height: height * 0.54,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(width),
+                  border: Border.all(
+                    color: style.outlineColor.withValues(alpha: 0.72),
+                    width: style.borderWidth,
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             bottom: 0,
             child: Container(
+              key: bodyKey,
               width: width,
               height: height * 0.68,
               decoration: BoxDecoration(
-                color: primaryColor,
+                color: style.bodyColor,
                 borderRadius: BorderRadius.circular(width),
-                border: Border.all(color: trimColor, width: mathMax(1, scale)),
+                border: Border.all(
+                  color: style.outlineColor,
+                  width: mathMax(style.borderWidth, scale * 0.8),
+                ),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
-                    color: glowColor,
-                    blurRadius: highlighted ? 12 : 0,
-                    spreadRadius: highlighted ? 1 : 0,
+                    color: style.glowColor,
+                    blurRadius: style.showHalo ? 14 : 7,
+                    spreadRadius: style.showHalo ? 1.2 : 0.2,
                   ),
                 ],
               ),
@@ -49,9 +112,7 @@ class GtexPseudo3DPlayer extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                  color: trimColor.computeLuminance() > 0.55
-                      ? Colors.black
-                      : Colors.white,
+                  color: style.labelColor,
                   fontSize: 8 * scale,
                   fontWeight: FontWeight.w800,
                 ),
@@ -65,12 +126,32 @@ class GtexPseudo3DPlayer extends StatelessWidget {
               height: width * 0.72,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: primaryColor.withValues(alpha: 0.96),
+                color: style.bodyColor.withValues(alpha: 0.96),
                 border: Border.all(
-                    color: trimColor, width: mathMax(1, scale * 0.7)),
+                  color: style.outlineColor,
+                  width: mathMax(1, scale * 0.7),
+                ),
               ),
             ),
           ),
+          if (style.showBadge)
+            Positioned(
+              key: badgeKey,
+              top: height * 0.14,
+              right: width * 0.02,
+              child: Container(
+                width: width * 0.18,
+                height: width * 0.18,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: style.badgeColor,
+                  border: Border.all(
+                    color: style.labelColor.withValues(alpha: 0.84),
+                    width: 1,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

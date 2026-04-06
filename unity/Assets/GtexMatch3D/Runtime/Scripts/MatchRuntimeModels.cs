@@ -8,6 +8,7 @@ namespace Gtex.Match3D.Runtime
     public sealed class MatchSceneSyncPayload
     {
         public string type;
+        public string sessionId;
         public string matchId;
         public string frameId;
         public float clockMinute;
@@ -169,6 +170,105 @@ namespace Gtex.Match3D.Runtime
     }
 
     [Serializable]
+    public sealed class MatchTeamIdentityDto
+    {
+        public string teamId;
+        public string teamName;
+    }
+
+    [Serializable]
+    public sealed class MatchNativeSessionDescriptorDto
+    {
+        public string sessionId;
+        public string matchId;
+        public string source;
+        public MatchTeamIdentityDto homeTeam;
+        public MatchTeamIdentityDto awayTeam;
+        public string initialFrameId;
+        public float initialClockMinute;
+        public string initialPhase;
+        public string initialCameraPreset;
+        public int expectedPlayerCount;
+        public float pitchLengthMeters = 105f;
+        public float pitchWidthMeters = 68f;
+        public int deterministicSeed;
+    }
+
+    [Serializable]
+    public sealed class MatchNativeSessionCloseRequestDto
+    {
+        public string sessionId;
+    }
+
+    [Serializable]
+    public sealed class MatchPlatformViewAttachmentDto
+    {
+        public bool attached;
+    }
+
+    [Serializable]
+    public sealed class MatchNativeRuntimeInfoDto
+    {
+        public bool available = true;
+        public string platform = "unity";
+        public string runtime = "unity_match_3d";
+        public string viewType = "match_3d/unity_view";
+        public bool supportsSessions = true;
+        public bool platformViewAttached;
+        public string sessionStatus = "idle";
+        public string sessionId;
+        public string matchId;
+        public int ackCount;
+    }
+
+    [Serializable]
+    public sealed class MatchNativeSessionStateDto
+    {
+        public string sessionId;
+        public string matchId;
+        public string status = "idle";
+        public string runtime = "unity_match_3d";
+        public bool platformViewAttached;
+        public int ackCount;
+        public int entityCount;
+        public int playerCount;
+        public string lastFrameId;
+        public string phase;
+        public float clockMinute;
+        public bool @implicit;
+
+        public bool IsOpen()
+        {
+            return string.Equals(status, "open", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(status, "implicit", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Serializable]
+    public sealed class MatchNativeRuntimeEventDto
+    {
+        public string type;
+        public bool available = true;
+        public string platform = "unity";
+        public string runtime = "unity_match_3d";
+        public string viewType = "match_3d/unity_view";
+        public bool supportsSessions = true;
+        public bool platformViewAttached;
+        public string sessionStatus = "idle";
+        public string sessionId;
+        public string matchId;
+        public string status = "idle";
+        public int ackCount;
+        public int entityCount;
+        public int playerCount;
+        public string lastFrameId;
+        public string phase;
+        public float clockMinute;
+        public string actionType;
+        public bool @implicit;
+    }
+
+    [Serializable]
     public sealed class SerializableVector3Dto
     {
         public float x;
@@ -285,6 +385,93 @@ namespace Gtex.Match3D.Runtime
             {
                 Debug.LogError("Failed to parse match event payload.\n" + exception);
                 return null;
+            }
+        }
+
+        public static MatchNativeSessionDescriptorDto DeserializeSessionDescriptor(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonUtility.FromJson<MatchNativeSessionDescriptorDto>(json);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("Failed to parse native session descriptor.\n" + exception);
+                return null;
+            }
+        }
+
+        public static MatchNativeSessionCloseRequestDto DeserializeSessionCloseRequest(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonUtility.FromJson<MatchNativeSessionCloseRequestDto>(json);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("Failed to parse native session close request.\n" + exception);
+                return null;
+            }
+        }
+
+        public static MatchPlatformViewAttachmentDto DeserializePlatformViewAttachment(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonUtility.FromJson<MatchPlatformViewAttachmentDto>(json);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("Failed to parse platform view attachment payload.\n" + exception);
+                return null;
+            }
+        }
+
+        public static string SerializeRuntimeInfo(MatchNativeRuntimeInfoDto payload)
+        {
+            return Serialize(payload);
+        }
+
+        public static string SerializeSessionState(MatchNativeSessionStateDto payload)
+        {
+            return Serialize(payload);
+        }
+
+        public static string SerializeRuntimeEvent(MatchNativeRuntimeEventDto payload)
+        {
+            return Serialize(payload);
+        }
+
+        private static string Serialize<T>(T payload) where T : class
+        {
+            if (payload == null)
+            {
+                return "{}";
+            }
+
+            try
+            {
+                return JsonUtility.ToJson(payload);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("Failed to serialize runtime payload.\n" + exception);
+                return "{}";
             }
         }
     }

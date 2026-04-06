@@ -11,6 +11,7 @@ from app.schemas.match_viewer import (
     MatchViewerPlayerFrameView,
     MatchViewerPointView,
     MatchViewerSide,
+    MatchViewerVector2View,
     MatchViewStateView,
 )
 
@@ -451,6 +452,13 @@ class MatchViewerScalingService:
             playback_rate=left.playback_rate if blend_left else right.playback_rate,
             flag_animation=left.flag_animation if blend_left else right.flag_animation,
             celebration_team_id=left.celebration_team_id if blend_left else right.celebration_team_id,
+            possession_phase=left.possession_phase if blend_left else right.possession_phase,
+            transition_state=left.transition_state if blend_left else right.transition_state,
+            danger_zone=left.danger_zone if blend_left else right.danger_zone,
+            pressure_index=round(left.pressure_index + ((right.pressure_index - left.pressure_index) * t), 3),
+            compactness_home=round(left.compactness_home + ((right.compactness_home - left.compactness_home) * t), 3),
+            compactness_away=round(left.compactness_away + ((right.compactness_away - left.compactness_away) * t), 3),
+            frame_tags=list(left.frame_tags if blend_left else right.frame_tags),
             players=self._interpolated_players(left.players, right.players, t),
             ball=self._interpolated_ball(left.ball, right.ball, t),
         )
@@ -491,6 +499,13 @@ class MatchViewerScalingService:
                     highlighted=left.highlighted if blend_left else right.highlighted,
                     position=self._lerp_point(left.position, right.position, t),
                     anchor_position=self._lerp_point(left.anchor_position, right.anchor_position, t),
+                    animation_state=left.animation_state if blend_left else right.animation_state,
+                    speed_ratio=round(left.speed_ratio + ((right.speed_ratio - left.speed_ratio) * t), 3),
+                    blend_factor=round(left.blend_factor + ((right.blend_factor - left.blend_factor) * t), 3),
+                    stamina_pct=round(left.stamina_pct + ((right.stamina_pct - left.stamina_pct) * t), 1),
+                    has_possession=left.has_possession if blend_left else right.has_possession,
+                    facing=self._lerp_vector2(left.facing, right.facing, t),
+                    velocity=self._lerp_vector2(left.velocity, right.velocity, t),
                 )
             )
         return players
@@ -532,6 +547,17 @@ class MatchViewerScalingService:
             x=round(left.x + ((right.x - left.x) * t), 3),
             y=round(left.y + ((right.y - left.y) * t), 3),
             z=round(left.z + ((right.z - left.z) * t), 3),
+        )
+
+    def _lerp_vector2(
+        self,
+        left: MatchViewerVector2View,
+        right: MatchViewerVector2View,
+        t: float,
+    ) -> MatchViewerVector2View:
+        return MatchViewerVector2View(
+            x=round(left.x + ((right.x - left.x) * t), 3),
+            y=round(left.y + ((right.y - left.y) * t), 3),
         )
 
     def _normalize_frames(

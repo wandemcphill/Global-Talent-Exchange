@@ -6,7 +6,7 @@ from app.match_engine.services.match_simulation_service import MatchSimulationSe
 from app.match_engine.simulation.models import MatchEventType, TacticalStyle
 from app.replay_archive.schemas import ReplayArchiveRecord
 from app.services.match_timeline_service import MatchTimelineService
-from app.schemas.match_viewer import MatchViewerEventType, MatchViewerSide
+from app.schemas.match_viewer import MatchViewerAnimationState, MatchViewerEventType, MatchViewerPossessionPhase, MatchViewerSide
 from backend.tests.match_engine.helpers import build_request, build_team
 
 
@@ -99,6 +99,39 @@ def test_match_timeline_service_surfaces_major_event_types_across_replays() -> N
     assert MatchViewerEventType.SAVE in discovered
     assert MatchViewerEventType.MISS in discovered
     assert MatchViewerEventType.RED_CARD in discovered
+
+
+def test_match_timeline_service_enriches_frames_with_player_motion_pressure_and_tags() -> None:
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=33))
+
+    view_state = MatchTimelineService().build_from_replay_payload(replay_payload)
+
+    assert all(0.0 <= frame.pressure_index <= 1.0 for frame in view_state.frames)
+    assert all(0.0 <= frame.compactness_home <= 1.0 for frame in view_state.frames)
+    assert all(0.0 <= frame.compactness_away <= 1.0 for frame in view_state.frames)
+    assert all(frame.danger_zone for frame in view_state.frames)
+    assert any(frame.frame_tags for frame in view_state.frames)
+    assert any(
+        frame.possession_phase in {
+            MatchViewerPossessionPhase.TRANSITION,
+            MatchViewerPossessionPhase.FINAL_THIRD,
+            MatchViewerPossessionPhase.BOX_ATTACK,
+        }
+        for frame in view_state.frames
+    )
+    assert any(player.has_possession for frame in view_state.frames for player in frame.players)
+    assert any(
+        player.animation_state is not MatchViewerAnimationState.IDLE
+        for frame in view_state.frames
+        for player in frame.players
+    )
+    for frame in view_state.frames:
+        for player in frame.players:
+            assert 0.0 <= player.speed_ratio <= 1.0
+            assert 0.0 <= player.blend_factor <= 1.0
+            assert 0.0 <= player.stamina_pct <= 100.0
+            assert -1.0 <= player.facing.x <= 1.0
+            assert -1.0 <= player.facing.y <= 1.0
 
 
 def test_match_timeline_service_builds_archive_fallback() -> None:

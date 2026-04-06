@@ -2,20 +2,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import md5
+from math import hypot
 from typing import Any
 
 from app.live_matches.schemas import LiveMatchStateView, LiveMatchStreamEventView
 from app.match_engine.schemas import (
     MatchBadgeVisualView,
+    MatchCrowdStateView,
     MatchEventView,
     MatchKitVisualView,
+    MatchMotionPredictionView,
+    MatchPlayerStatsView,
     MatchPlayerVisualView,
     MatchReplayPayloadView,
+    MatchRenderSyncEventView,
     MatchTeamVisualIdentityView,
 )
 from app.match_engine.simulation.models import MatchEventType, PlayerRole
 from app.replay_archive.schemas import ReplayArchiveRecord, ReplayMomentView
 from app.schemas.match_viewer import (
+    MatchViewerAnimationState,
     MatchViewerCameraPreset,
     MatchTimelineFrameView,
     MatchViewerBallFrameView,
@@ -25,8 +31,11 @@ from app.schemas.match_viewer import (
     MatchViewerPlaybackStage,
     MatchViewerPlayerFrameView,
     MatchViewerPlayerState,
+    MatchViewerPossessionPhase,
     MatchViewerSide,
     MatchViewerTeamView,
+    MatchViewerTransitionState,
+    MatchViewerVector2View,
     MatchViewStateView,
 )
 
@@ -49,6 +58,11 @@ class _PlayerRuntime:
     label: str
     shirt_number: int | None
     role: PlayerRole
+    minutes_played: int | None = None
+    substituted_in_minute: int | None = None
+    substituted_out_minute: int | None = None
+    rating: float | None = None
+    base_stamina_pct: float | None = None
 
 
 @dataclass(slots=True)
@@ -58,6 +72,7 @@ class _TeamRuntime:
     lineup: list[str]
     bench: list[str]
     current_formation: str
+    team_stamina_pct: float | None = None
 
 
 @dataclass(slots=True)
@@ -69,6 +84,9 @@ class _ViewerEventContext:
     away_formation: str | None = None
     fallback_formation: str | None = None
     render_contract: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+    motion: MatchMotionPredictionView | None = None
+    crowd: MatchCrowdStateView | None = None
 
 
 class MatchTimelineService:
@@ -76,6 +94,24 @@ class MatchTimelineService:
         if replay_payload.visual_identity is None:
             raise ValueError("Viewer timeline requires replay visual identity data.")
 
+        player_stats_by_id = {
+            item.player_id: item
+            for item in replay_payload.summary.player_stats
+        }
+        render_sync_by_event_id = {
+            item.event_id: item
+            for item in (replay_payload.render_sync.events if replay_payload.render_sync is not None else [])
+        }
+        home_stamina_pct = (
+            float(replay_payload.halftime_analytics.home_stamina)
+            if replay_payload.halftime_analytics is not None
+            else None
+        )
+        away_stamina_pct = (
+            float(replay_payload.halftime_analytics.away_stamina)
+            if replay_payload.halftime_analytics is not None
+            else None
+        )
         home_team = self._team_view(
             replay_payload.visual_identity.home_team,
             side=MatchViewerSide.HOME,
@@ -86,9 +122,25 @@ class MatchTimelineService:
             side=MatchViewerSide.AWAY,
             formation=replay_payload.summary.away_stats.started_formation,
         )
-        home_runtime = self._team_runtime(replay_payload.visual_identity.home_team, home_team)
-        away_runtime = self._team_runtime(replay_payload.visual_identity.away_team, away_team)
-        events = [self._context_from_match_event(item) for item in replay_payload.timeline.events]
+        home_runtime = self._team_runtime(
+            replay_payload.visual_identity.home_team,
+            home_team,
+            player_stats_by_id=player_stats_by_id,
+            team_stamina_pct=home_stamina_pct,
+        )
+        away_runtime = self._team_runtime(
+            replay_payload.visual_identity.away_team,
+            away_team,
+            player_stats_by_id=player_stats_by_id,
+            team_stamina_pct=away_stamina_pct,
+        )
+        events = [
+            self._context_from_match_event(
+                item,
+                render_sync=render_sync_by_event_id.get(item.event_id),
+            )
+            for item in replay_payload.timeline.events
+        ]
         events = self._ensure_control_events(
             match_id=replay_payload.match_id,
             events=events,
@@ -297,7 +349,14 @@ class MatchTimelineService:
             goalkeeper_color=team.goalkeeper_kit.primary_color,
         )
 
-    def _team_runtime(self, team: MatchTeamVisualIdentityView, team_view: MatchViewerTeamView) -> _TeamRuntime:
+    def _team_runtime(
+        self,
+        team: MatchTeamVisualIdentityView,
+        team_view: MatchViewerTeamView,
+        *,
+        player_stats_by_id: dict[str, MatchPlayerStatsView] | None = None,
+        team_stamina_pct: float | None = None,
+    ) -> _TeamRuntime:
         starters = team.player_visuals[:11]
         bench = team.player_visuals[11:]
         players_by_id = {
@@ -308,6 +367,35 @@ class MatchTimelineService:
                 label=item.display_name[:3].upper() if item.shirt_number is None else str(item.shirt_number),
                 shirt_number=item.shirt_number,
                 role=item.role,
+                minutes_played=(
+                    player_stats_by_id[item.player_id].minutes_played
+                    if player_stats_by_id is not None
+                    and item.player_id in player_stats_by_id
+                    and player_stats_by_id[item.player_id].team_id == team_view.team_id
+                    else None
+                ),
+                substituted_in_minute=(
+                    player_stats_by_id[item.player_id].substituted_in_minute
+                    if player_stats_by_id is not None
+                    and item.player_id in player_stats_by_id
+                    and player_stats_by_id[item.player_id].team_id == team_view.team_id
+                    else None
+                ),
+                substituted_out_minute=(
+                    player_stats_by_id[item.player_id].substituted_out_minute
+                    if player_stats_by_id is not None
+                    and item.player_id in player_stats_by_id
+                    and player_stats_by_id[item.player_id].team_id == team_view.team_id
+                    else None
+                ),
+                rating=(
+                    player_stats_by_id[item.player_id].rating
+                    if player_stats_by_id is not None
+                    and item.player_id in player_stats_by_id
+                    and player_stats_by_id[item.player_id].team_id == team_view.team_id
+                    else None
+                ),
+                base_stamina_pct=team_stamina_pct,
             )
             for item in team.player_visuals
         }
@@ -317,10 +405,19 @@ class MatchTimelineService:
             lineup=[item.player_id for item in starters],
             bench=[item.player_id for item in bench],
             current_formation=team_view.formation,
+            team_stamina_pct=team_stamina_pct,
         )
 
-    def _context_from_match_event(self, event: MatchEventView) -> _ViewerEventContext:
+    def _context_from_match_event(
+        self,
+        event: MatchEventView,
+        *,
+        render_sync: MatchRenderSyncEventView | None = None,
+    ) -> _ViewerEventContext:
         metadata = event.metadata or {}
+        context_metadata = dict(metadata)
+        if render_sync is not None:
+            context_metadata.update(render_sync.meta)
         viewer_type = self._viewer_event_type_from_match_event(event)
         return _ViewerEventContext(
             view=MatchViewerEventView(
@@ -364,6 +461,9 @@ class MatchTimelineService:
             away_formation=self._optional_text(metadata.get("away_formation")),
             fallback_formation=self._optional_text(metadata.get("fallback_formation")),
             render_contract=self._render_contract(metadata.get("render")),
+            metadata=context_metadata,
+            motion=render_sync.experience.motion if render_sync is not None and render_sync.experience is not None else None,
+            crowd=render_sync.experience.crowd if render_sync is not None and render_sync.experience is not None else None,
         )
 
     def _context_from_archive_event(
@@ -411,6 +511,7 @@ class MatchTimelineService:
             source_type=event.event_type,
             team_side=None,
             render_contract=None,
+            metadata=None,
         )
 
     def _context_from_live_event(
@@ -453,6 +554,8 @@ class MatchTimelineService:
                 team_name = home_team_name
             elif team_side is MatchViewerSide.AWAY:
                 team_name = away_team_name
+        context_metadata = dict(event.metadata)
+        context_metadata.update(event.meta)
         return _ViewerEventContext(
             view=MatchViewerEventView(
                 event_id=event.event_id or f"{event.match_id or 'live'}:{raw_event_type}:{int(self._live_event_time_seconds(event))}",
@@ -491,6 +594,9 @@ class MatchTimelineService:
             source_type=raw_event_type,
             team_side=team_side,
             render_contract=self._live_render_contract(event),
+            metadata=context_metadata,
+            motion=event.experience.motion if event.experience is not None else None,
+            crowd=event.experience.crowd if event.experience is not None else None,
         )
 
     def _ensure_control_events(
@@ -1472,7 +1578,12 @@ class MatchTimelineService:
                 deduped.append(frame.model_copy(update={"time_seconds": round(deduped[-1].time_seconds + 0.05, 2)}))
                 continue
             deduped.append(frame)
-        return deduped
+        return self._enrich_frames(
+            frames=deduped,
+            home_runtime=home_runtime,
+            away_runtime=away_runtime,
+            events=events,
+        )
 
     def _frame(
         self,
@@ -1918,6 +2029,578 @@ class MatchTimelineService:
                 return ball_frame(position=event_target, owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="traveling"))
         owner = primary or default_owner
         return ball_frame(position=self._ball_near_player(positions.get(owner) or event_target), owner_player_id=owner, state=self._ball_state_from_render(active_event, fallback="rolling"))
+
+    def _enrich_frames(
+        self,
+        *,
+        frames: list[MatchTimelineFrameView],
+        home_runtime: _TeamRuntime,
+        away_runtime: _TeamRuntime,
+        events: list[_ViewerEventContext],
+    ) -> list[MatchTimelineFrameView]:
+        if not frames:
+            return []
+
+        event_lookup = {item.view.event_id: item for item in events}
+        player_lookup = {
+            **home_runtime.players_by_id,
+            **away_runtime.players_by_id,
+        }
+        previous_positions: dict[str, Any] = {}
+        previous_time: float | None = None
+        enriched: list[MatchTimelineFrameView] = []
+
+        for frame in frames:
+            event = event_lookup.get(frame.active_event_id or "")
+            ball_owner = (
+                frame.ball.owner_player_id
+                if frame.ball.owner_player_id is not None and self._ball_is_controlled(frame.ball.state)
+                else None
+            )
+            ball_point = {
+                "x": float(frame.ball.position.x),
+                "y": float(frame.ball.position.y),
+            }
+            danger_zone = self._danger_zone_label(
+                ball_point=ball_point,
+                possession_side=frame.possession_side,
+                home_attacks_right=frame.home_attacks_right,
+                phase=frame.phase,
+            )
+            transition_state = self._transition_state_for_frame(
+                frame=frame,
+                event=event,
+                possession_side=frame.possession_side,
+                home_attacks_right=frame.home_attacks_right,
+            )
+            pressure_index = self._pressure_index_for_frame(
+                frame=frame,
+                event=event,
+                ball_point=ball_point,
+            )
+            compactness_home = self._compactness_for_team(frame.players, side=MatchViewerSide.HOME)
+            compactness_away = self._compactness_for_team(frame.players, side=MatchViewerSide.AWAY)
+            possession_phase = self._possession_phase_for_frame(
+                frame=frame,
+                event=event,
+                danger_zone=danger_zone,
+                transition_state=transition_state,
+            )
+
+            delta_t = 0.0 if previous_time is None else max(0.0, frame.time_seconds - previous_time)
+            updated_players: list[MatchViewerPlayerFrameView] = []
+            current_positions: dict[str, Any] = {}
+            for player in frame.players:
+                current_positions[player.player_id] = player.position
+                runtime = player_lookup.get(player.player_id)
+                velocity = self._player_velocity(
+                    current=player.position,
+                    previous=previous_positions.get(player.player_id),
+                    delta_t=delta_t,
+                )
+                has_possession = ball_owner == player.player_id
+                speed_ratio = self._player_speed_ratio(
+                    player=player,
+                    event=event,
+                    velocity=velocity,
+                )
+                facing = self._player_facing(
+                    player=player,
+                    frame=frame,
+                    event=event,
+                    velocity=velocity,
+                    ball_point=ball_point,
+                    has_possession=has_possession,
+                )
+                stamina_pct = self._player_stamina_pct(
+                    player=player,
+                    runtime=runtime,
+                    clock_minute=frame.clock_minute,
+                    event=event,
+                    speed_ratio=speed_ratio,
+                )
+                blend_factor = self._player_blend_factor(
+                    player=player,
+                    event=event,
+                    speed_ratio=speed_ratio,
+                )
+                animation_state = self._player_animation_state(
+                    player=player,
+                    frame=frame,
+                    event=event,
+                    has_possession=has_possession,
+                    speed_ratio=speed_ratio,
+                )
+                updated_players.append(
+                    player.model_copy(
+                        update={
+                            "animation_state": animation_state,
+                            "speed_ratio": speed_ratio,
+                            "blend_factor": blend_factor,
+                            "stamina_pct": stamina_pct,
+                            "has_possession": has_possession,
+                            "facing": facing,
+                            "velocity": velocity,
+                        }
+                    )
+                )
+
+            enriched.append(
+                frame.model_copy(
+                    update={
+                        "possession_phase": possession_phase,
+                        "transition_state": transition_state,
+                        "danger_zone": danger_zone,
+                        "pressure_index": pressure_index,
+                        "compactness_home": compactness_home,
+                        "compactness_away": compactness_away,
+                        "frame_tags": self._frame_tags(
+                            frame=frame,
+                            event=event,
+                            danger_zone=danger_zone,
+                            possession_phase=possession_phase,
+                            transition_state=transition_state,
+                            pressure_index=pressure_index,
+                        ),
+                        "players": updated_players,
+                    }
+                )
+            )
+            previous_positions = current_positions
+            previous_time = frame.time_seconds
+
+        return enriched
+
+    def _ball_is_controlled(self, state: str) -> bool:
+        return state not in {"shot", "traveling", "saved", "missed", "in_goal"}
+
+    def _danger_zone_label(
+        self,
+        *,
+        ball_point: dict[str, float],
+        possession_side: MatchViewerSide,
+        home_attacks_right: bool,
+        phase: MatchViewerPhase,
+    ) -> str:
+        if phase is MatchViewerPhase.SET_PIECE:
+            return "set_piece_lane"
+        progress = self._goal_progress(
+            point=ball_point,
+            side=possession_side,
+            home_attacks_right=home_attacks_right,
+        )
+        if progress >= 88.0 and 38.0 <= ball_point["y"] <= 62.0:
+            return "central_box"
+        if progress >= 82.0:
+            return "wide_box"
+        if progress >= 68.0:
+            return "final_third"
+        if progress >= 45.0:
+            return "middle_third"
+        return "build_up"
+
+    def _transition_state_for_frame(
+        self,
+        *,
+        frame: MatchTimelineFrameView,
+        event: _ViewerEventContext | None,
+        possession_side: MatchViewerSide,
+        home_attacks_right: bool,
+    ) -> MatchViewerTransitionState:
+        if frame.stage is MatchViewerPlaybackStage.RESET:
+            return (
+                MatchViewerTransitionState.HOME_RESET
+                if possession_side is MatchViewerSide.HOME
+                else MatchViewerTransitionState.AWAY_RESET
+            )
+        if event is None:
+            return MatchViewerTransitionState.STABLE
+        if frame.pause_playback and event.view.event_type in {
+            MatchViewerEventType.FOUL,
+            MatchViewerEventType.OFFSIDE,
+            MatchViewerEventType.YELLOW_CARD,
+            MatchViewerEventType.RED_CARD,
+            MatchViewerEventType.HALFTIME,
+            MatchViewerEventType.FULLTIME,
+            MatchViewerEventType.INJURY,
+            MatchViewerEventType.SUBSTITUTION,
+        }:
+            return MatchViewerTransitionState.STOPPED
+
+        origin = self._render_point(event, "origin") or {"x": 50.0, "y": 50.0}
+        target = self._render_point(event, "target") or {"x": float(frame.ball.position.x), "y": float(frame.ball.position.y)}
+        progress_delta = self._goal_progress(
+            point=target,
+            side=possession_side,
+            home_attacks_right=home_attacks_right,
+        ) - self._goal_progress(
+            point=origin,
+            side=possession_side,
+            home_attacks_right=home_attacks_right,
+        )
+        build_up_pattern = self._optional_text((event.metadata or {}).get("build_up_pattern"))
+        if event.view.event_type in {
+            MatchViewerEventType.ATTACK,
+            MatchViewerEventType.GOAL,
+            MatchViewerEventType.MISS,
+            MatchViewerEventType.SAVE,
+            MatchViewerEventType.PENALTY,
+            MatchViewerEventType.SET_PIECE,
+        } and (progress_delta >= 14.0 or build_up_pattern == "counterattack"):
+            return (
+                MatchViewerTransitionState.HOME_BREAK
+                if possession_side is MatchViewerSide.HOME
+                else MatchViewerTransitionState.AWAY_BREAK
+            )
+        return MatchViewerTransitionState.STABLE
+
+    def _pressure_index_for_frame(
+        self,
+        *,
+        frame: MatchTimelineFrameView,
+        event: _ViewerEventContext | None,
+        ball_point: dict[str, float],
+    ) -> float:
+        defending_distances = sorted(
+            self._distance(
+                {"x": float(player.position.x), "y": float(player.position.y)},
+                ball_point,
+            )
+            for player in frame.players
+            if player.side is not frame.possession_side
+        )
+        nearest_slice = defending_distances[:3]
+        proximity_pressure = 0.0
+        if nearest_slice:
+            proximity_pressure = self._clamp_unit(1.0 - ((sum(nearest_slice) / len(nearest_slice)) / 24.0))
+
+        motion_pressure = event.motion.pressure if event is not None and event.motion is not None else 0.0
+        emphasis_pressure = ((event.view.emphasis_level - 1) / 2.0) if event is not None else 0.0
+        territory_pressure = self._goal_progress(
+            point=ball_point,
+            side=frame.possession_side,
+            home_attacks_right=frame.home_attacks_right,
+        ) / 100.0
+        crowd_pressure = 0.0
+        if event is not None and event.crowd is not None:
+            crowd_pressure = max(event.crowd.home_intensity, event.crowd.away_intensity)
+        stage_bonus = 0.1 if frame.stage in {
+            MatchViewerPlaybackStage.EVENT,
+            MatchViewerPlaybackStage.REVIEW,
+            MatchViewerPlaybackStage.DECISION,
+        } else 0.0
+
+        return round(
+            self._clamp_unit(
+                (motion_pressure * 0.38)
+                + (proximity_pressure * 0.22)
+                + (territory_pressure * 0.18)
+                + (emphasis_pressure * 0.12)
+                + (crowd_pressure * 0.10)
+                + stage_bonus
+            ),
+            3,
+        )
+
+    def _compactness_for_team(
+        self,
+        players: list[MatchViewerPlayerFrameView],
+        *,
+        side: MatchViewerSide,
+    ) -> float:
+        team_players = [
+            player
+            for player in players
+            if player.side is side and player.active and player.line != "goalkeeper"
+        ]
+        if len(team_players) < 3:
+            return 0.5
+        x_values = [float(player.position.x) for player in team_players]
+        y_values = [float(player.position.y) for player in team_players]
+        x_span = max(x_values) - min(x_values)
+        y_span = max(y_values) - min(y_values)
+        spread = ((x_span / 64.0) + (y_span / 78.0)) / 2.0
+        return round(self._clamp_unit(1.0 - spread), 3)
+
+    def _possession_phase_for_frame(
+        self,
+        *,
+        frame: MatchTimelineFrameView,
+        event: _ViewerEventContext | None,
+        danger_zone: str,
+        transition_state: MatchViewerTransitionState,
+    ) -> MatchViewerPossessionPhase:
+        if frame.phase is MatchViewerPhase.KICKOFF or frame.stage is MatchViewerPlaybackStage.RESET:
+            return MatchViewerPossessionPhase.RESTART
+        if frame.phase is MatchViewerPhase.SET_PIECE:
+            return MatchViewerPossessionPhase.SET_PIECE
+        if frame.phase in {MatchViewerPhase.HALFTIME, MatchViewerPhase.FULLTIME}:
+            return MatchViewerPossessionPhase.DEAD_BALL
+        if event is not None and event.view.event_type in {
+            MatchViewerEventType.FOUL,
+            MatchViewerEventType.OFFSIDE,
+            MatchViewerEventType.YELLOW_CARD,
+            MatchViewerEventType.RED_CARD,
+            MatchViewerEventType.SUBSTITUTION,
+            MatchViewerEventType.INJURY,
+        } and frame.pause_playback:
+            return MatchViewerPossessionPhase.DEAD_BALL
+        if transition_state in {
+            MatchViewerTransitionState.HOME_BREAK,
+            MatchViewerTransitionState.AWAY_BREAK,
+        }:
+            return MatchViewerPossessionPhase.TRANSITION
+        if danger_zone in {"central_box", "wide_box"}:
+            return MatchViewerPossessionPhase.BOX_ATTACK
+        if danger_zone == "final_third":
+            return MatchViewerPossessionPhase.FINAL_THIRD
+        return MatchViewerPossessionPhase.BUILD_UP
+
+    def _frame_tags(
+        self,
+        *,
+        frame: MatchTimelineFrameView,
+        event: _ViewerEventContext | None,
+        danger_zone: str,
+        possession_phase: MatchViewerPossessionPhase,
+        transition_state: MatchViewerTransitionState,
+        pressure_index: float,
+    ) -> list[str]:
+        tags = [
+            f"phase:{frame.phase.value}",
+            f"stage:{frame.stage.value}",
+            f"camera:{frame.camera_preset.value}",
+            f"zone:{danger_zone}",
+        ]
+        if event is not None:
+            tags.append(f"event:{event.view.event_type.value}")
+        if possession_phase is not MatchViewerPossessionPhase.BUILD_UP:
+            tags.append(f"possession:{possession_phase.value}")
+        if transition_state is not MatchViewerTransitionState.STABLE:
+            tags.append(f"transition:{transition_state.value}")
+        if pressure_index >= 0.72:
+            tags.append("high_pressure")
+        elif pressure_index >= 0.45:
+            tags.append("medium_pressure")
+        if frame.playback_rate < 1.0:
+            tags.append("slow_motion")
+        if frame.pause_playback:
+            tags.append("paused")
+        if frame.flag_animation:
+            tags.append("assistant_flag")
+        if frame.celebration_team_id is not None:
+            tags.append("celebration")
+
+        deduped: list[str] = []
+        for tag in tags:
+            if tag not in deduped:
+                deduped.append(tag)
+        return deduped
+
+    def _player_velocity(
+        self,
+        *,
+        current,
+        previous,
+        delta_t: float,
+    ) -> MatchViewerVector2View:
+        if previous is None or delta_t <= 0.0:
+            return MatchViewerVector2View()
+        return MatchViewerVector2View(
+            x=round((float(current.x) - float(previous.x)) / max(delta_t, 0.05), 3),
+            y=round((float(current.y) - float(previous.y)) / max(delta_t, 0.05), 3),
+        )
+
+    def _player_speed_ratio(
+        self,
+        *,
+        player: MatchViewerPlayerFrameView,
+        event: _ViewerEventContext | None,
+        velocity: MatchViewerVector2View,
+    ) -> float:
+        if player.state is MatchViewerPlayerState.SENT_OFF:
+            return 0.0
+        speed = hypot(float(velocity.x), float(velocity.y))
+        resolved = self._clamp_unit(speed / 12.0)
+        if event is not None and event.motion is not None and player.player_id in event.view.highlighted_player_ids:
+            resolved = max(
+                resolved,
+                self._clamp_unit(
+                    (event.motion.run_weight * 0.45)
+                    + (event.motion.sprint_weight * 0.95)
+                    + (event.motion.shoot_weight * 0.75)
+                ),
+            )
+        state_floor = {
+            MatchViewerPlayerState.IDLE: 0.0,
+            MatchViewerPlayerState.MOVING: 0.16,
+            MatchViewerPlayerState.ATTACKING: 0.28,
+            MatchViewerPlayerState.PRESSING: 0.34,
+            MatchViewerPlayerState.DEFENDING: 0.22,
+            MatchViewerPlayerState.SENT_OFF: 0.0,
+        }[player.state]
+        return round(max(resolved, state_floor), 3)
+
+    def _player_facing(
+        self,
+        *,
+        player: MatchViewerPlayerFrameView,
+        frame: MatchTimelineFrameView,
+        event: _ViewerEventContext | None,
+        velocity: MatchViewerVector2View,
+        ball_point: dict[str, float],
+        has_possession: bool,
+    ) -> MatchViewerVector2View:
+        velocity_magnitude = hypot(float(velocity.x), float(velocity.y))
+        if velocity_magnitude >= 0.05:
+            return self._normalize_vector(float(velocity.x), float(velocity.y))
+
+        target = None
+        if event is not None and (
+            has_possession
+            or player.player_id in event.view.highlighted_player_ids
+            or player.state in {MatchViewerPlayerState.PRESSING, MatchViewerPlayerState.DEFENDING}
+        ):
+            target = self._render_point(event, "target")
+        if target is None and player.state in {MatchViewerPlayerState.PRESSING, MatchViewerPlayerState.DEFENDING}:
+            target = ball_point
+        if target is None:
+            target = {
+                "x": float(player.anchor_position.x),
+                "y": float(player.anchor_position.y),
+            }
+        direction_x = float(target["x"]) - float(player.position.x)
+        direction_y = float(target["y"]) - float(player.position.y)
+        if abs(direction_x) < 0.01 and abs(direction_y) < 0.01:
+            attacks_right = frame.home_attacks_right if player.side is MatchViewerSide.HOME else not frame.home_attacks_right
+            direction_x = 1.0 if attacks_right else -1.0
+            direction_y = 0.0
+        return self._normalize_vector(direction_x, direction_y)
+
+    def _player_stamina_pct(
+        self,
+        *,
+        player: MatchViewerPlayerFrameView,
+        runtime: _PlayerRuntime | None,
+        clock_minute: float,
+        event: _ViewerEventContext | None,
+        speed_ratio: float,
+    ) -> float:
+        baseline = runtime.base_stamina_pct if runtime is not None and runtime.base_stamina_pct is not None else 84.0
+        active_minute = min(clock_minute, float(runtime.substituted_out_minute) if runtime is not None and runtime.substituted_out_minute is not None else clock_minute)
+        freshness_bonus = 0.0
+        if runtime is not None and runtime.substituted_in_minute is not None:
+            active_minute = max(0.0, active_minute - float(runtime.substituted_in_minute))
+            if active_minute <= 12.0:
+                freshness_bonus = 7.0
+        line_load = {
+            "goalkeeper": 0.36,
+            "defense": 0.58,
+            "midfield": 0.72,
+            "attack": 0.68,
+        }.get(player.line, 0.64)
+        stamina = baseline - (active_minute * (0.18 + (speed_ratio * 0.11)) * line_load) + freshness_bonus
+        if event is not None and event.motion is not None and player.player_id in event.view.highlighted_player_ids and event.motion.fatigue_load is not None:
+            stamina = min(stamina, 100.0 - (event.motion.fatigue_load * 100.0))
+        if player.state is MatchViewerPlayerState.SENT_OFF:
+            stamina = min(stamina, 40.0)
+        return round(max(0.0, min(100.0, stamina)), 1)
+
+    def _player_blend_factor(
+        self,
+        *,
+        player: MatchViewerPlayerFrameView,
+        event: _ViewerEventContext | None,
+        speed_ratio: float,
+    ) -> float:
+        displacement = self._distance(
+            {"x": float(player.position.x), "y": float(player.position.y)},
+            {"x": float(player.anchor_position.x), "y": float(player.anchor_position.y)},
+        )
+        emphasis = 0.25 if player.highlighted else 0.0
+        motion_blend = 0.0
+        if event is not None and event.motion is not None and player.player_id in event.view.highlighted_player_ids:
+            motion_blend = max(event.motion.run_weight, event.motion.sprint_weight, event.motion.shoot_weight) * 0.55
+        return round(
+            self._clamp_unit(
+                max(displacement / 24.0, min(1.0, (speed_ratio * 0.55) + emphasis + motion_blend))
+            ),
+            3,
+        )
+
+    def _player_animation_state(
+        self,
+        *,
+        player: MatchViewerPlayerFrameView,
+        frame: MatchTimelineFrameView,
+        event: _ViewerEventContext | None,
+        has_possession: bool,
+        speed_ratio: float,
+    ) -> MatchViewerAnimationState:
+        if player.state is MatchViewerPlayerState.SENT_OFF:
+            return MatchViewerAnimationState.SENT_OFF
+        if (
+            frame.celebration_team_id == player.team_id
+            and event is not None
+            and event.view.event_type is MatchViewerEventType.GOAL
+            and frame.stage in {MatchViewerPlaybackStage.DECISION, MatchViewerPlaybackStage.POST}
+        ):
+            return MatchViewerAnimationState.CELEBRATE
+        if event is not None and player.role is PlayerRole.GOALKEEPER and event.view.event_type is MatchViewerEventType.SAVE and player.player_id in {
+            event.view.primary_player_id,
+            event.view.secondary_player_id,
+        }:
+            return MatchViewerAnimationState.SAVE
+        if has_possession and event is not None:
+            if event.view.event_type in {
+                MatchViewerEventType.PENALTY,
+                MatchViewerEventType.SET_PIECE,
+            } and frame.stage in {MatchViewerPlaybackStage.PRE, MatchViewerPlaybackStage.EVENT}:
+                return MatchViewerAnimationState.SET_PIECE
+            if event.view.event_type in {
+                MatchViewerEventType.GOAL,
+                MatchViewerEventType.MISS,
+                MatchViewerEventType.SAVE,
+            } and frame.stage in {MatchViewerPlaybackStage.EVENT, MatchViewerPlaybackStage.POST}:
+                return MatchViewerAnimationState.SHOOT
+            if event.view.event_type in {
+                MatchViewerEventType.ATTACK,
+                MatchViewerEventType.OFFSIDE,
+            } and frame.stage in {MatchViewerPlaybackStage.PRE, MatchViewerPlaybackStage.EVENT}:
+                return MatchViewerAnimationState.PASS
+        if player.state in {MatchViewerPlayerState.PRESSING, MatchViewerPlayerState.DEFENDING} and speed_ratio >= 0.35:
+            return MatchViewerAnimationState.PRESS
+        if speed_ratio >= 0.75:
+            return MatchViewerAnimationState.SPRINT
+        if speed_ratio >= 0.42:
+            return MatchViewerAnimationState.RUN
+        if speed_ratio >= 0.16:
+            return MatchViewerAnimationState.JOG
+        return MatchViewerAnimationState.IDLE
+
+    def _goal_progress(
+        self,
+        *,
+        point: dict[str, float],
+        side: MatchViewerSide,
+        home_attacks_right: bool,
+    ) -> float:
+        if side is MatchViewerSide.HOME:
+            return float(point["x"]) if home_attacks_right else 100.0 - float(point["x"])
+        return 100.0 - float(point["x"]) if home_attacks_right else float(point["x"])
+
+    def _distance(self, point_a: dict[str, float], point_b: dict[str, float]) -> float:
+        return hypot(float(point_a["x"]) - float(point_b["x"]), float(point_a["y"]) - float(point_b["y"]))
+
+    def _normalize_vector(self, x: float, y: float) -> MatchViewerVector2View:
+        magnitude = max(hypot(x, y), 0.0001)
+        return MatchViewerVector2View(
+            x=round(x / magnitude, 3),
+            y=round(y / magnitude, 3),
+        )
+
+    def _clamp_unit(self, value: float) -> float:
+        return max(0.0, min(1.0, float(value)))
 
     def _viewer_event_type_from_match_event(self, event: MatchEventView) -> MatchViewerEventType:
         mapping = {

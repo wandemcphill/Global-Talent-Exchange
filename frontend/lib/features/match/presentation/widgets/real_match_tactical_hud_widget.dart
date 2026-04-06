@@ -19,7 +19,7 @@ class RealMatchTacticalHudWidget extends StatelessWidget {
     final String possessionLabel =
         presentation.activeEventContext?.hasPrimaryPlayer == true
             ? 'Possession focus: ${presentation.activeEventContext!.primaryPlayerName}'
-            : 'Possession: ${presentation.possessionSide.name.toUpperCase()}';
+            : 'Possession: ${presentation.possessionSide.name.toUpperCase()} · ${presentation.transitionLabel}';
     final String instructionSummary = _combinedInstructionSummary();
     return DecoratedBox(
       key: const Key('real-match-tactical-hud'),
@@ -48,6 +48,14 @@ class RealMatchTacticalHudWidget extends StatelessWidget {
                   label: presentation.phaseLabel.toUpperCase(),
                   accent: const Color(0xFFFDB022),
                 ),
+                const SizedBox(width: 8),
+                _HudPill(
+                  label: presentation.pressureLabel.toUpperCase(),
+                  accent:
+                      presentation.isDangerMoment
+                          ? const Color(0xFFF97066)
+                          : const Color(0xFF53B1FD),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -67,6 +75,7 @@ class RealMatchTacticalHudWidget extends StatelessWidget {
                     team: package.home,
                     shape: presentation.homeShape,
                     eventContext: presentation.activeEventContext,
+                    presentation: presentation,
                     accent: _teamAccent(package.home, const Color(0xFF22C55E)),
                   ),
                 ),
@@ -76,6 +85,7 @@ class RealMatchTacticalHudWidget extends StatelessWidget {
                     team: package.away,
                     shape: presentation.awayShape,
                     eventContext: presentation.activeEventContext,
+                    presentation: presentation,
                     accent: _teamAccent(package.away, const Color(0xFFF97316)),
                     alignEnd: true,
                   ),
@@ -133,6 +143,7 @@ class _TeamTacticalCard extends StatelessWidget {
     required this.team,
     required this.shape,
     required this.eventContext,
+    required this.presentation,
     required this.accent,
     this.alignEnd = false,
   });
@@ -140,6 +151,7 @@ class _TeamTacticalCard extends StatelessWidget {
   final MatchPresentationTeam team;
   final MatchEngineTeamShape shape;
   final MatchEngineEventContext? eventContext;
+  final MatchEnginePresentationState presentation;
   final Color accent;
   final bool alignEnd;
 
@@ -148,18 +160,7 @@ class _TeamTacticalCard extends StatelessWidget {
     final String? press = _findInstruction(team.instructionSummary, 'press');
     final String? tempo = _findInstruction(team.instructionSummary, 'tempo');
     final String? width = _findInstruction(team.instructionSummary, 'width');
-    final String focusLabel =
-        eventContext?.teamId == team.teamId
-            ? 'Attack focus'
-            : shape.inPossession
-            ? 'Support shape'
-            : 'Defensive block';
-    final String focusValue =
-        eventContext?.teamId == team.teamId && eventContext?.bannerText != null
-            ? eventContext!.bannerText!
-            : shape.inPossession
-            ? 'Maintain support lanes'
-            : 'Hold compact distances';
+    final ({String label, String value}) focus = _focusCopy();
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -194,6 +195,7 @@ class _TeamTacticalCard extends StatelessWidget {
             children: <Widget>[
               _HudMetricChip(label: 'Width', value: width ?? shape.widthLabel),
               _HudMetricChip(label: 'Line', value: _lineHeightLabel(shape)),
+              _HudMetricChip(label: 'Compact', value: shape.compactnessLabel),
               _HudMetricChip(label: 'Press', value: press ?? 'Hidden'),
               _HudMetricChip(label: 'Tempo', value: tempo ?? 'Hidden'),
             ],
@@ -202,7 +204,7 @@ class _TeamTacticalCard extends StatelessWidget {
           _ShapeLaneSummary(shape: shape, accent: accent, alignEnd: alignEnd),
           const SizedBox(height: 10),
           Text(
-            '$focusLabel: $focusValue',
+            '${focus.label}: ${focus.value}',
             textAlign: alignEnd ? TextAlign.right : TextAlign.left,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: accent,
@@ -212,6 +214,35 @@ class _TeamTacticalCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  ({String label, String value}) _focusCopy() {
+    if (eventContext?.teamId == team.teamId &&
+        eventContext?.bannerText != null) {
+      return (label: 'Attack focus', value: eventContext!.bannerText!);
+    }
+    if (presentation.isSetPieceMoment) {
+      return (label: 'Restart shape', value: presentation.transitionLabel);
+    }
+    if (presentation.transitionState?.isBreak == true) {
+      return (
+        label: shape.inPossession ? 'Break support' : 'Recovery run',
+        value:
+            shape.inPossession
+                ? presentation.dangerLabel
+                : 'Collapse space and recover central lanes',
+      );
+    }
+    if (presentation.isDangerMoment && shape.inPossession) {
+      return (label: 'Chance state', value: presentation.dangerLabel);
+    }
+    return (
+      label: shape.inPossession ? 'Support shape' : 'Defensive block',
+      value:
+          shape.inPossession
+              ? 'Maintain support lanes'
+              : 'Hold compact distances',
     );
   }
 }
