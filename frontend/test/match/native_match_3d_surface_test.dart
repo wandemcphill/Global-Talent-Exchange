@@ -92,6 +92,50 @@ void main() {
   );
 
   testWidgets(
+    'native surface shows the Unity activity shell when the runtime uses full-screen Unity',
+    (WidgetTester tester) async {
+      final MatchViewState viewState = await _loadFallbackState(
+        _buildCompetition(id: 'native-match-3d-unity-activity'),
+      );
+      final _FakeMatch3dBridgeBackend backend = _FakeMatch3dBridgeBackend(
+        available: true,
+        platform: 'unity',
+        runtime: 'unity_match_3d',
+        viewType: 'match_3d/unity_activity',
+        platformViewAttachedOnOpen: false,
+        emitAckOnSceneSync: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: NativeMatch3dSurface(
+              viewState: viewState,
+              frame: viewState.firstFrame,
+              activeEvent: viewState.events.first,
+              bridge: Match3DBridge(backend: backend),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(find.byType(AndroidView), findsNothing);
+      expect(find.byType(Gtex3dScene), findsNothing);
+      expect(find.text('Opening Unity match engine'), findsOneWidget);
+      expect(find.textContaining(viewState.matchId), findsOneWidget);
+      expect(
+        backend.openedSessionIds.single,
+        'native_match_3d:${viewState.matchId}',
+      );
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.android,
+    }),
+  );
+
+  testWidgets(
     'native surface falls back and reports status when the native session closes unexpectedly',
     (WidgetTester tester) async {
       final MatchViewState viewState = await _loadFallbackState(
@@ -216,9 +260,21 @@ Future<MatchViewState> _loadFallbackState(CompetitionSummary competition) {
 
 class _FakeMatch3dBridgeBackend
     implements Match3dBridgeBackend, Match3dBridgeSessionBackend {
-  _FakeMatch3dBridgeBackend({required this.available});
+  _FakeMatch3dBridgeBackend({
+    required this.available,
+    this.platform = 'android',
+    this.runtime = 'native_match_3d_canvas',
+    this.viewType = 'match_3d/native_view',
+    this.platformViewAttachedOnOpen = true,
+    this.emitAckOnSceneSync = true,
+  });
 
   final bool available;
+  final String platform;
+  final String runtime;
+  final String viewType;
+  final bool platformViewAttachedOnOpen;
+  final bool emitAckOnSceneSync;
   final StreamController<dynamic> _controller =
       StreamController<dynamic>.broadcast();
   final List<Map<String, dynamic>> sentEvents = <Map<String, dynamic>>[];
@@ -245,9 +301,9 @@ class _FakeMatch3dBridgeBackend
   Future<Map<String, dynamic>> getRuntimeInfo() async {
     return <String, dynamic>{
       'available': available,
-      'platform': 'android',
-      'runtime': 'native_match_3d_canvas',
-      'viewType': 'match_3d/native_view',
+      'platform': platform,
+      'runtime': runtime,
+      'viewType': viewType,
       'supportsSessions': true,
       'platformViewAttached': _sessionState.platformViewAttached,
       'sessionStatus': _sessionState.lifecycle.name,
@@ -265,8 +321,8 @@ class _FakeMatch3dBridgeBackend
       sessionId: sessionId,
       matchId: request['matchId'] as String? ?? '',
       lifecycle: Match3dNativeSessionLifecycle.open,
-      runtime: 'native_match_3d_canvas',
-      platformViewAttached: true,
+      runtime: runtime,
+      platformViewAttached: platformViewAttachedOnOpen,
       ackCount: 0,
       entityCount: 0,
       playerCount: (request['expectedPlayerCount'] as num?)?.toInt() ?? 0,
@@ -274,7 +330,9 @@ class _FakeMatch3dBridgeBackend
       phase: request['initialPhase'] as String?,
       clockMinute: (request['initialClockMinute'] as num?)?.toDouble(),
     );
-    _controller.add(_runtimeEvent('PLATFORM_VIEW_ATTACHED'));
+    if (platformViewAttachedOnOpen) {
+      _controller.add(_runtimeEvent('PLATFORM_VIEW_ATTACHED'));
+    }
     _controller.add(_runtimeEvent('SESSION_OPENED'));
     return _sessionState.toMap();
   }
@@ -308,7 +366,7 @@ class _FakeMatch3dBridgeBackend
   @override
   Future<void> handleEvent(Map<String, dynamic> event) async {
     sentEvents.add(event);
-    if (event['type'] == 'SCENE_SYNC') {
+    if (event['type'] == 'SCENE_SYNC' && emitAckOnSceneSync) {
       _sessionState = Match3dNativeSessionState(
         sessionId: event['sessionId'] as String? ?? _sessionState.sessionId,
         matchId: event['matchId'] as String? ?? _sessionState.matchId,
@@ -372,9 +430,9 @@ class _FakeMatch3dBridgeBackend
     return <String, dynamic>{
       'type': type,
       'available': available,
-      'platform': 'android',
-      'runtime': 'native_match_3d_canvas',
-      'viewType': 'match_3d/native_view',
+      'platform': platform,
+      'runtime': runtime,
+      'viewType': viewType,
       'supportsSessions': true,
       'platformViewAttached': _sessionState.platformViewAttached,
       'sessionStatus': _sessionState.lifecycle.name,

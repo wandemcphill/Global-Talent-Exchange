@@ -7,19 +7,27 @@ This folder adds a Unity-side runtime that consumes the existing Flutter `SCENE_
 - `unity/Assets/GtexMatch3D/Runtime/Scripts/MatchSceneBootstrap.cs`
   Creates the scene hierarchy at runtime if you drop a single `MatchSceneBootstrap` object into an empty scene.
 - `unity/Assets/GtexMatch3D/Runtime/Scripts/MatchController.cs`
-  Orchestrates scene sync, event-triggered animation changes, camera focus, and replay recording.
+  Orchestrates scene sync, live-feed polling, event-triggered animation changes, camera focus, and replay recording.
 - `unity/Assets/GtexMatch3D/Runtime/Scripts/PlayerController.cs`
   Handles player interpolation, animator state changes, side colors, possession/highlight visuals.
 - `unity/Assets/GtexMatch3D/Runtime/Scripts/BallController.cs`
   Handles ball interpolation, shot orientation, and spin.
 - `unity/Assets/GtexMatch3D/Runtime/Scripts/CameraController.cs`
   Applies broadcast, tactical, and cinematic rigs from Flutter.
+- `unity/Assets/GtexMatch3D/Runtime/Scripts/MatchOverlayController.cs`
+  Draws the score, match clock, goal headline, and text event feed overlay.
 - `unity/Assets/GtexMatch3D/Runtime/Scripts/ReplayRecorder.cs`
   Records live runtime frames and prepares highlight clips.
 - `unity/Assets/GtexMatch3D/Runtime/Scripts/ReplayPlayer.cs`
   Rewinds, pauses, replays, loops, and supports slow motion.
 - `unity/Assets/GtexMatch3D/Runtime/Scripts/FlutterUnityBridge.cs`
   Entry point for JSON forwarded from the Flutter host/native shell.
+- `unity/Assets/GtexMatch3D/Runtime/Scripts/MatchAPI.cs`
+  Polling client for the backend live bridge at `/match/{id}/live`.
+- `unity/Assets/GtexMatch3D/Runtime/Scripts/MatchLiveBridge.cs`
+  Configurable backend to Unity poller that retries failures and keeps the last good state on screen.
+- `unity/Assets/GtexMatch3D/Runtime/Scripts/MatchLiveModels.cs`
+  Backend polling models: `MatchResponse`, `Event`, and `PlayerPosition`.
 
 ## Scene shape
 
@@ -41,11 +49,47 @@ If you already have authored prefabs, you can keep the same hierarchy and replac
 
 1. Copy `unity/Assets/GtexMatch3D` into your Unity project `Assets/` folder.
 2. Create a new empty scene.
-3. Add an empty root object named `MatchScene`.
-4. Add `MatchSceneBootstrap` to that root object.
-5. Press Play once.
+3. Add an empty root object named `MatchScene` and attach `MatchSceneBootstrap`.
+4. Set `MatchController.backendBaseUrl` and `MatchController.matchId` if you want live-feed playback.
+5. Press Play.
 
-The bootstrapper will generate a plane pitch, a sphere ball, a camera rig, lighting, and a disabled player prototype used for cloning.
+The bootstrapper will generate a plane pitch, a sphere ball, a camera rig, lighting, a text overlay, and a disabled player prototype used for cloning. In live-feed mode it also seeds 22 player capsules into a simple 4-3-3 vs 4-3-3 shape.
+
+## Android SDK / External Tools
+
+Unity Android builds depend on the Android Build Support module plus valid SDK, NDK, and JDK entries in `Edit > Preferences > External Tools`.
+
+For the GTEX workspace on this machine:
+
+- Flutter Android uses `C:\Users\ayomc\AppData\Local\Android\Sdk`
+- `frontend/android/local.properties` already points `sdk.dir` there
+
+If Unity is not using its bundled Android tools, point the Unity `Android SDK` field at that same SDK folder. The included editor helper `Assets/GtexMatch3D/Editor/GtexAndroidBuildTools.cs` can also copy `ANDROID_SDK_ROOT` or `ANDROID_HOME` into Unity's SDK preference when the current SDK path is missing.
+
+## Build helpers
+
+After importing the package into a real Unity project, use:
+
+- `Tools > GTEX > Android > Configure SDK From Environment`
+- `Tools > GTEX > Android > Validate External Tools`
+- `Tools > GTEX > Android > Build APK`
+- `Tools > GTEX > Android > Export Unity Library`
+
+When the Unity project sits inside this GTEX repo layout, the Unity-library export defaults to `../frontend/android/unityExport`. Otherwise it falls back to the Unity project's own `Builds/Android/` folder.
+
+## Live-feed playback
+
+`MatchController` now supports a standalone polling mode for a basic Football Manager-style viewer.
+
+- Primary path template: `/match/{id}/live`
+- Fallback path template for this repo: `/api/match-engine/live-feed/{id}`
+- Data source: `timeline_events`
+- Supported visual beats:
+  - `goal` / `goals` -> scorer animation, ball to goal, headline text
+  - `shot` / `missed_chances` / `penalties` -> shot animation, ball toward goal
+  - `assist` / `pass` -> pass animation, ball between two players
+
+The live-feed path templates are serialized on `MatchController`, so you can point the scene at either the generic endpoint or the existing GTEX backend route without changing code.
 
 ## Flutter to Unity handoff
 
@@ -76,6 +120,32 @@ Example target:
 ```csharp
 bridgeGameObject.SendMessage("HandleSceneSync", jsonPayload);
 ```
+
+## Direct backend polling
+
+If you want Unity to talk to GTEX without going through the Flutter host bridge:
+
+1. Add `MatchLiveBridge` to the same root object as `MatchSceneBootstrap`.
+2. Set `matchId`.
+3. Choose `Local`, `Production`, or `Custom` base URL in the inspector.
+4. Leave polling at `1` second for the initial bridge.
+
+`MatchLiveBridge` polls `GET /match/{matchId}/live`, retries with backoff on failures, and keeps rendering the last known good frame until the next successful response.
+
+## GTEX Android integration
+
+The Flutter/Android host now expects a Unity Android export under:
+
+- `frontend/android/unityExport/unityLibrary`
+
+Once that folder exists, Gradle conditionally includes `:unityLibrary` and GTEX launches Unity in a full-screen `UnityMatchActivity`.
+
+Runtime flow:
+
+- Flutter opens the native 3D session with `matchId` and `sessionId`
+- Android launches Unity and forwards scene-sync JSON through `UnitySendMessage`
+- Unity sends runtime events back into Android through `com.gtex.exchange.match3d.UnityBridgeCallback`
+- `MatchController` stores the active `matchId` and ignores scene-sync frames for any other match
 
 ## Motion-capture pipeline
 
@@ -129,4 +199,4 @@ With `useGlobalTimeScale` enabled, slow motion applies `Time.timeScale = 0.35`.
 
 - The generated scene uses primitives only; replace them with authored assets once your Unity project is wired.
 - The runtime is schema-aligned to the current Flutter scene graph contract rather than inventing a second event format.
-- No Unity compile/test pass was run here because this repo is not a Unity project and the editor/runtime is not present in the workspace.
+- No Unity compile/test pass was run here because this repo is not a full Unity project and the editor/runtime is not present in the workspace.

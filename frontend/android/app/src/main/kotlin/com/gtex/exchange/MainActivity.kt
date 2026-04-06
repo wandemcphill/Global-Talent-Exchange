@@ -1,7 +1,6 @@
 package com.gtex.exchange
 
-import com.gtex.exchange.match3d.NativeMatch3dPlatformViewFactory
-import com.gtex.exchange.match3d.NativeMatch3dRuntime
+import com.gtex.exchange.match3d.UnityMatch3dRuntime
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -11,11 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
-        flutterEngine.platformViewsController.registry.registerViewFactory(
-            NativeMatch3dPlatformViewFactory.viewType,
-            NativeMatch3dPlatformViewFactory(),
-        )
+        UnityMatch3dRuntime.attachHostActivity(this)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -23,7 +18,7 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
             when (call.method) {
                 "ping",
-                "runtimeInfo" -> result.success(NativeMatch3dRuntime.runtimeInfoMap())
+                "runtimeInfo" -> result.success(UnityMatch3dRuntime.runtimeInfoMap())
 
                 "openSession" -> {
                     val payload = call.arguments as? Map<*, *>
@@ -35,16 +30,16 @@ class MainActivity : FlutterActivity() {
                         )
                         return@setMethodCallHandler
                     }
-                    result.success(NativeMatch3dRuntime.openSession(payload.toStringKeyedMap()))
+                    result.success(UnityMatch3dRuntime.openSession(payload.toStringKeyedMap()))
                 }
 
                 "closeSession" -> {
                     val payload = call.arguments as? Map<*, *>
                     val sessionId = payload?.toStringKeyedMap()?.get("sessionId")?.toString()
-                    result.success(NativeMatch3dRuntime.closeSession(sessionId))
+                    result.success(UnityMatch3dRuntime.closeSession(sessionId))
                 }
 
-                "getSessionState" -> result.success(NativeMatch3dRuntime.sessionStateMap())
+                "getSessionState" -> result.success(UnityMatch3dRuntime.sessionStateMap())
 
                 "handleEvent" -> {
                     val payload = call.arguments as? Map<*, *>
@@ -56,7 +51,7 @@ class MainActivity : FlutterActivity() {
                         )
                         return@setMethodCallHandler
                     }
-                    result.success(NativeMatch3dRuntime.applyPayload(payload.toStringKeyedMap()))
+                    result.success(UnityMatch3dRuntime.applyPayload(payload.toStringKeyedMap()))
                 }
 
                 else -> result.notImplemented()
@@ -69,14 +64,19 @@ class MainActivity : FlutterActivity() {
         ).setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-                    NativeMatch3dRuntime.bindEventSink(events)
+                    UnityMatch3dRuntime.bindEventSink(events)
                 }
 
                 override fun onCancel(arguments: Any?) {
-                    NativeMatch3dRuntime.bindEventSink(null)
+                    UnityMatch3dRuntime.bindEventSink(null)
                 }
             },
         )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        UnityMatch3dRuntime.attachHostActivity(this)
     }
 }
 

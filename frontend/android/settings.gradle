@@ -23,3 +23,10 @@ plugins {
 }
 
 include ':app'
+
+def unityExportRoot = file('unityExport')
+def unityLibraryDir = new File(unityExportRoot, 'unityLibrary')
+if (unityLibraryDir.exists()) {
+    include ':unityLibrary'
+    project(':unityLibrary').projectDir = unityLibraryDir
+}

@@ -4,18 +4,34 @@ namespace Gtex.Match3D.Runtime
 {
     public sealed class FlutterUnityBridge : MonoBehaviour
     {
+        private const string BridgeGameObjectName = "GTEXUnityBridge";
+
+        private static FlutterUnityBridge _instance;
+
         [SerializeField] private MatchController matchController;
         [SerializeField] private string runtimeId = "unity_match_3d";
-        [SerializeField] private string viewType = "match_3d/unity_view";
+        [SerializeField] private string viewType = "match_3d/unity_activity";
         [SerializeField] private bool clearSceneOnSessionClose = true;
         [SerializeField] private bool createImplicitSessionFromSceneSync = true;
         [SerializeField] private bool platformViewAttached = false;
+        [SerializeField] private string androidRuntimeCallbackClass =
+            "com.gtex.exchange.match3d.UnityBridgeCallback";
 
         private MatchNativeSessionStateDto _sessionState;
         private string _lastRuntimeEventJson = "{}";
 
         private void Awake()
         {
+            if (_instance != null && _instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            _instance = this;
+            gameObject.name = BridgeGameObjectName;
+            DontDestroyOnLoad(transform.root.gameObject);
+
             if (matchController == null)
             {
                 matchController = GetComponent<MatchController>();
@@ -62,6 +78,11 @@ namespace Gtex.Match3D.Runtime
                 matchController.ClearScene();
             }
 
+            if (matchController != null)
+            {
+                matchController.SetActiveMatch(descriptor.matchId);
+            }
+
             _sessionState = new MatchNativeSessionStateDto
             {
                 sessionId = ResolveSessionId(descriptor.sessionId, descriptor.matchId),
@@ -102,6 +123,11 @@ namespace Gtex.Match3D.Runtime
             if (clearSceneOnSessionClose && matchController != null)
             {
                 matchController.ClearScene();
+            }
+
+            if (matchController != null)
+            {
+                matchController.SetActiveMatch(null);
             }
 
             RecordRuntimeEvent("SESSION_CLOSED");
@@ -209,6 +235,11 @@ namespace Gtex.Match3D.Runtime
             _sessionState.clockMinute = payload.clockMinute;
             _sessionState.@implicit = true;
 
+            if (matchController != null)
+            {
+                matchController.SetActiveMatch(payload.matchId);
+            }
+
             RecordRuntimeEvent("SESSION_IMPLICIT");
         }
 
@@ -228,6 +259,11 @@ namespace Gtex.Match3D.Runtime
             if (!_sessionState.@implicit)
             {
                 _sessionState.status = "open";
+            }
+
+            if (matchController != null)
+            {
+                matchController.SetActiveMatch(payload.matchId);
             }
         }
 
@@ -253,6 +289,7 @@ namespace Gtex.Match3D.Runtime
         {
             MatchNativeRuntimeEventDto payload = BuildRuntimeEvent(type, actionType);
             _lastRuntimeEventJson = MatchRuntimeJson.SerializeRuntimeEvent(payload);
+            NotifyAndroidRuntimeEvent(_lastRuntimeEventJson);
             return _lastRuntimeEventJson;
         }
 
@@ -317,6 +354,54 @@ namespace Gtex.Match3D.Runtime
             }
 
             return "unity_match_3d:implicit";
+        }
+
+        private void NotifyAndroidRuntimeEvent(string json)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (string.IsNullOrWhiteSpace(androidRuntimeCallbackClass))
+            {
+                return;
+            }
+
+            try
+            {
+                using (AndroidJavaClass callbackClass = new AndroidJavaClass(androidRuntimeCallbackClass))
+                {
+                    callbackClass.CallStatic("onRuntimeEvent", json);
+                }
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning("Failed to forward Unity runtime event to Android.\n" + exception);
+            }
+#endif
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureBridgeExists()
+        {
+            FlutterUnityBridge existingBridge = FindObjectOfType<FlutterUnityBridge>();
+            if (existingBridge != null)
+            {
+                existingBridge.gameObject.name = BridgeGameObjectName;
+                return;
+            }
+
+            MatchSceneBootstrap existingBootstrap = FindObjectOfType<MatchSceneBootstrap>();
+            if (existingBootstrap != null)
+            {
+                existingBootstrap.Bootstrap();
+                return;
+            }
+
+            GameObject root = GameObject.Find("MatchScene");
+            if (root == null)
+            {
+                root = new GameObject("MatchScene");
+            }
+
+            root.AddComponent<MatchSceneBootstrap>();
         }
     }
 }

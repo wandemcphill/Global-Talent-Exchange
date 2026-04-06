@@ -76,6 +76,9 @@ class NativeMatch3dSurface extends StatefulWidget {
 }
 
 class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
+  static const String _embeddedNativeViewType = 'match_3d/native_view';
+  static const String _unityActivityViewType = 'match_3d/unity_activity';
+
   Match3DBridge? _bridge;
   bool _nativeAvailable = false;
   bool _hasProbedNativeAvailability = false;
@@ -338,6 +341,14 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
         (_hasProbedNativeAvailability && !_nativeAvailable);
   }
 
+  bool get _usesEmbeddedNativeView =>
+      _runtimeInfo.viewType == _embeddedNativeViewType;
+
+  bool get _usesUnityActivityRuntime =>
+      _runtimeInfo.viewType == _unityActivityViewType ||
+      _runtimeInfo.platform == 'unity' ||
+      _runtimeInfo.runtime == 'unity_match_3d';
+
   _RuntimeBadgeStyle get _runtimeBadgeStyle {
     if (!_hasProbedNativeAvailability) {
       return const _RuntimeBadgeStyle(
@@ -386,6 +397,80 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
       label: 'Native 3D Ready',
       backgroundColor: Color(0xCC0F2A3B),
       borderColor: Color(0xFF53B1FD),
+    );
+  }
+
+  Widget _buildUnityActivityShell() {
+    final Match3dNativeSessionState? sessionState = _runtimeSessionState;
+    final bool playerVisible =
+        sessionState?.platformViewAttached ?? _runtimeInfo.platformViewAttached;
+    final String headline =
+        playerVisible
+            ? 'Unity match engine live'
+            : 'Opening Unity match engine';
+    final String detail =
+        playerVisible
+            ? 'Unity is running this match in a full-screen Android player. Use the system back gesture to return to the GTEX route.'
+            : 'GTEX launches Unity as a full-screen Android activity when native 3D is available for this match.';
+
+    return _buildNativeShell(
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[Color(0xFF081017), Color(0xFF11202A)],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: const Color(0xFF22C55E).withValues(alpha: 0.14),
+                  border: Border.all(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.45),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.sports_soccer,
+                  color: Color(0xFFB6F4C2),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                headline,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                detail,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.82),
+                  height: 1.45,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Match ID: ${widget.viewState.matchId}',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.74),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -450,13 +535,27 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
     if (_nativeAvailable &&
         !kIsWeb &&
         defaultTargetPlatform == TargetPlatform.android) {
+      if (_usesUnityActivityRuntime) {
+        return _wrapWithRuntimeBadge(_buildUnityActivityShell());
+      }
+      if (!_usesEmbeddedNativeView) {
+        return _wrapWithRuntimeBadge(
+          _buildNativeShell(
+            child: const Center(
+              child: Text(
+                'Native 3D runtime connected without an Android view binding.',
+              ),
+            ),
+          ),
+        );
+      }
       return _wrapWithRuntimeBadge(
         _buildNativeShell(
           child: Stack(
             children: <Widget>[
               Positioned.fill(
                 child: AndroidView(
-                  viewType: 'match_3d/native_view',
+                  viewType: _embeddedNativeViewType,
                   hitTestBehavior: PlatformViewHitTestBehavior.transparent,
                 ),
               ),
