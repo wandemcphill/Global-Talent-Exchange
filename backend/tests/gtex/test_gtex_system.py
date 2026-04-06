@@ -33,6 +33,7 @@ def _register_user(app_session_factory, *, label: str) -> tuple[User, dict[str, 
         )
         session.commit()
         token, _ = auth.issue_access_token(user, session=session)
+        session.commit()
         return user, {"Authorization": f"Bearer {token}"}
 
 
@@ -105,6 +106,83 @@ def test_jackpot_trigger_under_worker_load(client, app, app_session_factory):
     assert closed_round["trigger_mode"] == "threshold"
     if closed_round["payouts"]:
         assert closed_round["payouts"][0]["payout_amount"] == "60.0000"
+
+
+def test_admin_jackpot_runtime_update_and_manual_trigger(
+    client,
+    app,
+    app_session_factory,
+    bootstrap_admin_headers,
+):
+    runtime = ensure_gtex_runtime(app)
+    with app_session_factory() as session:
+        current_round_number = runtime.jackpot.ensure_open_round(session).round_number
+    user, headers = _register_user(app_session_factory, label="jackpot-admin")
+    _fund_user(app_session_factory, user_id=user.id, amount=Decimal("500.0000"))
+
+    update_response = client.post(
+        "/admin/jackpot/runtime",
+        headers=bootstrap_admin_headers,
+        json={
+            "threshold_amount": "125.0000",
+            "probability_limit": "900.0000",
+            "probability_cap": "0.3500",
+            "failsafe_hours": 3,
+            "contribution_rate": "0.1500",
+            "distribution_mode": "top_split",
+            "top_split_percent": "0.5000",
+            "min_activity_score": "1.2500",
+        },
+    )
+
+    assert update_response.status_code == 200, update_response.text
+    runtime_payload = update_response.json()
+    assert runtime_payload["threshold_amount"] == "125.0000"
+    assert runtime_payload["probability_limit"] == "900.0000"
+    assert runtime_payload["probability_cap"] == "0.3500"
+    assert runtime_payload["contribution_rate"] == "0.1500"
+    assert runtime_payload["distribution_mode"] == "top_split"
+    assert runtime_payload["top_split_percent"] == "0.5000"
+    assert runtime_payload["min_activity_score"] == "1.2500"
+    assert runtime_payload["failsafe_hours"] == 3
+    assert runtime.settings.jackpot_threshold_amount == Decimal("125.0000")
+    assert runtime.settings.jackpot_contribution_rate == Decimal("0.1500")
+
+    contribution_response = client.post(
+        "/jackpot/contribute",
+        headers=headers,
+        json={
+            "source_type": "platform_activity",
+            "source_id": "jackpot-manual-ui",
+            "entry_fee": "50.0000",
+            "contribution_amount": "50.0000",
+            "eligibility_score": "2.0000",
+            "metadata": {"scenario": "admin_jackpot_runtime_update"},
+        },
+    )
+
+    assert contribution_response.status_code == 201, contribution_response.text
+    contribution_payload = contribution_response.json()
+    assert contribution_payload["contribution_amount"] == "50.0000"
+
+    trigger_response = client.post(
+        "/admin/jackpot/trigger",
+        headers=bootstrap_admin_headers,
+    )
+
+    assert trigger_response.status_code == 200, trigger_response.text
+    trigger_payload = trigger_response.json()
+    assert trigger_payload["triggered_round_number"] == current_round_number
+    assert trigger_payload["next_round_number"] == current_round_number + 1
+
+    state_payload = client.get("/jackpot/state").json()
+    assert state_payload["round_number"] == current_round_number + 1
+    history_payload = client.get("/jackpot/history").json()
+    settled_round = next(
+        item for item in history_payload if item["round_number"] == current_round_number
+    )
+    assert settled_round["trigger_mode"] == "manual"
+    assert settled_round["payouts"][0]["payout_amount"] == "50.0000"
 
 
 def test_creator_market_buy_sell_and_trending(client, app_session_factory, app):

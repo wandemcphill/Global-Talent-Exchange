@@ -6,8 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_match_user, get_current_trading_user, get_current_user, get_optional_current_user, get_session
-from app.gtex.runtime import ensure_gtex_runtime
+from app.auth.dependencies import (
+    get_current_admin,
+    get_current_match_user,
+    get_current_trading_user,
+    get_current_user,
+    get_current_wallet_user,
+    get_optional_current_user,
+    get_session,
+)
+from app.gtex.runtime import apply_gtex_runtime_settings, ensure_gtex_runtime
 from app.gtex.schemas import (
     AdminBanUserRequest,
     AdminBanUserView,
@@ -20,6 +28,9 @@ from app.gtex.schemas import (
     CreatorTradeView,
     JackpotContributionRequest,
     JackpotContributionView,
+    JackpotAdminActionView,
+    JackpotAdminRuntimeUpdateRequest,
+    JackpotAdminRuntimeView,
     JackpotHistoryItemView,
     JackpotPayoutView,
     JackpotStateView,
@@ -71,7 +82,7 @@ def get_jackpot_state(
 def create_jackpot_contribution(
     payload: JackpotContributionRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     runtime=Depends(get_runtime),
 ) -> JackpotContributionView:
     try:
@@ -81,6 +92,7 @@ def create_jackpot_contribution(
             source_type=payload.source_type,
             source_id=payload.source_id,
             entry_fee=payload.entry_fee,
+            contribution_amount=payload.contribution_amount,
             eligibility_score=payload.eligibility_score,
             metadata=payload.metadata,
         )
@@ -89,6 +101,76 @@ def create_jackpot_contribution(
         session.rollback()
         raise_gtex_http_exception(exc)
     return JackpotContributionView.model_validate(contribution)
+
+
+@router.get("/admin/jackpot/runtime", response_model=JackpotAdminRuntimeView)
+def get_admin_jackpot_runtime(
+    _: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    runtime=Depends(get_runtime),
+) -> JackpotAdminRuntimeView:
+    del _
+    return JackpotAdminRuntimeView.model_validate(runtime.jackpot.get_runtime_state(session))
+
+
+@router.post("/admin/jackpot/runtime", response_model=JackpotAdminRuntimeView)
+def update_admin_jackpot_runtime(
+    payload: JackpotAdminRuntimeUpdateRequest,
+    current_admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    runtime=Depends(get_runtime),
+) -> JackpotAdminRuntimeView:
+    try:
+        updated_settings = runtime.jackpot.apply_runtime_settings(
+            session,
+            threshold_amount=payload.threshold_amount,
+            probability_limit=payload.probability_limit,
+            probability_cap=payload.probability_cap,
+            failsafe_hours=payload.failsafe_hours,
+            contribution_rate=payload.contribution_rate,
+            distribution_mode=payload.distribution_mode,
+            top_split_percent=payload.top_split_percent,
+            min_activity_score=payload.min_activity_score,
+        )
+        apply_gtex_runtime_settings(runtime, updated_settings)
+        runtime.jackpot._audit_log(
+            session,
+            actor_user_id=current_admin.id,
+            action_key="gtex.jackpot.runtime.updated",
+            resource_type="gtex_jackpot",
+            resource_id="global",
+            detail="Admin updated the live GTEX jackpot runtime settings.",
+            metadata_json=payload.model_dump(mode="json"),
+        )
+        session.commit()
+    except GtexError as exc:
+        session.rollback()
+        raise_gtex_http_exception(exc)
+    return JackpotAdminRuntimeView.model_validate(runtime.jackpot.get_runtime_state(session))
+
+
+@router.post("/admin/jackpot/trigger", response_model=JackpotAdminActionView)
+def trigger_admin_jackpot_round(
+    current_admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    runtime=Depends(get_runtime),
+) -> JackpotAdminActionView:
+    try:
+        result = runtime.jackpot.manual_trigger(session)
+        runtime.jackpot._audit_log(
+            session,
+            actor_user_id=current_admin.id,
+            action_key="gtex.jackpot.manual_trigger",
+            resource_type="gtex_jackpot",
+            resource_id=result["triggered_round_id"],
+            detail="Admin manually triggered the current GTEX jackpot round.",
+            metadata_json=result,
+        )
+        session.commit()
+    except GtexError as exc:
+        session.rollback()
+        raise_gtex_http_exception(exc)
+    return JackpotAdminActionView.model_validate(result)
 
 
 @router.get("/jackpot/history", response_model=list[JackpotHistoryItemView])

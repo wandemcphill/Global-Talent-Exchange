@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
@@ -245,6 +245,87 @@ class JackpotService(GtexBaseService):
             ),
         }
 
+    def get_runtime_state(self, session: Session, *, pool_key: str = "global") -> dict[str, Any]:
+        current_round = self.ensure_open_round(session, pool_key=pool_key)
+        state = self.get_state(session, pool_key=pool_key)
+        state.update(
+            {
+                "top_split_percent": self._amount(current_round.top_split_percent),
+                "min_activity_score": self._amount(current_round.min_activity_score),
+                "failsafe_hours": int(self.settings.jackpot_failsafe_hours),
+                "settings_source": "runtime",
+            }
+        )
+        return state
+
+    def apply_runtime_settings(
+        self,
+        session: Session,
+        *,
+        threshold_amount: Decimal,
+        probability_limit: Decimal,
+        probability_cap: Decimal,
+        failsafe_hours: int,
+        contribution_rate: Decimal,
+        distribution_mode: str,
+        top_split_percent: Decimal,
+        min_activity_score: Decimal,
+        pool_key: str = "global",
+    ) -> GtexSettings:
+        try:
+            resolved_distribution_mode = GtexJackpotDistributionMode(distribution_mode)
+        except ValueError as exc:
+            raise GtexValidationError("Unsupported jackpot distribution mode.") from exc
+        updated_settings = replace(
+            self.settings,
+            jackpot_threshold_amount=self._amount(threshold_amount),
+            jackpot_probability_limit=self._amount(probability_limit),
+            jackpot_probability_cap=self._amount(probability_cap),
+            jackpot_failsafe_hours=max(1, int(failsafe_hours)),
+            jackpot_contribution_rate=self._amount(contribution_rate),
+            jackpot_distribution_mode=resolved_distribution_mode.value,
+            jackpot_top_split_percent=self._amount(top_split_percent),
+            jackpot_min_activity_score=self._amount(min_activity_score),
+        )
+        self.settings = updated_settings
+        current_round = self.ensure_open_round(session, pool_key=pool_key)
+        current_round.threshold_amount = updated_settings.jackpot_threshold_amount
+        current_round.max_probability_limit = updated_settings.jackpot_probability_limit
+        current_round.probability_cap = updated_settings.jackpot_probability_cap
+        current_round.contribution_rate = updated_settings.jackpot_contribution_rate
+        current_round.distribution_mode = resolved_distribution_mode
+        current_round.top_split_percent = updated_settings.jackpot_top_split_percent
+        current_round.min_activity_score = updated_settings.jackpot_min_activity_score
+        current_round.failsafe_at = utcnow() + timedelta(
+            hours=updated_settings.jackpot_failsafe_hours
+        )
+        session.flush()
+        self._schedule_round_cache(session, current_round)
+        return updated_settings
+
+    def manual_trigger(
+        self,
+        session: Session,
+        *,
+        pool_key: str = "global",
+    ) -> dict[str, Any]:
+        current_round = self.ensure_open_round(session, pool_key=pool_key)
+        triggered_round_id = current_round.id
+        triggered_round_number = current_round.round_number
+        self.trigger_round(
+            session,
+            round_record=current_round,
+            trigger_mode=GtexJackpotTriggerMode.MANUAL,
+        )
+        next_round = self.ensure_open_round(session, pool_key=pool_key)
+        return {
+            "detail": f"Manual jackpot trigger processed for round {triggered_round_number}.",
+            "triggered_round_id": triggered_round_id,
+            "triggered_round_number": triggered_round_number,
+            "next_round_id": next_round.id,
+            "next_round_number": next_round.round_number,
+        }
+
     def list_history(self, session: Session, *, limit: int = 20) -> list[GtexJackpotRound]:
         rounds = session.scalars(
             select(GtexJackpotRound)
@@ -263,19 +344,25 @@ class JackpotService(GtexBaseService):
         source_type: GtexContributionSourceType | str,
         source_id: str | None,
         entry_fee: Decimal,
+        contribution_amount: Decimal | None = None,
         eligibility_score: Decimal,
         metadata: dict[str, Any] | None = None,
     ) -> GtexJackpotContribution:
-        contribution_amount = self._amount(entry_fee) * self.settings.jackpot_contribution_rate
-        contribution_amount = self._amount(contribution_amount)
+        resolved_contribution_amount = self._amount(
+            contribution_amount
+            if contribution_amount is not None
+            else self._amount(entry_fee) * self.settings.jackpot_contribution_rate
+        )
+        if resolved_contribution_amount <= Decimal("0.0000"):
+            raise GtexValidationError("Jackpot contribution amount must be greater than zero.")
         lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
         actor_account = self.wallet_service.get_user_account(session, actor, LedgerUnit.COIN)
         try:
             self.wallet_service.append_transaction(
                 session,
                 postings=[
-                    LedgerPosting(account=actor_account, amount=-contribution_amount),
-                    LedgerPosting(account=lottery_pool, amount=contribution_amount),
+                    LedgerPosting(account=actor_account, amount=-resolved_contribution_amount),
+                    LedgerPosting(account=lottery_pool, amount=resolved_contribution_amount),
                 ],
                 reason=LedgerEntryReason.TRADE_SETTLEMENT,
                 source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
@@ -292,7 +379,7 @@ class JackpotService(GtexBaseService):
             source_type=source_type,
             source_id=source_id,
             entry_fee=entry_fee,
-            contribution_amount=contribution_amount,
+            contribution_amount=resolved_contribution_amount,
             eligibility_score=eligibility_score,
             metadata=metadata,
         )

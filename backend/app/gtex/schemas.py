@@ -21,6 +21,7 @@ class JackpotContributionRequest(BaseModel):
     source_type: str
     source_id: str | None = None
     entry_fee: Decimal = Field(gt=0)
+    contribution_amount: Decimal | None = Field(default=None, gt=0)
     eligibility_score: Decimal = Field(default=Decimal("1.0000"), gt=0)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -74,6 +75,41 @@ class JackpotStateView(GtexSchema):
     distribution_mode: str
     last_winner_user_id: str | None = None
     last_trigger_mode: str | None = None
+
+
+class JackpotAdminRuntimeView(JackpotStateView):
+    top_split_percent: Decimal
+    min_activity_score: Decimal
+    failsafe_hours: int
+    settings_source: str = "runtime"
+
+
+class JackpotAdminRuntimeUpdateRequest(BaseModel):
+    threshold_amount: Decimal = Field(gt=0)
+    probability_limit: Decimal = Field(gt=0)
+    probability_cap: Decimal = Field(gt=0, le=Decimal("1.0000"))
+    failsafe_hours: int = Field(ge=1)
+    contribution_rate: Decimal = Field(gt=0, le=Decimal("1.0000"))
+    distribution_mode: str
+    top_split_percent: Decimal = Field(gt=0, le=Decimal("1.0000"))
+    min_activity_score: Decimal = Field(gt=0)
+
+    @field_validator("distribution_mode")
+    @classmethod
+    def normalize_distribution_mode(cls, value: str) -> str:
+        candidate = value.strip().lower()
+        allowed = {"single_winner", "top_split", "activity_weighted"}
+        if candidate not in allowed:
+            raise ValueError("Unsupported jackpot distribution mode.")
+        return candidate
+
+
+class JackpotAdminActionView(BaseModel):
+    detail: str
+    triggered_round_id: str
+    triggered_round_number: int
+    next_round_id: str
+    next_round_number: int
 
 
 class CreatorPlayerView(GtexSchema):

@@ -25,6 +25,7 @@ import 'package:gte_frontend/features/creator_stadium_monetization/creator_stadi
 import 'package:gte_frontend/features/fan_prediction/fan_prediction.dart';
 import 'package:gte_frontend/features/football_world_simulation/football_world_simulation.dart';
 import 'package:gte_frontend/features/gift_economy_admin/gift_economy_admin.dart';
+import 'package:gte_frontend/features/jackpot/presentation/gtex_jackpot_route_screen.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/player_card_marketplace/player_card_marketplace.dart';

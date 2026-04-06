@@ -29,6 +29,7 @@ def _register_user(app_session_factory, *, label: str) -> tuple[User, dict[str, 
         )
         session.commit()
         token, _ = auth.issue_access_token(user, session=session)
+        session.commit()
         return user, {"Authorization": f"Bearer {token}"}
 
 

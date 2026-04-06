@@ -134,6 +134,15 @@ def shutdown_gtex_runtime(app: FastAPI, _context: ApplicationContext) -> None:
         app.state.gtex_runtime = None
 
 
+def apply_gtex_runtime_settings(runtime: GtexRuntime, settings: GtexSettings) -> None:
+    runtime.settings = settings
+    runtime.jackpot.settings = settings
+    runtime.creator_market.settings = settings
+    runtime.economy.settings = settings
+    runtime.ai_leagues.settings = settings
+    runtime.universe.settings = settings
+
+
 def _seed_runtime(app: FastAPI, runtime: GtexRuntime) -> None:
     session_factory = getattr(app.state, "session_factory", None)
     if session_factory is None:
