@@ -248,16 +248,21 @@ class DemoWorldVisibilitySeeder:
         upper_codes = {code.strip().upper() for code in codes if code}
         if not upper_codes:
             return None
-        return self.session.scalar(
-            select(Country).where(
-                or_(
-                    Country.alpha2_code.in_(upper_codes),
-                    Country.alpha3_code.in_(upper_codes),
-                    Country.fifa_code.in_(upper_codes),
-                    Country.name.in_(codes),
+        candidates = list(
+            self.session.scalars(
+                select(Country).where(
+                    or_(
+                        Country.alpha2_code.in_(upper_codes),
+                        Country.alpha3_code.in_(upper_codes),
+                        Country.fifa_code.in_(upper_codes),
+                        Country.name.in_(codes),
+                    )
                 )
             )
         )
+        if not candidates:
+            return None
+        return min(candidates, key=self._country_candidate_sort_key)
 
     def _upsert_demo_clubs(self, *, users: dict[str, User], countries: dict[str, Country]) -> dict[str, ClubProfile]:
         access_service = AccessControlService(self.session)
@@ -315,7 +320,7 @@ class DemoWorldVisibilitySeeder:
         ) -> list[tuple[Player, Country | None]]:
             statement = (
                 select(Player, Country)
-                .outerjoin(Country, Country.id == Player.country_id)
+                .join(Country, Country.id == Player.country_id)
                 .order_by(
                     Player.market_value_eur.desc().nullslast(),
                     Player.full_name.asc(),
@@ -1357,6 +1362,23 @@ class DemoWorldVisibilitySeeder:
             if normalized:
                 return normalized[:8]
         raise ValueError(f"Country '{country.id}' is missing a usable code.")
+
+    def _country_candidate_sort_key(self, country: Country) -> tuple[int, int, int, str]:
+        alpha2 = self._normalized_country_code(country.alpha2_code)
+        fifa = self._normalized_country_code(country.fifa_code)
+        alpha3 = self._normalized_country_code(country.alpha3_code)
+        name = " ".join(country.name.strip().lower().split())
+        return (
+            0 if len(alpha2) == 2 else 1,
+            0 if len(fifa) in {2, 3} else 1,
+            0 if len(alpha3) == 3 else 1,
+            name,
+        )
+
+    def _normalized_country_code(self, value: str | None) -> str:
+        if not value:
+            return ""
+        return "".join(character for character in str(value).upper() if character.isalnum())
 
     def _transfer_price(self, player: Player, *, factor: str) -> Decimal:
         base_value = Decimal(str(player.current_market_reference_value or player.market_value_eur or 7_500_000))

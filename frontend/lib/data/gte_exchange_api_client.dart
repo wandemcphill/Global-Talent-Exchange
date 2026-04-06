@@ -402,7 +402,7 @@ class GteExchangeApiClient {
       liveCall:
           () async => GteMarketPlayerListView.fromJson(
             await _sendPublicGet(
-              '/marketplace/players',
+              '/api/market/players',
               query: query.toQueryParameters(),
             ),
           ),

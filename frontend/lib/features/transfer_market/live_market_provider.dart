@@ -168,7 +168,7 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
   bool authenticated = ref.watch(isAuthenticatedProvider);
   final String query = ref.watch(marketSearchQueryProvider).trim();
   final JsonMap playerPayload = await api.getMap(
-    query.isEmpty ? '/players/real-universe' : '/players/real-universe/search',
+    '/players',
     auth: false,
     query: <String, Object?>{
       'limit': 12,
@@ -176,7 +176,7 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
     },
   );
   final List<JsonMap> playerItems = jsonMapList(
-    playerPayload['items'],
+    playerPayload['items'] ?? playerPayload['players'],
     label: 'real player universe items',
   );
   final List<String> warnings = <String>[];

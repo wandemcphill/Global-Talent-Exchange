@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import sys
@@ -29,7 +30,7 @@ from app.ingestion.dev_cli import (
     seed_demo_liquidity_database,
     seed_world_visibility_database,
 )
-from app.ingestion.models import Player
+from app.ingestion.models import Country, Player
 from app.matching.models import TradeExecution
 from app.models.agent_marketplace import AgentMarketplaceListing
 from app.models.federation import Federation
@@ -236,6 +237,122 @@ def test_seed_world_visibility_database_refreshes_bootstrapped_db(tmp_path: Path
     assert second_summary["national_team_competition_count"] == summary["national_team_competition_count"]
 
 
+def test_seed_world_visibility_database_skips_players_with_missing_country_rows(tmp_path: Path) -> None:
+    database_path = tmp_path / "seed-world-visibility-missing-country.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+
+    bootstrap_demo_database(
+        database_url=database_url,
+        player_count=12,
+        provider="cli-demo",
+        signal_provider="cli-demo-signals",
+        password=DEFAULT_DEMO_PASSWORD,
+        seed=20260311,
+        batch_size=6,
+        reset_db=True,
+        with_liquidity=True,
+        liquid_player_count=3,
+        illiquid_player_count=1,
+    )
+
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        with SessionLocal() as session:
+            player = session.scalar(
+                select(Player)
+                .where(Player.source_provider == "cli-demo", Player.country_id.is_not(None))
+                .order_by(Player.market_value_eur.desc().nullslast(), Player.id.asc())
+                .limit(1)
+            )
+            assert player is not None
+            assert player.country_id is not None
+            country = session.get(Country, player.country_id)
+            assert country is not None
+            session.delete(country)
+            session.commit()
+
+        summary = seed_world_visibility_database(
+            database_url=database_url,
+            provider="cli-demo",
+        )
+    finally:
+        engine.dispose()
+
+    assert summary["marketplace_listing_count"] > 0
+    assert summary["transfer_listing_count"] > 0
+    assert summary["federation_count"] > 0
+    assert summary["national_team_competition_count"] > 0
+
+
+def test_seed_world_visibility_database_prefers_canonical_country_codes(tmp_path: Path) -> None:
+    database_path = tmp_path / "seed-world-visibility-country-preference.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+
+    bootstrap_demo_database(
+        database_url=database_url,
+        player_count=12,
+        provider="cli-demo",
+        signal_provider="cli-demo-signals",
+        password=DEFAULT_DEMO_PASSWORD,
+        seed=20260311,
+        batch_size=6,
+        reset_db=True,
+        with_liquidity=True,
+        liquid_player_count=3,
+        illiquid_player_count=1,
+    )
+
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        with SessionLocal() as session:
+            session.add_all(
+                [
+                    Country(
+                        source_provider="cli-duplicate",
+                        provider_external_id="dup-nigeria",
+                        name="Nigeria",
+                        alpha2_code=None,
+                        alpha3_code="NPFL",
+                        fifa_code=None,
+                        is_enabled_for_universe=True,
+                    ),
+                    Country(
+                        source_provider="cli-duplicate",
+                        provider_external_id="dup-brazil",
+                        name="Brazil",
+                        alpha2_code=None,
+                        alpha3_code="BRA1",
+                        fifa_code=None,
+                        is_enabled_for_universe=True,
+                    ),
+                    Country(
+                        source_provider="cli-duplicate",
+                        provider_external_id="dup-spain",
+                        name="Spain",
+                        alpha2_code=None,
+                        alpha3_code="ES1",
+                        fifa_code=None,
+                        is_enabled_for_universe=True,
+                    ),
+                ]
+            )
+            session.commit()
+
+        summary = seed_world_visibility_database(
+            database_url=database_url,
+            provider="cli-demo",
+        )
+    finally:
+        engine.dispose()
+
+    assert summary["marketplace_listing_count"] > 0
+    assert summary["transfer_listing_count"] > 0
+    assert summary["federation_count"] > 0
+    assert summary["national_team_competition_count"] > 0
+
+
 def test_run_simulation_ticks_database_is_deterministic_for_same_seed(tmp_path: Path) -> None:
     first_database_url = f"sqlite+pysqlite:///{(tmp_path / 'tick-seed-first.db').as_posix()}"
     second_database_url = f"sqlite+pysqlite:///{(tmp_path / 'tick-seed-second.db').as_posix()}"
@@ -330,6 +447,7 @@ def test_run_backend_server_invokes_uvicorn(monkeypatch) -> None:
         "--factory",
         "--reload",
     ]
+    assert observed["env"]["PYTHONPATH"].split(os.pathsep)[0].endswith("backend")
     assert observed["env"]["GTE_DEMO_SIMULATION_ENABLED"] == "1"
     assert observed["env"]["GTE_DEMO_SIMULATION_SEED_ON_BOOT"] == "0"
 

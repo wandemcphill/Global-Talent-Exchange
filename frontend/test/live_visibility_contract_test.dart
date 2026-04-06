@@ -8,6 +8,7 @@ import 'package:gte_frontend/data/gte_mock_api.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
 import 'package:gte_frontend/features/federations/live_federations_provider.dart';
 import 'package:gte_frontend/features/national_teams/live_national_teams_provider.dart';
+import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
 import 'package:gte_frontend/features/transfer_center/live_transfer_center_provider.dart';
 import 'package:gte_frontend/features/world/live_world_provider.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
@@ -15,14 +16,14 @@ import 'package:gte_frontend/shared/providers/auth_provider.dart';
 
 void main() {
   test(
-    'player market client parses live /marketplace/players payloads',
+    'player market client parses live /api/market/players payloads',
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/marketplace/players': const GteTransportResponse(
+          '/api/v1/market/players': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
-              'players': <Object?>[
+              'items': <Object?>[
                 <String, Object?>{
                   'player_id': 'player-osimhen',
                   'player_name': 'Victor Osimhen',
@@ -31,19 +32,14 @@ void main() {
                   'current_club_name': 'Galata Lions',
                   'age': 27,
                   'current_value_credits': 1450.0,
-                  'movement_pct': 0.12,
+                  'movement_pct': 12.0,
                   'trend_score': 8.5,
                   'market_interest_score': 91,
                   'average_rating': 7.8,
-                  'is_available': true,
-                  'availability_label': 'Available now',
-                  'asking_type': 'transfer',
-                  'agent_user_id': 'agent-1',
-                  'agent_name': 'Seed Agent',
                 },
               ],
               'limit': 20,
-              'has_more': false,
+              'offset': 0,
               'total': 1,
             },
           ),
@@ -60,10 +56,10 @@ void main() {
 
       final market = await client.fetchPlayers();
 
-      expect(transport.requests.single.uri.path, '/api/v1/marketplace/players');
+      expect(transport.requests.single.uri.path, '/api/v1/market/players');
       expect(market.items, hasLength(1));
       expect(market.items.single.playerId, 'player-osimhen');
-      expect(market.items.single.agentName, 'Seed Agent');
+      expect(market.items.single.availabilityLabel, 'Available now');
       expect(market.total, 1);
     },
   );
@@ -351,6 +347,77 @@ void main() {
         transport.requests.last.headers['Authorization'],
         'Bearer token-1',
       );
+    },
+  );
+
+  test(
+    'market dashboard provider reads real-player shares from the unified players list payload',
+    () async {
+      final ProviderContainer container = _buildContainer(
+        transport: _PathTransport(<String, GteTransportResponse>{
+          '/api/v1/players': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'players': <Object?>[
+                <String, Object?>{
+                  'player_id': 'player-1',
+                  'player_name': 'Harry Kane',
+                  'position': 'ST',
+                  'nationality': 'England',
+                  'current_club_name': 'Bayern Munich',
+                  'current_value_credits': 706.0,
+                  'market_interest_score': 250,
+                },
+              ],
+              'limit': 12,
+              'has_more': false,
+              'total': 1,
+            },
+          ),
+          '/api/v1/players/player-1/shares/market': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'market_issued': true,
+              'status': 'active',
+              'share_price_coin': 18.5,
+              'total_shares': 1000,
+              'circulating_shares': 620,
+            },
+          ),
+          '/api/v1/transfer-market/listings': const GteTransportResponse(
+            statusCode: 200,
+            body: <Object?>[
+              <String, Object?>{
+                'id': 'listing-1',
+                'player_id': 'player-1',
+                'base_price': 7000000.0,
+                'current_highest_bid': 7250000.0,
+                'status': 'open',
+                'watchlist_count': 4,
+                'bid_count': 2,
+                'market_signal': 'Live transfer listing',
+                'channel': 'market:listing-1',
+                'time_remaining': 3600,
+                'player': <String, Object?>{
+                  'full_name': 'Harry Kane',
+                  'current_club_name': 'Bayern Munich',
+                },
+              },
+            ],
+          ),
+        }),
+      );
+      addTearDown(container.dispose);
+
+      final MarketDashboardData dashboard = await container.read(
+        marketDashboardProvider.future,
+      );
+
+      expect(dashboard.playerShares, hasLength(1));
+      expect(dashboard.playerShares.single.playerName, 'Harry Kane');
+      expect(dashboard.playerShares.single.marketStatus, 'active');
+      expect(dashboard.transferListings, hasLength(1));
+      expect(dashboard.transferListings.single.playerName, 'Harry Kane');
     },
   );
 }

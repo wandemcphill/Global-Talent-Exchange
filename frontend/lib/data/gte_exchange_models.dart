@@ -110,7 +110,6 @@ class GteMarketPlayersQuery {
     final String? trimmedCursor = cursor?.trim();
     final String? trimmedPosition = _trimOrNull(position);
     final String? trimmedCountry = _trimOrNull(country);
-    final String? trimmedAvailability = _trimOrNull(availability);
     return <String, Object?>{
       'limit': limit,
       if (trimmedCursor != null && trimmedCursor.isNotEmpty)
@@ -120,10 +119,9 @@ class GteMarketPlayersQuery {
       if (trimmedSearch != null && trimmedSearch.isNotEmpty)
         'search': trimmedSearch,
       if (trimmedPosition != null) 'position': trimmedPosition,
-      if (trimmedCountry != null) 'country': trimmedCountry,
+      if (trimmedCountry != null) 'nationality': trimmedCountry,
       if (minAge != null) 'min_age': minAge,
       if (maxAge != null) 'max_age': maxAge,
-      if (trimmedAvailability != null) 'availability': trimmedAvailability,
     };
   }
 }

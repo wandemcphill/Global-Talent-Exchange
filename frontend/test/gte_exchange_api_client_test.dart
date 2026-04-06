@@ -135,16 +135,16 @@ void main() {
       );
 
       expect(transport.lastRequest, isNotNull);
-      expect(transport.lastRequest!.uri.path, '/api/v1/marketplace/players');
+      expect(transport.lastRequest!.uri.path, '/api/v1/market/players');
       expect(transport.lastRequest!.uri.queryParameters['search'], 'ronaldo');
       expect(transport.lastRequest!.uri.queryParameters['position'], 'ST');
-      expect(transport.lastRequest!.uri.queryParameters['country'], 'Nigeria');
+      expect(
+        transport.lastRequest!.uri.queryParameters['nationality'],
+        'Nigeria',
+      );
       expect(transport.lastRequest!.uri.queryParameters['min_age'], '18');
       expect(transport.lastRequest!.uri.queryParameters['max_age'], '28');
-      expect(
-        transport.lastRequest!.uri.queryParameters['availability'],
-        'free_agent',
-      );
+      expect(transport.lastRequest!.uri.queryParameters['availability'], isNull);
     },
   );
 
@@ -259,12 +259,13 @@ class _RecordingTransport implements GteTransport {
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) async {
     lastRequest = request;
-    if (request.uri.path == '/api/v1/players') {
+    if (request.uri.path == '/api/v1/market/players') {
       return const GteTransportResponse(
         statusCode: 200,
         body: <String, Object?>{
-          'players': <Object?>[],
+          'items': <Object?>[],
           'limit': 20,
+          'offset': 0,
           'has_more': false,
           'total': 0,
         },

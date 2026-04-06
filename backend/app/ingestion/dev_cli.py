@@ -328,6 +328,13 @@ def run_backend_server(
     if reload_enabled:
         command.append("--reload")
     environment = _build_local_demo_environ(database_url=database_url)
+    backend_import_root = str(PROJECT_ROOT / "backend")
+    existing_pythonpath = environment.get("PYTHONPATH", "").strip()
+    environment["PYTHONPATH"] = (
+        backend_import_root
+        if not existing_pythonpath
+        else f"{backend_import_root}{os.pathsep}{existing_pythonpath}"
+    )
     if demo_simulation:
         environment["GTE_DEMO_SIMULATION_ENABLED"] = "1"
         environment["GTE_DEMO_SIMULATION_BOOTSTRAP"] = "1" if demo_bootstrap else "0"
