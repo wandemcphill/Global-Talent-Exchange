@@ -445,8 +445,12 @@ def _read_cached_live_feed(request: Request, match_key: str) -> MatchLiveFeedVie
     status = MatchStatus.COMPLETED if status_raw == "completed" else MatchStatus.IN_PROGRESS
     return MatchLiveFeedView(
         match_id=str(state.get("match_id") or match_key),
-        home_team_name=str(state.get("home_team_name") or _resolve_cached_team_name(events, key="home_team_name", fallback="Home Club")),
-        away_team_name=str(state.get("away_team_name") or _resolve_cached_team_name(events, key="away_team_name", fallback="Away Club")),
+        home_team_name=str(
+            state.get("home_team_name") or _resolve_cached_team_name(events, key="home_team_name", fallback="Home Club")
+        ),
+        away_team_name=str(
+            state.get("away_team_name") or _resolve_cached_team_name(events, key="away_team_name", fallback="Away Club")
+        ),
         home_score=int(score.get("home") or 0),
         away_score=int(score.get("away") or 0),
         status=status,
@@ -513,8 +517,12 @@ def read_match_highlights(
             manifest_builder.build_from_replay_payload(payload),
             ad_profile=ad_profile,
             match_context={
-                "home_team_name": payload.visual_identity.home_team.team_name if payload.visual_identity is not None else "",
-                "away_team_name": payload.visual_identity.away_team.team_name if payload.visual_identity is not None else "",
+                "home_team_name": (
+                    payload.visual_identity.home_team.team_name if payload.visual_identity is not None else ""
+                ),
+                "away_team_name": (
+                    payload.visual_identity.away_team.team_name if payload.visual_identity is not None else ""
+                ),
                 "competition_name": (
                     f"{payload.visual_identity.home_team.team_name} vs {payload.visual_identity.away_team.team_name}"
                     if payload.visual_identity is not None

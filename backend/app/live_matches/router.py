@@ -112,7 +112,9 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
     )
 
 
-def _merge_session_access(base: dict[str, object] | None, overlay: dict[str, object] | None) -> dict[str, object] | None:
+def _merge_session_access(
+    base: dict[str, object] | None, overlay: dict[str, object] | None
+) -> dict[str, object] | None:
     if base is None and overlay is None:
         return None
     merged = dict(base or {})
@@ -131,7 +133,14 @@ def _merge_session_access(base: dict[str, object] | None, overlay: dict[str, obj
         base_items.extend(list(overlay.get(key) or []))
         if base_items:
             merged[key] = base_items
-    for key in ("access_source", "rights_owner_id", "viewing_fee_coin", "sync_strategy", "watch_party_enabled", "reactions_enabled"):
+    for key in (
+        "access_source",
+        "rights_owner_id",
+        "viewing_fee_coin",
+        "sync_strategy",
+        "watch_party_enabled",
+        "reactions_enabled",
+    ):
         if key in overlay and overlay.get(key) is not None:
             merged[key] = overlay[key]
     return merged
@@ -175,7 +184,11 @@ def _commentary_payload(events) -> list[dict[str, object]]:
                 "team": event.team or event.metadata.get("team_name"),
                 "player": event.player or event.metadata.get("player_name"),
                 "context": dict(event.metadata.get("commentary_context") or {}),
-                "cue": event.experience.commentary.model_dump(mode="json") if event.experience is not None and event.experience.commentary is not None else None,
+                "cue": (
+                    event.experience.commentary.model_dump(mode="json")
+                    if event.experience is not None and event.experience.commentary is not None
+                    else None
+                ),
             }
         )
     return payload
@@ -244,11 +257,15 @@ def _float_or_default(value: object | None, *, default: float = 0.0) -> float:
 
 
 def _world_x(normalized_x: object | None) -> float:
-    return round(((_float_or_default(normalized_x) / 100.0) * _UNITY_PITCH_LENGTH_METERS) - (_UNITY_PITCH_LENGTH_METERS / 2.0), 3)
+    return round(
+        ((_float_or_default(normalized_x) / 100.0) * _UNITY_PITCH_LENGTH_METERS) - (_UNITY_PITCH_LENGTH_METERS / 2.0), 3
+    )
 
 
 def _world_z(normalized_y: object | None) -> float:
-    return round(((_float_or_default(normalized_y) / 100.0) * _UNITY_PITCH_WIDTH_METERS) - (_UNITY_PITCH_WIDTH_METERS / 2.0), 3)
+    return round(
+        ((_float_or_default(normalized_y) / 100.0) * _UNITY_PITCH_WIDTH_METERS) - (_UNITY_PITCH_WIDTH_METERS / 2.0), 3
+    )
 
 
 def _world_velocity_x(normalized_delta_x: object | None) -> float:
@@ -399,7 +416,9 @@ def _load_persisted_live_view_state(match_id: str, request: Request) -> MatchVie
                             MatchReplayPayloadView.model_validate(replay_payload)
                         )
                     except Exception:
-                        logger.warning("Stored duel replay payload for %s could not be rebuilt into a live view.", match_id)
+                        logger.warning(
+                            "Stored duel replay payload for %s could not be rebuilt into a live view.", match_id
+                        )
 
     archive = ensure_replay_archive(request.app)
     record = archive.repository.get_latest_record(f"replay:{match_id}")
@@ -443,7 +462,9 @@ def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, obje
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match stream was not found.")
         logger.warning("Live match cache miss for %s; returning persisted match frames instead.", match_id)
     if not view_state.frames:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Live match frame could not be resolved.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Live match frame could not be resolved."
+        )
 
     frame = view_state.frames[-1]
     players_by_id = {player.player_id: player for player in frame.players}

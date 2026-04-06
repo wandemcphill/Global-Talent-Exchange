@@ -260,9 +260,19 @@ class MatchSimulationRequest(CommonSchema):
             raise ValueError("Home and away teams must be different")
         combined_player_ids = {
             player.player_id
-            for player in [*self.home_team.starters, *self.home_team.bench, *self.away_team.starters, *self.away_team.bench]
+            for player in [
+                *self.home_team.starters,
+                *self.home_team.bench,
+                *self.away_team.starters,
+                *self.away_team.bench,
+            ]
         }
-        expected_count = len(self.home_team.starters) + len(self.home_team.bench) + len(self.away_team.starters) + len(self.away_team.bench)
+        expected_count = (
+            len(self.home_team.starters)
+            + len(self.home_team.bench)
+            + len(self.away_team.starters)
+            + len(self.away_team.bench)
+        )
         if len(combined_player_ids) != expected_count:
             raise ValueError("Player IDs must be unique across both squads")
         return self
@@ -444,8 +454,6 @@ class MatchPlayerStatsView(CommonSchema):
     xg_faced: float = Field(default=0.0, ge=0.0)
     rating: float | None = Field(default=None, ge=0.0, le=10.0)
     rating_summary: str | None = None
-
-
 
 
 class MatchPlayerRatingView(CommonSchema):
@@ -733,7 +741,7 @@ class MatchInjuryReportView(CommonSchema):
     minute: int = Field(ge=0, le=120)
     team_name: str
     player_name: str
-    severity: str = Field(default='monitor')
+    severity: str = Field(default="monitor")
     tactical_impact: str
 
 

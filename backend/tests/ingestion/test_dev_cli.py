@@ -382,16 +382,28 @@ def test_seed_all_database_is_idempotent_and_populates_backend_tables(tmp_path: 
 
     assert first["seed_summary"]["players_seeded"] == 12
     assert second["seed_summary"]["players_seeded"] == first["seed_summary"]["players_seeded"]
-    assert second["world_visibility_seed"]["marketplace_listing_count"] == first["world_visibility_seed"]["marketplace_listing_count"]
-    assert second["world_visibility_seed"]["transfer_listing_count"] == first["world_visibility_seed"]["transfer_listing_count"]
+    assert (
+        second["world_visibility_seed"]["marketplace_listing_count"]
+        == first["world_visibility_seed"]["marketplace_listing_count"]
+    )
+    assert (
+        second["world_visibility_seed"]["transfer_listing_count"]
+        == first["world_visibility_seed"]["transfer_listing_count"]
+    )
     assert second["world_visibility_seed"]["federation_count"] == first["world_visibility_seed"]["federation_count"]
-    assert second["world_visibility_seed"]["national_team_competition_count"] == first["world_visibility_seed"]["national_team_competition_count"]
+    assert (
+        second["world_visibility_seed"]["national_team_competition_count"]
+        == first["world_visibility_seed"]["national_team_competition_count"]
+    )
 
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     try:
         with SessionLocal() as session:
-            assert session.scalar(select(func.count()).select_from(Player).where(Player.source_provider == "cli-demo")) == 12
+            assert (
+                session.scalar(select(func.count()).select_from(Player).where(Player.source_provider == "cli-demo"))
+                == 12
+            )
             assert session.scalar(select(func.count()).select_from(AgentMarketplaceListing)) > 0
             assert session.scalar(select(func.count()).select_from(TransferListing)) > 0
             assert session.scalar(select(func.count()).select_from(Federation)) > 0

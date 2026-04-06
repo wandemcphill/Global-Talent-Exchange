@@ -70,9 +70,7 @@ def _insert_match(session_factory: sessionmaker[Session], replay_payload) -> Non
 def _build_payload_with_manifestable_highlights() -> object:
     service = MatchSimulationService()
     for seed in range(1, 120):
-        replay_payload = service.build_replay_payload(
-            build_request(seed=seed, match_id=f"match-{seed:03d}")
-        )
+        replay_payload = service.build_replay_payload(build_request(seed=seed, match_id=f"match-{seed:03d}"))
         if any(clip.event_id is not None for clip in replay_payload.summary.highlight_package):
             return replay_payload
     raise AssertionError("Expected a replay payload with event-backed highlight clips.")

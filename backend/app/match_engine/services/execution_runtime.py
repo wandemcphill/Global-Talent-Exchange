@@ -162,7 +162,9 @@ class LeagueFixtureExecutionService:
     ) -> None:
         if reference_at is None:
             return
-        seconds_until_start = int((_normalize_timestamp(kickoff_at) - _normalize_timestamp(reference_at)).total_seconds())
+        seconds_until_start = int(
+            (_normalize_timestamp(kickoff_at) - _normalize_timestamp(reference_at)).total_seconds()
+        )
         if seconds_until_start < 0:
             return
         if seconds_until_start <= 60:
@@ -733,9 +735,7 @@ class LocalMatchExecutionWorker:
                         "top_assist_award": asdict(state.top_assist_award),
                     }
                 )
-            self.event_publisher.publish(
-                DomainEvent(name="competition.season.settlement.completed", payload=payload)
-            )
+            self.event_publisher.publish(DomainEvent(name="competition.season.settlement.completed", payload=payload))
         except Exception:
             self._release_claim(self._completed_settlement_jobs, claim_key)
             raise
@@ -907,7 +907,9 @@ class LocalMatchExecutionWorker:
             decided_by_penalties=replay_payload.summary.decided_by_penalties,
         )
 
-    def _build_replay_archive_payload(self, job: MatchSimulationJob, replay_payload: MatchReplayPayloadView) -> dict[str, Any]:
+    def _build_replay_archive_payload(
+        self, job: MatchSimulationJob, replay_payload: MatchReplayPayloadView
+    ) -> dict[str, Any]:
         scheduled_start = _resolve_kickoff(job)
         presentation_duration_minutes = max(3, ceil(replay_payload.timeline.presentation_duration_seconds / 60))
         return {
@@ -935,9 +937,7 @@ class LocalMatchExecutionWorker:
                 else None
             ),
             "participant_user_ids": [
-                user_id
-                for user_id in (job.home_user_id, job.away_user_id)
-                if user_id is not None
+                user_id for user_id in (job.home_user_id, job.away_user_id) if user_id is not None
             ],
             "competition_context": {
                 "competition_id": job.competition_id,
@@ -971,8 +971,12 @@ class LocalMatchExecutionWorker:
                     "club_name": event.team_name,
                     "player_id": event.primary_player.player_id if event.primary_player is not None else None,
                     "player_name": event.primary_player.player_name if event.primary_player is not None else None,
-                    "secondary_player_id": event.secondary_player.player_id if event.secondary_player is not None else None,
-                    "secondary_player_name": event.secondary_player.player_name if event.secondary_player is not None else None,
+                    "secondary_player_id": (
+                        event.secondary_player.player_id if event.secondary_player is not None else None
+                    ),
+                    "secondary_player_name": (
+                        event.secondary_player.player_name if event.secondary_player is not None else None
+                    ),
                     "description": event.commentary,
                     "home_score": event.home_score,
                     "away_score": event.away_score,
@@ -989,9 +993,17 @@ class LocalMatchExecutionWorker:
                         "club_name": event.team_name,
                         "player_id": event.secondary_player.player_id,
                         "player_name": event.secondary_player.player_name,
-                        "secondary_player_id": event.primary_player.player_id if event.primary_player is not None else None,
-                        "secondary_player_name": event.primary_player.player_name if event.primary_player is not None else None,
-                        "description": f"Assist for {event.primary_player.player_name}" if event.primary_player is not None else "Assist",
+                        "secondary_player_id": (
+                            event.primary_player.player_id if event.primary_player is not None else None
+                        ),
+                        "secondary_player_name": (
+                            event.primary_player.player_name if event.primary_player is not None else None
+                        ),
+                        "description": (
+                            f"Assist for {event.primary_player.player_name}"
+                            if event.primary_player is not None
+                            else "Assist"
+                        ),
                         "home_score": event.home_score,
                         "away_score": event.away_score,
                     }
@@ -1057,11 +1069,7 @@ class LocalMatchExecutionWorker:
             },
         }
         if include_user_ids:
-            user_ids = [
-                user_id
-                for user_id in (job.home_user_id, job.away_user_id)
-                if user_id is not None
-            ]
+            user_ids = [user_id for user_id in (job.home_user_id, job.away_user_id) if user_id is not None]
             if user_ids:
                 payload["user_ids"] = user_ids
         return payload

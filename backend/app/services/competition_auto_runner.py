@@ -61,11 +61,7 @@ class CompetitionAutoRunner:
                 changed = True
 
             matches = self._matches(competition.id)
-            scheduled = [
-                match
-                for match in matches
-                if match.status == MatchStatus.SCHEDULED.value
-            ]
+            scheduled = [match for match in matches if match.status == MatchStatus.SCHEDULED.value]
             if scheduled:
                 for match in scheduled:
                     self._simulate_match(competition, match)
@@ -88,10 +84,7 @@ class CompetitionAutoRunner:
                         force=False,
                     )
                     matches = self._matches(competition.id)
-                    if (
-                        competition.status != previous_status
-                        or len(matches) != previous_match_count
-                    ):
+                    if competition.status != previous_status or len(matches) != previous_match_count:
                         changed = True
                     if matches and self._all_matches_complete(matches):
                         status = CompetitionStatus(competition.status)
@@ -148,9 +141,7 @@ class CompetitionAutoRunner:
             return match
 
         job = self._simulation_job(competition, match)
-        replay_payload = self.match_service.build_replay_payload(
-            self.team_factory.build_request(job)
-        )
+        replay_payload = self.match_service.build_replay_payload(self.team_factory.build_request(job))
         self._store_match_viewer_payload(match, replay_payload)
         self._store_match_events(match, replay_payload)
         return self.lifecycle_service.complete_match(
@@ -170,19 +161,11 @@ class CompetitionAutoRunner:
         window = (
             FixtureWindow(match.window)
             if match.window is not None
-            else (
-                FixtureWindow.SENIOR_1
-                if format_enum is CompetitionFormat.LEAGUE
-                else FixtureWindow.FAST_CUP_OPEN
-            )
+            else (FixtureWindow.SENIOR_1 if format_enum is CompetitionFormat.LEAGUE else FixtureWindow.FAST_CUP_OPEN)
         )
         match_date = (
             match.match_date
-            or (
-                match.scheduled_at.astimezone(timezone.utc).date()
-                if match.scheduled_at is not None
-                else None
-            )
+            or (match.scheduled_at.astimezone(timezone.utc).date() if match.scheduled_at is not None else None)
             or (
                 competition.scheduled_start_at.astimezone(timezone.utc).date()
                 if competition.scheduled_start_at is not None
@@ -195,9 +178,7 @@ class CompetitionAutoRunner:
             fixture_id=match.id,
             competition_id=competition.id,
             competition_type=(
-                CompetitionType.LEAGUE
-                if format_enum is CompetitionFormat.LEAGUE
-                else CompetitionType.FAST_CUP
+                CompetitionType.LEAGUE if format_enum is CompetitionFormat.LEAGUE else CompetitionType.FAST_CUP
             ),
             match_date=match_date,
             window=window,
@@ -228,9 +209,7 @@ class CompetitionAutoRunner:
 
     def _store_match_events(self, match: CompetitionMatch, replay_payload) -> None:
         existing = self.session.scalar(
-            select(CompetitionMatchEvent.id).where(
-                CompetitionMatchEvent.match_id == match.id
-            )
+            select(CompetitionMatchEvent.id).where(CompetitionMatchEvent.match_id == match.id)
         )
         if existing is not None:
             return
@@ -249,13 +228,10 @@ class CompetitionAutoRunner:
                 added_time=event.added_time,
                 club_id=event.team_id,
                 player_id=event.primary_player.player_id if event.primary_player else None,
-                secondary_player_id=(
-                    event.secondary_player.player_id
-                    if event.secondary_player
-                    else None
-                ),
+                secondary_player_id=(event.secondary_player.player_id if event.secondary_player else None),
                 card_type=card_type,
-                highlight=event_type in {
+                highlight=event_type
+                in {
                     "goal",
                     "penalty_goal",
                     "penalty_scored",
@@ -275,9 +251,7 @@ class CompetitionAutoRunner:
             )
 
     def _club_name(self, competition_id: str, club_id: str) -> str:
-        club_profile = self.session.scalar(
-            select(ClubProfile).where(ClubProfile.owner_user_id == club_id)
-        )
+        club_profile = self.session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == club_id))
         if club_profile is not None:
             return club_profile.club_name
 
@@ -318,22 +292,16 @@ class CompetitionAutoRunner:
     def _participant_count(self, competition_id: str) -> int:
         return len(
             self.session.scalars(
-                select(CompetitionParticipant).where(
-                    CompetitionParticipant.competition_id == competition_id
-                )
+                select(CompetitionParticipant).where(CompetitionParticipant.competition_id == competition_id)
             ).all()
         )
 
     def _rule_set(self, competition_id: str) -> CompetitionRuleSet:
         rule_set = self.session.scalar(
-            select(CompetitionRuleSet).where(
-                CompetitionRuleSet.competition_id == competition_id
-            )
+            select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition_id)
         )
         if rule_set is None:
-            raise ValueError(
-                f"Competition rules were not found for competition {competition_id}."
-            )
+            raise ValueError(f"Competition rules were not found for competition {competition_id}.")
         return rule_set
 
     def _is_last_match(self, competition_id: str, match: CompetitionMatch) -> bool:
@@ -341,14 +309,8 @@ class CompetitionAutoRunner:
         if not matches:
             return False
         latest_round = max(item.round_number for item in matches)
-        latest_round_matches = [
-            item for item in matches if item.round_number == latest_round
-        ]
-        return (
-            match.round_number == latest_round
-            and len(latest_round_matches) == 1
-            and match.requires_winner
-        )
+        latest_round_matches = [item for item in matches if item.round_number == latest_round]
+        return match.round_number == latest_round and len(latest_round_matches) == 1 and match.requires_winner
 
     @staticmethod
     def _all_matches_complete(matches: list[CompetitionMatch]) -> bool:
