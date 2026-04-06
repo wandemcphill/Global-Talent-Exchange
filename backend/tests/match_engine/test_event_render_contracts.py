@@ -75,7 +75,10 @@ def test_viewer_timeline_consumes_render_contract_for_camera_and_ball_states() -
     goal_frames = [frame for frame in view_state.frames if frame.active_event_id == goal_event.event_id]
 
     assert goal_frames
-    assert any(frame.camera_preset in {MatchViewerCameraPreset.BOX_ZOOM, MatchViewerCameraPreset.GOAL_CELEBRATION} for frame in goal_frames)
+    assert any(
+        frame.camera_preset in {MatchViewerCameraPreset.BOX_ZOOM, MatchViewerCameraPreset.GOAL_CELEBRATION}
+        for frame in goal_frames
+    )
     assert any(frame.ball.state in {"shot", "cross", "lob"} for frame in goal_frames)
     assert any(frame.playback_rate <= 0.5 for frame in goal_frames)
     assert any(frame.pressure_index > 0.0 for frame in goal_frames)
@@ -147,10 +150,13 @@ def test_render_sync_exposes_motion_commentary_crowd_and_spectator_layers() -> N
     assert experience is not None
     assert experience.motion is not None
     assert experience.motion.model_key == "gtex_motion_blend_v1"
-    assert round(
-        experience.motion.run_weight + experience.motion.sprint_weight + experience.motion.shoot_weight,
-        3,
-    ) == 1.0
+    assert (
+        round(
+            experience.motion.run_weight + experience.motion.sprint_weight + experience.motion.shoot_weight,
+            3,
+        )
+        == 1.0
+    )
     assert -1.0 <= experience.motion.direction.x <= 1.0
     assert -1.0 <= experience.motion.direction.y <= 1.0
 

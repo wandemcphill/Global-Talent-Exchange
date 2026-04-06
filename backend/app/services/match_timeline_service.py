@@ -39,7 +39,6 @@ from app.schemas.match_viewer import (
     MatchViewStateView,
 )
 
-
 _SUPPORTED_FORMATIONS = {"4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "4-4-1"}
 _LINE_Y_MAP = {
     1: (50.0,),
@@ -94,10 +93,7 @@ class MatchTimelineService:
         if replay_payload.visual_identity is None:
             raise ValueError("Viewer timeline requires replay visual identity data.")
 
-        player_stats_by_id = {
-            item.player_id: item
-            for item in replay_payload.summary.player_stats
-        }
+        player_stats_by_id = {item.player_id: item for item in replay_payload.summary.player_stats}
         render_sync_by_event_id = {
             item.event_id: item
             for item in (replay_payload.render_sync.events if replay_payload.render_sync is not None else [])
@@ -160,7 +156,9 @@ class MatchTimelineService:
             source="simulation",
             supports_offside=any(item.view.event_type is MatchViewerEventType.OFFSIDE for item in events),
             deterministic_seed=replay_payload.seed,
-            duration_seconds=max(replay_payload.timeline.presentation_duration_seconds, int(frames[-1].time_seconds) if frames else 0),
+            duration_seconds=max(
+                replay_payload.timeline.presentation_duration_seconds, int(frames[-1].time_seconds) if frames else 0
+            ),
             home_team=home_team,
             away_team=away_team,
             events=[item.view for item in events],
@@ -226,8 +224,12 @@ class MatchTimelineService:
                 item.event_id or "",
             ),
         )
-        resolved_home_team_id = home_team_id or self._team_id_from_live_events(ordered_events, side=MatchViewerSide.HOME)
-        resolved_away_team_id = away_team_id or self._team_id_from_live_events(ordered_events, side=MatchViewerSide.AWAY)
+        resolved_home_team_id = home_team_id or self._team_id_from_live_events(
+            ordered_events, side=MatchViewerSide.HOME
+        )
+        resolved_away_team_id = away_team_id or self._team_id_from_live_events(
+            ordered_events, side=MatchViewerSide.AWAY
+        )
         resolved_home_team_id = resolved_home_team_id or f"{match_id}:home"
         resolved_away_team_id = resolved_away_team_id or f"{match_id}:away"
         resolved_home_team_name = home_team_name or self._team_name_from_live_events(
@@ -272,8 +274,10 @@ class MatchTimelineService:
             )
             for event in ordered_events
         ]
-        current_minute = int(live_state.snapshot.current_minute) if live_state is not None else (
-            max((item.minute for item in ordered_events), default=0)
+        current_minute = (
+            int(live_state.snapshot.current_minute)
+            if live_state is not None
+            else (max((item.minute for item in ordered_events), default=0))
         )
         duration_seconds = max(
             max((self._live_event_time_seconds(item) for item in ordered_events), default=0.0),
@@ -433,7 +437,9 @@ class MatchTimelineService:
                 primary_player_id=event.primary_player.player_id if event.primary_player is not None else None,
                 primary_player_name=event.primary_player.player_name if event.primary_player is not None else None,
                 secondary_player_id=event.secondary_player.player_id if event.secondary_player is not None else None,
-                secondary_player_name=event.secondary_player.player_name if event.secondary_player is not None else None,
+                secondary_player_name=(
+                    event.secondary_player.player_name if event.secondary_player is not None else None
+                ),
                 home_score=event.home_score,
                 away_score=event.away_score,
                 banner_text=self._banner_text(event.commentary, event.event_type.value),
@@ -462,8 +468,14 @@ class MatchTimelineService:
             fallback_formation=self._optional_text(metadata.get("fallback_formation")),
             render_contract=self._render_contract(metadata.get("render")),
             metadata=context_metadata,
-            motion=render_sync.experience.motion if render_sync is not None and render_sync.experience is not None else None,
-            crowd=render_sync.experience.crowd if render_sync is not None and render_sync.experience is not None else None,
+            motion=(
+                render_sync.experience.motion
+                if render_sync is not None and render_sync.experience is not None
+                else None
+            ),
+            crowd=(
+                render_sync.experience.crowd if render_sync is not None and render_sync.experience is not None else None
+            ),
         )
 
     def _context_from_archive_event(
@@ -496,9 +508,7 @@ class MatchTimelineService:
                 commentary=commentary,
                 emphasis_level=self._emphasis_level(viewer_type),
                 highlighted_player_ids=[
-                    player_id
-                    for player_id in (event.player_id, event.secondary_player_id)
-                    if player_id is not None
+                    player_id for player_id in (event.player_id, event.secondary_player_id) if player_id is not None
                 ],
                 flags=[],
                 playback_profile="neutral",
@@ -535,7 +545,9 @@ class MatchTimelineService:
             away_team_id=away_team_id,
         )
         primary_player_name = event.player or self._optional_text(event.metadata.get("player_name"))
-        secondary_player_name = event.secondary_player or self._optional_text(event.metadata.get("secondary_player_name"))
+        secondary_player_name = event.secondary_player or self._optional_text(
+            event.metadata.get("secondary_player_name")
+        )
         primary_player_id = self._live_actor_id(
             player_id=event.player_id,
             player_name=primary_player_name,
@@ -546,8 +558,16 @@ class MatchTimelineService:
             player_name=secondary_player_name,
             side=team_side,
         )
-        commentary = event.commentary or self._optional_text(event.metadata.get("description")) or self._banner_text(raw_event_type, raw_event_type)
-        team_id = event.team_id or (home_team_id if team_side is MatchViewerSide.HOME else away_team_id if team_side is MatchViewerSide.AWAY else None)
+        commentary = (
+            event.commentary
+            or self._optional_text(event.metadata.get("description"))
+            or self._banner_text(raw_event_type, raw_event_type)
+        )
+        team_id = event.team_id or (
+            home_team_id
+            if team_side is MatchViewerSide.HOME
+            else away_team_id if team_side is MatchViewerSide.AWAY else None
+        )
         team_name = event.team or self._optional_text(event.metadata.get("team_name"))
         if not team_name:
             if team_side is MatchViewerSide.HOME:
@@ -558,7 +578,8 @@ class MatchTimelineService:
         context_metadata.update(event.meta)
         return _ViewerEventContext(
             view=MatchViewerEventView(
-                event_id=event.event_id or f"{event.match_id or 'live'}:{raw_event_type}:{int(self._live_event_time_seconds(event))}",
+                event_id=event.event_id
+                or f"{event.match_id or 'live'}:{raw_event_type}:{int(self._live_event_time_seconds(event))}",
                 sequence=int(event.sequence_id or event.sequence or 0),
                 event_type=viewer_type,
                 minute=event.minute,
@@ -577,14 +598,11 @@ class MatchTimelineService:
                 commentary=commentary,
                 emphasis_level=self._emphasis_level(viewer_type),
                 highlighted_player_ids=[
-                    player_id
-                    for player_id in (primary_player_id, secondary_player_id)
-                    if player_id is not None
+                    player_id for player_id in (primary_player_id, secondary_player_id) if player_id is not None
                 ],
                 flags=[],
-                playback_profile=self._optional_text(event.meta.get("chance_family")) or (
-                    "build_up" if viewer_type is MatchViewerEventType.ATTACK else "neutral"
-                ),
+                playback_profile=self._optional_text(event.meta.get("chance_family"))
+                or ("build_up" if viewer_type is MatchViewerEventType.ATTACK else "neutral"),
                 miss_variant="wide" if viewer_type is MatchViewerEventType.MISS else None,
                 reviewable=bool(event.meta.get("reviewable", False)),
                 review_reason=self._optional_text(event.meta.get("review_reason")),
@@ -891,7 +909,11 @@ class MatchTimelineService:
     ) -> list[dict[str, Any]]:
         observed: dict[str, dict[str, Any]] = {}
         for index, event in enumerate(events):
-            event_side = self._live_team_side(event, home_team_id=team_id if side is MatchViewerSide.HOME else "", away_team_id=team_id if side is MatchViewerSide.AWAY else "")
+            event_side = self._live_team_side(
+                event,
+                home_team_id=team_id if side is MatchViewerSide.HOME else "",
+                away_team_id=team_id if side is MatchViewerSide.AWAY else "",
+            )
             if event_side is not None and event_side is not side:
                 continue
             if event_side is None and event.team_id != team_id:
@@ -899,10 +921,16 @@ class MatchTimelineService:
             weight = float(event.importance_score or 0.0) + (12.0 if event.event_type == "goal" else 4.0)
             primary_name = event.player or self._optional_text(event.metadata.get("player_name"))
             primary_id = self._live_actor_id(player_id=event.player_id, player_name=primary_name, side=side)
-            self._remember_live_player(observed, player_id=primary_id, player_name=primary_name, weight=weight + (len(events) - index))
+            self._remember_live_player(
+                observed, player_id=primary_id, player_name=primary_name, weight=weight + (len(events) - index)
+            )
             if event.event_type == "substitution":
-                secondary_name = event.secondary_player or self._optional_text(event.metadata.get("secondary_player_name"))
-                secondary_id = self._live_actor_id(player_id=event.secondary_player_id, player_name=secondary_name, side=side)
+                secondary_name = event.secondary_player or self._optional_text(
+                    event.metadata.get("secondary_player_name")
+                )
+                secondary_id = self._live_actor_id(
+                    player_id=event.secondary_player_id, player_name=secondary_name, side=side
+                )
                 self._remember_live_player(
                     observed,
                     player_id=secondary_id,
@@ -963,7 +991,11 @@ class MatchTimelineService:
         side: MatchViewerSide,
     ) -> str | None:
         for event in events:
-            event_side = self._live_team_side(event, home_team_id=team_id if side is MatchViewerSide.HOME else "", away_team_id=team_id if side is MatchViewerSide.AWAY else "")
+            event_side = self._live_team_side(
+                event,
+                home_team_id=team_id if side is MatchViewerSide.HOME else "",
+                away_team_id=team_id if side is MatchViewerSide.AWAY else "",
+            )
             if event_side is not None and event_side is not side:
                 continue
             if event.team_id == team_id and event.team:
@@ -995,11 +1027,21 @@ class MatchTimelineService:
         *,
         live_state: LiveMatchStateView | None,
     ) -> bool:
-        if any(self._viewer_event_type_from_live_event(item, raw_event_type=self._optional_text(item.metadata.get("raw_event_type")) or item.event_type) is MatchViewerEventType.FULLTIME for item in events):
+        if any(
+            self._viewer_event_type_from_live_event(
+                item, raw_event_type=self._optional_text(item.metadata.get("raw_event_type")) or item.event_type
+            )
+            is MatchViewerEventType.FULLTIME
+            for item in events
+        ):
             return True
         if live_state is None:
             return False
-        return not live_state.is_live or str(live_state.snapshot.status).lower() in {"completed", "full_time", "finished"}
+        return not live_state.is_live or str(live_state.snapshot.status).lower() in {
+            "completed",
+            "full_time",
+            "finished",
+        }
 
     def _live_event_time_seconds(self, event: LiveMatchStreamEventView) -> float:
         if event.presentation_second is not None:
@@ -1156,10 +1198,7 @@ class MatchTimelineService:
             goal_confirmed = (
                 event.view.event_type is MatchViewerEventType.GOAL
                 and event.view.review_decision != "disallowed"
-                and (
-                    event.view.home_score != prior_home_score
-                    or event.view.away_score != prior_away_score
-                )
+                and (event.view.home_score != prior_home_score or event.view.away_score != prior_away_score)
             )
 
             def display_score(stage_name: str) -> tuple[int, int]:
@@ -1438,11 +1477,7 @@ class MatchTimelineService:
                         stage="decision",
                         possession_side=possession_side,
                         camera_preset=MatchViewerCameraPreset.BROADCAST,
-                        overlay_text=(
-                            "Confirmed"
-                            if event.view.review_decision == "confirmed"
-                            else "Disallowed"
-                        ),
+                        overlay_text=("Confirmed" if event.view.review_decision == "confirmed" else "Disallowed"),
                         pause_playback=True,
                     )
                     append_frame(
@@ -1496,9 +1531,7 @@ class MatchTimelineService:
                     possession_side=possession_side,
                     camera_preset=MatchViewerCameraPreset.BOX_ZOOM,
                     overlay_text=(
-                        "RED CARD"
-                        if event.view.event_type is MatchViewerEventType.RED_CARD
-                        else "YELLOW CARD"
+                        "RED CARD" if event.view.event_type is MatchViewerEventType.RED_CARD else "YELLOW CARD"
                     ),
                     pause_playback=True,
                 )
@@ -1543,8 +1576,7 @@ class MatchTimelineService:
                     time_seconds=last_time + self._settle_seconds(event.view.event_type),
                     clock_minute=min(
                         120.0,
-                        self._clock_value(event.view.minute, event.view.added_time)
-                        + 0.12,
+                        self._clock_value(event.view.minute, event.view.added_time) + 0.12,
                     ),
                     home_score=event.view.home_score,
                     away_score=event.view.away_score,
@@ -1634,7 +1666,11 @@ class MatchTimelineService:
             home_attacks_right=home_attacks_right,
             possession_side=possession_side,
             active_event_id=active_event.view.event_id if active_event is not None else None,
-            event_banner=active_event.view.banner_text if active_event is not None and stage in {"event", "decision", "post"} else None,
+            event_banner=(
+                active_event.view.banner_text
+                if active_event is not None and stage in {"event", "decision", "post"}
+                else None
+            ),
             stage=self._playback_stage(stage),
             camera_preset=camera_preset,
             overlay_text=overlay_text,
@@ -1660,9 +1696,15 @@ class MatchTimelineService:
         for runtime in (home_runtime, away_runtime):
             anchors = self._anchors_for_team(
                 runtime=runtime,
-                team_attacks_right=home_attacks_right if runtime.view.side is MatchViewerSide.HOME else not home_attacks_right,
+                team_attacks_right=(
+                    home_attacks_right if runtime.view.side is MatchViewerSide.HOME else not home_attacks_right
+                ),
             )
-            attack_direction = 1.0 if (home_attacks_right if runtime.view.side is MatchViewerSide.HOME else not home_attacks_right) else -1.0
+            attack_direction = (
+                1.0
+                if (home_attacks_right if runtime.view.side is MatchViewerSide.HOME else not home_attacks_right)
+                else -1.0
+            )
             for player_id in runtime.lineup:
                 player = runtime.players_by_id[player_id]
                 anchor = anchors[player_id]
@@ -1757,9 +1799,7 @@ class MatchTimelineService:
         outfield_ids = lineup[1:]
         line_sizes = self._line_sizes(runtime.current_formation, outfield_ids, runtime)
         line_x_values = self._line_x_values(line_sizes, team_attacks_right=team_attacks_right)
-        anchors: dict[str, dict[str, float]] = {
-            goalkeeper_id: {"x": 8.0 if team_attacks_right else 92.0, "y": 50.0}
-        }
+        anchors: dict[str, dict[str, float]] = {goalkeeper_id: {"x": 8.0 if team_attacks_right else 92.0, "y": 50.0}}
         cursor = 0
         for group_index, group_size in enumerate(line_sizes):
             y_values = self._line_y_values(group_size)
@@ -1779,7 +1819,7 @@ class MatchTimelineService:
         line_sizes = self._line_sizes(runtime.current_formation, outfield_ids, runtime)
         cursor = 0
         for group_index, group_size in enumerate(line_sizes):
-            group_ids = outfield_ids[cursor:cursor + group_size]
+            group_ids = outfield_ids[cursor : cursor + group_size]
             if player_id in group_ids:
                 if group_index == 0:
                     return "defense"
@@ -1822,7 +1862,9 @@ class MatchTimelineService:
         return base if team_attacks_right else [100.0 - item for item in base]
 
     def _line_y_values(self, count: int) -> list[float]:
-        return list(_LINE_Y_MAP.get(count, tuple(10.0 + ((index + 1) * (80.0 / (count + 1))) for index in range(count))))
+        return list(
+            _LINE_Y_MAP.get(count, tuple(10.0 + ((index + 1) * (80.0 / (count + 1))) for index in range(count)))
+        )
 
     def _resolve_collisions(self, payloads: list[dict[str, Any]]) -> None:
         for index, item in enumerate(payloads):
@@ -1857,8 +1899,12 @@ class MatchTimelineService:
         stage: str,
     ) -> tuple[dict[str, float], MatchViewerPlayerState]:
         viewer_type = active_event.view.event_type
-        primary_side = self._team_side_from_player(home_runtime=runtime, away_runtime=opponent, player_id=active_event.view.primary_player_id)
-        secondary_side = self._team_side_from_player(home_runtime=runtime, away_runtime=opponent, player_id=active_event.view.secondary_player_id)
+        primary_side = self._team_side_from_player(
+            home_runtime=runtime, away_runtime=opponent, player_id=active_event.view.primary_player_id
+        )
+        secondary_side = self._team_side_from_player(
+            home_runtime=runtime, away_runtime=opponent, player_id=active_event.view.secondary_player_id
+        )
         attacking_side = active_event.team_side or secondary_side or primary_side
         defending_side = None if attacking_side is None else self._opposite_side(attacking_side)
         player_side = runtime.view.side
@@ -1899,12 +1945,22 @@ class MatchTimelineService:
         if player.player_id == active_event.view.secondary_player_id:
             if viewer_type is MatchViewerEventType.SAVE and secondary_side is attacking_side:
                 state = MatchViewerPlayerState.ATTACKING
-                position["x"] = self._lerp(position["x"], event_origin["x"] if stage == "pre" else event_target["x"], 0.66 if stage != "pre" else 0.38)
-                position["y"] = self._lerp(position["y"], event_origin["y"] if stage == "pre" else event_target["y"], 0.66 if stage != "pre" else 0.38)
+                position["x"] = self._lerp(
+                    position["x"],
+                    event_origin["x"] if stage == "pre" else event_target["x"],
+                    0.66 if stage != "pre" else 0.38,
+                )
+                position["y"] = self._lerp(
+                    position["y"],
+                    event_origin["y"] if stage == "pre" else event_target["y"],
+                    0.66 if stage != "pre" else 0.38,
+                )
                 return position, state
             if viewer_type is MatchViewerEventType.GOAL and secondary_side is attacking_side:
                 state = MatchViewerPlayerState.ATTACKING
-                position["x"] = self._lerp(position["x"], event_target["x"] - (5.0 if attacking_side is MatchViewerSide.HOME else -5.0), 0.52)
+                position["x"] = self._lerp(
+                    position["x"], event_target["x"] - (5.0 if attacking_side is MatchViewerSide.HOME else -5.0), 0.52
+                )
                 position["y"] = self._lerp(position["y"], event_target["y"] + 6.0, 0.52)
                 return position, state
 
@@ -1925,7 +1981,9 @@ class MatchTimelineService:
                 return position, state
             if player_side is attacking_side and line == "attack":
                 state = MatchViewerPlayerState.ATTACKING
-                position["x"] = self._lerp(position["x"], event_target["x"] - (2.5 if attacking_side is MatchViewerSide.HOME else -2.5), 0.38)
+                position["x"] = self._lerp(
+                    position["x"], event_target["x"] - (2.5 if attacking_side is MatchViewerSide.HOME else -2.5), 0.38
+                )
                 position["y"] = self._lerp(position["y"], event_target["y"], 0.25)
                 return position, state
             if player_side is defending_side and line in {"defense", "midfield"}:
@@ -1969,7 +2027,11 @@ class MatchTimelineService:
             return ball_frame(position={"x": 50.0, "y": 50.0}, owner_player_id=default_owner, state="placed")
         if active_event is None:
             owner = default_owner
-            return ball_frame(position=self._ball_near_player(positions.get(owner) or {"x": 50.0, "y": 50.0}), owner_player_id=owner, state="rolling")
+            return ball_frame(
+                position=self._ball_near_player(positions.get(owner) or {"x": 50.0, "y": 50.0}),
+                owner_player_id=owner,
+                state="rolling",
+            )
 
         viewer_type = active_event.view.event_type
         primary = active_event.view.primary_player_id
@@ -2001,34 +2063,88 @@ class MatchTimelineService:
 
         if viewer_type is MatchViewerEventType.GOAL:
             if stage == "pre":
-                return ball_frame(position=self._ball_near_player(primary_pos or event_origin), owner_player_id=primary, state=self._ball_state_from_render(active_event, fallback="controlled"))
+                return ball_frame(
+                    position=self._ball_near_player(primary_pos or event_origin),
+                    owner_player_id=primary,
+                    state=self._ball_state_from_render(active_event, fallback="controlled"),
+                )
             if stage == "event":
-                return ball_frame(position=event_target, owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="shot"))
-            return ball_frame(position={"x": event_target["x"], "y": event_target["y"]}, owner_player_id=None, state="in_goal")
+                return ball_frame(
+                    position=event_target,
+                    owner_player_id=None,
+                    state=self._ball_state_from_render(active_event, fallback="shot"),
+                )
+            return ball_frame(
+                position={"x": event_target["x"], "y": event_target["y"]}, owner_player_id=None, state="in_goal"
+            )
         if viewer_type is MatchViewerEventType.SAVE:
             if stage == "pre":
-                return ball_frame(position=self._ball_near_player(secondary_pos or primary_pos or event_origin), owner_player_id=secondary or primary, state=self._ball_state_from_render(active_event, fallback="controlled"))
+                return ball_frame(
+                    position=self._ball_near_player(secondary_pos or primary_pos or event_origin),
+                    owner_player_id=secondary or primary,
+                    state=self._ball_state_from_render(active_event, fallback="controlled"),
+                )
             if stage == "event":
-                return ball_frame(position=event_target, owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="saved"))
-            return ball_frame(position=self._ball_near_player(goalkeeper_target), owner_player_id=primary if primary_side is defending_side else secondary, state="held")
+                return ball_frame(
+                    position=event_target,
+                    owner_player_id=None,
+                    state=self._ball_state_from_render(active_event, fallback="saved"),
+                )
+            return ball_frame(
+                position=self._ball_near_player(goalkeeper_target),
+                owner_player_id=primary if primary_side is defending_side else secondary,
+                state="held",
+            )
         if viewer_type is MatchViewerEventType.MISS:
             if stage == "pre":
-                return ball_frame(position=self._ball_near_player(primary_pos or event_origin), owner_player_id=primary, state=self._ball_state_from_render(active_event, fallback="controlled"))
+                return ball_frame(
+                    position=self._ball_near_player(primary_pos or event_origin),
+                    owner_player_id=primary,
+                    state=self._ball_state_from_render(active_event, fallback="controlled"),
+                )
             resolved_miss_target = event_target if stage == "event" else wide_target
-            return ball_frame(position=resolved_miss_target if stage == "event" else self._ball_near_player(resolved_miss_target), owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="missed"))
+            return ball_frame(
+                position=resolved_miss_target if stage == "event" else self._ball_near_player(resolved_miss_target),
+                owner_player_id=None,
+                state=self._ball_state_from_render(active_event, fallback="missed"),
+            )
         if viewer_type is MatchViewerEventType.FOUL:
-            return ball_frame(position=self._ball_near_player(primary_pos or event_origin), owner_player_id=primary or default_owner, state="stopped")
+            return ball_frame(
+                position=self._ball_near_player(primary_pos or event_origin),
+                owner_player_id=primary or default_owner,
+                state="stopped",
+            )
         if viewer_type is MatchViewerEventType.OFFSIDE:
-            return ball_frame(position=event_target if stage != "pre" else self._ball_near_player(primary_pos or event_origin), owner_player_id=primary, state="stopped")
+            return ball_frame(
+                position=event_target if stage != "pre" else self._ball_near_player(primary_pos or event_origin),
+                owner_player_id=primary,
+                state="stopped",
+            )
         if viewer_type in {MatchViewerEventType.RED_CARD, MatchViewerEventType.HALFTIME, MatchViewerEventType.FULLTIME}:
-            return ball_frame(position=self._ball_near_player(primary_pos or positions.get(default_owner) or {"x": 50.0, "y": 50.0}), owner_player_id=primary or default_owner, state="stopped")
+            return ball_frame(
+                position=self._ball_near_player(primary_pos or positions.get(default_owner) or {"x": 50.0, "y": 50.0}),
+                owner_player_id=primary or default_owner,
+                state="stopped",
+            )
         if viewer_type in {MatchViewerEventType.PENALTY, MatchViewerEventType.SET_PIECE, MatchViewerEventType.ATTACK}:
             if stage == "pre":
-                return ball_frame(position=self._ball_near_player(primary_pos or event_origin), owner_player_id=primary or default_owner, state=self._ball_state_from_render(active_event, fallback="controlled"))
+                return ball_frame(
+                    position=self._ball_near_player(primary_pos or event_origin),
+                    owner_player_id=primary or default_owner,
+                    state=self._ball_state_from_render(active_event, fallback="controlled"),
+                )
             if stage == "event":
-                return ball_frame(position=event_target, owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="traveling"))
+                return ball_frame(
+                    position=event_target,
+                    owner_player_id=None,
+                    state=self._ball_state_from_render(active_event, fallback="traveling"),
+                )
         owner = primary or default_owner
-        return ball_frame(position=self._ball_near_player(positions.get(owner) or event_target), owner_player_id=owner, state=self._ball_state_from_render(active_event, fallback="rolling"))
+        return ball_frame(
+            position=self._ball_near_player(positions.get(owner) or event_target),
+            owner_player_id=owner,
+            state=self._ball_state_from_render(active_event, fallback="rolling"),
+        )
 
     def _enrich_frames(
         self,
@@ -2228,7 +2344,10 @@ class MatchTimelineService:
             return MatchViewerTransitionState.STOPPED
 
         origin = self._render_point(event, "origin") or {"x": 50.0, "y": 50.0}
-        target = self._render_point(event, "target") or {"x": float(frame.ball.position.x), "y": float(frame.ball.position.y)}
+        target = self._render_point(event, "target") or {
+            "x": float(frame.ball.position.x),
+            "y": float(frame.ball.position.y),
+        }
         progress_delta = self._goal_progress(
             point=target,
             side=possession_side,
@@ -2276,19 +2395,27 @@ class MatchTimelineService:
 
         motion_pressure = event.motion.pressure if event is not None and event.motion is not None else 0.0
         emphasis_pressure = ((event.view.emphasis_level - 1) / 2.0) if event is not None else 0.0
-        territory_pressure = self._goal_progress(
-            point=ball_point,
-            side=frame.possession_side,
-            home_attacks_right=frame.home_attacks_right,
-        ) / 100.0
+        territory_pressure = (
+            self._goal_progress(
+                point=ball_point,
+                side=frame.possession_side,
+                home_attacks_right=frame.home_attacks_right,
+            )
+            / 100.0
+        )
         crowd_pressure = 0.0
         if event is not None and event.crowd is not None:
             crowd_pressure = max(event.crowd.home_intensity, event.crowd.away_intensity)
-        stage_bonus = 0.1 if frame.stage in {
-            MatchViewerPlaybackStage.EVENT,
-            MatchViewerPlaybackStage.REVIEW,
-            MatchViewerPlaybackStage.DECISION,
-        } else 0.0
+        stage_bonus = (
+            0.1
+            if frame.stage
+            in {
+                MatchViewerPlaybackStage.EVENT,
+                MatchViewerPlaybackStage.REVIEW,
+                MatchViewerPlaybackStage.DECISION,
+            }
+            else 0.0
+        )
 
         return round(
             self._clamp_unit(
@@ -2309,9 +2436,7 @@ class MatchTimelineService:
         side: MatchViewerSide,
     ) -> float:
         team_players = [
-            player
-            for player in players
-            if player.side is side and player.active and player.line != "goalkeeper"
+            player for player in players if player.side is side and player.active and player.line != "goalkeeper"
         ]
         if len(team_players) < 3:
             return 0.5
@@ -2336,14 +2461,19 @@ class MatchTimelineService:
             return MatchViewerPossessionPhase.SET_PIECE
         if frame.phase in {MatchViewerPhase.HALFTIME, MatchViewerPhase.FULLTIME}:
             return MatchViewerPossessionPhase.DEAD_BALL
-        if event is not None and event.view.event_type in {
-            MatchViewerEventType.FOUL,
-            MatchViewerEventType.OFFSIDE,
-            MatchViewerEventType.YELLOW_CARD,
-            MatchViewerEventType.RED_CARD,
-            MatchViewerEventType.SUBSTITUTION,
-            MatchViewerEventType.INJURY,
-        } and frame.pause_playback:
+        if (
+            event is not None
+            and event.view.event_type
+            in {
+                MatchViewerEventType.FOUL,
+                MatchViewerEventType.OFFSIDE,
+                MatchViewerEventType.YELLOW_CARD,
+                MatchViewerEventType.RED_CARD,
+                MatchViewerEventType.SUBSTITUTION,
+                MatchViewerEventType.INJURY,
+            }
+            and frame.pause_playback
+        ):
             return MatchViewerPossessionPhase.DEAD_BALL
         if transition_state in {
             MatchViewerTransitionState.HOME_BREAK,
@@ -2472,7 +2602,9 @@ class MatchTimelineService:
         direction_x = float(target["x"]) - float(player.position.x)
         direction_y = float(target["y"]) - float(player.position.y)
         if abs(direction_x) < 0.01 and abs(direction_y) < 0.01:
-            attacks_right = frame.home_attacks_right if player.side is MatchViewerSide.HOME else not frame.home_attacks_right
+            attacks_right = (
+                frame.home_attacks_right if player.side is MatchViewerSide.HOME else not frame.home_attacks_right
+            )
             direction_x = 1.0 if attacks_right else -1.0
             direction_y = 0.0
         return self._normalize_vector(direction_x, direction_y)
@@ -2487,7 +2619,14 @@ class MatchTimelineService:
         speed_ratio: float,
     ) -> float:
         baseline = runtime.base_stamina_pct if runtime is not None and runtime.base_stamina_pct is not None else 84.0
-        active_minute = min(clock_minute, float(runtime.substituted_out_minute) if runtime is not None and runtime.substituted_out_minute is not None else clock_minute)
+        active_minute = min(
+            clock_minute,
+            (
+                float(runtime.substituted_out_minute)
+                if runtime is not None and runtime.substituted_out_minute is not None
+                else clock_minute
+            ),
+        )
         freshness_bonus = 0.0
         if runtime is not None and runtime.substituted_in_minute is not None:
             active_minute = max(0.0, active_minute - float(runtime.substituted_in_minute))
@@ -2500,7 +2639,12 @@ class MatchTimelineService:
             "attack": 0.68,
         }.get(player.line, 0.64)
         stamina = baseline - (active_minute * (0.18 + (speed_ratio * 0.11)) * line_load) + freshness_bonus
-        if event is not None and event.motion is not None and player.player_id in event.view.highlighted_player_ids and event.motion.fatigue_load is not None:
+        if (
+            event is not None
+            and event.motion is not None
+            and player.player_id in event.view.highlighted_player_ids
+            and event.motion.fatigue_load is not None
+        ):
             stamina = min(stamina, 100.0 - (event.motion.fatigue_load * 100.0))
         if player.state is MatchViewerPlayerState.SENT_OFF:
             stamina = min(stamina, 40.0)
@@ -2522,9 +2666,7 @@ class MatchTimelineService:
         if event is not None and event.motion is not None and player.player_id in event.view.highlighted_player_ids:
             motion_blend = max(event.motion.run_weight, event.motion.sprint_weight, event.motion.shoot_weight) * 0.55
         return round(
-            self._clamp_unit(
-                max(displacement / 24.0, min(1.0, (speed_ratio * 0.55) + emphasis + motion_blend))
-            ),
+            self._clamp_unit(max(displacement / 24.0, min(1.0, (speed_ratio * 0.55) + emphasis + motion_blend))),
             3,
         )
 
@@ -2546,10 +2688,16 @@ class MatchTimelineService:
             and frame.stage in {MatchViewerPlaybackStage.DECISION, MatchViewerPlaybackStage.POST}
         ):
             return MatchViewerAnimationState.CELEBRATE
-        if event is not None and player.role is PlayerRole.GOALKEEPER and event.view.event_type is MatchViewerEventType.SAVE and player.player_id in {
-            event.view.primary_player_id,
-            event.view.secondary_player_id,
-        }:
+        if (
+            event is not None
+            and player.role is PlayerRole.GOALKEEPER
+            and event.view.event_type is MatchViewerEventType.SAVE
+            and player.player_id
+            in {
+                event.view.primary_player_id,
+                event.view.secondary_player_id,
+            }
+        ):
             return MatchViewerAnimationState.SAVE
         if has_possession and event is not None:
             if event.view.event_type in {
@@ -2721,7 +2869,13 @@ class MatchTimelineService:
         return 1.1
 
     def _lead_seconds(self, event_type: MatchViewerEventType) -> float:
-        if event_type in {MatchViewerEventType.GOAL, MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.RED_CARD, MatchViewerEventType.OFFSIDE}:
+        if event_type in {
+            MatchViewerEventType.GOAL,
+            MatchViewerEventType.SAVE,
+            MatchViewerEventType.MISS,
+            MatchViewerEventType.RED_CARD,
+            MatchViewerEventType.OFFSIDE,
+        }:
             return 2.2
         if event_type in {MatchViewerEventType.PENALTY, MatchViewerEventType.SET_PIECE}:
             return 1.8
@@ -2730,7 +2884,12 @@ class MatchTimelineService:
     def _settle_seconds(self, event_type: MatchViewerEventType) -> float:
         if event_type is MatchViewerEventType.GOAL:
             return 2.4
-        if event_type in {MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.RED_CARD, MatchViewerEventType.FOUL}:
+        if event_type in {
+            MatchViewerEventType.SAVE,
+            MatchViewerEventType.MISS,
+            MatchViewerEventType.RED_CARD,
+            MatchViewerEventType.FOUL,
+        }:
             return 1.8
         if event_type in {MatchViewerEventType.HALFTIME, MatchViewerEventType.FULLTIME}:
             return 1.2
@@ -2755,7 +2914,9 @@ class MatchTimelineService:
         if role is PlayerRole.GOALKEEPER:
             return position
         center_bias = 0.56 if highlighted else 0.22
-        position["x"] = self._lerp(position["x"], 50.0 + (attack_direction * (1.2 if highlighted else 5.0)), center_bias)
+        position["x"] = self._lerp(
+            position["x"], 50.0 + (attack_direction * (1.2 if highlighted else 5.0)), center_bias
+        )
         position["y"] = self._lerp(position["y"], 50.0, 0.26 if highlighted else 0.14)
         return position
 
@@ -2769,8 +2930,17 @@ class MatchTimelineService:
     ) -> dict[str, float]:
         attacks_right = home_attacks_right if side is MatchViewerSide.HOME else not home_attacks_right
         target_y = 26.0 + (self._fraction(event_id) * 48.0)
-        target_x = 96.0 if attacks_right and viewer_type is MatchViewerEventType.GOAL else 90.0 if attacks_right else 4.0 if viewer_type is MatchViewerEventType.GOAL else 10.0
-        if viewer_type in {MatchViewerEventType.PENALTY, MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.SET_PIECE}:
+        target_x = (
+            96.0
+            if attacks_right and viewer_type is MatchViewerEventType.GOAL
+            else 90.0 if attacks_right else 4.0 if viewer_type is MatchViewerEventType.GOAL else 10.0
+        )
+        if viewer_type in {
+            MatchViewerEventType.PENALTY,
+            MatchViewerEventType.SAVE,
+            MatchViewerEventType.MISS,
+            MatchViewerEventType.SET_PIECE,
+        }:
             target_x = 88.0 if attacks_right else 12.0
         if viewer_type is MatchViewerEventType.OFFSIDE:
             target_x = 82.0 if attacks_right else 18.0
@@ -2811,8 +2981,12 @@ class MatchTimelineService:
         }
 
     def _default_owner(self, runtime: _TeamRuntime) -> str | None:
-        attackers = [player_id for player_id in runtime.lineup if runtime.players_by_id[player_id].role is PlayerRole.FORWARD]
-        midfielders = [player_id for player_id in runtime.lineup if runtime.players_by_id[player_id].role is PlayerRole.MIDFIELDER]
+        attackers = [
+            player_id for player_id in runtime.lineup if runtime.players_by_id[player_id].role is PlayerRole.FORWARD
+        ]
+        midfielders = [
+            player_id for player_id in runtime.lineup if runtime.players_by_id[player_id].role is PlayerRole.MIDFIELDER
+        ]
         if attackers:
             return attackers[0]
         if midfielders:
@@ -2956,7 +3130,13 @@ class MatchTimelineService:
     def _emphasis_level(self, event_type: MatchViewerEventType) -> int:
         if event_type in {MatchViewerEventType.GOAL, MatchViewerEventType.RED_CARD}:
             return 3
-        if event_type in {MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.FOUL, MatchViewerEventType.OFFSIDE, MatchViewerEventType.PENALTY}:
+        if event_type in {
+            MatchViewerEventType.SAVE,
+            MatchViewerEventType.MISS,
+            MatchViewerEventType.FOUL,
+            MatchViewerEventType.OFFSIDE,
+            MatchViewerEventType.PENALTY,
+        }:
             return 2
         return 1
 

@@ -6,7 +6,12 @@ from app.match_engine.services.match_simulation_service import MatchSimulationSe
 from app.match_engine.simulation.models import MatchEventType, TacticalStyle
 from app.replay_archive.schemas import ReplayArchiveRecord
 from app.services.match_timeline_service import MatchTimelineService
-from app.schemas.match_viewer import MatchViewerAnimationState, MatchViewerEventType, MatchViewerPossessionPhase, MatchViewerSide
+from app.schemas.match_viewer import (
+    MatchViewerAnimationState,
+    MatchViewerEventType,
+    MatchViewerPossessionPhase,
+    MatchViewerSide,
+)
 from backend.tests.match_engine.helpers import build_request, build_team
 
 
@@ -86,7 +91,9 @@ def test_match_timeline_service_surfaces_major_event_types_across_replays() -> N
                 ),
             )
         )
-        discovered.update(event.event_type for event in timeline_service.build_from_replay_payload(replay_payload).events)
+        discovered.update(
+            event.event_type for event in timeline_service.build_from_replay_payload(replay_payload).events
+        )
         if {
             MatchViewerEventType.GOAL,
             MatchViewerEventType.SAVE,
@@ -112,7 +119,8 @@ def test_match_timeline_service_enriches_frames_with_player_motion_pressure_and_
     assert all(frame.danger_zone for frame in view_state.frames)
     assert any(frame.frame_tags for frame in view_state.frames)
     assert any(
-        frame.possession_phase in {
+        frame.possession_phase
+        in {
             MatchViewerPossessionPhase.TRANSITION,
             MatchViewerPossessionPhase.FINAL_THIRD,
             MatchViewerPossessionPhase.BOX_ATTACK,
@@ -263,8 +271,14 @@ def _build_archive_record(
             "started_at": datetime.now(UTC),
             "final_whistle_at": datetime.now(UTC),
             "live": False,
-            "home_club": {"club_id": replay_payload.visual_identity.home_team.team_id, "club_name": replay_payload.visual_identity.home_team.team_name},
-            "away_club": {"club_id": replay_payload.visual_identity.away_team.team_id, "club_name": replay_payload.visual_identity.away_team.team_name},
+            "home_club": {
+                "club_id": replay_payload.visual_identity.home_team.team_id,
+                "club_name": replay_payload.visual_identity.home_team.team_name,
+            },
+            "away_club": {
+                "club_id": replay_payload.visual_identity.away_team.team_id,
+                "club_name": replay_payload.visual_identity.away_team.team_name,
+            },
             "scoreline": {
                 "home_goals": replay_payload.summary.home_score,
                 "away_goals": replay_payload.summary.away_score,
@@ -279,8 +293,12 @@ def _build_archive_record(
                     "club_name": event.team_name,
                     "player_id": event.primary_player.player_id if event.primary_player is not None else None,
                     "player_name": event.primary_player.player_name if event.primary_player is not None else None,
-                    "secondary_player_id": event.secondary_player.player_id if event.secondary_player is not None else None,
-                    "secondary_player_name": event.secondary_player.player_name if event.secondary_player is not None else None,
+                    "secondary_player_id": (
+                        event.secondary_player.player_id if event.secondary_player is not None else None
+                    ),
+                    "secondary_player_name": (
+                        event.secondary_player.player_name if event.secondary_player is not None else None
+                    ),
                     "description": event.commentary,
                     "home_score": event.home_score,
                     "away_score": event.away_score,

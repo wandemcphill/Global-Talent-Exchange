@@ -10,11 +10,9 @@ from app.schemas.match_viewer import (
     MatchViewerPlaybackStage,
     MatchViewerPlayerFrameView,
     MatchViewerPointView,
-    MatchViewerSide,
     MatchViewerVector2View,
     MatchViewStateView,
 )
-
 
 _PRESENTATION_ONLY_FLAG = "presentation_only"
 _SYNTHETIC_CINEMATIC_FLAG = "synthetic_cinematic"
@@ -59,7 +57,9 @@ class MatchViewerScalingService:
     ) -> MatchViewStateView:
         authoritative_events = [event for event in view_state.events if not self._is_presentation_only(event)]
         event_ids = {event.event_id for event in authoritative_events}
-        base_frames = [frame for frame in view_state.frames if frame.active_event_id is None or frame.active_event_id in event_ids]
+        base_frames = [
+            frame for frame in view_state.frames if frame.active_event_id is None or frame.active_event_id in event_ids
+        ]
         base_duration = self._base_duration(view_state)
         target_duration = self._target_duration(authoritative_events, frame_count=len(base_frames), mode=mode)
         scaled_events = self._scale_authoritative_events(
@@ -68,7 +68,11 @@ class MatchViewerScalingService:
             target_duration=target_duration,
             mode=mode,
         )
-        events = scaled_events if mode is not MatchMode.CINEMATIC else self._with_cinematic_events(scaled_events, target_duration)
+        events = (
+            scaled_events
+            if mode is not MatchMode.CINEMATIC
+            else self._with_cinematic_events(scaled_events, target_duration)
+        )
         event_lookup = {event.event_id: event for event in events}
         frames = self._scale_frames(
             base_frames,
@@ -191,10 +195,14 @@ class MatchViewerScalingService:
             gap_before = max(0.0, event.time_seconds - previous.time_seconds)
             if gap_before < 14.0:
                 continue
-            minute = self._interpolated_minute(previous, event, event.time_seconds - min(max(gap_before * 0.45, 7.0), 18.0))
+            minute = self._interpolated_minute(
+                previous, event, event.time_seconds - min(max(gap_before * 0.45, 7.0), 18.0)
+            )
             team_name = event.team_name or "Match"
             if attack_count < attack_limit and event.event_type in _BUILDUP_TYPES:
-                attack_time = max(previous.time_seconds + 3.0, event.time_seconds - min(max(gap_before * 0.45, 7.0), 18.0))
+                attack_time = max(
+                    previous.time_seconds + 3.0, event.time_seconds - min(max(gap_before * 0.45, 7.0), 18.0)
+                )
                 if attack_time < event.time_seconds - 2.0:
                     extras.append(
                         MatchViewerEventView(
@@ -228,7 +236,9 @@ class MatchViewerScalingService:
                 and gap_before > 28.0
                 and not self._has_real_miss_between(events, previous.time_seconds, event.time_seconds)
             ):
-                miss_time = max(previous.time_seconds + 6.0, event.time_seconds - min(max(gap_before * 0.22, 4.0), 10.0))
+                miss_time = max(
+                    previous.time_seconds + 6.0, event.time_seconds - min(max(gap_before * 0.22, 4.0), 10.0)
+                )
                 if miss_time < event.time_seconds - 1.5:
                     miss_minute = self._interpolated_minute(previous, event, miss_time)
                     extras.append(
@@ -433,18 +443,38 @@ class MatchViewerScalingService:
         away_score: int | None,
     ) -> MatchTimelineFrameView:
         blend_left = t < 0.5
-        phase = self._phase_for_event(active_event.event_type) if active_event is not None else (left.phase if blend_left else right.phase)
+        phase = (
+            self._phase_for_event(active_event.event_type)
+            if active_event is not None
+            else (left.phase if blend_left else right.phase)
+        )
         return MatchTimelineFrameView(
             frame_id=self._frame_id(match_id, time_seconds, stage),
             time_seconds=round(time_seconds, 2),
             clock_minute=round(left.clock_minute + ((right.clock_minute - left.clock_minute) * t), 2),
             phase=phase,
-            home_score=left.home_score if home_score is None and blend_left else (right.home_score if home_score is None else home_score),
-            away_score=left.away_score if away_score is None and blend_left else (right.away_score if away_score is None else away_score),
+            home_score=(
+                left.home_score
+                if home_score is None and blend_left
+                else (right.home_score if home_score is None else home_score)
+            ),
+            away_score=(
+                left.away_score
+                if away_score is None and blend_left
+                else (right.away_score if away_score is None else away_score)
+            ),
             home_attacks_right=left.home_attacks_right if blend_left else right.home_attacks_right,
             possession_side=left.possession_side if blend_left else right.possession_side,
-            active_event_id=active_event.event_id if active_event is not None else (left.active_event_id if blend_left else right.active_event_id),
-            event_banner=active_event.banner_text if active_event is not None else (left.event_banner if blend_left else right.event_banner),
+            active_event_id=(
+                active_event.event_id
+                if active_event is not None
+                else (left.active_event_id if blend_left else right.active_event_id)
+            ),
+            event_banner=(
+                active_event.banner_text
+                if active_event is not None
+                else (left.event_banner if blend_left else right.event_banner)
+            ),
             stage=stage,
             camera_preset=left.camera_preset if blend_left else right.camera_preset,
             overlay_text=left.overlay_text if blend_left else right.overlay_text,
@@ -471,7 +501,10 @@ class MatchViewerScalingService:
     ) -> list[MatchViewerPlayerFrameView]:
         left_by_id = {player.player_id: player for player in left_players}
         right_by_id = {player.player_id: player for player in right_players}
-        ordered_ids = [*[player.player_id for player in left_players], *[player.player_id for player in right_players if player.player_id not in left_by_id]]
+        ordered_ids = [
+            *[player.player_id for player in left_players],
+            *[player.player_id for player in right_players if player.player_id not in left_by_id],
+        ]
         players: list[MatchViewerPlayerFrameView] = []
         for player_id in ordered_ids:
             left = left_by_id.get(player_id)
@@ -607,7 +640,9 @@ class MatchViewerScalingService:
                     update={
                         "frame_id": self._frame_id(match_id, float(target_duration), MatchViewerPlaybackStage.POST),
                         "time_seconds": float(target_duration),
-                        "phase": MatchViewerPhase.FULLTIME if last.phase is not MatchViewerPhase.FULLTIME else last.phase,
+                        "phase": (
+                            MatchViewerPhase.FULLTIME if last.phase is not MatchViewerPhase.FULLTIME else last.phase
+                        ),
                         "stage": MatchViewerPlaybackStage.POST,
                     }
                 )

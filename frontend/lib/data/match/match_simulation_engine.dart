@@ -1870,7 +1870,7 @@ MatchPlayerAnimationState _animationStateForPlayer({
   }
   if (team.tactics.pressing == MatchSimulationPressing.high &&
       (player.isDefender || player.isMidfielder)) {
-    return MatchPlayerAnimationState.intercept;
+    return MatchPlayerAnimationState.press;
   }
   return player.isForward
       ? MatchPlayerAnimationState.jog
@@ -1890,6 +1890,11 @@ double _speedRatioForAnimation(
     MatchPlayerAnimationState.control => 0.24,
     MatchPlayerAnimationState.pass => 0.46,
     MatchPlayerAnimationState.shoot => 0.68,
+    MatchPlayerAnimationState.press => 0.62,
+    MatchPlayerAnimationState.save => 0.64,
+    MatchPlayerAnimationState.celebrate => 0.42,
+    MatchPlayerAnimationState.setPiece => 0.28,
+    MatchPlayerAnimationState.sentOff => 0.03,
     MatchPlayerAnimationState.tackle => 0.74,
     MatchPlayerAnimationState.intercept => 0.66,
     MatchPlayerAnimationState.recover => 0.18,
@@ -1915,6 +1920,11 @@ double _blendFactorForAnimation(
     MatchPlayerAnimationState.control => 0.56,
     MatchPlayerAnimationState.pass => 0.78,
     MatchPlayerAnimationState.shoot => 0.92,
+    MatchPlayerAnimationState.press => 0.72,
+    MatchPlayerAnimationState.save => 0.88,
+    MatchPlayerAnimationState.celebrate => 0.82,
+    MatchPlayerAnimationState.setPiece => 0.70,
+    MatchPlayerAnimationState.sentOff => 0.14,
     MatchPlayerAnimationState.tackle => 0.88,
     MatchPlayerAnimationState.intercept => 0.80,
     MatchPlayerAnimationState.recover => 0.24,
@@ -2052,11 +2062,16 @@ MatchViewerPlayerState _viewerStateForAnimation(
     MatchPlayerAnimationState.idle => MatchViewerPlayerState.idle,
     MatchPlayerAnimationState.control ||
     MatchPlayerAnimationState.pass ||
-    MatchPlayerAnimationState.shoot =>
+    MatchPlayerAnimationState.shoot ||
+    MatchPlayerAnimationState.celebrate ||
+    MatchPlayerAnimationState.setPiece =>
       MatchViewerPlayerState.attacking,
+    MatchPlayerAnimationState.press ||
     MatchPlayerAnimationState.tackle ||
     MatchPlayerAnimationState.intercept =>
       MatchViewerPlayerState.pressing,
+    MatchPlayerAnimationState.save => MatchViewerPlayerState.defending,
+    MatchPlayerAnimationState.sentOff => MatchViewerPlayerState.sentOff,
     MatchPlayerAnimationState.recover => ownsPossession
         ? MatchViewerPlayerState.moving
         : MatchViewerPlayerState.defending,
