@@ -10,7 +10,6 @@ from app.auth.dependencies import (
     get_current_admin,
     get_current_match_user,
     get_current_trading_user,
-    get_current_user,
     get_current_wallet_user,
     get_optional_current_user,
     get_session,
