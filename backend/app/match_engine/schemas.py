@@ -795,6 +795,32 @@ class MatchEventTimelineView(CommonSchema):
     events: list[MatchEventView] = Field(default_factory=list)
 
 
+class MatchSimulationTimelineEventView(CommonSchema):
+    minute: int = Field(ge=0, le=120)
+    type: str
+    player: str | None = None
+    team: str | None = None
+    position_x: float = Field(default=50.0, ge=0.0, le=100.0)
+    position_y: float = Field(default=50.0, ge=0.0, le=100.0)
+
+
+class MatchSimulationScoreView(CommonSchema):
+    home: int = Field(ge=0)
+    away: int = Field(ge=0)
+
+
+class MatchSimulationStatsView(CommonSchema):
+    home: MatchTeamStatsView
+    away: MatchTeamStatsView
+
+
+class MatchSimulationResponseView(CommonSchema):
+    match_id: str
+    timeline_events: list[MatchSimulationTimelineEventView] = Field(default_factory=list)
+    score: MatchSimulationScoreView
+    stats: MatchSimulationStatsView
+
+
 class MatchLiveFeedEventView(CommonSchema):
     event_id: str
     minute: int = Field(ge=0)

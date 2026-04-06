@@ -221,6 +221,7 @@ class CompetitionAutoRunner:
         match.metadata_json = {
             **dict(match.metadata_json or {}),
             "match_viewer": viewer_payload.model_dump(mode="json"),
+            "replay_payload": replay_payload.model_dump(mode="json"),
             "simulation_summary": replay_payload.summary.model_dump(mode="json"),
             "simulation_seed": replay_payload.seed,
         }

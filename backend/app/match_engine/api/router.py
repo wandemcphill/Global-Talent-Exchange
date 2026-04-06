@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -21,6 +23,7 @@ from app.match_engine.schemas import (
     MatchReplayPayloadView,
     MatchRenderSyncPayloadView,
     MatchSimulationRequest,
+    MatchSimulationResponseView,
 )
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.match_engine.services.highlight_manifest import MatchHighlightManifestBuilder
@@ -28,6 +31,8 @@ from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
 from app.replay_archive.service import ensure_replay_archive
 from app.services.ads.engine import AdDecisionEngine
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["match-engine"])
 legacy_router = APIRouter(prefix="/match-engine")
@@ -198,6 +203,46 @@ def _load_stored_replay_payload(match_key: str, session: Session) -> MatchReplay
     raise HTTPException(status_code=404, detail=f"Replay payload for {match_key} was not found.")
 
 
+def _timeline_position(render_event) -> tuple[float, float]:
+    if render_event is not None and render_event.position is not None:
+        return float(render_event.position.x), float(render_event.position.y)
+    if render_event is not None and render_event.target_position is not None:
+        return float(render_event.target_position.x), float(render_event.target_position.y)
+    return 50.0, 50.0
+
+
+def _build_simulation_response(replay_payload: MatchReplayPayloadView) -> MatchSimulationResponseView:
+    render_sync_by_event_id = {
+        item.event_id: item
+        for item in (replay_payload.render_sync.events if replay_payload.render_sync is not None else [])
+    }
+    timeline_events = []
+    for event in replay_payload.timeline.events:
+        position_x, position_y = _timeline_position(render_sync_by_event_id.get(event.event_id))
+        timeline_events.append(
+            {
+                "minute": event.minute,
+                "type": getattr(event.event_type, "value", str(event.event_type)),
+                "player": None if event.primary_player is None else event.primary_player.player_name,
+                "team": event.team_name,
+                "position_x": round(position_x, 3),
+                "position_y": round(position_y, 3),
+            }
+        )
+    return MatchSimulationResponseView(
+        match_id=replay_payload.match_id,
+        timeline_events=timeline_events,
+        score={
+            "home": replay_payload.summary.home_score,
+            "away": replay_payload.summary.away_score,
+        },
+        stats={
+            "home": replay_payload.summary.home_stats.model_dump(mode="json"),
+            "away": replay_payload.summary.away_stats.model_dump(mode="json"),
+        },
+    )
+
+
 @legacy_router.post("/replay", response_model=MatchReplayPayloadView)
 @api_router.post("/replay", response_model=MatchReplayPayloadView)
 def create_match_replay(
@@ -210,6 +255,25 @@ def create_match_replay(
     except FairnessViolation as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
     return service.build_replay_payload(payload)
+
+
+@legacy_router.post("/simulate", response_model=MatchSimulationResponseView)
+@api_router.post("/simulate", response_model=MatchSimulationResponseView)
+def simulate_match(
+    payload: MatchSimulationRequest,
+    service: MatchSimulationService = Depends(get_match_simulation_service),
+    fairness_guard: FairnessGuard = Depends(get_fairness_guard),
+) -> MatchSimulationResponseView:
+    try:
+        fairness_guard.validate_public_request(payload)
+    except FairnessViolation as exc:
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
+    try:
+        replay_payload = service.build_replay_payload(payload)
+        return _build_simulation_response(replay_payload)
+    except Exception as exc:
+        logger.exception("Failed to build Unity simulation payload for match %s", payload.match_id)
+        raise HTTPException(status_code=503, detail="Match simulation is temporarily unavailable.") from exc
 
 
 @legacy_router.post("/timeline", response_model=MatchEventTimelineView)

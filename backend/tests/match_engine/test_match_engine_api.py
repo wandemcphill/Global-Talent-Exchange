@@ -102,6 +102,27 @@ def test_match_engine_routes_expose_render_sync_and_post_match_analytics() -> No
     assert analytics_body["team_heatmaps"]
 
 
+def test_match_engine_simulate_route_returns_unity_ready_contract() -> None:
+    app, _ = _build_app()
+    request_payload = build_request(seed=58, match_id="unity-ready-match")
+
+    with TestClient(app) as client:
+        response = client.post("/api/match-engine/simulate", json=request_payload.model_dump(mode="json"))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["match_id"] == "unity-ready-match"
+    assert body["score"]["home"] >= 0
+    assert body["score"]["away"] >= 0
+    assert body["stats"]["home"]["team_id"] == request_payload.home_team.team_id
+    assert body["stats"]["away"]["team_id"] == request_payload.away_team.team_id
+    assert body["timeline_events"]
+    first_event = body["timeline_events"][0]
+    assert {"minute", "type", "player", "team", "position_x", "position_y"} <= set(first_event)
+    assert 0.0 <= float(first_event["position_x"]) <= 100.0
+    assert 0.0 <= float(first_event["position_y"]) <= 100.0
+
+
 def test_match_engine_highlights_route_exposes_clip_manifests() -> None:
     app, session_factory = _build_app(_artifact_root("match_engine_highlight_manifest"))
     replay_payload = _build_payload_with_manifestable_highlights()

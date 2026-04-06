@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 import sys
 
@@ -27,6 +29,7 @@ from app.ingestion.dev_cli import (
     run_pytest,
     run_simulation_tick_database,
     run_simulation_ticks_database,
+    seed_all_database,
     seed_demo_liquidity_database,
     seed_world_visibility_database,
 )
@@ -35,6 +38,7 @@ from app.matching.models import TradeExecution
 from app.models.agent_marketplace import AgentMarketplaceListing
 from app.models.federation import Federation
 from app.models.national_team import NationalTeamCompetition
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.transfer_market import TransferListing
 from app.models.user import User
 from app.models.wallet import PaymentEvent
@@ -351,6 +355,78 @@ def test_seed_world_visibility_database_prefers_canonical_country_codes(tmp_path
     assert summary["transfer_listing_count"] > 0
     assert summary["federation_count"] > 0
     assert summary["national_team_competition_count"] > 0
+
+
+def test_seed_all_database_is_idempotent_and_populates_backend_tables(tmp_path: Path) -> None:
+    database_path = tmp_path / "seed-all.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+
+    first = seed_all_database(
+        database_url=database_url,
+        player_count=12,
+        provider="cli-demo",
+        signal_provider="cli-demo-signals",
+        password=DEFAULT_DEMO_PASSWORD,
+        seed=20260311,
+        batch_size=6,
+    )
+    second = seed_all_database(
+        database_url=database_url,
+        player_count=12,
+        provider="cli-demo",
+        signal_provider="cli-demo-signals",
+        password=DEFAULT_DEMO_PASSWORD,
+        seed=20260311,
+        batch_size=6,
+    )
+
+    assert first["seed_summary"]["players_seeded"] == 12
+    assert second["seed_summary"]["players_seeded"] == first["seed_summary"]["players_seeded"]
+    assert second["world_visibility_seed"]["marketplace_listing_count"] == first["world_visibility_seed"]["marketplace_listing_count"]
+    assert second["world_visibility_seed"]["transfer_listing_count"] == first["world_visibility_seed"]["transfer_listing_count"]
+    assert second["world_visibility_seed"]["federation_count"] == first["world_visibility_seed"]["federation_count"]
+    assert second["world_visibility_seed"]["national_team_competition_count"] == first["world_visibility_seed"]["national_team_competition_count"]
+
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        with SessionLocal() as session:
+            assert session.scalar(select(func.count()).select_from(Player).where(Player.source_provider == "cli-demo")) == 12
+            assert session.scalar(select(func.count()).select_from(AgentMarketplaceListing)) > 0
+            assert session.scalar(select(func.count()).select_from(TransferListing)) > 0
+            assert session.scalar(select(func.count()).select_from(Federation)) > 0
+            assert session.scalar(select(func.count()).select_from(NationalTeamCompetition)) > 0
+            assert session.scalar(select(func.count()).select_from(NationalRegenSeed)) > 0
+    finally:
+        engine.dispose()
+
+
+def test_seed_all_module_runs_from_repo_root(tmp_path: Path) -> None:
+    database_path = tmp_path / "seed-all-module.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+    project_root = Path(__file__).resolve().parents[3]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.bootstrap.seed_all",
+            "--database-url",
+            database_url,
+            "--player-count",
+            "10",
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["database_url"] == database_url
+    assert payload["world_visibility_seed"]["marketplace_listing_count"] > 0
+    assert payload["world_visibility_seed"]["transfer_listing_count"] > 0
 
 
 def test_run_simulation_ticks_database_is_deterministic_for_same_seed(tmp_path: Path) -> None:

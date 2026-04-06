@@ -210,6 +210,48 @@ def seed_world_visibility_database(
         return summary.to_dict()
 
 
+def resolve_seed_all_database_url(database_url: str | None = None) -> str:
+    candidate = (database_url or os.getenv("DATABASE_URL") or os.getenv("GTE_DATABASE_URL") or "").strip()
+    if candidate:
+        return candidate
+    default_path = (PROJECT_ROOT / "gte_backend.db").resolve()
+    return f"sqlite+pysqlite:///{default_path.as_posix()}"
+
+
+def seed_all_database(
+    *,
+    database_url: str,
+    player_count: int,
+    provider: str,
+    signal_provider: str,
+    password: str,
+    seed: int,
+    batch_size: int,
+) -> dict[str, Any]:
+    resolved_database_url = resolve_seed_all_database_url(database_url)
+    bootstrap_result = bootstrap_demo_database(
+        database_url=resolved_database_url,
+        player_count=player_count,
+        provider=provider,
+        signal_provider=signal_provider,
+        password=password,
+        seed=seed,
+        batch_size=batch_size,
+        reset_db=False,
+        with_liquidity=False,
+    )
+    world_visibility_seed = seed_world_visibility_database(
+        database_url=resolved_database_url,
+        provider=provider,
+    )
+    return {
+        "database_url": resolved_database_url,
+        "seed": seed,
+        **bootstrap_result,
+        "world_visibility_seed": world_visibility_seed,
+    }
+
+
 def run_simulation_tick_database(
     *,
     database_url: str,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 
@@ -20,18 +21,27 @@ from app.live_matches.schemas import (
 from app.live_matches.service import LiveMatchError, ensure_live_match_hub
 from app.infinite_league.service import ensure_infinite_league_runtime
 from app.match_engine.schemas import MatchReplayPayloadView
+from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
 from app.models.user import User
 from app.realtime.service import commentary_topic, match_topic
 from app.replay_archive.service import ensure_replay_archive
+from app.schemas.match_viewer import MatchViewStateView
 from app.services.device_fingerprint_service import DeviceFingerprintService
+from app.services.match_timeline_service import MatchTimelineService
 from app.ticketing.service import TicketingError, TicketingService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["live-matches"])
 legacy_router = APIRouter(prefix="/matches", tags=["live-matches"])
 api_router = APIRouter(prefix="/api/matches", tags=["live-matches"])
 match_router = APIRouter(prefix="/match", tags=["live-matches"])
 api_match_router = APIRouter(prefix="/api/match", tags=["live-matches"])
+
+_UNITY_PITCH_LENGTH_METERS = 105.0
+_UNITY_PITCH_WIDTH_METERS = 68.0
+_UNITY_PLAYER_HEIGHT_METERS = 0.9
 
 
 def _generated_match_access_payload() -> dict[str, object]:
@@ -212,6 +222,259 @@ def _commentary_response(
         )
 
 
+def _enum_value(value: object | None) -> str | None:
+    if value is None:
+        return None
+    resolved = getattr(value, "value", None)
+    if isinstance(resolved, str):
+        return resolved
+    text = str(value).strip()
+    return text or None
+
+
+def _float_or_default(value: object | None, *, default: float = 0.0) -> float:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _world_x(normalized_x: object | None) -> float:
+    return round(((_float_or_default(normalized_x) / 100.0) * _UNITY_PITCH_LENGTH_METERS) - (_UNITY_PITCH_LENGTH_METERS / 2.0), 3)
+
+
+def _world_z(normalized_y: object | None) -> float:
+    return round(((_float_or_default(normalized_y) / 100.0) * _UNITY_PITCH_WIDTH_METERS) - (_UNITY_PITCH_WIDTH_METERS / 2.0), 3)
+
+
+def _world_velocity_x(normalized_delta_x: object | None) -> float:
+    return round((_float_or_default(normalized_delta_x) / 100.0) * _UNITY_PITCH_LENGTH_METERS, 3)
+
+
+def _world_velocity_z(normalized_delta_y: object | None) -> float:
+    return round((_float_or_default(normalized_delta_y) / 100.0) * _UNITY_PITCH_WIDTH_METERS, 3)
+
+
+def _ball_trajectory_type(active_event) -> str:
+    event_type = (_enum_value(active_event.event_type) or "").lower() if active_event is not None else ""
+    if event_type in {"goal", "save", "miss", "penalty"}:
+        return "shot"
+    if event_type in {"kickoff", "set_piece", "attack"}:
+        return "pass"
+    if event_type in {"foul", "offside", "halftime", "fulltime"}:
+        return "stopped"
+    return "controlled"
+
+
+def _unity_player_payload(player) -> dict[str, object]:
+    return {
+        "entityId": f"player:{player.player_id}",
+        "playerId": player.player_id,
+        "teamId": player.team_id,
+        "teamSide": _enum_value(player.side),
+        "label": player.label,
+        "role": _enum_value(player.role),
+        "line": player.line,
+        "shirtNumber": player.shirt_number,
+        "active": bool(player.active),
+        "highlighted": bool(player.highlighted),
+        "hasPossession": bool(player.has_possession),
+        "animationState": _enum_value(player.animation_state),
+        "speedRatio": round(_float_or_default(player.speed_ratio), 3),
+        "state": _enum_value(player.state),
+        "x": _world_x(player.position.x),
+        "y": _UNITY_PLAYER_HEIGHT_METERS,
+        "z": _world_z(player.position.y),
+        "velocityX": _world_velocity_x(player.velocity.x),
+        "velocityY": 0.0,
+        "velocityZ": _world_velocity_z(player.velocity.y),
+        "facingX": round(_float_or_default(player.facing.x), 3),
+        "facingZ": round(_float_or_default(player.facing.y, default=1.0), 3),
+        "spin": 0.0,
+        "trajectoryType": "",
+        "isBall": False,
+    }
+
+
+def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -> dict[str, object]:
+    owner_player_id = frame.ball.owner_player_id
+    owner = players_by_id.get(owner_player_id) if owner_player_id is not None else None
+    velocity = frame.ball.velocity
+    spin = frame.ball.spin
+    velocity_x = _float_or_default(velocity.x if velocity is not None else None)
+    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=1.0)
+    return {
+        "entityId": "ball",
+        "playerId": owner_player_id,
+        "teamId": getattr(owner, "team_id", None),
+        "teamSide": _enum_value(getattr(owner, "side", None)),
+        "label": "Ball",
+        "role": "ball",
+        "line": None,
+        "shirtNumber": None,
+        "active": True,
+        "highlighted": False,
+        "hasPossession": bool(owner_player_id),
+        "animationState": "ball",
+        "speedRatio": 1.0 if velocity is not None else 0.0,
+        "state": str(frame.ball.state or "rolling"),
+        "x": _world_x(frame.ball.position.x),
+        "y": round(_float_or_default(frame.ball.height), 3),
+        "z": _world_z(frame.ball.position.y),
+        "velocityX": round(velocity_x, 3),
+        "velocityY": round(_float_or_default(velocity.y if velocity is not None else None), 3),
+        "velocityZ": round(velocity_z, 3),
+        "facingX": round(velocity_x, 3),
+        "facingZ": round(velocity_z, 3),
+        "spin": round(_float_or_default(getattr(spin, "z", None)), 3),
+        "trajectoryType": _ball_trajectory_type(active_event),
+        "isBall": True,
+    }
+
+
+def _unity_event_payload(event) -> dict[str, object]:
+    return {
+        "id": event.event_id,
+        "type": _enum_value(event.event_type),
+        "sequence": int(event.sequence),
+        "minute": int(event.minute),
+        "addedTime": int(event.added_time),
+        "clockLabel": event.clock_label,
+        "timeSeconds": round(_float_or_default(event.time_seconds), 3),
+        "teamId": event.team_id,
+        "teamName": event.team_name,
+        "primaryPlayerId": event.primary_player_id,
+        "primaryPlayerName": event.primary_player_name,
+        "secondaryPlayerId": event.secondary_player_id,
+        "secondaryPlayerName": event.secondary_player_name,
+        "homeScore": int(event.home_score),
+        "awayScore": int(event.away_score),
+        "bannerText": event.banner_text,
+        "commentary": event.commentary,
+        "emphasisLevel": int(event.emphasis_level),
+        "highlightedPlayerIds": list(event.highlighted_player_ids),
+        "flags": list(event.flags),
+        "playbackProfile": event.playback_profile,
+        "missVariant": event.miss_variant,
+        "reviewable": bool(event.reviewable),
+        "reviewReason": event.review_reason,
+        "reviewDecision": event.review_decision,
+        "scoreCommit": event.score_commit,
+    }
+
+
+def _load_persisted_live_view_state(match_id: str, request: Request) -> MatchViewStateView | None:
+    timeline_service = MatchTimelineService()
+    session_factory = getattr(request.app.state, "session_factory", None)
+    if session_factory is not None:
+        with session_factory() as session:
+            match = session.get(CompetitionMatch, match_id)
+            if match is not None:
+                metadata = match.metadata_json if isinstance(match.metadata_json, dict) else {}
+                viewer_payload = metadata.get("match_viewer")
+                if isinstance(viewer_payload, dict):
+                    try:
+                        return MatchViewStateView.model_validate(viewer_payload)
+                    except Exception:
+                        logger.warning("Stored match_viewer payload for %s could not be validated.", match_id)
+                replay_payload = metadata.get("replay_payload")
+                if isinstance(replay_payload, dict):
+                    try:
+                        return timeline_service.build_from_replay_payload(
+                            MatchReplayPayloadView.model_validate(replay_payload)
+                        )
+                    except Exception:
+                        logger.warning("Stored replay_payload for %s could not be rebuilt into a live view.", match_id)
+
+            duel = session.get(ManagerDuel, match_id)
+            if duel is not None:
+                replay_payload = (duel.metadata_json or {}).get("replay_payload")
+                if isinstance(replay_payload, dict):
+                    try:
+                        return timeline_service.build_from_replay_payload(
+                            MatchReplayPayloadView.model_validate(replay_payload)
+                        )
+                    except Exception:
+                        logger.warning("Stored duel replay payload for %s could not be rebuilt into a live view.", match_id)
+
+    archive = ensure_replay_archive(request.app)
+    record = archive.repository.get_latest_record(f"replay:{match_id}")
+    if record is not None:
+        try:
+            return timeline_service.build_from_archive_record(record)
+        except Exception:
+            logger.warning("Replay archive record for %s could not be rebuilt into a live view.", match_id)
+    return None
+
+
+def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, object]:
+    hub = ensure_live_match_hub(request.app)
+    source = "live_match_hub"
+    state = hub.get_state(match_id)
+    if state is None and _bootstrap_infinite_league_stream(request.app, hub, match_id):
+        state = hub.get_state(match_id)
+        source = "infinite_league_runtime"
+    view_state: MatchViewStateView | None = None
+    live_status = "completed"
+    if state is not None:
+        events, _ = hub.get_events_since(match_id, 0)
+        live_status = state.snapshot.status
+        try:
+            view_state = MatchTimelineService().build_from_live_stream(
+                match_id=match_id,
+                source=source,
+                home_team_id=None,
+                home_team_name=None,
+                away_team_id=None,
+                away_team_name=None,
+                events=events,
+                live_state=state,
+            )
+        except Exception:
+            logger.exception("Failed to build live-stream view state for match %s", match_id)
+            view_state = None
+    if view_state is None:
+        view_state = _load_persisted_live_view_state(match_id, request)
+        if view_state is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match stream was not found.")
+        logger.warning("Live match cache miss for %s; returning persisted match frames instead.", match_id)
+    if not view_state.frames:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Live match frame could not be resolved.")
+
+    frame = view_state.frames[-1]
+    players_by_id = {player.player_id: player for player in frame.players}
+    active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
+    view_state_payload = view_state.model_dump(mode="json")
+
+    return {
+        "matchId": match_id,
+        "source": view_state.source,
+        "status": live_status if state is not None else "completed",
+        "isLive": bool(state.is_live) if state is not None else False,
+        "frameId": frame.frame_id,
+        "clockMinute": round(_float_or_default(frame.clock_minute), 2),
+        "phase": _enum_value(frame.phase) or "open_play",
+        "homeScore": int(frame.home_score),
+        "awayScore": int(frame.away_score),
+        "possessionSide": _enum_value(frame.possession_side) or "home",
+        "activeEventId": frame.active_event_id,
+        "cameraPreset": _enum_value(frame.camera_preset) or "broadcast",
+        "pitchLengthMeters": _UNITY_PITCH_LENGTH_METERS,
+        "pitchWidthMeters": _UNITY_PITCH_WIDTH_METERS,
+        "score": {"home": int(frame.home_score), "away": int(frame.away_score)},
+        "players": [_unity_player_payload(player) for player in frame.players],
+        "ballPosition": _unity_ball_payload(frame, active_event, players_by_id),
+        "events": [_unity_event_payload(event) for event in view_state.events],
+        "frames": view_state_payload["frames"],
+        "timelineEvents": view_state_payload["events"],
+        "viewer": view_state_payload,
+    }
+
+
 @legacy_router.post("/{match_id}/spectate", response_model=SpectatorSessionView)
 @api_router.post("/{match_id}/spectate", response_model=SpectatorSessionView)
 def join_spectate(
@@ -277,6 +540,23 @@ def join_spectate(
         ),
     )
     return _build_session_view(match_id, spectator_session, access_payload)
+
+
+@legacy_router.get("/{match_id}/live")
+@api_router.get("/{match_id}/live")
+@match_router.get("/{match_id}/live")
+@api_match_router.get("/{match_id}/live")
+def read_match_live_bridge(match_id: str, request: Request) -> dict[str, object]:
+    try:
+        return _build_unity_live_payload(match_id, request)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to build live match bridge payload for %s", match_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Live match payload is temporarily unavailable.",
+        ) from exc
 
 
 @legacy_router.get("/{match_id}/highlights", response_model=MatchHighlightResponseView)

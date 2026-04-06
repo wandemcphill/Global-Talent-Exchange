@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+import logging
 from math import ceil
 import time
 from threading import RLock
@@ -36,6 +37,8 @@ from app.services.match_timeline_service import MatchTimelineService
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.match_engine.simulation.models import MatchEventType
 from app.services.player_lifecycle_service import PlayerLifecycleService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -421,6 +424,10 @@ class LocalMatchExecutionWorker:
         job: MatchSimulationJob,
         replay_payload: MatchReplayPayloadView,
     ) -> list[dict[str, Any]]:
+        render_sync_by_event_id = {
+            item.event_id: item
+            for item in (replay_payload.render_sync.events if replay_payload.render_sync is not None else [])
+        }
         timeline = sorted(
             self._build_replay_timeline(replay_payload),
             key=lambda item: (
@@ -451,6 +458,15 @@ class LocalMatchExecutionWorker:
         for minute in sorted(checkpoints):
             while event_index < len(timeline) and int(timeline[event_index].get("minute") or 0) <= minute:
                 event = dict(timeline[event_index])
+                render_event = self._resolve_render_sync_event(
+                    event_id=str(event.get("event_id") or ""),
+                    render_sync_by_event_id=render_sync_by_event_id,
+                )
+                if render_event is not None:
+                    if render_event.position is not None:
+                        event["position"] = render_event.position.model_dump(mode="json")
+                    if render_event.target_position is not None:
+                        event["target_position"] = render_event.target_position.model_dump(mode="json")
                 score_home = int(event.get("home_score") or score_home)
                 score_away = int(event.get("away_score") or score_away)
                 event["status"] = "live"
@@ -490,6 +506,18 @@ class LocalMatchExecutionWorker:
         )
         return frames
 
+    @staticmethod
+    def _resolve_render_sync_event(
+        *,
+        event_id: str,
+        render_sync_by_event_id: dict[str, Any],
+    ):
+        if event_id in render_sync_by_event_id:
+            return render_sync_by_event_id[event_id]
+        if event_id.endswith(":assist"):
+            return render_sync_by_event_id.get(event_id.removesuffix(":assist"))
+        return None
+
     def _publish_live_frame(
         self,
         *,
@@ -517,6 +545,8 @@ class LocalMatchExecutionWorker:
                 "description": frame.get("description"),
                 "home_score": frame.get("home_score"),
                 "away_score": frame.get("away_score"),
+                "position": frame.get("position"),
+                "target_position": frame.get("target_position"),
                 "metadata": {
                     "status": frame.get("status"),
                     "home_team_name": home_team_name,
@@ -581,6 +611,8 @@ class LocalMatchExecutionWorker:
             "clock_label": f"{int(frame.get('minute') or 0)}'",
             "is_penalty": bool(frame.get("is_penalty")),
             "highlight_eligible": str(frame.get("event_type") or "") not in {"score_update", "kickoff"},
+            "position": frame.get("position"),
+            "target_position": frame.get("target_position"),
             "metadata": {
                 "status": frame.get("status"),
                 "home_team_name": frame.get("home_team_name"),
@@ -621,10 +653,14 @@ class LocalMatchExecutionWorker:
             match.metadata_json = {
                 **(match.metadata_json or {}),
                 "match_viewer": viewer_payload.model_dump(mode="json"),
+                "replay_payload": replay_payload.model_dump(mode="json"),
+                "simulation_summary": replay_payload.summary.model_dump(mode="json"),
+                "simulation_seed": replay_payload.seed,
             }
             session.commit()
         except Exception:
             session.rollback()
+            logger.exception("Failed to persist replay payload for match %s", job.fixture_id)
         finally:
             session.close()
 

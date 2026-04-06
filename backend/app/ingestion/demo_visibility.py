@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -61,6 +61,7 @@ from app.regen_universe.service import RegenUniverseService
 
 DEMO_WORLD_VISIBILITY_SOURCE = "demo_world_visibility"
 DEMO_WORLD_VISIBILITY_BATCH = "u17_batch"
+DEMO_WORLD_VISIBILITY_REFERENCE_AT = datetime(2026, 3, 11, 12, 0, tzinfo=UTC)
 
 _DEMO_USERNAMES = {
     "fan": "seed_fan",
@@ -190,6 +191,7 @@ _DEMO_CLUB_SPECS = (
 @dataclass(slots=True)
 class DemoWorldVisibilitySeeder:
     session: Session
+    reference_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def seed(
         self,
@@ -413,7 +415,7 @@ class DemoWorldVisibilitySeeder:
         self.session.flush()
 
     def _seed_transfer_market(self, *, seed_players: dict[str, list[Player]], clubs: dict[str, ClubProfile]) -> None:
-        now = datetime.now(UTC)
+        now = self.reference_at
         heated_player = seed_players["fan"][0]
         waiting_player = seed_players["scout"][0]
         negotiation_player = seed_players["admin"][0]
@@ -647,7 +649,7 @@ class DemoWorldVisibilitySeeder:
         if competition is None:
             raise ValueError("Expected seeded national-team competition 'gtex-u17-world-cup'.")
 
-        now = datetime.now(UTC)
+        now = self.reference_at
         competition.entry_opens_at = now - timedelta(days=2)
         competition.entry_closes_at = now + timedelta(days=12)
         competition.kickoff_at = now + timedelta(days=18)
@@ -736,7 +738,7 @@ class DemoWorldVisibilitySeeder:
                 {
                     "type": "demo_visibility_seed",
                     "headline": "Demo transfer lane primed",
-                    "occurred_at": datetime.now(UTC).isoformat(),
+                    "occurred_at": self.reference_at.isoformat(),
                 }
             ],
         }
@@ -876,7 +878,7 @@ class DemoWorldVisibilitySeeder:
                 promotion_relegation_rules_json={"promotion_slots": 1, "relegation_slots": 1},
                 entry_requirements_json={"founding_year_max": 2024},
                 governance_rules_override_json={},
-                season_label=str(datetime.now(UTC).year),
+                season_label=str(self.reference_at.year),
                 status="active",
                 metadata_json={"seed_source": DEMO_WORLD_VISIBILITY_SOURCE},
             )
@@ -907,8 +909,8 @@ class DemoWorldVisibilitySeeder:
                 summary="Demo governance proposal keeping the live governance table populated.",
                 payload_json={"rules_patch": {"economy": {"federation_share_bps": 1500}}},
                 status=FederationProposalStatus.OPEN.value,
-                voting_starts_at=datetime.now(UTC) - timedelta(hours=12),
-                voting_ends_at=datetime.now(UTC) + timedelta(days=2),
+                voting_starts_at=self.reference_at - timedelta(hours=12),
+                voting_ends_at=self.reference_at + timedelta(days=2),
                 yes_votes=2,
                 no_votes=0,
                 abstain_votes=0,
@@ -940,8 +942,8 @@ class DemoWorldVisibilitySeeder:
                 fine_amount=Decimal("125000.0000"),
                 points_deduction=0,
                 suspension_matches=0,
-                starts_at=datetime.now(UTC) - timedelta(days=1),
-                ends_at=datetime.now(UTC) + timedelta(days=3),
+                starts_at=self.reference_at - timedelta(days=1),
+                ends_at=self.reference_at + timedelta(days=3),
                 status="active",
                 metadata_json={"seed_source": DEMO_WORLD_VISIBILITY_SOURCE},
             )
@@ -1392,13 +1394,19 @@ def seed_world_visibility_data(
     *,
     database_url: str = DEFAULT_DATABASE_URL,
     provider_name: str = DEFAULT_DEMO_PROVIDER_NAME,
+    reference_at: datetime | None = None,
 ) -> DemoWorldVisibilitySummary:
     engine = create_database_engine(database_url)
     try:
         ensure_database_schema_current(engine)
         session_factory = create_session_factory(engine)
         with session_factory() as session:
-            return DemoWorldVisibilitySeeder(session).seed(provider_name=provider_name)
+            seeder = (
+                DemoWorldVisibilitySeeder(session)
+                if reference_at is None
+                else DemoWorldVisibilitySeeder(session, reference_at=reference_at)
+            )
+            return seeder.seed(provider_name=provider_name)
     finally:
         engine.dispose()
 
