@@ -30,25 +30,20 @@ class RealMatchTacticalHudWidget extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final bool stackedHeader = constraints.maxWidth < 430;
+            final bool stackedCards = constraints.maxWidth < 520;
+            final Widget headerPills = Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment:
+                  stackedHeader ? WrapAlignment.start : WrapAlignment.end,
               children: <Widget>[
-                Expanded(
-                  child: Text(
-                    'Tactical HUD',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
                 _HudPill(
                   label: presentation.phaseLabel.toUpperCase(),
                   accent: const Color(0xFFFDB022),
                 ),
-                const SizedBox(width: 8),
                 _HudPill(
                   label: presentation.pressureLabel.toUpperCase(),
                   accent:
@@ -57,31 +52,64 @@ class RealMatchTacticalHudWidget extends StatelessWidget {
                           : const Color(0xFF53B1FD),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              possessionLabel,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: const Color(0xFF7DD3FC),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
+            );
+
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Expanded(
-                  child: _TeamTacticalCard(
+                if (stackedHeader) ...<Widget>[
+                  Text(
+                    'Tactical HUD',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  headerPills,
+                ] else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          'Tactical HUD',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: headerPills,
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
+                Text(
+                  possessionLabel,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: const Color(0xFF7DD3FC),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (stackedCards) ...<Widget>[
+                  _TeamTacticalCard(
                     team: package.home,
                     shape: presentation.homeShape,
                     eventContext: presentation.activeEventContext,
                     presentation: presentation,
                     accent: _teamAccent(package.home, const Color(0xFF22C55E)),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _TeamTacticalCard(
+                  const SizedBox(height: 10),
+                  _TeamTacticalCard(
                     team: package.away,
                     shape: presentation.awayShape,
                     eventContext: presentation.activeEventContext,
@@ -89,20 +117,51 @@ class RealMatchTacticalHudWidget extends StatelessWidget {
                     accent: _teamAccent(package.away, const Color(0xFFF97316)),
                     alignEnd: true,
                   ),
-                ),
+                ] else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: _TeamTacticalCard(
+                          team: package.home,
+                          shape: presentation.homeShape,
+                          eventContext: presentation.activeEventContext,
+                          presentation: presentation,
+                          accent: _teamAccent(
+                            package.home,
+                            const Color(0xFF22C55E),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _TeamTacticalCard(
+                          team: package.away,
+                          shape: presentation.awayShape,
+                          eventContext: presentation.activeEventContext,
+                          presentation: presentation,
+                          accent: _teamAccent(
+                            package.away,
+                            const Color(0xFFF97316),
+                          ),
+                          alignEnd: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                if (instructionSummary.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text(
+                    instructionSummary,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
               ],
-            ),
-            if (instructionSummary.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 12),
-              Text(
-                instructionSummary,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white70,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ],
+            );
+          },
         ),
       ),
     );
