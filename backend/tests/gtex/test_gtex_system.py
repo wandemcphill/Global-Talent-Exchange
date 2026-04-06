@@ -178,9 +178,7 @@ def test_admin_jackpot_runtime_update_and_manual_trigger(
     state_payload = client.get("/jackpot/state").json()
     assert state_payload["round_number"] == current_round_number + 1
     history_payload = client.get("/jackpot/history").json()
-    settled_round = next(
-        item for item in history_payload if item["round_number"] == current_round_number
-    )
+    settled_round = next(item for item in history_payload if item["round_number"] == current_round_number)
     assert settled_round["trigger_mode"] == "manual"
     assert settled_round["payouts"][0]["payout_amount"] == "50.0000"
 
@@ -405,7 +403,9 @@ def test_match_completion_projection_is_idempotent(client, app, app_session_fact
         assert stored_match is not None
         assert stored_match.metadata_json["economy_settled_at"]
         checkpoint_count = session.scalar(
-            select(func.count()).select_from(GlobalProjectionCheckpoint).where(
+            select(func.count())
+            .select_from(GlobalProjectionCheckpoint)
+            .where(
                 GlobalProjectionCheckpoint.event_name == MATCH_COMPLETED,
                 GlobalProjectionCheckpoint.aggregate_id == stored_match.id,
             )
@@ -421,7 +421,9 @@ def test_match_completion_projection_is_idempotent(client, app, app_session_fact
 
     with app_session_factory() as session:
         final_checkpoint_count = session.scalar(
-            select(func.count()).select_from(GlobalProjectionCheckpoint).where(
+            select(func.count())
+            .select_from(GlobalProjectionCheckpoint)
+            .where(
                 GlobalProjectionCheckpoint.event_name == MATCH_COMPLETED,
                 GlobalProjectionCheckpoint.aggregate_id == match_id,
             )

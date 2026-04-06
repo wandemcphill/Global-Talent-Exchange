@@ -12,7 +12,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.event_backbone import build_outbox_event, defer_event_publish_until_commit, defer_session_callback_until_commit
+from app.core.event_backbone import (
+    build_outbox_event,
+    defer_event_publish_until_commit,
+    defer_session_callback_until_commit,
+)
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.core.global_ids import global_match_id
 from app.gtex.config import AMOUNT_QUANTUM, GtexSettings
@@ -52,7 +56,6 @@ from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
-
 
 StateStore = InMemoryStateStore | RedisStateStore
 
@@ -196,12 +199,17 @@ class JackpotService(GtexBaseService):
         )
         if current_round is not None:
             return current_round
-        next_round_number = int(
-            session.scalar(
-                select(func.coalesce(func.max(GtexJackpotRound.round_number), 0)).where(GtexJackpotRound.pool_key == pool_key)
+        next_round_number = (
+            int(
+                session.scalar(
+                    select(func.coalesce(func.max(GtexJackpotRound.round_number), 0)).where(
+                        GtexJackpotRound.pool_key == pool_key
+                    )
+                )
+                or 0
             )
-            or 0
-        ) + 1
+            + 1
+        )
         distribution_mode = GtexJackpotDistributionMode(self.settings.jackpot_distribution_mode)
         current_round = GtexJackpotRound(
             pool_key=pool_key,
@@ -239,9 +247,13 @@ class JackpotService(GtexBaseService):
             "participant_count": self.state_store.scard(redis_keys.jackpot_participants(current_round.id)),
             "failsafe_at": current_round.failsafe_at,
             "distribution_mode": current_round.distribution_mode.value,
-            "last_winner_user_id": str(last_winner.get("user_id")) if last_winner.get("user_id") else current_round.winning_user_id,
-            "last_trigger_mode": str(last_winner.get("trigger_mode")) if last_winner.get("trigger_mode") else (
-                current_round.trigger_mode.value if current_round.trigger_mode is not None else None
+            "last_winner_user_id": (
+                str(last_winner.get("user_id")) if last_winner.get("user_id") else current_round.winning_user_id
+            ),
+            "last_trigger_mode": (
+                str(last_winner.get("trigger_mode"))
+                if last_winner.get("trigger_mode")
+                else (current_round.trigger_mode.value if current_round.trigger_mode is not None else None)
             ),
         }
 
@@ -296,9 +308,7 @@ class JackpotService(GtexBaseService):
         current_round.distribution_mode = resolved_distribution_mode
         current_round.top_split_percent = updated_settings.jackpot_top_split_percent
         current_round.min_activity_score = updated_settings.jackpot_min_activity_score
-        current_round.failsafe_at = utcnow() + timedelta(
-            hours=updated_settings.jackpot_failsafe_hours
-        )
+        current_round.failsafe_at = utcnow() + timedelta(hours=updated_settings.jackpot_failsafe_hours)
         session.flush()
         self._schedule_round_cache(session, current_round)
         return updated_settings
@@ -328,9 +338,7 @@ class JackpotService(GtexBaseService):
 
     def list_history(self, session: Session, *, limit: int = 20) -> list[GtexJackpotRound]:
         rounds = session.scalars(
-            select(GtexJackpotRound)
-            .order_by(GtexJackpotRound.round_number.desc())
-            .limit(limit)
+            select(GtexJackpotRound).order_by(GtexJackpotRound.round_number.desc()).limit(limit)
         ).all()
         for round_record in rounds:
             round_record.payouts
@@ -397,7 +405,9 @@ class JackpotService(GtexBaseService):
         metadata: dict[str, Any] | None = None,
     ) -> GtexJackpotContribution:
         current_round = self.ensure_open_round(session)
-        resolved_amount = self._amount(contribution_amount or (self._amount(entry_fee) * self.settings.jackpot_contribution_rate))
+        resolved_amount = self._amount(
+            contribution_amount or (self._amount(entry_fee) * self.settings.jackpot_contribution_rate)
+        )
         contribution = GtexJackpotContribution(
             round_id=current_round.id,
             participant_user_id=participant_user_id,
@@ -453,7 +463,9 @@ class JackpotService(GtexBaseService):
         )
         return contribution
 
-    def evaluate_trigger(self, session: Session, *, pool_key: str = "global") -> tuple[GtexJackpotRound, GtexJackpotTriggerMode] | None:
+    def evaluate_trigger(
+        self, session: Session, *, pool_key: str = "global"
+    ) -> tuple[GtexJackpotRound, GtexJackpotTriggerMode] | None:
         current_round = self.ensure_open_round(session, pool_key=pool_key)
         if self._amount(current_round.current_balance) <= Decimal("0.0000"):
             return None
@@ -518,7 +530,9 @@ class JackpotService(GtexBaseService):
         round_record.trigger_reason = f"{trigger_mode.value}_trigger"
         round_record.triggered_at = utcnow()
         if not eligible:
-            next_round = self._roll_round(session, round_record=round_record, carryover_balance=self._amount(round_record.current_balance))
+            next_round = self._roll_round(
+                session, round_record=round_record, carryover_balance=self._amount(round_record.current_balance)
+            )
             self._stage_event(
                 session,
                 name="JACKPOT_TRIGGERED",
@@ -683,7 +697,9 @@ class JackpotService(GtexBaseService):
         self._schedule_round_cache(session, next_round)
         defer_session_callback_until_commit(
             session,
-            callback=lambda round_id=round_record.id: self.state_store.delete(redis_keys.jackpot_participants(round_id)),
+            callback=lambda round_id=round_record.id: self.state_store.delete(
+                redis_keys.jackpot_participants(round_id)
+            ),
         )
         return next_round
 
@@ -773,13 +789,15 @@ class CreatorMarketService(GtexBaseService):
             "total_wins": asset.total_wins,
             "total_trades": asset.total_trades,
             "total_volume": self._amount(asset.total_volume),
-            "holding": None
-            if holding is None
-            else {
-                "shares_owned": self._amount(holding.shares_owned),
-                "reserved_shares": self._amount(holding.reserved_shares),
-                "avg_price": self._amount(holding.avg_price),
-            },
+            "holding": (
+                None
+                if holding is None
+                else {
+                    "shares_owned": self._amount(holding.shares_owned),
+                    "reserved_shares": self._amount(holding.reserved_shares),
+                    "avg_price": self._amount(holding.avg_price),
+                }
+            ),
         }
 
     def buy_shares(
@@ -966,7 +984,9 @@ class CreatorMarketService(GtexBaseService):
         asset.total_trades += 1
         asset.total_volume = self._amount(asset.total_volume + gross_amount)
         asset.demand_score = self._amount(max(Decimal("0.0000"), self._amount(asset.demand_score) - Decimal(shares)))
-        asset.momentum_score = self._amount(max(Decimal("0.0000"), self._amount(asset.momentum_score) - Decimal("0.7500")))
+        asset.momentum_score = self._amount(
+            max(Decimal("0.0000"), self._amount(asset.momentum_score) - Decimal("0.7500"))
+        )
         asset.current_price = self._revalue_asset(asset)
         anomaly_flag = self._detect_trade_anomaly(
             session,
@@ -1113,11 +1133,17 @@ class CreatorMarketService(GtexBaseService):
         return asset
 
     def list_trending(self, session: Session, *, limit: int = 10, viewer: User | None = None) -> list[dict[str, Any]]:
-        member_ids = [str(item) for item in self.state_store.zrevrange(redis_keys.trending_players(), 0, max(limit - 1, 0))]
+        member_ids = [
+            str(item) for item in self.state_store.zrevrange(redis_keys.trending_players(), 0, max(limit - 1, 0))
+        ]
         if member_ids:
             assets = session.scalars(select(GtexCreatorAsset).where(GtexCreatorAsset.id.in_(member_ids))).all()
             asset_map = {asset.id: asset for asset in assets}
-            return [self.get_view(session, player_id=member_id, viewer=viewer) for member_id in member_ids if member_id in asset_map]
+            return [
+                self.get_view(session, player_id=member_id, viewer=viewer)
+                for member_id in member_ids
+                if member_id in asset_map
+            ]
         assets = session.scalars(
             select(GtexCreatorAsset)
             .order_by(GtexCreatorAsset.demand_score.desc(), GtexCreatorAsset.current_price.desc())
@@ -1521,7 +1547,9 @@ class CreatorMarketService(GtexBaseService):
             )
         )
 
-    def _refresh_asset_cache(self, session: Session, asset: GtexCreatorAsset, *, cooldown_user_id: str | None = None) -> None:
+    def _refresh_asset_cache(
+        self, session: Session, asset: GtexCreatorAsset, *, cooldown_user_id: str | None = None
+    ) -> None:
         defer_session_callback_until_commit(
             session,
             callback=lambda player_id=asset.id, price=self._amount(asset.current_price): self.state_store.set_decimal(
@@ -1536,7 +1564,9 @@ class CreatorMarketService(GtexBaseService):
                 demand,
             ),
         )
-        trending_score = float(self._amount(asset.demand_score + asset.momentum_score + (asset.current_price / Decimal("10.0000"))))
+        trending_score = float(
+            self._amount(asset.demand_score + asset.momentum_score + (asset.current_price / Decimal("10.0000")))
+        )
         defer_session_callback_until_commit(
             session,
             callback=lambda player_id=asset.id, score=trending_score: self.state_store.zadd(
@@ -1562,8 +1592,7 @@ class CreatorMarketService(GtexBaseService):
             raise GtexConflictError("Trade cooldown is still active for this asset.")
         recent_cutoff = utcnow() - timedelta(seconds=self.settings.creator_trade_cooldown_seconds)
         recent_trade = session.scalar(
-            select(GtexCreatorTrade.id)
-            .where(
+            select(GtexCreatorTrade.id).where(
                 GtexCreatorTrade.player_id == player_id,
                 GtexCreatorTrade.created_at >= recent_cutoff,
                 or_(GtexCreatorTrade.buyer_id == actor_id, GtexCreatorTrade.seller_id == actor_id),
@@ -1576,8 +1605,7 @@ class CreatorMarketService(GtexBaseService):
         window_start = utcnow() - timedelta(seconds=self.settings.creator_anomaly_window_seconds)
         recent_notional = self._amount(
             session.scalar(
-                select(func.coalesce(func.sum(GtexCreatorTrade.gross_amount), 0))
-                .where(
+                select(func.coalesce(func.sum(GtexCreatorTrade.gross_amount), 0)).where(
                     GtexCreatorTrade.player_id == player_id,
                     GtexCreatorTrade.created_at >= window_start,
                 )
@@ -1663,7 +1691,9 @@ class UnifiedEconomyService(GtexBaseService):
             )
             if user is not None
         ]
-        actual_contribution = self._amount(Decimal(len(human_users)) * self._amount(match.entry_fee) * self.settings.jackpot_contribution_rate)
+        actual_contribution = self._amount(
+            Decimal(len(human_users)) * self._amount(match.entry_fee) * self.settings.jackpot_contribution_rate
+        )
         match.jackpot_contribution = actual_contribution
         human_winner = session.get(User, match.winner_user_id) if match.winner_user_id else None
         operations_account = self.wallet_service.ensure_operations_account(session, LedgerUnit.COIN)
@@ -1816,7 +1846,9 @@ class UnifiedEconomyService(GtexBaseService):
         else:
             actual_home = Decimal("0.5000")
             actual_away = Decimal("0.5000")
-        expected_home = Decimal("1.0000") / (Decimal("1.0000") + Decimal(10) ** (Decimal(away_standing.elo - home_standing.elo) / Decimal(400)))
+        expected_home = Decimal("1.0000") / (
+            Decimal("1.0000") + Decimal(10) ** (Decimal(away_standing.elo - home_standing.elo) / Decimal(400))
+        )
         expected_away = Decimal("1.0000") - expected_home
         home_delta = int(round(self.settings.ai_ranked_k_factor * float(actual_home - expected_home)))
         away_delta = int(round(self.settings.ai_ranked_k_factor * float(actual_away - expected_away)))
@@ -1855,7 +1887,11 @@ class UnifiedEconomyService(GtexBaseService):
                     GtexLeagueStanding.user_id == user_id,
                 )
             )
-            if standing is not None and standing.matches_played >= 5 and self._amount(standing.win_rate) >= Decimal("0.9000"):
+            if (
+                standing is not None
+                and standing.matches_played >= 5
+                and self._amount(standing.win_rate) >= Decimal("0.9000")
+            ):
                 session.add(
                     GtexRiskFlag(
                         category="abnormal_win_rate",
@@ -1877,8 +1913,10 @@ class UnifiedEconomyService(GtexBaseService):
                     .where(
                         GtexMatch.completed_at >= recent_cutoff,
                         or_(
-                            (GtexMatch.home_user_id == match.home_user_id) & (GtexMatch.away_user_id == match.away_user_id),
-                            (GtexMatch.home_user_id == match.away_user_id) & (GtexMatch.away_user_id == match.home_user_id),
+                            (GtexMatch.home_user_id == match.home_user_id)
+                            & (GtexMatch.away_user_id == match.away_user_id),
+                            (GtexMatch.home_user_id == match.away_user_id)
+                            & (GtexMatch.away_user_id == match.home_user_id),
                         ),
                     )
                 )
@@ -1899,7 +1937,9 @@ class UnifiedEconomyService(GtexBaseService):
                     )
                 )
 
-    def _get_or_create_standing(self, session: Session, *, league_id: str, user: User | None, ai: GtexAIProfile | None) -> GtexLeagueStanding:
+    def _get_or_create_standing(
+        self, session: Session, *, league_id: str, user: User | None, ai: GtexAIProfile | None
+    ) -> GtexLeagueStanding:
         subject_key = self._subject_key(user=user, ai=ai)
         standing = session.scalar(
             select(GtexLeagueStanding).where(
@@ -1931,7 +1971,9 @@ class UnifiedEconomyService(GtexBaseService):
     def _refresh_ai_cache(self, session: Session, ai: GtexAIProfile) -> None:
         defer_session_callback_until_commit(
             session,
-            callback=lambda ai_id=ai.id, elo=ai.elo: self.state_store.set_decimal(redis_keys.ai_elo(ai_id), Decimal(elo)),
+            callback=lambda ai_id=ai.id, elo=ai.elo: self.state_store.set_decimal(
+                redis_keys.ai_elo(ai_id), Decimal(elo)
+            ),
         )
         defer_session_callback_until_commit(
             session,
@@ -2017,7 +2059,12 @@ class AiLeagueService(GtexBaseService):
                 self._seed_ai_for_league(session, league)
         else:
             for league in session.scalars(select(GtexLeague)).all():
-                existing = int(session.scalar(select(func.count()).select_from(GtexAIProfile).where(GtexAIProfile.league_id == league.id)) or 0)
+                existing = int(
+                    session.scalar(
+                        select(func.count()).select_from(GtexAIProfile).where(GtexAIProfile.league_id == league.id)
+                    )
+                    or 0
+                )
                 if existing == 0:
                     self._seed_ai_for_league(session, league)
 
@@ -2025,7 +2072,9 @@ class AiLeagueService(GtexBaseService):
         leagues = session.scalars(select(GtexLeague).order_by(GtexLeague.min_elo.asc())).all()
         items: list[dict[str, Any]] = []
         for league in leagues:
-            leaderboard_members = self.state_store.zrevrange(redis_keys.league_leaderboard(league.id), 0, 4, withscores=True)
+            leaderboard_members = self.state_store.zrevrange(
+                redis_keys.league_leaderboard(league.id), 0, 4, withscores=True
+            )
             if leaderboard_members:
                 subject_keys = [str(member) for member, _ in leaderboard_members]
                 standing_rows = session.scalars(
@@ -2199,13 +2248,11 @@ class AiLeagueService(GtexBaseService):
         )
         defer_session_callback_until_commit(
             session,
-            callback=lambda queue_id=queue_entry.id, opponent_id=(opponent_entry.id if opponent_entry is not None else None): self.state_store.zrem(
+            callback=lambda queue_id=queue_entry.id, opponent_id=(
+                opponent_entry.id if opponent_entry is not None else None
+            ): self.state_store.zrem(
                 redis_keys.queue_waiting(),
-                *tuple(
-                    member
-                    for member in (queue_id, opponent_id)
-                    if member is not None
-                ),
+                *tuple(member for member in (queue_id, opponent_id) if member is not None),
             ),
         )
         self._stage_event(
@@ -2287,7 +2334,9 @@ class AiLeagueService(GtexBaseService):
         home_score = 0
         away_score = 0
         generated_events: list[GtexMatchEvent] = []
-        event_count = max(3, self.settings.ai_simulation_event_count + int(simulation_context.get("intensity_bonus_events") or 0))
+        event_count = max(
+            3, self.settings.ai_simulation_event_count + int(simulation_context.get("intensity_bonus_events") or 0)
+        )
         aggression_overrides = dict(simulation_context.get("aggression_overrides") or {})
         for index in range(1, event_count + 1):
             actor = home if rng.random() < float(home_strength / (home_strength + away_strength)) else away
@@ -2343,7 +2392,9 @@ class AiLeagueService(GtexBaseService):
             if event.event_type in {"goal", "chance", "save"}
         ][:6]
         rivalry_level = "fierce" if rivalry_meetings >= 5 else "heated" if rivalry_meetings >= 2 else "fresh"
-        winner_label = home.label if home_score > away_score else away.label if away_score > home_score else "Neither side"
+        winner_label = (
+            home.label if home_score > away_score else away.label if away_score > home_score else "Neither side"
+        )
         storyline = (
             f"{winner_label} emerged from a {rivalry_level} duel after {len(generated_events)} simulated phases."
             if winner_label != "Neither side"
@@ -2411,9 +2462,7 @@ class AiLeagueService(GtexBaseService):
         if match is None:
             raise GtexNotFoundError(f"GTEX match {match_id} was not found.")
         events = session.scalars(
-            select(GtexMatchEvent)
-            .where(GtexMatchEvent.match_id == match.id)
-            .order_by(GtexMatchEvent.event_index.asc())
+            select(GtexMatchEvent).where(GtexMatchEvent.match_id == match.id).order_by(GtexMatchEvent.event_index.asc())
         ).all()
         return {
             "id": match.id,
@@ -2438,7 +2487,9 @@ class AiLeagueService(GtexBaseService):
             "completed_at": match.completed_at,
             "match_storyline": (match.metadata_json or {}).get("narrative_output", {}).get("match_storyline"),
             "key_moments": list((match.metadata_json or {}).get("narrative_output", {}).get("key_moments") or []),
-            "player_highlights": list((match.metadata_json or {}).get("narrative_output", {}).get("player_highlights") or []),
+            "player_highlights": list(
+                (match.metadata_json or {}).get("narrative_output", {}).get("player_highlights") or []
+            ),
             "rivalry": dict((match.metadata_json or {}).get("rivalry") or {}),
             "match_context": dict((match.metadata_json or {}).get("match_context") or {}),
             "home_manager": dict((match.metadata_json or {}).get("home_manager") or {}),
@@ -2465,12 +2516,60 @@ class AiLeagueService(GtexBaseService):
 
     def _seed_ai_for_league(self, session: Session, league: GtexLeague) -> None:
         profiles: list[tuple[str, GtexAiProfileType, str, Decimal, Decimal, Decimal, int]] = [
-            ("Tempo Nova", GtexAiProfileType.CASUAL_BOT, "pressing", Decimal("0.5800"), Decimal("0.4200"), Decimal("0.6100"), max(league.min_elo, 950)),
-            ("Calm Orbit", GtexAiProfileType.CASUAL_BOT, "possession", Decimal("0.5600"), Decimal("0.3600"), Decimal("0.4100"), max(league.min_elo, 990)),
-            ("Rank Forge", GtexAiProfileType.RANKED_BOT, "counter", Decimal("0.7200"), Decimal("0.5100"), Decimal("0.6600"), max(league.min_elo + 50, 1250)),
-            ("Signal Peak", GtexAiProfileType.RANKED_BOT, "balanced", Decimal("0.7500"), Decimal("0.4700"), Decimal("0.5000"), max(league.min_elo + 80, 1320)),
-            ("Atlas Circuit", GtexAiProfileType.ELITE_CLUB, "aggressive", Decimal("0.9100"), Decimal("0.6800"), Decimal("0.8200"), max(league.min_elo + 120, 2100)),
-            ("Mirage Union", GtexAiProfileType.ELITE_CLUB, "adaptive", Decimal("0.9300"), Decimal("0.7400"), Decimal("0.5400"), max(league.min_elo + 150, 2180)),
+            (
+                "Tempo Nova",
+                GtexAiProfileType.CASUAL_BOT,
+                "pressing",
+                Decimal("0.5800"),
+                Decimal("0.4200"),
+                Decimal("0.6100"),
+                max(league.min_elo, 950),
+            ),
+            (
+                "Calm Orbit",
+                GtexAiProfileType.CASUAL_BOT,
+                "possession",
+                Decimal("0.5600"),
+                Decimal("0.3600"),
+                Decimal("0.4100"),
+                max(league.min_elo, 990),
+            ),
+            (
+                "Rank Forge",
+                GtexAiProfileType.RANKED_BOT,
+                "counter",
+                Decimal("0.7200"),
+                Decimal("0.5100"),
+                Decimal("0.6600"),
+                max(league.min_elo + 50, 1250),
+            ),
+            (
+                "Signal Peak",
+                GtexAiProfileType.RANKED_BOT,
+                "balanced",
+                Decimal("0.7500"),
+                Decimal("0.4700"),
+                Decimal("0.5000"),
+                max(league.min_elo + 80, 1320),
+            ),
+            (
+                "Atlas Circuit",
+                GtexAiProfileType.ELITE_CLUB,
+                "aggressive",
+                Decimal("0.9100"),
+                Decimal("0.6800"),
+                Decimal("0.8200"),
+                max(league.min_elo + 120, 2100),
+            ),
+            (
+                "Mirage Union",
+                GtexAiProfileType.ELITE_CLUB,
+                "adaptive",
+                Decimal("0.9300"),
+                Decimal("0.7400"),
+                Decimal("0.5400"),
+                max(league.min_elo + 150, 2180),
+            ),
         ]
         for name, profile_type, playstyle, skill_level, adaptation_rate, aggression, elo in profiles:
             if profile_type == GtexAiProfileType.CASUAL_BOT and league.league_type != GtexLeagueType.CASUAL:
@@ -2538,7 +2637,9 @@ class AiLeagueService(GtexBaseService):
             label = asset.display_name
         else:
             assert ai is not None
-            strength = self._amount(ai.skill_level + ai.adaptation_rate + ai.aggression + (Decimal(ai.elo) / Decimal("2500.0000")))
+            strength = self._amount(
+                ai.skill_level + ai.adaptation_rate + ai.aggression + (Decimal(ai.elo) / Decimal("2500.0000"))
+            )
             label = ai.name
         return SimulatedParticipant(
             participant_type=participant_type,

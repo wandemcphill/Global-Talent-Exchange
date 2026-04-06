@@ -271,7 +271,12 @@ def get_market_trending(
     current_user: User | None = Depends(get_optional_current_user),
     runtime=Depends(get_runtime),
 ) -> MarketTrendingView:
-    return MarketTrendingView(items=[CreatorPlayerView.model_validate(item) for item in runtime.creator_market.list_trending(session, limit=limit, viewer=current_user)])
+    return MarketTrendingView(
+        items=[
+            CreatorPlayerView.model_validate(item)
+            for item in runtime.creator_market.list_trending(session, limit=limit, viewer=current_user)
+        ]
+    )
 
 
 @router.get("/admin/flags", response_model=list[AdminFlagView])

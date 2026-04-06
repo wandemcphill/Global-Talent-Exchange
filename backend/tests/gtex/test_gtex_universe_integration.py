@@ -190,12 +190,15 @@ def test_career_mode_progression_updates_player_state_and_market(client, app, ap
         asset = runtime.creator_market.ensure_asset_for_user(session, user_model)
         assert Decimal(asset.demand_score) > Decimal("0")
         assert Decimal(asset.momentum_score) > Decimal("0")
-        assert session.scalar(
-            select(func.count()).select_from(CareerTrainingSession).where(CareerTrainingSession.career_player_id == created["id"])
-        ) == 1
-        decision = session.scalar(
-            select(CareerDecision).where(CareerDecision.career_player_id == created["id"])
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(CareerTrainingSession)
+                .where(CareerTrainingSession.career_player_id == created["id"])
+            )
+            == 1
         )
+        decision = session.scalar(select(CareerDecision).where(CareerDecision.career_player_id == created["id"]))
         assert decision is not None
         assert decision.decision_type.value == "transfer"
         entries = session.scalars(
@@ -238,12 +241,17 @@ def test_career_mode_progression_updates_player_state_and_market(client, app, ap
         assert legacy_record is not None
         assert legacy_record.legacy_role == "hall_of_fame"
         assert legacy_record.summary_json["ai_player"] is True
-        assert session.scalar(
-            select(func.count()).select_from(PlayerContract).where(
-                PlayerContract.player_id == created["player_id"],
-                PlayerContract.status == "active",
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(PlayerContract)
+                .where(
+                    PlayerContract.player_id == created["player_id"],
+                    PlayerContract.status == "active",
+                )
             )
-        ) == 0
+            == 0
+        )
 
 
 def test_real_world_sync_creates_mirror_match_with_manager_career_and_economy_outputs(client, app, app_session_factory):
