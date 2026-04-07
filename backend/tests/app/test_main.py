@@ -47,6 +47,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert hasattr(app.state, "settings")
         assert hasattr(app.state, "db_engine")
         assert hasattr(app.state, "session_factory")
+        assert app.state.outbox_relay is not None
         assert hasattr(app.state, "market_engine")
         assert hasattr(app.state, "ingestion_pipeline")
         assert hasattr(app.state, "value_engine_bridge")

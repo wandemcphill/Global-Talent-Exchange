@@ -24,7 +24,7 @@ namespace Gtex.Match3D.Runtime
         [SerializeField] private bool snapFirstFrame = true;
         [SerializeField] private bool enableLiveFeedPlayback = true;
         [SerializeField] private string backendBaseUrl = "http://localhost:8000";
-        [SerializeField] private string liveFeedPathTemplate = "/match/{0}/live";
+        [SerializeField] private string liveFeedPathTemplate = "/matches/{0}/live";
         [SerializeField] private string fallbackLiveFeedPathTemplate = "/api/match-engine/live-feed/{0}";
         [SerializeField] private string matchId = "match-001";
         [SerializeField] private float liveFeedPollIntervalSeconds = 5f;

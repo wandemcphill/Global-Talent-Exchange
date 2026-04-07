@@ -109,6 +109,7 @@ class Container:
         from app.market.projections import MarketSummaryProjector
         from app.market.repositories import build_market_repository
         from app.market.service import MarketEngine
+        from app.matches.command_runtime import LocalMatchCommandBridge
         from app.match_engine.services.match_simulation_service import MatchSimulationService
         from app.notifications.service import NotificationCenter
         from app.observability.alert_system import AlertSystem
@@ -155,9 +156,18 @@ class Container:
         event_publisher.subscribe(fraud_detection.handle_event)
         event_publisher.subscribe(security_monitoring.handle_event)
         event_publisher.subscribe(self.global_memory_projector.handle_event)
+        if _use_local_match_command_bridge(self.settings):
+            event_publisher.subscribe(
+                LocalMatchCommandBridge(
+                    session_factory=self.database.session_factory,
+                    event_publisher=event_publisher,
+                ).handle_event
+            )
 
         self.outbox_relay = None
-        if self.settings.outbox_relay_enabled and (self.settings.kafka_enabled or self.settings.redis_url):
+        if self.settings.outbox_relay_enabled and (
+            self.settings.kafka_enabled or self.settings.redis_url or _use_local_outbox_relay(self.settings)
+        ):
             kafka_producer = None
             if self.settings.kafka_enabled:
                 try:
@@ -172,7 +182,7 @@ class Container:
                     else:
                         logger.warning("container.outbox_relay.kafka_unavailable_falling_back_to_redis")
                         kafka_producer = None
-            if kafka_producer is not None or self.settings.redis_url:
+            if kafka_producer is not None or self.settings.redis_url or _use_local_outbox_relay(self.settings):
                 self.outbox_relay = OutboxRelayService(
                     session_factory=self.database.session_factory,
                     publisher=RedisKafkaOutboxPublisher(
@@ -317,6 +327,14 @@ def bind_application_state(
 
 def _module_name(module: object) -> str:
     return str(getattr(module, "name", module))
+
+
+def _use_local_outbox_relay(settings: Settings) -> bool:
+    return not settings.kafka_enabled and not bool(settings.redis_url)
+
+
+def _use_local_match_command_bridge(settings: Settings) -> bool:
+    return settings.outbox_relay_enabled and _use_local_outbox_relay(settings)
 
 
 __all__ = [

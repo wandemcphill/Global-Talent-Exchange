@@ -64,7 +64,7 @@ namespace Gtex.Match3D.Runtime
 
         public static string BuildLiveUrl(string baseUrl, string matchId)
         {
-            return baseUrl.TrimEnd('/') + "/match/" + UnityWebRequest.EscapeURL(matchId) + "/live";
+            return baseUrl.TrimEnd('/') + "/matches/" + UnityWebRequest.EscapeURL(matchId) + "/live";
         }
 
         private static MatchResponse Deserialize(string json)

@@ -60,14 +60,19 @@ def flush_to_broker(
         if not claims:
             return 0
 
-        delivered = 0
-        for row_id, claim_token in claims:
-            row = _load_claimed_row(session, row_id=row_id, claim_token=claim_token)
-            if row is None:
-                continue
-            try:
-                publisher.publish(row)
-            except Exception as exc:
+    delivered = 0
+    for row_id, claim_token in claims:
+        row = _load_claimed_event_for_publish(
+            session_factory=session_factory,
+            row_id=row_id,
+            claim_token=claim_token,
+        )
+        if row is None:
+            continue
+        try:
+            publisher.publish(row)
+        except Exception as exc:
+            with session_factory() as session:
                 _mark_publish_failure(
                     session,
                     row_id=row_id,
@@ -76,7 +81,8 @@ def flush_to_broker(
                     max_attempts=max_attempts,
                 )
                 session.commit()
-                continue
+            continue
+        with session_factory() as session:
             claimed = _load_claimed_row(session, row_id=row_id, claim_token=claim_token)
             if claimed is None:
                 continue
@@ -87,7 +93,7 @@ def flush_to_broker(
             claimed.claim_token = None
             session.commit()
             delivered += 1
-        return delivered
+    return delivered
 
 
 @dataclass(slots=True)
@@ -209,6 +215,20 @@ def _load_claimed_row(session: Session, *, row_id: str, claim_token: str) -> Out
             OutboxEvent.claim_token == claim_token,
         )
     )
+
+
+def _load_claimed_event_for_publish(
+    *,
+    session_factory: sessionmaker[Session],
+    row_id: str,
+    claim_token: str,
+) -> OutboxEvent | None:
+    with session_factory() as session:
+        row = _load_claimed_row(session, row_id=row_id, claim_token=claim_token)
+        if row is None:
+            return None
+        session.expunge(row)
+        return row
 
 
 def _mark_publish_failure(
