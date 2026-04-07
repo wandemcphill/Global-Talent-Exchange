@@ -588,6 +588,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       api: CompetitionApi.standard(
         baseUrl: widget.apiBaseUrl,
         mode: _liveBackendMode,
+        accessToken: widget.controller.accessToken,
       ),
       currentUserId: _competitionUserId,
       currentUserName: _competitionUserName,

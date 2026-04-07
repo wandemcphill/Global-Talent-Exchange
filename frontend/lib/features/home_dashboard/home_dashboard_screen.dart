@@ -81,6 +81,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   late RegenUniverseController _regenUniverseController;
   late String _userId;
   late String? _userName;
+  String? _competitionAccessToken;
   String? _clubId;
   String? _clubName;
   bool _tradingSummaryPrimeQueued = false;
@@ -490,6 +491,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final _HomeIdentity identity = _deriveIdentity();
     _userId = identity.userId;
     _userName = identity.userName;
+    _competitionAccessToken = widget.exchangeController.accessToken;
     _clubId = identity.clubId;
     _clubName = identity.clubName;
     _competitionController = _buildCompetitionController();
@@ -528,6 +530,22 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   void _handleExchangeChanged() {
     final _HomeIdentity next = _deriveIdentity();
+    final String? nextAccessToken = widget.exchangeController.accessToken;
+    if (nextAccessToken != _competitionAccessToken) {
+      final CompetitionController previousCompetition = _competitionController;
+      _competitionAccessToken = nextAccessToken;
+      _competitionController = _buildCompetitionControllerFor(
+        userId: next.userId,
+        userName: next.userName,
+      );
+      if (_hasClubScope(next.clubId, next.clubName)) {
+        _competitionController.bootstrap();
+      }
+      previousCompetition.dispose();
+      if (mounted) {
+        setState(() {});
+      }
+    }
     if (next.userId != _userId || next.userName != _userName) {
       _userId = next.userId;
       _userName = next.userName;
@@ -827,13 +845,21 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   CompetitionController _buildCompetitionController() {
+    return _buildCompetitionControllerFor(userId: _userId, userName: _userName);
+  }
+
+  CompetitionController _buildCompetitionControllerFor({
+    required String userId,
+    String? userName,
+  }) {
     return CompetitionController(
       api: CompetitionApi.standard(
         baseUrl: widget.apiBaseUrl,
         mode: widget.backendMode,
+        accessToken: _competitionAccessToken,
       ),
-      currentUserId: _userId,
-      currentUserName: _userName,
+      currentUserId: userId,
+      currentUserName: userName,
     );
   }
 

@@ -185,7 +185,11 @@ class GteNavigationDependencies {
 
   CompetitionApi createCompetitionApi() {
     return competitionApi ??
-        CompetitionApi.standard(baseUrl: apiBaseUrl, mode: backendMode);
+        CompetitionApi.standard(
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+          accessToken: accessToken,
+        );
   }
 
   TrophyCabinetRepository createTrophyCabinetRepository() {
@@ -276,7 +280,6 @@ class GteNavigationGuardResolver {
       message: 'World Super Cup is not active right now.',
     );
   }
-
 }
 
 CompetitionSummary? _findWorldSuperCupCompetition(
@@ -309,4 +312,3 @@ bool _isWorldSuperCupActive(CompetitionSummary competition) {
       return true;
   }
 }
-

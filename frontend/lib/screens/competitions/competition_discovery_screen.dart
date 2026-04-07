@@ -21,6 +21,7 @@ class CompetitionDiscoveryScreen extends StatefulWidget {
     this.controller,
     this.baseUrl = 'http://127.0.0.1:8000',
     this.backendMode = GteBackendMode.live,
+    this.accessToken,
     required this.currentUserId,
     this.currentUserName,
     this.isAuthenticated = false,
@@ -33,6 +34,7 @@ class CompetitionDiscoveryScreen extends StatefulWidget {
   final CompetitionController? controller;
   final String baseUrl;
   final GteBackendMode backendMode;
+  final String? accessToken;
   final String currentUserId;
   final String? currentUserName;
   final bool isAuthenticated;
@@ -48,7 +50,7 @@ class CompetitionDiscoveryScreen extends StatefulWidget {
 
 class _CompetitionDiscoveryScreenState
     extends State<CompetitionDiscoveryScreen> {
-  late final CompetitionController _controller;
+  late CompetitionController _controller;
   late final bool _ownsController;
   late final TextEditingController _searchController;
 
@@ -56,16 +58,7 @@ class _CompetitionDiscoveryScreenState
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller =
-        widget.controller ??
-        CompetitionController(
-          api: CompetitionApi.standard(
-            baseUrl: widget.baseUrl,
-            mode: widget.backendMode,
-          ),
-          currentUserId: widget.currentUserId,
-          currentUserName: widget.currentUserName,
-        );
+    _controller = widget.controller ?? _buildOwnedController();
     _searchController = TextEditingController(text: _controller.searchQuery);
     _searchController.addListener(_handleSearchChanged);
     _controller.bootstrap();
@@ -74,6 +67,16 @@ class _CompetitionDiscoveryScreenState
   @override
   void didUpdateWidget(covariant CompetitionDiscoveryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_ownsController &&
+        (oldWidget.baseUrl != widget.baseUrl ||
+            oldWidget.backendMode != widget.backendMode ||
+            oldWidget.accessToken != widget.accessToken)) {
+      _controller.dispose();
+      _controller = _buildOwnedController();
+      _searchController.text = _controller.searchQuery;
+      _controller.bootstrap();
+      return;
+    }
     if (oldWidget.currentUserId != widget.currentUserId ||
         oldWidget.currentUserName != widget.currentUserName) {
       _controller.updateCurrentUser(
@@ -93,6 +96,18 @@ class _CompetitionDiscoveryScreenState
       _controller.dispose();
     }
     super.dispose();
+  }
+
+  CompetitionController _buildOwnedController() {
+    return CompetitionController(
+      api: CompetitionApi.standard(
+        baseUrl: widget.baseUrl,
+        mode: widget.backendMode,
+        accessToken: widget.accessToken,
+      ),
+      currentUserId: widget.currentUserId,
+      currentUserName: widget.currentUserName,
+    );
   }
 
   @override

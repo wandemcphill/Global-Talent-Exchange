@@ -111,6 +111,7 @@ class GteAppRouteRegistry {
       return CompetitionDiscoveryScreen(
         baseUrl: liveDependencies.apiBaseUrl,
         backendMode: liveDependencies.backendMode,
+        accessToken: liveDependencies.accessToken,
         currentUserId: liveDependencies.currentUserId,
         currentUserName: liveDependencies.currentUserName,
         isAuthenticated: liveDependencies.isAuthenticated,
@@ -154,6 +155,7 @@ class GteAppRouteRegistry {
       return CompetitionDiscoveryScreen(
         baseUrl: liveDependencies.apiBaseUrl,
         backendMode: liveDependencies.backendMode,
+        accessToken: liveDependencies.accessToken,
         currentUserId: liveDependencies.currentUserId,
         currentUserName: liveDependencies.currentUserName,
         isAuthenticated: liveDependencies.isAuthenticated,

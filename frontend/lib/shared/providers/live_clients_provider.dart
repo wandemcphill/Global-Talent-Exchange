@@ -26,6 +26,7 @@ final Provider<CompetitionApi> competitionApiProvider =
       return CompetitionApi.standard(
         baseUrl: ref.watch(apiBaseUrlProvider),
         mode: ref.watch(criticalBackendModeProvider),
+        accessToken: ref.watch(accessTokenProvider),
       );
     });
 
