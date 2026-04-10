@@ -501,6 +501,13 @@ class GteExchangeApiClient {
     );
   }
 
+  Future<Map<String, Object?>> fetchMatchAnalytics(String matchKey) async {
+    return GteJson.map(
+      await _sendPublicGet('/api/match-engine/analytics/$matchKey'),
+      label: 'match analytics',
+    );
+  }
+
   Future<Map<String, Object?>> fetchMatchViewer(
     String matchKey, {
     MatchMode mode = MatchMode.standard,

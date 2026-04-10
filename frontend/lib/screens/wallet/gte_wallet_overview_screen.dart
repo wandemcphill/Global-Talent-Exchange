@@ -33,6 +33,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   Future<List<Object?>> _loadWallet() {
     return Future.wait<Object?>(<Future<Object?>>[
       widget.controller.api.fetchWalletOverview(),
+      widget.controller.api.fetchWalletSummary(currency: GteLedgerUnit.coin),
+      widget.controller.api.fetchWalletSummary(currency: GteLedgerUnit.credit),
       widget.controller.api.listWalletTransactions(limit: 8),
       widget.controller.api.fetchWithdrawalEligibility(),
     ]);
@@ -103,7 +105,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
               !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (!snapshot.hasData || snapshot.data!.length < 3) {
+          if (!snapshot.hasData || snapshot.data!.length < 5) {
             return const Center(
               child: GteStatePanel(
                 title: 'GTEX wallet unavailable',
@@ -115,10 +117,14 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
 
           final GteWalletOverview overview =
               snapshot.data![0] as GteWalletOverview;
+          final GteWalletSummary coinSummary =
+              snapshot.data![1] as GteWalletSummary;
+          final GteWalletSummary fanSummary =
+              snapshot.data![2] as GteWalletSummary;
           final List<GteWalletTransactionRecord> transactions =
-              snapshot.data![1] as List<GteWalletTransactionRecord>;
+              snapshot.data![3] as List<GteWalletTransactionRecord>;
           final GteWithdrawalEligibility eligibility =
-              snapshot.data![2] as GteWithdrawalEligibility;
+              snapshot.data![4] as GteWithdrawalEligibility;
           final String restrictionMessage =
               overview.policyBlocked
                   ? overview.policyBlockReason ??
@@ -152,25 +158,35 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'GTEX Coin wallet',
+                        'Wallet balances',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Top up GTEX Coin, buy player assets, and withdraw verified balances from one live wallet lane.',
+                        'Track GTEX Coin for funding and withdrawals, plus Fan Coin for gifting and fan-economy actions.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
                       Row(
                         children: <Widget>[
                           _BalanceTile(
-                            label: 'GTEX Coin',
-                            value: gteFormatAmountForUnit(
-                              overview.availableBalance,
-                              overview.currency,
+                            label: _walletUnitLabel(coinSummary.currency),
+                            value: _formatWalletAmount(
+                              coinSummary.availableBalance,
+                              coinSummary.currency,
                             ),
-                            detail: 'Trading and withdrawal balance',
+                            detail: _walletUnitDetail(coinSummary.currency),
                             accent: GteShellTheme.accentCapital,
+                          ),
+                          const SizedBox(width: 12),
+                          _BalanceTile(
+                            label: _walletUnitLabel(fanSummary.currency),
+                            value: _formatWalletAmount(
+                              fanSummary.availableBalance,
+                              fanSummary.currency,
+                            ),
+                            detail: _walletUnitDetail(fanSummary.currency),
+                            accent: GteShellTheme.accent,
                           ),
                         ],
                       ),
@@ -211,6 +227,11 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                             label: const Text('Transactions'),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Fan Coin is your gifting balance. GTEX Coin remains the rail for deposits, trading, and withdrawals.',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
@@ -283,11 +304,11 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'GTEX Coin is the only live wallet currency in this shell.',
+                        'GTEX Coin handles deposits, player trading, and withdrawals.',
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Player trading, portfolio settlement, and withdrawals all clear through GTEX Coin.',
+                        'Fan Coin is kept in sync as the gifting and fan-economy balance.',
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -539,6 +560,34 @@ String _providerStatusLabel(String? status) {
     default:
       return 'Unknown';
   }
+}
+
+String _walletUnitLabel(GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.credit:
+      return 'Fan Coin';
+    case GteLedgerUnit.coin:
+      return 'GTEX Coin';
+    case GteLedgerUnit.unknown:
+      return 'Wallet Unit';
+  }
+}
+
+String _walletUnitDetail(GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.credit:
+      return 'Gifting and fan economy balance';
+    case GteLedgerUnit.coin:
+      return 'Funding, trading, and withdrawal balance';
+    case GteLedgerUnit.unknown:
+      return 'Wallet balance';
+  }
+}
+
+String _formatWalletAmount(double value, GteLedgerUnit unit) {
+  final bool wholeNumber = value == value.roundToDouble();
+  final String amount = value.toStringAsFixed(wholeNumber ? 0 : 2);
+  return '$amount ${_walletUnitLabel(unit)}';
 }
 
 String _titleCase(String value) {

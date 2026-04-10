@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.base import generate_uuid, utcnow
+from app.models.admin_runtime_state import AdminRuntimeState
 from app.models.user import User
 from app.models.wallet import LedgerAccount, LedgerSourceTag, LedgerUnit, PaymentEvent, PaymentStatus, PayoutRequest, PayoutStatus
 from app.players.read_models import PlayerSummaryReadModel
@@ -51,6 +52,7 @@ from .schemas import (
 
 ADMIN_GODMODE_FILE = "admin_god_mode.json"
 AUDIT_LOG_FILE = "admin_god_mode.audit.jsonl"
+ADMIN_GODMODE_STATE_KEY = "admin_god_mode"
 GOD_MODE_ROLE_NAME = "god_mode"
 SCOPED_ADMIN_ROLE_NAME = "scoped_admin"
 SUPER_ADMIN_EXTRA_PERMISSIONS: tuple[str, ...] = (
@@ -839,6 +841,9 @@ class AdminGodModeService:
     def _audit_path(self, app: FastAPI) -> Path:
         return app.state.settings.config_root / AUDIT_LOG_FILE
 
+    def _session_factory(self, app: FastAPI):
+        return getattr(app.state, "session_factory", None)
+
     def _log_admin_override(
         self,
         *,
@@ -856,21 +861,61 @@ class AdminGodModeService:
         )
 
     def _load_state(self, app: FastAPI) -> dict[str, Any]:
-        path = self._state_path(app)
-        if not path.exists():
+        session_factory = self._session_factory(app)
+        if session_factory is not None:
+            with session_factory() as session:
+                row = session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY))
+                if row is None:
+                    seeded = self._load_file_state(app) or self._default_state()
+                    normalized = self._normalize_state(seeded)
+                    self._save_state_record(session, normalized)
+                    session.commit()
+                    return normalized
+                state = dict(row.payload_json or {})
+                normalized = self._normalize_state(state)
+                if normalized != state:
+                    self._save_state_record(session, normalized)
+                    session.commit()
+                return normalized
+        seeded = self._load_file_state(app)
+        if seeded is None:
             state = self._default_state()
             self._save_state(app, state)
             return state
-        state = json.loads(path.read_text(encoding="utf-8"))
-        normalized = self._normalize_state(state)
-        if normalized != state:
+        normalized = self._normalize_state(seeded)
+        if normalized != seeded:
             self._save_state(app, normalized)
         return normalized
 
+    def _load_file_state(self, app: FastAPI) -> dict[str, Any] | None:
+        path = self._state_path(app)
+        if not path.exists():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+
     def _save_state(self, app: FastAPI, state: dict[str, Any]) -> None:
+        session_factory = self._session_factory(app)
+        if session_factory is not None:
+            with session_factory() as session:
+                self._save_state_record(session, state)
+                session.commit()
+            return
+        self._save_file_state(app, state)
+
+    def _save_file_state(self, app: FastAPI, state: dict[str, Any]) -> None:
         path = self._state_path(app)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _save_state_record(self, session: Session, state: dict[str, Any]) -> None:
+        normalized = self._normalize_state(state)
+        row = session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY))
+        if row is None:
+            session.add(AdminRuntimeState(state_key=ADMIN_GODMODE_STATE_KEY, payload_json=normalized))
+            session.flush()
+            return
+        row.payload_json = normalized
+        session.flush()
 
     def _default_state(self) -> dict[str, Any]:
         return {

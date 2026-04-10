@@ -143,8 +143,9 @@ void main() {
       );
       await tester.ensureVisible(walletOverviewButton);
       await tester.tap(walletOverviewButton);
-      await _pumpUntilText(tester, 'GTEX Coin wallet');
-      expect(find.text('GTEX Coin wallet'), findsOneWidget);
+      await _pumpUntilText(tester, 'Wallet balances');
+      expect(find.text('Wallet balances'), findsOneWidget);
+      expect(find.text('FAN COIN'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');

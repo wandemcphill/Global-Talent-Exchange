@@ -310,6 +310,8 @@ def buy_player_shares(
         holding=PlayerShareHoldingView.model_validate(result["holding"]),
         transaction_id=result["transaction_id"],
         gross_amount_coin=result["gross_amount_coin"],
+        fee_amount_coin=result["fee_amount_coin"],
+        net_amount_coin=result["net_amount_coin"],
     )
 
 
@@ -334,6 +336,8 @@ def sell_player_shares(
         holding=PlayerShareHoldingView.model_validate(result["holding"]),
         transaction_id=result["transaction_id"],
         gross_amount_coin=result["gross_amount_coin"],
+        fee_amount_coin=result["fee_amount_coin"],
+        net_amount_coin=result["net_amount_coin"],
     )
 
 

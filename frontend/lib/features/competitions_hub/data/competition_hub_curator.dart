@@ -29,7 +29,10 @@ List<CompetitionSummary> competitionHubCompetitionsForDestination(
         _compareFastCupRows,
       );
     case CompetitionHubDestination.worldSuperCup:
-      return const <CompetitionSummary>[];
+      return _sorted(
+        competitions.where(_isWorldSuperCupCompetition),
+        _compareEliteRows,
+      );
     case CompetitionHubDestination.academy:
       return _sorted(
         competitions.where(_isAcademyCompetition),
@@ -52,7 +55,8 @@ bool competitionHubHasActiveSeason(
   List<CompetitionSummary> competitions,
 ) {
   if (destination == CompetitionHubDestination.worldSuperCup) {
-    return false;
+    return competitionHubCompetitionsForDestination(destination, competitions)
+        .isNotEmpty;
   }
   return competitionHubCompetitionsForDestination(destination, competitions)
       .isNotEmpty;
@@ -77,6 +81,15 @@ bool _isAcademyCompetition(CompetitionSummary item) {
       creator.contains('academy') ||
       name.contains('rookie') ||
       name.contains('academy');
+}
+
+bool _isWorldSuperCupCompetition(CompetitionSummary item) {
+  final String name = item.name.toLowerCase();
+  final String creator = item.creatorLabel.toLowerCase();
+  return name.contains('world super cup') ||
+      name.contains('world cup') ||
+      name.contains('world championship') ||
+      creator.contains('world super cup');
 }
 
 List<CompetitionSummary> _sorted(

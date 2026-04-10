@@ -28,6 +28,7 @@ class ClubApi {
   ClubApi({
     required this.config,
     required this.transport,
+    this.accessToken,
     required ReputationRepository reputationRepository,
     required DynastyRepository dynastyRepository,
     required TrophyCabinetRepository trophyRepository,
@@ -41,6 +42,7 @@ class ClubApi {
 
   final GteRepositoryConfig config;
   final GteTransport transport;
+  final String? accessToken;
   final ReputationRepository _reputationRepository;
   final DynastyRepository _dynastyRepository;
   final TrophyCabinetRepository _trophyRepository;
@@ -50,12 +52,14 @@ class ClubApi {
   factory ClubApi.standard({
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.liveThenFixture,
+    String? accessToken,
   }) {
     final GteRepositoryConfig config =
         GteRepositoryConfig(baseUrl: baseUrl, mode: mode);
     return ClubApi(
       config: config,
       transport: GteHttpTransport(),
+      accessToken: accessToken,
       reputationRepository: ReputationApiRepository.standard(
         baseUrl: baseUrl,
         mode: mode,
@@ -67,11 +71,13 @@ class ClubApi {
       trophyRepository: _ClubTrophyApiRepository(
         config: config,
         transport: GteHttpTransport(),
+        accessToken: accessToken,
         fixtures: StubTrophyCabinetRepository(),
       ),
       identityRepository: _ClubIdentityApiRepository(
         config: config,
         transport: GteHttpTransport(),
+        accessToken: accessToken,
         fixtures: MockClubIdentityRepository(),
       ),
     );
@@ -438,11 +444,18 @@ class ClubApi {
       return null;
     }
     try {
+      final Map<String, String> headers = <String, String>{
+        'Accept': 'application/json',
+      };
+      final String token = accessToken?.trim() ?? '';
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       final GteTransportResponse response = await transport.send(
         GteTransportRequest(
           method: 'GET',
           uri: config.uriFor('/clubs/$clubId'),
-          headers: const <String, String>{'Accept': 'application/json'},
+          headers: headers,
         ),
       );
       final Object? payload = gteApiSuccessPayload(response.body);
@@ -460,11 +473,13 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
   _ClubIdentityApiRepository({
     required this.config,
     required this.transport,
+    required this.accessToken,
     required this.fixtures,
   });
 
   final GteRepositoryConfig config;
   final GteTransport transport;
+  final String? accessToken;
   final ClubIdentityRepository fixtures;
 
   @override
@@ -542,9 +557,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
       return await liveCall();
     } on GteApiException catch (error) {
       if (config.mode == GteBackendMode.liveThenFixture &&
-          (error.supportsFixtureFallback ||
-              error.type == GteApiErrorType.notFound ||
-              error.type == GteApiErrorType.unknown)) {
+          error.supportsFixtureFallback) {
         return fixtureCall();
       }
       rethrow;
@@ -562,11 +575,18 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
     Object? body,
   }) async {
     try {
+      final Map<String, String> headers = <String, String>{
+        'Accept': 'application/json',
+      };
+      final String token = accessToken?.trim() ?? '';
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       final GteTransportResponse response = await transport.send(
         GteTransportRequest(
           method: method,
           uri: config.uriFor(path),
-          headers: const <String, String>{'Accept': 'application/json'},
+          headers: headers,
           body: body,
         ),
       );
@@ -595,11 +615,13 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
   _ClubTrophyApiRepository({
     required this.config,
     required this.transport,
+    required this.accessToken,
     required this.fixtures,
   });
 
   final GteRepositoryConfig config;
   final GteTransport transport;
+  final String? accessToken;
   final TrophyCabinetRepository fixtures;
 
   @override
@@ -676,9 +698,7 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
       return await liveCall();
     } on GteApiException catch (error) {
       if (config.mode == GteBackendMode.liveThenFixture &&
-          (error.supportsFixtureFallback ||
-              error.type == GteApiErrorType.notFound ||
-              error.type == GteApiErrorType.unknown)) {
+          error.supportsFixtureFallback) {
         return fixtureCall();
       }
       rethrow;
@@ -695,11 +715,18 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
     Map<String, Object?> query = const <String, Object?>{},
   }) async {
     try {
+      final Map<String, String> headers = <String, String>{
+        'Accept': 'application/json',
+      };
+      final String token = accessToken?.trim() ?? '';
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       final GteTransportResponse response = await transport.send(
         GteTransportRequest(
           method: 'GET',
           uri: config.uriFor(path, query),
-          headers: const <String, String>{'Accept': 'application/json'},
+          headers: headers,
         ),
       );
       if (response.statusCode >= 400) {

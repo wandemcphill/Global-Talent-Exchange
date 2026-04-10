@@ -190,8 +190,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
 
-      expect(find.text('GTEX Coin wallet'), findsOneWidget);
+      expect(find.text('Wallet balances'), findsOneWidget);
       expect(find.text('GTEX COIN'), findsOneWidget);
+      expect(find.text('FAN COIN'), findsOneWidget);
       expect(find.text('Top up GTEX'), findsOneWidget);
     });
 

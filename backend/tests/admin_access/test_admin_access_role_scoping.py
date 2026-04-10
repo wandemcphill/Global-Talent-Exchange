@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
@@ -19,12 +20,14 @@ import app.orders.models  # noqa: F401
 from app.admin_access.router import router as admin_access_router
 from app.admin_godmode.service import (
     ADMIN_GODMODE_FILE,
+    ADMIN_GODMODE_STATE_KEY,
     AdminGodModeService,
     DEFAULT_ROLE_PERMISSIONS,
     GOD_MODE_ROLE_NAME,
     SCOPED_ADMIN_ROLE_NAME,
     SUPER_ADMIN_EXTRA_PERMISSIONS,
 )
+from app.models.admin_runtime_state import AdminRuntimeState
 from app.auth.dependencies import get_current_super_admin, get_session
 from app.auth.service import AuthService
 from app.models.base import Base
@@ -110,6 +113,34 @@ def test_create_admin_assigns_scoped_role_without_god_mode_baseline(
     assert profile.permissions == ["manage_commissions"]
     assert "manage_payment_rails" not in profile.permissions
     assert "view_audit_log" not in profile.permissions
+
+
+def test_god_mode_state_prefers_database_when_session_factory_exists(tmp_path: Path) -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    app = FastAPI()
+    app.state.settings = SimpleNamespace(config_root=tmp_path)
+    app.state.session_factory = SessionLocal
+
+    service = AdminGodModeService(wallet_service=WalletService())
+    state = service._load_state(app)
+
+    with SessionLocal() as session:
+        row = session.scalar(
+            select(AdminRuntimeState).where(
+                AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY
+            )
+        )
+
+    assert state["roles"]["default_admin_role"] == SCOPED_ADMIN_ROLE_NAME
+    assert row is not None
+    assert not (tmp_path / ADMIN_GODMODE_FILE).exists()
 
 
 def test_resolve_profile_keeps_super_admin_full_and_plain_admin_scoped(

@@ -64,6 +64,8 @@ class PlayerSharePurchaseView(BaseModel):
     holding: PlayerShareHoldingView
     transaction_id: str
     gross_amount_coin: Decimal
+    fee_amount_coin: Decimal
+    net_amount_coin: Decimal
 
 
 class PlayerShareSaleRequest(BaseModel):
@@ -75,6 +77,8 @@ class PlayerShareSaleView(BaseModel):
     holding: PlayerShareHoldingView
     transaction_id: str
     gross_amount_coin: Decimal
+    fee_amount_coin: Decimal
+    net_amount_coin: Decimal
 
 
 class PlayerShareTradeRequest(BaseModel):

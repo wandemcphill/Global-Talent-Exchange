@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from hashlib import sha256
+import json
+from pathlib import Path
 from statistics import mean
 
 from app.ai_manager.schemas import (
@@ -765,6 +767,9 @@ class MonetizationPolicy:
 @dataclass(slots=True)
 class AIManagerService:
     profiles: dict[str, AIManagerProfileView] = field(default_factory=dict)
+    storage_path: Path = field(
+        default_factory=lambda: Path(__file__).resolve().parents[2] / "config" / "ai_manager_profiles.json"
+    )
     activation_policy: ActivationPolicy = field(default_factory=ActivationPolicy)
     squad_planner: SquadPlanner = field(default_factory=SquadPlanner)
     match_decision_engine: MatchDecisionEngine = field(default_factory=MatchDecisionEngine)
@@ -772,6 +777,11 @@ class AIManagerService:
     training_optimizer: TrainingOptimizer = field(default_factory=TrainingOptimizer)
     finance_controller: FinanceController = field(default_factory=FinanceController)
     monetization_policy: MonetizationPolicy = field(default_factory=MonetizationPolicy)
+
+    def __post_init__(self) -> None:
+        if self.profiles:
+            return
+        self.profiles = self._load_profiles()
 
     def upsert_profile(self, payload: AIManagerProfileInput) -> AIManagerProfileView:
         profile = AIManagerProfileView(
@@ -782,6 +792,7 @@ class AIManagerService:
             risk_tolerance=round(payload.risk_tolerance if payload.risk_tolerance is not None else payload.personality_profile.risk, 2),
         )
         self.profiles[payload.club_id] = profile
+        self._persist_profiles()
         return profile
 
     def get_profile(self, club_id: str) -> AIManagerProfileView:
@@ -789,6 +800,7 @@ class AIManagerService:
         if profile is None:
             profile = self._default_profile(club_id)
             self.profiles[club_id] = profile
+            self._persist_profiles()
         return profile
 
     def run_autopilot(self, payload: AutopilotRunRequest) -> AutopilotRunResponse:
@@ -863,6 +875,39 @@ class AIManagerService:
             f"Top finance action: {finance_actions[0].action}.",
             f"Top transfer action: {transfer_actions[0].action}.",
         ]
+
+    def _load_profiles(self) -> dict[str, AIManagerProfileView]:
+        if not self.storage_path.exists():
+            return {}
+        try:
+            payload = json.loads(self.storage_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        profiles: dict[str, AIManagerProfileView] = {}
+        for club_id, raw in payload.items():
+            if not isinstance(club_id, str) or not isinstance(raw, dict):
+                continue
+            try:
+                profiles[club_id] = AIManagerProfileView.model_validate(raw)
+            except Exception:
+                continue
+        return profiles
+
+    def _persist_profiles(self) -> None:
+        try:
+            self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                club_id: profile.model_dump(mode="json")
+                for club_id, profile in self.profiles.items()
+            }
+            self.storage_path.write_text(
+                json.dumps(payload, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+        except OSError:
+            return
 
 
 __all__ = ["AIManagerService"]

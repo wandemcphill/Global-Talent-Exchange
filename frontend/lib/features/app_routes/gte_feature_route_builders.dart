@@ -1464,7 +1464,7 @@ Widget _buildClubAiAssistantScreen(
                 await Future.wait<dynamic>(<Future<dynamic>>[
                   api.getMap(
                     '/api/ai-manager/profiles/${route.clubId}',
-                    auth: false,
+                    auth: true,
                   ),
                   api.post(
                     '/api/ai-manager/autopilot/run',
@@ -1472,17 +1472,17 @@ Widget _buildClubAiAssistantScreen(
                       clubId: route.clubId,
                       clubName: route.clubName ?? route.clubId,
                     ),
-                    auth: false,
+                    auth: true,
                   ),
                   api.post(
                     '/api/ai-manager/autopilot/live-decision',
                     body: _buildAiLiveDecisionRequest(clubId: route.clubId),
-                    auth: false,
+                    auth: true,
                   ),
                   api.post(
                     '/api/ai-manager/economy/reward-preview',
                     body: _buildAiRewardPreviewRequest(),
-                    auth: false,
+                    auth: true,
                   ),
                 ]);
             return <String, dynamic>{

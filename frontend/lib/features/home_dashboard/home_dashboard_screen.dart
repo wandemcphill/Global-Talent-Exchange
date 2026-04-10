@@ -841,6 +841,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       clubName: clubName,
       baseUrl: widget.apiBaseUrl,
       backendMode: widget.backendMode,
+      accessToken: widget.exchangeController.accessToken,
     );
   }
 

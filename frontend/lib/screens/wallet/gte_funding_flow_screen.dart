@@ -241,7 +241,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
         _session = session;
         _verification = null;
       });
-      if (session.paymentLink.trim().isNotEmpty) {
+      if (!session.mockMode && session.paymentLink.trim().isNotEmpty) {
         await _launchPaymentLink(session.paymentLink);
       }
     } catch (error) {
@@ -298,6 +298,14 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
         });
       }
     }
+  }
+
+  void _simulateMockFailure() {
+    setState(() {
+      _verification = null;
+      _error =
+          'Mock payment was marked as failed locally. No wallet credit was applied.';
+    });
   }
 
   Future<void> _createManualDeposit() async {
@@ -656,22 +664,42 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       spacing: 10,
                       runSpacing: 10,
                       children: <Widget>[
-                        FilledButton.tonalIcon(
-                          onPressed:
-                              _isVerifying
-                                  ? null
-                                  : () =>
-                                      _launchPaymentLink(session.paymentLink),
-                          icon: const Icon(Icons.open_in_browser_outlined),
-                          label: Text(
-                            'Open ${_providerLabel(session.provider)}',
+                        if (session.mockMode)
+                          FilledButton.tonalIcon(
+                            onPressed: _isVerifying ? null : _verifyTopUp,
+                            icon: const Icon(Icons.check_circle_outline),
+                            label: const Text('Simulate payment success'),
+                          )
+                        else
+                          FilledButton.tonalIcon(
+                            onPressed:
+                                _isVerifying
+                                    ? null
+                                    : () =>
+                                        _launchPaymentLink(session.paymentLink),
+                            icon: const Icon(Icons.open_in_browser_outlined),
+                            label: Text(
+                              'Open ${_providerLabel(session.provider)}',
+                            ),
                           ),
-                        ),
+                        if (session.mockMode)
+                          OutlinedButton.icon(
+                            onPressed:
+                                _isSubmitting || _isVerifying
+                                    ? null
+                                    : _simulateMockFailure,
+                            icon: const Icon(Icons.cancel_outlined),
+                            label: const Text('Simulate payment failure'),
+                          ),
                         OutlinedButton.icon(
                           onPressed: _isVerifying ? null : _verifyTopUp,
                           icon: const Icon(Icons.verified_outlined),
                           label: Text(
-                            _isVerifying ? 'Verifying...' : 'Verify payment',
+                            _isVerifying
+                                ? 'Verifying...'
+                                : session.mockMode
+                                ? 'Verify mock payment'
+                                : 'Verify payment',
                           ),
                         ),
                         OutlinedButton(

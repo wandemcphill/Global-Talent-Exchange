@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
+from app.club_identity.jerseys.sql_repository import SqlClubIdentityRepository
 from app.club_identity.jerseys.schemas import (
     BadgeProfileView,
     ClubIdentityProfilePatch,
@@ -14,15 +14,13 @@ from app.club_identity.jerseys.schemas import (
     JerseySetView,
 )
 from app.club_identity.jerseys.service import ClubIdentityService
+from app.db import get_session
 
 router = APIRouter(prefix="/api", tags=["club-identity-jerseys"])
 
-_repository = InMemoryClubIdentityRepository()
-_service = ClubIdentityService(_repository)
 
-
-def get_identity_service() -> ClubIdentityService:
-    return _service
+def get_identity_service(session=Depends(get_session)) -> ClubIdentityService:
+    return ClubIdentityService(SqlClubIdentityRepository(session))
 
 
 def _bad_request(error: ValueError) -> HTTPException:

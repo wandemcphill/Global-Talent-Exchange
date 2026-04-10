@@ -117,6 +117,7 @@ def create_competition(
 )
 def create_competition_alias(
     payload: CompetitionCreateRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     return _handle_competition_errors(lambda: orchestrator.create(payload))

@@ -27,7 +27,7 @@ from app.schemas.club_ops_responses import (
     ScoutingProspectDetailResponse,
     ScoutingProspectsResponse,
 )
-from app.schemas.scouting_core import ScoutAssignmentView, YouthProspectView
+from app.schemas.scouting_core import ScoutAssignmentView, YouthPipelineSnapshotView, YouthProspectView
 from app.schemas.sponsorship_core import ClubSponsorshipAssetView, ClubSponsorshipContractView
 from app.services.academy_service import AcademyService, get_academy_service
 from app.services.club_budget_service import ClubBudgetService, get_club_budget_service
@@ -35,6 +35,7 @@ from app.services.club_cashflow_service import ClubCashflowService, get_club_cas
 from app.services.club_finance_service import ClubFinanceService, get_club_finance_service
 from app.services.club_sponsorship_service import ClubSponsorshipService, get_club_sponsorship_service
 from app.services.scouting_service import ScoutingService, get_scouting_service
+from app.services.youth_pipeline_service import YouthPipelineService, get_youth_pipeline_service
 
 router = APIRouter(prefix="/api/clubs/{club_id}", tags=["club-ops"])
 
@@ -240,6 +241,18 @@ def get_scouting_overview(
     scouting_service: ScoutingService = Depends(get_scouting_service),
 ) -> ScoutingOverviewResponse:
     return scouting_service.get_overview(club_id)
+
+
+@router.get(
+    "/youth-pipeline",
+    response_model=YouthPipelineSnapshotView,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, OrganizationRole.SCOUT, forbidden_detail="club_access_required"))],
+)
+def get_youth_pipeline(
+    club_id: str,
+    youth_pipeline_service: YouthPipelineService = Depends(get_youth_pipeline_service),
+) -> YouthPipelineSnapshotView:
+    return youth_pipeline_service.get_snapshot(club_id)
 
 
 @router.post(

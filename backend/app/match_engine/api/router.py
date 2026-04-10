@@ -178,7 +178,7 @@ def _build_availability(record, timeline_events: list[MatchLiveFeedEventView]) -
     replay_available = record is not None
     highlights_available = bool(timeline_events)
     return MatchMediaAvailabilityView(
-        halftime_analytics_available=False,
+        halftime_analytics_available=replay_available,
         key_moments_available=highlights_available,
         highlights_available=highlights_available,
         replay_available=replay_available,

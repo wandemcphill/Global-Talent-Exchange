@@ -15,14 +15,18 @@ class GovernanceApi {
   factory GovernanceApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode =
+        mode == GteBackendMode.fixture
+            ? GteBackendMode.fixture
+            : GteBackendMode.live;
     return GovernanceApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _GovernanceFixtures.seed(),
     );

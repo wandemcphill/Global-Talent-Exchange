@@ -263,7 +263,7 @@ def check_redis(app: FastAPI) -> None:
 
 
 def _default_asgi_run_migration_check(settings: Settings) -> bool:
-    return settings.run_migration_check if settings.app_env.lower() != "production" else False
+    return settings.run_migration_check
 
 
 def _should_run_schema_check() -> bool:

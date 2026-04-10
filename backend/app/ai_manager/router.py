@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from app.auth.dependencies import get_current_user
 from app.ai_manager.schemas import (
     AIManagerProfileInput,
     AIManagerProfileView,
@@ -20,11 +23,11 @@ api_router = APIRouter(prefix="/api/ai-manager")
 
 
 def get_ai_manager_service(request: Request) -> AIManagerService:
-    service = getattr(request.app.state, "ai_manager_service", None)
-    if service is None:
-        service = AIManagerService()
-        request.app.state.ai_manager_service = service
-    return service
+    settings = getattr(request.app.state, "settings", None)
+    config_root = getattr(settings, "config_root", None)
+    if config_root is None:
+        return AIManagerService()
+    return AIManagerService(storage_path=Path(config_root) / "ai_manager_profiles.json")
 
 
 @legacy_router.put("/profiles/{club_id}", response_model=AIManagerProfileView)
@@ -33,6 +36,7 @@ def upsert_ai_manager_profile(
     club_id: str,
     payload: AIManagerProfileInput,
     service: AIManagerService = Depends(get_ai_manager_service),
+    _=Depends(get_current_user),
 ) -> AIManagerProfileView:
     if payload.club_id != club_id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Path club_id must match payload club_id.")
@@ -44,6 +48,7 @@ def upsert_ai_manager_profile(
 def read_ai_manager_profile(
     club_id: str,
     service: AIManagerService = Depends(get_ai_manager_service),
+    _=Depends(get_current_user),
 ) -> AIManagerProfileView:
     return service.get_profile(club_id)
 
@@ -53,6 +58,7 @@ def read_ai_manager_profile(
 def run_club_autopilot(
     payload: AutopilotRunRequest,
     service: AIManagerService = Depends(get_ai_manager_service),
+    _=Depends(get_current_user),
 ) -> AutopilotRunResponse:
     return service.run_autopilot(payload)
 
@@ -62,6 +68,7 @@ def run_club_autopilot(
 def preview_live_match_decision(
     payload: LiveMatchDecisionRequest,
     service: AIManagerService = Depends(get_ai_manager_service),
+    _=Depends(get_current_user),
 ) -> LiveDecisionResponse:
     return service.evaluate_live_decision(payload)
 
@@ -71,6 +78,7 @@ def preview_live_match_decision(
 def preview_ai_manager_reward_policy(
     payload: RewardPreviewRequest,
     service: AIManagerService = Depends(get_ai_manager_service),
+    _=Depends(get_current_user),
 ) -> RewardPreviewResponse:
     return service.preview_reward(payload)
 

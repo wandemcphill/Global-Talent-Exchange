@@ -39,24 +39,33 @@ class HybridEventPublisher:
     _seen_event_ids: deque[str] = field(init=False, default_factory=deque)
     _seen_lookup: set[str] = field(init=False, default_factory=set)
     _seen_lock: RLock = field(init=False, default_factory=RLock)
+    _disabled_warning_emitted: bool = field(init=False, default=False)
+    _publish_warning_emitted: bool = field(init=False, default=False)
 
     def __post_init__(self) -> None:
-        if self.redis_url:
-            try:
-                self._redis = Redis.from_url(self.redis_url, decode_responses=True)
-            except RedisError:
-                self._redis = None
+        if not self.redis_url:
+            self._warn_disabled("redis_url_missing")
+            return
+        try:
+            self._redis = Redis.from_url(self.redis_url, decode_responses=True)
+        except RedisError:
+            self._redis = None
+            self._warn_disabled("redis_connect_failed")
 
     def publish(self, event: DomainEvent) -> None:
         self._record_seen(event.event_id)
         self.delegate.publish(event)
         if self._redis is None:
+            self._warn_disabled("publisher_unavailable")
             return
         envelope = make_json_safe(event.envelope())
         envelope["fanout_instance_id"] = self.instance_id
         try:
             self._redis.publish(self.redis_channel, json.dumps(envelope))
         except RedisError:
+            if not self._publish_warning_emitted:
+                logger.warning("backbone.redis_fanout.publish_failed channel=%s", self.redis_channel)
+                self._publish_warning_emitted = True
             return
 
     def subscribe(self, subscriber: EventSubscriber) -> None:
@@ -71,7 +80,10 @@ class HybridEventPublisher:
         return self.delegate.subscriber_count
 
     def start(self) -> None:
-        if self._redis is None or self._listener_thread is not None:
+        if self._redis is None:
+            self._warn_disabled("listener_unavailable")
+            return
+        if self._listener_thread is not None:
             return
         self._stop_event.clear()
         self._listener_thread = Thread(
@@ -157,6 +169,12 @@ class HybridEventPublisher:
     def _has_seen(self, event_id: str) -> bool:
         with self._seen_lock:
             return event_id in self._seen_lookup
+
+    def _warn_disabled(self, reason: str) -> None:
+        if self._disabled_warning_emitted:
+            return
+        logger.warning("backbone.redis_fanout.disabled channel=%s reason=%s", self.redis_channel, reason)
+        self._disabled_warning_emitted = True
 
 
 def _optional_string(value: Any) -> str | None:

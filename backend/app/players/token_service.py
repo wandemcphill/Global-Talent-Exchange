@@ -11,6 +11,7 @@ from app.core.event_backbone import defer_event_publish_until_commit
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
+from app.models.admin_rules import AdminRewardRule
 from app.models.base import generate_uuid
 from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 from app.models.user import User, UserRole
@@ -43,6 +44,20 @@ class PlayerTokenMarketService:
         self.session = session
         self.wallet_service = wallet_service or WalletService(event_publisher=event_publisher)
         self.event_publisher = event_publisher or getattr(self.wallet_service, "event_publisher", InMemoryEventPublisher())
+
+    def _active_trading_fee_bps(self) -> int:
+        rule = self.session.scalar(
+            select(AdminRewardRule)
+            .where(AdminRewardRule.active.is_(True))
+            .order_by(AdminRewardRule.updated_at.desc())
+        )
+        return int(rule.trading_fee_bps if rule is not None else 2000)
+
+    def _trading_fee(self, gross_amount: Decimal) -> Decimal:
+        fee_bps = self._active_trading_fee_bps()
+        if fee_bps <= 0:
+            return Decimal("0.0000")
+        return self._amount((gross_amount * Decimal(fee_bps)) / Decimal("10000"))
 
     def issue_market(
         self,
@@ -201,25 +216,38 @@ class PlayerTokenMarketService:
 
         executed_price = self._amount(market.share_price_coin)
         gross_amount = self._amount(executed_price * Decimal(share_count))
+        fee_amount = self._trading_fee(gross_amount)
+        total_buyer_debit = self._amount(gross_amount + fee_amount)
         buyer_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.COIN)
         market_liquidity_account = self._ensure_player_share_liquidity_account(player_id)
+        trade_fee_account = self.wallet_service.ensure_trade_fee_account(self.session, LedgerUnit.COIN)
         try:
+            postings = [
+                LedgerPosting(
+                    account=buyer_account,
+                    amount=-total_buyer_debit,
+                    source_tag=LedgerSourceTag.PLAYER_SHARE_PURCHASE,
+                    transaction_type=LedgerTransactionType.TRADE_BUY,
+                ),
+                LedgerPosting(
+                    account=market_liquidity_account,
+                    amount=gross_amount,
+                    source_tag=LedgerSourceTag.PLAYER_SHARE_PURCHASE,
+                    transaction_type=LedgerTransactionType.TRADE_BUY,
+                ),
+            ]
+            if fee_amount > Decimal("0.0000"):
+                postings.append(
+                    LedgerPosting(
+                        account=trade_fee_account,
+                        amount=fee_amount,
+                        source_tag=LedgerSourceTag.PLAYER_SHARE_PURCHASE,
+                        transaction_type=LedgerTransactionType.TRADE_BUY,
+                    )
+                )
             entries = self.wallet_service.append_transaction(
                 self.session,
-                postings=[
-                    LedgerPosting(
-                        account=buyer_account,
-                        amount=-gross_amount,
-                        source_tag=LedgerSourceTag.PLAYER_SHARE_PURCHASE,
-                        transaction_type=LedgerTransactionType.TRADE_BUY,
-                    ),
-                    LedgerPosting(
-                        account=market_liquidity_account,
-                        amount=gross_amount,
-                        source_tag=LedgerSourceTag.PLAYER_SHARE_PURCHASE,
-                        transaction_type=LedgerTransactionType.TRADE_BUY,
-                    ),
-                ],
+                postings=postings,
                 reason=LedgerEntryReason.TRADE_SETTLEMENT,
                 source_tag=LedgerSourceTag.PLAYER_SHARE_PURCHASE,
                 reference=f"player-share-buy:{player_id}:{generate_uuid()}",
@@ -240,7 +268,7 @@ class PlayerTokenMarketService:
             previous_cost = self._amount(holding.average_cost_coin)
 
         new_share_count = previous_shares + int(share_count)
-        total_cost = (previous_cost * Decimal(previous_shares)) + gross_amount
+        total_cost = (previous_cost * Decimal(previous_shares)) + total_buyer_debit
         holding.share_count = new_share_count
         holding.average_cost_coin = self._amount(total_cost / Decimal(new_share_count))
         holding.metadata_json = {
@@ -265,6 +293,8 @@ class PlayerTokenMarketService:
             metadata_json={
                 "market_id": market.id,
                 "transaction_id": entries[0].transaction_id,
+                "fee_amount_coin": str(fee_amount),
+                "net_amount_coin": str(total_buyer_debit),
                 "circulating_shares": int(market.circulating_shares or 0),
                 "total_shares": int(market.total_shares or 0),
                 "previous_share_price_coin": str(previous_price),
@@ -288,6 +318,8 @@ class PlayerTokenMarketService:
             "holding": holding,
             "transaction_id": entries[0].transaction_id,
             "gross_amount_coin": gross_amount,
+            "fee_amount_coin": fee_amount,
+            "net_amount_coin": total_buyer_debit,
         }
 
     def sell_shares(self, *, actor: User, player_id: str, share_count: int) -> dict[str, Any]:
@@ -305,6 +337,8 @@ class PlayerTokenMarketService:
 
         executed_price = self._amount(market.share_price_coin)
         gross_amount = self._amount(executed_price * Decimal(share_count))
+        fee_amount = self._trading_fee(gross_amount)
+        net_seller_credit = self._amount(gross_amount - fee_amount)
         market_liquidity_account = self._ensure_player_share_liquidity_account(player_id)
         current_liquidity = self.wallet_service.get_balance(self.session, market_liquidity_account)
         if current_liquidity < gross_amount:
@@ -314,22 +348,33 @@ class PlayerTokenMarketService:
             )
 
         seller_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.COIN)
+        trade_fee_account = self.wallet_service.ensure_trade_fee_account(self.session, LedgerUnit.COIN)
+        postings = [
+            LedgerPosting(
+                account=seller_account,
+                amount=net_seller_credit,
+                source_tag=LedgerSourceTag.PLAYER_SHARE_SALE,
+                transaction_type=LedgerTransactionType.TRADE_SELL,
+            ),
+            LedgerPosting(
+                account=market_liquidity_account,
+                amount=-gross_amount,
+                source_tag=LedgerSourceTag.PLAYER_SHARE_SALE,
+                transaction_type=LedgerTransactionType.TRADE_SELL,
+            ),
+        ]
+        if fee_amount > Decimal("0.0000"):
+            postings.append(
+                LedgerPosting(
+                    account=trade_fee_account,
+                    amount=fee_amount,
+                    source_tag=LedgerSourceTag.PLAYER_SHARE_SALE,
+                    transaction_type=LedgerTransactionType.TRADE_SELL,
+                )
+            )
         entries = self.wallet_service.append_transaction(
             self.session,
-            postings=[
-                LedgerPosting(
-                    account=seller_account,
-                    amount=gross_amount,
-                    source_tag=LedgerSourceTag.PLAYER_SHARE_SALE,
-                    transaction_type=LedgerTransactionType.TRADE_SELL,
-                ),
-                LedgerPosting(
-                    account=market_liquidity_account,
-                    amount=-gross_amount,
-                    source_tag=LedgerSourceTag.PLAYER_SHARE_SALE,
-                    transaction_type=LedgerTransactionType.TRADE_SELL,
-                ),
-            ],
+            postings=postings,
             reason=LedgerEntryReason.TRADE_SETTLEMENT,
             source_tag=LedgerSourceTag.PLAYER_SHARE_SALE,
             reference=f"player-share-sell:{player_id}:{generate_uuid()}",
@@ -363,6 +408,8 @@ class PlayerTokenMarketService:
             metadata_json={
                 "market_id": market.id,
                 "transaction_id": entries[0].transaction_id,
+                "fee_amount_coin": str(fee_amount),
+                "net_amount_coin": str(net_seller_credit),
                 "circulating_shares": int(market.circulating_shares or 0),
                 "total_shares": int(market.total_shares or 0),
                 "previous_share_price_coin": str(previous_price),
@@ -386,6 +433,8 @@ class PlayerTokenMarketService:
             "holding": holding,
             "transaction_id": entries[0].transaction_id,
             "gross_amount_coin": gross_amount,
+            "fee_amount_coin": fee_amount,
+            "net_amount_coin": net_seller_credit,
         }
 
     def apply_performance_adjustment(

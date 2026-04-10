@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from types import SimpleNamespace
 
+from app.auth.dependencies import get_current_user
 from app.ai_manager.router import router
 
 
@@ -11,8 +13,10 @@ from app.ai_manager.router import router
 def client() -> TestClient:
     application = FastAPI()
     application.include_router(router)
+    application.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="user-1")
     with TestClient(application) as test_client:
         yield test_client
+    application.dependency_overrides.clear()
 
 
 def _profile(club_id: str) -> dict[str, object]:

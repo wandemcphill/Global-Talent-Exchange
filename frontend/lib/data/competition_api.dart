@@ -99,10 +99,12 @@ class CompetitionApi {
 
   Future<CompetitionSummary> createCompetition(CompetitionDraft draft) {
     return _withFallback<CompetitionSummary>(() async {
-      final Object? payload = await _sendBest('POST', const <String>[
-        '/api/competitions/create',
-        '/api/competitions',
-      ], body: draft.toCreateRequestJson());
+      final Object? payload = await _sendBest(
+        'POST',
+        const <String>['/api/competitions'],
+        body: draft.toCreateRequestJson(),
+        auth: true,
+      );
       return CompetitionSummary.fromJson(payload);
     }, () async => _fixtureStore.create(draft));
   }

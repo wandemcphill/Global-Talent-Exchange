@@ -2,6 +2,7 @@ import 'package:gte_frontend/data/club_ops_fixtures.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/models/academy_models.dart';
 import 'package:gte_frontend/models/club_finance_models.dart';
 import 'package:gte_frontend/models/player_avatar.dart';
@@ -13,20 +14,28 @@ class ClubOpsApi {
     required this.config,
     required this.transport,
     required this.latency,
+    required this.accessToken,
+    required this.authSessionStore,
   });
 
   final GteRepositoryConfig config;
   final GteTransport transport;
   final Duration latency;
+  final String? accessToken;
+  final AuthSessionStore? authSessionStore;
 
   factory ClubOpsApi.standard({
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.liveThenFixture,
+    String? accessToken,
+    AuthSessionStore? authSessionStore,
   }) {
     return ClubOpsApi._(
       config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
       transport: GteHttpTransport(),
       latency: const Duration(milliseconds: 200),
+      accessToken: accessToken,
+      authSessionStore: authSessionStore ?? SecureAuthSessionStore(),
     );
   }
 
@@ -39,6 +48,8 @@ class ClubOpsApi {
           GteRepositoryConfig(baseUrl: baseUrl, mode: GteBackendMode.fixture),
       transport: _UnsupportedClubOpsTransport(),
       latency: latency,
+      accessToken: null,
+      authSessionStore: null,
     );
   }
 
@@ -48,7 +59,7 @@ class ClubOpsApi {
   }) {
     return _withFallback<ClubFinanceSnapshot>(
       () async => _parseFinance(
-        _asMap(await _request('GET', '/api/clubs/$clubId/finance')),
+        _asMap(await _request('GET', '/api/clubs/$clubId/finances')),
         fallbackClubId: clubId,
         fallbackClubName: clubName,
       ),
@@ -128,7 +139,7 @@ class ClubOpsApi {
   Future<ClubOpsAdminSnapshot> fetchClubOpsAdmin() {
     return _withFallback<ClubOpsAdminSnapshot>(
       () async => _parseAdminSnapshot(
-        _asMap(await _request('GET', '/api/admin/club-ops')),
+        _asMap(await _request('GET', '/api/admin/clubs/ops-summary')),
       ),
       () async {
         await Future<void>.delayed(latency);
@@ -140,7 +151,7 @@ class ClubOpsApi {
   Future<ClubFinanceAnalyticsSnapshot> fetchFinanceAnalytics() {
     return _withFallback<ClubFinanceAnalyticsSnapshot>(
       () async => _parseFinanceAnalytics(
-        _asMap(await _request('GET', '/api/admin/club-ops/finance')),
+        _asMap(await _request('GET', '/api/admin/clubs/finance-analytics')),
       ),
       () async {
         await Future<void>.delayed(latency);
@@ -152,7 +163,7 @@ class ClubOpsApi {
   Future<SponsorshipAnalyticsSnapshot> fetchSponsorshipAnalytics() {
     return _withFallback<SponsorshipAnalyticsSnapshot>(
       () async => _parseSponsorshipAnalytics(
-        _asMap(await _request('GET', '/api/admin/club-ops/sponsorships')),
+        _asMap(await _request('GET', '/api/admin/clubs/sponsorship-analytics')),
       ),
       () async {
         await Future<void>.delayed(latency);
@@ -164,7 +175,7 @@ class ClubOpsApi {
   Future<AcademyAnalyticsSnapshot> fetchAcademyAnalytics() {
     return _withFallback<AcademyAnalyticsSnapshot>(
       () async => _parseAcademyAnalytics(
-        _asMap(await _request('GET', '/api/admin/club-ops/academy')),
+        _asMap(await _request('GET', '/api/admin/clubs/academy-analytics')),
       ),
       () async {
         await Future<void>.delayed(latency);
@@ -176,7 +187,7 @@ class ClubOpsApi {
   Future<ScoutingAnalyticsSnapshot> fetchScoutingAnalytics() {
     return _withFallback<ScoutingAnalyticsSnapshot>(
       () async => _parseScoutingAnalytics(
-        _asMap(await _request('GET', '/api/admin/club-ops/scouting')),
+        _asMap(await _request('GET', '/api/admin/clubs/scouting-analytics')),
       ),
       () async {
         await Future<void>.delayed(latency);
@@ -209,10 +220,7 @@ class ClubOpsApi {
   }
 
   bool _shouldFallback(GteApiException error) {
-    return error.supportsFixtureFallback ||
-        error.type == GteApiErrorType.notFound ||
-        error.type == GteApiErrorType.validation ||
-        error.type == GteApiErrorType.unauthorized;
+    return error.supportsFixtureFallback;
   }
 
   Future<Object?> _request(
@@ -221,11 +229,18 @@ class ClubOpsApi {
     Map<String, Object?> query = const <String, Object?>{},
   }) async {
     try {
+      final String? resolvedAccessToken = await _readAccessToken();
+      final Map<String, String> headers = <String, String>{
+        'Accept': 'application/json',
+      };
+      if (resolvedAccessToken != null && resolvedAccessToken.trim().isNotEmpty) {
+        headers['Authorization'] = 'Bearer ${resolvedAccessToken.trim()}';
+      }
       final GteTransportResponse response = await transport.send(
         GteTransportRequest(
           method: method,
           uri: config.uriFor(path, query),
-          headers: const <String, String>{'Accept': 'application/json'},
+          headers: headers,
         ),
       );
       if (response.statusCode >= 400) {
@@ -245,6 +260,24 @@ class ClubOpsApi {
         message: 'Unable to reach the club operations backend.',
         cause: error,
       );
+    }
+  }
+
+  Future<String?> _readAccessToken() async {
+    final String direct = accessToken?.trim() ?? '';
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+    final AuthSessionStore? store = authSessionStore;
+    if (store == null) {
+      return null;
+    }
+    try {
+      final session = await store.readSession();
+      final String resolved = session?.accessToken.trim() ?? '';
+      return resolved.isEmpty ? null : resolved;
+    } catch (_) {
+      return null;
     }
   }
 

@@ -20,9 +20,14 @@ class ClubController extends ChangeNotifier {
     String? clubName,
     required String baseUrl,
     GteBackendMode backendMode = GteBackendMode.live,
+    String? accessToken,
   }) {
     return ClubController(
-      api: ClubApi.standard(baseUrl: baseUrl, mode: backendMode),
+      api: ClubApi.standard(
+        baseUrl: baseUrl,
+        mode: backendMode,
+        accessToken: accessToken,
+      ),
       clubId: clubId,
       clubName: clubName,
     );

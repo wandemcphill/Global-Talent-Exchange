@@ -18,10 +18,10 @@ from app.manager_market.service import ManagerMarketService
 from app.models.user import User
 from app.wallets.service import WalletService
 
-router = APIRouter(prefix="/competitions", tags=["competitions"])
+router = APIRouter(prefix="/api/competitions", tags=["competitions"])
 
 
-@router.get("/{competition_id}", response_model=CompetitionView)
+@router.get("/records/{competition_id}", response_model=CompetitionView)
 def get_competition(
     competition_id: str,
     session: Session = Depends(get_session),

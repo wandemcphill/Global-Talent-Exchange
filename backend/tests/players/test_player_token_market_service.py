@@ -108,13 +108,15 @@ def test_player_share_market_lifecycle(session) -> None:
 
     assert market.total_shares == 1000
     assert purchase["gross_amount_coin"] == Decimal("0.7500")
+    assert purchase["fee_amount_coin"] == Decimal("0.1500")
+    assert purchase["net_amount_coin"] == Decimal("0.9000")
     assert purchase["transaction_id"]
     assert purchase["market"]["share_price_coin"] == Decimal("0.0769")
     assert repriced.share_price_coin == Decimal("0.0807")
     assert dividend["gross_amount_coin"] == Decimal("7.5000")
     assert holding is not None
     assert holding.share_count == 10
-    assert holding.average_cost_coin == Decimal("0.0750")
+    assert holding.average_cost_coin == Decimal("0.0900")
     assert holding.dividends_earned_coin == Decimal("7.5000")
     assert len(events) >= 4
 
@@ -153,6 +155,8 @@ def test_player_share_market_sell_flow_updates_holding_and_price(session) -> Non
 
     assert sale["transaction_id"]
     assert sale["gross_amount_coin"] > Decimal("0.0000")
+    assert sale["fee_amount_coin"] > Decimal("0.0000")
+    assert sale["net_amount_coin"] < sale["gross_amount_coin"]
     assert sale["market"]["circulating_shares"] == 6
     assert Decimal(str(sale["market"]["share_price_coin"])) < Decimal("0.5125")
     assert holding is not None

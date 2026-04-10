@@ -302,12 +302,14 @@ def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> 
         events = events_response.json()
 
         assert payload["gross_amount_coin"] == "5.0000"
+        assert payload["fee_amount_coin"] == "1.0000"
+        assert payload["net_amount_coin"] == "6.0000"
         assert payload["transaction_id"]
         assert payload["market"]["circulating_shares"] == 10
         assert payload["holding"]["share_count"] == 10
-        assert payload["holding"]["average_cost_coin"] == "0.5000"
+        assert payload["holding"]["average_cost_coin"] == "0.6000"
         assert holding.share_count == 10
-        assert holding.average_cost_coin == Decimal("0.5000")
+        assert holding.average_cost_coin == Decimal("0.6000")
         assert [item["event_type"] for item in events] == ["buy", "issue"]
         assert events[0]["metadata_json"]["transaction_id"] == payload["transaction_id"]
         assert events[0]["metadata_json"]["circulating_shares"] == 10
@@ -366,9 +368,12 @@ def test_market_buy_and_sell_endpoints_execute_share_trades(monkeypatch) -> None
         buy_payload = buy_response.json()
         sell_payload = sell_response.json()
         assert buy_payload["holding"]["share_count"] == 10
+        assert Decimal(buy_payload["fee_amount_coin"]) > Decimal("0.0000")
         assert sell_payload["holding"]["share_count"] == 6
         assert sell_payload["market"]["circulating_shares"] == 6
         assert Decimal(sell_payload["gross_amount_coin"]) > Decimal("0.0000")
+        assert Decimal(sell_payload["fee_amount_coin"]) > Decimal("0.0000")
+        assert Decimal(sell_payload["net_amount_coin"]) < Decimal(sell_payload["gross_amount_coin"])
     finally:
         session.close()
         engine.dispose()
