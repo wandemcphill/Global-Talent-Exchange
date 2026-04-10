@@ -1,3 +1,5 @@
+# ruff: noqa: F401, F811
+
 import app.ingestion.models  # noqa: F401
 import app.agents.models  # noqa: F401
 import app.global_memory.models  # noqa: F401
@@ -54,7 +56,13 @@ from app.models.club_dynasty_progress import ClubDynastyProgress
 from app.models.club_finance_account import ClubFinanceAccount
 from app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
 from app.models.club_hall_of_fame import ClubHallOfFameEntry
-from app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
+from app.models.club_infra import (
+    ClubFacility,
+    ClubStadium,
+    ClubSupporterHolding,
+    ClubSupporterToken,
+    SupporterTokenStatus,
+)
 from app.models.club_ownership import (
     ClubDividendDistribution,
     ClubGovernanceState,
@@ -223,7 +231,12 @@ from app.models.creator_fan_engagement import (
     CreatorTacticalAdviceStatus,
     CreatorTacticalAdviceType,
 )
-from app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier, CreatorLeagueTier
+from app.models.creator_league import (
+    CreatorLeagueConfig,
+    CreatorLeagueSeason,
+    CreatorLeagueSeasonTier,
+    CreatorLeagueTier,
+)
 from app.models.creator_application import CreatorApplication
 from app.models.creator_card import CreatorCard, CreatorCardListing, CreatorCardLoan, CreatorCardSale, CreatorCardSwap
 from app.models.creator_profile import CreatorProfile
@@ -246,7 +259,17 @@ from app.models.streamer_tournament import (
     StreamerTournamentStatus,
     StreamerTournamentType,
 )
-from app.models.community_engine import CompetitionWatchlist, LiveThread, LiveThreadMessage, MessageVisibility, PrivateMessage, PrivateMessageParticipant, PrivateMessageThread, PrivateMessageThreadStatus, LiveThreadStatus
+from app.models.community_engine import (
+    CompetitionWatchlist,
+    LiveThread,
+    LiveThreadMessage,
+    MessageVisibility,
+    PrivateMessage,
+    PrivateMessageParticipant,
+    PrivateMessageThread,
+    PrivateMessageThreadStatus,
+    LiveThreadStatus,
+)
 from app.models.discovery_engine import FeaturedRail, SavedSearch
 from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
 from app.models.economy_config import GiftCatalogItem, ServicePricingRule
@@ -499,15 +522,34 @@ from app.models.scouting_intelligence import (
     TalentDiscoveryBadge,
 )
 from app.models.revenue_share_rule import RevenueShareRule
-from app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, RiskSeverity, SystemEvent, SystemEventSeverity
+from app.models.risk_ops import (
+    AmlCase,
+    AuditLog,
+    FraudCase,
+    RiskCaseStatus,
+    RiskSeverity,
+    SystemEvent,
+    SystemEventSeverity,
+)
 from app.models.sponsorship_engine import SponsorshipLead
 from app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
-from app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus, GovernanceVote, GovernanceVoteChoice
+from app.models.governance_engine import (
+    GovernanceProposal,
+    GovernanceProposalScope,
+    GovernanceProposalStatus,
+    GovernanceVote,
+    GovernanceVoteChoice,
+)
 from app.models.creator_attention_earnings import ClipEarningEventType, ClipEarningsLog, CreatorWallet
 from app.models.creator_clip_monetization import CreatorClipRevenueAttribution
 from app.models.sponsored_clip import SponsoredClip
 from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
-from app.models.moderation_report import ModerationPriority, ModerationReport, ModerationReportStatus, ModerationResolutionAction
+from app.models.moderation_report import (
+    ModerationPriority,
+    ModerationReport,
+    ModerationReportStatus,
+    ModerationResolutionAction,
+)
 from app.models.history_engagement import (
     Achievement,
     AchievementCategory,
@@ -560,7 +602,15 @@ from app.models.national_team_tournament import (
 from app.models.story_feed import StoryFeedItem
 from app.models.youth_tournament import YouthTournament
 from app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
-from app.models.hosted_competition import CompetitionTemplate, HostedCompetitionSettlement, HostedCompetitionSettlementStatus, HostedCompetitionStanding, HostedCompetitionStatus, UserHostedCompetition, UserHostedCompetitionParticipant
+from app.models.hosted_competition import (
+    CompetitionTemplate,
+    HostedCompetitionSettlement,
+    HostedCompetitionSettlementStatus,
+    HostedCompetitionStanding,
+    HostedCompetitionStatus,
+    UserHostedCompetition,
+    UserHostedCompetitionParticipant,
+)
 from app.models.integrity import IntegrityIncident, IntegrityScore
 from app.models.wallet import (
     LedgerAccount,

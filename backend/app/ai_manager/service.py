@@ -232,9 +232,11 @@ class SquadPlanner:
             2,
         )
         rationale = [
-            "Defensive variant selected because the club is the underdog or the squad is carrying fatigue/injury pressure."
-            if defensive_variant
-            else "Attacking variant selected because the squad is stable enough to lean into the manager's style.",
+            (
+                "Defensive variant selected because the club is the underdog or the squad is carrying fatigue/injury pressure."
+                if defensive_variant
+                else "Attacking variant selected because the squad is stable enough to lean into the manager's style."
+            ),
             f"Opponent strength {payload.opponent.strength} vs club strength {payload.club_strength} shaped the initial formation choice.",
         ]
         if any(player.age <= 21 for _, player, _, _ in selected_rows) and profile.personality_profile.youth_bias >= 0.6:
@@ -244,7 +246,9 @@ class SquadPlanner:
             RoleAssignmentView(
                 slot=slot,
                 player_id=player.player_id,
-                role=self._role_for_slot(slot=slot, style=profile.tactical_style, aggression=profile.personality_profile.aggression),
+                role=self._role_for_slot(
+                    slot=slot, style=profile.tactical_style, aggression=profile.personality_profile.aggression
+                ),
             )
             for slot, player, _, _ in selected_rows
         ]
@@ -332,9 +336,15 @@ class SquadPlanner:
         return PressingIntensity.LOW
 
     def _tempo(self, *, profile: AIManagerProfileView, defensive_variant: bool) -> TempoSetting:
-        if defensive_variant and profile.tactical_style in {ManagerTacticalStyle.POSSESSION, ManagerTacticalStyle.BALANCED}:
+        if defensive_variant and profile.tactical_style in {
+            ManagerTacticalStyle.POSSESSION,
+            ManagerTacticalStyle.BALANCED,
+        }:
             return TempoSetting.SLOW
-        if profile.tactical_style in {ManagerTacticalStyle.DIRECT, ManagerTacticalStyle.COUNTER} or profile.risk_tolerance >= 0.65:
+        if (
+            profile.tactical_style in {ManagerTacticalStyle.DIRECT, ManagerTacticalStyle.COUNTER}
+            or profile.risk_tolerance >= 0.65
+        ):
             return TempoSetting.FAST
         return TempoSetting.NORMAL
 
@@ -374,7 +384,9 @@ class MatchDecisionEngine:
     def evaluate(self, *, profile: AIManagerProfileView, payload: LiveMatchDecisionRequest) -> LiveDecisionResponse:
         goal_difference = payload.score_for - payload.score_against
         xg_difference = payload.xg_for - payload.xg_against
-        average_fatigue = payload.average_fatigue if payload.average_fatigue is not None else 1.0 - payload.average_stamina
+        average_fatigue = (
+            payload.average_fatigue if payload.average_fatigue is not None else 1.0 - payload.average_stamina
+        )
         attack_bias = _clamp01(0.40 + (profile.personality_profile.aggression * 0.22) + (profile.risk_tolerance * 0.20))
         formation = STYLE_FORMATIONS[profile.tactical_style]["attacking"]
         tempo = TempoSetting.NORMAL
@@ -393,7 +405,9 @@ class MatchDecisionEngine:
             pressing = PressingIntensity.HIGH
             line_height = LineHeight.HIGH if payload.red_cards_for == 0 else LineHeight.MEDIUM
             directive = "go_all_out_attack"
-            rationale.append("Late scoreboard or xG deficit triggers an all-out attacking switch with a higher line and faster tempo.")
+            rationale.append(
+                "Late scoreboard or xG deficit triggers an all-out attacking switch with a higher line and faster tempo."
+            )
             if payload.substitutions_used < payload.maximum_substitutions:
                 trigger_substitution = True
                 substitution_reason = "Fresh attacking legs are needed while chasing the match."
@@ -405,14 +419,18 @@ class MatchDecisionEngine:
             pressing = PressingIntensity.LOW
             waste_time_behavior = True
             directive = "protect_lead"
-            rationale.append("Leading late in the match shifts the plan toward control, slower tempo, and game management.")
+            rationale.append(
+                "Leading late in the match shifts the plan toward control, slower tempo, and game management."
+            )
 
         if payload.possession_share < 0.40 and goal_difference <= 0:
             pressing = PressingIntensity.HIGH
             line_height = LineHeight.HIGH if payload.red_cards_for == 0 else line_height
             attack_bias = _clamp01(attack_bias + 0.08)
             directive = "increase_pressing" if directive == "hold_shape" else directive
-            rationale.append("Low possession share without a lead calls for a more aggressive press to recover territory.")
+            rationale.append(
+                "Low possession share without a lead calls for a more aggressive press to recover territory."
+            )
 
         if payload.red_cards_for > payload.red_cards_against:
             attack_bias = _clamp01(attack_bias - 0.12)
@@ -427,7 +445,9 @@ class MatchDecisionEngine:
             pressing = PressingIntensity.HIGH
             rationale.append("The opponent is down a player, so the team can pin them deeper and sustain pressure.")
 
-        if (payload.average_stamina <= 0.70 or average_fatigue >= 0.30) and payload.substitutions_used < payload.maximum_substitutions:
+        if (
+            payload.average_stamina <= 0.70 or average_fatigue >= 0.30
+        ) and payload.substitutions_used < payload.maximum_substitutions:
             trigger_substitution = True
             substitution_reason = substitution_reason or "Fatigue has moved beyond the safe workload threshold."
             rationale.append("Fatigue has crossed the substitution threshold and risks late-match drop-off.")
@@ -485,14 +505,18 @@ class FinanceController:
                 )
             )
 
-        if profile.financial_strategy is FinancialStrategy.SUSTAINABLE and finance.cash_balance <= int(finance.revenue * 0.25):
+        if profile.financial_strategy is FinancialStrategy.SUSTAINABLE and finance.cash_balance <= int(
+            finance.revenue * 0.25
+        ):
             actions.append(
                 FinanceActionView(
                     action="freeze_risky_spend",
                     rationale="Sustainable financial strategy keeps a cash buffer and blocks nonessential spend at the current reserve level.",
                 )
             )
-        elif profile.financial_strategy is FinancialStrategy.AGGRESSIVE and finance.cash_balance > int(finance.revenue * 0.40):
+        elif profile.financial_strategy is FinancialStrategy.AGGRESSIVE and finance.cash_balance > int(
+            finance.revenue * 0.40
+        ):
             actions.append(
                 FinanceActionView(
                     action="reinvest_in_squad",
@@ -538,7 +562,9 @@ class TransferAgent:
         actions: list[TransferRecommendationView] = []
         reserve_floor = int(finance.revenue * 0.15)
         average_wage = max(1.0, finance.wage_bill / max(len(squad), 1))
-        constrained_budget = finance.transfer_budget <= int(finance.revenue * 0.05) or finance.cash_balance < reserve_floor
+        constrained_budget = (
+            finance.transfer_budget <= int(finance.revenue * 0.05) or finance.cash_balance < reserve_floor
+        )
 
         affordable_targets: list[tuple[TransferTargetInput, float]] = []
         free_agents: list[tuple[TransferTargetInput, float]] = []
@@ -628,7 +654,9 @@ class TransferAgent:
         candidates = [
             player
             for player in squad
-            if player.age <= 20 and player.potential - player.rating >= 8 and player.availability is PlayerAvailability.AVAILABLE
+            if player.age <= 20
+            and player.potential - player.rating >= 8
+            and player.availability is PlayerAvailability.AVAILABLE
         ]
         if not candidates:
             return None
@@ -703,7 +731,11 @@ class TrainingOptimizer:
                 "medium" if player.injury_risk < 0.5 else "low",
                 "Poor form triggers a focused corrective block instead of generic training.",
             )
-        if player.age <= 20 and player.potential - player.rating >= 8 and profile.personality_profile.youth_bias >= 0.55:
+        if (
+            player.age <= 20
+            and player.potential - player.rating >= 8
+            and profile.personality_profile.youth_bias >= 0.55
+        ):
             return (
                 "development",
                 "high" if player.fatigue < 0.5 else "medium",
@@ -789,7 +821,9 @@ class AIManagerService:
             personality_profile=payload.personality_profile,
             tactical_style=payload.tactical_style,
             financial_strategy=payload.financial_strategy,
-            risk_tolerance=round(payload.risk_tolerance if payload.risk_tolerance is not None else payload.personality_profile.risk, 2),
+            risk_tolerance=round(
+                payload.risk_tolerance if payload.risk_tolerance is not None else payload.personality_profile.risk, 2
+            ),
         )
         self.profiles[payload.club_id] = profile
         self._persist_profiles()
@@ -804,7 +838,11 @@ class AIManagerService:
         return profile
 
     def run_autopilot(self, payload: AutopilotRunRequest) -> AutopilotRunResponse:
-        profile = self.upsert_profile(payload.manager_override) if payload.manager_override is not None else self.get_profile(payload.club_id)
+        profile = (
+            self.upsert_profile(payload.manager_override)
+            if payload.manager_override is not None
+            else self.get_profile(payload.club_id)
+        )
         activation = self.activation_policy.evaluate(user_last_active_hours=payload.user_last_active_hours)
         squad_plan = self.squad_planner.plan(profile=profile, payload=payload)
         finance_actions = self.finance_controller.review(profile=profile, squad=payload.squad, finance=payload.finance)
@@ -835,7 +873,11 @@ class AIManagerService:
         )
 
     def evaluate_live_decision(self, payload: LiveMatchDecisionRequest) -> LiveDecisionResponse:
-        profile = self.upsert_profile(payload.manager_override) if payload.manager_override is not None else self.get_profile(payload.club_id)
+        profile = (
+            self.upsert_profile(payload.manager_override)
+            if payload.manager_override is not None
+            else self.get_profile(payload.club_id)
+        )
         return self.match_decision_engine.evaluate(profile=profile, payload=payload)
 
     def preview_reward(self, payload: RewardPreviewRequest) -> RewardPreviewResponse:
@@ -898,10 +940,7 @@ class AIManagerService:
     def _persist_profiles(self) -> None:
         try:
             self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {
-                club_id: profile.model_dump(mode="json")
-                for club_id, profile in self.profiles.items()
-            }
+            payload = {club_id: profile.model_dump(mode="json") for club_id, profile in self.profiles.items()}
             self.storage_path.write_text(
                 json.dumps(payload, indent=2, sort_keys=True),
                 encoding="utf-8",

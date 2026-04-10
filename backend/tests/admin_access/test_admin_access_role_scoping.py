@@ -132,11 +132,7 @@ def test_god_mode_state_prefers_database_when_session_factory_exists(tmp_path: P
     state = service._load_state(app)
 
     with SessionLocal() as session:
-        row = session.scalar(
-            select(AdminRuntimeState).where(
-                AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY
-            )
-        )
+        row = session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY))
 
     assert state["roles"]["default_admin_role"] == SCOPED_ADMIN_ROLE_NAME
     assert row is not None

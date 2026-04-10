@@ -5,10 +5,7 @@ import '../gte_shell_theme.dart';
 import '../gte_surface_panel.dart';
 
 class ReferralFlagCard extends StatelessWidget {
-  const ReferralFlagCard({
-    super.key,
-    required this.flag,
-  });
+  const ReferralFlagCard({super.key, required this.flag});
 
   final ReferralFlagEntry flag;
 
@@ -28,20 +25,19 @@ class ReferralFlagCard extends StatelessWidget {
               ),
               Chip(
                 label: Text(flag.severity.label),
-                backgroundColor: _severityColor(flag.severity).withValues(alpha: 0.18),
+                backgroundColor: _severityColor(
+                  flag.severity,
+                ).withValues(alpha: 0.18),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            '${flag.creatorHandle} · ${flag.shareCode}',
+            '${flag.creatorHandle} - ${flag.shareCode}',
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
-          Text(
-            flag.riskSignal,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          Text(flag.riskSignal, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 8),
           Text(
             flag.qualifiedParticipationLabel,
@@ -55,9 +51,9 @@ class ReferralFlagCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             flag.recommendedAction,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: GteShellTheme.accentWarm,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: GteShellTheme.accentWarm),
           ),
         ],
       ),

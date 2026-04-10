@@ -53,6 +53,7 @@ def patch_club_identity(
 # POST /clubs/{club_id}/jerseys is provided by canonical_clubs router
 # This router provides legacy/custom jersey set operations and identity endpoints
 
+
 @router.patch("/clubs/{club_id}/jerseys", response_model=JerseySetView)
 def patch_club_jerseys(
     club_id: str,

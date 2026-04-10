@@ -189,11 +189,7 @@ def _build_cabinet(
 
 def _filtered_trophies(*, session: Session, club_id: str, team_scope: str | None) -> list[Any]:
     _cabinet, trophies = ClubTrophyService(session).get_trophy_cabinet(club_id)
-    return [
-        trophy
-        for trophy in trophies
-        if team_scope in (None, "", _team_scope(trophy))
-    ]
+    return [trophy for trophy in trophies if team_scope in (None, "", _team_scope(trophy))]
 
 
 def _require_club(session: Session, club_id: str) -> ClubProfile:
@@ -213,7 +209,10 @@ def _to_win_view(club: ClubProfile, trophy: Any) -> TrophyWinView:
         trophy_name=str(trophy.trophy_name),
         season_label=str(trophy.season_label),
         competition_region=str(metadata.get("competition_region") or trophy.competition_source),
-        competition_tier=str(metadata.get("competition_tier") or ("elite" if _is_elite(trophy) else "major" if _is_major(trophy) else "standard")),
+        competition_tier=str(
+            metadata.get("competition_tier")
+            or ("elite" if _is_elite(trophy) else "major" if _is_major(trophy) else "standard")
+        ),
         final_result_summary=str(metadata.get("final_result_summary") or f"{club.club_name} won {trophy.trophy_name}."),
         earned_at=trophy.awarded_at,
         captain_name=_optional_string(metadata.get("captain_name")),

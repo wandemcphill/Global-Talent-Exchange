@@ -43,13 +43,13 @@ class PlayerTokenMarketService:
     ) -> None:
         self.session = session
         self.wallet_service = wallet_service or WalletService(event_publisher=event_publisher)
-        self.event_publisher = event_publisher or getattr(self.wallet_service, "event_publisher", InMemoryEventPublisher())
+        self.event_publisher = event_publisher or getattr(
+            self.wallet_service, "event_publisher", InMemoryEventPublisher()
+        )
 
     def _active_trading_fee_bps(self) -> int:
         rule = self.session.scalar(
-            select(AdminRewardRule)
-            .where(AdminRewardRule.active.is_(True))
-            .order_by(AdminRewardRule.updated_at.desc())
+            select(AdminRewardRule).where(AdminRewardRule.active.is_(True)).order_by(AdminRewardRule.updated_at.desc())
         )
         return int(rule.trading_fee_bps if rule is not None else 2000)
 
@@ -449,7 +449,9 @@ class PlayerTokenMarketService:
         market = self.get_market(player_id=player_id)
         normalized_multiplier = self._amount(multiplier)
         if normalized_multiplier <= Decimal("0.0000"):
-            raise PlayerTokenMarketError("Performance multiplier must be greater than zero.", reason="multiplier_invalid")
+            raise PlayerTokenMarketError(
+                "Performance multiplier must be greater than zero.", reason="multiplier_invalid"
+            )
 
         reference_price = self._amount(market.share_price_coin)
         proposed_price = self._amount(reference_price * normalized_multiplier)
@@ -492,11 +494,15 @@ class PlayerTokenMarketService:
             ).all()
         )
         if not holdings:
-            raise PlayerTokenMarketError("No shareholders are available for dividend distribution.", reason="no_shareholders")
+            raise PlayerTokenMarketError(
+                "No shareholders are available for dividend distribution.", reason="no_shareholders"
+            )
 
         total_shares = sum(int(item.share_count or 0) for item in holdings)
         if total_shares <= 0:
-            raise PlayerTokenMarketError("No circulating shares are available for dividend distribution.", reason="no_circulation")
+            raise PlayerTokenMarketError(
+                "No circulating shares are available for dividend distribution.", reason="no_circulation"
+            )
 
         source_account = self._ensure_player_share_liquidity_account(player_id)
         payouts: list[tuple[PlayerShareHolding, Decimal]] = []

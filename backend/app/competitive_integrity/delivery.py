@@ -19,9 +19,7 @@ class DeliveryAttempt:
 
 class PushDeliveryGateway:
     def send(self, session: Session, *, user: User, payload: dict[str, object]) -> DeliveryAttempt:
-        preference = session.scalar(
-            select(NotificationPreference).where(NotificationPreference.user_id == user.id)
-        )
+        preference = session.scalar(select(NotificationPreference).where(NotificationPreference.user_id == user.id))
         if preference is not None and not preference.allow_competition:
             return DeliveryAttempt(success=False, failure_reason="push_opted_out")
         subscription = session.scalar(
@@ -31,7 +29,9 @@ class PushDeliveryGateway:
                 NotificationSubscription.active.is_(True),
             )
         )
-        token = None if subscription is None else str((subscription.metadata_json or {}).get("device_token") or "").strip()
+        token = (
+            None if subscription is None else str((subscription.metadata_json or {}).get("device_token") or "").strip()
+        )
         if not token:
             return DeliveryAttempt(success=False, failure_reason="missing_fcm_token")
         if not os.getenv("GTE_FCM_SERVER_KEY", "").strip():
@@ -43,14 +43,13 @@ class SmsDeliveryGateway:
     def send(self, _session: Session, *, user: User, payload: dict[str, object]) -> DeliveryAttempt:
         if not (user.phone_number or "").strip():
             return DeliveryAttempt(success=False, failure_reason="missing_phone_number")
-        provider = "termii" if str(payload.get("preferred_sms_provider") or "").strip().lower() == "termii" else "twilio"
+        provider = (
+            "termii" if str(payload.get("preferred_sms_provider") or "").strip().lower() == "termii" else "twilio"
+        )
         if provider == "termii":
             if not os.getenv("GTE_TERMII_API_KEY", "").strip():
                 return DeliveryAttempt(success=False, failure_reason="sms_provider_unconfigured")
-        elif not (
-            os.getenv("GTE_TWILIO_ACCOUNT_SID", "").strip()
-            and os.getenv("GTE_TWILIO_AUTH_TOKEN", "").strip()
-        ):
+        elif not (os.getenv("GTE_TWILIO_ACCOUNT_SID", "").strip() and os.getenv("GTE_TWILIO_AUTH_TOKEN", "").strip()):
             return DeliveryAttempt(success=False, failure_reason="sms_provider_unconfigured")
         return DeliveryAttempt(success=False, failure_reason="sms_delivery_not_integrated")
 

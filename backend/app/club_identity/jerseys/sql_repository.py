@@ -41,11 +41,7 @@ class SqlClubIdentityRepository:
         palette_payload = self._as_dict(metadata.get("color_palette"))
         badge_payload = self._as_dict(metadata.get("badge_profile"))
         jersey_payload = self._as_dict(metadata.get("jersey_set"))
-        short_code = str(
-            metadata.get("short_club_code")
-            or club.short_name
-            or self._build_short_code(club.club_name)
-        )
+        short_code = str(metadata.get("short_club_code") or club.short_name or self._build_short_code(club.club_name))
         palette = ColorPaletteProfile(
             palette_name=str(palette_payload.get("palette_name") or "club"),
             primary_color=str(palette_payload.get("primary_color") or club.primary_color),
@@ -241,9 +237,7 @@ class SqlClubIdentityRepository:
         return theme
 
     def _derive_trophy_star_count(self, club_id: str) -> int:
-        count = len(
-            self.session.scalars(select(ClubTrophy.id).where(ClubTrophy.club_id == club_id)).all()
-        )
+        count = len(self.session.scalars(select(ClubTrophy.id).where(ClubTrophy.club_id == club_id)).all())
         return min(10, count)
 
     def _legacy_metadata(self, theme: ClubIdentityTheme | None) -> dict[str, Any]:
@@ -264,24 +258,63 @@ class SqlClubIdentityRepository:
     ) -> JerseyVariant:
         metadata = {**stored, **(design.metadata_json or {})} if design is not None else dict(stored)
         defaults = {
-            JerseyType.HOME: (palette.primary_color, palette.secondary_color, palette.accent_color, "crew", "short", "solid"),
-            JerseyType.AWAY: (palette.secondary_color, palette.primary_color, palette.accent_color, "v_neck", "raglan", "sash"),
-            JerseyType.THIRD: (palette.accent_color, palette.primary_color, palette.secondary_color, "crew", "short", "hoops"),
+            JerseyType.HOME: (
+                palette.primary_color,
+                palette.secondary_color,
+                palette.accent_color,
+                "crew",
+                "short",
+                "solid",
+            ),
+            JerseyType.AWAY: (
+                palette.secondary_color,
+                palette.primary_color,
+                palette.accent_color,
+                "v_neck",
+                "raglan",
+                "sash",
+            ),
+            JerseyType.THIRD: (
+                palette.accent_color,
+                palette.primary_color,
+                palette.secondary_color,
+                "crew",
+                "short",
+                "hoops",
+            ),
             JerseyType.GOALKEEPER: ("#111827", "#F8FAFC", palette.accent_color, "crew", "long", "solid"),
         }[slot]
-        pattern_value = str(metadata.get("pattern_type") or design.base_template_id if design is not None else defaults[5])
+        pattern_value = str(
+            metadata.get("pattern_type") or design.base_template_id if design is not None else defaults[5]
+        )
         if pattern_value not in PatternType._value2member_map_:
             pattern_value = defaults[5]
         return JerseyVariant(
             jersey_type=slot,
-            primary_color=str(design.primary_color if design is not None else stored.get("primary_color") or defaults[0]),
-            secondary_color=str(design.secondary_color if design is not None else stored.get("secondary_color") or defaults[1]),
+            primary_color=str(
+                design.primary_color if design is not None else stored.get("primary_color") or defaults[0]
+            ),
+            secondary_color=str(
+                design.secondary_color if design is not None else stored.get("secondary_color") or defaults[1]
+            ),
             accent_color=str(design.trim_color if design is not None else stored.get("accent_color") or defaults[2]),
             collar_style=CollarStyle(str(metadata.get("collar_style") or defaults[3])),
-            sleeve_style=SleeveStyle(str(design.sleeve_style if design is not None and design.sleeve_style else metadata.get("sleeve_style") or defaults[4])),
+            sleeve_style=SleeveStyle(
+                str(
+                    design.sleeve_style
+                    if design is not None and design.sleeve_style
+                    else metadata.get("sleeve_style") or defaults[4]
+                )
+            ),
             pattern_type=PatternType(pattern_value),
-            badge_placement=BadgePlacement(str(design.crest_placement if design is not None else metadata.get("badge_placement") or "left_chest")),
-            front_text=str(design.motto_text if design is not None and design.motto_text else metadata.get("front_text") or front_text),
+            badge_placement=BadgePlacement(
+                str(design.crest_placement if design is not None else metadata.get("badge_placement") or "left_chest")
+            ),
+            front_text=str(
+                design.motto_text
+                if design is not None and design.motto_text
+                else metadata.get("front_text") or front_text
+            ),
             shorts_color=str(metadata.get("shorts_color") or palette.shorts_color),
             socks_color=str(metadata.get("socks_color") or palette.socks_color),
             theme_tags=tuple(str(tag) for tag in (metadata.get("theme_tags") or self._theme_tags(slot))),

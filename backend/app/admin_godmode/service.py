@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -14,9 +13,17 @@ from sqlalchemy.orm import Session
 from app.models.base import generate_uuid, utcnow
 from app.models.admin_runtime_state import AdminRuntimeState
 from app.models.user import User
-from app.models.wallet import LedgerAccount, LedgerSourceTag, LedgerUnit, PaymentEvent, PaymentStatus, PayoutRequest, PayoutStatus
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerSourceTag,
+    LedgerUnit,
+    PaymentEvent,
+    PaymentStatus,
+    PayoutRequest,
+    PayoutStatus,
+)
 from app.players.read_models import PlayerSummaryReadModel
-from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.wallets.service import LedgerPosting, WalletService
 from app.observability.audit_service import AuditTrailService
 
 from .schemas import (
@@ -184,8 +191,12 @@ class AdminGodModeService:
             profile=profile,
             commissions=CommissionSettingsView.model_validate(state["commissions"]),
             payment_rails=[PaymentRailView.model_validate(item) for item in state["payment_rails"]],
-            withdrawal_controls=WithdrawalControlView.model_validate(state.get("withdrawal_controls") or DEFAULT_WITHDRAWAL_CONTROLS),
-            competition_controls=CompetitionControlView.model_validate(state.get("competition_controls") or DEFAULT_COMPETITION_CONTROLS),
+            withdrawal_controls=WithdrawalControlView.model_validate(
+                state.get("withdrawal_controls") or DEFAULT_WITHDRAWAL_CONTROLS
+            ),
+            competition_controls=CompetitionControlView.model_validate(
+                state.get("competition_controls") or DEFAULT_COMPETITION_CONTROLS
+            ),
             treasury=self.get_treasury_summary(app, session),
             withdrawals=self.list_withdrawals(session),
             withdrawal_summary=self.get_withdrawal_summary(app, session),
@@ -222,7 +233,9 @@ class AdminGodModeService:
         state = self._load_state(app)
         return CommissionSettingsView.model_validate(state["commissions"])
 
-    def update_commissions(self, app: FastAPI, actor: User, payload: CommissionSettingsUpdate) -> CommissionSettingsView:
+    def update_commissions(
+        self, app: FastAPI, actor: User, payload: CommissionSettingsUpdate
+    ) -> CommissionSettingsView:
         state = self._load_state(app)
         profile = self.resolve_profile(actor, state)
         self._assert_has_permission(profile, "manage_commissions")
@@ -291,7 +304,9 @@ class AdminGodModeService:
         state = self._load_state(app)
         return WithdrawalControlView.model_validate(state.get("withdrawal_controls") or DEFAULT_WITHDRAWAL_CONTROLS)
 
-    def update_withdrawal_controls(self, app: FastAPI, actor: User, payload: WithdrawalControlUpdate) -> WithdrawalControlView:
+    def update_withdrawal_controls(
+        self, app: FastAPI, actor: User, payload: WithdrawalControlUpdate
+    ) -> WithdrawalControlView:
         state = self._load_state(app)
         profile = self.resolve_profile(actor, state)
         self._assert_has_permission(profile, "manage_payment_rails")
@@ -321,7 +336,9 @@ class AdminGodModeService:
         state = self._load_state(app)
         return CompetitionControlView.model_validate(state.get("competition_controls") or DEFAULT_COMPETITION_CONTROLS)
 
-    def update_competition_controls(self, app: FastAPI, actor: User, payload: CompetitionControlUpdate) -> CompetitionControlView:
+    def update_competition_controls(
+        self, app: FastAPI, actor: User, payload: CompetitionControlUpdate
+    ) -> CompetitionControlView:
         state = self._load_state(app)
         profile = self.resolve_profile(actor, state)
         self._assert_has_permission(profile, "manage_commissions")
@@ -341,9 +358,7 @@ class AdminGodModeService:
 
     def get_treasury_summary(self, app: FastAPI, session: Session) -> TreasurySummaryView:
         platform_accounts = session.scalars(
-            select(LedgerAccount)
-            .where(LedgerAccount.code.like("platform:%"))
-            .order_by(LedgerAccount.code.asc())
+            select(LedgerAccount).where(LedgerAccount.code.like("platform:%")).order_by(LedgerAccount.code.asc())
         ).all()
         balances = [
             TreasuryBalanceView(
@@ -354,9 +369,7 @@ class AdminGodModeService:
             )
             for account in platform_accounts
         ]
-        inventory_accounts = [
-            account for account in platform_accounts if account.code.startswith("platform:position:")
-        ]
+        inventory_accounts = [account for account in platform_accounts if account.code.startswith("platform:position:")]
         inventory = [
             LiquidityInventoryView(
                 player_id=account.code.split(":")[2],
@@ -369,7 +382,11 @@ class AdminGodModeService:
             session.scalars(select(PaymentEvent.id).where(PaymentEvent.status == PaymentStatus.VERIFIED)).all()
         )
         pending_payout_count = len(
-            session.scalars(select(PayoutRequest.id).where(PayoutRequest.status.in_((PayoutStatus.REQUESTED, PayoutStatus.REVIEWING, PayoutStatus.HELD)))).all()
+            session.scalars(
+                select(PayoutRequest.id).where(
+                    PayoutRequest.status.in_((PayoutStatus.REQUESTED, PayoutStatus.REVIEWING, PayoutStatus.HELD))
+                )
+            ).all()
         )
         processing_payout_count = len(
             session.scalars(select(PayoutRequest.id).where(PayoutRequest.status == PayoutStatus.PROCESSING)).all()
@@ -389,7 +406,12 @@ class AdminGodModeService:
         queued_amount = Decimal("0.0000")
         for item in requests:
             counts[item.status.value] = counts.get(item.status.value, 0) + 1
-            if item.status in {PayoutStatus.REQUESTED, PayoutStatus.REVIEWING, PayoutStatus.HELD, PayoutStatus.PROCESSING}:
+            if item.status in {
+                PayoutStatus.REQUESTED,
+                PayoutStatus.REVIEWING,
+                PayoutStatus.HELD,
+                PayoutStatus.PROCESSING,
+            }:
                 queued_amount += Decimal(item.amount)
         dashboard = self.get_treasury_dashboard(app, session)
         immediate = dashboard.immediate_withdrawable_manager_trade_credits
@@ -415,19 +437,36 @@ class AdminGodModeService:
             deposits_enabled_count=sum(1 for rail in rails if rail.get("deposits_enabled")),
             withdrawals_enabled_count=sum(1 for rail in rails if rail.get("withdrawals_enabled")),
             paused_providers=sorted(str(rail.get("provider")) for rail in rails if not rail.get("is_live")),
-            maintenance_providers=sorted(str(rail.get("provider")) for rail in rails if rail.get("maintenance_message")),
+            maintenance_providers=sorted(
+                str(rail.get("provider")) for rail in rails if rail.get("maintenance_message")
+            ),
         )
 
     def get_treasury_dashboard(self, app: FastAPI, session: Session) -> TreasuryDashboardView:
         manager_state = self._load_manager_market_state(app)
-        platform_credit = self.wallet_service.get_balance(session, self.wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT))
-        platform_coin = self.wallet_service.get_balance(session, self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN))
-        sink_credit = self.wallet_service.get_balance(session, self._ensure_treasury_sink_account(session, LedgerUnit.CREDIT))
-        sink_coin = self.wallet_service.get_balance(session, self._ensure_treasury_sink_account(session, LedgerUnit.COIN))
+        platform_credit = self.wallet_service.get_balance(
+            session, self.wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+        )
+        platform_coin = self.wallet_service.get_balance(
+            session, self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+        )
+        sink_credit = self.wallet_service.get_balance(
+            session, self._ensure_treasury_sink_account(session, LedgerUnit.CREDIT)
+        )
+        sink_coin = self.wallet_service.get_balance(
+            session, self._ensure_treasury_sink_account(session, LedgerUnit.COIN)
+        )
         trade_history = list(manager_state.get("trade_history") or [])
         gross_total = sum((Decimal(str(item.get("gross_credits") or 0)) for item in trade_history), Decimal("0.0000"))
         fee_total = sum((Decimal(str(item.get("fee_credits") or 0)) for item in trade_history), Decimal("0.0000"))
-        immediate_total = sum((Decimal(str(item.get("seller_net_credits") or 0)) for item in trade_history if bool(item.get("immediate_withdrawal_eligible", True))), Decimal("0.0000"))
+        immediate_total = sum(
+            (
+                Decimal(str(item.get("seller_net_credits") or 0))
+                for item in trade_history
+                if bool(item.get("immediate_withdrawal_eligible", True))
+            ),
+            Decimal("0.0000"),
+        )
         return TreasuryDashboardView(
             platform_credit_balance=platform_credit,
             platform_coin_balance=platform_coin,
@@ -436,17 +475,44 @@ class AdminGodModeService:
             manager_trade_volume_credits=gross_total.quantize(Decimal("0.0001")),
             manager_trade_fee_revenue_credits=fee_total.quantize(Decimal("0.0001")),
             immediate_withdrawable_manager_trade_credits=immediate_total.quantize(Decimal("0.0001")),
-            open_manager_listing_count=sum(1 for item in manager_state.get("listings", []) if item.get("status") == "open"),
+            open_manager_listing_count=sum(
+                1 for item in manager_state.get("listings", []) if item.get("status") == "open"
+            ),
             settled_manager_trade_count=len(trade_history),
         )
 
     def list_high_risk_actions(self, app: FastAPI) -> list[HighRiskActionView]:
         return [
-            HighRiskActionView(action_key="liquidity_intervention", label="Liquidity desk intervention", required_permission="manage_liquidity_desk", integrity_note="Requires bounded reference pricing and an explicit confirmation phrase."),
-            HighRiskActionView(action_key="payment_rail_toggle", label="Payment rail toggle", required_permission="manage_payment_rails", integrity_note="Pausing live rails should always carry a maintenance message and an audit reason."),
-            HighRiskActionView(action_key="withdrawal_status_change", label="Withdrawal status change", required_permission="manage_withdrawals", integrity_note="Completion must pass through processing to reduce accidental settlement errors."),
-            HighRiskActionView(action_key="treasury_withdrawal", label="Treasury withdrawal", required_permission="manage_treasury_withdrawals", integrity_note="Requires a destination reference, clear reason, and a confirmation phrase."),
-            HighRiskActionView(action_key="commission_change", label="Commission policy change", required_permission="manage_commissions", integrity_note="Reason is mandatory so fee policy changes remain traceable."),
+            HighRiskActionView(
+                action_key="liquidity_intervention",
+                label="Liquidity desk intervention",
+                required_permission="manage_liquidity_desk",
+                integrity_note="Requires bounded reference pricing and an explicit confirmation phrase.",
+            ),
+            HighRiskActionView(
+                action_key="payment_rail_toggle",
+                label="Payment rail toggle",
+                required_permission="manage_payment_rails",
+                integrity_note="Pausing live rails should always carry a maintenance message and an audit reason.",
+            ),
+            HighRiskActionView(
+                action_key="withdrawal_status_change",
+                label="Withdrawal status change",
+                required_permission="manage_withdrawals",
+                integrity_note="Completion must pass through processing to reduce accidental settlement errors.",
+            ),
+            HighRiskActionView(
+                action_key="treasury_withdrawal",
+                label="Treasury withdrawal",
+                required_permission="manage_treasury_withdrawals",
+                integrity_note="Requires a destination reference, clear reason, and a confirmation phrase.",
+            ),
+            HighRiskActionView(
+                action_key="commission_change",
+                label="Commission policy change",
+                required_permission="manage_commissions",
+                integrity_note="Reason is mandatory so fee policy changes remain traceable.",
+            ),
         ]
 
     def available_audit_event_types(self, app: FastAPI) -> list[str]:
@@ -657,9 +723,16 @@ class AdminGodModeService:
         next_status = PayoutStatus(payload.status)
         if request.status == PayoutStatus.COMPLETED:
             raise GodModeError("Completed withdrawals are append-only and cannot be moved again.")
-        if next_status == PayoutStatus.COMPLETED and request.status not in {PayoutStatus.PROCESSING, PayoutStatus.REVIEWING}:
+        if next_status == PayoutStatus.COMPLETED and request.status not in {
+            PayoutStatus.PROCESSING,
+            PayoutStatus.REVIEWING,
+        }:
             raise GodModeError("Withdrawal must be in processing or reviewing before it can be completed.")
-        if next_status == PayoutStatus.PROCESSING and request.status not in {PayoutStatus.REQUESTED, PayoutStatus.REVIEWING, PayoutStatus.HELD}:
+        if next_status == PayoutStatus.PROCESSING and request.status not in {
+            PayoutStatus.REQUESTED,
+            PayoutStatus.REVIEWING,
+            PayoutStatus.HELD,
+        }:
             raise GodModeError("Only queued withdrawals can enter processing.")
         previous_status = request.status
         request.status = next_status
@@ -671,7 +744,10 @@ class AdminGodModeService:
             self.wallet_service.complete_payout_request(session, request, actor=actor)
         elif next_status in {PayoutStatus.REJECTED, PayoutStatus.FAILED} and request.settlement_transaction_id is None:
             self.wallet_service.release_payout_request(session, request, actor=actor, failure_reason=payload.status)
-        elif previous_status in {PayoutStatus.REJECTED, PayoutStatus.FAILED} and next_status not in {PayoutStatus.REJECTED, PayoutStatus.FAILED}:
+        elif previous_status in {PayoutStatus.REJECTED, PayoutStatus.FAILED} and next_status not in {
+            PayoutStatus.REJECTED,
+            PayoutStatus.FAILED,
+        }:
             raise GodModeError("Rejected or failed withdrawals are terminal after funds are released.")
         session.flush()
         self._append_audit(
@@ -750,7 +826,9 @@ class AdminGodModeService:
         )
         return TreasuryWithdrawalView.model_validate(record)
 
-    def list_audit_events(self, app: FastAPI, limit: int = 30, query: str | None = None, event_type: str | None = None) -> list[AuditEventView]:
+    def list_audit_events(
+        self, app: FastAPI, limit: int = 30, query: str | None = None, event_type: str | None = None
+    ) -> list[AuditEventView]:
         path = self._audit_path(app)
         if not path.exists():
             return []
@@ -864,7 +942,9 @@ class AdminGodModeService:
         session_factory = self._session_factory(app)
         if session_factory is not None:
             with session_factory() as session:
-                row = session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY))
+                row = session.scalar(
+                    select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY)
+                )
                 if row is None:
                     seeded = self._load_file_state(app) or self._default_state()
                     normalized = self._normalize_state(seeded)
@@ -938,10 +1018,7 @@ class AdminGodModeService:
         return normalized
 
     def _normalize_roles_block(self, roles_block: dict[str, Any]) -> dict[str, Any]:
-        available_roles = {
-            role_name: list(permissions)
-            for role_name, permissions in DEFAULT_ROLE_PERMISSIONS.items()
-        }
+        available_roles = {role_name: list(permissions) for role_name, permissions in DEFAULT_ROLE_PERMISSIONS.items()}
         for role_name, permissions in dict(roles_block.get("available_roles") or {}).items():
             available_roles[str(role_name)] = [str(item) for item in permissions or []]
         available_roles.setdefault(SCOPED_ADMIN_ROLE_NAME, [])
@@ -956,9 +1033,12 @@ class AdminGodModeService:
         for assignment in roles_block.get("assignments") or []:
             if not isinstance(assignment, dict):
                 continue
-            role_name = str(
-                assignment.get("role_name") or SCOPED_ADMIN_ROLE_NAME,
-            ).strip() or SCOPED_ADMIN_ROLE_NAME
+            role_name = (
+                str(
+                    assignment.get("role_name") or SCOPED_ADMIN_ROLE_NAME,
+                ).strip()
+                or SCOPED_ADMIN_ROLE_NAME
+            )
             if role_name not in available_roles:
                 role_name = SCOPED_ADMIN_ROLE_NAME
             assignments.append(
@@ -966,16 +1046,10 @@ class AdminGodModeService:
                     "subject_key": str(assignment.get("subject_key") or "").strip(),
                     "role_name": role_name,
                     "permissions": [
-                        str(item).strip()
-                        for item in assignment.get("permissions") or []
-                        if str(item).strip()
+                        str(item).strip() for item in assignment.get("permissions") or [] if str(item).strip()
                     ],
                     "is_enabled": bool(assignment.get("is_enabled", True)),
-                    **(
-                        {"notes": str(assignment.get("notes"))}
-                        if assignment.get("notes") is not None
-                        else {}
-                    ),
+                    **({"notes": str(assignment.get("notes"))} if assignment.get("notes") is not None else {}),
                 }
             )
         return {
@@ -1012,6 +1086,7 @@ class AdminGodModeService:
         account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
         if account is None:
             from app.models.wallet import LedgerAccountKind
+
             account = LedgerAccount(
                 code=code,
                 label=f"Treasury {unit.value.capitalize()} Withdrawal Sink",

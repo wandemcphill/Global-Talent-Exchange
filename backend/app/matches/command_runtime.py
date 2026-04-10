@@ -98,7 +98,9 @@ def _build_fixture(
 ) -> ScheduledFixture:
     match_id = request.match_id.strip()
     competition_id = request.competition_id or _optional_text(getattr(match, "competition_id", None))
-    round_number = request.round_number or getattr(match, "round_number", None) or getattr(round_record, "round_number", None)
+    round_number = (
+        request.round_number or getattr(match, "round_number", None) or getattr(round_record, "round_number", None)
+    )
     home_club_id = request.home_club_id or _optional_text(getattr(match, "home_club_id", None))
     away_club_id = request.away_club_id or _optional_text(getattr(match, "away_club_id", None))
     stage_name = (
@@ -197,9 +199,7 @@ def _resolve_fixture_window(
 
     if not competition_type.uses_senior_windows:
         return (
-            FixtureWindow.ACADEMY_OPEN
-            if competition_type is CompetitionType.ACADEMY
-            else FixtureWindow.FAST_CUP_OPEN
+            FixtureWindow.ACADEMY_OPEN if competition_type is CompetitionType.ACADEMY else FixtureWindow.FAST_CUP_OPEN
         )
 
     if scheduled_at is None:
@@ -208,9 +208,7 @@ def _resolve_fixture_window(
     scheduled_start = _normalize_timestamp(scheduled_at)
     return min(
         FixtureWindow.senior_windows(),
-        key=lambda window: abs(
-            (window.kickoff_at(match_date, tzinfo=timezone.utc) - scheduled_start).total_seconds()
-        ),
+        key=lambda window: abs((window.kickoff_at(match_date, tzinfo=timezone.utc) - scheduled_start).total_seconds()),
     )
 
 

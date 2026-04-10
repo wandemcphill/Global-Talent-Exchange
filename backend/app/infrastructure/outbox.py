@@ -28,11 +28,9 @@ def utcnow() -> datetime:
 
 
 class BrokerPublisher(Protocol):
-    def publish(self, row: OutboxEvent) -> None:
-        ...
+    def publish(self, row: OutboxEvent) -> None: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 
 
 def write_event(event: Any, *, session: Session) -> OutboxEvent:
@@ -105,11 +103,7 @@ class RedisKafkaOutboxPublisher:
     def publish(self, row: OutboxEvent) -> None:
         if self.kafka_producer is not None:
             topic = self.topic_router.topic_for(row.event_type)
-            headers = {
-                str(key): str(value)
-                for key, value in dict(row.headers_json or {}).items()
-                if value is not None
-            }
+            headers = {str(key): str(value) for key, value in dict(row.headers_json or {}).items() if value is not None}
             headers.setdefault("event_type", row.event_type)
             headers.setdefault("producer", row.producer)
             with start_producer_span(

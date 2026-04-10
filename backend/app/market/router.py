@@ -179,7 +179,9 @@ def get_market_summary(
 ) -> MarketSummaryView:
     summary = session.get(MarketSummaryReadModel, asset_id)
     if summary is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Market summary for {asset_id} was not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Market summary for {asset_id} was not found"
+        )
     return MarketSummaryView.model_validate(summary)
 
 
