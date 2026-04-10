@@ -241,12 +241,31 @@ ReferralHubData _fixtureHub(String baseUrl) {
     rewardHistory: <RewardHistoryEntry>[
       RewardHistoryEntry(
         rewardId: 'fixture-reward-1',
+        title: 'Welcome reward',
+        detail: 'Your first qualified referral unlocked the onboarding reward.',
+        category: ReferralRewardCategory.welcomeBonus,
+        rewardLabel: '25 competition credits',
+        issuedAt: DateTime.utc(2026, 2, 26),
+        ledgerNote: 'Approved',
+      ),
+      RewardHistoryEntry(
+        rewardId: 'fixture-reward-2',
         title: 'Qualified join reward',
         detail: 'Referral conversion milestone reached.',
         category: ReferralRewardCategory.participationCredit,
         rewardLabel: '40 competition credits',
         issuedAt: DateTime.utc(2026, 3, 1),
         ledgerNote: 'Approved',
+      ),
+      RewardHistoryEntry(
+        rewardId: 'fixture-reward-3',
+        title: 'Creator community reward',
+        detail:
+            'High-quality creator competition participation triggered the community reward review bonus.',
+        category: ReferralRewardCategory.creatorCommunityReward,
+        rewardLabel: '80 competition credits',
+        issuedAt: DateTime.utc(2026, 3, 4),
+        ledgerNote: 'Review cleared',
       ),
     ],
     invites: <ReferralInviteEntry>[
