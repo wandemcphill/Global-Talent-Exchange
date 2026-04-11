@@ -706,6 +706,10 @@ class BroadcastNetworkRuntime:
         return {str(channel_id): int(count) for channel_id, count in rows}
 
     def _bootstrap_infinite_league_stream(self, hub, match_id: str) -> bool:
+        existing_state = hub.get_state(match_id)
+        if existing_state is not None and existing_state.is_live:
+            return True
+
         stream = ensure_infinite_league_runtime(self.app).live_stream(match_id)
         if stream is None:
             return False
@@ -723,6 +727,7 @@ class BroadcastNetworkRuntime:
             checkpoint_interval_seconds=stream.checkpoint_interval_seconds,
             max_latency_ms=stream.max_latency_ms,
             read_only=True,
+            target_runtime_seconds=30.0,
         )
         return True
 

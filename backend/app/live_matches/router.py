@@ -52,6 +52,7 @@ _UNITY_ALLOWED_ACCESS_SOURCES = frozenset(
     {"infinite_league", "open", "non_exclusive", "rights_owner", "grant", "paid_view"}
 )
 _UNITY_ACCESS_POLICY_MESSAGE = "Unity live access requires session-backed rights validation for non-generated matches."
+_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = 30.0
 
 _UNITY_PITCH_LENGTH_METERS = 105.0
 _UNITY_PITCH_WIDTH_METERS = 68.0
@@ -70,7 +71,13 @@ def _generated_match_access_payload() -> dict[str, object]:
     }
 
 
-def _bootstrap_infinite_league_stream(app, hub, match_id: str) -> bool:
+def _bootstrap_infinite_league_stream(app, hub, match_id: str, *, restart_if_completed: bool = False) -> bool:
+    existing_state = hub.get_state(match_id)
+    if existing_state is not None and existing_state.is_live:
+        return True
+    if existing_state is not None and not restart_if_completed:
+        return False
+
     stream = ensure_infinite_league_runtime(app).live_stream(match_id)
     if stream is None:
         return False
@@ -88,6 +95,7 @@ def _bootstrap_infinite_league_stream(app, hub, match_id: str) -> bool:
         checkpoint_interval_seconds=stream.checkpoint_interval_seconds,
         max_latency_ms=stream.max_latency_ms,
         read_only=True,
+        target_runtime_seconds=_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS,
     )
     return True
 
@@ -489,7 +497,12 @@ def build_unity_live_payload_for_app(app, match_id: str) -> dict[str, object]:
     hub = ensure_live_match_hub(app)
     source = "live_match_hub"
     state = hub.get_state(match_id)
-    if state is None and _bootstrap_infinite_league_stream(app, hub, match_id):
+    if (state is None or not state.is_live) and _bootstrap_infinite_league_stream(
+        app,
+        hub,
+        match_id,
+        restart_if_completed=True,
+    ):
         state = hub.get_state(match_id)
         source = "infinite_league_runtime"
     view_state: MatchViewStateView | None = None

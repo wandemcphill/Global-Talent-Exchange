@@ -200,6 +200,48 @@ def test_api_v1_match_websocket_supports_unity_live_bridge_stream(app_client) ->
         assert saw_update is True
 
 
+def test_api_v1_unity_live_bridge_survives_http_bootstrap_before_websocket(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    unity_access_response = client.post(
+        f"/api/matches/{match_id}/unity-access",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert unity_access_response.status_code == 200, unity_access_response.text
+    unity_access_token = unity_access_response.json()["access_token"]
+
+    live_response = client.get(
+        f"/match/{match_id}/live",
+        headers={"Authorization": f"Bearer {unity_access_token}"},
+    )
+    assert live_response.status_code == 200, live_response.text
+    first_frame = live_response.json()
+
+    with client.websocket_connect(
+        f"/api/v1/ws/match/{match_id}?format=unity&access_token={unity_access_token}"
+    ) as websocket:
+        initial_payload = websocket.receive_json()
+        saw_update = False
+        for _ in range(12):
+            next_payload = websocket.receive_json()
+            if (
+                next_payload.get("frameId") != initial_payload.get("frameId")
+                or next_payload.get("clockMinute") != initial_payload.get("clockMinute")
+                or next_payload.get("activeEventId") != initial_payload.get("activeEventId")
+            ):
+                saw_update = True
+                break
+
+    assert initial_payload["matchId"] == match_id
+    assert first_frame["matchId"] == match_id
+    assert saw_update is True
+
+
 def test_api_v1_unity_live_access_can_be_refreshed(app_client) -> None:
     app, client = app_client
     _user_id, token = _create_authenticated_user(app)
