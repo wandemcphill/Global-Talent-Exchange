@@ -60,7 +60,14 @@ def _merge_session_access(base: dict[str, Any], overlay: dict[str, Any] | None) 
         values.extend(list(overlay.get(key) or []))
         if values:
             merged[key] = values
-    for key in ("access_source", "rights_owner_id", "viewing_fee_coin", "sync_strategy", "watch_party_enabled", "reactions_enabled"):
+    for key in (
+        "access_source",
+        "rights_owner_id",
+        "viewing_fee_coin",
+        "sync_strategy",
+        "watch_party_enabled",
+        "reactions_enabled",
+    ):
         if key in overlay and overlay.get(key) is not None:
             merged[key] = overlay[key]
     return merged
@@ -150,7 +157,9 @@ class BroadcastNetworkRuntime:
             except Exception:
                 pass
         channels, ranked = self._channel_bundle()
-        featured_channel = next((channel for channel in channels if channel.channel_id == "trending"), channels[0] if channels else None)
+        featured_channel = next(
+            (channel for channel in channels if channel.channel_id == "trending"), channels[0] if channels else None
+        )
         payload = BroadcastHomeView(
             channels=channels,
             featured_channel=featured_channel,
@@ -250,7 +259,9 @@ class BroadcastNetworkRuntime:
         channel = self._session_channel_by_id(channel_id)
         match_id = (
             channel.current_program.match_id
-            if channel is not None and channel.current_program is not None and channel.current_program.match_id is not None
+            if channel is not None
+            and channel.current_program is not None
+            and channel.current_program.match_id is not None
             else watch_session.current_match_id
         )
         return self.commentary_orchestrator.build_manifest(channel_id=channel_id, match_id=match_id)
@@ -386,11 +397,15 @@ class BroadcastNetworkRuntime:
             score = snapshot.score
             match = matches.get(match_id)
             metadata_json = dict(match.metadata_json or {}) if match is not None else {}
-            replay_payload = metadata_json.get("replay_payload") if isinstance(metadata_json.get("replay_payload"), dict) else {}
+            replay_payload = (
+                metadata_json.get("replay_payload") if isinstance(metadata_json.get("replay_payload"), dict) else {}
+            )
             summary = replay_payload.get("summary") if isinstance(replay_payload, dict) else {}
             home_stats = summary.get("home_stats") if isinstance(summary, dict) else {}
             away_stats = summary.get("away_stats") if isinstance(summary, dict) else {}
-            atmosphere_profile = str(metadata_json.get("atmosphere_profile") or replay_payload.get("atmosphere_profile") or "standard")
+            atmosphere_profile = str(
+                metadata_json.get("atmosphere_profile") or replay_payload.get("atmosphere_profile") or "standard"
+            )
             home_team_name = str(home_stats.get("team_name") or metadata_json.get("home_team_name") or "Home")
             away_team_name = str(away_stats.get("team_name") or metadata_json.get("away_team_name") or "Away")
             minute = int(snapshot.current_minute or 0)
@@ -402,7 +417,9 @@ class BroadcastNetworkRuntime:
             )
             recent_velocity = _clamp((0.72 if snapshot.dramatic_event else 0.24) + (goals * 0.08), 0.0, 1.0)
             momentum = snapshot.momentum_indicator or "balanced"
-            focus_target, focus_reason = self._focus_target(snapshot=snapshot.model_dump(mode="json"), momentum=momentum)
+            focus_target, focus_reason = self._focus_target(
+                snapshot=snapshot.model_dump(mode="json"), momentum=momentum
+            )
             candidate = _ProgramCandidate(
                 match_id=match_id,
                 title=f"{home_team_name} vs {away_team_name}",
@@ -456,7 +473,12 @@ class BroadcastNetworkRuntime:
                 match_stage=_clamp(minute / 95.0, 0.0, 1.0),
                 rivalry=0.72 if "derby" in match.headline.lower() else 0.44,
                 upset_probability=0.65 if match.upset else 0.28,
-                recent_moment_velocity=_clamp((match.viral_score / 100.0) + (0.12 if state is not None and state.snapshot.dramatic_event else 0.0), 0.0, 1.0),
+                recent_moment_velocity=_clamp(
+                    (match.viral_score / 100.0)
+                    + (0.12 if state is not None and state.snapshot.dramatic_event else 0.0),
+                    0.0,
+                    1.0,
+                ),
                 momentum=state.snapshot.momentum_indicator if state is not None else "balanced",
                 focus_target="final_third" if goals > 0 else "midfield",
                 focus_reason="ai_highlight_loop" if goals > 0 else "ai_schedule_fill",
@@ -489,12 +511,19 @@ class BroadcastNetworkRuntime:
         now = _utcnow()
         selected = candidates[:6]
         current_program = (
-            self._program_slot(channel_id=channel_id, candidate=selected[0], start_at=now - timedelta(seconds=45), offset_minutes=10)
+            self._program_slot(
+                channel_id=channel_id, candidate=selected[0], start_at=now - timedelta(seconds=45), offset_minutes=10
+            )
             if selected
             else self._fallback_slot(channel_id=channel_id, generated_at=now)
         )
         upcoming_programs = [
-            self._program_slot(channel_id=channel_id, candidate=candidate, start_at=now + timedelta(minutes=index * 12), offset_minutes=12)
+            self._program_slot(
+                channel_id=channel_id,
+                candidate=candidate,
+                start_at=now + timedelta(minutes=index * 12),
+                offset_minutes=12,
+            )
             for index, candidate in enumerate(selected[1:6], start=1)
         ]
         return BroadcastChannelView(
@@ -552,7 +581,9 @@ class BroadcastNetworkRuntime:
             metadata={"fallback_mode": "replay"},
         )
 
-    def _director_focus_for_program(self, program: BroadcastProgramSlotView | None) -> BroadcastDirectorFocusView | None:
+    def _director_focus_for_program(
+        self, program: BroadcastProgramSlotView | None
+    ) -> BroadcastDirectorFocusView | None:
         if program is None or program.match_id is None:
             return None
         for candidate in self._ranked_candidates():
@@ -589,7 +620,9 @@ class BroadcastNetworkRuntime:
                 "channel_type": channel_type,
                 "auto_switch_enabled": True,
             },
-            "sync_strategy": state.spectator_sync.sync_strategy if state.spectator_sync is not None else "deterministic_playback",
+            "sync_strategy": (
+                state.spectator_sync.sync_strategy if state.spectator_sync is not None else "deterministic_playback"
+            ),
             "watch_party_enabled": True,
             "reactions_enabled": True,
         }
@@ -634,7 +667,9 @@ class BroadcastNetworkRuntime:
             reactions_enabled=bool(access_payload.get("reactions_enabled", True)),
         )
 
-    def _create_watch_session(self, *, user_id: str, channel_id: str, current_match_id: str | None) -> BroadcastWatchSession:
+    def _create_watch_session(
+        self, *, user_id: str, channel_id: str, current_match_id: str | None
+    ) -> BroadcastWatchSession:
         if self.session_factory is None:
             return BroadcastWatchSession(
                 user_id=user_id,
@@ -701,7 +736,9 @@ class BroadcastNetworkRuntime:
                 select(
                     BroadcastWatchSession.channel_id,
                     func.count(func.distinct(BroadcastWatchSession.user_id)),
-                ).where(BroadcastWatchSession.status == "active").group_by(BroadcastWatchSession.channel_id)
+                )
+                .where(BroadcastWatchSession.status == "active")
+                .group_by(BroadcastWatchSession.channel_id)
             ).all()
         return {str(channel_id): int(count) for channel_id, count in rows}
 
