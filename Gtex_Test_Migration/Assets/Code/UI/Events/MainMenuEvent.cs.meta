@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 79ca3fe48af7cb345aa157ab21b8ac95
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/UI/Events/MainMenuEvent.cs
+  uploadId: 597280

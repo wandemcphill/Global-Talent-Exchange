@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 2b9afbe4bcfaacd4b91d43443612b3f9
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/Graphics/RenderTextureCreators/TextCreator.cs
+  uploadId: 597280

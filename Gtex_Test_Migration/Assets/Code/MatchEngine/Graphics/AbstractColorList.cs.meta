@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 35287315f6509774d85b8075e6a02445
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Graphics/AbstractColorList.cs
+  uploadId: 597280

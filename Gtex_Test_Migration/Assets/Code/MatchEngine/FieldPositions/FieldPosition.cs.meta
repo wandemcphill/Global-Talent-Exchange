@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 20c0a1f2a688bf74690c36e688463293
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/FieldPositions/FieldPosition.cs
+  uploadId: 597280

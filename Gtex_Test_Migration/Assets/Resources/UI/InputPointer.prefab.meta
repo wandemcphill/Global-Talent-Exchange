@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: aea4f3e047c60ff4fb1b33bc20c59957
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Resources/UI/InputPointer.prefab
+  uploadId: 597280

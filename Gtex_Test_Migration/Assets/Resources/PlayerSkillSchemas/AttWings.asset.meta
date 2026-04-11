@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c7655601dc18fb44cb40ba27d2a86d44
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Resources/PlayerSkillSchemas/AttWings.asset
+  uploadId: 597280

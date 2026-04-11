@@ -133,6 +133,23 @@ class SpectatorSessionView(CommonSchema):
     reactions_enabled: bool = True
 
 
+class UnityLiveAccessView(CommonSchema):
+    match_id: str
+    spectator_session_id: str
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int = Field(ge=1)
+    refresh_expires_in: int = Field(ge=1)
+    live_path: str
+    websocket_path: str
+    refresh_path: str
+
+
+class UnityLiveAccessRefreshRequest(CommonSchema):
+    refresh_token: str
+
+
 class LiveCommentaryStreamEventView(CommonSchema):
     source_event_id: str | None = None
     sequence_id: int | None = Field(default=None, ge=1)

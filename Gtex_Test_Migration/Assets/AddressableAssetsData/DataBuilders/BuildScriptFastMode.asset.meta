@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5726b71fee0cdaa4fbd297f6db682016
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/AddressableAssetsData/DataBuilders/BuildScriptFastMode.asset
+  uploadId: 597280

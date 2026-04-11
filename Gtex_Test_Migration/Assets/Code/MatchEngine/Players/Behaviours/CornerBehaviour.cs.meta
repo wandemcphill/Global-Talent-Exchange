@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: db9acca1bbdf71047a35b0ee16d7ab60
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Players/Behaviours/CornerBehaviour.cs
+  uploadId: 597280

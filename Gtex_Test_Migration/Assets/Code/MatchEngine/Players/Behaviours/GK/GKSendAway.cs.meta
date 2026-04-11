@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 22bfdbe77bc6f964db090e635b6511c1
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Players/Behaviours/GK/GKSendAway.cs
+  uploadId: 597280

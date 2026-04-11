@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: f9205193765a0744bb0ce17b033aa252
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/MatchEngine.prefab
+  uploadId: 597280

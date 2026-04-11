@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4bbc21a8d07c3a84bb079dee869a2066
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/PlayableFormations/Balanced/4_3_2_1_Balanced.asset
+  uploadId: 597280

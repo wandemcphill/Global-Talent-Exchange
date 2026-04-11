@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a7e4a2c819f4b4c4898ac4f92eabe21d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Resources/Singletons/FormalPositioning.asset
+  uploadId: 597280

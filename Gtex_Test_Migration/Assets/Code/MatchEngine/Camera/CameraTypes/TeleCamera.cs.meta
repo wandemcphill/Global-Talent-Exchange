@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 31e5f33a9cdee264e9e44dff8e3694df
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Camera/CameraTypes/TeleCamera.cs
+  uploadId: 597280

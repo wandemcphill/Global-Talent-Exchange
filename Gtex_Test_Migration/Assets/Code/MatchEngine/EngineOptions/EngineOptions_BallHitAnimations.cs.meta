@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: ff1425542a051424cb3bbfaf15b5b0bd
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/EngineOptions/EngineOptions_BallHitAnimations.cs
+  uploadId: 597280

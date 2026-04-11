@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 715ffe8faa2f8f14aa32eeb055eacd61
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Resources/Singletons/PlayerControllerPrefab.asset
+  uploadId: 597280

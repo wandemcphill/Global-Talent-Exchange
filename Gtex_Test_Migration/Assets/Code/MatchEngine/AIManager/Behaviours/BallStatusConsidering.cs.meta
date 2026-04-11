@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 965fe05c491d9a345a8494c16e8d3c33
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/AIManager/Behaviours/BallStatusConsidering.cs
+  uploadId: 597280

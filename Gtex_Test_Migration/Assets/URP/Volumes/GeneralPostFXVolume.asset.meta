@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c8dfaf79227e90d4591b63372305a8ab
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/URP/Volumes/GeneralPostFXVolume.asset
+  uploadId: 597280

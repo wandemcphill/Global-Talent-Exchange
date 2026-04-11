@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: f58e00bd59f4d924bb1b2db335666de3
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Events/BallHitTheWoodWorkEvent.cs
+  uploadId: 597280

@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 1e525028aa429c84083d07026093ed78
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/UI/MatchThemes/MatchEvents/UpcomingMatchEvent.cs
+  uploadId: 597280

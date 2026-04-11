@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 2238d4d6a741b614db0173a5e01586a7
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/UI/Utilities/DontDestroy.cs
+  uploadId: 597280

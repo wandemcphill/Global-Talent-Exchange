@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: a2a655792e531314691e93d4b3d8a9a7
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Players/Behaviours/KickOffBehaviour.cs
+  uploadId: 597280

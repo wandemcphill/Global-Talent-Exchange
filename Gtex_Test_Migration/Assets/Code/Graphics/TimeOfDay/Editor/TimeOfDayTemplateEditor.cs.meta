@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: ee685870ad5b8824c9aaf634a3d4ec0c
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/Graphics/TimeOfDay/Editor/TimeOfDayTemplateEditor.cs
+  uploadId: 597280

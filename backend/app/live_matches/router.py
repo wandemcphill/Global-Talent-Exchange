@@ -4,7 +4,9 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.encoders import jsonable_encoder
 
+from app.auth.security import TokenError
 from app.auth.dependencies import get_current_match_user, get_current_social_user
 from app.broadcast_network.commentary_service import CommentaryOrchestratorService
 from app.broadcast_rights.service import BroadcastRightsError, BroadcastRightsService
@@ -17,8 +19,15 @@ from app.live_matches.schemas import (
     MatchHighlightSharePackageView,
     LiveMatchSpeedModeView,
     SpectatorSessionView,
+    UnityLiveAccessView,
+    UnityLiveAccessRefreshRequest,
 )
 from app.live_matches.service import LiveMatchError, ensure_live_match_hub
+from app.live_matches.unity_access import (
+    issue_unity_live_token_bundle,
+    validate_unity_live_access_token,
+    validate_unity_live_refresh_token,
+)
 from app.infinite_league.service import ensure_infinite_league_runtime
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.models.competition_match import CompetitionMatch
@@ -38,6 +47,11 @@ legacy_router = APIRouter(prefix="/matches", tags=["live-matches"])
 api_router = APIRouter(prefix="/api/matches", tags=["live-matches"])
 match_router = APIRouter(prefix="/match", tags=["live-matches"])
 api_match_router = APIRouter(prefix="/api/match", tags=["live-matches"])
+
+_UNITY_ALLOWED_ACCESS_SOURCES = frozenset(
+    {"infinite_league", "open", "non_exclusive", "rights_owner", "grant", "paid_view"}
+)
+_UNITY_ACCESS_POLICY_MESSAGE = "Unity live access requires session-backed rights validation for non-generated matches."
 
 _UNITY_PITCH_LENGTH_METERS = 105.0
 _UNITY_PITCH_WIDTH_METERS = 68.0
@@ -191,6 +205,47 @@ def _commentary_payload(events) -> list[dict[str, object]]:
                 ),
             }
         )
+    return payload
+
+
+def _enforce_unity_live_access_policy(
+    *,
+    match_id: str,
+    access_payload: dict[str, object] | None,
+    is_generated_match: bool,
+) -> dict[str, object]:
+    payload = dict(access_payload or {})
+    encoded_payload = jsonable_encoder(payload)
+    if is_generated_match and not payload:
+        payload = _generated_match_access_payload()
+        encoded_payload = jsonable_encoder(payload)
+
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_UNITY_ACCESS_POLICY_MESSAGE,
+        )
+
+    if not bool(payload.get("has_access", False)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "message": "Broadcast rights access is restricted for this match.",
+                "access": encoded_payload,
+            },
+        )
+
+    access_source = str(payload.get("access_source") or "").strip()
+    if access_source not in _UNITY_ALLOWED_ACCESS_SOURCES:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "message": _UNITY_ACCESS_POLICY_MESSAGE,
+                "match_id": match_id,
+                "access": encoded_payload,
+            },
+        )
+
     return payload
 
 
@@ -384,9 +439,9 @@ def _unity_event_payload(event) -> dict[str, object]:
     }
 
 
-def _load_persisted_live_view_state(match_id: str, request: Request) -> MatchViewStateView | None:
+def _load_persisted_live_view_state(match_id: str, app) -> MatchViewStateView | None:
     timeline_service = MatchTimelineService()
-    session_factory = getattr(request.app.state, "session_factory", None)
+    session_factory = getattr(app.state, "session_factory", None)
     if session_factory is not None:
         with session_factory() as session:
             match = session.get(CompetitionMatch, match_id)
@@ -420,7 +475,7 @@ def _load_persisted_live_view_state(match_id: str, request: Request) -> MatchVie
                             "Stored duel replay payload for %s could not be rebuilt into a live view.", match_id
                         )
 
-    archive = ensure_replay_archive(request.app)
+    archive = ensure_replay_archive(app)
     record = archive.repository.get_latest_record(f"replay:{match_id}")
     if record is not None:
         try:
@@ -430,11 +485,11 @@ def _load_persisted_live_view_state(match_id: str, request: Request) -> MatchVie
     return None
 
 
-def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, object]:
-    hub = ensure_live_match_hub(request.app)
+def build_unity_live_payload_for_app(app, match_id: str) -> dict[str, object]:
+    hub = ensure_live_match_hub(app)
     source = "live_match_hub"
     state = hub.get_state(match_id)
-    if state is None and _bootstrap_infinite_league_stream(request.app, hub, match_id):
+    if state is None and _bootstrap_infinite_league_stream(app, hub, match_id):
         state = hub.get_state(match_id)
         source = "infinite_league_runtime"
     view_state: MatchViewStateView | None = None
@@ -457,7 +512,7 @@ def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, obje
             logger.exception("Failed to build live-stream view state for match %s", match_id)
             view_state = None
     if view_state is None:
-        view_state = _load_persisted_live_view_state(match_id, request)
+        view_state = _load_persisted_live_view_state(match_id, app)
         if view_state is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match stream was not found.")
         logger.warning("Live match cache miss for %s; returning persisted match frames instead.", match_id)
@@ -496,20 +551,121 @@ def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, obje
     }
 
 
-@legacy_router.post("/{match_id}/spectate", response_model=SpectatorSessionView)
-@api_router.post("/{match_id}/spectate", response_model=SpectatorSessionView)
-def join_spectate(
+def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, object]:
+    return build_unity_live_payload_for_app(request.app, match_id)
+
+
+def _extract_bearer_token(authorization: str | None) -> str:
+    candidate = str(authorization or "").strip()
+    if not candidate:
+        return ""
+    if candidate.lower().startswith("bearer "):
+        return candidate.split(" ", maxsplit=1)[1].strip()
+    return ""
+
+
+def _resolve_unity_live_access_token(
+    *,
+    authorization: str | None,
+    query_token: str | None,
+) -> str:
+    bearer_token = _extract_bearer_token(authorization)
+    if bearer_token:
+        return bearer_token
+    candidate = str(query_token or "").strip()
+    return candidate
+
+
+def _require_unity_live_access_for_request(request: Request, *, match_id: str):
+    token = _resolve_unity_live_access_token(
+        authorization=request.headers.get("authorization"),
+        query_token=request.query_params.get("access_token"),
+    )
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unity live access token is required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        claims = validate_unity_live_access_token(token, match_id=match_id)
+    except TokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    hub = ensure_live_match_hub(request.app)
+    try:
+        spectator_session = hub.validate_session(match_id, claims["spectator_session_id"])
+    except LiveMatchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    if spectator_session.user_id != claims["viewer_user_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unity live access token does not match the spectator session.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return spectator_session
+
+
+def _require_unity_live_access_for_websocket(websocket: WebSocket, *, match_id: str):
+    token = _resolve_unity_live_access_token(
+        authorization=websocket.headers.get("authorization"),
+        query_token=websocket.query_params.get("access_token"),
+    )
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unity live access token is required.")
+
+    try:
+        claims = validate_unity_live_access_token(token, match_id=match_id)
+    except TokenError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    hub = ensure_live_match_hub(websocket.scope["app"])
+    try:
+        spectator_session = hub.validate_session(match_id, claims["spectator_session_id"])
+    except LiveMatchError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    if spectator_session.user_id != claims["viewer_user_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unity live access token does not match the spectator session.",
+        )
+
+    return spectator_session
+
+
+def _join_spectate_session(
+    *,
     match_id: str,
     request: Request,
-    pay_to_view: bool = Query(default=False),
-    current_user: User = Depends(get_current_match_user),
-) -> SpectatorSessionView:
+    current_user: User,
+    pay_to_view: bool,
+    require_resolved_access: bool = False,
+):
     access_payload: dict[str, object] | None = None
     hub = ensure_live_match_hub(request.app)
     is_generated_match = _bootstrap_infinite_league_stream(request.app, hub, match_id)
     if is_generated_match:
         access_payload = _generated_match_access_payload()
+
     session_factory = getattr(request.app.state, "session_factory", None)
+    if session_factory is None and require_resolved_access and not is_generated_match:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_UNITY_ACCESS_POLICY_MESSAGE,
+        )
+
     if session_factory is not None:
         with session_factory() as session:
             if not is_generated_match:
@@ -525,7 +681,7 @@ def join_spectate(
                             status_code=status.HTTP_403_FORBIDDEN,
                             detail={
                                 "message": "Broadcast rights access is restricted for this match.",
-                                "access": access_payload,
+                                "access": jsonable_encoder(access_payload),
                             },
                         )
                 except BroadcastRightsError as exc:
@@ -545,12 +701,20 @@ def join_spectate(
                     user_id=current_user.id,
                 ),
             )
+            if require_resolved_access:
+                access_payload = _enforce_unity_live_access_policy(
+                    match_id=match_id,
+                    access_payload=access_payload,
+                    is_generated_match=is_generated_match,
+                )
             session.commit()
-            return _build_session_view(match_id, spectator_session, access_payload)
+            return spectator_session, access_payload
+
     try:
         spectator_session = hub.join_spectate(match_id, current_user.id)
     except LiveMatchError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
     access_payload = _merge_session_access(
         access_payload,
         _resolve_attendee_access(
@@ -560,7 +724,167 @@ def join_spectate(
             user_id=current_user.id,
         ),
     )
+    if require_resolved_access:
+        access_payload = _enforce_unity_live_access_policy(
+            match_id=match_id,
+            access_payload=access_payload,
+            is_generated_match=is_generated_match,
+        )
+    return spectator_session, access_payload
+
+
+def _revalidate_unity_refresh_access(
+    *,
+    match_id: str,
+    request: Request,
+    viewer_user_id: str,
+) -> dict[str, object]:
+    hub = ensure_live_match_hub(request.app)
+    is_generated_match = _bootstrap_infinite_league_stream(request.app, hub, match_id)
+    access_payload: dict[str, object] | None = _generated_match_access_payload() if is_generated_match else None
+
+    session_factory = getattr(request.app.state, "session_factory", None)
+    if session_factory is None:
+        return _enforce_unity_live_access_policy(
+            match_id=match_id,
+            access_payload=access_payload,
+            is_generated_match=is_generated_match,
+        )
+
+    with session_factory() as session:
+        actor = session.get(User, viewer_user_id)
+        if actor is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unity live refresh user was not found.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if not is_generated_match:
+            try:
+                access_payload = BroadcastRightsService(session).resolve_match_access(
+                    actor=actor,
+                    match_id=match_id,
+                    pay_to_view=False,
+                )
+            except BroadcastRightsError as exc:
+                session.rollback()
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
+
+        return _enforce_unity_live_access_policy(
+            match_id=match_id,
+            access_payload=access_payload,
+            is_generated_match=is_generated_match,
+        )
+
+
+def _issue_unity_live_access_view(*, match_id: str, spectator_session_id: str, viewer_user_id: str) -> UnityLiveAccessView:
+    token_bundle = issue_unity_live_token_bundle(
+        match_id=match_id,
+        spectator_session_id=spectator_session_id,
+        viewer_user_id=viewer_user_id,
+    )
+    return UnityLiveAccessView(
+        match_id=match_id,
+        spectator_session_id=spectator_session_id,
+        access_token=str(token_bundle["access_token"]),
+        refresh_token=str(token_bundle["refresh_token"]),
+        token_type="bearer",
+        expires_in=int(token_bundle["access_expires_in"]),
+        refresh_expires_in=int(token_bundle["refresh_expires_in"]),
+        live_path=f"/match/{match_id}/live",
+        websocket_path=f"/api/v1/ws/match/{match_id}?format=unity",
+        refresh_path=f"/match/{match_id}/unity-access/refresh",
+    )
+
+
+@legacy_router.post("/{match_id}/spectate", response_model=SpectatorSessionView)
+@api_router.post("/{match_id}/spectate", response_model=SpectatorSessionView)
+def join_spectate(
+    match_id: str,
+    request: Request,
+    pay_to_view: bool = Query(default=False),
+    current_user: User = Depends(get_current_match_user),
+) -> SpectatorSessionView:
+    spectator_session, access_payload = _join_spectate_session(
+        match_id=match_id,
+        request=request,
+        current_user=current_user,
+        pay_to_view=pay_to_view,
+    )
     return _build_session_view(match_id, spectator_session, access_payload)
+
+
+@legacy_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
+@api_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
+@match_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
+@api_match_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
+def issue_unity_live_access(
+    match_id: str,
+    request: Request,
+    pay_to_view: bool = Query(default=False),
+    current_user: User = Depends(get_current_match_user),
+) -> UnityLiveAccessView:
+    spectator_session, _access_payload = _join_spectate_session(
+        match_id=match_id,
+        request=request,
+        current_user=current_user,
+        pay_to_view=pay_to_view,
+        require_resolved_access=True,
+    )
+    return _issue_unity_live_access_view(
+        match_id=match_id,
+        spectator_session_id=spectator_session.id,
+        viewer_user_id=current_user.id,
+    )
+
+
+@legacy_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
+@api_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
+@match_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
+@api_match_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
+def refresh_unity_live_access(
+    match_id: str,
+    payload: UnityLiveAccessRefreshRequest,
+    request: Request,
+) -> UnityLiveAccessView:
+    try:
+        claims = validate_unity_live_refresh_token(payload.refresh_token, match_id=match_id)
+    except TokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    hub = ensure_live_match_hub(request.app)
+    try:
+        spectator_session = hub.validate_session(match_id, claims["spectator_session_id"])
+    except LiveMatchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    if spectator_session.user_id != claims["viewer_user_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unity live refresh token does not match the spectator session.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    _revalidate_unity_refresh_access(
+        match_id=match_id,
+        request=request,
+        viewer_user_id=spectator_session.user_id,
+    )
+
+    return _issue_unity_live_access_view(
+        match_id=match_id,
+        spectator_session_id=spectator_session.id,
+        viewer_user_id=spectator_session.user_id,
+    )
 
 
 @legacy_router.get("/{match_id}/live")
@@ -568,6 +892,7 @@ def join_spectate(
 @match_router.get("/{match_id}/live")
 @api_match_router.get("/{match_id}/live")
 def read_match_live_bridge(match_id: str, request: Request) -> dict[str, object]:
+    _require_unity_live_access_for_request(request, match_id=match_id)
     try:
         return _build_unity_live_payload(match_id, request)
     except HTTPException:

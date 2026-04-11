@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: dc4f5f7faba28b44396a08fbbf9b1100
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Resources/Singletons/PositionSkillRules.asset
+  uploadId: 597280

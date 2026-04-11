@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 4cec1d45f3f3a5d4dad004a4b7247fce
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Events/RefereeShortWhistleEvent.cs
+  uploadId: 597280

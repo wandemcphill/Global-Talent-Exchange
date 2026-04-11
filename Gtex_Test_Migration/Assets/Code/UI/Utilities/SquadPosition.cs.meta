@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 1796c85aaba2d6044a23f6031ca1f621
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/UI/Utilities/SquadPosition.cs
+  uploadId: 597280

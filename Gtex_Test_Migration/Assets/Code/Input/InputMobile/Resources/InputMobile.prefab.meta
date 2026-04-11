@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 79be1d350ae132d4c8eaa791e7dd644c
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/Input/InputMobile/Resources/InputMobile.prefab
+  uploadId: 597280

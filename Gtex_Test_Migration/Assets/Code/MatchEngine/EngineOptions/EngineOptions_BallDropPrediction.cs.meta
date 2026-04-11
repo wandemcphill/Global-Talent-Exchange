@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 77d1cdb4a89adab43bf9866e647392c3
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/EngineOptions/EngineOptions_BallDropPrediction.cs
+  uploadId: 597280

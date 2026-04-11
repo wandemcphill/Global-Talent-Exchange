@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
@@ -11,6 +13,7 @@ from fastapi.responses import JSONResponse
 from app.auth.dependencies import get_current_user
 from app.auth.security import TokenError, decode_access_token
 from app.core.container import ApplicationContext
+from app.live_matches.router import build_unity_live_payload_for_app, _require_unity_live_access_for_websocket
 from app.models.user import User
 
 from .schemas import (
@@ -34,6 +37,7 @@ from .service import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["api-v1"])
+logger = logging.getLogger(__name__)
 
 
 def install_exception_handlers(app, _context: ApplicationContext) -> None:
@@ -480,6 +484,10 @@ def vote_on_federation(
 
 @router.websocket("/ws/match/{match_id}")
 async def stream_match_commentary(websocket: WebSocket, match_id: str) -> None:
+    if str(websocket.query_params.get("format") or "").strip().lower() == "unity":
+        await _stream_unity_live_match(websocket, match_id)
+        return
+
     user = _resolve_websocket_user(websocket)
     if user is None:
         await websocket.close(code=4401)
@@ -497,6 +505,65 @@ async def stream_match_commentary(websocket: WebSocket, match_id: str) -> None:
             await websocket.receive_text()
     except WebSocketDisconnect:
         return
+
+
+async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
+    app = websocket.scope["app"]
+
+    try:
+        _require_unity_live_access_for_websocket(websocket, match_id=match_id)
+        payload = build_unity_live_payload_for_app(app, match_id)
+    except HTTPException as exc:
+        close_code = 4404 if exc.status_code == status.HTTP_404_NOT_FOUND else 4401 if exc.status_code == status.HTTP_401_UNAUTHORIZED else 1011
+        close_reason = "not_found" if exc.status_code == status.HTTP_404_NOT_FOUND else "unauthorized" if exc.status_code == status.HTTP_401_UNAUTHORIZED else "bootstrap_failed"
+        await websocket.close(code=close_code, reason=close_reason)
+        return
+    except Exception:
+        logger.exception("api_v1.unity_match_stream.bootstrap_failed match_id=%s", match_id)
+        await websocket.close(code=1011)
+        return
+
+    await websocket.accept()
+    last_signature = _unity_payload_signature(payload)
+    await websocket.send_json(payload)
+
+    try:
+        while True:
+            await asyncio.sleep(0.25)
+            payload = build_unity_live_payload_for_app(app, match_id)
+            signature = _unity_payload_signature(payload)
+            if signature != last_signature:
+                await websocket.send_json(payload)
+                last_signature = signature
+            if not bool(payload.get("isLive", False)) and str(payload.get("status") or "").strip().lower() not in {"live", "in_progress"}:
+                break
+    except WebSocketDisconnect:
+        return
+    except HTTPException as exc:
+        logger.warning(
+            "api_v1.unity_match_stream.terminated match_id=%s status_code=%s",
+            match_id,
+            exc.status_code,
+        )
+    except Exception:
+        logger.exception("api_v1.unity_match_stream.failed match_id=%s", match_id)
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
+def _unity_payload_signature(payload: dict[str, Any]) -> tuple[object, ...]:
+    return (
+        payload.get("frameId"),
+        payload.get("activeEventId"),
+        payload.get("clockMinute"),
+        payload.get("homeScore"),
+        payload.get("awayScore"),
+        payload.get("status"),
+        payload.get("isLive"),
+    )
 
 
 @router.websocket("/ws/market/{listing_id}")

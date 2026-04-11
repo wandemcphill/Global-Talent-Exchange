@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 5437d1806d523c841bf8bebc10b66d02
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/FieldPositions/KickOffPositioning_Starter.cs
+  uploadId: 597280

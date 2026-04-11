@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 402dc569d73655d42b7b4703922e7df6
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 13400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/PhysicMaterials/FieldPhysic.physicMaterial
+  uploadId: 597280

@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 31e8adf15bc3e4e48867226c5b09614b
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Players/InputBehaviours/InputThoughtPassBehaviour.cs
+  uploadId: 597280

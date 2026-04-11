@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
+from starlette.websockets import WebSocketDisconnect
 
 from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
@@ -159,3 +160,87 @@ def test_api_v1_websockets_emit_match_market_and_notification_events(app_client)
         event = websocket.receive_json()
         assert event["type"] == "story_event"
         assert event["title"] == "Shock Winner"
+
+
+def test_api_v1_match_websocket_supports_unity_live_bridge_stream(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    unity_access_response = client.post(
+        f"/api/matches/{match_id}/unity-access",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert unity_access_response.status_code == 200, unity_access_response.text
+    unity_access_token = unity_access_response.json()["access_token"]
+
+    with client.websocket_connect(f"/api/v1/ws/match/{match_id}?format=unity&access_token={unity_access_token}") as websocket:
+        first_payload = websocket.receive_json()
+        assert first_payload["matchId"] == match_id
+        assert "players" in first_payload
+        assert "ballPosition" in first_payload
+        assert "events" in first_payload
+
+        saw_update = False
+        for _ in range(12):
+            next_payload = websocket.receive_json()
+            if (
+                next_payload.get("frameId") != first_payload.get("frameId")
+                or next_payload.get("clockMinute") != first_payload.get("clockMinute")
+                or next_payload.get("activeEventId") != first_payload.get("activeEventId")
+            ):
+                saw_update = True
+                break
+
+        assert saw_update is True
+
+
+def test_api_v1_unity_live_access_can_be_refreshed(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    unity_access_response = client.post(
+        f"/api/matches/{match_id}/unity-access",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert unity_access_response.status_code == 200, unity_access_response.text
+    issued = unity_access_response.json()
+
+    refresh_response = client.post(
+        f"/api/matches/{match_id}/unity-access/refresh",
+        json={"refresh_token": issued["refresh_token"]},
+    )
+    assert refresh_response.status_code == 200, refresh_response.text
+    refreshed = refresh_response.json()
+
+    assert refreshed["match_id"] == match_id
+    assert refreshed["spectator_session_id"] == issued["spectator_session_id"]
+    assert refreshed["access_token"] != issued["access_token"]
+    assert refreshed["refresh_token"] != issued["refresh_token"]
+
+    live_response = client.get(
+        f"/match/{match_id}/live",
+        headers={"Authorization": f"Bearer {refreshed['access_token']}"},
+    )
+    assert live_response.status_code == 200, live_response.text
+
+
+def test_api_v1_match_websocket_rejects_unity_live_bridge_without_access_token(app_client) -> None:
+    _app, client = app_client
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    with client.websocket_connect(f"/api/v1/ws/match/{match_id}?format=unity") as websocket:
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            websocket.receive_json()
+
+    assert exc_info.value.code == 4401

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ad1ee4df856694d42996a1f00e9904fe
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 4890085278179872738
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/URP/LightningSettings.lighting
+  uploadId: 597280

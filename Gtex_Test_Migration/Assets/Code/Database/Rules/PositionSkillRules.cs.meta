@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 62167fdba83dc4547948862d652ba67e
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/Database/Rules/PositionSkillRules.cs
+  uploadId: 597280

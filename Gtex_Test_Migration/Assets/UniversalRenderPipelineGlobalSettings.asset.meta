@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 86cdabaf43b2c1a44897c46ab1184ce6
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/UniversalRenderPipelineGlobalSettings.asset
+  uploadId: 597280

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 58c2bb1b2c15279499252c60059831ef
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Input/InputSystem.inputsettings.asset
+  uploadId: 597280

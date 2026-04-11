@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 08f2facda1fbe1e48bc2a82c76432c48
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/MatchEngine/Players/Behaviours/AbstractTacticalPositioning.cs
+  uploadId: 597280

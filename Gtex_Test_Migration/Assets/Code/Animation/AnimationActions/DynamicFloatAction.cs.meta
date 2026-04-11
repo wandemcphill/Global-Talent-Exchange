@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 556d8df248d7e51408f2f604c9e0c83b
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/Animation/AnimationActions/DynamicFloatAction.cs
+  uploadId: 597280

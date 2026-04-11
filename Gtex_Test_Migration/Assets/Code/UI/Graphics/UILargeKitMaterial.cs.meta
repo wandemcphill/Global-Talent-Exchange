@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 438ad36fe7fadde49a1cb99d14058618
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Code/UI/Graphics/UILargeKitMaterial.cs
+  uploadId: 597280

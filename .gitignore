@@ -14,6 +14,7 @@ backend/.tmp_*.err
 backend/.tmp_*.out
 backend/.tmp_*.db
 backend/.tmp_*.db-*
+backend/config/.runtime/
 .vscode/
 .env
 .env.*
@@ -21,3 +22,27 @@ backend/.tmp_*.db-*
 2nd.zip
 fm2023.csv.zip
 node_modules/
+Gtex_Test_Migration/tmp/gtex-live-bootstrap.json
+
+# Unity generated output
+Gtex_Test_Migration/.vs/
+Gtex_Test_Migration/.vsconfig
+Gtex_Test_Migration/Builds/
+Gtex_Test_Migration/Library/
+Gtex_Test_Migration/Logs/
+Gtex_Test_Migration/Obj/
+Gtex_Test_Migration/Temp/
+Gtex_Test_Migration/UserSettings/
+Gtex_Test_Migration/*.csproj
+Gtex_Test_Migration/*.pidb
+Gtex_Test_Migration/*.sln
+Gtex_Test_Migration/*.suo
+Gtex_Test_Migration/*.tmp
+Gtex_Test_Migration/*.user
+Gtex_Test_Migration/Assets/_Recovery/
+Gtex_Test_Migration/Assets/_Recovery.meta
+Gtex_Test_Migration/Assets/AddressableAssetsData/*/addressables_content_state.bin
+Gtex_Test_Migration/Assets/AddressableAssetsData/*/addressables_content_state.bin.meta
+
+# Embedded Unity package payloads copied for offline local work
+Gtex_Test_Migration/Packages/com.unity.*/
