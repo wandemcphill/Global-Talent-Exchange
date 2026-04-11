@@ -778,7 +778,9 @@ def _revalidate_unity_refresh_access(
         )
 
 
-def _issue_unity_live_access_view(*, match_id: str, spectator_session_id: str, viewer_user_id: str) -> UnityLiveAccessView:
+def _issue_unity_live_access_view(
+    *, match_id: str, spectator_session_id: str, viewer_user_id: str
+) -> UnityLiveAccessView:
     token_bundle = issue_unity_live_token_bundle(
         match_id=match_id,
         spectator_session_id=spectator_session_id,

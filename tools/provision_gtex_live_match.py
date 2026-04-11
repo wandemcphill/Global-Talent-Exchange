@@ -10,13 +10,12 @@ from typing import Any, Final
 import httpx
 import websockets
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_UNITY_CONFIG = PROJECT_ROOT / "Gtex_Test_Migration" / "Assets" / "Resources" / "GTEX" / "match-config.json"
 DEFAULT_BOOTSTRAP_PATH = PROJECT_ROOT / "Gtex_Test_Migration" / "tmp" / "gtex-live-bootstrap.json"
 DEFAULT_USER_EMAIL = "unity-live@gtex.local"
-DEFAULT_USER_PASSWORD = "UnityLivePass123!"
+DEFAULT_USER_PASSWORD = "UnityLivePass123!"  # pragma: allowlist secret
 DEFAULT_USER_FULL_NAME = "GTEX Unity Live"
 DEFAULT_USER_PHONE = "08000000000"
 DEFAULT_USER_REGION = "NG"
@@ -506,7 +505,11 @@ def main() -> None:
         "config_written": not args.dry_run,
         "bootstrap_written": not args.dry_run,
         "bootstrap_profile": bootstrap_payload.get("profile"),
-        "auth_mode": "access_token" if str(args.user_access_token or "").strip() else ("login_or_register" if allow_register else "login_only"),
+        "auth_mode": (
+            "access_token"
+            if str(args.user_access_token or "").strip()
+            else ("login_or_register" if allow_register else "login_only")
+        ),
         "bootstrap_ttl_seconds": bootstrap_ttl_seconds,
         "bootstrap_consume_on_load": consume_bootstrap_on_load,
         "spectator_session_id": unity_access.get("spectator_session_id"),
@@ -521,7 +524,9 @@ def main() -> None:
         "runtime_mode": config_payload.get("runtimeMode"),
         "auto_start_on_boot": config_payload.get("autoStartOnBoot"),
         "enabled": config_payload.get("enabled"),
-        "unity_bootstrap_mode": "bootstrap_access_and_refresh" if args.persist_access_token else "bootstrap_refresh_only",
+        "unity_bootstrap_mode": (
+            "bootstrap_access_and_refresh" if args.persist_access_token else "bootstrap_refresh_only"
+        ),
         "config_match_id_present": bool(str(config_payload.get("matchId") or "").strip()),
         "config_has_live_access_token": bool(config_payload.get("liveAccessToken")),
         "config_has_live_refresh_token": bool(config_payload.get("liveRefreshToken")),

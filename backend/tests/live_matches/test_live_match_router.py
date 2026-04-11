@@ -63,7 +63,7 @@ def _issue_live_access_token(session_factory: sessionmaker[Session], match_id: s
         user = User(
             email="viewer@example.com",
             username="viewer",
-            password_hash="hashed-password",
+            password_hash="hashed-password",  # pragma: allowlist secret
             is_active=True,
         )
         session.add(user)
@@ -88,7 +88,7 @@ def _issue_live_refresh_token(session_factory: sessionmaker[Session], match_id: 
         user = User(
             email="refresh-viewer@example.com",
             username="refreshviewer",
-            password_hash="hashed-password",
+            password_hash="hashed-password",  # pragma: allowlist secret
             is_active=True,
         )
         session.add(user)
@@ -175,7 +175,7 @@ def test_unity_live_access_requires_session_backed_rights_for_non_generated_matc
         id="viewer-user-001",
         email="viewer@example.com",
         username="viewer",
-        password_hash="hashed-password",
+        password_hash="hashed-password",  # pragma: allowlist secret
         is_active=True,
     )
 
@@ -183,7 +183,10 @@ def test_unity_live_access_requires_session_backed_rights_for_non_generated_matc
         response = client.post("/match/restricted-match-001/unity-access")
 
     assert response.status_code == 503
-    assert response.json()["detail"] == "Unity live access requires session-backed rights validation for non-generated matches."
+    assert (
+        response.json()["detail"]
+        == "Unity live access requires session-backed rights validation for non-generated matches."
+    )
 
 
 def test_unity_live_refresh_route_revalidates_restricted_match_access() -> None:
@@ -221,7 +224,7 @@ def test_unity_live_refresh_route_revalidates_restricted_match_access() -> None:
         viewer = User(
             email="restricted-viewer@example.com",
             username="restrictedviewer",
-            password_hash="hashed-password",
+            password_hash="hashed-password",  # pragma: allowlist secret
             is_active=True,
         )
         session.add(viewer)

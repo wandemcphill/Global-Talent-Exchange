@@ -177,7 +177,9 @@ def test_api_v1_match_websocket_supports_unity_live_bridge_stream(app_client) ->
     assert unity_access_response.status_code == 200, unity_access_response.text
     unity_access_token = unity_access_response.json()["access_token"]
 
-    with client.websocket_connect(f"/api/v1/ws/match/{match_id}?format=unity&access_token={unity_access_token}") as websocket:
+    with client.websocket_connect(
+        f"/api/v1/ws/match/{match_id}?format=unity&access_token={unity_access_token}"
+    ) as websocket:
         first_payload = websocket.receive_json()
         assert first_payload["matchId"] == match_id
         assert "players" in first_payload

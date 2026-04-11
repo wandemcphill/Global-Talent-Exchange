@@ -18,7 +18,6 @@ from app.models.user import User
 
 from .schemas import (
     ApiEnvelope,
-    ApiError,
     BroadcastPayRequest,
     ClubOfferRequest,
     ClubSaleRequest,
@@ -514,8 +513,16 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
         _require_unity_live_access_for_websocket(websocket, match_id=match_id)
         payload = build_unity_live_payload_for_app(app, match_id)
     except HTTPException as exc:
-        close_code = 4404 if exc.status_code == status.HTTP_404_NOT_FOUND else 4401 if exc.status_code == status.HTTP_401_UNAUTHORIZED else 1011
-        close_reason = "not_found" if exc.status_code == status.HTTP_404_NOT_FOUND else "unauthorized" if exc.status_code == status.HTTP_401_UNAUTHORIZED else "bootstrap_failed"
+        close_code = (
+            4404
+            if exc.status_code == status.HTTP_404_NOT_FOUND
+            else 4401 if exc.status_code == status.HTTP_401_UNAUTHORIZED else 1011
+        )
+        close_reason = (
+            "not_found"
+            if exc.status_code == status.HTTP_404_NOT_FOUND
+            else "unauthorized" if exc.status_code == status.HTTP_401_UNAUTHORIZED else "bootstrap_failed"
+        )
         await websocket.close(code=close_code, reason=close_reason)
         return
     except Exception:
@@ -535,7 +542,10 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
             if signature != last_signature:
                 await websocket.send_json(payload)
                 last_signature = signature
-            if not bool(payload.get("isLive", False)) and str(payload.get("status") or "").strip().lower() not in {"live", "in_progress"}:
+            if not bool(payload.get("isLive", False)) and str(payload.get("status") or "").strip().lower() not in {
+                "live",
+                "in_progress",
+            }:
                 break
     except WebSocketDisconnect:
         return
