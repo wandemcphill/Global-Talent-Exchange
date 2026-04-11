@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import Any, Callable
 from urllib import error, parse, request
 
+from verify_unity_routes import RenderUnityRouteVerificationError, derive_api_base_url, verify_unity_live_routes
+
 DEFAULT_SERVICE_ORDER = ("API", "OUTBOX", "SIMULATION", "PROJECTIONS", "WEB")
 SUCCESS_STATUSES = {"active", "deployed", "live", "success", "succeeded"}
 FAILURE_STATUSES = {
@@ -62,6 +64,18 @@ def _get_int_env(name: str, default: int) -> int:
         return int(raw_value)
     except ValueError as exc:
         raise RenderDeployError(f"{name} must be an integer.") from exc
+
+
+def _get_bool_env(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name, "").strip()
+    if not raw_value:
+        return default
+    lowered = raw_value.lower()
+    if lowered in {"1", "true", "yes", "on"}:
+        return True
+    if lowered in {"0", "false", "no", "off"}:
+        return False
+    raise RenderDeployError(f"{name} must be a boolean.")
 
 
 def _load_service_targets() -> list[ServiceTarget]:
@@ -309,6 +323,8 @@ def main() -> int:
     deploy_timeout_seconds = _get_int_env("RENDER_DEPLOY_TIMEOUT_SECONDS", 1800)
     health_timeout_seconds = _get_int_env("RENDER_HEALTH_TIMEOUT_SECONDS", 180)
     poll_interval_seconds = _get_int_env("RENDER_POLL_INTERVAL_SECONDS", 10)
+    verify_unity_routes_after_deploy = _get_bool_env("RENDER_VERIFY_UNITY_ROUTES", True)
+    unity_route_probe_match_id = _optional_env("RENDER_UNITY_ROUTE_PROBE_MATCH_ID") or "gtex-render-route-probe"
 
     if any(target.env_key == "API" for target in targets) and not health_url:
         raise RenderDeployError("RENDER_HEALTH_URL must be set when deploying the API service.")
@@ -338,6 +354,16 @@ def main() -> int:
                     timeout_seconds=health_timeout_seconds,
                     poll_interval_seconds=poll_interval_seconds,
                 )
+                if verify_unity_routes_after_deploy:
+                    try:
+                        api_base_url = derive_api_base_url(health_url)
+                        verify_unity_live_routes(
+                            api_base_url,
+                            probe_match_id=unity_route_probe_match_id,
+                        )
+                    except RenderUnityRouteVerificationError as exc:
+                        raise RenderDeployError(str(exc)) from exc
+                    _log(f"[unity-routes] {api_base_url} passed")
 
     except Exception as exc:  # noqa: BLE001
         _log("Automatic rollback is not available in hook-only mode.")

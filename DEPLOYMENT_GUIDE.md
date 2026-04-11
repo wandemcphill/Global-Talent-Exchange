@@ -91,8 +91,22 @@ The workflow reads the same variable names in both environments, but GitHub reso
   - `api`
   - `database`
   - `redis`
+- After the API health gate passes, the deploy runner also verifies the hosted Unity live contract:
+  - `/api/matches/{match_id}/unity-access`
+  - `/api/matches/{match_id}/unity-access/refresh`
+- That post-deploy gate fails the rollout if the hosted API is still behind the GTEX workspace backend shape.
 - If any deploy or health gate fails, the runner triggers Render rollbacks for the services already promoted in that release.
 - The API service runs with two instances and an extended shutdown delay so Render can roll instances without dropping all capacity at once.
+
+### Manual hosted Unity verification
+
+Run this after any manual Render rollout or when validating a hosted incident:
+
+```powershell
+python ops/render/verify_unity_routes.py --url "https://gtex-api.onrender.com/health"
+```
+
+This accepts either the API base URL or the health URL and fails if the hosted deployment does not expose the Unity access and refresh routes expected by the GTEX Unity runtime.
 
 ## Render to Kubernetes
 
