@@ -88,8 +88,9 @@ def test_moments_engine_applies_goal_boost_and_hot_window(tmp_path) -> None:
     assert moment.boost.hot_window_multiplier == 2.0
     assert moment.boost.final_score == 2.6
     assert moment.clip.storage_key is not None
-    assert moment.clip.queue_name == "clip_builder_queue"
-    assert engine.highlight_generation_service.queue.get_by_storage_key(moment.clip.storage_key) is not None
+    assert moment.clip.queue_name is None
+    assert moment.clip.render_status == "unavailable"
+    assert engine.highlight_generation_service.queue.get_by_storage_key(moment.clip.storage_key) is None
     published_names = [event.name for event in publisher.published_events]
     assert published_names == [
         "viral.clip.dispatch.requested",

@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/national_team_models.dart';
 
 class NationalTeamApi {
-  NationalTeamApi({
-    required this.client,
-    required this.fixtures,
-  });
+  NationalTeamApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _NationalTeamFixtures fixtures;
@@ -15,14 +12,15 @@ class NationalTeamApi {
   factory NationalTeamApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return NationalTeamApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _NationalTeamFixtures.seed(),
     );
@@ -44,38 +42,34 @@ class NationalTeamApi {
   }
 
   Future<List<NationalTeamCompetition>> listCompetitions() {
-    return client.withFallback<List<NationalTeamCompetition>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/national-team-engine/competitions', auth: false);
-        return payload
-            .map(NationalTeamCompetition.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.listCompetitions,
-    );
+    return client.withFallback<List<NationalTeamCompetition>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/national-team-engine/competitions',
+        auth: false,
+      );
+      return payload
+          .map(NationalTeamCompetition.fromJson)
+          .toList(growable: false);
+    }, fixtures.listCompetitions);
   }
 
   Future<NationalTeamEntryDetail> fetchEntryDetail(String entryId) {
-    return client.withFallback<NationalTeamEntryDetail>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/national-team-engine/entries/$entryId', auth: false);
-        return NationalTeamEntryDetail.fromJson(payload);
-      },
-      () async => fixtures.entryDetail(entryId),
-    );
+    return client.withFallback<NationalTeamEntryDetail>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/national-team-engine/entries/$entryId',
+        auth: false,
+      );
+      return NationalTeamEntryDetail.fromJson(payload);
+    }, () async => fixtures.entryDetail(entryId));
   }
 
   Future<NationalTeamUserHistory> fetchUserHistory() {
-    return client.withFallback<NationalTeamUserHistory>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/national-team-engine/me/history');
-        return NationalTeamUserHistory.fromJson(payload);
-      },
-      fixtures.userHistory,
-    );
+    return client.withFallback<NationalTeamUserHistory>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/national-team-engine/me/history',
+      );
+      return NationalTeamUserHistory.fromJson(payload);
+    }, fixtures.userHistory);
   }
 }
 
@@ -88,21 +82,21 @@ class _NationalTeamFixtures {
   static _NationalTeamFixtures seed() {
     final List<NationalTeamCompetition> competitions =
         <NationalTeamCompetition>[
-      NationalTeamCompetition(
-        id: 'nt-1',
-        key: 'world-scout-qualifier',
-        title: 'World Scout Qualifier',
-        seasonLabel: 'Spring 2026',
-        regionType: 'global',
-        ageBand: 'senior',
-        formatType: 'cup',
-        status: 'open',
-        notes: 'Regional qualifiers open now.',
-        active: true,
-        createdAt: DateTime.parse('2026-03-01T00:00:00Z'),
-        updatedAt: DateTime.parse('2026-03-12T00:00:00Z'),
-      ),
-    ];
+          NationalTeamCompetition(
+            id: 'nt-1',
+            key: 'world-scout-qualifier',
+            title: 'World Scout Qualifier',
+            seasonLabel: 'Spring 2026',
+            regionType: 'global',
+            ageBand: 'senior',
+            formatType: 'cup',
+            status: 'open',
+            notes: 'Regional qualifiers open now.',
+            active: true,
+            createdAt: DateTime.parse('2026-03-01T00:00:00Z'),
+            updatedAt: DateTime.parse('2026-03-12T00:00:00Z'),
+          ),
+        ];
     final List<NationalTeamEntry> entries = <NationalTeamEntry>[
       NationalTeamEntry(
         id: 'entry-1',
@@ -123,8 +117,10 @@ class _NationalTeamFixtures {
       List<NationalTeamCompetition>.of(_competitions, growable: false);
 
   Future<NationalTeamEntryDetail> entryDetail(String entryId) async {
-    final NationalTeamEntry entry =
-        _entries.firstWhere((NationalTeamEntry item) => item.id == entryId, orElse: () => _entries.first);
+    final NationalTeamEntry entry = _entries.firstWhere(
+      (NationalTeamEntry item) => item.id == entryId,
+      orElse: () => _entries.first,
+    );
     return NationalTeamEntryDetail(
       entry: entry,
       squadMembers: <NationalTeamSquadMember>[

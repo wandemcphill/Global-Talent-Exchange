@@ -43,12 +43,15 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
 
   factory ClubIdentityApiRepository.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
     ClubIdentityRepository? fixtures,
     GteTransport? transport,
   }) {
-    final GteRepositoryConfig config =
-        GteRepositoryConfig(baseUrl: baseUrl, mode: mode);
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
+    final GteRepositoryConfig config = GteRepositoryConfig(
+      baseUrl: baseUrl,
+      mode: resolvedMode,
+    );
     return ClubIdentityApiRepository(
       config: config,
       transport: transport ?? GteHttpTransport(),
@@ -93,11 +96,9 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
   }) {
     return _withFallback<ClubIdentityDto>(
       () async => ClubIdentityDto.fromJson(
-        _asMap(await _request(
-          'PATCH',
-          '/api/clubs/$clubId/identity',
-          body: patch,
-        )),
+        _asMap(
+          await _request('PATCH', '/api/clubs/$clubId/identity', body: patch),
+        ),
       ),
       () => fixtures.patchIdentity(clubId: clubId, patch: patch),
     );
@@ -110,11 +111,9 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
   }) {
     return _withFallback<JerseySetDto>(
       () async => JerseySetDto.fromJson(
-        _asMap(await _request(
-          'PATCH',
-          '/api/clubs/$clubId/jerseys',
-          body: patch,
-        )),
+        _asMap(
+          await _request('PATCH', '/api/clubs/$clubId/jerseys', body: patch),
+        ),
       ),
       () => fixtures.patchJerseys(clubId: clubId, patch: patch),
     );
@@ -145,11 +144,7 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
     }
   }
 
-  Future<Object?> _request(
-    String method,
-    String path, {
-    Object? body,
-  }) async {
+  Future<Object?> _request(String method, String path, {Object? body}) async {
     try {
       final GteTransportResponse response = await transport.send(
         GteTransportRequest(
@@ -210,14 +205,18 @@ class MockClubIdentityRepository extends ClubIdentityRepository {
       clubName: patch['club_name'] as String? ?? current.clubName,
       shortClubCode:
           patch['short_club_code'] as String? ?? current.shortClubCode,
-      colorPalette: patch['color_palette'] is Map<String, dynamic>
-          ? ColorPaletteProfileDto.fromJson(
-              patch['color_palette'] as Map<String, dynamic>)
-          : current.colorPalette,
-      badgeProfile: patch['badge_profile'] is Map<String, dynamic>
-          ? BadgeProfileDto.fromJson(
-              patch['badge_profile'] as Map<String, dynamic>)
-          : current.badgeProfile,
+      colorPalette:
+          patch['color_palette'] is Map<String, dynamic>
+              ? ColorPaletteProfileDto.fromJson(
+                patch['color_palette'] as Map<String, dynamic>,
+              )
+              : current.colorPalette,
+      badgeProfile:
+          patch['badge_profile'] is Map<String, dynamic>
+              ? BadgeProfileDto.fromJson(
+                patch['badge_profile'] as Map<String, dynamic>,
+              )
+              : current.badgeProfile,
       jerseySet: current.jerseySet,
     );
     _profiles[clubId] = updated;
@@ -239,22 +238,34 @@ class MockClubIdentityRepository extends ClubIdentityRepository {
     final ClubIdentityDto current = await fetchIdentity(clubId);
     final JerseySetDto currentSet = current.jerseySet;
     final JerseySetDto updatedSet = JerseySetDto(
-      home: patch['home'] is Map<String, dynamic>
-          ? _copyVariantFromJson(
-              currentSet.home, patch['home'] as Map<String, dynamic>)
-          : currentSet.home,
-      away: patch['away'] is Map<String, dynamic>
-          ? _copyVariantFromJson(
-              currentSet.away, patch['away'] as Map<String, dynamic>)
-          : currentSet.away,
-      third: patch['third'] is Map<String, dynamic>
-          ? _copyVariantFromJson(
-              currentSet.third, patch['third'] as Map<String, dynamic>)
-          : currentSet.third,
-      goalkeeper: patch['goalkeeper'] is Map<String, dynamic>
-          ? _copyVariantFromJson(currentSet.goalkeeper,
-              patch['goalkeeper'] as Map<String, dynamic>)
-          : currentSet.goalkeeper,
+      home:
+          patch['home'] is Map<String, dynamic>
+              ? _copyVariantFromJson(
+                currentSet.home,
+                patch['home'] as Map<String, dynamic>,
+              )
+              : currentSet.home,
+      away:
+          patch['away'] is Map<String, dynamic>
+              ? _copyVariantFromJson(
+                currentSet.away,
+                patch['away'] as Map<String, dynamic>,
+              )
+              : currentSet.away,
+      third:
+          patch['third'] is Map<String, dynamic>
+              ? _copyVariantFromJson(
+                currentSet.third,
+                patch['third'] as Map<String, dynamic>,
+              )
+              : currentSet.third,
+      goalkeeper:
+          patch['goalkeeper'] is Map<String, dynamic>
+              ? _copyVariantFromJson(
+                currentSet.goalkeeper,
+                patch['goalkeeper'] as Map<String, dynamic>,
+              )
+              : currentSet.goalkeeper,
     );
     _profiles[clubId] = ClubIdentityDefaults.buildIdentity(
       clubId: current.clubId,
@@ -297,15 +308,18 @@ JerseyVariantDto _copyVariantFromJson(
     primaryColor: json['primary_color'] as String?,
     secondaryColor: json['secondary_color'] as String?,
     accentColor: json['accent_color'] as String?,
-    patternType: json['pattern_type'] == null
-        ? null
-        : PatternType.values.byName(json['pattern_type'] as String),
-    collarStyle: json['collar_style'] == null
-        ? null
-        : _collarStyleFromWire(json['collar_style'] as String),
-    sleeveStyle: json['sleeve_style'] == null
-        ? null
-        : SleeveStyle.values.byName(json['sleeve_style'] as String),
+    patternType:
+        json['pattern_type'] == null
+            ? null
+            : PatternType.values.byName(json['pattern_type'] as String),
+    collarStyle:
+        json['collar_style'] == null
+            ? null
+            : _collarStyleFromWire(json['collar_style'] as String),
+    sleeveStyle:
+        json['sleeve_style'] == null
+            ? null
+            : SleeveStyle.values.byName(json['sleeve_style'] as String),
     badgePlacement: json['badge_placement'] as String?,
     frontText: json['front_text'] as String?,
     shortsColor: json['shorts_color'] as String?,
@@ -340,10 +354,11 @@ String _errorMessage(Object? payload) {
   }
   if (payload is Map) {
     final Map<String, Object?> json = GteJson.map(payload);
-    final String? detail = GteJson.stringOrNull(
-      json,
-      const <String>['detail', 'message', 'error'],
-    );
+    final String? detail = GteJson.stringOrNull(json, const <String>[
+      'detail',
+      'message',
+      'error',
+    ]);
     if (detail != null && detail.isNotEmpty) {
       return detail;
     }

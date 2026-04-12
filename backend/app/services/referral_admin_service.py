@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
-from fastapi import Request
+from fastapi import Depends, Request
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.auth.dependencies import get_session
+from app.models.admin_runtime_state import AdminRuntimeState
+from app.models.share_code import ShareCode
 
 from app.schemas.referral_admin import (
     AttributionChainEntryView,
@@ -21,10 +27,18 @@ from app.schemas.referral_admin import (
 from app.schemas.referral_analytics import CreatorLeaderboardResponse, ReferralAnalyticsSummaryView
 from app.services.creator_leaderboard_service import CreatorLeaderboardService
 from app.services.referral_analytics_service import ReferralAnalyticsService
-from app.services.referral_orchestrator import ReferralActionError, ReferralOrchestrator, RewardRecord, utcnow
+from app.services.referral_orchestrator import (
+    ReferralActionError,
+    ReferralOrchestrator,
+    ReferralRuntimeStore,
+    RewardRecord,
+    utcnow,
+)
 from app.services.referral_risk_service import ReferralRiskService
 
 _FOUR_PLACES = Decimal("0.0001")
+_SHARE_CODE_MODERATION_STATE_PREFIX = "referral_share_code_moderation:"
+_CREATOR_REWARD_FREEZE_STATE_PREFIX = "referral_creator_reward_freeze:"
 
 
 @dataclass(slots=True)
@@ -46,21 +60,9 @@ class CreatorRewardFreezeState:
 
 
 @dataclass(slots=True)
-class RewardReviewAudit:
-    reward_id: str
-    action: str
-    status_after: str
-    reason: str | None
-    reference: str | None
-    performed_by_admin_id: str
-    performed_at: datetime
-
-
-@dataclass(slots=True)
-class ReferralAdminStore:
+class ReferralAdminRuntimeStore:
     blocked_share_codes: dict[str, ShareCodeModerationState] = field(default_factory=dict)
     creator_reward_freezes: dict[str, CreatorRewardFreezeState] = field(default_factory=dict)
-    reward_reviews: dict[str, list[RewardReviewAudit]] = field(default_factory=dict)
 
 
 class ReferralAdminService:
@@ -68,24 +70,30 @@ class ReferralAdminService:
         self,
         orchestrator: ReferralOrchestrator,
         *,
-        store: ReferralAdminStore | None = None,
+        runtime_store: ReferralAdminRuntimeStore | None = None,
+        session: Session | None = None,
     ) -> None:
         self.orchestrator = orchestrator
-        self.store = store or ReferralAdminStore()
+        self.runtime_store = runtime_store or ReferralAdminRuntimeStore()
+        self.session = session
         self.analytics = ReferralAnalyticsService(orchestrator)
         self.risk = ReferralRiskService(orchestrator)
         self.leaderboard = CreatorLeaderboardService(orchestrator)
+        self._share_code_state_cache: dict[str, ShareCodeModerationState] | None = None
+        self._creator_freeze_state_cache: dict[str, CreatorRewardFreezeState] | None = None
 
     def dashboard(self) -> ReferralAdminDashboardView:
         share_codes = self.analytics.share_code_metrics()
         flags = self.list_flags()
         pending_rewards = len(self.list_pending_rewards())
+        blocked_states = self._share_code_moderation_states()
+        frozen_states = self._creator_reward_freeze_states()
         return ReferralAdminDashboardView(
             total_share_codes=len(share_codes),
             active_share_codes=sum(1 for metric in share_codes.values() if metric.active),
             pending_rewards=pending_rewards,
-            blocked_share_codes=sum(1 for state in self.store.blocked_share_codes.values() if state.blocked),
-            frozen_creators=sum(1 for state in self.store.creator_reward_freezes.values() if state.frozen),
+            blocked_share_codes=sum(1 for state in blocked_states.values() if state.blocked),
+            frozen_creators=sum(1 for state in frozen_states.values() if state.frozen),
             total_flags=len(flags),
             high_severity_flags=sum(1 for flag in flags if flag.severity == "high"),
             recent_flags=flags[:5],
@@ -116,20 +124,30 @@ class ReferralAdminService:
         admin_user_id: str,
         payload: ShareCodeModerationRequest,
     ) -> ShareCodeUsageSummaryView:
-        with self.orchestrator.store.lock:
-            share_code = self.orchestrator.store.share_codes_by_id.get(share_code_id)
+        changed_at = utcnow()
+        if self.session is not None:
+            share_code = self.session.get(ShareCode, share_code_id)
             if share_code is None:
                 raise ReferralActionError("share_code_not_found")
-            share_code.active = not payload.disable_code
-            share_code.updated_at = utcnow()
+            share_code.is_active = not payload.disable_code
+            share_code.updated_at = changed_at
+            self.session.flush()
+        else:
+            with self.orchestrator.store.lock:
+                share_code = self.orchestrator.store.share_codes_by_id.get(share_code_id)
+                if share_code is None:
+                    raise ReferralActionError("share_code_not_found")
+                share_code.active = not payload.disable_code
+                share_code.updated_at = changed_at
 
-        self.store.blocked_share_codes[share_code_id] = ShareCodeModerationState(
+        state = ShareCodeModerationState(
             share_code_id=share_code_id,
             blocked=payload.disable_code,
             reason=payload.reason,
             updated_by_admin_id=admin_user_id,
-            updated_at=utcnow(),
+            updated_at=changed_at,
         )
+        self._save_share_code_moderation_state(state)
         result = self.get_share_code(share_code_id)
         if result is None:
             raise ReferralActionError("share_code_not_found")
@@ -163,13 +181,14 @@ class ReferralAdminService:
         creator = self.get_creator(creator_id)
         if creator is None:
             raise ReferralActionError("creator_not_found")
-        self.store.creator_reward_freezes[creator_id] = CreatorRewardFreezeState(
+        state = CreatorRewardFreezeState(
             creator_id=creator_id,
             frozen=payload.freeze,
             reason=payload.reason,
             updated_by_admin_id=admin_user_id,
             updated_at=utcnow(),
         )
+        self._save_creator_reward_freeze_state(state)
         refreshed = self.get_creator(creator_id)
         if refreshed is None:
             raise ReferralActionError("creator_not_found")
@@ -182,9 +201,8 @@ class ReferralAdminService:
         creator_id: str | None = None,
         attribution_status: str | None = None,
     ) -> list[AttributionChainEntryView]:
-        with self.orchestrator.store.lock:
-            attributions = tuple(self.orchestrator.store.attributions_by_id.values())
-            rewards = tuple(self.orchestrator.store.rewards_by_id.values())
+        rewards = self.orchestrator.rewards.list_all()
+        attributions = self.orchestrator.attributions.list_all()
 
         rewards_by_attribution: dict[str, list[RewardRecord]] = {}
         for reward in rewards:
@@ -220,12 +238,11 @@ class ReferralAdminService:
         return sorted(items, key=lambda item: item.first_touched_at, reverse=True)
 
     def list_pending_rewards(self) -> list[PendingRewardView]:
-        with self.orchestrator.store.lock:
-            rewards = tuple(self.orchestrator.store.rewards_by_id.values())
-            attributions = {
-                attribution.attribution_id: attribution
-                for attribution in self.orchestrator.store.attributions_by_id.values()
-            }
+        rewards = self.orchestrator.rewards.list_all()
+        attributions = {
+            attribution.attribution_id: attribution
+            for attribution in self.orchestrator.attributions.list_all()
+        }
         items = []
         for reward in rewards:
             if reward.status != "pending":
@@ -260,41 +277,28 @@ class ReferralAdminService:
         admin_user_id: str,
         payload: RewardReviewRequest,
     ) -> RewardReviewDecisionView:
-        with self.orchestrator.store.lock:
-            reward = self.orchestrator.store.rewards_by_id.get(reward_id)
-            if reward is None:
-                raise ReferralActionError("reward_not_found")
-            attribution = self.orchestrator.store.attributions_by_id.get(reward.attribution_id)
-            creator_id = reward.beneficiary_creator_id or (attribution.creator_profile_id if attribution is not None else None)
-            if payload.action == "approve" and self._creator_frozen(creator_id):
-                raise ReferralActionError("creator_rewards_frozen")
-            status_after = "approved" if payload.action == "approve" else "blocked"
-            updated = replace(
-                reward,
-                status=status_after,
-                review_reason=payload.reason,
-                updated_at=utcnow(),
-            )
-            self.orchestrator.store.rewards_by_id[reward_id] = updated
-
-        decision = RewardReviewAudit(
+        reward = self.orchestrator.rewards.get_by_id(reward_id)
+        if reward is None:
+            raise ReferralActionError("reward_not_found")
+        attribution = self.orchestrator.attributions.get_by_id(reward.attribution_id)
+        creator_id = reward.beneficiary_creator_id or (attribution.creator_profile_id if attribution is not None else None)
+        if payload.action == "approve" and self._creator_frozen(creator_id):
+            raise ReferralActionError("creator_rewards_frozen")
+        updated = self.orchestrator.rewards.apply_review_decision(
             reward_id=reward_id,
             action=payload.action,
-            status_after=status_after,
             reason=payload.reason,
             reference=payload.reference,
-            performed_by_admin_id=admin_user_id,
-            performed_at=utcnow(),
+            admin_user_id=admin_user_id,
         )
-        self.store.reward_reviews.setdefault(reward_id, []).append(decision)
         return RewardReviewDecisionView(
             reward_id=reward_id,
             action=payload.action,
-            status_after=status_after,
+            status_after=updated.status,
             reason=payload.reason,
             reference=payload.reference,
             performed_by_admin_id=admin_user_id,
-            performed_at=decision.performed_at,
+            performed_at=updated.updated_at,
         )
 
     def list_flags(self) -> list[ReferralFlagView]:
@@ -363,7 +367,7 @@ class ReferralAdminService:
 
     def _manual_flags(self) -> list[ReferralFlagView]:
         flags: list[ReferralFlagView] = []
-        for state in self.store.blocked_share_codes.values():
+        for state in self._share_code_moderation_states().values():
             if not state.blocked:
                 continue
             flags.append(
@@ -380,7 +384,7 @@ class ReferralAdminService:
                     flagged_at=state.updated_at,
                 )
             )
-        for state in self.store.creator_reward_freezes.values():
+        for state in self._creator_reward_freeze_states().values():
             if not state.frozen:
                 continue
             flags.append(
@@ -408,19 +412,153 @@ class ReferralAdminService:
     def _creator_frozen(self, creator_id: str | None) -> bool:
         if creator_id is None:
             return False
-        state = self.store.creator_reward_freezes.get(creator_id)
+        state = self._creator_reward_freeze_states().get(creator_id)
         return state.frozen if state is not None else False
 
+    def _share_code_moderation_states(self) -> dict[str, ShareCodeModerationState]:
+        if self._share_code_state_cache is not None:
+            return self._share_code_state_cache
+        if self.session is None:
+            self._share_code_state_cache = dict(self.runtime_store.blocked_share_codes)
+            return self._share_code_state_cache
+        rows = tuple(
+            self.session.scalars(
+                select(AdminRuntimeState).where(
+                    AdminRuntimeState.state_key.like(f"{_SHARE_CODE_MODERATION_STATE_PREFIX}%")
+                )
+            ).all()
+        )
+        states: dict[str, ShareCodeModerationState] = {}
+        for row in rows:
+            state = self._share_code_moderation_state_from_row(row)
+            if state is not None:
+                states[state.share_code_id] = state
+        self.runtime_store.blocked_share_codes = dict(states)
+        self._share_code_state_cache = states
+        return states
 
-def get_referral_admin_service(request: Request) -> ReferralAdminService:
-    service = getattr(request.app.state, "referral_admin_service", None)
+    def _creator_reward_freeze_states(self) -> dict[str, CreatorRewardFreezeState]:
+        if self._creator_freeze_state_cache is not None:
+            return self._creator_freeze_state_cache
+        if self.session is None:
+            self._creator_freeze_state_cache = dict(self.runtime_store.creator_reward_freezes)
+            return self._creator_freeze_state_cache
+        rows = tuple(
+            self.session.scalars(
+                select(AdminRuntimeState).where(
+                    AdminRuntimeState.state_key.like(f"{_CREATOR_REWARD_FREEZE_STATE_PREFIX}%")
+                )
+            ).all()
+        )
+        states: dict[str, CreatorRewardFreezeState] = {}
+        for row in rows:
+            state = self._creator_reward_freeze_state_from_row(row)
+            if state is not None:
+                states[state.creator_id] = state
+        self.runtime_store.creator_reward_freezes = dict(states)
+        self._creator_freeze_state_cache = states
+        return states
+
+    def _save_share_code_moderation_state(self, state: ShareCodeModerationState) -> None:
+        self._share_code_moderation_states()[state.share_code_id] = state
+        self.runtime_store.blocked_share_codes[state.share_code_id] = state
+        if self.session is not None:
+            self._save_runtime_state_record(
+                state_key=f"{_SHARE_CODE_MODERATION_STATE_PREFIX}{state.share_code_id}",
+                payload_json={
+                    "share_code_id": state.share_code_id,
+                    "blocked": state.blocked,
+                    "reason": state.reason,
+                    "updated_by_admin_id": state.updated_by_admin_id,
+                    "updated_at": state.updated_at.isoformat(),
+                },
+            )
+
+    def _save_creator_reward_freeze_state(self, state: CreatorRewardFreezeState) -> None:
+        self._creator_reward_freeze_states()[state.creator_id] = state
+        self.runtime_store.creator_reward_freezes[state.creator_id] = state
+        if self.session is not None:
+            self._save_runtime_state_record(
+                state_key=f"{_CREATOR_REWARD_FREEZE_STATE_PREFIX}{state.creator_id}",
+                payload_json={
+                    "creator_id": state.creator_id,
+                    "frozen": state.frozen,
+                    "reason": state.reason,
+                    "updated_by_admin_id": state.updated_by_admin_id,
+                    "updated_at": state.updated_at.isoformat(),
+                },
+            )
+
+    def _save_runtime_state_record(self, *, state_key: str, payload_json: dict[str, object]) -> None:
+        if self.session is None:
+            return
+        row = self.session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == state_key))
+        if row is None:
+            self.session.add(AdminRuntimeState(state_key=state_key, payload_json=dict(payload_json)))
+            self.session.flush()
+            return
+        row.payload_json = dict(payload_json)
+        self.session.flush()
+
+    @staticmethod
+    def _share_code_moderation_state_from_row(row: AdminRuntimeState) -> ShareCodeModerationState | None:
+        payload = dict(row.payload_json or {})
+        share_code_id = str(payload.get("share_code_id") or row.state_key.removeprefix(_SHARE_CODE_MODERATION_STATE_PREFIX))
+        if not share_code_id:
+            return None
+        return ShareCodeModerationState(
+            share_code_id=share_code_id,
+            blocked=bool(payload.get("blocked", False)),
+            reason=str(payload.get("reason") or ""),
+            updated_by_admin_id=str(payload.get("updated_by_admin_id") or ""),
+            updated_at=_parse_state_timestamp(payload.get("updated_at")),
+        )
+
+    @staticmethod
+    def _creator_reward_freeze_state_from_row(row: AdminRuntimeState) -> CreatorRewardFreezeState | None:
+        payload = dict(row.payload_json or {})
+        creator_id = str(payload.get("creator_id") or row.state_key.removeprefix(_CREATOR_REWARD_FREEZE_STATE_PREFIX))
+        if not creator_id:
+            return None
+        return CreatorRewardFreezeState(
+            creator_id=creator_id,
+            frozen=bool(payload.get("frozen", False)),
+            reason=str(payload.get("reason") or ""),
+            updated_by_admin_id=str(payload.get("updated_by_admin_id") or ""),
+            updated_at=_parse_state_timestamp(payload.get("updated_at")),
+        )
+
+
+def get_referral_admin_service(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> ReferralAdminService:
+    runtime_store = getattr(request.app.state, "referral_admin_runtime_store", None)
+    if runtime_store is None:
+        runtime_store = getattr(request.app.state, "referral_admin_store", None)
+    if runtime_store is None:
+        runtime_store = ReferralAdminRuntimeStore()
+    request.app.state.referral_admin_runtime_store = runtime_store
+
     orchestrator = getattr(request.app.state, "referral_orchestrator", None)
     if orchestrator is None:
-        from app.services.referral_orchestrator import ReferralOrchestrator
+        runtime_referral_store = getattr(request.app.state, "referral_runtime_store", None)
+        if runtime_referral_store is None:
+            runtime_referral_store = getattr(request.app.state, "referral_store", None)
+        if runtime_referral_store is None:
+            runtime_referral_store = ReferralRuntimeStore()
+        request.app.state.referral_runtime_store = runtime_referral_store
+        orchestrator = ReferralOrchestrator(store=runtime_referral_store, session=session)
+    elif session is not None and getattr(orchestrator, "session", None) is None:
+        orchestrator = ReferralOrchestrator(store=orchestrator.store, session=session)
 
-        orchestrator = ReferralOrchestrator()
-        request.app.state.referral_orchestrator = orchestrator
-    if service is None:
-        service = ReferralAdminService(orchestrator)
-        request.app.state.referral_admin_service = service
-    return service
+    return ReferralAdminService(orchestrator, runtime_store=runtime_store, session=session)
+
+
+def _parse_state_timestamp(value: object) -> datetime:
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            pass
+    return utcnow()

@@ -19,14 +19,15 @@ class CreatorApi {
   factory CreatorApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return CreatorApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
-        transport: createModeAwareTransport(mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
+        transport: createModeAwareTransport(resolvedMode),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       baseUrl: baseUrl,
       fixtures: _CreatorFixtures.seed(baseUrl),
@@ -178,11 +179,8 @@ class CreatorApi {
   }) async {
     return _withLegacyNotFoundFallback<Object?>(
       path,
-      (String resolvedPath) => client.post(
-        resolvedPath,
-        body: body,
-        auth: auth,
-      ),
+      (String resolvedPath) =>
+          client.post(resolvedPath, body: body, auth: auth),
     );
   }
 

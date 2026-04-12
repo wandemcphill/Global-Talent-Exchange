@@ -14,7 +14,7 @@ from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin, utcnow
 class ReferralEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "referral_events"
 
-    event_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True, index=True)
+    event_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
     referral_attribution_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("referral_attributions.id", ondelete="SET NULL"),

@@ -19,20 +19,21 @@ class ReferralApi {
 
   factory ReferralApi.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
     String? accessToken,
     AuthSessionStore? authSessionStore,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return ReferralApi._(
       baseUrl: baseUrl,
-      mode: mode,
+      mode: resolvedMode,
       latency: const Duration(milliseconds: 180),
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
         authSessionStore: authSessionStore ?? SecureAuthSessionStore(),
-        mode: mode,
+        mode: resolvedMode,
       ),
     );
   }

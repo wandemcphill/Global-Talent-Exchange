@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pathlib import Path
 import json
 from decimal import Decimal
 from typing import Annotated
@@ -10,6 +9,7 @@ from fastapi.routing import APIRoute
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.admin_finance.service import AdminFinanceService
 from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
 from app.admin_godmode.service import (
@@ -68,7 +68,7 @@ from app.wallets.funding_service import (
 )
 from app.wallets.service import LedgerError, WalletService
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
-from app.wallets.providers import get_provider_adapter
+from app.wallets.providers import get_live_provider_adapter
 from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict
@@ -334,7 +334,7 @@ def _load_admin_god_mode_state(request: Request | None) -> dict[str, object]:
     config_root = getattr(request.app.state.settings, "config_root", None)
     if config_root is None:
         return {}
-    path = Path(config_root) / "admin_god_mode.json"
+    path = admin_godmode_state_path(config_root)
     if not path.exists():
         return {
             "commissions": dict(DEFAULT_COMMISSION_SETTINGS),
@@ -864,7 +864,7 @@ def create_purchase_order_quote(
     request: Request = None,
 ) -> PurchaseOrderQuoteView:
     try:
-        get_provider_adapter(payload.provider_key)
+        get_live_provider_adapter(payload.provider_key)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     settings, processor_mode, payout_channel = _require_gateway_deposit(
@@ -912,7 +912,7 @@ def create_purchase_order(
     request: Request = None,
 ) -> PurchaseOrderView:
     try:
-        get_provider_adapter(payload.provider_key)
+        get_live_provider_adapter(payload.provider_key)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     settings, processor_mode, payout_channel = _require_gateway_deposit(
@@ -1201,7 +1201,7 @@ async def handle_provider_webhook(
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     try:
-        adapter = get_provider_adapter(provider_key)
+        adapter = get_live_provider_adapter(provider_key)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:

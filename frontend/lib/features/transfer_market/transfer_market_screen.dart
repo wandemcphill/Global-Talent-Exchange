@@ -649,6 +649,9 @@ class _MarketBody extends ConsumerWidget {
         );
       }
     } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
       await _handleProtectedActionError(context, ref, error);
     }
   }
@@ -679,6 +682,9 @@ class _MarketBody extends ConsumerWidget {
         );
       }
     } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
       await _handleProtectedActionError(context, ref, error);
     }
   }
@@ -738,6 +744,9 @@ class _MarketBody extends ConsumerWidget {
         );
       }
     } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
       await _handleProtectedActionError(context, ref, error);
     }
   }

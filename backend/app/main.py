@@ -201,6 +201,7 @@ async def _startup_app(app: FastAPI) -> None:
             app.state.realtime.bind_loop(asyncio.get_running_loop())
         check_db(app)
         check_redis(app)
+        runtime_context.start_outbox_relay()
         runtime_context.metrics.refresh_from_database()
         _start_deferred_startup(app, context=runtime_context, modules=module_specs)
         logger.info("app.startup.complete")
@@ -243,15 +244,7 @@ def check_db(app: FastAPI) -> None:
             raise
         logger.warning("app.startup.health.database.schema_repair.begin detail=%s", exc)
         app.state.container.database.initialize(run_migration_check=True)
-        try:
-            app.state.container.check_db(check_schema=True)
-        except RuntimeError as repair_exc:
-            if not _should_attempt_schema_repair(repair_exc):
-                raise
-            logger.warning("app.startup.health.database.metadata_repair.begin detail=%s", repair_exc)
-            _repair_schema_from_metadata(app)
-            app.state.container.check_db(check_schema=True)
-            logger.info("app.startup.health.database.metadata_repair.complete")
+        app.state.container.check_db(check_schema=True)
         logger.info("app.startup.health.database.schema_repair.complete")
     logger.info("app.startup.health.database.complete")
 
@@ -272,14 +265,6 @@ def _should_run_schema_check() -> bool:
 
 def _should_attempt_schema_repair(exc: RuntimeError) -> bool:
     return str(exc).startswith("Database schema smoke check failed.")
-
-
-def _repair_schema_from_metadata(app: FastAPI) -> None:
-    from app.core.database import get_target_metadata
-
-    metadata = get_target_metadata()
-    with app.state.container.database.engine.begin() as connection:
-        metadata.create_all(bind=connection)
 
 
 def _configure_cors(app: FastAPI, settings: Settings) -> None:

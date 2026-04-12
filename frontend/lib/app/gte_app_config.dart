@@ -1,5 +1,7 @@
 import '../data/gte_api_repository.dart';
 
+const String gteFixtureApiBaseUrl = 'https://fixture.invalid';
+
 class GteAppConfig {
   const GteAppConfig({required this.apiBaseUrl, required this.backendMode});
 
@@ -12,21 +14,52 @@ class GteAppConfig {
           : GteBackendMode.live;
 
   static GteAppConfig fromEnvironment() {
-    const String rawBaseUrl = String.fromEnvironment(
-      'GTE_API_BASE_URL',
-      defaultValue: 'http://127.0.0.1:8000',
-    );
+    const String rawBaseUrl = String.fromEnvironment('GTE_API_BASE_URL');
     const String rawMode = String.fromEnvironment(
       'GTE_BACKEND_MODE',
       // Default to live so imported players, regens, and admin changes are
       // visible without requiring a local launch flag override.
       defaultValue: 'live',
     );
+    final GteBackendMode backendMode = _parseBackendMode(rawMode);
     return GteAppConfig(
-      apiBaseUrl: rawBaseUrl,
-      backendMode: _parseBackendMode(rawMode),
+      apiBaseUrl: resolveGteApiBaseUrl(
+        rawBaseUrl: rawBaseUrl,
+        backendMode: backendMode,
+      ),
+      backendMode: backendMode,
     );
   }
+}
+
+String resolveGteApiBaseUrl({
+  required String rawBaseUrl,
+  required GteBackendMode backendMode,
+}) {
+  final String baseUrl = rawBaseUrl.trim();
+  if (baseUrl.isNotEmpty) {
+    return baseUrl;
+  }
+  if (backendMode == GteBackendMode.fixture) {
+    return gteFixtureApiBaseUrl;
+  }
+  throw StateError(
+    'GTE_API_BASE_URL must be set when GTE_BACKEND_MODE is live or '
+    'liveThenFixture.',
+  );
+}
+
+String resolveGteApiBaseUrlFromEnvironment({
+  String rawBaseUrl = const String.fromEnvironment('GTE_API_BASE_URL'),
+  String rawMode = const String.fromEnvironment(
+    'GTE_BACKEND_MODE',
+    defaultValue: 'live',
+  ),
+}) {
+  return resolveGteApiBaseUrl(
+    rawBaseUrl: rawBaseUrl,
+    backendMode: _parseBackendMode(rawMode),
+  );
 }
 
 GteBackendMode _parseBackendMode(String rawMode) {

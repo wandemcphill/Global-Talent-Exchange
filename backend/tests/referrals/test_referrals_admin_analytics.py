@@ -5,12 +5,17 @@ from dataclasses import dataclass
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
+import app.models  # noqa: F401
+from app.auth.dependencies import get_session
 from app.auth.dependencies import get_current_user
+from app.models.base import Base
 from app.routes.admin_referrals import router as admin_referrals_router
 from app.routes.creators import router as creators_router
 from app.routes.referrals import router as referrals_router
-from app.services.referral_orchestrator import ReferralOrchestrator
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,11 +29,13 @@ class StubUser:
 
 @pytest.fixture()
 def admin_referral_api():
-    app = FastAPI()
-    app.include_router(creators_router)
-    app.include_router(referrals_router)
-    app.include_router(admin_referrals_router)
-    app.state.referral_orchestrator = ReferralOrchestrator()
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    session_local = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
     users = {
         "admin": StubUser("user-admin", "admin", "Admin User", "admin@example.com", role="admin"),
@@ -38,19 +45,38 @@ def admin_referral_api():
         "referred_2": StubUser("user-r2", "referred2", "Referred 2", "r2@example.com"),
         "referred_3": StubUser("user-r3", "referred3", "Referred 3", "r3@example.com"),
     }
+
+    app = _build_admin_referral_app(session_local, users)
+    with TestClient(app) as client:
+        yield app, client, users, session_local
+
+    engine.dispose()
+
+
+def _build_admin_referral_app(session_local, users: dict[str, StubUser]) -> FastAPI:
+    app = FastAPI()
+    app.include_router(creators_router)
+    app.include_router(referrals_router)
+    app.include_router(admin_referrals_router)
     app.state.current_user = users["admin"]
 
     def override_current_user():
         return app.state.current_user
 
-    app.dependency_overrides[get_current_user] = override_current_user
+    def override_session():
+        session = session_local()
+        try:
+            yield session
+        finally:
+            session.close()
 
-    with TestClient(app) as client:
-        yield app, client, users
+    app.dependency_overrides[get_current_user] = override_current_user
+    app.dependency_overrides[get_session] = override_session
+    return app
 
 
 def test_admin_can_inspect_analytics_review_rewards_and_block_share_codes(admin_referral_api) -> None:
-    app, client, users = admin_referral_api
+    app, client, users, _session_local = admin_referral_api
 
     alpha_code = _create_creator_profile(
         app,
@@ -151,6 +177,96 @@ def test_admin_can_inspect_analytics_review_rewards_and_block_share_codes(admin_
     dashboard_payload = dashboard_response.json()
     assert dashboard_payload["blocked_share_codes"] == 1
     assert dashboard_payload["pending_rewards"] == 2
+
+
+def test_admin_referral_state_survives_restart(admin_referral_api) -> None:
+    app, client, users, session_local = admin_referral_api
+
+    alpha_code = _create_creator_profile(
+        app,
+        client,
+        users["creator_alpha"],
+        handle="restartalpha",
+        competition_id="comp-restart",
+    )
+    _redeem_and_progress(
+        app,
+        client,
+        users["referred_1"],
+        alpha_code,
+        campaign_name="restart-growth",
+        linked_competition_id="comp-restart",
+        milestones=["first_creator_competition_joined"],
+    )
+
+    app.state.current_user = users["admin"]
+    creators_response = client.get("/api/admin/referrals/creators")
+    assert creators_response.status_code == 200
+    creator = next(item for item in creators_response.json() if item["handle"] == "restartalpha")
+
+    share_codes_response = client.get("/api/admin/referrals/share-codes")
+    assert share_codes_response.status_code == 200
+    share_code = next(item for item in share_codes_response.json() if item["code"] == alpha_code)
+
+    pending_response = client.get("/api/admin/referrals/rewards/pending")
+    assert pending_response.status_code == 200
+    pending_reward = next(
+        item for item in pending_response.json() if item["beneficiary_creator_id"] == creator["creator_id"]
+    )
+
+    freeze_response = client.post(
+        f"/api/admin/referrals/creators/{creator['creator_id']}/reward-freeze",
+        json={"freeze": True, "reason": "creator review freeze"},
+    )
+    assert freeze_response.status_code == 200
+    assert freeze_response.json()["approval_frozen"] is True
+
+    block_response = client.post(
+        f"/api/admin/referrals/share-codes/{share_code['code_id']}/block",
+        json={"reason": "manual integrity review", "disable_code": True},
+    )
+    assert block_response.status_code == 200
+    assert block_response.json()["active"] is False
+
+    review_response = client.post(
+        f"/api/admin/referrals/rewards/{pending_reward['reward_id']}/review",
+        json={"action": "block", "reason": "fraud ring suspected", "reference": "case-restart-1"},
+    )
+    assert review_response.status_code == 200
+    assert review_response.json()["status_after"] == "blocked"
+
+    restarted_app = _build_admin_referral_app(session_local, users)
+    with TestClient(restarted_app) as restarted_client:
+        restarted_app.state.current_user = users["admin"]
+
+        dashboard_response = restarted_client.get("/api/admin/referrals/dashboard")
+        assert dashboard_response.status_code == 200
+        dashboard_payload = dashboard_response.json()
+        assert dashboard_payload["blocked_share_codes"] == 1
+        assert dashboard_payload["frozen_creators"] == 1
+        assert dashboard_payload["pending_rewards"] == 0
+
+        flags_response = restarted_client.get("/api/admin/referrals/flags")
+        assert flags_response.status_code == 200
+        flag_types = {item["flag_type"] for item in flags_response.json()}
+        assert "manual_share_code_block" in flag_types
+        assert "manual_creator_reward_freeze" in flag_types
+
+        share_code_response = restarted_client.get(f"/api/admin/referrals/share-codes/{share_code['code_id']}")
+        assert share_code_response.status_code == 200
+        assert share_code_response.json()["active"] is False
+
+        creator_response = restarted_client.get(f"/api/admin/referrals/creators/{creator['creator_id']}")
+        assert creator_response.status_code == 200
+        assert creator_response.json()["approval_frozen"] is True
+
+        restarted_app.state.current_user = users["creator_alpha"]
+        rewards_response = restarted_client.get("/api/referrals/me/rewards")
+        assert rewards_response.status_code == 200
+        assert any(
+            item["reward_id"] == pending_reward["reward_id"] and item["status"] == "blocked"
+            for item in rewards_response.json()
+        )
 
 
 def _create_creator_profile(app: FastAPI, client: TestClient, user: StubUser, *, handle: str, competition_id: str) -> str:

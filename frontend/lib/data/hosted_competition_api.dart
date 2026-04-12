@@ -14,16 +14,17 @@ class HostedCompetitionApi {
   factory HostedCompetitionApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
     GteTransport? transport,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     final GteTransport resolvedTransport = transport ?? GteHttpTransport();
     return HostedCompetitionApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: resolvedTransport,
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _HostedCompetitionFixtures.seed(),
     );

@@ -8,6 +8,12 @@ import 'gte_models.dart';
 
 enum GteBackendMode { live, fixture, liveThenFixture }
 
+GteBackendMode gteProductionBackendMode(GteBackendMode mode) {
+  return mode == GteBackendMode.fixture
+      ? GteBackendMode.fixture
+      : GteBackendMode.live;
+}
+
 enum GteApiErrorType {
   network,
   unauthorized,

@@ -34,11 +34,11 @@ class ClubApi {
     required TrophyCabinetRepository trophyRepository,
     required ClubIdentityRepository identityRepository,
     _ClubFixtureStore? fixtures,
-  })  : _reputationRepository = reputationRepository,
-        _dynastyRepository = dynastyRepository,
-        _trophyRepository = trophyRepository,
-        _identityRepository = identityRepository,
-        _fixtures = fixtures ?? _ClubFixtureStore.seeded();
+  }) : _reputationRepository = reputationRepository,
+       _dynastyRepository = dynastyRepository,
+       _trophyRepository = trophyRepository,
+       _identityRepository = identityRepository,
+       _fixtures = fixtures ?? _ClubFixtureStore.seeded();
 
   final GteRepositoryConfig config;
   final GteTransport transport;
@@ -51,22 +51,25 @@ class ClubApi {
 
   factory ClubApi.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
     String? accessToken,
   }) {
-    final GteRepositoryConfig config =
-        GteRepositoryConfig(baseUrl: baseUrl, mode: mode);
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
+    final GteRepositoryConfig config = GteRepositoryConfig(
+      baseUrl: baseUrl,
+      mode: resolvedMode,
+    );
     return ClubApi(
       config: config,
       transport: GteHttpTransport(),
       accessToken: accessToken,
       reputationRepository: ReputationApiRepository.standard(
         baseUrl: baseUrl,
-        mode: mode,
+        mode: resolvedMode,
       ),
       dynastyRepository: DynastyApiRepository.standard(
         baseUrl: baseUrl,
-        mode: mode,
+        mode: resolvedMode,
       ),
       trophyRepository: _ClubTrophyApiRepository(
         config: config,
@@ -94,9 +97,10 @@ class ClubApi {
     required String clubId,
     String? clubName,
   }) async {
-    final String fallbackClubName = clubName?.trim().isNotEmpty == true
-        ? clubName!.trim()
-        : prettifyClubId(clubId);
+    final String fallbackClubName =
+        clubName?.trim().isNotEmpty == true
+            ? clubName!.trim()
+            : prettifyClubId(clubId);
     final List<Object?> payload = await Future.wait<Object?>(<Future<Object?>>[
       _identityRepository.fetchIdentity(clubId),
       _reputationRepository.fetchOverview(clubId),
@@ -153,11 +157,13 @@ class ClubApi {
       globalRank: _findLeaderboardEntry(globalLeaderboard, clubId),
       regionalRank: _findLeaderboardEntry(regionalLeaderboard, clubId),
     );
-    final ClubBrandingProfile branding =
-        _fixtures.brandingFor(clubId, resolvedClubName);
+    final ClubBrandingProfile branding = _fixtures.brandingFor(
+      clubId,
+      resolvedClubName,
+    );
     final List<ClubCatalogItem> catalog = _fixtures.catalogFor(clubId);
-    final List<ClubPurchaseRecord> purchaseHistory =
-        _fixtures.purchaseHistoryFor(clubId);
+    final List<ClubPurchaseRecord> purchaseHistory = _fixtures
+        .purchaseHistoryFor(clubId);
 
     return ClubDashboardData(
       clubId: clubId,
@@ -166,12 +172,13 @@ class ClubApi {
         clubRecord ?? const <String, Object?>{},
         const <String>['country_name', 'countryName'],
       ),
-      playerCount: clubRecord == null
-          ? null
-          : GteJson.integer(
-              clubRecord,
-              const <String>['player_count', 'playerCount'],
-            ),
+      playerCount:
+          clubRecord == null
+              ? null
+              : GteJson.integer(clubRecord, const <String>[
+                'player_count',
+                'playerCount',
+              ]),
       identity: identity.copyWith(clubName: resolvedClubName),
       reputation: reputation,
       trophyCabinet: trophyCabinet,
@@ -185,8 +192,11 @@ class ClubApi {
         dynastyProfile: dynastyProfile,
         catalog: catalog,
       ),
-      legacyMilestones:
-          _buildLegacyMilestones(reputation, dynastyProfile, trophyCabinet),
+      legacyMilestones: _buildLegacyMilestones(
+        reputation,
+        dynastyProfile,
+        trophyCabinet,
+      ),
     );
   }
 
@@ -289,9 +299,10 @@ class ClubApi {
       contributions.add(
         ReputationContribution(
           title: milestone.title,
-          detail: milestone.season == null
-              ? 'Legacy milestone'
-              : 'Season ${milestone.season}',
+          detail:
+              milestone.season == null
+                  ? 'Legacy milestone'
+                  : 'Season ${milestone.season}',
           delta: milestone.delta,
           categoryLabel: 'Legacy milestone',
         ),
@@ -354,9 +365,10 @@ class ClubApi {
       ...reputation.profile.biggestMilestones.map(
         (ReputationMilestoneDto milestone) => ClubLegacyMilestone(
           title: milestone.title,
-          subtitle: milestone.season == null
-              ? 'Club reputation milestone'
-              : 'Unlocked in Season ${milestone.season}',
+          subtitle:
+              milestone.season == null
+                  ? 'Club reputation milestone'
+                  : 'Unlocked in Season ${milestone.season}',
           tagLabel:
               '${milestone.delta >= 0 ? '+' : ''}${milestone.delta} reputation',
           unlocked: true,
@@ -370,7 +382,9 @@ class ClubApi {
           unlocked: era.active || era.dynastyStatus != DynastyStatus.none,
         ),
       ),
-      ...trophyCabinet.featuredHonors(limit: 2).map(
+      ...trophyCabinet
+          .featuredHonors(limit: 2)
+          .map(
             (honor) => ClubLegacyMilestone(
               title: honor.trophyName,
               subtitle: '${honor.seasonLabel} ${honor.competitionRegion}',
@@ -519,11 +533,9 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
   }) {
     return _withFallback<ClubIdentityDto>(
       () async => ClubIdentityDto.fromJson(
-        _asMap(await _request(
-          'PATCH',
-          '/api/clubs/$clubId/identity',
-          body: patch,
-        )),
+        _asMap(
+          await _request('PATCH', '/api/clubs/$clubId/identity', body: patch),
+        ),
       ),
       () => fixtures.patchIdentity(clubId: clubId, patch: patch),
     );
@@ -536,11 +548,9 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
   }) {
     return _withFallback<JerseySetDto>(
       () async => JerseySetDto.fromJson(
-        _asMap(await _request(
-          'PATCH',
-          '/api/clubs/$clubId/jerseys',
-          body: patch,
-        )),
+        _asMap(
+          await _request('PATCH', '/api/clubs/$clubId/jerseys', body: patch),
+        ),
       ),
       () => fixtures.patchJerseys(clubId: clubId, patch: patch),
     );
@@ -569,11 +579,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
     }
   }
 
-  Future<Object?> _request(
-    String method,
-    String path, {
-    Object? body,
-  }) async {
+  Future<Object?> _request(String method, String path, {Object? body}) async {
     try {
       final Map<String, String> headers = <String, String>{
         'Accept': 'application/json',
@@ -631,10 +637,12 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
   }) {
     return _withFallback<TrophyCabinetDto>(
       () async => TrophyCabinetDto.fromJson(
-        _asMap(await _request(
-          '/api/clubs/$clubId/trophy-cabinet',
-          query: <String, Object?>{'team_scope': teamScope},
-        )),
+        _asMap(
+          await _request(
+            '/api/clubs/$clubId/trophy-cabinet',
+            query: <String, Object?>{'team_scope': teamScope},
+          ),
+        ),
       ),
       () => fixtures.fetchTrophyCabinet(clubId: clubId, teamScope: teamScope),
     );
@@ -647,10 +655,12 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
   }) {
     return _withFallback<HonorsTimelineDto>(
       () async => HonorsTimelineDto.fromJson(
-        _asMap(await _request(
-          '/api/clubs/$clubId/honors-timeline',
-          query: <String, Object?>{'team_scope': teamScope},
-        )),
+        _asMap(
+          await _request(
+            '/api/clubs/$clubId/honors-timeline',
+            query: <String, Object?>{'team_scope': teamScope},
+          ),
+        ),
       ),
       () => fixtures.fetchHonorsTimeline(clubId: clubId, teamScope: teamScope),
     );
@@ -663,25 +673,27 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
   }) {
     return _withFallback<SeasonHonorsArchiveDto>(
       () async => SeasonHonorsArchiveDto.fromJson(
-        _asMap(await _request(
-          '/api/clubs/$clubId/season-honors',
-          query: <String, Object?>{'team_scope': teamScope},
-        )),
+        _asMap(
+          await _request(
+            '/api/clubs/$clubId/season-honors',
+            query: <String, Object?>{'team_scope': teamScope},
+          ),
+        ),
       ),
       () => fixtures.fetchSeasonHonors(clubId: clubId, teamScope: teamScope),
     );
   }
 
   @override
-  Future<TrophyLeaderboardDto> fetchTrophyLeaderboard({
-    String? teamScope,
-  }) {
+  Future<TrophyLeaderboardDto> fetchTrophyLeaderboard({String? teamScope}) {
     return _withFallback<TrophyLeaderboardDto>(
       () async => TrophyLeaderboardDto.fromJson(
-        _asMap(await _request(
-          '/api/leaderboards/trophies',
-          query: <String, Object?>{'team_scope': teamScope},
-        )),
+        _asMap(
+          await _request(
+            '/api/leaderboards/trophies',
+            query: <String, Object?>{'team_scope': teamScope},
+          ),
+        ),
       ),
       () => fixtures.fetchTrophyLeaderboard(teamScope: teamScope),
     );
@@ -752,70 +764,68 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
 
 class _ClubFixtureStore {
   _ClubFixtureStore.seeded()
-      : _brandingByClub = <String, ClubBrandingProfile>{
-          'royal-lagos-fc': ClubBrandingProfile(
-            selectedThemeId: 'royal-night',
-            selectedBackdropId: 'marble-gallery',
-            motto: 'Earned prestige, worn with legacy.',
-            availableThemes: _themes,
-            availableBackdrops: _backdrops,
-            reviewStatus: 'Ready for showcase',
-            reviewNote:
-                'Branding stays within club identity rules and keeps jersey contrast readable.',
+    : _brandingByClub = <String, ClubBrandingProfile>{
+        'royal-lagos-fc': ClubBrandingProfile(
+          selectedThemeId: 'royal-night',
+          selectedBackdropId: 'marble-gallery',
+          motto: 'Earned prestige, worn with legacy.',
+          availableThemes: _themes,
+          availableBackdrops: _backdrops,
+          reviewStatus: 'Ready for showcase',
+          reviewNote:
+              'Branding stays within club identity rules and keeps jersey contrast readable.',
+        ),
+      },
+      _ownedByClub = <String, Set<String>>{
+        'royal-lagos-fc': <String>{
+          'catalog-founder-frame',
+          'catalog-grand-banner',
+        },
+      },
+      _equippedByClub = <String, Map<String, String>>{
+        'royal-lagos-fc': <String, String>{'showcase': 'catalog-founder-frame'},
+      },
+      _purchaseHistoryByClub = <String, List<ClubPurchaseRecord>>{
+        'royal-lagos-fc': <ClubPurchaseRecord>[
+          ClubPurchaseRecord(
+            id: 'purchase-001',
+            itemId: 'catalog-founder-frame',
+            itemTitle: 'Founder frame',
+            category: 'Club identity',
+            purchasedAt: DateTime.utc(2026, 2, 14, 16, 30),
+            priceCredits: 60,
+            confirmationLabel: 'Catalog purchase CP-001',
+            statusLabel: 'Equipped in showcase',
+            transparencyNote:
+                'Permanent cosmetic unlock. No random reward outcomes.',
+            equipped: true,
           ),
-        },
-        _ownedByClub = <String, Set<String>>{
-          'royal-lagos-fc': <String>{
-            'catalog-founder-frame',
-            'catalog-grand-banner',
-          },
-        },
-        _equippedByClub = <String, Map<String, String>>{
-          'royal-lagos-fc': <String, String>{
-            'showcase': 'catalog-founder-frame',
-          },
-        },
-        _purchaseHistoryByClub = <String, List<ClubPurchaseRecord>>{
-          'royal-lagos-fc': <ClubPurchaseRecord>[
-            ClubPurchaseRecord(
-              id: 'purchase-001',
-              itemId: 'catalog-founder-frame',
-              itemTitle: 'Founder frame',
-              category: 'Club identity',
-              purchasedAt: DateTime.utc(2026, 2, 14, 16, 30),
-              priceCredits: 60,
-              confirmationLabel: 'Catalog purchase CP-001',
-              statusLabel: 'Equipped in showcase',
-              transparencyNote:
-                  'Permanent cosmetic unlock. No random reward outcomes.',
-              equipped: true,
-            ),
-          ],
-        },
-        _brandingQueue = <BrandingReviewCase>[
-          const BrandingReviewCase(
-            id: 'review-001',
-            clubName: 'Royal Lagos FC',
-            submittedAtLabel: '2026-03-10 19:40 UTC',
-            themeName: 'Royal night',
-            backdropName: 'Marble gallery',
-            motto: 'Earned prestige, worn with legacy.',
-            statusLabel: 'Pending review',
-            reviewNote:
-                'Verify banner contrast before publishing to global showcase.',
-          ),
-          const BrandingReviewCase(
-            id: 'review-002',
-            clubName: 'Atlas Sporting',
-            submittedAtLabel: '2026-03-09 18:15 UTC',
-            themeName: 'Continental stone',
-            backdropName: 'Legacy corridor',
-            motto: 'From silverware to dynasty.',
-            statusLabel: 'Pending review',
-            reviewNote:
-                'Backdrop is strong; confirm motto still fits moderation length.',
-          ),
-        ];
+        ],
+      },
+      _brandingQueue = <BrandingReviewCase>[
+        const BrandingReviewCase(
+          id: 'review-001',
+          clubName: 'Royal Lagos FC',
+          submittedAtLabel: '2026-03-10 19:40 UTC',
+          themeName: 'Royal night',
+          backdropName: 'Marble gallery',
+          motto: 'Earned prestige, worn with legacy.',
+          statusLabel: 'Pending review',
+          reviewNote:
+              'Verify banner contrast before publishing to global showcase.',
+        ),
+        const BrandingReviewCase(
+          id: 'review-002',
+          clubName: 'Atlas Sporting',
+          submittedAtLabel: '2026-03-09 18:15 UTC',
+          themeName: 'Continental stone',
+          backdropName: 'Legacy corridor',
+          motto: 'From silverware to dynasty.',
+          statusLabel: 'Pending review',
+          reviewNote:
+              'Backdrop is strong; confirm motto still fits moderation length.',
+        ),
+      ];
 
   final Map<String, ClubBrandingProfile> _brandingByClub;
   final Map<String, Set<String>> _ownedByClub;
@@ -852,15 +862,17 @@ class _ClubFixtureStore {
     final Set<String> owned = _ownedByClub[clubId] ?? <String>{};
     final Map<String, String> equipped =
         _equippedByClub[clubId] ?? <String, String>{};
-    return _catalogBlueprints.map((ClubCatalogItem item) {
-      CatalogOwnershipStatus status = CatalogOwnershipStatus.available;
-      if (equipped[item.slot] == item.id) {
-        status = CatalogOwnershipStatus.equipped;
-      } else if (owned.contains(item.id)) {
-        status = CatalogOwnershipStatus.owned;
-      }
-      return item.copyWith(ownershipStatus: status);
-    }).toList(growable: false);
+    return _catalogBlueprints
+        .map((ClubCatalogItem item) {
+          CatalogOwnershipStatus status = CatalogOwnershipStatus.available;
+          if (equipped[item.slot] == item.id) {
+            status = CatalogOwnershipStatus.equipped;
+          } else if (owned.contains(item.id)) {
+            status = CatalogOwnershipStatus.owned;
+          }
+          return item.copyWith(ownershipStatus: status);
+        })
+        .toList(growable: false);
   }
 
   List<ClubPurchaseRecord> purchaseHistoryFor(String clubId) {
@@ -868,20 +880,24 @@ class _ClubFixtureStore {
       _purchaseHistoryByClub[clubId] ?? const <ClubPurchaseRecord>[],
       growable: false,
     )..sort(
-        (ClubPurchaseRecord left, ClubPurchaseRecord right) =>
-            right.purchasedAt.compareTo(left.purchasedAt),
-      );
+      (ClubPurchaseRecord left, ClubPurchaseRecord right) =>
+          right.purchasedAt.compareTo(left.purchasedAt),
+    );
   }
 
   void purchaseItem(String clubId, ClubCatalogItem item) {
-    final Set<String> owned =
-        _ownedByClub.putIfAbsent(clubId, () => <String>{});
+    final Set<String> owned = _ownedByClub.putIfAbsent(
+      clubId,
+      () => <String>{},
+    );
     owned.add(item.id);
     final List<ClubPurchaseRecord> history = _purchaseHistoryByClub.putIfAbsent(
-        clubId, () => <ClubPurchaseRecord>[]);
+      clubId,
+      () => <ClubPurchaseRecord>[],
+    );
     final bool equipped =
         (_equippedByClub[clubId] ?? const <String, String>{})[item.slot] ==
-            item.id;
+        item.id;
     history.insert(
       0,
       ClubPurchaseRecord(
@@ -900,11 +916,15 @@ class _ClubFixtureStore {
   }
 
   void equipItem(String clubId, ClubCatalogItem item) {
-    final Map<String, String> equipped =
-        _equippedByClub.putIfAbsent(clubId, () => <String, String>{});
+    final Map<String, String> equipped = _equippedByClub.putIfAbsent(
+      clubId,
+      () => <String, String>{},
+    );
     equipped[item.slot] = item.id;
     final List<ClubPurchaseRecord> history = _purchaseHistoryByClub.putIfAbsent(
-        clubId, () => <ClubPurchaseRecord>[]);
+      clubId,
+      () => <ClubPurchaseRecord>[],
+    );
     for (int index = 0; index < history.length; index += 1) {
       final ClubPurchaseRecord record = history[index];
       if (record.itemId == item.id) {
@@ -1020,9 +1040,10 @@ class _ClubFixtureStore {
       if (review.id == reviewId) {
         _brandingQueue[index] = review.copyWith(
           statusLabel: approved ? 'Approved for showcase' : 'Changes requested',
-          reviewNote: approved
-              ? 'Branding aligns with club identity guidance and showcase readability.'
-              : 'Adjust contrast or motto length before resubmitting this club identity update.',
+          reviewNote:
+              approved
+                  ? 'Branding aligns with club identity guidance and showcase readability.'
+                  : 'Adjust contrast or motto length before resubmitting this club identity update.',
         );
       }
     }
@@ -1187,10 +1208,11 @@ String _errorMessage(Object? payload) {
   }
   if (payload is Map) {
     final Map<String, Object?> json = GteJson.map(payload);
-    final String? detail = GteJson.stringOrNull(
-      json,
-      const <String>['detail', 'message', 'error'],
-    );
+    final String? detail = GteJson.stringOrNull(json, const <String>[
+      'detail',
+      'message',
+      'error',
+    ]);
     if (detail != null && detail.isNotEmpty) {
       return detail;
     }

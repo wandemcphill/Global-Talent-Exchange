@@ -12,14 +12,15 @@ class CommunityApi {
   factory CommunityApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return CommunityApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _CommunityFixtures.seed(),
     );

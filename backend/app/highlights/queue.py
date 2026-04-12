@@ -231,7 +231,35 @@ class FileHighlightRenderQueue:
         self._write_record(target_path, completed)
         return completed
 
-    def mark_failed(self, record: HighlightRenderJobRecord, *, error: str) -> HighlightRenderJobRecord:
+    def mark_pending(
+        self,
+        record: HighlightRenderJobRecord,
+        *,
+        error: str,
+        result: dict[str, Any] | None = None,
+    ) -> HighlightRenderJobRecord:
+        pending = replace(
+            record,
+            status="queued",
+            updated_at=_utcnow(),
+            completed_at=None,
+            last_error=error,
+            result=dict(result or {}),
+        )
+        source_path = self._processing_path(record.job_id)
+        target_path = self._pending_path(record.job_id)
+        if source_path.exists():
+            source_path.replace(target_path)
+        self._write_record(target_path, pending)
+        return pending
+
+    def mark_failed(
+        self,
+        record: HighlightRenderJobRecord,
+        *,
+        error: str,
+        result: dict[str, Any] | None = None,
+    ) -> HighlightRenderJobRecord:
         completed_at = _utcnow()
         failed = replace(
             record,
@@ -239,6 +267,7 @@ class FileHighlightRenderQueue:
             updated_at=completed_at,
             completed_at=completed_at,
             last_error=error,
+            result=dict(result or {}),
         )
         source_path = self._processing_path(record.job_id)
         target_path = self._failed_path(record.job_id)

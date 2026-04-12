@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/dispute_engine_models.dart';
 
 class DisputeEngineApi {
-  DisputeEngineApi({
-    required this.client,
-    required this.fixtures,
-  });
+  DisputeEngineApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _DisputeEngineFixtures fixtures;
@@ -15,14 +12,15 @@ class DisputeEngineApi {
   factory DisputeEngineApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return DisputeEngineApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _DisputeEngineFixtures.seed(),
     );
@@ -44,18 +42,12 @@ class DisputeEngineApi {
   }
 
   Future<List<DisputeEngineCase>> listMyDisputes() {
-    return client.withFallback<List<DisputeEngineCase>>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/disputes/me');
-        final List<dynamic> disputes =
-            payload['disputes'] as List<dynamic>? ?? <dynamic>[];
-        return disputes
-            .map(DisputeEngineCase.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.listMyDisputes,
-    );
+    return client.withFallback<List<DisputeEngineCase>>(() async {
+      final Map<String, dynamic> payload = await client.getMap('/disputes/me');
+      final List<dynamic> disputes =
+          payload['disputes'] as List<dynamic>? ?? <dynamic>[];
+      return disputes.map(DisputeEngineCase.fromJson).toList(growable: false);
+    }, fixtures.listMyDisputes);
   }
 
   Future<DisputeEngineDetail> createDispute({
@@ -65,88 +57,71 @@ class DisputeEngineApi {
     required String subject,
     required String message,
   }) {
-    return client.withFallback<DisputeEngineDetail>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/disputes',
-          body: <String, Object?>{
-            'resource_type': resourceType,
-            'resource_id': resourceId,
-            'reference': reference,
-            'subject': subject,
-            'message': message,
-            'metadata_json': <String, Object?>{},
-          },
-        );
-        return DisputeEngineDetail.fromJson(payload);
-      },
-      () async => fixtures.createDispute(reference: reference),
-    );
+    return client.withFallback<DisputeEngineDetail>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/disputes',
+        body: <String, Object?>{
+          'resource_type': resourceType,
+          'resource_id': resourceId,
+          'reference': reference,
+          'subject': subject,
+          'message': message,
+          'metadata_json': <String, Object?>{},
+        },
+      );
+      return DisputeEngineDetail.fromJson(payload);
+    }, () async => fixtures.createDispute(reference: reference));
   }
 
   Future<DisputeEngineDetail> fetchDispute(String disputeId) {
-    return client.withFallback<DisputeEngineDetail>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/disputes/$disputeId');
-        return DisputeEngineDetail.fromJson(payload);
-      },
-      () async => fixtures.detail(disputeId),
-    );
+    return client.withFallback<DisputeEngineDetail>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/disputes/$disputeId',
+      );
+      return DisputeEngineDetail.fromJson(payload);
+    }, () async => fixtures.detail(disputeId));
   }
 
   Future<DisputeEngineDetail> addMessage({
     required String disputeId,
     required String message,
   }) {
-    return client.withFallback<DisputeEngineDetail>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/disputes/$disputeId/messages',
-          body: <String, Object?>{
-            'message': message,
-          },
-        );
-        return DisputeEngineDetail.fromJson(payload);
-      },
-      () async => fixtures.addMessage(disputeId, message),
-    );
+    return client.withFallback<DisputeEngineDetail>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/disputes/$disputeId/messages',
+        body: <String, Object?>{'message': message},
+      );
+      return DisputeEngineDetail.fromJson(payload);
+    }, () async => fixtures.addMessage(disputeId, message));
   }
 
   Future<List<DisputeEngineCase>> listAdminDisputes() {
-    return client.withFallback<List<DisputeEngineCase>>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/admin/disputes');
-        final List<dynamic> disputes =
-            payload['disputes'] as List<dynamic>? ?? <dynamic>[];
-        return disputes
-            .map(DisputeEngineCase.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.listAdminDisputes,
-    );
+    return client.withFallback<List<DisputeEngineCase>>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/admin/disputes',
+      );
+      final List<dynamic> disputes =
+          payload['disputes'] as List<dynamic>? ?? <dynamic>[];
+      return disputes.map(DisputeEngineCase.fromJson).toList(growable: false);
+    }, fixtures.listAdminDisputes);
   }
 
   Future<DisputeEngineCase> assignDispute({
     required String disputeId,
     String? adminUserId,
   }) {
-    return client.withFallback<DisputeEngineCase>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/disputes/$disputeId/assign',
-          body: <String, Object?>{
-            if (adminUserId != null) 'admin_user_id': adminUserId,
-          },
-        );
-        return DisputeEngineCase.fromJson(payload);
-      },
-      () async => fixtures.assign(disputeId),
-    );
+    return client.withFallback<DisputeEngineCase>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/admin/disputes/$disputeId/assign',
+        body: <String, Object?>{
+          if (adminUserId != null) 'admin_user_id': adminUserId,
+        },
+      );
+      return DisputeEngineCase.fromJson(payload);
+    }, () async => fixtures.assign(disputeId));
   }
 
   Future<DisputeEngineCase> updateStatus({
@@ -154,20 +129,17 @@ class DisputeEngineApi {
     required String status,
     String? note,
   }) {
-    return client.withFallback<DisputeEngineCase>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/disputes/$disputeId/status',
-          body: <String, Object?>{
-            'status': status,
-            if (note != null) 'note': note,
-          },
-        );
-        return DisputeEngineCase.fromJson(payload);
-      },
-      () async => fixtures.updateStatus(disputeId, status),
-    );
+    return client.withFallback<DisputeEngineCase>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/admin/disputes/$disputeId/status',
+        body: <String, Object?>{
+          'status': status,
+          if (note != null) 'note': note,
+        },
+      );
+      return DisputeEngineCase.fromJson(payload);
+    }, () async => fixtures.updateStatus(disputeId, status));
   }
 }
 
@@ -198,18 +170,18 @@ class _DisputeEngineFixtures {
     ];
     final Map<String, List<DisputeEngineMessage>> messages =
         <String, List<DisputeEngineMessage>>{
-      'case-1': <DisputeEngineMessage>[
-        DisputeEngineMessage(
-          id: 'dmsg-1',
-          disputeId: 'case-1',
-          senderUserId: 'user-1',
-          senderRole: 'user',
-          message: 'The points awarded do not match the fixture.',
-          attachmentId: null,
-          createdAt: DateTime.parse('2026-03-12T12:00:00Z'),
-        ),
-      ],
-    };
+          'case-1': <DisputeEngineMessage>[
+            DisputeEngineMessage(
+              id: 'dmsg-1',
+              disputeId: 'case-1',
+              senderUserId: 'user-1',
+              senderRole: 'user',
+              message: 'The points awarded do not match the fixture.',
+              attachmentId: null,
+              createdAt: DateTime.parse('2026-03-12T12:00:00Z'),
+            ),
+          ],
+        };
     return _DisputeEngineFixtures(cases, messages);
   }
 
@@ -234,19 +206,29 @@ class _DisputeEngineFixtures {
       closedAt: null,
     );
     _cases.insert(0, dispute);
-    return DisputeEngineDetail(dispute: dispute, messages: const <DisputeEngineMessage>[]);
-  }
-
-  Future<DisputeEngineDetail> detail(String disputeId) async {
-    final DisputeEngineCase dispute =
-        _cases.firstWhere((DisputeEngineCase item) => item.id == disputeId);
     return DisputeEngineDetail(
       dispute: dispute,
-      messages: List<DisputeEngineMessage>.of(_messages[disputeId] ?? const <DisputeEngineMessage>[], growable: false),
+      messages: const <DisputeEngineMessage>[],
     );
   }
 
-  Future<DisputeEngineDetail> addMessage(String disputeId, String message) async {
+  Future<DisputeEngineDetail> detail(String disputeId) async {
+    final DisputeEngineCase dispute = _cases.firstWhere(
+      (DisputeEngineCase item) => item.id == disputeId,
+    );
+    return DisputeEngineDetail(
+      dispute: dispute,
+      messages: List<DisputeEngineMessage>.of(
+        _messages[disputeId] ?? const <DisputeEngineMessage>[],
+        growable: false,
+      ),
+    );
+  }
+
+  Future<DisputeEngineDetail> addMessage(
+    String disputeId,
+    String message,
+  ) async {
     final DisputeEngineMessage msg = DisputeEngineMessage(
       id: 'dmsg-${DateTime.now().millisecondsSinceEpoch}',
       disputeId: disputeId,
@@ -263,8 +245,9 @@ class _DisputeEngineFixtures {
   Future<List<DisputeEngineCase>> listAdminDisputes() async => listMyDisputes();
 
   Future<DisputeEngineCase> assign(String disputeId) async {
-    final int index =
-        _cases.indexWhere((DisputeEngineCase item) => item.id == disputeId);
+    final int index = _cases.indexWhere(
+      (DisputeEngineCase item) => item.id == disputeId,
+    );
     if (index == -1) {
       return _cases.first;
     }
@@ -288,9 +271,13 @@ class _DisputeEngineFixtures {
     return updated;
   }
 
-  Future<DisputeEngineCase> updateStatus(String disputeId, String status) async {
-    final int index =
-        _cases.indexWhere((DisputeEngineCase item) => item.id == disputeId);
+  Future<DisputeEngineCase> updateStatus(
+    String disputeId,
+    String status,
+  ) async {
+    final int index = _cases.indexWhere(
+      (DisputeEngineCase item) => item.id == disputeId,
+    );
     if (index == -1) {
       return _cases.first;
     }
@@ -307,8 +294,12 @@ class _DisputeEngineFixtures {
       createdAt: _cases[index].createdAt,
       updatedAt: DateTime.now().toUtc(),
       lastMessageAt: _cases[index].lastMessageAt,
-      resolvedAt: status == 'resolved' ? DateTime.now().toUtc() : _cases[index].resolvedAt,
-      closedAt: status == 'closed' ? DateTime.now().toUtc() : _cases[index].closedAt,
+      resolvedAt:
+          status == 'resolved'
+              ? DateTime.now().toUtc()
+              : _cases[index].resolvedAt,
+      closedAt:
+          status == 'closed' ? DateTime.now().toUtc() : _cases[index].closedAt,
     );
     _cases[index] = updated;
     return updated;

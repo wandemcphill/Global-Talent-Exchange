@@ -6,8 +6,10 @@ from typing import Any
 try:
     from rq import get_current_job
 except ModuleNotFoundError:  # pragma: no cover - exercised in lightweight test/runtime environments
+
     def get_current_job() -> Any | None:
         return None
+
 
 from app.core.cache_namespaces import REGEN_UNIVERSE_CACHE_NAMESPACE
 from app.core.config import get_settings
@@ -30,7 +32,6 @@ def _context():
         settings = get_settings()
         _TASK_CONTEXT = build_application_context(
             settings=settings,
-            run_migration_check=False,
         )
     return _TASK_CONTEXT
 
@@ -72,7 +73,9 @@ def verify_wallet_top_up_job(*, user_id: str, reference: str) -> dict[str, Any]:
         logger.info("worker.wallet_top_up_verify.completed job_id=%s", job_id)
         return payload
     except Exception:
-        logger.exception("worker.wallet_top_up_verify.failed job_id=%s user_id=%s reference=%s", job_id, user_id, reference)
+        logger.exception(
+            "worker.wallet_top_up_verify.failed job_id=%s user_id=%s reference=%s", job_id, user_id, reference
+        )
         raise
 
 

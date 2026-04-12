@@ -6,7 +6,13 @@ from decimal import Decimal
 from threading import RLock
 from uuid import uuid4
 
-from fastapi import Request
+from fastapi import Depends, Request
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
+
+from app.auth.dependencies import get_session
+from app.common.enums.share_code_type import ShareCodeType
+from app.models.share_code import ShareCode
 
 from app.schemas.creator_requests import CreatorProfileCreateRequest, CreatorProfileUpdateRequest
 from app.schemas.creator_responses import CreatorSummaryView
@@ -136,7 +142,7 @@ class CreatorCompetitionLinkRecord:
 
 
 @dataclass(slots=True)
-class ReferralStore:
+class ReferralRuntimeStore:
     creators_by_user_id: dict[str, CreatorProfileRecord] = field(default_factory=dict)
     creator_ids_by_handle: dict[str, str] = field(default_factory=dict)
     creators_by_id: dict[str, CreatorProfileRecord] = field(default_factory=dict)
@@ -166,17 +172,18 @@ def generate_id(prefix: str) -> str:
 class ReferralOrchestrator:
     """GTEX creator profiles, share codes, invite attribution, and referral rewards are community-growth features tied to qualified participation milestones in creator competitions and other skill-based platform activity. They are not betting affiliate flows, house-banked wagering products, or cash-settled prediction mechanics."""
 
-    def __init__(self, store: ReferralStore | None = None) -> None:
+    def __init__(self, store: ReferralRuntimeStore | None = None, session: Session | None = None) -> None:
         from app.services.creator_competition_link_service import CreatorCompetitionLinkService
         from app.services.creator_profile_service import CreatorProfileService
         from app.services.referral_attribution_service import ReferralAttributionService
         from app.services.referral_reward_service import ReferralRewardService
 
-        self.store = store or ReferralStore()
-        self.creator_profiles = CreatorProfileService(self.store)
-        self.creator_competitions = CreatorCompetitionLinkService(self.store)
-        self.attributions = ReferralAttributionService(self.store)
-        self.rewards = ReferralRewardService(self.store)
+        self.store = store or ReferralRuntimeStore()
+        self.session = session
+        self.creator_profiles = CreatorProfileService(self.store, session=session)
+        self.creator_competitions = CreatorCompetitionLinkService(self.store, session=session)
+        self.attributions = ReferralAttributionService(self.store, session=session)
+        self.rewards = ReferralRewardService(self.store, session=session)
 
     def create_creator_profile(self, *, current_user, payload: CreatorProfileCreateRequest):
         creator = self.creator_profiles.create_profile(
@@ -270,8 +277,23 @@ class ReferralOrchestrator:
         return share_code
 
     def list_my_share_codes(self, *, current_user):
+        creator = self.creator_profiles.get_optional(current_user.id)
+        if self.session is not None:
+            filters = [ShareCode.owner_user_id == current_user.id]
+            if creator is not None:
+                filters.append(ShareCode.owner_creator_id == creator.creator_id)
+            share_codes = tuple(
+                self.session.scalars(
+                    select(ShareCode)
+                    .where(or_(*filters))
+                    .order_by(ShareCode.created_at.desc(), ShareCode.id.desc())
+                ).all()
+            )
+            records = tuple(self._share_code_from_model(share_code) for share_code in share_codes)
+            for record in records:
+                self._cache_share_code(record)
+            return list(records)
         with self.store.lock:
-            creator = self.store.creators_by_user_id.get(current_user.id)
             return [
                 share_code
                 for share_code in self.store.share_codes_by_id.values()
@@ -280,11 +302,42 @@ class ReferralOrchestrator:
             ]
 
     def update_share_code(self, *, current_user, share_code_id: str, payload: ShareCodeUpdateRequest):
+        creator = self.creator_profiles.get_optional(current_user.id)
+        if self.session is not None:
+            share_code = self.session.get(ShareCode, share_code_id)
+            if share_code is None:
+                raise ReferralActionError("share_code_not_found")
+            if share_code.owner_user_id != current_user.id and (
+                creator is None or share_code.owner_creator_id != creator.creator_id
+            ):
+                raise ReferralActionError("share_code_forbidden")
+            if payload.linked_competition_id is not None:
+                share_code.linked_competition_id = payload.linked_competition_id
+            if payload.active is not None:
+                share_code.is_active = payload.active
+            if payload.max_uses is not None:
+                share_code.max_uses = payload.max_uses
+            if payload.ends_at is not None:
+                share_code.ends_at = payload.ends_at
+            if payload.metadata is not None:
+                share_code.metadata_json = payload.metadata
+            self.session.flush()
+            updated = self._share_code_from_model(share_code)
+            self._cache_share_code(updated)
+            if updated.owner_creator_id is not None and updated.linked_competition_id is not None:
+                self.creator_competitions.link_competition(
+                    creator_id=updated.owner_creator_id,
+                    competition_id=updated.linked_competition_id,
+                    linked_share_code=updated.code,
+                )
+            if payload.use_as_default and updated.owner_creator_id is not None:
+                creator = self.creator_profiles.get_by_id(updated.owner_creator_id)
+                self.creator_profiles.attach_default_share_code(user_id=creator.user_id, share_code=updated)
+            return updated
         with self.store.lock:
             share_code = self.store.share_codes_by_id.get(share_code_id)
             if share_code is None:
                 raise ReferralActionError("share_code_not_found")
-            creator = self.store.creators_by_user_id.get(current_user.id)
             if share_code.owner_user_id != current_user.id and (
                 creator is None or share_code.owner_creator_id != creator.creator_id
             ):
@@ -314,7 +367,7 @@ class ReferralOrchestrator:
                 linked_share_code=updated.code,
             )
         if payload.use_as_default and updated.owner_creator_id is not None:
-            creator = self.store.creators_by_id[updated.owner_creator_id]
+            creator = self.creator_profiles.get_by_id(updated.owner_creator_id)
             self.creator_profiles.attach_default_share_code(user_id=creator.user_id, share_code=updated)
         return updated
 
@@ -333,10 +386,19 @@ class ReferralOrchestrator:
             linked_competition_id=payload.linked_competition_id,
             metadata=payload.metadata,
         )
-        with self.store.lock:
-            refreshed = self.store.share_codes_by_id[share_code.share_code_id]
-            refreshed.current_uses += 1
-            refreshed.updated_at = utcnow()
+        if self.session is not None:
+            persisted_share_code = self.session.get(ShareCode, share_code.share_code_id)
+            if persisted_share_code is None:
+                raise ReferralActionError("share_code_not_found")
+            persisted_share_code.current_uses += 1
+            self.session.flush()
+            refreshed = self._share_code_from_model(persisted_share_code)
+            self._cache_share_code(refreshed)
+        else:
+            with self.store.lock:
+                refreshed = self.store.share_codes_by_id[share_code.share_code_id]
+                refreshed.current_uses += 1
+                refreshed.updated_at = utcnow()
         if attribution.creator_profile_id is not None:
             self.creator_competitions.record_signup(
                 creator_id=attribution.creator_profile_id,
@@ -449,6 +511,35 @@ class ReferralOrchestrator:
             fallback_seed=creator.handle if creator is not None else getattr(current_user, "username", current_user.id),
         )
         now = utcnow()
+        if self.session is not None:
+            share_code_model = ShareCode(
+                id=generate_id("code"),
+                code=code,
+                vanity_code=vanity_code,
+                code_type=ShareCodeType(share_code_type),
+                owner_user_id=current_user.id,
+                owner_creator_id=creator.creator_id if share_code_type == "creator_share" and creator is not None else None,
+                linked_competition_id=linked_competition_id,
+                is_active=True,
+                max_uses=max_uses,
+                current_uses=0,
+                starts_at=starts_at,
+                ends_at=ends_at,
+                metadata_json=metadata,
+            )
+            self.session.add(share_code_model)
+            self.session.flush()
+            share_code = self._share_code_from_model(share_code_model)
+            self._cache_share_code(share_code)
+            if share_code.owner_creator_id is not None and linked_competition_id is not None:
+                self.creator_competitions.link_competition(
+                    creator_id=share_code.owner_creator_id,
+                    competition_id=linked_competition_id,
+                    linked_share_code=share_code.code,
+                )
+            if use_as_default and creator is not None:
+                self.creator_profiles.attach_default_share_code(user_id=current_user.id, share_code=share_code)
+            return share_code
         share_code = ShareCodeRecord(
             share_code_id=generate_id("code"),
             code=code,
@@ -485,6 +576,15 @@ class ReferralOrchestrator:
         if not normalized:
             normalized = "community"
         candidate = normalized[:16]
+        if self.session is not None:
+            if self.session.scalar(select(ShareCode.id).where(ShareCode.code == candidate)) is None:
+                return candidate
+            suffix = 2
+            while True:
+                attempt = f"{candidate[:13]}{suffix}"
+                if self.session.scalar(select(ShareCode.id).where(ShareCode.code == attempt)) is None:
+                    return attempt
+                suffix += 1
         with self.store.lock:
             if candidate not in self.store.share_code_ids_by_code:
                 return candidate
@@ -496,6 +596,13 @@ class ReferralOrchestrator:
                 suffix += 1
 
     def _get_share_code_by_code(self, code: str) -> ShareCodeRecord:
+        if self.session is not None:
+            share_code = self.session.scalar(select(ShareCode).where(ShareCode.code == code.lower()))
+            if share_code is None:
+                raise ReferralActionError("share_code_not_found")
+            record = self._share_code_from_model(share_code)
+            self._cache_share_code(record)
+            return record
         with self.store.lock:
             share_code_id = self.store.share_code_ids_by_code.get(code.lower())
             if share_code_id is None:
@@ -508,8 +615,71 @@ class ReferralOrchestrator:
         attribution = self.attributions.get_for_user(current_user_id)
         if attribution is None:
             raise ReferralActionError("attribution_not_found")
+        if self.session is not None and attribution.share_code_id is not None:
+            share_code = self.session.get(ShareCode, attribution.share_code_id)
+            if share_code is not None:
+                record = self._share_code_from_model(share_code)
+                self._cache_share_code(record)
+                return record
         with self.store.lock:
-            return self.store.share_codes_by_id[attribution.share_code_id]
+            cached = self.store.share_codes_by_id.get(attribution.share_code_id or "")
+            if cached is not None:
+                return cached
+        return ShareCodeRecord(
+            share_code_id=attribution.share_code_id or generate_id("code"),
+            code=attribution.share_code,
+            share_code_type="creator_share" if attribution.creator_profile_id is not None else "user_referral",
+            owner_user_id=attribution.referrer_user_id,
+            owner_creator_id=attribution.creator_profile_id,
+            linked_competition_id=attribution.linked_competition_id,
+            active=True,
+            max_uses=0,
+            current_uses=0,
+            starts_at=attribution.first_touched_at,
+            ends_at=None,
+            metadata=attribution.metadata,
+            vanity_code=None,
+            created_at=attribution.first_touched_at,
+            updated_at=attribution.first_touched_at,
+        )
+
+    def list_all_share_codes(self) -> tuple[ShareCodeRecord, ...]:
+        if self.session is not None:
+            share_codes = tuple(
+                self.session.scalars(select(ShareCode).order_by(ShareCode.created_at, ShareCode.id)).all()
+            )
+            records = tuple(self._share_code_from_model(share_code) for share_code in share_codes)
+            for record in records:
+                self._cache_share_code(record)
+            return records
+        with self.store.lock:
+            return tuple(self.store.share_codes_by_id.values())
+
+    @staticmethod
+    def _share_code_from_model(share_code: ShareCode) -> ShareCodeRecord:
+        code_type = share_code.code_type.value if hasattr(share_code.code_type, "value") else str(share_code.code_type)
+        return ShareCodeRecord(
+            share_code_id=share_code.id,
+            code=share_code.code,
+            share_code_type=code_type,
+            owner_user_id=share_code.owner_user_id,
+            owner_creator_id=share_code.owner_creator_id,
+            linked_competition_id=share_code.linked_competition_id,
+            active=share_code.is_active,
+            max_uses=share_code.max_uses or 0,
+            current_uses=share_code.current_uses,
+            starts_at=share_code.starts_at,
+            ends_at=share_code.ends_at,
+            metadata=dict(share_code.metadata_json or {}),
+            vanity_code=share_code.vanity_code,
+            created_at=share_code.created_at,
+            updated_at=share_code.updated_at,
+        )
+
+    def _cache_share_code(self, share_code: ShareCodeRecord) -> None:
+        with self.store.lock:
+            self.store.share_codes_by_id[share_code.share_code_id] = share_code
+            self.store.share_code_ids_by_code[share_code.code] = share_code.share_code_id
 
     def _ensure_redemption_allowed(
         self,
@@ -563,9 +733,17 @@ class ReferralOrchestrator:
         )
 
 
-def get_referral_orchestrator(request: Request) -> ReferralOrchestrator:
+def get_referral_orchestrator(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> ReferralOrchestrator:
     orchestrator = getattr(request.app.state, "referral_orchestrator", None)
     if orchestrator is None:
-        orchestrator = ReferralOrchestrator()
-        request.app.state.referral_orchestrator = orchestrator
+        store = getattr(request.app.state, "referral_runtime_store", None)
+        if store is None:
+            store = getattr(request.app.state, "referral_store", None)
+        if store is None:
+            store = ReferralRuntimeStore()
+        request.app.state.referral_runtime_store = store
+        orchestrator = ReferralOrchestrator(store=store, session=session)
     return orchestrator

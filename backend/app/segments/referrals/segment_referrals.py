@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_session
 from app.models.user import User
 from app.schemas.referral_requests import (
     AttributionCaptureRequest,
@@ -26,11 +28,14 @@ router = APIRouter(prefix="/api/referrals", tags=["referrals"])
 @router.post("/share-codes", response_model=ShareCodeView, status_code=status.HTTP_201_CREATED)
 def create_share_code(
     payload: ShareCodeCreateRequest,
+    session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
 ) -> ShareCodeView:
     try:
-        return ShareCodeView.model_validate(orchestrator.create_share_code(current_user=current_user, payload=payload))
+        share_code = orchestrator.create_share_code(current_user=current_user, payload=payload)
+        session.commit()
+        return ShareCodeView.model_validate(share_code)
     except ReferralActionError as exc:
         raise _to_http_error(exc) from exc
 
@@ -47,13 +52,18 @@ def list_my_share_codes(
 def update_share_code(
     share_code_id: str,
     payload: ShareCodeUpdateRequest,
+    session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
 ) -> ShareCodeView:
     try:
-        return ShareCodeView.model_validate(
-            orchestrator.update_share_code(current_user=current_user, share_code_id=share_code_id, payload=payload)
+        share_code = orchestrator.update_share_code(
+            current_user=current_user,
+            share_code_id=share_code_id,
+            payload=payload,
         )
+        session.commit()
+        return ShareCodeView.model_validate(share_code)
     except ReferralActionError as exc:
         raise _to_http_error(exc) from exc
 
@@ -62,11 +72,14 @@ def update_share_code(
 def redeem_share_code(
     code: str,
     payload: ShareCodeRedeemRequest,
+    session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
 ) -> ShareCodeRedeemResponse:
     try:
-        return orchestrator.redeem_share_code(current_user=current_user, code=code, payload=payload)
+        response = orchestrator.redeem_share_code(current_user=current_user, code=code, payload=payload)
+        session.commit()
+        return response
     except ReferralActionError as exc:
         raise _to_http_error(exc) from exc
 
@@ -74,11 +87,14 @@ def redeem_share_code(
 @router.post("/attribution", response_model=AttributionView)
 def capture_referral_attribution(
     payload: AttributionCaptureRequest,
+    session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
 ) -> AttributionView:
     try:
-        return orchestrator.capture_attribution(current_user=current_user, payload=payload)
+        response = orchestrator.capture_attribution(current_user=current_user, payload=payload)
+        session.commit()
+        return response
     except ReferralActionError as exc:
         raise _to_http_error(exc) from exc
 

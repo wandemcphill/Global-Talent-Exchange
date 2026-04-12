@@ -16,6 +16,7 @@ from app.models.user_wallet import UserWallet, WalletTransactionRecord
 from app.models.wallet import LedgerUnit
 from app.policies.service import PolicyService
 from app.treasury.service import TreasuryService
+from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
 from app.wallets.rail_service import WalletRailError, WalletRailService
 from app.wallets.service import WalletService
 
@@ -131,7 +132,7 @@ class WalletFundingService:
         callback_url: str | None = None,
     ) -> WalletTopUpSession:
         normalized_provider = provider.strip().lower()
-        if normalized_provider not in {"paystack", "korapay"}:
+        if normalized_provider not in SUPPORTED_TOP_UP_PROVIDER_KEYS:
             raise WalletFundingError("Only Paystack and KoraPay top-up are currently supported.")
 
         normalized_amount = self._normalize_amount(amount)

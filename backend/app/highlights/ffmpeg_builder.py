@@ -26,6 +26,22 @@ class HighlightRenderer(Protocol):
 
 
 @dataclass(slots=True)
+class HighlightSourcePendingError(RuntimeError):
+    reason: str
+
+    def __str__(self) -> str:
+        return self.reason
+
+
+@dataclass(slots=True)
+class HighlightSourceUnavailableError(RuntimeError):
+    reason: str
+
+    def __str__(self) -> str:
+        return self.reason
+
+
+@dataclass(slots=True)
 class FFmpegHighlightRenderer:
     binary: str = "ffmpeg"
 
@@ -40,14 +56,17 @@ class FFmpegHighlightRenderer:
             if clip_paths and len(clip_paths) == len(job.source_clip_storage_keys):
                 self._run(self._concat_command(clip_paths=clip_paths, output_path=output_path))
                 return {"renderer": "ffmpeg", "mode": "concat_reel", "clip_count": len(clip_paths)}
+            if job.source_clip_storage_keys:
+                raise HighlightSourcePendingError("source_clips_pending")
 
         source_path = self._resolve_source_path(job=job, storage_root=storage_root)
-        if source_path is not None and source_path.exists():
-            self._run(self._clip_command(job=job, source_path=source_path, output_path=output_path))
-            return {"renderer": "ffmpeg", "mode": "source_clip", "source_path": str(source_path)}
+        if source_path is not None:
+            if source_path.exists():
+                self._run(self._clip_command(job=job, source_path=source_path, output_path=output_path))
+                return {"renderer": "ffmpeg", "mode": "source_clip", "source_path": str(source_path)}
+            raise HighlightSourcePendingError("source_footage_pending")
 
-        self._run(self._placeholder_command(job=job, output_path=output_path))
-        return {"renderer": "ffmpeg", "mode": "placeholder"}
+        raise HighlightSourceUnavailableError("source_footage_unavailable")
 
     def _resolve_source_path(self, *, job: HighlightRenderJob, storage_root: Path) -> Path | None:
         if job.source_path:
@@ -66,23 +85,6 @@ class FFmpegHighlightRenderer:
             command.extend(["-vf", f"setpts={1.0 / job.playback_speed:.3f}*PTS"])
         command.extend(["-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(output_path)])
         return command
-
-    def _placeholder_command(self, *, job: HighlightRenderJob, output_path: Path) -> list[str]:
-        return [
-            self.binary,
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            f"color=c=black:s=1280x720:d={self._seconds(job.duration_seconds)}",
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-movflags",
-            "+faststart",
-            str(output_path),
-        ]
 
     def _concat_command(self, *, clip_paths: list[Path], output_path: Path) -> list[str]:
         with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8", suffix=".txt") as handle:
@@ -113,4 +115,9 @@ class FFmpegHighlightRenderer:
         return f"{float(value):.3f}"
 
 
-__all__ = ["FFmpegHighlightRenderer", "HighlightRenderer"]
+__all__ = [
+    "FFmpegHighlightRenderer",
+    "HighlightRenderer",
+    "HighlightSourcePendingError",
+    "HighlightSourceUnavailableError",
+]

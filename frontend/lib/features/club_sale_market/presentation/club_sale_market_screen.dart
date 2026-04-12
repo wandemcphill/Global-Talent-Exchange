@@ -462,7 +462,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                         offer.offerId,
                         ClubSaleOfferRespondRequest(message: message),
                       );
-                      if (!mounted || _controller.actionError != null) {
+                      if (!context.mounted || _controller.actionError != null) {
                         return;
                       }
                       AppFeedback.showSuccess(context, 'Offer accepted.');
@@ -479,7 +479,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                         offer.offerId,
                         ClubSaleOfferRespondRequest(message: message),
                       );
-                      if (!mounted || _controller.actionError != null) {
+                      if (!context.mounted || _controller.actionError != null) {
                         return;
                       }
                       AppFeedback.showSuccess(context, 'Offer rejected.');
@@ -553,7 +553,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                         offer.offerId,
                         ClubSaleOfferRespondRequest(message: message),
                       );
-                      if (!mounted || _controller.actionError != null) {
+                      if (!context.mounted || _controller.actionError != null) {
                         return;
                       }
                       AppFeedback.showSuccess(context, 'Offer accepted.');
@@ -570,7 +570,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                         offer.offerId,
                         ClubSaleOfferRespondRequest(message: message),
                       );
-                      if (!mounted || _controller.actionError != null) {
+                      if (!context.mounted || _controller.actionError != null) {
                         return;
                       }
                       AppFeedback.showSuccess(context, 'Offer rejected.');
@@ -686,7 +686,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                       } else {
                         await _controller.updateListing(clubId, request);
                       }
-                      if (!mounted || _controller.actionError != null) {
+                      if (!context.mounted || _controller.actionError != null) {
                         return;
                       }
                       Navigator.of(context).pop(true);
@@ -704,7 +704,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
     );
     priceController.dispose();
     noteController.dispose();
-    if (submitted == true && mounted) {
+    if (submitted == true && context.mounted) {
       AppFeedback.showSuccess(
         context,
         existing == null ? 'Listing created.' : 'Listing updated.',
@@ -751,7 +751,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                       reason: reasonController.text.trim(),
                     ),
                   );
-                  if (!mounted || _controller.actionError != null) {
+                  if (!context.mounted || _controller.actionError != null) {
                     return;
                   }
                   Navigator.of(context).pop(true);
@@ -764,7 +764,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
       },
     );
     reasonController.dispose();
-    if (submitted == true && mounted) {
+    if (submitted == true && context.mounted) {
       AppFeedback.showSuccess(context, 'Listing cancelled.');
     }
   }
@@ -811,7 +811,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                       message: messageController.text.trim(),
                     ),
                   );
-                  if (!mounted || _controller.actionError != null) {
+                  if (!context.mounted || _controller.actionError != null) {
                     return;
                   }
                   Navigator.of(context).pop(true);
@@ -824,7 +824,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
       },
     );
     messageController.dispose();
-    if (submitted == true && mounted) {
+    if (submitted == true && context.mounted) {
       AppFeedback.showSuccess(context, 'Inquiry sent.');
     }
   }
@@ -879,7 +879,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                       responseMessage: responseController.text.trim(),
                     ),
                   );
-                  if (!mounted || _controller.actionError != null) {
+                  if (!context.mounted || _controller.actionError != null) {
                     return;
                   }
                   Navigator.of(context).pop(true);
@@ -892,7 +892,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
       },
     );
     responseController.dispose();
-    if (submitted == true && mounted) {
+    if (submitted == true && context.mounted) {
       AppFeedback.showSuccess(context, 'Inquiry response sent.');
     }
   }
@@ -993,7 +993,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                       ),
                     );
                   }
-                  if (!mounted || _controller.actionError != null) {
+                  if (!context.mounted || _controller.actionError != null) {
                     return;
                   }
                   Navigator.of(context).pop(true);
@@ -1010,7 +1010,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
     priceController.dispose();
     noteController.dispose();
     expiryController.dispose();
-    if (submitted == true && mounted) {
+    if (submitted == true && context.mounted) {
       AppFeedback.showSuccess(
         context,
         existingOffer == null ? 'Offer submitted.' : 'Counteroffer submitted.',
@@ -1059,7 +1059,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
               FilledButton(
                 onPressed: () async {
                   await onSubmit(messageController.text.trim());
-                  if (!mounted || _controller.actionError != null) {
+                  if (!context.mounted || _controller.actionError != null) {
                     return;
                   }
                   Navigator.of(context).pop(true);
@@ -1072,7 +1072,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
       },
     );
     messageController.dispose();
-    if (submitted == true && mounted) {
+    if (submitted == true && context.mounted) {
       AppFeedback.showSuccess(context, '$submitLabel complete.');
     }
   }
@@ -1139,7 +1139,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                       executedSalePrice: price,
                     ),
                   );
-                  if (!mounted || _controller.actionError != null) {
+                  if (!context.mounted || _controller.actionError != null) {
                     return;
                   }
                   Navigator.of(context).pop(true);
@@ -1152,7 +1152,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
       },
     );
     priceController.dispose();
-    if (submitted == true && mounted) {
+    if (submitted == true && context.mounted) {
       AppFeedback.showSuccess(context, 'Transfer executed.');
     }
   }

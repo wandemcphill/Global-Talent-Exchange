@@ -12,7 +12,12 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 
-from app.highlights.ffmpeg_builder import FFmpegHighlightRenderer, HighlightRenderer
+from app.highlights.ffmpeg_builder import (
+    FFmpegHighlightRenderer,
+    HighlightRenderer,
+    HighlightSourcePendingError,
+    HighlightSourceUnavailableError,
+)
 from app.highlights.queue import FileHighlightRenderQueue
 from app.highlights.service import HighlightGenerationService
 from app.storage import LocalObjectStorage
@@ -96,6 +101,38 @@ class HighlightRenderWorker:
                 "output_storage_key": stored.key,
                 "size_bytes": stored.size_bytes,
                 "mode": render_result.get("mode"),
+            }
+        except HighlightSourcePendingError as exc:
+            pending = self.queue.mark_pending(
+                record,
+                error=str(exc),
+                result={
+                    "render_status": "pending",
+                    "reason": str(exc),
+                    "output_storage_key": record.payload.output_storage_key,
+                },
+            )
+            return {
+                "job_id": pending.job_id,
+                "status": "pending",
+                "error": pending.last_error,
+                "output_storage_key": pending.payload.output_storage_key,
+            }
+        except HighlightSourceUnavailableError as exc:
+            failed = self.queue.mark_failed(
+                record,
+                error=str(exc),
+                result={
+                    "render_status": "unavailable",
+                    "reason": str(exc),
+                    "output_storage_key": record.payload.output_storage_key,
+                },
+            )
+            return {
+                "job_id": failed.job_id,
+                "status": "unavailable",
+                "error": failed.last_error,
+                "output_storage_key": failed.payload.output_storage_key,
             }
         except Exception as exc:
             failed = self.queue.mark_failed(record, error=str(exc))

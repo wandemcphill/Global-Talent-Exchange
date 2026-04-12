@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../app/gte_app_config.dart';
 import '../../../core/actions/action_pipeline.dart' as feed_actions;
 import '../../../core/app_feedback.dart';
 import '../../../core/optimistic_ui_handler.dart';
@@ -1504,10 +1505,7 @@ class _BackdropPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-const String _frontendAuditBaseUrl = String.fromEnvironment(
-  'GTE_API_BASE_URL',
-  defaultValue: 'http://127.0.0.1:8000',
-);
+final String _frontendAuditBaseUrl = resolveGteApiBaseUrlFromEnvironment();
 
 class _LoadingState extends StatelessWidget {
   const _LoadingState();

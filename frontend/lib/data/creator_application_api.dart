@@ -17,16 +17,17 @@ class CreatorApplicationApi {
   factory CreatorApplicationApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return CreatorApplicationApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
-      mode: mode,
+      mode: resolvedMode,
     );
   }
 
@@ -113,19 +114,14 @@ class CreatorApplicationApi {
 
 class _CreatorApplicationFixtureState {
   CreatorContactVerificationStatus verification =
-      const CreatorContactVerificationStatus(
-    userId: 'fixture-user',
-  );
+      const CreatorContactVerificationStatus(userId: 'fixture-user');
   CreatorApplicationView? application;
 
   CreatorContactVerificationStatus verifyEmail() {
     final DateTime now = DateTime.now().toUtc();
     verification = verification.copyWith(emailVerifiedAt: now);
     if (application != null) {
-      application = application!.copyWith(
-        emailVerifiedAt: now,
-        updatedAt: now,
-      );
+      application = application!.copyWith(emailVerifiedAt: now, updatedAt: now);
     }
     return verification;
   }
@@ -134,10 +130,7 @@ class _CreatorApplicationFixtureState {
     final DateTime now = DateTime.now().toUtc();
     verification = verification.copyWith(phoneVerifiedAt: now);
     if (application != null) {
-      application = application!.copyWith(
-        phoneVerifiedAt: now,
-        updatedAt: now,
-      );
+      application = application!.copyWith(phoneVerifiedAt: now, updatedAt: now);
     }
     return verification;
   }

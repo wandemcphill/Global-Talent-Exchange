@@ -7,7 +7,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.admin_godmode.service import ADMIN_GODMODE_FILE, DEFAULT_PAYMENT_RAILS
+from app.admin_godmode.runtime_paths import admin_godmode_state_path
+from app.admin_godmode.service import DEFAULT_PAYMENT_RAILS
 from app.core.config import Settings
 from app.models.treasury import PaymentMode
 from app.models.wallet import LedgerUnit
@@ -42,10 +43,6 @@ class PaymentGatewayService:
         treasury_settings = TreasuryService().ensure_settings(self.session)
         automatic_deposits_enabled = treasury_settings.deposit_mode in {PaymentMode.AUTOMATIC, PaymentMode.HYBRID}
         manual_deposits_enabled = treasury_settings.deposit_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
-        live_deposit = automatic_deposits_enabled and any(
-            bool(rail.get("is_live")) and bool(rail.get("deposits_enabled")) and str(rail.get("provider")) != "bank_transfer_manual"
-            for rail in rails
-        )
         methods: list[PaymentMethod] = []
 
         for rail in rails:
@@ -73,44 +70,6 @@ class PaymentGatewayService:
                     maintenance_message=rail.get("maintenance_message"),
                 )
             )
-
-        methods.extend(
-            [
-                PaymentMethod(
-                    method_key="cards",
-                    display_name="Cards",
-                    provider_key="cards",
-                    method_group="card_wallet",
-                    unit=LedgerUnit.COIN,
-                    deposits_enabled=live_deposit,
-                    withdrawals_enabled=False,
-                    is_live=live_deposit,
-                    maintenance_message=None,
-                ),
-                PaymentMethod(
-                    method_key="apple_pay",
-                    display_name="Apple Pay",
-                    provider_key="apple_pay",
-                    method_group="card_wallet",
-                    unit=LedgerUnit.COIN,
-                    deposits_enabled=live_deposit,
-                    withdrawals_enabled=False,
-                    is_live=live_deposit,
-                    maintenance_message=None,
-                ),
-                PaymentMethod(
-                    method_key="google_pay",
-                    display_name="Google Pay",
-                    provider_key="google_pay",
-                    method_group="card_wallet",
-                    unit=LedgerUnit.COIN,
-                    deposits_enabled=live_deposit,
-                    withdrawals_enabled=False,
-                    is_live=live_deposit,
-                    maintenance_message=None,
-                ),
-            ]
-        )
 
         if self.settings.crypto_deposit_enabled:
             methods.append(
@@ -144,7 +103,9 @@ class PaymentGatewayService:
         if unit is None:
             unit = LedgerUnit.CREDIT if method_key == "crypto_deposit" else LedgerUnit.COIN
         if provider_key == "bank_transfer_manual":
-            raise PaymentGatewayError("Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders.")
+            raise PaymentGatewayError(
+                "Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders."
+            )
         self._assert_provider_enabled(provider_key)
         settings = TreasuryService().ensure_settings(self.session)
         rail_service = WalletRailService(self.session)
@@ -178,7 +139,9 @@ class PaymentGatewayService:
         if unit is None:
             unit = LedgerUnit.CREDIT if method_key == "crypto_deposit" else LedgerUnit.COIN
         if provider_key == "bank_transfer_manual":
-            raise PaymentGatewayError("Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders.")
+            raise PaymentGatewayError(
+                "Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders."
+            )
         self._assert_provider_enabled(provider_key)
         settings = TreasuryService().ensure_settings(self.session)
         rail_service = WalletRailService(self.session)
@@ -198,27 +161,48 @@ class PaymentGatewayService:
 
     def _load_payment_rails(self) -> list[dict[str, Any]]:
         path = self._state_path()
+        default_rails = self._default_payment_rails()
         if not path.exists():
-            return list(DEFAULT_PAYMENT_RAILS)
+            return default_rails
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            return list(DEFAULT_PAYMENT_RAILS)
+            return default_rails
         rails = payload.get("payment_rails")
         if isinstance(rails, list):
-            return rails
-        return list(DEFAULT_PAYMENT_RAILS)
+            defaults_by_provider = {rail["provider"]: dict(rail) for rail in default_rails}
+            for rail in rails:
+                if not isinstance(rail, dict):
+                    continue
+                provider = str(rail.get("provider") or "").strip().lower()
+                if provider not in defaults_by_provider:
+                    continue
+                merged = dict(defaults_by_provider[provider])
+                merged.update(
+                    {
+                        "provider": provider,
+                        "deposits_enabled": bool(rail.get("deposits_enabled", merged["deposits_enabled"])),
+                        "withdrawals_enabled": bool(rail.get("withdrawals_enabled", merged["withdrawals_enabled"])),
+                        "is_live": bool(rail.get("is_live", merged["is_live"])),
+                        "maintenance_message": rail.get("maintenance_message", merged["maintenance_message"]),
+                    }
+                )
+                defaults_by_provider[provider] = merged
+            return [defaults_by_provider[rail["provider"]] for rail in default_rails]
+        return default_rails
 
     def _state_path(self) -> Path:
-        return self.settings.config_root / ADMIN_GODMODE_FILE
+        return admin_godmode_state_path(self.settings.config_root)
+
+    @staticmethod
+    def _default_payment_rails() -> list[dict[str, Any]]:
+        return [dict(rail) for rail in DEFAULT_PAYMENT_RAILS]
 
     def _resolve_provider(self, method_key: str | None) -> str:
         if method_key == "crypto_deposit":
             if not self.settings.crypto_deposit_enabled:
                 raise PaymentGatewayError("Crypto deposit rail is disabled.")
             return self.settings.crypto_provider_key
-        if method_key in {"cards", "apple_pay", "google_pay"}:
-            return method_key
         if method_key:
             return method_key
         rails = self._load_payment_rails()
@@ -230,8 +214,6 @@ class PaymentGatewayService:
         raise PaymentGatewayError("No active payment provider is configured.")
 
     def _assert_provider_enabled(self, provider_key: str) -> None:
-        if provider_key in {"cards", "apple_pay", "google_pay"}:
-            return
         if provider_key == self.settings.crypto_provider_key:
             if not self.settings.crypto_deposit_enabled:
                 raise PaymentGatewayError("Crypto deposit rail is disabled.")

@@ -4,11 +4,15 @@ import 'gte_authed_api.dart';
 
 class AgentMarketplaceApi {
   AgentMarketplaceApi({
-    required this.config,
+    required GteRepositoryConfig config,
     required this.transport,
     required this.accessToken,
-    this.mode = GteBackendMode.liveThenFixture,
-  });
+    GteBackendMode mode = GteBackendMode.live,
+  }) : config = GteRepositoryConfig(
+         baseUrl: config.baseUrl,
+         mode: gteProductionBackendMode(config.mode),
+       ),
+       mode = gteProductionBackendMode(mode);
 
   final GteRepositoryConfig config;
   final GteTransport transport;
@@ -16,15 +20,17 @@ class AgentMarketplaceApi {
   final GteBackendMode mode;
 
   GteAuthedApi get _client => GteAuthedApi(
-        config: config,
-        transport: transport,
-        accessToken: accessToken,
-        mode: mode,
-      );
+    config: config,
+    transport: transport,
+    accessToken: accessToken,
+    mode: mode,
+  );
 
   Future<List<GteConversationSummary>> fetchConversations() async {
-    final List<dynamic> payload =
-        await _client.getList('/conversations', auth: true);
+    final List<dynamic> payload = await _client.getList(
+      '/conversations',
+      auth: true,
+    );
     return payload.map(GteConversationSummary.fromJson).toList(growable: false);
   }
 

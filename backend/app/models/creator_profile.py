@@ -18,9 +18,8 @@ class CreatorProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
-        index=True,
     )
-    handle: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    handle: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     tier: Mapped[str] = mapped_column(String(32), nullable=False, default="community", server_default="community")
     status: Mapped[CreatorProfileStatus] = mapped_column(

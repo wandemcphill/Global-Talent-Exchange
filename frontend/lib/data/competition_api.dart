@@ -28,11 +28,12 @@ class CompetitionApi {
 
   factory CompetitionApi.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
     String? accessToken,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return CompetitionApi(
-      config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+      config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
       transport: GteHttpTransport(),
       accessToken: accessToken,
     );

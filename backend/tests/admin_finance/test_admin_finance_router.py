@@ -238,6 +238,7 @@ def test_control_tower_snapshot_returns_finance_metrics(client, app_session_fact
     assert Decimal(payload["gtex_supply"]) > Decimal("0")
     assert Decimal(payload["daily_revenue_naira"]) > Decimal("0")
     assert payload["cash_rails"]["payment_methods"]
+    assert {"Cards", "Apple Pay", "Google Pay"}.isdisjoint(payload["cash_rails"]["payment_methods"])
     assert len(payload["history"]) >= 7
     assert payload["projection"]["days"] == 30
 
@@ -591,3 +592,35 @@ def test_korapay_webhook_verifies_signature_and_settles_purchase_order(
         refreshed = session.get(FancoinPurchaseOrder, order.id)
         assert refreshed is not None
         assert refreshed.status == PurchaseOrderStatus.SETTLED
+
+
+def test_korapay_webhook_rejects_invalid_signature_when_secret_is_configured(
+    client, app_session_factory, monkeypatch
+) -> None:
+    _prepare_admin(client, app_session_factory)
+    _seed_provider_order(
+        app_session_factory,
+        provider_key="korapay",
+        provider_reference="kp_live_ref_invalid_sig",
+        email="korapay-invalid@example.com",
+        username="korapayinvalid",
+    )
+    monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SECRET", "korapay-secret")
+
+    response = client.post(
+        "/integrations/payments/korapay/webhook",
+        headers={"x-korapay-signature": "invalid-signature"},
+        json={
+            "event": "charge.success",
+            "data": {
+                "id": "kp-event-invalid",
+                "reference": "kp_live_ref_invalid_sig",
+                "amount": "9000.0000",
+                "currency": "NGN",
+                "status": "success",
+            },
+        },
+    )
+
+    assert response.status_code == 401, response.text
+    assert "signature is invalid" in response.json()["detail"].lower()

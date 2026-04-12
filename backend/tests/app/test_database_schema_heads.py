@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from alembic.autogenerate import api as alembic_autogenerate
 from alembic import command as alembic_command
+from alembic.migration import MigrationContext
 from types import SimpleNamespace
 
 from sqlalchemy import create_engine, inspect, text
@@ -77,6 +79,126 @@ def test_history_engagement_schema_repair_restores_missing_season_pass_tables(tm
     assert "season_pass_seasons" in checked_tables
     assert "season_pass_rewards" in checked_tables
     assert "season_pass_missions" in checked_tables
+
+
+def test_head_upgrade_materializes_model_tables_and_columns(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'migration-integrity.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+
+    try:
+        config = database_module.build_alembic_config(database_url)
+        script = database_module.ScriptDirectory.from_config(config)
+
+        assert script.get_heads() == [script.get_current_head()]
+
+        alembic_command.upgrade(config, "head")
+
+        metadata = database_module.get_target_metadata()
+        table_inspector = inspect(engine)
+        missing_tables: list[str] = []
+        missing_columns: list[str] = []
+
+        for table in metadata.sorted_tables:
+            if not table_inspector.has_table(table.name):
+                missing_tables.append(table.name)
+                continue
+
+            database_columns = {column["name"] for column in table_inspector.get_columns(table.name)}
+            missing_columns.extend(
+                f"{table.name}.{column.name}" for column in table.columns if column.name not in database_columns
+            )
+
+        assert not missing_tables, "Missing migrated tables: " + ", ".join(sorted(missing_tables))
+        assert not missing_columns, "Missing migrated columns: " + ", ".join(sorted(missing_columns))
+    finally:
+        engine.dispose()
+
+
+def test_head_upgrade_has_no_unmapped_tables_or_columns(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'migration-drift-coverage.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+
+    try:
+        config = database_module.build_alembic_config(database_url)
+        alembic_command.upgrade(config, "head")
+
+        metadata = database_module.get_target_metadata()
+        with engine.connect() as connection:
+            context = MigrationContext.configure(
+                connection=connection,
+                opts={"target_metadata": metadata, "compare_type": True},
+            )
+            diffs = alembic_autogenerate.compare_metadata(context, metadata)
+
+        unmapped_tables = sorted(
+            diff[1].name for diff in diffs if isinstance(diff, tuple) and diff[0] == "remove_table"
+        )
+        unmapped_columns = sorted(
+            f"{diff[2]}.{diff[3].name}" for diff in diffs if isinstance(diff, tuple) and diff[0] == "remove_column"
+        )
+        structural_drift: list[str] = []
+        for diff in diffs:
+            if isinstance(diff, list):
+                structural_drift.extend(
+                    f"{item[2]}.{item[3]}:{item[0]}"
+                    for item in diff
+                    if item[0] == "modify_nullable"
+                )
+                continue
+            if diff[0] == "remove_fk":
+                structural_drift.append(
+                    f"{diff[1].table.name}.{','.join(column.name for column in diff[1].columns)}:remove_fk"
+                )
+
+        assert not unmapped_tables, "Migrated tables missing from target metadata: " + ", ".join(unmapped_tables)
+        assert not unmapped_columns, "Migrated columns missing from target metadata: " + ", ".join(unmapped_columns)
+        assert not structural_drift, "Unexpected structural drift after head upgrade: " + ", ".join(sorted(structural_drift))
+    finally:
+        engine.dispose()
+
+
+def test_head_upgrade_has_expected_index_coverage(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'migration-index-coverage.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+
+    try:
+        config = database_module.build_alembic_config(database_url)
+        alembic_command.upgrade(config, "head")
+
+        metadata = database_module.get_target_metadata()
+        inspector = inspect(engine)
+        actual_unique: dict[str, set[tuple[str, ...]]] = {}
+        actual_indexes: dict[str, set[tuple[str, ...]]] = {}
+
+        for table_name in inspector.get_table_names():
+            actual_unique[table_name] = {
+                tuple(constraint.get("column_names") or ())
+                for constraint in inspector.get_unique_constraints(table_name)
+                if constraint.get("column_names")
+            }
+            actual_indexes[table_name] = set()
+            for index in inspector.get_indexes(table_name):
+                columns = tuple(index.get("column_names") or ())
+                if not columns:
+                    continue
+                if index.get("unique"):
+                    actual_unique[table_name].add(columns)
+                else:
+                    actual_indexes[table_name].add(columns)
+
+        missing_indexes: list[str] = []
+        for table in metadata.sorted_tables:
+            available_columns = actual_indexes.get(table.name, set()) | actual_unique.get(table.name, set())
+            for index in sorted(table.indexes, key=lambda item: item.name or ""):
+                columns = tuple(column.name for column in index.columns)
+                if not columns or index.unique:
+                    continue
+                if columns not in available_columns:
+                    missing_indexes.append(f"{table.name}.{index.name}:{','.join(columns)}")
+
+        assert not missing_indexes, "Missing migrated indexes: " + ", ".join(sorted(missing_indexes))
+    finally:
+        engine.dispose()
 
 
 def test_create_app_registers_world_simulation_routes_without_running_lifespan() -> None:

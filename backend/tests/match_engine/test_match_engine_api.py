@@ -136,13 +136,14 @@ def test_match_engine_highlights_route_exposes_clip_manifests() -> None:
     assert body["highlight_profile"] == replay_payload.summary.highlight_profile.value
     assert body["pipeline"]["worker_profile"] == "ffmpeg_gpu_preferred"
     assert body["reel"]["runtime_seconds"] == replay_payload.summary.highlight_runtime_seconds
-    assert body["reel"]["render_status"] == "queued"
+    assert body["reel"]["render_status"] == "unavailable"
     assert body["highlights"]
 
     first_clip = body["highlights"][0]
     assert first_clip["duration_seconds"] > 0
     assert first_clip["camera_sequence"]
     assert first_clip["storage_key"].startswith("media/highlights/")
-    assert first_clip["render_status"] == "queued"
-    assert first_clip["metadata"]["queue_job_id"].startswith("highlight_")
-    assert first_clip["metadata"]["queue_status"] == "queued"
+    assert first_clip["render_status"] == "unavailable"
+    assert "queue_job_id" not in first_clip["metadata"]
+    assert first_clip["metadata"]["queue_status"] == "source_unavailable"
+    assert first_clip["metadata"]["queue_reason"] == "source_footage_unavailable"

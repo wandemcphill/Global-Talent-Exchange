@@ -62,11 +62,30 @@ jobs:
           backend/tests/wallets/test_wallet_event_backbone.py
           -q
 
+  backend-migration-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pytest
+      - run: >
+          python -m pytest
+          backend/tests/app/test_database_schema_heads.py
+          -k "ensure_database_schema_current or history_engagement_schema_repair or head_upgrade_materializes_model_tables_and_columns or head_upgrade_has_no_unmapped_tables_or_columns or head_upgrade_has_expected_index_coverage"
+          -q
+
   deploy-staging:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - frontend-tests
       - backend-tests
+      - backend-migration-integrity
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:

@@ -193,7 +193,6 @@ class Container:
                     batch_size=self.settings.outbox_relay_batch_size,
                     poll_interval_ms=self.settings.outbox_relay_poll_interval_ms,
                 )
-                self.outbox_relay.start()
 
         self.market_engine = MarketEngine(
             repository=build_market_repository(self.settings.redis_url),
@@ -223,6 +222,11 @@ class Container:
         self._initialized = True
         logger.info("container.initialize.complete")
         return self
+
+    def start_outbox_relay(self) -> None:
+        if self.outbox_relay is None:
+            return
+        self.outbox_relay.start()
 
     def shutdown(self) -> None:
         logger.info("container.shutdown.begin")

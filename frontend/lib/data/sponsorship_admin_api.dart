@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/sponsorship_admin_models.dart';
 
 class SponsorshipAdminApi {
-  SponsorshipAdminApi({
-    required this.client,
-    required this.fixtures,
-  });
+  SponsorshipAdminApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _SponsorshipFixtures fixtures;
@@ -15,14 +12,15 @@ class SponsorshipAdminApi {
   factory SponsorshipAdminApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return SponsorshipAdminApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _SponsorshipFixtures.seed(),
     );
@@ -44,31 +42,26 @@ class SponsorshipAdminApi {
   }
 
   Future<List<SponsorshipPackageView>> listPackages() {
-    return client.withFallback<List<SponsorshipPackageView>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/admin/sponsorship/packages');
-        return payload
-            .map(SponsorshipPackageView.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.packages,
-    );
+    return client.withFallback<List<SponsorshipPackageView>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/admin/sponsorship/packages',
+      );
+      return payload
+          .map(SponsorshipPackageView.fromJson)
+          .toList(growable: false);
+    }, fixtures.packages);
   }
 
   Future<List<SponsorshipContractView>> listClubContracts(String clubId) {
-    return client.withFallback<List<SponsorshipContractView>>(
-      () async {
-        final List<dynamic> payload = await client.getList(
-          '/sponsorship/clubs/$clubId/contracts',
-          auth: false,
-        );
-        return payload
-            .map(SponsorshipContractView.fromJson)
-            .toList(growable: false);
-      },
-      () async => fixtures.contractsForClub(clubId),
-    );
+    return client.withFallback<List<SponsorshipContractView>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/sponsorship/clubs/$clubId/contracts',
+        auth: false,
+      );
+      return payload
+          .map(SponsorshipContractView.fromJson)
+          .toList(growable: false);
+    }, () async => fixtures.contractsForClub(clubId));
   }
 
   Future<SponsorshipContractView> reviewContract({
@@ -76,20 +69,17 @@ class SponsorshipAdminApi {
     required String action,
     String? resolutionNote,
   }) {
-    return client.withFallback<SponsorshipContractView>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/sponsorship/contracts/$contractId/review',
-          body: <String, Object?>{
-            'action': action,
-            'resolution_note': resolutionNote ?? '',
-          },
-        );
-        return SponsorshipContractView.fromJson(payload);
-      },
-      () async => fixtures.reviewContract(contractId, action),
-    );
+    return client.withFallback<SponsorshipContractView>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/admin/sponsorship/contracts/$contractId/review',
+        body: <String, Object?>{
+          'action': action,
+          'resolution_note': resolutionNote ?? '',
+        },
+      );
+      return SponsorshipContractView.fromJson(payload);
+    }, () async => fixtures.reviewContract(contractId, action));
   }
 }
 
@@ -150,9 +140,12 @@ class _SponsorshipFixtures {
       List<SponsorshipContractView>.of(_contracts, growable: false);
 
   Future<SponsorshipContractView> reviewContract(
-      String contractId, String action) async {
-    final int index = _contracts
-        .indexWhere((SponsorshipContractView item) => item.id == contractId);
+    String contractId,
+    String action,
+  ) async {
+    final int index = _contracts.indexWhere(
+      (SponsorshipContractView item) => item.id == contractId,
+    );
     if (index == -1) {
       return _contracts.first;
     }

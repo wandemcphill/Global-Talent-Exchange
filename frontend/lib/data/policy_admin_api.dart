@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/policy_admin_models.dart';
 
 class PolicyAdminApi {
-  PolicyAdminApi({
-    required this.client,
-    required this.fixtures,
-  });
+  PolicyAdminApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _PolicyAdminFixtures fixtures;
@@ -15,14 +12,15 @@ class PolicyAdminApi {
   factory PolicyAdminApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return PolicyAdminApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _PolicyAdminFixtures.seed(),
     );
@@ -44,16 +42,12 @@ class PolicyAdminApi {
   }
 
   Future<List<CountryFeaturePolicy>> listCountryPolicies() {
-    return client.withFallback<List<CountryFeaturePolicy>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/admin/policies/country-policies');
-        return payload
-            .map(CountryFeaturePolicy.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.policies,
-    );
+    return client.withFallback<List<CountryFeaturePolicy>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/admin/policies/country-policies',
+      );
+      return payload.map(CountryFeaturePolicy.fromJson).toList(growable: false);
+    }, fixtures.policies);
   }
 
   Future<CountryFeaturePolicy> upsertCountryPolicy({
@@ -68,33 +62,29 @@ class PolicyAdminApi {
     int oneTimeRegionChangeAfterDays = 180,
     bool active = true,
   }) {
-    return client.withFallback<CountryFeaturePolicy>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/policies/country-policies',
-          body: <String, Object?>{
-            'country_code': countryCode,
-            'bucket_type': bucketType,
-            'deposits_enabled': depositsEnabled,
-            'market_trading_enabled': marketTradingEnabled,
-            'platform_reward_withdrawals_enabled':
-                platformRewardWithdrawalsEnabled,
-            'user_hosted_gift_withdrawals_enabled':
-                userHostedGiftWithdrawalsEnabled,
-            'gtex_competition_gift_withdrawals_enabled':
-                gtexCompetitionGiftWithdrawalsEnabled,
-            'national_reward_withdrawals_enabled':
-                nationalRewardWithdrawalsEnabled,
-            'one_time_region_change_after_days':
-                oneTimeRegionChangeAfterDays,
-            'active': active,
-          },
-        );
-        return CountryFeaturePolicy.fromJson(payload);
-      },
-      () async => fixtures.upsertPolicy(countryCode: countryCode),
-    );
+    return client.withFallback<CountryFeaturePolicy>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/admin/policies/country-policies',
+        body: <String, Object?>{
+          'country_code': countryCode,
+          'bucket_type': bucketType,
+          'deposits_enabled': depositsEnabled,
+          'market_trading_enabled': marketTradingEnabled,
+          'platform_reward_withdrawals_enabled':
+              platformRewardWithdrawalsEnabled,
+          'user_hosted_gift_withdrawals_enabled':
+              userHostedGiftWithdrawalsEnabled,
+          'gtex_competition_gift_withdrawals_enabled':
+              gtexCompetitionGiftWithdrawalsEnabled,
+          'national_reward_withdrawals_enabled':
+              nationalRewardWithdrawalsEnabled,
+          'one_time_region_change_after_days': oneTimeRegionChangeAfterDays,
+          'active': active,
+        },
+      );
+      return CountryFeaturePolicy.fromJson(payload);
+    }, () async => fixtures.upsertPolicy(countryCode: countryCode));
   }
 }
 

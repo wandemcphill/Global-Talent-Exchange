@@ -223,6 +223,17 @@ class MomentsEngine:
         title = self._clip_title(event, detected_events=detected_events)
         subtitle = self._clip_subtitle(event)
         event_second = max(0, event.minute * 60)
+        source_path = self._optional_string(event.metadata.get("source_path"))
+        source_storage_key = self._optional_string(event.metadata.get("source_storage_key"))
+        source_status = self.highlight_generation_service.resolve_clip_source_status(
+            source_path=source_path,
+            source_storage_key=source_storage_key,
+        )
+        if source_status == "unavailable":
+            return MomentClipView(
+                storage_key=storage_key,
+                render_status="unavailable",
+            )
         job = HighlightRenderJob(
             kind="clip",
             match_id=event.match_id,
@@ -234,8 +245,8 @@ class MomentsEngine:
             start_second=max(0, event_second - 8),
             end_second=event_second + 6,
             playback_speed=0.85 if "last_minute_win" in detected_events else 1.0,
-            source_path=self._optional_string(event.metadata.get("source_path")),
-            source_storage_key=self._optional_string(event.metadata.get("source_storage_key")),
+            source_path=source_path,
+            source_storage_key=source_storage_key,
             metadata={
                 "source_event_type": event.source_event_type,
                 "event_type": event.event_type,
@@ -249,7 +260,9 @@ class MomentsEngine:
             },
         )
         record = queue.enqueue(job)
-        render_status = "ready" if record.status == "succeeded" else record.status
+        render_status = self.highlight_generation_service.render_status_for_record(record)
+        if source_status == "pending":
+            render_status = "pending"
         cdn_path = None
         if getattr(settings, "cdn_base_url", None):
             cdn_path = f"{str(settings.cdn_base_url).rstrip('/')}/{storage_key}"

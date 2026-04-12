@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/notification_settings_models.dart';
 
 class NotificationSettingsApi {
-  NotificationSettingsApi({
-    required this.client,
-    required this.fixtures,
-  });
+  NotificationSettingsApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _NotificationFixtures fixtures;
@@ -15,14 +12,15 @@ class NotificationSettingsApi {
   factory NotificationSettingsApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return NotificationSettingsApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _NotificationFixtures.seed(),
     );
@@ -44,14 +42,12 @@ class NotificationSettingsApi {
   }
 
   Future<NotificationPreference> fetchPreferences() {
-    return client.withFallback<NotificationPreference>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/notifications/preferences');
-        return NotificationPreference.fromJson(payload);
-      },
-      fixtures.preferences,
-    );
+    return client.withFallback<NotificationPreference>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/notifications/preferences',
+      );
+      return NotificationPreference.fromJson(payload);
+    }, fixtures.preferences);
   }
 
   Future<NotificationPreference> updatePreferences(
@@ -85,16 +81,14 @@ class NotificationSettingsApi {
   }
 
   Future<List<NotificationSubscription>> listSubscriptions() {
-    return client.withFallback<List<NotificationSubscription>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/notifications/subscriptions');
-        return payload
-            .map(NotificationSubscription.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.subscriptions,
-    );
+    return client.withFallback<List<NotificationSubscription>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/notifications/subscriptions',
+      );
+      return payload
+          .map(NotificationSubscription.fromJson)
+          .toList(growable: false);
+    }, fixtures.subscriptions);
   }
 
   Future<NotificationSubscription> upsertSubscription({
@@ -128,41 +122,31 @@ class NotificationSettingsApi {
   }
 
   Future<void> deleteSubscription(String subscriptionId) {
-    return client.withFallback<void>(
-      () async {
-        await client.request(
-          'DELETE',
-          '/notifications/subscriptions/$subscriptionId',
-        );
-      },
-      () async => fixtures.removeSubscription(subscriptionId),
-    );
+    return client.withFallback<void>(() async {
+      await client.request(
+        'DELETE',
+        '/notifications/subscriptions/$subscriptionId',
+      );
+    }, () async => fixtures.removeSubscription(subscriptionId));
   }
 
   Future<List<PlatformAnnouncement>> listAnnouncements() {
-    return client.withFallback<List<PlatformAnnouncement>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/notifications/announcements', auth: false);
-        return payload
-            .map(PlatformAnnouncement.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.announcements,
-    );
+    return client.withFallback<List<PlatformAnnouncement>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/notifications/announcements',
+        auth: false,
+      );
+      return payload.map(PlatformAnnouncement.fromJson).toList(growable: false);
+    }, fixtures.announcements);
   }
 
   Future<List<PlatformAnnouncement>> adminListAnnouncements() {
-    return client.withFallback<List<PlatformAnnouncement>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/admin/notifications/announcements');
-        return payload
-            .map(PlatformAnnouncement.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.announcements,
-    );
+    return client.withFallback<List<PlatformAnnouncement>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/admin/notifications/announcements',
+      );
+      return payload.map(PlatformAnnouncement.fromJson).toList(growable: false);
+    }, fixtures.announcements);
   }
 
   Future<PlatformAnnouncement> publishAnnouncement({
@@ -203,7 +187,10 @@ class NotificationSettingsApi {
 
 class _NotificationFixtures {
   _NotificationFixtures(
-      this._preference, this._subscriptions, this._announcements);
+    this._preference,
+    this._subscriptions,
+    this._announcements,
+  );
 
   NotificationPreference _preference;
   final List<NotificationSubscription> _subscriptions;
@@ -295,7 +282,8 @@ class _NotificationFixtures {
 
   Future<void> removeSubscription(String subscriptionId) async {
     _subscriptions.removeWhere(
-        (NotificationSubscription item) => item.id == subscriptionId);
+      (NotificationSubscription item) => item.id == subscriptionId,
+    );
   }
 
   Future<List<PlatformAnnouncement>> announcements() async =>

@@ -1,5 +1,35 @@
 from __future__ import annotations
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
+
+from app.auth.dependencies import get_current_user, get_session
+from app.routes.creators import router as creators_router
+from app.routes.referrals import router as referrals_router
+
+
+def _build_referral_app(engine, users, *, current_user):
+    app = FastAPI()
+    app.include_router(creators_router)
+    app.include_router(referrals_router)
+    app.state.current_user = current_user
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    def override_current_user():
+        return app.state.current_user
+
+    def override_session():
+        local_session = SessionLocal()
+        try:
+            yield local_session
+        finally:
+            local_session.close()
+
+    app.dependency_overrides[get_current_user] = override_current_user
+    app.dependency_overrides[get_session] = override_session
+    return app
+
 
 def test_creator_profile_endpoints_create_patch_and_read_by_handle(referral_api) -> None:
     app, client, users, _session = referral_api
@@ -49,6 +79,95 @@ def test_creator_profile_endpoints_create_patch_and_read_by_handle(referral_api)
     summary_payload = summary_response.json()
     assert summary_payload["profile"]["default_share_code"] == "creatorone"
     assert summary_payload["featured_competitions"][0]["competition_id"] == "comp-creator-2"
+
+
+def test_creator_profile_survives_app_restart(referral_api) -> None:
+    app, client, users, session = referral_api
+    app.state.current_user = users["creator"]
+
+    create_response = client.post(
+        "/api/creators/profile",
+        json={
+            "handle": "creator.restart",
+            "display_name": "Creator Restart",
+            "tier": "featured",
+            "status": "active",
+            "default_competition_id": "comp-restart-1",
+            "revenue_share_percent": "11.0",
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+
+    engine = session.get_bind()
+    restarted_app = _build_referral_app(engine, users, current_user=users["creator"])
+
+    with TestClient(restarted_app) as restarted_client:
+        me_response = restarted_client.get("/api/creators/profile/me")
+        assert me_response.status_code == 200, me_response.text
+        me_payload = me_response.json()
+        assert me_payload["handle"] == "creator.restart"
+        assert me_payload["default_share_code"] == "creatorrestart"
+
+        competitions_response = restarted_client.get("/api/creators/me/competitions")
+        assert competitions_response.status_code == 200, competitions_response.text
+        competitions_payload = competitions_response.json()
+        assert competitions_payload[0]["competition_id"] == "comp-restart-1"
+        assert competitions_payload[0]["linked_share_code"] == "creatorrestart"
+
+        public_response = restarted_client.get("/api/creators/creator.restart")
+        assert public_response.status_code == 200, public_response.text
+        assert public_response.json()["user_id"] == users["creator"].id
+
+
+def test_creator_profile_updates_are_visible_across_app_instances(referral_api) -> None:
+    app_a, client_a, users, session = referral_api
+    engine = session.get_bind()
+    app_b = _build_referral_app(engine, users, current_user=users["creator"])
+
+    with TestClient(app_b) as client_b:
+        app_a.state.current_user = users["creator"]
+        create_response = client_a.post(
+            "/api/creators/profile",
+            json={
+                "handle": "creator.scale",
+                "display_name": "Creator Scale",
+                "tier": "featured",
+                "status": "active",
+                "default_competition_id": "comp-scale-1",
+                "revenue_share_percent": "9.5",
+            },
+        )
+        assert create_response.status_code == 201, create_response.text
+        assert create_response.json()["default_share_code"] == "creatorscale"
+
+        me_response = client_b.get("/api/creators/profile/me")
+        assert me_response.status_code == 200, me_response.text
+        assert me_response.json()["handle"] == "creator.scale"
+        assert me_response.json()["default_competition_id"] == "comp-scale-1"
+
+        patch_response = client_b.patch(
+            "/api/creators/profile",
+            json={
+                "display_name": "Creator Scale Updated",
+                "default_competition_id": "comp-scale-2",
+            },
+        )
+        assert patch_response.status_code == 200, patch_response.text
+        assert patch_response.json()["display_name"] == "Creator Scale Updated"
+        assert patch_response.json()["default_competition_id"] == "comp-scale-2"
+
+        app_a.state.current_user = users["creator"]
+        summary_response = client_a.get("/api/creators/me/summary")
+        assert summary_response.status_code == 200, summary_response.text
+        summary_payload = summary_response.json()
+        assert summary_payload["profile"]["display_name"] == "Creator Scale Updated"
+        assert summary_payload["profile"]["default_competition_id"] == "comp-scale-2"
+        assert summary_payload["featured_competitions"][0]["competition_id"] == "comp-scale-2"
+        assert summary_payload["featured_competitions"][0]["linked_share_code"] == "creatorscale"
+
+        public_response = client_a.get("/api/creators/creator.scale")
+        assert public_response.status_code == 200, public_response.text
+        assert public_response.json()["display_name"] == "Creator Scale Updated"
 
 
 def test_creator_insights_endpoint_returns_profile_patterns_and_recommendations(referral_api) -> None:

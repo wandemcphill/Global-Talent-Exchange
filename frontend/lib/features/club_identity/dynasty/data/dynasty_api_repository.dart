@@ -23,11 +23,14 @@ class DynastyApiRepository implements DynastyRepository {
 
   factory DynastyApiRepository.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
     Duration latency = const Duration(milliseconds: 220),
   }) {
-    final GteRepositoryConfig config =
-        GteRepositoryConfig(baseUrl: baseUrl, mode: mode);
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
+    final GteRepositoryConfig config = GteRepositoryConfig(
+      baseUrl: baseUrl,
+      mode: resolvedMode,
+    );
     return DynastyApiRepository(
       config: config,
       transport: GteHttpTransport(),
@@ -47,7 +50,8 @@ class DynastyApiRepository implements DynastyRepository {
   Future<DynastyHistoryDto> fetchDynastyHistory(String clubId) {
     return _withFallback<DynastyHistoryDto>(
       () async => mapper.mapHistory(
-          await _request('GET', '/api/clubs/$clubId/dynasty/history')),
+        await _request('GET', '/api/clubs/$clubId/dynasty/history'),
+      ),
       () => fixtures.fetchDynastyHistory(clubId),
     );
   }
@@ -118,8 +122,10 @@ class DynastyApiRepository implements DynastyRepository {
     if (payload is! Map) {
       return false;
     }
-    final Map<String, Object?> json =
-        GteJson.map(payload, label: 'dynasty profile');
+    final Map<String, Object?> json = GteJson.map(
+      payload,
+      label: 'dynasty profile',
+    );
     return json.containsKey('progress');
   }
 
@@ -201,19 +207,17 @@ class DynastyApiRepository implements DynastyRepository {
     return GteApiErrorType.unknown;
   }
 
-  String _errorMessage(
-    Object? payload, {
-    required String fallback,
-  }) {
+  String _errorMessage(Object? payload, {required String fallback}) {
     if (payload is String && payload.trim().isNotEmpty) {
       return payload;
     }
     if (payload is Map) {
       final Map<String, Object?> json = GteJson.map(payload);
-      final String? detail = GteJson.stringOrNull(
-        json,
-        const <String>['detail', 'message', 'error'],
-      );
+      final String? detail = GteJson.stringOrNull(json, const <String>[
+        'detail',
+        'message',
+        'error',
+      ]);
       if (detail != null && detail.isNotEmpty) {
         return detail;
       }

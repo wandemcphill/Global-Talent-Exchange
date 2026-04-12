@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/risk_ops_models.dart';
 
 class RiskOpsApi {
-  RiskOpsApi({
-    required this.client,
-    required this.fixtures,
-  });
+  RiskOpsApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _RiskOpsFixtures fixtures;
@@ -15,14 +12,15 @@ class RiskOpsApi {
   factory RiskOpsApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return RiskOpsApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _RiskOpsFixtures.seed(),
     );
@@ -44,14 +42,12 @@ class RiskOpsApi {
   }
 
   Future<RiskOverview> fetchOverview() {
-    return client.withFallback<RiskOverview>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/admin/risk-ops/overview');
-        return RiskOverview.fromJson(payload);
-      },
-      fixtures.overview,
-    );
+    return client.withFallback<RiskOverview>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/admin/risk-ops/overview',
+      );
+      return RiskOverview.fromJson(payload);
+    }, fixtures.overview);
   }
 }
 

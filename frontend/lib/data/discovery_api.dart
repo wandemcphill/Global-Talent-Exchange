@@ -6,10 +6,7 @@ import 'gte_http_transport.dart';
 import '../models/discovery_models.dart';
 
 class DiscoveryApi {
-  DiscoveryApi({
-    required this.client,
-    required this.fixtures,
-  });
+  DiscoveryApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _DiscoveryFixtures fixtures;
@@ -17,14 +14,15 @@ class DiscoveryApi {
   factory DiscoveryApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return DiscoveryApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _DiscoveryFixtures.seed(),
     );
@@ -46,14 +44,12 @@ class DiscoveryApi {
   }
 
   Future<DiscoveryHome> fetchHome() {
-    return client.withFallback<DiscoveryHome>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/discovery/home');
-        return DiscoveryHome.fromJson(payload);
-      },
-      fixtures.home,
-    );
+    return client.withFallback<DiscoveryHome>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/discovery/home',
+      );
+      return DiscoveryHome.fromJson(payload);
+    }, fixtures.home);
   }
 
   Future<List<DiscoveryItem>> search({
@@ -61,33 +57,26 @@ class DiscoveryApi {
     String entityScope = 'all',
     int limit = 20,
   }) {
-    return client.withFallback<List<DiscoveryItem>>(
-      () async {
-        final List<dynamic> payload = await client.getList(
-          '/discovery/search',
-          query: <String, Object?>{
-            'q': query,
-            'entity_scope': entityScope,
-            'limit': limit,
-          },
-        );
-        return payload
-            .map(DiscoveryItem.fromJson)
-            .toList(growable: false);
-      },
-      () async => fixtures.search(query: query, limit: limit),
-    );
+    return client.withFallback<List<DiscoveryItem>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/discovery/search',
+        query: <String, Object?>{
+          'q': query,
+          'entity_scope': entityScope,
+          'limit': limit,
+        },
+      );
+      return payload.map(DiscoveryItem.fromJson).toList(growable: false);
+    }, () async => fixtures.search(query: query, limit: limit));
   }
 
   Future<List<SavedSearch>> listSavedSearches() {
-    return client.withFallback<List<SavedSearch>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/discovery/saved-searches');
-        return payload.map(SavedSearch.fromJson).toList(growable: false);
-      },
-      fixtures.savedSearches,
-    );
+    return client.withFallback<List<SavedSearch>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/discovery/saved-searches',
+      );
+      return payload.map(SavedSearch.fromJson).toList(growable: false);
+    }, fixtures.savedSearches);
   }
 
   Future<SavedSearch> createSavedSearch({
@@ -95,44 +84,33 @@ class DiscoveryApi {
     String entityScope = 'all',
     bool alertsEnabled = false,
   }) {
-    return client.withFallback<SavedSearch>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/discovery/saved-searches',
-          body: <String, Object?>{
-            'query': query,
-            'entity_scope': entityScope,
-            'alerts_enabled': alertsEnabled,
-          },
-        );
-        return SavedSearch.fromJson(payload);
-      },
-      () async => fixtures.createSavedSearch(query: query),
-    );
+    return client.withFallback<SavedSearch>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/discovery/saved-searches',
+        body: <String, Object?>{
+          'query': query,
+          'entity_scope': entityScope,
+          'alerts_enabled': alertsEnabled,
+        },
+      );
+      return SavedSearch.fromJson(payload);
+    }, () async => fixtures.createSavedSearch(query: query));
   }
 
   Future<void> deleteSavedSearch(String searchId) {
-    return client.withFallback<void>(
-      () async {
-        await client.request(
-          'DELETE',
-          '/discovery/saved-searches/$searchId',
-        );
-      },
-      () async => fixtures.deleteSavedSearch(searchId),
-    );
+    return client.withFallback<void>(() async {
+      await client.request('DELETE', '/discovery/saved-searches/$searchId');
+    }, () async => fixtures.deleteSavedSearch(searchId));
   }
 
   Future<List<FeaturedRail>> listFeaturedRails() {
-    return client.withFallback<List<FeaturedRail>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/admin/discovery/featured-rails');
-        return payload.map(FeaturedRail.fromJson).toList(growable: false);
-      },
-      fixtures.featuredRails,
-    );
+    return client.withFallback<List<FeaturedRail>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/admin/discovery/featured-rails',
+      );
+      return payload.map(FeaturedRail.fromJson).toList(growable: false);
+    }, fixtures.featuredRails);
   }
 
   Future<FeaturedRail> upsertFeaturedRail({
@@ -145,29 +123,23 @@ class DiscoveryApi {
     int displayOrder = 0,
     bool active = true,
   }) {
-    return client.withFallback<FeaturedRail>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/discovery/featured-rails',
-          body: <String, Object?>{
-            'rail_key': railKey,
-            'title': title,
-            'rail_type': railType,
-            'audience': audience,
-            'query_hint': queryHint,
-            'subtitle': subtitle,
-            'display_order': displayOrder,
-            'active': active,
-          },
-        );
-        return FeaturedRail.fromJson(payload);
-      },
-      () async => fixtures.upsertRail(
-        railKey: railKey,
-        title: title,
-      ),
-    );
+    return client.withFallback<FeaturedRail>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/admin/discovery/featured-rails',
+        body: <String, Object?>{
+          'rail_key': railKey,
+          'title': title,
+          'rail_type': railType,
+          'audience': audience,
+          'query_hint': queryHint,
+          'subtitle': subtitle,
+          'display_order': displayOrder,
+          'active': active,
+        },
+      );
+      return FeaturedRail.fromJson(payload);
+    }, () async => fixtures.upsertRail(railKey: railKey, title: title));
   }
 }
 

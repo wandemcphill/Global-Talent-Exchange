@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/story_feed_models.dart';
 
 class StoryFeedApi {
-  StoryFeedApi({
-    required this.client,
-    required this.fixtures,
-  });
+  StoryFeedApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _StoryFeedFixtures fixtures;
@@ -15,14 +12,15 @@ class StoryFeedApi {
   factory StoryFeedApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return StoryFeedApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _StoryFeedFixtures.seed(),
     );
@@ -44,28 +42,24 @@ class StoryFeedApi {
   }
 
   Future<List<StoryFeedItem>> listFeed({int limit = 50}) {
-    return client.withFallback<List<StoryFeedItem>>(
-      () async {
-        final List<dynamic> payload = await client.getList(
-          '/story-feed',
-          query: <String, Object?>{'limit': limit},
-          auth: false,
-        );
-        return payload.map(StoryFeedItem.fromJson).toList(growable: false);
-      },
-      fixtures.feed,
-    );
+    return client.withFallback<List<StoryFeedItem>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/story-feed',
+        query: <String, Object?>{'limit': limit},
+        auth: false,
+      );
+      return payload.map(StoryFeedItem.fromJson).toList(growable: false);
+    }, fixtures.feed);
   }
 
   Future<StoryDigest> fetchDigest() {
-    return client.withFallback<StoryDigest>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/story-feed/digest', auth: false);
-        return StoryDigest.fromJson(payload);
-      },
-      fixtures.digest,
-    );
+    return client.withFallback<StoryDigest>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/story-feed/digest',
+        auth: false,
+      );
+      return StoryDigest.fromJson(payload);
+    }, fixtures.digest);
   }
 
   Future<StoryFeedItem> publishStory({
@@ -78,27 +72,24 @@ class StoryFeedApi {
     String? countryCode,
     bool featured = false,
   }) {
-    return client.withFallback<StoryFeedItem>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/story-feed',
-          body: <String, Object?>{
-            'story_type': storyType,
-            'title': title,
-            'body': body,
-            'audience': audience,
-            if (subjectType != null) 'subject_type': subjectType,
-            if (subjectId != null) 'subject_id': subjectId,
-            if (countryCode != null) 'country_code': countryCode,
-            'featured': featured,
-            'metadata_json': <String, Object?>{},
-          },
-        );
-        return StoryFeedItem.fromJson(payload);
-      },
-      () async => fixtures.publishStory(title: title, body: body),
-    );
+    return client.withFallback<StoryFeedItem>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/admin/story-feed',
+        body: <String, Object?>{
+          'story_type': storyType,
+          'title': title,
+          'body': body,
+          'audience': audience,
+          if (subjectType != null) 'subject_type': subjectType,
+          if (subjectId != null) 'subject_id': subjectId,
+          if (countryCode != null) 'country_code': countryCode,
+          'featured': featured,
+          'metadata_json': <String, Object?>{},
+        },
+      );
+      return StoryFeedItem.fromJson(payload);
+    }, () async => fixtures.publishStory(title: title, body: body));
   }
 }
 

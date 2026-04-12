@@ -50,8 +50,10 @@ class _TransferNewsCalendarScreenState
 
   bool get _isAuthenticated =>
       widget.accessToken != null && widget.accessToken!.trim().isNotEmpty;
-  bool get _isAdmin => <String>{'admin', 'super_admin'}
-      .contains((widget.currentUserRole ?? '').trim().toLowerCase());
+  bool get _isAdmin => <String>{
+    'admin',
+    'super_admin',
+  }.contains((widget.currentUserRole ?? '').trim().toLowerCase());
 
   @override
   void initState() {
@@ -89,10 +91,13 @@ class _TransferNewsCalendarScreenState
       _windowsError = null;
     });
     try {
-      final List<dynamic> payload =
-          await _api.getList('/api/transfers/windows', auth: false);
-      _windows =
-          payload.map(_TransferWindowRecord.fromJson).toList(growable: false);
+      final List<dynamic> payload = await _api.getList(
+        '/api/transfers/windows',
+        auth: false,
+      );
+      _windows = payload
+          .map(_TransferWindowRecord.fromJson)
+          .toList(growable: false);
       _selectedWindowId ??= _windows.isEmpty ? null : _windows.first.id;
       if (_selectedWindowId != null) {
         await _loadBids(_selectedWindowId!);
@@ -132,6 +137,7 @@ class _TransferNewsCalendarScreenState
     if (windowId == null) {
       return;
     }
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     await showGteFormSheet(
       context,
       title: 'Create transfer bid',
@@ -151,7 +157,9 @@ class _TransferNewsCalendarScreenState
             (values['buyingClubId'] ?? '').isEmpty ||
             amount == null) {
           AppFeedback.showError(
-              context, 'Enter player, buying club, and amount.');
+            context,
+            'Enter player, buying club, and amount.',
+          );
           return false;
         }
         try {
@@ -166,12 +174,14 @@ class _TransferNewsCalendarScreenState
             },
           );
           await _loadBids(windowId);
-          if (mounted) {
-            AppFeedback.showSuccess(context, 'Transfer bid created.');
-          }
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Transfer bid created.')),
+          );
           return true;
         } catch (error) {
-          AppFeedback.showError(context, AppFeedback.messageFor(error));
+          messenger.showSnackBar(
+            SnackBar(content: Text(AppFeedback.messageFor(error))),
+          );
           return false;
         }
       },
@@ -183,6 +193,7 @@ class _TransferNewsCalendarScreenState
     if (windowId == null) {
       return;
     }
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     try {
       await _api.request(
         'POST',
@@ -193,11 +204,13 @@ class _TransferNewsCalendarScreenState
         },
       );
       await _loadBids(windowId);
-      if (mounted) {
-        AppFeedback.showSuccess(context, 'Transfer bid accepted.');
-      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Transfer bid accepted.')),
+      );
     } catch (error) {
-      AppFeedback.showError(context, AppFeedback.messageFor(error));
+      messenger.showSnackBar(
+        SnackBar(content: Text(AppFeedback.messageFor(error))),
+      );
     }
   }
 
@@ -206,6 +219,7 @@ class _TransferNewsCalendarScreenState
     if (windowId == null) {
       return;
     }
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     try {
       await _api.request(
         'POST',
@@ -213,15 +227,18 @@ class _TransferNewsCalendarScreenState
         body: const <String, Object?>{'reason': 'frontend_review'},
       );
       await _loadBids(windowId);
-      if (mounted) {
-        AppFeedback.showSuccess(context, 'Transfer bid rejected.');
-      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Transfer bid rejected.')),
+      );
     } catch (error) {
-      AppFeedback.showError(context, AppFeedback.messageFor(error));
+      messenger.showSnackBar(
+        SnackBar(content: Text(AppFeedback.messageFor(error))),
+      );
     }
   }
 
   Future<void> _createSeason() async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     await showGteFormSheet(
       context,
       title: 'Create calendar season',
@@ -243,7 +260,9 @@ class _TransferNewsCalendarScreenState
           ),
         );
         if ((_controller.actionError ?? '').isNotEmpty) {
-          AppFeedback.showError(context, _controller.actionError!);
+          messenger.showSnackBar(
+            SnackBar(content: Text(_controller.actionError!)),
+          );
           return false;
         }
         await _controller.loadCalendar();
@@ -310,9 +329,10 @@ class _TransferNewsCalendarScreenState
                           children: <Widget>[
                             if (_isAuthenticated)
                               FilledButton.tonalIcon(
-                                onPressed: _selectedWindowId == null
-                                    ? null
-                                    : _createBid,
+                                onPressed:
+                                    _selectedWindowId == null
+                                        ? null
+                                        : _createBid,
                                 icon: const Icon(Icons.gavel_outlined),
                                 label: const Text('Create bid'),
                               )
@@ -338,103 +358,116 @@ class _TransferNewsCalendarScreenState
                     title: 'Transfer windows',
                     loading: _isLoadingWindows,
                     error: _windowsError,
-                    child: _windows.isEmpty
-                        ? const Text('No transfer windows available.')
-                        : Column(
-                            children: _windows
-                                .map(
-                                  (_TransferWindowRecord item) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: GteSurfacePanel(
-                                      accentColor: _selectedWindowId == item.id
-                                          ? const Color(0xFF8ED8FF)
-                                          : null,
-                                      onTap: () => _loadBids(item.id),
-                                      child: Text(
-                                        '${item.label}\n${item.status} • ${item.territoryCode} • ${item.opensOn} to ${item.closesOn}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium,
+                    child:
+                        _windows.isEmpty
+                            ? const Text('No transfer windows available.')
+                            : Column(
+                              children: _windows
+                                  .map(
+                                    (_TransferWindowRecord item) => Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 10,
+                                      ),
+                                      child: GteSurfacePanel(
+                                        accentColor:
+                                            _selectedWindowId == item.id
+                                                ? const Color(0xFF8ED8FF)
+                                                : null,
+                                        onTap: () => _loadBids(item.id),
+                                        child: Text(
+                                          '${item.label}\n${item.status} • ${item.territoryCode} • ${item.opensOn} to ${item.closesOn}',
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
+                                  )
+                                  .toList(growable: false),
+                            ),
                   ),
                   const SizedBox(height: 18),
                   _TransferListCard(
                     title: 'Transfer bids',
                     loading: _isLoadingBids,
                     error: _bidsError,
-                    child: _bids.isEmpty
-                        ? const Text('No bids loaded for the selected window.')
-                        : Column(
-                            children: _bids
-                                .map(
-                                  (_TransferBidRecord item) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: GteSurfacePanel(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: <Widget>[
-                                          Text(
-                                            '${item.playerId} • ${item.status} • ${item.bidAmount}',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium,
-                                          ),
-                                          if (_isAuthenticated) ...<Widget>[
-                                            const SizedBox(height: 10),
-                                            Wrap(
-                                              spacing: 10,
-                                              runSpacing: 10,
-                                              children: <Widget>[
-                                                FilledButton.tonal(
-                                                  onPressed: () =>
-                                                      _acceptBid(item),
-                                                  child: const Text('Accept'),
-                                                ),
-                                                FilledButton.tonal(
-                                                  onPressed: () =>
-                                                      _rejectBid(item),
-                                                  child: const Text('Reject'),
-                                                ),
-                                              ],
+                    child:
+                        _bids.isEmpty
+                            ? const Text(
+                              'No bids loaded for the selected window.',
+                            )
+                            : Column(
+                              children: _bids
+                                  .map(
+                                    (_TransferBidRecord item) => Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 10,
+                                      ),
+                                      child: GteSurfacePanel(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: <Widget>[
+                                            Text(
+                                              '${item.playerId} • ${item.status} • ${item.bidAmount}',
+                                              style:
+                                                  Theme.of(
+                                                    context,
+                                                  ).textTheme.bodyMedium,
                                             ),
+                                            if (_isAuthenticated) ...<Widget>[
+                                              const SizedBox(height: 10),
+                                              Wrap(
+                                                spacing: 10,
+                                                runSpacing: 10,
+                                                children: <Widget>[
+                                                  FilledButton.tonal(
+                                                    onPressed:
+                                                        () => _acceptBid(item),
+                                                    child: const Text('Accept'),
+                                                  ),
+                                                  FilledButton.tonal(
+                                                    onPressed:
+                                                        () => _rejectBid(item),
+                                                    child: const Text('Reject'),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
                                           ],
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
+                                  )
+                                  .toList(growable: false),
+                            ),
                   ),
                   const SizedBox(height: 18),
                   _TransferListCard(
                     title: 'Calendar events',
                     loading: _controller.isLoadingCalendar,
                     error: _controller.calendarError,
-                    child: _controller.calendarEvents.isEmpty
-                        ? const Text('No calendar events available.')
-                        : Column(
-                            children: _controller.calendarEvents
-                                .take(6)
-                                .map(
-                                  (CalendarEventViewModel item) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Text(
-                                      '${item.title} • ${item.status} • ${item.family}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium,
+                    child:
+                        _controller.calendarEvents.isEmpty
+                            ? const Text('No calendar events available.')
+                            : Column(
+                              children: _controller.calendarEvents
+                                  .take(6)
+                                  .map(
+                                    (CalendarEventViewModel item) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Text(
+                                        '${item.title} • ${item.status} • ${item.family}',
+                                        style:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium,
+                                      ),
                                     ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
+                                  )
+                                  .toList(growable: false),
+                            ),
                   ),
                 ],
               ),

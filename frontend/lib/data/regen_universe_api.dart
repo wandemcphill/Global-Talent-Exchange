@@ -12,13 +12,14 @@ class RegenUniverseApi {
 
   factory RegenUniverseApi.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return RegenUniverseApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _RegenUniverseFixtures.seed(),
     );

@@ -13,8 +13,8 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class ShareCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "share_codes"
 
-    code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
-    vanity_code: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    vanity_code: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True)
     code_type: Mapped[ShareCodeType] = mapped_column(
         Enum(
             ShareCodeType,

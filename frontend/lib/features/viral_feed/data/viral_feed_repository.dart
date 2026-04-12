@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 
+import '../../../app/gte_app_config.dart';
 import '../../../data/gte_api_contracts.dart';
 import '../../../data/gte_api_repository.dart';
 import '../../../data/gte_authed_api.dart';
@@ -36,15 +37,17 @@ class ViralFeedApiRepository implements ViralFeedRepository {
        _auditHooks = auditHooks;
 
   factory ViralFeedApiRepository.standard({
-    String baseUrl = _apiBaseUrl,
+    String? baseUrl,
     String? accessToken,
     AuthSession? authSession,
     String? deviceId,
   }) {
+    final String resolvedBaseUrl =
+        baseUrl ?? resolveGteApiBaseUrlFromEnvironment();
     return ViralFeedApiRepository(
       client: GteAuthedApi(
         config: GteRepositoryConfig(
-          baseUrl: baseUrl,
+          baseUrl: resolvedBaseUrl,
           mode: GteBackendMode.live,
         ),
         transport: GteHttpTransport(),
@@ -55,7 +58,7 @@ class ViralFeedApiRepository implements ViralFeedRepository {
       ),
       validator: const ViralFeedValidator(),
       auditHooks: FrontendAuditHooks(
-        baseUrl: baseUrl,
+        baseUrl: resolvedBaseUrl,
         accessToken: authSession?.accessToken ?? accessToken,
       ),
     );
@@ -277,11 +280,6 @@ class ViralFeedApiRepository implements ViralFeedRepository {
     return sessionId.isEmpty ? null : sessionId;
   }
 }
-
-const String _apiBaseUrl = String.fromEnvironment(
-  'GTE_API_BASE_URL',
-  defaultValue: 'http://127.0.0.1:8000',
-);
 
 List<int> _intListValue(Object? value) {
   if (value is! List) {

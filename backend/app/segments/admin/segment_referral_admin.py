@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_session
 from app.models.user import User
 from app.schemas.referral_admin import (
     AttributionChainEntryView,
@@ -73,11 +75,18 @@ def get_referral_share_code(
 def block_referral_share_code(
     share_code_id: str,
     payload: ShareCodeModerationRequest,
+    session: Session = Depends(get_session),
     current_user: User = Depends(_require_admin),
     admin_service: ReferralAdminService = Depends(get_referral_admin_service),
 ) -> ShareCodeUsageSummaryView:
     try:
-        return admin_service.block_share_code(share_code_id=share_code_id, admin_user_id=current_user.id, payload=payload)
+        result = admin_service.block_share_code(
+            share_code_id=share_code_id,
+            admin_user_id=current_user.id,
+            payload=payload,
+        )
+        session.commit()
+        return result
     except ReferralActionError as exc:
         raise _to_http_error(exc) from exc
 
@@ -106,15 +115,18 @@ def get_referral_creator(
 def set_referral_creator_reward_freeze(
     creator_id: str,
     payload: CreatorRewardFreezeRequest,
+    session: Session = Depends(get_session),
     current_user: User = Depends(_require_admin),
     admin_service: ReferralAdminService = Depends(get_referral_admin_service),
 ) -> CreatorAdminSummaryView:
     try:
-        return admin_service.set_creator_reward_freeze(
+        result = admin_service.set_creator_reward_freeze(
             creator_id=creator_id,
             admin_user_id=current_user.id,
             payload=payload,
         )
+        session.commit()
+        return result
     except ReferralActionError as exc:
         raise _to_http_error(exc) from exc
 
@@ -146,11 +158,18 @@ def list_pending_referral_rewards(
 def review_referral_reward(
     reward_id: str,
     payload: RewardReviewRequest,
+    session: Session = Depends(get_session),
     current_user: User = Depends(_require_admin),
     admin_service: ReferralAdminService = Depends(get_referral_admin_service),
 ) -> RewardReviewDecisionView:
     try:
-        return admin_service.review_reward(reward_id=reward_id, admin_user_id=current_user.id, payload=payload)
+        result = admin_service.review_reward(
+            reward_id=reward_id,
+            admin_user_id=current_user.id,
+            payload=payload,
+        )
+        session.commit()
+        return result
     except ReferralActionError as exc:
         raise _to_http_error(exc) from exc
 

@@ -9,7 +9,10 @@ import os
 from pathlib import Path
 import time
 
+from alembic import command
 from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import MetaData, create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
@@ -23,7 +26,9 @@ ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
     "app.models",
     "app.agents.models",
+    "app.ledger.models",
     "app.leaderboards.models",
+    "app.matching.models",
     "app.models.economy_governor",
     "app.models.fx_pricing",
     "app.models.player_token_market",
@@ -37,6 +42,7 @@ MODEL_MODULES = (
     "app.leagues.repository",
     "app.live_ops.models",
     "app.market.read_models",
+    "app.orders.models",
     "app.players.read_models",
     "app.predictions.models",
     "app.regen_universe.models",
@@ -81,6 +87,19 @@ RUNTIME_SCHEMA_SMOKE_TABLES = (
 logger = logging.getLogger(__name__)
 
 
+@lru_cache
+def _resolved_model_modules() -> tuple[str, ...]:
+    resolved_modules = list(MODEL_MODULES)
+    models_package_root = BACKEND_ROOT / "app" / "models"
+    for module_path in sorted(models_package_root.glob("*.py")):
+        if module_path.stem in {"__init__", "base"}:
+            continue
+        dotted_path = f"app.models.{module_path.stem}"
+        if dotted_path not in resolved_modules:
+            resolved_modules.append(dotted_path)
+    return tuple(resolved_modules)
+
+
 def get_database_url() -> str:
     return get_settings().database_url
 
@@ -90,7 +109,7 @@ def get_database_read_url() -> str:
 
 
 def load_model_modules() -> None:
-    for module_path in MODEL_MODULES:
+    for module_path in _resolved_model_modules():
         import_module(module_path)
 
 
@@ -258,10 +277,6 @@ def initialize_database_connection(
 
 
 def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, ...]:
-    from alembic import command
-    from alembic.runtime.migration import MigrationContext
-    from alembic.script import ScriptDirectory
-
     load_model_modules()
     database_engine = engine or get_engine()
     config = build_alembic_config(str(database_engine.url))

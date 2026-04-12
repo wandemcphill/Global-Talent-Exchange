@@ -16,7 +16,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class ReferralReward(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "referral_rewards"
 
-    reward_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    reward_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     referral_attribution_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("referral_attributions.id", ondelete="SET NULL"),

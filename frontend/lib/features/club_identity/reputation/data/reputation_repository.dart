@@ -29,10 +29,11 @@ class ReputationApiRepository implements ReputationRepository {
 
   factory ReputationApiRepository.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return ReputationApiRepository(
-      config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+      config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
       transport: GteHttpTransport(),
       fixtures: FixtureReputationRepository(),
     );
@@ -65,20 +66,23 @@ class ReputationApiRepository implements ReputationRepository {
   }) {
     return _withFallback<PrestigeLeaderboardDto>(
       () async {
-        final Map<String, Object?> payload =
-            _asMap(await _request('GET', '/api/leaderboards/prestige'));
-        final List<PrestigeLeaderboardEntryDto> entries =
-            _mapLeaderboardEntries(
-          _asList(payload['leaderboard']),
+        final Map<String, Object?> payload = _asMap(
+          await _request('GET', '/api/leaderboards/prestige'),
         );
-        final List<PrestigeLeaderboardEntryDto> scopedEntries =
-            _applyScope(entries, scope: scope, currentClubId: currentClubId);
+        final List<PrestigeLeaderboardEntryDto> entries =
+            _mapLeaderboardEntries(_asList(payload['leaderboard']));
+        final List<PrestigeLeaderboardEntryDto> scopedEntries = _applyScope(
+          entries,
+          scope: scope,
+          currentClubId: currentClubId,
+        );
         return PrestigeLeaderboardDto(
           scope: scope,
           entries: scopedEntries,
-          note: scope == PrestigeLeaderboardScope.global
-              ? null
-              : 'Regional and following filters are temporarily backed by fixture scope rules until the backend exposes those fields.',
+          note:
+              scope == PrestigeLeaderboardScope.global
+                  ? null
+                  : 'Regional and following filters are temporarily backed by fixture scope rules until the backend exposes those fields.',
         );
       },
       () =>
@@ -144,8 +148,8 @@ class ReputationApiRepository implements ReputationRepository {
         _asNullableString(json['club_name']) ?? prettifyClubId(clubId);
     final String regionLabel =
         _asNullableString(json['region_label']) ??
-            _asNullableString(json['region']) ??
-            'Global';
+        _asNullableString(json['region']) ??
+        'Global';
     return ReputationProfileDto(
       clubId: clubId,
       clubName: clubName,
@@ -153,7 +157,8 @@ class ReputationApiRepository implements ReputationRepository {
       currentScore: _asInt(json['current_score']),
       highestScore: _asInt(json['highest_score']),
       currentPrestigeTier: prestigeTierFromRaw(
-          _asString(json['current_prestige_tier'], fallback: 'Local')),
+        _asString(json['current_prestige_tier'], fallback: 'Local'),
+      ),
       lastActiveSeason: _asNullableInt(json['last_active_season']),
       badgesEarned: _asStringList(json['badges_earned']),
       biggestMilestones: milestonePayload
@@ -177,7 +182,8 @@ class ReputationApiRepository implements ReputationRepository {
       clubId: clubId,
       currentScore: _asInt(json['current_score']),
       currentPrestigeTier: prestigeTierFromRaw(
-          _asString(json['current_prestige_tier'], fallback: 'Local')),
+        _asString(json['current_prestige_tier'], fallback: 'Local'),
+      ),
       events: events,
     );
   }
@@ -193,16 +199,21 @@ class ReputationApiRepository implements ReputationRepository {
   }
 
   ReputationEventDto _mapHistoryEvent(
-      Map<String, Object?> json, String clubId) {
+    Map<String, Object?> json,
+    String clubId,
+  ) {
     final int season = _asInt(json['season']);
     final List<String> milestones = _asStringList(json['milestones']);
     final List<String> badges = _asStringList(json['badges']);
-    final ReputationEventCategory category =
-        _inferCategory(milestones: milestones, badges: badges);
+    final ReputationEventCategory category = _inferCategory(
+      milestones: milestones,
+      badges: badges,
+    );
     final int delta = _asInt(json['season_delta']);
-    final String title = milestones.isNotEmpty
-        ? milestones.first
-        : 'Season $season reputation update';
+    final String title =
+        milestones.isNotEmpty
+            ? milestones.first
+            : 'Season $season reputation update';
     final String description = _buildHistoryDescription(
       scoreAfter: _asInt(json['score_after']),
       prestigeTier: _asString(json['prestige_tier'], fallback: 'Local'),
@@ -223,7 +234,8 @@ class ReputationApiRepository implements ReputationRepository {
   }
 
   List<PrestigeLeaderboardEntryDto> _mapLeaderboardEntries(
-      List<Object?> payload) {
+    List<Object?> payload,
+  ) {
     final List<PrestigeLeaderboardEntryDto> entries =
         <PrestigeLeaderboardEntryDto>[];
     for (int index = 0; index < payload.length; index += 1) {
@@ -233,8 +245,8 @@ class ReputationApiRepository implements ReputationRepository {
           _asNullableString(item['club_name']) ?? prettifyClubId(clubId);
       final String regionLabel =
           _asNullableString(item['region_label']) ??
-              _asNullableString(item['region']) ??
-              'Global';
+          _asNullableString(item['region']) ??
+          'Global';
       final int rank = _asNullableInt(item['rank']) ?? index + 1;
       entries.add(
         PrestigeLeaderboardEntryDto(
@@ -243,7 +255,8 @@ class ReputationApiRepository implements ReputationRepository {
           regionLabel: regionLabel,
           currentScore: _asInt(item['current_score']),
           currentPrestigeTier: prestigeTierFromRaw(
-              _asString(item['current_prestige_tier'], fallback: 'Local')),
+            _asString(item['current_prestige_tier'], fallback: 'Local'),
+          ),
           highestScore: _asInt(item['highest_score']),
           totalSeasons: _asInt(item['total_seasons']),
           rank: rank,
@@ -263,48 +276,48 @@ class FixtureReputationRepository implements ReputationRepository {
 
   static final Map<String, ReputationProfileDto> _profiles =
       <String, ReputationProfileDto>{
-    'royal-lagos-fc': ReputationProfileDto(
-      clubId: 'royal-lagos-fc',
-      clubName: 'Royal Lagos FC',
-      regionLabel: 'West Africa',
-      currentScore: 1184,
-      highestScore: 1184,
-      currentPrestigeTier: PrestigeTier.legendary,
-      lastActiveSeason: 12,
-      badgesEarned: const <String>[
-        'continental_champion',
-        'back_to_back_champion',
-        'golden_attack',
-        'invincibles',
-      ],
-      biggestMilestones: <ReputationMilestoneDto>[
-        ReputationMilestoneDto(
-          title: 'Continental Champion',
-          badgeCode: 'continental_champion',
-          season: 11,
-          delta: 180,
-          occurredAt: DateTime.utc(2026, 5, 30),
+        'royal-lagos-fc': ReputationProfileDto(
+          clubId: 'royal-lagos-fc',
+          clubName: 'Royal Lagos FC',
+          regionLabel: 'West Africa',
+          currentScore: 1184,
+          highestScore: 1184,
+          currentPrestigeTier: PrestigeTier.legendary,
+          lastActiveSeason: 12,
+          badgesEarned: const <String>[
+            'continental_champion',
+            'back_to_back_champion',
+            'golden_attack',
+            'invincibles',
+          ],
+          biggestMilestones: <ReputationMilestoneDto>[
+            ReputationMilestoneDto(
+              title: 'Continental Champion',
+              badgeCode: 'continental_champion',
+              season: 11,
+              delta: 180,
+              occurredAt: DateTime.utc(2026, 5, 30),
+            ),
+            ReputationMilestoneDto(
+              title: 'Back-to-Back Champion',
+              badgeCode: 'back_to_back_champion',
+              season: 12,
+              delta: 30,
+              occurredAt: DateTime.utc(2026, 6, 14),
+            ),
+            ReputationMilestoneDto(
+              title: 'Invincibles',
+              badgeCode: 'invincibles',
+              season: 10,
+              delta: 40,
+              occurredAt: DateTime.utc(2025, 5, 28),
+            ),
+          ],
         ),
-        ReputationMilestoneDto(
-          title: 'Back-to-Back Champion',
-          badgeCode: 'back_to_back_champion',
-          season: 12,
-          delta: 30,
-          occurredAt: DateTime.utc(2026, 6, 14),
-        ),
-        ReputationMilestoneDto(
-          title: 'Invincibles',
-          badgeCode: 'invincibles',
-          season: 10,
-          delta: 40,
-          occurredAt: DateTime.utc(2025, 5, 28),
-        ),
-      ],
-    ),
-  };
+      };
 
-  static final Map<String, ReputationHistoryDto> _historyByClub =
-      <String, ReputationHistoryDto>{
+  static final Map<String, ReputationHistoryDto>
+  _historyByClub = <String, ReputationHistoryDto>{
     'royal-lagos-fc': ReputationHistoryDto(
       clubId: 'royal-lagos-fc',
       currentScore: 1184,
@@ -371,101 +384,101 @@ class FixtureReputationRepository implements ReputationRepository {
 
   static final List<PrestigeLeaderboardEntryDto> _leaderboard =
       <PrestigeLeaderboardEntryDto>[
-    PrestigeLeaderboardEntryDto(
-      clubId: 'monte-carlo-athletic',
-      clubName: 'Monte Carlo Athletic',
-      regionLabel: 'Europe',
-      currentScore: 1462,
-      currentPrestigeTier: PrestigeTier.legendary,
-      highestScore: 1490,
-      totalSeasons: 14,
-      rank: 1,
-      isFollowing: true,
-    ),
-    PrestigeLeaderboardEntryDto(
-      clubId: 'royal-lagos-fc',
-      clubName: 'Royal Lagos FC',
-      regionLabel: 'West Africa',
-      currentScore: 1184,
-      currentPrestigeTier: PrestigeTier.legendary,
-      highestScore: 1184,
-      totalSeasons: 12,
-      rank: 2,
-      isFollowing: true,
-    ),
-    PrestigeLeaderboardEntryDto(
-      clubId: 'porto-imperial',
-      clubName: 'Porto Imperial',
-      regionLabel: 'Europe',
-      currentScore: 1112,
-      currentPrestigeTier: PrestigeTier.legendary,
-      highestScore: 1140,
-      totalSeasons: 11,
-      rank: 3,
-    ),
-    PrestigeLeaderboardEntryDto(
-      clubId: 'rio-crown-united',
-      clubName: 'Rio Crown United',
-      regionLabel: 'South America',
-      currentScore: 1028,
-      currentPrestigeTier: PrestigeTier.elite,
-      highestScore: 1090,
-      totalSeasons: 10,
-      rank: 4,
-      isFollowing: true,
-    ),
-    PrestigeLeaderboardEntryDto(
-      clubId: 'ankara-sun',
-      clubName: 'Ankara Sun',
-      regionLabel: 'Europe',
-      currentScore: 948,
-      currentPrestigeTier: PrestigeTier.elite,
-      highestScore: 980,
-      totalSeasons: 9,
-      rank: 5,
-    ),
-    PrestigeLeaderboardEntryDto(
-      clubId: 'casablanca-royals',
-      clubName: 'Casablanca Royals',
-      regionLabel: 'North Africa',
-      currentScore: 904,
-      currentPrestigeTier: PrestigeTier.elite,
-      highestScore: 918,
-      totalSeasons: 9,
-      rank: 6,
-    ),
-    PrestigeLeaderboardEntryDto(
-      clubId: 'lagos-harbour-sc',
-      clubName: 'Lagos Harbour SC',
-      regionLabel: 'West Africa',
-      currentScore: 782,
-      currentPrestigeTier: PrestigeTier.elite,
-      highestScore: 816,
-      totalSeasons: 8,
-      rank: 7,
-      isFollowing: true,
-    ),
-    PrestigeLeaderboardEntryDto(
-      clubId: 'doha-summit',
-      clubName: 'Doha Summit',
-      regionLabel: 'Middle East',
-      currentScore: 721,
-      currentPrestigeTier: PrestigeTier.elite,
-      highestScore: 760,
-      totalSeasons: 8,
-      rank: 8,
-    ),
-    PrestigeLeaderboardEntryDto(
-      clubId: 'accra-constellation',
-      clubName: 'Accra Constellation',
-      regionLabel: 'West Africa',
-      currentScore: 664,
-      currentPrestigeTier: PrestigeTier.elite,
-      highestScore: 664,
-      totalSeasons: 6,
-      rank: 9,
-    ),
-  ];
+        PrestigeLeaderboardEntryDto(
+          clubId: 'monte-carlo-athletic',
+          clubName: 'Monte Carlo Athletic',
+          regionLabel: 'Europe',
+          currentScore: 1462,
+          currentPrestigeTier: PrestigeTier.legendary,
+          highestScore: 1490,
+          totalSeasons: 14,
+          rank: 1,
+          isFollowing: true,
+        ),
+        PrestigeLeaderboardEntryDto(
+          clubId: 'royal-lagos-fc',
+          clubName: 'Royal Lagos FC',
+          regionLabel: 'West Africa',
+          currentScore: 1184,
+          currentPrestigeTier: PrestigeTier.legendary,
+          highestScore: 1184,
+          totalSeasons: 12,
+          rank: 2,
+          isFollowing: true,
+        ),
+        PrestigeLeaderboardEntryDto(
+          clubId: 'porto-imperial',
+          clubName: 'Porto Imperial',
+          regionLabel: 'Europe',
+          currentScore: 1112,
+          currentPrestigeTier: PrestigeTier.legendary,
+          highestScore: 1140,
+          totalSeasons: 11,
+          rank: 3,
+        ),
+        PrestigeLeaderboardEntryDto(
+          clubId: 'rio-crown-united',
+          clubName: 'Rio Crown United',
+          regionLabel: 'South America',
+          currentScore: 1028,
+          currentPrestigeTier: PrestigeTier.elite,
+          highestScore: 1090,
+          totalSeasons: 10,
+          rank: 4,
+          isFollowing: true,
+        ),
+        PrestigeLeaderboardEntryDto(
+          clubId: 'ankara-sun',
+          clubName: 'Ankara Sun',
+          regionLabel: 'Europe',
+          currentScore: 948,
+          currentPrestigeTier: PrestigeTier.elite,
+          highestScore: 980,
+          totalSeasons: 9,
+          rank: 5,
+        ),
+        PrestigeLeaderboardEntryDto(
+          clubId: 'casablanca-royals',
+          clubName: 'Casablanca Royals',
+          regionLabel: 'North Africa',
+          currentScore: 904,
+          currentPrestigeTier: PrestigeTier.elite,
+          highestScore: 918,
+          totalSeasons: 9,
+          rank: 6,
+        ),
+        PrestigeLeaderboardEntryDto(
+          clubId: 'lagos-harbour-sc',
+          clubName: 'Lagos Harbour SC',
+          regionLabel: 'West Africa',
+          currentScore: 782,
+          currentPrestigeTier: PrestigeTier.elite,
+          highestScore: 816,
+          totalSeasons: 8,
+          rank: 7,
+          isFollowing: true,
+        ),
+        PrestigeLeaderboardEntryDto(
+          clubId: 'doha-summit',
+          clubName: 'Doha Summit',
+          regionLabel: 'Middle East',
+          currentScore: 721,
+          currentPrestigeTier: PrestigeTier.elite,
+          highestScore: 760,
+          totalSeasons: 8,
+          rank: 8,
+        ),
+        PrestigeLeaderboardEntryDto(
+          clubId: 'accra-constellation',
+          clubName: 'Accra Constellation',
+          regionLabel: 'West Africa',
+          currentScore: 664,
+          currentPrestigeTier: PrestigeTier.elite,
+          highestScore: 664,
+          totalSeasons: 6,
+          rank: 9,
+        ),
+      ];
 
   @override
   Future<ReputationProfileDto> fetchOverview(String clubId) async {
@@ -491,14 +504,18 @@ class FixtureReputationRepository implements ReputationRepository {
     required String currentClubId,
   }) async {
     await Future<void>.delayed(latency);
-    final List<PrestigeLeaderboardEntryDto> filtered =
-        _applyScope(_leaderboard, scope: scope, currentClubId: currentClubId);
+    final List<PrestigeLeaderboardEntryDto> filtered = _applyScope(
+      _leaderboard,
+      scope: scope,
+      currentClubId: currentClubId,
+    );
     return PrestigeLeaderboardDto(
       scope: scope,
       entries: filtered,
-      note: scope == PrestigeLeaderboardScope.following
-          ? 'Following is mocked from your watch circle until social graph data is available.'
-          : null,
+      note:
+          scope == PrestigeLeaderboardScope.following
+              ? 'Following is mocked from your watch circle until social graph data is available.'
+              : null,
     );
   }
 
@@ -533,16 +550,20 @@ List<PrestigeLeaderboardEntryDto> _applyScope(
         }
       }
       final List<PrestigeLeaderboardEntryDto> regionalEntries = entries
-          .where((PrestigeLeaderboardEntryDto entry) =>
-              entry.regionLabel == currentRegion)
+          .where(
+            (PrestigeLeaderboardEntryDto entry) =>
+                entry.regionLabel == currentRegion,
+          )
           .toList(growable: false);
       return regionalEntries.isEmpty
           ? List<PrestigeLeaderboardEntryDto>.from(entries)
           : regionalEntries;
     case PrestigeLeaderboardScope.following:
       final List<PrestigeLeaderboardEntryDto> followingEntries = entries
-          .where((PrestigeLeaderboardEntryDto entry) =>
-              entry.isFollowing || entry.clubId == currentClubId)
+          .where(
+            (PrestigeLeaderboardEntryDto entry) =>
+                entry.isFollowing || entry.clubId == currentClubId,
+          )
           .toList(growable: false);
       return followingEntries.isEmpty
           ? List<PrestigeLeaderboardEntryDto>.from(entries)
@@ -590,9 +611,7 @@ String _buildHistoryDescription({
     fragments.add(milestones.join(' - '));
   }
   if (badges.isNotEmpty) {
-    fragments.add(
-      badges.map(prettifyBadgeCode).join(' - '),
-    );
+    fragments.add(badges.map(prettifyBadgeCode).join(' - '));
   }
   return fragments.join(' ');
 }
@@ -602,8 +621,10 @@ Map<String, Object?> _asMap(Object? value) {
     return value;
   }
   if (value is Map) {
-    return value.map((Object? key, Object? nestedValue) =>
-        MapEntry<String, Object?>(key.toString(), nestedValue));
+    return value.map(
+      (Object? key, Object? nestedValue) =>
+          MapEntry<String, Object?>(key.toString(), nestedValue),
+    );
   }
   return <String, Object?>{};
 }

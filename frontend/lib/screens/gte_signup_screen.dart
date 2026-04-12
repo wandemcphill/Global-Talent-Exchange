@@ -84,6 +84,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
       return;
     }
 
+    final String regionCode = resolveRegionCodeForContext(context);
     await _trackAnalyticsEventSafely('signup_started');
     await widget.controller.register(
       fullName: fullName,
@@ -91,11 +92,13 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
       email: email,
       password: password,
       isOver18: _isOver18,
-      regionCode: resolveRegionCodeForContext(context),
+      regionCode: regionCode,
     );
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
+    final BuildContext currentContext = context;
+    final NavigatorState navigator = Navigator.of(currentContext);
     if (widget.controller.authError != null) {
       setState(() {
         _localError = widget.controller.authError;
@@ -105,7 +108,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
     final GteComplianceStatus? compliance = widget.controller.complianceStatus;
     if (compliance != null && compliance.hasMissingRequiredPolicies) {
       final bool? openCompliance = await showDialog<bool>(
-        context: context,
+        context: currentContext,
         builder: (BuildContext context) {
           return AlertDialog(
             title: const Text('Compliance step required'),
@@ -125,8 +128,11 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
           );
         },
       );
-      if (openCompliance == true && mounted) {
-        await Navigator.of(context).push(
+      if (openCompliance == true) {
+        if (!currentContext.mounted) {
+          return;
+        }
+        await navigator.push(
           MaterialPageRoute<void>(
             builder:
                 (_) => GtePolicyComplianceCenterScreen(
@@ -134,10 +140,16 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                 ),
           ),
         );
+        if (!currentContext.mounted) {
+          return;
+        }
       }
     }
     await _trackAnalyticsEventSafely('signup_completed');
-    Navigator.of(context).pop(true);
+    if (!currentContext.mounted) {
+      return;
+    }
+    navigator.pop(true);
   }
 
   String _resolveRegionCode(BuildContext context) {

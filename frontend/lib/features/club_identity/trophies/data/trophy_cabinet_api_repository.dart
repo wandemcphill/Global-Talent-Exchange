@@ -17,10 +17,11 @@ class TrophyCabinetApiRepository implements TrophyCabinetRepository {
 
   factory TrophyCabinetApiRepository.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return TrophyCabinetApiRepository(
-      config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+      config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
       transport: GteHttpTransport(),
     );
   }

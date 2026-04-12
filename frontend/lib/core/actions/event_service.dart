@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../app/gte_app_config.dart';
 import '../../data/gte_authed_api.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_http_transport.dart';
@@ -317,7 +318,7 @@ class EventService {
        _deviceResolver = deviceResolver ?? _defaultDevice;
 
   factory EventService.standard({
-    String baseUrl = _defaultActionApiBaseUrl,
+    String? baseUrl,
     GteTransport? transport,
     EventQueueStore? store,
     AuthSessionStore? authSessionStore,
@@ -327,10 +328,12 @@ class EventService {
     Duration? retryMaxDelay,
     String? deviceId,
   }) {
+    final String resolvedBaseUrl =
+        baseUrl ?? resolveGteApiBaseUrlFromEnvironment();
     return EventService(
       transport: ClipEventsApiTransport(
         config: GteRepositoryConfig(
-          baseUrl: baseUrl,
+          baseUrl: resolvedBaseUrl,
           mode: GteBackendMode.live,
         ),
         transport: transport,
@@ -573,11 +576,6 @@ class EventService {
     );
   }
 }
-
-const String _defaultActionApiBaseUrl = String.fromEnvironment(
-  'GTE_API_BASE_URL',
-  defaultValue: 'http://127.0.0.1:8000',
-);
 
 DateTime _defaultNow() => DateTime.now().toUtc();
 

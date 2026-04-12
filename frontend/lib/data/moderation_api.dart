@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/moderation_models.dart';
 
 class ModerationApi {
-  ModerationApi({
-    required this.client,
-    required this.fixtures,
-  });
+  ModerationApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _ModerationFixtures fixtures;
@@ -15,14 +12,15 @@ class ModerationApi {
   factory ModerationApi.standard({
     required String baseUrl,
     required String? accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return ModerationApi(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        mode: mode,
+        mode: resolvedMode,
       ),
       fixtures: _ModerationFixtures.seed(),
     );
@@ -67,19 +65,18 @@ class ModerationApi {
         );
         return ModerationReport.fromJson(payload);
       },
-      () async => fixtures.createReport(targetId: targetId, description: description),
+      () async =>
+          fixtures.createReport(targetId: targetId, description: description),
     );
   }
 
   Future<List<ModerationReport>> listMyReports() {
-    return client.withFallback<List<ModerationReport>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/moderation/me/reports');
-        return payload.map(ModerationReport.fromJson).toList(growable: false);
-      },
-      fixtures.listReports,
-    );
+    return client.withFallback<List<ModerationReport>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/moderation/me/reports',
+      );
+      return payload.map(ModerationReport.fromJson).toList(growable: false);
+    }, fixtures.listReports);
   }
 
   Future<List<ModerationReport>> listReports({
@@ -87,32 +84,27 @@ class ModerationApi {
     String? priority,
     String? targetType,
   }) {
-    return client.withFallback<List<ModerationReport>>(
-      () async {
-        final List<dynamic> payload = await client.getList(
-          '/admin/moderation/reports',
-          query: <String, Object?>{
-            if (status != null && status.isNotEmpty) 'status': status,
-            if (priority != null && priority.isNotEmpty) 'priority': priority,
-            if (targetType != null && targetType.isNotEmpty)
-              'target_type': targetType,
-          },
-        );
-        return payload.map(ModerationReport.fromJson).toList(growable: false);
-      },
-      fixtures.listReports,
-    );
+    return client.withFallback<List<ModerationReport>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/admin/moderation/reports',
+        query: <String, Object?>{
+          if (status != null && status.isNotEmpty) 'status': status,
+          if (priority != null && priority.isNotEmpty) 'priority': priority,
+          if (targetType != null && targetType.isNotEmpty)
+            'target_type': targetType,
+        },
+      );
+      return payload.map(ModerationReport.fromJson).toList(growable: false);
+    }, fixtures.listReports);
   }
 
   Future<ModerationSummary> fetchSummary() {
-    return client.withFallback<ModerationSummary>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/admin/moderation/reports/summary');
-        return ModerationSummary.fromJson(payload);
-      },
-      fixtures.summary,
-    );
+    return client.withFallback<ModerationSummary>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/admin/moderation/reports/summary',
+      );
+      return ModerationSummary.fromJson(payload);
+    }, fixtures.summary);
   }
 
   Future<ModerationReport> assignReport({
@@ -120,20 +112,17 @@ class ModerationApi {
     String? adminUserId,
     String? priority,
   }) {
-    return client.withFallback<ModerationReport>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/moderation/reports/$reportId/assign',
-          body: <String, Object?>{
-            if (adminUserId != null) 'admin_user_id': adminUserId,
-            if (priority != null) 'priority': priority,
-          },
-        );
-        return ModerationReport.fromJson(payload);
-      },
-      () async => fixtures.assignReport(reportId, priority),
-    );
+    return client.withFallback<ModerationReport>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/admin/moderation/reports/$reportId/assign',
+        body: <String, Object?>{
+          if (adminUserId != null) 'admin_user_id': adminUserId,
+          if (priority != null) 'priority': priority,
+        },
+      );
+      return ModerationReport.fromJson(payload);
+    }, () async => fixtures.assignReport(reportId, priority));
   }
 
   Future<ModerationReport> resolveReport({
@@ -142,21 +131,18 @@ class ModerationApi {
     required String resolutionNote,
     bool dismiss = false,
   }) {
-    return client.withFallback<ModerationReport>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/moderation/reports/$reportId/resolve',
-          body: <String, Object?>{
-            'resolution_action': resolutionAction,
-            'resolution_note': resolutionNote,
-            'dismiss': dismiss,
-          },
-        );
-        return ModerationReport.fromJson(payload);
-      },
-      () async => fixtures.resolveReport(reportId, resolutionAction),
-    );
+    return client.withFallback<ModerationReport>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/admin/moderation/reports/$reportId/resolve',
+        body: <String, Object?>{
+          'resolution_action': resolutionAction,
+          'resolution_note': resolutionNote,
+          'dismiss': dismiss,
+        },
+      );
+      return ModerationReport.fromJson(payload);
+    }, () async => fixtures.resolveReport(reportId, resolutionAction));
   }
 }
 
@@ -231,9 +217,13 @@ class _ModerationFixtures {
     );
   }
 
-  Future<ModerationReport> assignReport(String reportId, String? priority) async {
-    final int index =
-        _reports.indexWhere((ModerationReport item) => item.id == reportId);
+  Future<ModerationReport> assignReport(
+    String reportId,
+    String? priority,
+  ) async {
+    final int index = _reports.indexWhere(
+      (ModerationReport item) => item.id == reportId,
+    );
     if (index == -1) {
       return _reports.first;
     }
@@ -261,8 +251,9 @@ class _ModerationFixtures {
   }
 
   Future<ModerationReport> resolveReport(String reportId, String action) async {
-    final int index =
-        _reports.indexWhere((ModerationReport item) => item.id == reportId);
+    final int index = _reports.indexWhere(
+      (ModerationReport item) => item.id == reportId,
+    );
     if (index == -1) {
       return _reports.first;
     }

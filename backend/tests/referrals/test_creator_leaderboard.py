@@ -6,12 +6,17 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
+import app.models  # noqa: F401
 from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_session
+from app.models.base import Base
 from app.routes.admin_referrals import router as admin_referrals_router
 from app.routes.creators import router as creators_router
 from app.routes.referrals import router as referrals_router
-from app.services.referral_orchestrator import ReferralOrchestrator
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,11 +30,18 @@ class StubUser:
 
 @pytest.fixture()
 def leaderboard_api():
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    session_local = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
     app = FastAPI()
     app.include_router(creators_router)
     app.include_router(referrals_router)
     app.include_router(admin_referrals_router)
-    app.state.referral_orchestrator = ReferralOrchestrator()
 
     users = {
         "admin": StubUser("user-admin", "admin", "Admin User", "admin@example.com", role="admin"),
@@ -45,10 +57,20 @@ def leaderboard_api():
     def override_current_user():
         return app.state.current_user
 
+    def override_session():
+        session = session_local()
+        try:
+            yield session
+        finally:
+            session.close()
+
     app.dependency_overrides[get_current_user] = override_current_user
+    app.dependency_overrides[get_session] = override_session
 
     with TestClient(app) as client:
         yield app, client, users
+
+    engine.dispose()
 
 
 def test_creator_leaderboard_orders_by_fraud_adjusted_growth(leaderboard_api) -> None:

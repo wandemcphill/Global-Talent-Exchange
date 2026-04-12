@@ -13,7 +13,7 @@ from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 class ReferralRewardLedger(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "referral_reward_ledger"
 
-    entry_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    entry_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     reward_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("referral_rewards.id", ondelete="CASCADE"),

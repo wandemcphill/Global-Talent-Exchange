@@ -83,14 +83,32 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert health_payload["status"] == "ok"
     assert health_payload["checks"]["api"] == {"status": "ok", "detail": None}
     assert health_payload["checks"]["database"] == {"status": "ok", "detail": None}
-    assert health_payload["checks"]["redis"] == {"status": "skipped", "detail": "Redis is not configured."}
+    assert health_payload["checks"]["redis"] == {
+        "status": "skipped",
+        "detail": "Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+    }
+    assert health_payload["checks"]["kafka"] == {
+        "status": "skipped",
+        "detail": "Kafka brokers are not configured; event streaming is running in local fallback mode.",
+    }
+    assert health_payload["runtime_mode"] == "degraded"
+    assert any("Redis is not configured" in reason for reason in health_payload["mode_reasons"])
+    assert any("Kafka brokers are not configured" in reason for reason in health_payload["mode_reasons"])
     assert ready_response.status_code == 200
     ready_payload = ready_response.json()
     assert ready_payload["status"] == "ready"
     assert ready_payload["checks"]["api"] == {"status": "ok", "detail": None}
     assert ready_payload["checks"]["database"] == {"status": "ok", "detail": None}
-    assert ready_payload["checks"]["redis"] == {"status": "skipped", "detail": "Redis is not configured."}
+    assert ready_payload["checks"]["redis"] == {
+        "status": "skipped",
+        "detail": "Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+    }
+    assert ready_payload["checks"]["kafka"] == {
+        "status": "skipped",
+        "detail": "Kafka brokers are not configured; event streaming is running in local fallback mode.",
+    }
     assert ready_payload["checks"]["schema"] == {"status": "ok", "detail": None}
+    assert ready_payload["runtime_mode"] == "degraded"
     assert version_response.status_code == 200
     assert version_response.json() == {
         "app_name": app.state.settings.app_name,
@@ -234,7 +252,7 @@ def test_app_startup_repairs_schema_when_smoke_detects_stale_database(tmp_path) 
     assert revision == target_head
 
 
-def test_app_startup_repairs_stamped_head_database_with_missing_tables(tmp_path) -> None:
+def test_app_startup_fails_stamped_head_database_with_missing_tables(tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_stamped_head_schema_repair.db').as_posix()}"
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     target_head = ScriptDirectory.from_config(build_alembic_config(str(engine.url))).get_current_head()
@@ -248,18 +266,9 @@ def test_app_startup_repairs_stamped_head_database_with_missing_tables(tmp_path)
 
     app = create_app(engine=engine, run_migration_check=False)
 
-    with TestClient(app) as client:
-        ready_response = client.get("/ready")
-
-    assert ready_response.status_code == 200
-    assert ready_response.json()["status"] == "ready"
-
-    with engine.begin() as connection:
-        connection.execute(text("SELECT COUNT(*) FROM wallets")).scalar_one()
-        connection.execute(text("SELECT COUNT(*) FROM event_outbox")).scalar_one()
-        revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-
-    assert revision == target_head
+    with pytest.raises(RuntimeError, match="Database schema smoke check failed."):
+        with TestClient(app):
+            pass
 
 
 def test_ready_returns_service_unavailable_when_database_check_fails(app_and_engine, monkeypatch) -> None:
@@ -277,7 +286,14 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
     assert payload["status"] == "not_ready"
     assert payload["checks"]["api"] == {"status": "ok", "detail": None}
     assert payload["checks"]["database"] == {"status": "error", "detail": "db offline"}
-    assert payload["checks"]["redis"] == {"status": "skipped", "detail": "Redis is not configured."}
+    assert payload["checks"]["redis"] == {
+        "status": "skipped",
+        "detail": "Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+    }
+    assert payload["checks"]["kafka"] == {
+        "status": "skipped",
+        "detail": "Kafka brokers are not configured; event streaming is running in local fallback mode.",
+    }
 
 
 def test_app_startup_fails_when_schema_smoke_fails_even_without_migration_upgrade(monkeypatch, tmp_path) -> None:
@@ -314,7 +330,14 @@ def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(monkeypatch, t
     assert payload["status"] == "ready"
     assert payload["checks"]["api"] == {"status": "ok", "detail": None}
     assert payload["checks"]["database"] == {"status": "ok", "detail": None}
-    assert payload["checks"]["redis"] == {"status": "skipped", "detail": "Redis is not configured."}
+    assert payload["checks"]["redis"] == {
+        "status": "skipped",
+        "detail": "Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+    }
+    assert payload["checks"]["kafka"] == {
+        "status": "skipped",
+        "detail": "Kafka brokers are not configured; event streaming is running in local fallback mode.",
+    }
     assert "schema" not in payload["checks"]
 
 

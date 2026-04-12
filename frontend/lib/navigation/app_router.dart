@@ -48,7 +48,9 @@ CompetitionFamilyRoute _competitionFamilyFromSegment(String value) {
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
   final AuthSession? authSession = ref.watch(authProvider);
   final String deviceId = ref.watch(deviceIdProvider);
+  final String apiBaseUrl = ref.watch(apiBaseUrlProvider);
   final EventService eventService = EventService.standard(
+    baseUrl: apiBaseUrl,
     authSessionStore: ref.watch(authSessionStoreProvider),
     deviceIdentityStore: ref.watch(deviceIdentityStoreProvider),
     deviceId: deviceId,
@@ -205,6 +207,7 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
                     ? ViralFeedScreen(
                       currentUserId: authSession?.userId,
                       repository: ViralFeedApiRepository.standard(
+                        baseUrl: apiBaseUrl,
                         authSession: authSession,
                         deviceId: deviceId,
                       ),
