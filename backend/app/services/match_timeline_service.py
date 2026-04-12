@@ -2789,6 +2789,19 @@ class MatchTimelineService:
         normalized_event = (event.event_type or "").strip().lower()
         if normalized_event == "goal" or normalized_raw in {"goal", "penalty_goal", "penalty_scored"}:
             return MatchViewerEventType.GOAL
+        if normalized_event == "save" or normalized_raw in {"save", "goalkeeper_save", "double_save", "shot_on_target"}:
+            return MatchViewerEventType.SAVE
+        if normalized_event == "chance" or normalized_raw in {
+            "chance",
+            "miss",
+            "missed_chance",
+            "missed_big_chance",
+            "woodwork",
+            "penalty_missed",
+        }:
+            return MatchViewerEventType.MISS
+        if normalized_event in {"attack", "shot"} or normalized_raw in {"attack", "counter", "counter_attack"}:
+            return MatchViewerEventType.ATTACK
         if normalized_event in {"full_time", "fulltime"} or normalized_raw in {"full_time", "fulltime"}:
             return MatchViewerEventType.FULLTIME
         if normalized_event == "card" or normalized_raw in {"red_card", "yellow_card"}:
@@ -2801,16 +2814,10 @@ class MatchTimelineService:
             return MatchViewerEventType.OFFSIDE
         if normalized_event == "foul" or normalized_raw in {"foul", "tactical_foul"}:
             return MatchViewerEventType.FOUL
-        if normalized_raw in {"goalkeeper_save", "double_save", "shot_on_target"}:
-            return MatchViewerEventType.SAVE
-        if normalized_raw in {"missed_chance", "missed_big_chance", "woodwork", "penalty_missed"}:
-            return MatchViewerEventType.MISS
         if normalized_raw in {"free_kick", "corner"}:
             return MatchViewerEventType.SET_PIECE
         if normalized_raw == "penalty_awarded":
             return MatchViewerEventType.PENALTY
-        if normalized_event == "shot":
-            return MatchViewerEventType.ATTACK
         return MatchViewerEventType.NEUTRAL
 
     def _viewer_event_type_from_archive_event(self, event: ReplayMomentView) -> MatchViewerEventType:

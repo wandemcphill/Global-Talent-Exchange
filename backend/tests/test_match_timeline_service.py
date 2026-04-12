@@ -4,12 +4,14 @@ from datetime import UTC, datetime
 
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.match_engine.simulation.models import MatchEventType, TacticalStyle
+from app.live_matches.schemas import LiveMatchRenderPointView, LiveMatchStreamEventView
 from app.replay_archive.schemas import ReplayArchiveRecord
 from app.services.match_timeline_service import MatchTimelineService
 from app.schemas.match_viewer import (
     MatchViewerAnimationState,
     MatchViewerEventType,
     MatchViewerPossessionPhase,
+    MatchViewerPlayerState,
     MatchViewerSide,
 )
 from backend.tests.match_engine.helpers import build_request, build_team
@@ -234,6 +236,77 @@ def test_match_timeline_service_builds_long_archive_replay() -> None:
     assert view_state.duration_seconds == 480
     assert view_state.frames[-1].time_seconds >= 480
     assert all(frame.possession_side in {MatchViewerSide.HOME, MatchViewerSide.AWAY} for frame in view_state.frames)
+
+
+def test_match_timeline_service_maps_infinite_league_chance_and_save_events_to_action_frames() -> None:
+    service = MatchTimelineService()
+    view_state = service.build_from_live_stream(
+        match_id="match-live-001",
+        source="infinite_league_runtime",
+        home_team_id="home-team",
+        home_team_name="North City",
+        away_team_id="away-team",
+        away_team_name="South Town",
+        events=[
+            LiveMatchStreamEventView(
+                match_id="match-live-001",
+                event_id="match-live-001:chance",
+                sequence=1,
+                tick=120,
+                minute=2,
+                event_type="chance",
+                team_id="home-team",
+                team="North City",
+                player_id="north-city-9",
+                player="North City 9",
+                secondary_player_id="north-city-10",
+                secondary_player="North City 10",
+                commentary="North City miss a big chance.",
+                position=LiveMatchRenderPointView(x=62.0, y=48.0),
+                target_position=LiveMatchRenderPointView(x=87.0, y=44.0),
+                metadata={"raw_event_type": "chance", "team_side": "home"},
+            ),
+            LiveMatchStreamEventView(
+                match_id="match-live-001",
+                event_id="match-live-001:save",
+                sequence=2,
+                tick=185,
+                minute=3,
+                event_type="save",
+                team_id="away-team",
+                team="South Town",
+                player_id="south-town-gk",
+                player="South Town GK",
+                secondary_player_id="north-city-9",
+                secondary_player="North City 9",
+                commentary="The keeper makes the save.",
+                position=LiveMatchRenderPointView(x=14.0, y=50.0),
+                target_position=LiveMatchRenderPointView(x=9.0, y=51.0),
+                metadata={"raw_event_type": "save", "team_side": "away"},
+            ),
+        ],
+    )
+
+    event_types = {event.event_type for event in view_state.events}
+    assert MatchViewerEventType.MISS in event_types
+    assert MatchViewerEventType.SAVE in event_types
+
+    moving_frames = [
+        frame
+        for frame in view_state.frames
+        if frame.active_event_id in {"match-live-001:chance", "match-live-001:save"}
+    ]
+    assert moving_frames
+    assert any(frame.ball.position.x != 50.0 or frame.ball.position.y != 50.0 for frame in moving_frames)
+    assert any(
+        sum(
+            1
+            for player in frame.players
+            if player.state in {MatchViewerPlayerState.ATTACKING, MatchViewerPlayerState.PRESSING}
+        )
+        >= 3
+        for frame in moving_frames
+    )
 
 
 def _archive_event_type(event_type: MatchEventType) -> str | None:
