@@ -37,6 +37,8 @@ from app.match_engine.schemas import (
 )
 from app.match_engine.simulation.models import MatchEventType
 from app.models.spectator_session import SpectatorSession
+from app.schemas.match_viewer import MatchViewStateView
+from app.services.match_timeline_service import MatchTimelineService
 
 
 def utcnow() -> datetime:
@@ -85,6 +87,16 @@ class _LiveMatchRuntime:
     published_events: list[LiveMatchStreamEventView] = field(default_factory=list)
     spectator_user_ids: set[str] = field(default_factory=set)
     last_snapshot: LiveMatchSnapshotView | None = None
+    viewer_state: MatchViewStateView | None = None
+    target_runtime_seconds: float = 0.0
+
+
+@dataclass(slots=True)
+class LiveMatchPlaybackContext:
+    viewer_state: MatchViewStateView | None
+    elapsed_runtime_seconds: float
+    target_runtime_seconds: float
+    is_live: bool
 
 
 @dataclass(slots=True)
@@ -127,6 +139,20 @@ class LiveMatchHub:
             atmosphere_profile=replay_payload.atmosphere_profile or "standard",
         )
         event_batches = self._build_batches(replay_payload, stadium_profile=stadium_profile)
+        step_interval_seconds = self._resolve_step_interval(
+            batch_count=len(event_batches),
+            target_runtime_seconds=target_runtime_seconds,
+        )
+        target_runtime_seconds_resolved = max(
+            step_interval_seconds * max(len(event_batches), 1),
+            step_interval_seconds,
+            1.0,
+        )
+        viewer_state = None
+        try:
+            viewer_state = MatchTimelineService().build_from_replay_payload(replay_payload)
+        except Exception:
+            viewer_state = None
         runtime = _LiveMatchRuntime(
             match_id=match_id,
             channel=f"match:{match_id}:events",
@@ -144,10 +170,7 @@ class LiveMatchHub:
             pause_replay_enabled=(replay_payload.spectator_package.can_pause if replay_payload.spectator_package is not None else False),
             reactions_enabled=(replay_payload.spectator_package.reactions_enabled if replay_payload.spectator_package is not None else True),
             read_only=read_only,
-            step_interval_seconds=self._resolve_step_interval(
-                batch_count=len(event_batches),
-                target_runtime_seconds=target_runtime_seconds,
-            ),
+            step_interval_seconds=step_interval_seconds,
             event_batches=event_batches,
             on_batch=on_batch,
             on_complete=on_complete,
@@ -156,6 +179,8 @@ class LiveMatchHub:
                 away_possession=replay_payload.summary.away_stats.possession,
                 read_only=read_only,
             ),
+            viewer_state=viewer_state,
+            target_runtime_seconds=target_runtime_seconds_resolved,
         )
         self._start_runtime(runtime)
 
@@ -195,6 +220,29 @@ class LiveMatchHub:
             atmosphere_profile=atmosphere_profile,
         )
         event_batches = self._build_event_batches(events, stadium_profile=stadium_profile)
+        step_interval_seconds = self._resolve_step_interval(
+            batch_count=len(event_batches),
+            target_runtime_seconds=target_runtime_seconds,
+        )
+        target_runtime_seconds_resolved = max(
+            step_interval_seconds * max(len(event_batches), 1),
+            step_interval_seconds,
+            1.0,
+        )
+        viewer_state = None
+        try:
+            viewer_state = MatchTimelineService().build_from_live_stream(
+                match_id=match_id,
+                source=self._resolve_viewer_source(events),
+                home_team_id=home_team_id,
+                home_team_name=home_team_name,
+                away_team_id=away_team_id,
+                away_team_name=away_team_name,
+                events=list(events),
+                live_state=None,
+            )
+        except Exception:
+            viewer_state = None
         runtime = _LiveMatchRuntime(
             match_id=match_id,
             channel=f"match:{match_id}:events",
@@ -212,10 +260,7 @@ class LiveMatchHub:
             pause_replay_enabled=pause_replay_enabled,
             reactions_enabled=reactions_enabled,
             read_only=read_only,
-            step_interval_seconds=self._resolve_step_interval(
-                batch_count=len(event_batches),
-                target_runtime_seconds=target_runtime_seconds,
-            ),
+            step_interval_seconds=step_interval_seconds,
             event_batches=event_batches,
             on_batch=on_batch,
             on_complete=on_complete,
@@ -224,6 +269,8 @@ class LiveMatchHub:
                 away_possession=base_away_possession,
                 read_only=read_only,
             ),
+            viewer_state=viewer_state,
+            target_runtime_seconds=target_runtime_seconds_resolved,
         )
         self._start_runtime(runtime)
 
@@ -291,6 +338,25 @@ class LiveMatchHub:
             except Exception:
                 continue
         return events, len(cached_events)
+
+    def get_playback_context(self, match_id: str) -> LiveMatchPlaybackContext | None:
+        with self._lock:
+            runtime = self._matches.get(match_id)
+            if runtime is None:
+                return None
+            viewer_state = runtime.viewer_state
+            started_at = runtime.started_at
+            completed_at = runtime.completed_at
+            target_runtime_seconds = max(runtime.target_runtime_seconds, runtime.step_interval_seconds, 1.0)
+            is_live = runtime.live
+        reference_time = completed_at or utcnow()
+        elapsed_runtime_seconds = max(0.0, (reference_time - started_at).total_seconds())
+        return LiveMatchPlaybackContext(
+            viewer_state=viewer_state,
+            elapsed_runtime_seconds=min(elapsed_runtime_seconds, target_runtime_seconds),
+            target_runtime_seconds=target_runtime_seconds,
+            is_live=is_live,
+        )
 
     def list_active_matches(self) -> list[str]:
         with self._lock:
@@ -852,6 +918,13 @@ class LiveMatchHub:
             raise LiveMatchError("Match is not currently live for spectating.")
         return None
 
+    def _resolve_viewer_source(self, events: Sequence[LiveMatchStreamEventView]) -> str:
+        for event in events:
+            source = str(event.meta.get("source") or event.metadata.get("source") or "").strip().lower()
+            if source == "infinite_league":
+                return "infinite_league_runtime"
+        return "live_match_hub"
+
     def _build_state_view(self, runtime: _LiveMatchRuntime) -> LiveMatchStateView:
         crowd_state = _runtime_crowd_state(runtime)
         if self.attendance_overlay_provider is not None:
@@ -1202,4 +1275,4 @@ def _pressure_value(value: object | None) -> float:
     return _float_value(value, default=0.0)
 
 
-__all__ = ["LiveMatchError", "LiveMatchHub", "ensure_live_match_hub"]
+__all__ = ["LiveMatchError", "LiveMatchHub", "LiveMatchPlaybackContext", "ensure_live_match_hub"]

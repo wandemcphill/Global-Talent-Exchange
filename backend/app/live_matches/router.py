@@ -36,7 +36,7 @@ from app.models.manager_duel import ManagerDuel
 from app.models.user import User
 from app.realtime.service import commentary_topic, match_topic
 from app.replay_archive.service import ensure_replay_archive
-from app.schemas.match_viewer import MatchViewStateView
+from app.schemas.match_viewer import MatchTimelineFrameView, MatchViewStateView
 from app.services.device_fingerprint_service import DeviceFingerprintService
 from app.services.match_timeline_service import MatchTimelineService
 from app.ticketing.service import TicketingError, TicketingService
@@ -451,6 +451,185 @@ def _unity_event_payload(event) -> dict[str, object]:
     }
 
 
+def _lerp(start: float, end: float, factor: float) -> float:
+    return start + ((end - start) * factor)
+
+
+def _interpolate_frame(
+    start_frame: MatchTimelineFrameView,
+    end_frame: MatchTimelineFrameView,
+    *,
+    sample_time_seconds: float,
+    factor: float,
+) -> MatchTimelineFrameView:
+    sampled_suffix = int(round(sample_time_seconds * 100))
+    if factor <= 0.0 or start_frame.frame_id == end_frame.frame_id:
+        return start_frame.model_copy(
+            update={
+                "frame_id": f"{start_frame.frame_id}:sample:{sampled_suffix}",
+                "time_seconds": round(sample_time_seconds, 2),
+            }
+        )
+    if factor >= 1.0:
+        return end_frame.model_copy(
+            update={
+                "frame_id": f"{end_frame.frame_id}:sample:{sampled_suffix}",
+                "time_seconds": round(sample_time_seconds, 2),
+            }
+        )
+
+    end_players_by_id = {player.player_id: player for player in end_frame.players}
+    players = []
+    for start_player in start_frame.players:
+        end_player = end_players_by_id.get(start_player.player_id, start_player)
+        players.append(
+            start_player.model_copy(
+                update={
+                    "highlighted": end_player.highlighted if factor >= 0.5 else start_player.highlighted,
+                    "has_possession": end_player.has_possession if factor >= 0.5 else start_player.has_possession,
+                    "state": end_player.state if factor >= 0.5 else start_player.state,
+                    "animation_state": end_player.animation_state if factor >= 0.5 else start_player.animation_state,
+                    "position": start_player.position.model_copy(
+                        update={
+                            "x": round(_lerp(start_player.position.x, end_player.position.x, factor), 3),
+                            "y": round(_lerp(start_player.position.y, end_player.position.y, factor), 3),
+                        }
+                    ),
+                    "anchor_position": start_player.anchor_position.model_copy(
+                        update={
+                            "x": round(_lerp(start_player.anchor_position.x, end_player.anchor_position.x, factor), 3),
+                            "y": round(_lerp(start_player.anchor_position.y, end_player.anchor_position.y, factor), 3),
+                        }
+                    ),
+                    "speed_ratio": round(_lerp(start_player.speed_ratio, end_player.speed_ratio, factor), 3),
+                    "blend_factor": round(_lerp(start_player.blend_factor, end_player.blend_factor, factor), 3),
+                    "stamina_pct": round(_lerp(start_player.stamina_pct, end_player.stamina_pct, factor), 3),
+                    "facing": start_player.facing.model_copy(
+                        update={
+                            "x": round(_lerp(start_player.facing.x, end_player.facing.x, factor), 3),
+                            "y": round(_lerp(start_player.facing.y, end_player.facing.y, factor), 3),
+                        }
+                    ),
+                    "velocity": start_player.velocity.model_copy(
+                        update={
+                            "x": round(_lerp(start_player.velocity.x, end_player.velocity.x, factor), 3),
+                            "y": round(_lerp(start_player.velocity.y, end_player.velocity.y, factor), 3),
+                        }
+                    ),
+                }
+            )
+        )
+
+    start_ball = start_frame.ball
+    end_ball = end_frame.ball
+    sampled_ball = start_ball.model_copy(
+        update={
+            "position": start_ball.position.model_copy(
+                update={
+                    "x": round(_lerp(start_ball.position.x, end_ball.position.x, factor), 3),
+                    "y": round(_lerp(start_ball.position.y, end_ball.position.y, factor), 3),
+                }
+            ),
+            "height": round(_lerp(start_ball.height, end_ball.height, factor), 3),
+            "owner_player_id": end_ball.owner_player_id if factor >= 0.5 else start_ball.owner_player_id,
+            "state": end_ball.state if factor >= 0.5 else start_ball.state,
+            "spin": (
+                None
+                if start_ball.spin is None or end_ball.spin is None
+                else start_ball.spin.model_copy(
+                    update={
+                        "x": round(_lerp(start_ball.spin.x, end_ball.spin.x, factor), 3),
+                        "y": round(_lerp(start_ball.spin.y, end_ball.spin.y, factor), 3),
+                        "z": round(_lerp(start_ball.spin.z, end_ball.spin.z, factor), 3),
+                    }
+                )
+            ),
+            "velocity": (
+                None
+                if start_ball.velocity is None or end_ball.velocity is None
+                else start_ball.velocity.model_copy(
+                    update={
+                        "x": round(_lerp(start_ball.velocity.x, end_ball.velocity.x, factor), 3),
+                        "y": round(_lerp(start_ball.velocity.y, end_ball.velocity.y, factor), 3),
+                        "z": round(_lerp(start_ball.velocity.z, end_ball.velocity.z, factor), 3),
+                    }
+                )
+            ),
+        }
+    )
+
+    return start_frame.model_copy(
+        update={
+            "frame_id": f"{start_frame.frame_id}:sample:{sampled_suffix}",
+            "time_seconds": round(sample_time_seconds, 2),
+            "clock_minute": round(_lerp(start_frame.clock_minute, end_frame.clock_minute, factor), 2),
+            "phase": end_frame.phase if factor >= 0.5 else start_frame.phase,
+            "home_score": end_frame.home_score if factor >= 0.95 else start_frame.home_score,
+            "away_score": end_frame.away_score if factor >= 0.95 else start_frame.away_score,
+            "home_attacks_right": end_frame.home_attacks_right if factor >= 0.5 else start_frame.home_attacks_right,
+            "possession_side": end_frame.possession_side if factor >= 0.5 else start_frame.possession_side,
+            "active_event_id": end_frame.active_event_id if factor >= 0.5 else start_frame.active_event_id,
+            "event_banner": end_frame.event_banner if factor >= 0.5 else start_frame.event_banner,
+            "stage": end_frame.stage if factor >= 0.5 else start_frame.stage,
+            "camera_preset": end_frame.camera_preset if factor >= 0.5 else start_frame.camera_preset,
+            "overlay_text": end_frame.overlay_text if factor >= 0.5 else start_frame.overlay_text,
+            "pause_playback": end_frame.pause_playback if factor >= 0.5 else start_frame.pause_playback,
+            "playback_rate": round(_lerp(start_frame.playback_rate, end_frame.playback_rate, factor), 3),
+            "flag_animation": end_frame.flag_animation if factor >= 0.5 else start_frame.flag_animation,
+            "celebration_team_id": end_frame.celebration_team_id if factor >= 0.5 else start_frame.celebration_team_id,
+            "possession_phase": end_frame.possession_phase if factor >= 0.5 else start_frame.possession_phase,
+            "transition_state": end_frame.transition_state if factor >= 0.5 else start_frame.transition_state,
+            "danger_zone": end_frame.danger_zone if factor >= 0.5 else start_frame.danger_zone,
+            "pressure_index": round(_lerp(start_frame.pressure_index, end_frame.pressure_index, factor), 3),
+            "compactness_home": round(_lerp(start_frame.compactness_home, end_frame.compactness_home, factor), 3),
+            "compactness_away": round(_lerp(start_frame.compactness_away, end_frame.compactness_away, factor), 3),
+            "frame_tags": list(end_frame.frame_tags if factor >= 0.5 else start_frame.frame_tags),
+            "players": players,
+            "ball": sampled_ball,
+        }
+    )
+
+
+def _sample_viewer_frame(view_state: MatchViewStateView, sample_time_seconds: float) -> MatchTimelineFrameView:
+    if not view_state.frames:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Live match frame could not be resolved.",
+        )
+
+    sampled_suffix = int(round(sample_time_seconds * 100))
+    if sample_time_seconds <= view_state.frames[0].time_seconds:
+        return view_state.frames[0].model_copy(
+            update={
+                "frame_id": f"{view_state.frames[0].frame_id}:sample:{sampled_suffix}",
+                "time_seconds": round(max(0.0, sample_time_seconds), 2),
+            }
+        )
+    if sample_time_seconds >= view_state.frames[-1].time_seconds:
+        return view_state.frames[-1].model_copy(
+            update={
+                "frame_id": f"{view_state.frames[-1].frame_id}:sample:{sampled_suffix}",
+                "time_seconds": round(sample_time_seconds, 2),
+            }
+        )
+
+    for index in range(1, len(view_state.frames)):
+        previous_frame = view_state.frames[index - 1]
+        next_frame = view_state.frames[index]
+        if sample_time_seconds > next_frame.time_seconds:
+            continue
+        span = max(next_frame.time_seconds - previous_frame.time_seconds, 0.0001)
+        factor = max(0.0, min(1.0, (sample_time_seconds - previous_frame.time_seconds) / span))
+        return _interpolate_frame(
+            previous_frame,
+            next_frame,
+            sample_time_seconds=sample_time_seconds,
+            factor=factor,
+        )
+
+    return view_state.frames[-1]
+
+
 def _load_persisted_live_view_state(match_id: str, app) -> MatchViewStateView | None:
     timeline_service = MatchTimelineService()
     session_factory = getattr(app.state, "session_factory", None)
@@ -511,7 +690,12 @@ def build_unity_live_payload_for_app(app, match_id: str) -> dict[str, object]:
         source = "infinite_league_runtime"
     view_state: MatchViewStateView | None = None
     live_status = "completed"
-    if state is not None:
+    playback_context = hub.get_playback_context(match_id)
+    if playback_context is not None and playback_context.viewer_state is not None:
+        view_state = playback_context.viewer_state
+        source = view_state.source or source
+        live_status = "live" if playback_context.is_live else "completed"
+    elif state is not None:
         events, _ = hub.get_events_since(match_id, 0)
         live_status = state.snapshot.status
         try:
@@ -538,7 +722,25 @@ def build_unity_live_payload_for_app(app, match_id: str) -> dict[str, object]:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Live match frame could not be resolved."
         )
 
-    frame = view_state.frames[-1]
+    if state is not None:
+        live_status = state.snapshot.status
+
+    if playback_context is not None and playback_context.viewer_state is not None:
+        playback_span_seconds = max(
+            float(view_state.duration_seconds),
+            float(view_state.frames[-1].time_seconds),
+            1.0,
+        )
+        playback_ratio = min(
+            1.0,
+            max(0.0, playback_context.elapsed_runtime_seconds / max(playback_context.target_runtime_seconds, 1.0)),
+        )
+        frame = _sample_viewer_frame(
+            view_state,
+            round(playback_span_seconds * playback_ratio, 2),
+        )
+    else:
+        frame = view_state.frames[-1]
     players_by_id = {player.player_id: player for player in frame.players}
     active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
     view_state_payload = view_state.model_dump(mode="json")

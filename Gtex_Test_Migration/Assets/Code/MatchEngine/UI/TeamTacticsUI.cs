@@ -34,6 +34,11 @@ namespace FStudio.MatchEngine.UI {
         }
 
         protected override void OnEventCalled(MatchInitializationCompletedEvent eventObject) {
+            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackEnabled) {
+                Disappear();
+                return;
+            }
+
             Appear();
         }
     }
