@@ -39,6 +39,7 @@ EAGER_MODULE_NAMES = frozenset(
         "match_viewer",
         "hosted_competition_engine_admin",
         "streamer_tournament_engine",
+        "world_simulation",
     }
 )
 

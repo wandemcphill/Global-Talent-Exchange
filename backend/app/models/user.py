@@ -35,11 +35,15 @@ class KycStatus(StrEnum):
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
-    username: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    favourite_club: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    nationality: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    preferred_position: Mapped[str | None] = mapped_column(String(120), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", native_enum=False),
