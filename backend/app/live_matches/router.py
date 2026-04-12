@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.encoders import jsonable_encoder
@@ -52,7 +53,10 @@ _UNITY_ALLOWED_ACCESS_SOURCES = frozenset(
     {"infinite_league", "open", "non_exclusive", "rights_owner", "grant", "paid_view"}
 )
 _UNITY_ACCESS_POLICY_MESSAGE = "Unity live access requires session-backed rights validation for non-generated matches."
-_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = 30.0
+_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = max(
+    60.0,
+    float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "900")),
+)
 
 _UNITY_PITCH_LENGTH_METERS = 105.0
 _UNITY_PITCH_WIDTH_METERS = 68.0

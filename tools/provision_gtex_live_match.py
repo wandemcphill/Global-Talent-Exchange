@@ -20,6 +20,8 @@ DEFAULT_USER_FULL_NAME = "GTEX Unity Live"
 DEFAULT_USER_PHONE = "08000000000"
 DEFAULT_USER_REGION = "NG"
 DEFAULT_USER_USERNAME = "unitylive"
+AUTH_LOGIN_PATHS: Final[tuple[str, ...]] = ("/api/auth/login", "/auth/login", "/api/v1/auth/login")
+AUTH_REGISTER_PATHS: Final[tuple[str, ...]] = ("/api/auth/register", "/auth/register", "/api/v1/auth/register")
 LOCAL_PROFILE: Final[str] = "local"
 STAGING_PROFILE: Final[str] = "staging"
 PRODUCTION_PROFILE: Final[str] = "production"
@@ -193,6 +195,26 @@ def unwrap_api_response(response: httpx.Response) -> dict[str, Any]:
     raise RuntimeError("Backend returned an unexpected JSON payload.")
 
 
+def post_first_available(
+    client: httpx.Client,
+    paths: tuple[str, ...],
+    *,
+    json_payload: dict[str, Any],
+) -> httpx.Response:
+    last_response: httpx.Response | None = None
+    for path in paths:
+        response = client.post(path, json=json_payload)
+        if response.status_code in {404, 405}:
+            last_response = response
+            continue
+        return response
+
+    if last_response is not None:
+        return last_response
+
+    raise RuntimeError("No auth route candidates were configured.")
+
+
 def ensure_user_access_token(
     client: httpx.Client,
     *,
@@ -212,9 +234,10 @@ def ensure_user_access_token(
     if not str(email or "").strip() or not str(password or "").strip():
         raise RuntimeError("Backend login credentials are required when no provisioning access token is supplied.")
 
-    login_response = client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
+    login_response = post_first_available(
+        client,
+        AUTH_LOGIN_PATHS,
+        json_payload={"email": email, "password": password},
     )
     if login_response.status_code < 300:
         return str(unwrap_api_response(login_response).get("access_token") or "").strip()
@@ -228,9 +251,10 @@ def ensure_user_access_token(
             "provide --user-access-token, or pass --allow-register."
         )
 
-    register_response = client.post(
-        "/api/v1/auth/register",
-        json={
+    register_response = post_first_available(
+        client,
+        AUTH_REGISTER_PATHS,
+        json_payload={
             "email": email,
             "full_name": full_name,
             "phone_number": phone_number,
@@ -245,9 +269,10 @@ def ensure_user_access_token(
     if register_response.status_code != 409:
         register_response.raise_for_status()
 
-    retry_login_response = client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
+    retry_login_response = post_first_available(
+        client,
+        AUTH_LOGIN_PATHS,
+        json_payload={"email": email, "password": password},
     )
     retry_payload = unwrap_api_response(retry_login_response)
     access_token = str(retry_payload.get("access_token") or "").strip()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -25,6 +26,11 @@ from app.live_matches.service import ensure_live_match_hub
 from app.live_ops.service import LiveOpsService
 from app.models.broadcast_watch_session import BroadcastWatchSession
 from app.models.competition_match import CompetitionMatch
+
+_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = max(
+    60.0,
+    float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "900")),
+)
 
 
 def _utcnow() -> datetime:
@@ -764,7 +770,7 @@ class BroadcastNetworkRuntime:
             checkpoint_interval_seconds=stream.checkpoint_interval_seconds,
             max_latency_ms=stream.max_latency_ms,
             read_only=True,
-            target_runtime_seconds=30.0,
+            target_runtime_seconds=_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS,
         )
         return True
 
