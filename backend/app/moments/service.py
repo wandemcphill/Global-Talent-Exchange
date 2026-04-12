@@ -557,7 +557,7 @@ class MomentsEngine:
         if moment.event_type == "goal":
             return f"Goal for {moment.team or 'unknown side'}"
         if moment.event_type == "red_card":
-            return f"Red card changes the match"
+            return "Red card changes the match"
         if moment.event_type == "penalty":
             return f"Penalty drama for {moment.team or 'unknown side'}"
         return "Live match moment"

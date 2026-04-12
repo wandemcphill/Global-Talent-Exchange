@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select

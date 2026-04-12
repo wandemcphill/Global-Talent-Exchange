@@ -12,7 +12,6 @@ from app.models.referral_attribution import ReferralAttribution
 from app.models.referral_event import ReferralEvent
 from app.services.referral_orchestrator import (
     AttributionRecord,
-    ReferralActionError,
     ReferralRuntimeStore,
     ShareCodeRecord,
     generate_id,
