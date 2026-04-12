@@ -29,8 +29,8 @@ namespace FStudio.GTEX
         public string liveAccessToken = string.Empty;
         public string liveRefreshToken = string.Empty;
         public float pollIntervalSeconds = 1f;
-        public float maxRetryDelaySeconds = 8f;
-        public int timeoutSeconds = 5;
+        public float maxRetryDelaySeconds = 12f;
+        public int timeoutSeconds = 20;
         public string homeTemplateTeam = "City";
         public string awayTemplateTeam = "Royal";
         public string homeTeamName = string.Empty;
@@ -152,6 +152,18 @@ namespace FStudio.GTEX
             if (runtimeModeValue == GtexRuntimeMode.LivePlayback && !HasLiveAuthBootstrap)
             {
                 Debug.LogWarning("[GTEX] Live playback auth bootstrap is missing.");
+            }
+
+            if (maxRetryDelaySeconds < 1f)
+            {
+                maxRetryDelaySeconds = 12f;
+                Debug.LogWarning("[GTEX] maxRetryDelaySeconds was invalid. Defaulting to 12.");
+            }
+
+            if (timeoutSeconds < 5)
+            {
+                timeoutSeconds = 20;
+                Debug.LogWarning("[GTEX] timeoutSeconds was too low. Defaulting to 20.");
             }
 
             if (simulationTargetDurationMinutes <= 0f)

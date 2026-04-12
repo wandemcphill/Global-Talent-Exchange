@@ -15,7 +15,7 @@ namespace FStudio.GTEX.Simulation
             }
 
             var config = GtexMatchConfigLoader.Load();
-            if (config == null || config.ResolveRuntimeMode() != GtexRuntimeMode.LocalSimulation)
+            if (config == null)
             {
                 return;
             }
@@ -38,9 +38,14 @@ namespace FStudio.GTEX.Simulation
                 return;
             }
 
-            if (GtexSimRuntimeHost.TryAutoStart(config))
+            if (GtexRuntimeBootstrap.TryAutoStart(config))
             {
-                Debug.Log("[GTEX Sim Bootstrap] Local simulation auto-started for scene '" + activeScene.name + "'.");
+                Debug.Log(
+                    "[GTEX Runtime Bootstrap] " +
+                    config.ResolveRuntimeMode() +
+                    " auto-started for scene '" +
+                    activeScene.name +
+                    "'.");
             }
         }
     }

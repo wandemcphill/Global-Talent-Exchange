@@ -162,9 +162,10 @@ namespace FStudio.GTEX
         private IEnumerator Bootstrap()
         {
 #if GTEX_FAST_MODE
-            Debug.Log("[GTEX] FAST MODE: Skipping live match bootstrap.");
-            yield break;
+            Debug.Log("[GTEX] FAST MODE: Live match bootstrap remains enabled in editor/runtime.");
 #else
+
+#endif
 
             Debug.Log("[GTEX] Bootstrapping match...");
 
@@ -215,7 +216,6 @@ namespace FStudio.GTEX
 
             // fallback polling safety net
             StartCoroutine(FallbackPolling());
-#endif
         }
 
         private bool TryBuildMatchRequest(out MatchCreateRequest matchRequest)
