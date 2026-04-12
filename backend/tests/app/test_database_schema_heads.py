@@ -35,7 +35,9 @@ def test_ensure_database_schema_current_upgrades_single_head(monkeypatch, tmp_pa
 
     monkeypatch.setattr(database_module, "load_model_modules", lambda: None)
     monkeypatch.setattr(database_module, "build_alembic_config", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(database_module.ScriptDirectory, "from_config", staticmethod(lambda _config: _DummyScriptDirectory()))
+    monkeypatch.setattr(
+        database_module.ScriptDirectory, "from_config", staticmethod(lambda _config: _DummyScriptDirectory())
+    )
     monkeypatch.setattr(database_module, "MigrationContext", _DummyMigrationContext)
     monkeypatch.setattr(
         database_module,
@@ -140,9 +142,7 @@ def test_head_upgrade_has_no_unmapped_tables_or_columns(tmp_path) -> None:
         for diff in diffs:
             if isinstance(diff, list):
                 structural_drift.extend(
-                    f"{item[2]}.{item[3]}:{item[0]}"
-                    for item in diff
-                    if item[0] == "modify_nullable"
+                    f"{item[2]}.{item[3]}:{item[0]}" for item in diff if item[0] == "modify_nullable"
                 )
                 continue
             if diff[0] == "remove_fk":
@@ -152,7 +152,9 @@ def test_head_upgrade_has_no_unmapped_tables_or_columns(tmp_path) -> None:
 
         assert not unmapped_tables, "Migrated tables missing from target metadata: " + ", ".join(unmapped_tables)
         assert not unmapped_columns, "Migrated columns missing from target metadata: " + ", ".join(unmapped_columns)
-        assert not structural_drift, "Unexpected structural drift after head upgrade: " + ", ".join(sorted(structural_drift))
+        assert not structural_drift, "Unexpected structural drift after head upgrade: " + ", ".join(
+            sorted(structural_drift)
+        )
     finally:
         engine.dispose()
 

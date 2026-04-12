@@ -240,15 +240,16 @@ class ReferralAdminService:
     def list_pending_rewards(self) -> list[PendingRewardView]:
         rewards = self.orchestrator.rewards.list_all()
         attributions = {
-            attribution.attribution_id: attribution
-            for attribution in self.orchestrator.attributions.list_all()
+            attribution.attribution_id: attribution for attribution in self.orchestrator.attributions.list_all()
         }
         items = []
         for reward in rewards:
             if reward.status != "pending":
                 continue
             attribution = attributions.get(reward.attribution_id)
-            creator_id = reward.beneficiary_creator_id or (attribution.creator_profile_id if attribution is not None else None)
+            creator_id = reward.beneficiary_creator_id or (
+                attribution.creator_profile_id if attribution is not None else None
+            )
             items.append(
                 PendingRewardView(
                     reward_id=reward.reward_id,
@@ -281,7 +282,9 @@ class ReferralAdminService:
         if reward is None:
             raise ReferralActionError("reward_not_found")
         attribution = self.orchestrator.attributions.get_by_id(reward.attribution_id)
-        creator_id = reward.beneficiary_creator_id or (attribution.creator_profile_id if attribution is not None else None)
+        creator_id = reward.beneficiary_creator_id or (
+            attribution.creator_profile_id if attribution is not None else None
+        )
         if payload.action == "approve" and self._creator_frozen(creator_id):
             raise ReferralActionError("creator_rewards_frozen")
         updated = self.orchestrator.rewards.apply_review_decision(
@@ -313,7 +316,9 @@ class ReferralAdminService:
     def creator_leaderboard(self) -> CreatorLeaderboardResponse:
         return self.leaderboard.build()
 
-    def _build_share_code_summary(self, metric, total_signups: int, flags_by_entity: dict[tuple[str, str], list[ReferralFlagView]]) -> ShareCodeUsageSummaryView:
+    def _build_share_code_summary(
+        self, metric, total_signups: int, flags_by_entity: dict[tuple[str, str], list[ReferralFlagView]]
+    ) -> ShareCodeUsageSummaryView:
         flags = flags_by_entity.get(("share_code", metric.share_code_id), [])
         return ShareCodeUsageSummaryView(
             code_id=metric.share_code_id,
@@ -325,7 +330,9 @@ class ReferralAdminService:
             active=metric.active,
             max_uses=metric.max_uses,
             current_uses=metric.current_uses,
-            usage_share=(Decimal(metric.attributed_signups) / Decimal(total_signups)).quantize(_FOUR_PLACES, rounding=ROUND_HALF_UP),
+            usage_share=(Decimal(metric.attributed_signups) / Decimal(total_signups)).quantize(
+                _FOUR_PLACES, rounding=ROUND_HALF_UP
+            ),
             attributed_signups=metric.attributed_signups,
             qualified_referrals=metric.qualified_referrals,
             creator_competition_joins=metric.creator_competition_joins,
@@ -337,7 +344,13 @@ class ReferralAdminService:
             flags=flags,
         )
 
-    def _build_creator_summary(self, creator_id: str, metric, share_codes: list[ShareCodeUsageSummaryView], flags_by_entity: dict[tuple[str, str], list[ReferralFlagView]]) -> CreatorAdminSummaryView:
+    def _build_creator_summary(
+        self,
+        creator_id: str,
+        metric,
+        share_codes: list[ShareCodeUsageSummaryView],
+        flags_by_entity: dict[tuple[str, str], list[ReferralFlagView]],
+    ) -> CreatorAdminSummaryView:
         creator_share_codes = [item for item in share_codes if item.owner_creator_id == creator_id]
         flags = [
             *flags_by_entity.get(("creator_profile", creator_id), []),
@@ -503,7 +516,9 @@ class ReferralAdminService:
     @staticmethod
     def _share_code_moderation_state_from_row(row: AdminRuntimeState) -> ShareCodeModerationState | None:
         payload = dict(row.payload_json or {})
-        share_code_id = str(payload.get("share_code_id") or row.state_key.removeprefix(_SHARE_CODE_MODERATION_STATE_PREFIX))
+        share_code_id = str(
+            payload.get("share_code_id") or row.state_key.removeprefix(_SHARE_CODE_MODERATION_STATE_PREFIX)
+        )
         if not share_code_id:
             return None
         return ShareCodeModerationState(

@@ -6,7 +6,12 @@ from uuid import uuid4
 
 from app.core.config import get_settings, reset_settings_cache
 from app.highlights.service import HighlightGenerationService
-from app.match_engine.schemas import MatchHighlightItemView, MatchHighlightListView, MatchHighlightPipelineView, MatchHighlightReelView
+from app.match_engine.schemas import (
+    MatchHighlightItemView,
+    MatchHighlightListView,
+    MatchHighlightPipelineView,
+    MatchHighlightReelView,
+)
 
 
 def _artifact_root(name: str) -> Path:

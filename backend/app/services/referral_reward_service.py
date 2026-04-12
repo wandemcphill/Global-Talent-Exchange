@@ -57,7 +57,8 @@ class ReferralRewardService:
             rewards = [
                 reward
                 for reward in self.store.rewards_by_id.values()
-                if reward.beneficiary_user_id == user_id or (creator_id is not None and reward.beneficiary_creator_id == creator_id)
+                if reward.beneficiary_user_id == user_id
+                or (creator_id is not None and reward.beneficiary_creator_id == creator_id)
             ]
         return sorted(rewards, key=lambda reward: reward.created_at, reverse=True)
 
@@ -160,44 +161,54 @@ class ReferralRewardService:
         policies = {
             "verification_completed": ("points", "approved", Decimal("25"), "points", "Verified community invite"),
             "first_competition_joined": ("starter_pack", "approved", None, None, "First contest participation"),
-            "first_paid_competition_joined": ("wallet_credit", "pending", Decimal("5.00"), "credit", "Qualified paid participation"),
+            "first_paid_competition_joined": (
+                "wallet_credit",
+                "pending",
+                Decimal("5.00"),
+                "credit",
+                "Qualified paid participation",
+            ),
             "retained_day_30": ("badge", "approved", None, None, "Thirty day community retention"),
         }
         if milestone not in policies:
             return []
         reward_type, status, amount, unit, label = policies[milestone]
-        return [self._upsert_reward(
-            attribution=attribution,
-            beneficiary_user_id=attribution.referrer_user_id,
-            beneficiary_creator_id=None,
-            reward_type=reward_type,
-            status=status,
-            milestone=milestone,
-            amount=amount,
-            unit=unit,
-            label=label,
-            hold_until=utcnow() + timedelta(days=7) if reward_type == "wallet_credit" else None,
-            review_reason="ledger_hook_pending" if reward_type == "wallet_credit" else None,
-        )]
+        return [
+            self._upsert_reward(
+                attribution=attribution,
+                beneficiary_user_id=attribution.referrer_user_id,
+                beneficiary_creator_id=None,
+                reward_type=reward_type,
+                status=status,
+                milestone=milestone,
+                amount=amount,
+                unit=unit,
+                label=label,
+                hold_until=utcnow() + timedelta(days=7) if reward_type == "wallet_credit" else None,
+                review_reason="ledger_hook_pending" if reward_type == "wallet_credit" else None,
+            )
+        ]
 
     def _create_for_creator(self, attribution: AttributionRecord, *, milestone: str) -> list[RewardRecord]:
         if attribution.creator_profile_id is None:
             return []
         if milestone != "first_creator_competition_joined":
             return []
-        return [self._upsert_reward(
-            attribution=attribution,
-            beneficiary_user_id=None,
-            beneficiary_creator_id=attribution.creator_profile_id,
-            reward_type="creator_revshare",
-            status="pending",
-            milestone=milestone,
-            amount=Decimal("2.50"),
-            unit="credit",
-            label="Creator competition qualified join",
-            hold_until=utcnow() + timedelta(days=14),
-            review_reason="fraud_and_ledger_review_pending",
-        )]
+        return [
+            self._upsert_reward(
+                attribution=attribution,
+                beneficiary_user_id=None,
+                beneficiary_creator_id=attribution.creator_profile_id,
+                reward_type="creator_revshare",
+                status="pending",
+                milestone=milestone,
+                amount=Decimal("2.50"),
+                unit="credit",
+                label="Creator competition qualified join",
+                hold_until=utcnow() + timedelta(days=14),
+                review_reason="fraud_and_ledger_review_pending",
+            )
+        ]
 
     def _upsert_reward(
         self,
@@ -222,9 +233,7 @@ class ReferralRewardService:
                 reward_type=reward_type,
                 milestone=milestone,
             )
-            reward = self.session.scalar(
-                select(ReferralReward).where(ReferralReward.reward_key == reward_key)
-            )
+            reward = self.session.scalar(select(ReferralReward).where(ReferralReward.reward_key == reward_key))
             payload_json = {
                 "trigger_milestone": milestone,
                 "label": label,
@@ -345,7 +354,11 @@ class ReferralRewardService:
                     and reward.reward_type == reward_type
                     and reward.trigger_milestone == milestone
                 ):
-                    if reward.status != status or reward.review_reason != review_reason or reward.hold_until != hold_until:
+                    if (
+                        reward.status != status
+                        or reward.review_reason != review_reason
+                        or reward.hold_until != hold_until
+                    ):
                         updated = replace(
                             reward,
                             status=status,

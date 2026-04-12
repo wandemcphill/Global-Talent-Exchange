@@ -194,7 +194,8 @@ class ReferralAttributionService:
             return [
                 record
                 for record in self.store.attributions_by_id.values()
-                if record.referrer_user_id == user_id or (creator_id is not None and record.creator_profile_id == creator_id)
+                if record.referrer_user_id == user_id
+                or (creator_id is not None and record.creator_profile_id == creator_id)
             ]
 
     def get_for_user(self, referred_user_id: str) -> AttributionRecord | None:
@@ -251,14 +252,19 @@ class ReferralAttributionService:
         for event in events:
             if event.referral_attribution_id is not None:
                 events_by_attribution[event.referral_attribution_id].append(event)
-        return tuple(self._from_model(attribution, events_by_attribution.get(attribution.id, [])) for attribution in attributions)
+        return tuple(
+            self._from_model(attribution, events_by_attribution.get(attribution.id, [])) for attribution in attributions
+        )
 
     @staticmethod
     def _from_model(attribution: ReferralAttribution, events: list[ReferralEvent]) -> AttributionRecord:
-        source_channel = attribution.source_channel.value if hasattr(attribution.source_channel, "value") else str(attribution.source_channel)
+        source_channel = (
+            attribution.source_channel.value
+            if hasattr(attribution.source_channel, "value")
+            else str(attribution.source_channel)
+        )
         milestones = [
-            event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type)
-            for event in events
+            event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type) for event in events
         ]
         metadata = dict(attribution.metadata_json or {})
         return AttributionRecord(

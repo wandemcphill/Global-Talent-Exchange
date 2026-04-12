@@ -251,7 +251,8 @@ class ReferralOrchestrator:
             active_participants=sum(
                 1
                 for invite in invites
-                if "first_creator_competition_joined" in invite.milestones or "first_competition_joined" in invite.milestones
+                if "first_creator_competition_joined" in invite.milestones
+                or "first_competition_joined" in invite.milestones
             ),
             pending_rewards=sum(1 for reward in rewards if reward.status == "pending"),
             approved_rewards=sum(1 for reward in rewards if reward.status == "approved"),
@@ -284,9 +285,7 @@ class ReferralOrchestrator:
                 filters.append(ShareCode.owner_creator_id == creator.creator_id)
             share_codes = tuple(
                 self.session.scalars(
-                    select(ShareCode)
-                    .where(or_(*filters))
-                    .order_by(ShareCode.created_at.desc(), ShareCode.id.desc())
+                    select(ShareCode).where(or_(*filters)).order_by(ShareCode.created_at.desc(), ShareCode.id.desc())
                 ).all()
             )
             records = tuple(self._share_code_from_model(share_code) for share_code in share_codes)
@@ -348,7 +347,11 @@ class ReferralOrchestrator:
                 share_code_type=share_code.share_code_type,
                 owner_user_id=share_code.owner_user_id,
                 owner_creator_id=share_code.owner_creator_id,
-                linked_competition_id=payload.linked_competition_id if payload.linked_competition_id is not None else share_code.linked_competition_id,
+                linked_competition_id=(
+                    payload.linked_competition_id
+                    if payload.linked_competition_id is not None
+                    else share_code.linked_competition_id
+                ),
                 active=payload.active if payload.active is not None else share_code.active,
                 max_uses=payload.max_uses if payload.max_uses is not None else share_code.max_uses,
                 current_uses=share_code.current_uses,
@@ -412,7 +415,9 @@ class ReferralOrchestrator:
         )
 
     def capture_attribution(self, *, current_user, payload: AttributionCaptureRequest):
-        share_code = self._resolve_share_code_for_user(current_user_id=current_user.id, requested_code=payload.share_code)
+        share_code = self._resolve_share_code_for_user(
+            current_user_id=current_user.id, requested_code=payload.share_code
+        )
         self._ensure_redemption_allowed(
             current_user=current_user,
             share_code=share_code,
@@ -427,7 +432,11 @@ class ReferralOrchestrator:
             milestone=payload.milestone,
             metadata=payload.metadata,
         )
-        if payload.milestone in {"first_competition_joined", "first_paid_competition_joined", "first_creator_competition_joined"}:
+        if payload.milestone in {
+            "first_competition_joined",
+            "first_paid_competition_joined",
+            "first_creator_competition_joined",
+        }:
             self.creator_competitions.record_qualified_join(
                 creator_id=attribution.creator_profile_id,
                 competition_id=attribution.linked_competition_id,
@@ -454,7 +463,8 @@ class ReferralOrchestrator:
             active_participants=sum(
                 1
                 for invite in invites
-                if "first_competition_joined" in invite.milestones or "first_creator_competition_joined" in invite.milestones
+                if "first_competition_joined" in invite.milestones
+                or "first_creator_competition_joined" in invite.milestones
             ),
             pending_rewards=sum(1 for reward in rewards if reward.status == "pending"),
             approved_rewards=sum(1 for reward in rewards if reward.status == "approved"),
@@ -477,18 +487,21 @@ class ReferralOrchestrator:
             user_id=current_user.id,
             creator_id=creator.creator_id if creator is not None else None,
         )
-        return [ReferralInviteView.model_validate(
-            {
-                "share_code": invite.share_code,
-                "referred_user_id": invite.referred_user_id,
-                "source_channel": invite.source_channel,
-                "linked_competition_id": invite.linked_competition_id,
-                "campaign_name": invite.campaign_name,
-                "attribution_status": invite.attribution_status,
-                "milestones": invite.milestones,
-                "first_touched_at": invite.first_touched_at,
-            }
-        ) for invite in invites]
+        return [
+            ReferralInviteView.model_validate(
+                {
+                    "share_code": invite.share_code,
+                    "referred_user_id": invite.referred_user_id,
+                    "source_channel": invite.source_channel,
+                    "linked_competition_id": invite.linked_competition_id,
+                    "campaign_name": invite.campaign_name,
+                    "attribution_status": invite.attribution_status,
+                    "milestones": invite.milestones,
+                    "first_touched_at": invite.first_touched_at,
+                }
+            )
+            for invite in invites
+        ]
 
     def _create_share_code_record(
         self,
@@ -518,7 +531,9 @@ class ReferralOrchestrator:
                 vanity_code=vanity_code,
                 code_type=ShareCodeType(share_code_type),
                 owner_user_id=current_user.id,
-                owner_creator_id=creator.creator_id if share_code_type == "creator_share" and creator is not None else None,
+                owner_creator_id=(
+                    creator.creator_id if share_code_type == "creator_share" and creator is not None else None
+                ),
                 linked_competition_id=linked_competition_id,
                 is_active=True,
                 max_uses=max_uses,

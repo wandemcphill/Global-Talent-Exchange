@@ -49,7 +49,9 @@ def _safe_segment(value: str, *, fallback: str) -> str:
     candidate = (value or "").strip()
     if not candidate:
         return fallback
-    sanitized = "".join(character if character.isalnum() or character in {"-", "_", "."} else "_" for character in candidate)
+    sanitized = "".join(
+        character if character.isalnum() or character in {"-", "_", "."} else "_" for character in candidate
+    )
     sanitized = sanitized.strip("._")
     return sanitized or fallback
 
@@ -105,7 +107,9 @@ class MomentsEngine:
         except Exception:
             return
         with self._lock:
-            dedupe_id = normalized.source_event_id or (f"seq:{normalized.sequence_id}" if normalized.sequence_id is not None else event.event_id)
+            dedupe_id = normalized.source_event_id or (
+                f"seq:{normalized.sequence_id}" if normalized.sequence_id is not None else event.event_id
+            )
             source_key = f"{normalized.match_id}:{dedupe_id}"
             if source_key in self._seen_source_events:
                 return
@@ -299,7 +303,9 @@ class MomentsEngine:
                     )
                     session.commit()
             except Exception:
-                logger.exception("moments.dispatch.enqueue_failed match_id=%s moment_id=%s", moment.match_id, moment.moment_id)
+                logger.exception(
+                    "moments.dispatch.enqueue_failed match_id=%s moment_id=%s", moment.match_id, moment.moment_id
+                )
         if self.event_publisher is None:
             return
         self.event_publisher.publish(
@@ -492,7 +498,9 @@ class MomentsEngine:
         if not match_id:
             raise ValueError("match.events payload is missing match_id")
         source_event_id = str(payload.get("source_event_id") or payload.get("event_id") or event.event_id).strip()
-        source_event_type = str(payload.get("source_event_type") or payload.get("event_type") or "generic").strip().lower()
+        source_event_type = (
+            str(payload.get("source_event_type") or payload.get("event_type") or "generic").strip().lower()
+        )
         event_type = MomentsEngine._moment_event_type(source_event_type)
         return _NormalizedMatchEvent(
             match_id=match_id,

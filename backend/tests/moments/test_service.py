@@ -32,7 +32,9 @@ def _session_factory() -> sessionmaker[Session]:
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def _build_engine(tmp_path) -> tuple[MomentsEngine, InMemoryEventPublisher, InMemoryViralLeaderboardStore, sessionmaker[Session]]:
+def _build_engine(
+    tmp_path,
+) -> tuple[MomentsEngine, InMemoryEventPublisher, InMemoryViralLeaderboardStore, sessionmaker[Session]]:
     app = FastAPI()
     queue = FileHighlightRenderQueue(tmp_path)
     storage = LocalObjectStorage(tmp_path)

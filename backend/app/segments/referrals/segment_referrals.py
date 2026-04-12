@@ -128,7 +128,13 @@ def _to_http_error(exc: ReferralActionError) -> HTTPException:
     status_code = status.HTTP_400_BAD_REQUEST
     if reason in {"share_code_not_found", "creator_not_found", "attribution_not_found"}:
         status_code = status.HTTP_404_NOT_FOUND
-    elif reason in {"self_referral_blocked", "share_code_inactive", "share_code_expired", "share_code_exhausted", "share_code_not_started"}:
+    elif reason in {
+        "self_referral_blocked",
+        "share_code_inactive",
+        "share_code_expired",
+        "share_code_exhausted",
+        "share_code_not_started",
+    }:
         status_code = status.HTTP_409_CONFLICT
     elif reason in {"share_code_forbidden"}:
         status_code = status.HTTP_403_FORBIDDEN

@@ -269,7 +269,9 @@ def test_admin_referral_state_survives_restart(admin_referral_api) -> None:
         )
 
 
-def _create_creator_profile(app: FastAPI, client: TestClient, user: StubUser, *, handle: str, competition_id: str) -> str:
+def _create_creator_profile(
+    app: FastAPI, client: TestClient, user: StubUser, *, handle: str, competition_id: str
+) -> str:
     app.state.current_user = user
     response = client.post(
         "/api/creators/profile",

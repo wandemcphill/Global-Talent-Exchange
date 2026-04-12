@@ -133,8 +133,12 @@ class CreatorProfileService:
                 display_name=display_name or creator.display_name,
                 tier=tier or creator.tier,
                 status=status or creator.status,
-                default_competition_id=default_competition_id if default_competition_id is not None else creator.default_competition_id,
-                revenue_share_percent=revenue_share_percent if revenue_share_percent is not None else creator.revenue_share_percent,
+                default_competition_id=(
+                    default_competition_id if default_competition_id is not None else creator.default_competition_id
+                ),
+                revenue_share_percent=(
+                    revenue_share_percent if revenue_share_percent is not None else creator.revenue_share_percent
+                ),
                 updated_at=utcnow(),
             )
             self._save(updated)
@@ -191,7 +195,9 @@ class CreatorProfileService:
     def list_all(self) -> tuple[CreatorProfileRecord, ...]:
         if self.session is not None:
             profiles = tuple(
-                self.session.scalars(select(CreatorProfile).order_by(CreatorProfile.created_at, CreatorProfile.id)).all()
+                self.session.scalars(
+                    select(CreatorProfile).order_by(CreatorProfile.created_at, CreatorProfile.id)
+                ).all()
             )
             creators = tuple(self._from_model(profile) for profile in profiles)
             for creator in creators:

@@ -21,8 +21,7 @@ def _resolve_storage_path(storage_root: Path, storage_key: str) -> Path:
 
 
 class HighlightRenderer(Protocol):
-    def render(self, job: HighlightRenderJob, *, output_path: Path, storage_root: Path) -> dict[str, Any]:
-        ...
+    def render(self, job: HighlightRenderJob, *, output_path: Path, storage_root: Path) -> dict[str, Any]: ...
 
 
 @dataclass(slots=True)

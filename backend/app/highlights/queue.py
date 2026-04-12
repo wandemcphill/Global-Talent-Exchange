@@ -7,7 +7,6 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
-
 HighlightRenderKind = Literal["clip", "reel"]
 HighlightRenderStatus = Literal["queued", "processing", "succeeded", "failed"]
 
@@ -214,7 +213,9 @@ class FileHighlightRenderQueue:
             return claimed
         return None
 
-    def mark_succeeded(self, record: HighlightRenderJobRecord, *, result: dict[str, Any] | None = None) -> HighlightRenderJobRecord:
+    def mark_succeeded(
+        self, record: HighlightRenderJobRecord, *, result: dict[str, Any] | None = None
+    ) -> HighlightRenderJobRecord:
         completed_at = _utcnow()
         completed = replace(
             record,
