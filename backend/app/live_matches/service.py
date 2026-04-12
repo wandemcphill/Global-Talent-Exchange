@@ -164,11 +164,27 @@ class LiveMatchHub:
             base_away_possession=replay_payload.summary.away_stats.possession,
             atmosphere_profile=replay_payload.atmosphere_profile or "standard",
             stadium_profile=stadium_profile,
-            sync_strategy=(replay_payload.spectator_package.sync_strategy if replay_payload.spectator_package is not None else "deterministic_playback"),
-            checkpoint_interval_seconds=(replay_payload.sync_contract.checkpoint_interval_seconds if replay_payload.sync_contract is not None else 15),
-            max_latency_ms=(replay_payload.sync_contract.max_latency_ms if replay_payload.sync_contract is not None else 320),
-            pause_replay_enabled=(replay_payload.spectator_package.can_pause if replay_payload.spectator_package is not None else False),
-            reactions_enabled=(replay_payload.spectator_package.reactions_enabled if replay_payload.spectator_package is not None else True),
+            sync_strategy=(
+                replay_payload.spectator_package.sync_strategy
+                if replay_payload.spectator_package is not None
+                else "deterministic_playback"
+            ),
+            checkpoint_interval_seconds=(
+                replay_payload.sync_contract.checkpoint_interval_seconds
+                if replay_payload.sync_contract is not None
+                else 15
+            ),
+            max_latency_ms=(
+                replay_payload.sync_contract.max_latency_ms if replay_payload.sync_contract is not None else 320
+            ),
+            pause_replay_enabled=(
+                replay_payload.spectator_package.can_pause if replay_payload.spectator_package is not None else False
+            ),
+            reactions_enabled=(
+                replay_payload.spectator_package.reactions_enabled
+                if replay_payload.spectator_package is not None
+                else True
+            ),
             read_only=read_only,
             step_interval_seconds=step_interval_seconds,
             event_batches=event_batches,
@@ -511,7 +527,9 @@ class LiveMatchHub:
             atmosphere_profile=replay_payload.atmosphere_profile or "standard",
         )
         tick_rate_hz = replay_payload.sync_contract.tick_rate_hz if replay_payload.sync_contract is not None else 20
-        max_latency_ms = replay_payload.sync_contract.max_latency_ms if replay_payload.sync_contract is not None else 320
+        max_latency_ms = (
+            replay_payload.sync_contract.max_latency_ms if replay_payload.sync_contract is not None else 320
+        )
         checkpoint_interval_seconds = (
             replay_payload.sync_contract.checkpoint_interval_seconds if replay_payload.sync_contract is not None else 15
         )
@@ -715,7 +733,9 @@ class LiveMatchHub:
             "team_id": raw_event.team_id,
             "team_name": raw_event.team_name,
             "player_name": raw_event.primary_player.player_name if raw_event.primary_player is not None else None,
-            "secondary_player_name": raw_event.secondary_player.player_name if raw_event.secondary_player is not None else None,
+            "secondary_player_name": (
+                raw_event.secondary_player.player_name if raw_event.secondary_player is not None else None
+            ),
             "raw_event_type": raw_event.event_type.value,
             "description": generated_commentary.line,
             "home_score": raw_event.home_score,
@@ -767,9 +787,13 @@ class LiveMatchHub:
             team_id=home_team_id if team_side == "home" else away_team_id if team_side == "away" else raw_event.team_id,
             team=raw_event.team_name,
             team_side=team_side,
-            player_id=self._actor_player_id(raw_event=raw_event, team_side=team_side, home_team_id=home_team_id, away_team_id=away_team_id),
+            player_id=self._actor_player_id(
+                raw_event=raw_event, team_side=team_side, home_team_id=home_team_id, away_team_id=away_team_id
+            ),
             player=raw_event.primary_player.player_name if raw_event.primary_player is not None else None,
-            secondary_player_id=self._secondary_actor_id(raw_event=raw_event, team_side=team_side, home_team_id=home_team_id, away_team_id=away_team_id),
+            secondary_player_id=self._secondary_actor_id(
+                raw_event=raw_event, team_side=team_side, home_team_id=home_team_id, away_team_id=away_team_id
+            ),
             secondary_player=raw_event.secondary_player.player_name if raw_event.secondary_player is not None else None,
             commentary=generated_commentary.line,
             home_score=raw_event.home_score,
@@ -815,13 +839,23 @@ class LiveMatchHub:
         return fallback
 
     def _actor_player_id(self, *, raw_event, team_side: str | None, home_team_id: str, away_team_id: str) -> str | None:
-        event_side = "home" if raw_event.team_id == home_team_id else "away" if raw_event.team_id == away_team_id else None
+        event_side = (
+            "home" if raw_event.team_id == home_team_id else "away" if raw_event.team_id == away_team_id else None
+        )
         if team_side is None or event_side == team_side:
             return raw_event.primary_player.player_id if raw_event.primary_player is not None else None
-        return raw_event.secondary_player.player_id if raw_event.secondary_player is not None else raw_event.primary_player.player_id if raw_event.primary_player is not None else None
+        return (
+            raw_event.secondary_player.player_id
+            if raw_event.secondary_player is not None
+            else raw_event.primary_player.player_id if raw_event.primary_player is not None else None
+        )
 
-    def _secondary_actor_id(self, *, raw_event, team_side: str | None, home_team_id: str, away_team_id: str) -> str | None:
-        event_side = "home" if raw_event.team_id == home_team_id else "away" if raw_event.team_id == away_team_id else None
+    def _secondary_actor_id(
+        self, *, raw_event, team_side: str | None, home_team_id: str, away_team_id: str
+    ) -> str | None:
+        event_side = (
+            "home" if raw_event.team_id == home_team_id else "away" if raw_event.team_id == away_team_id else None
+        )
         if team_side is None or event_side == team_side:
             return raw_event.secondary_player.player_id if raw_event.secondary_player is not None else None
         return raw_event.primary_player.player_id if raw_event.primary_player is not None else None
@@ -855,19 +889,19 @@ class LiveMatchHub:
         away_possession = 100 - home_possession
         momentum = "balanced"
         dramatic_event = any(
-            event.event_type == "goal"
-            or (
-                event.event_type == "card"
-                and event.metadata.get("card_type") == "red"
-            )
+            event.event_type == "goal" or (event.event_type == "card" and event.metadata.get("card_type") == "red")
             for event in recent_events
         )
         if recent_events:
             home_weight = sum(
-                1 for event in recent_events if event.metadata.get("team_side") == "home" and event.event_type in {"goal", "shot"}
+                1
+                for event in recent_events
+                if event.metadata.get("team_side") == "home" and event.event_type in {"goal", "shot"}
             )
             away_weight = sum(
-                1 for event in recent_events if event.metadata.get("team_side") == "away" and event.event_type in {"goal", "shot"}
+                1
+                for event in recent_events
+                if event.metadata.get("team_side") == "away" and event.event_type in {"goal", "shot"}
             )
             if home_weight > away_weight:
                 momentum = "home"
@@ -1013,12 +1047,7 @@ def _build_win_probability(
 
     home_signal = score_weight + possession_tilt + dramatic_swing
     away_signal = (-score_weight) - possession_tilt - dramatic_swing
-    draw_signal = (
-        0.95
-        - (abs(score_swing) * 1.05)
-        - (time_factor * 0.45)
-        - (abs(possession_tilt) * 0.35)
-    )
+    draw_signal = 0.95 - (abs(score_swing) * 1.05) - (time_factor * 0.45) - (abs(possession_tilt) * 0.35)
 
     max_signal = max(home_signal, draw_signal, away_signal)
     home_weight = math.exp(home_signal - max_signal)
@@ -1083,7 +1112,9 @@ def ensure_live_match_hub(app: FastAPI, *, step_interval_seconds: float | None =
     hub.cache_backend = getattr(app.state, "cache_backend", hub.cache_backend)
     hub._hot_cache = HotPathCache(hub.cache_backend)
     hub.event_publisher = getattr(app.state, "event_publisher", hub.event_publisher)
-    hub.attendance_overlay_provider = getattr(app.state, "stadium_ticket_crowd_overlay_provider", hub.attendance_overlay_provider)
+    hub.attendance_overlay_provider = getattr(
+        app.state, "stadium_ticket_crowd_overlay_provider", hub.attendance_overlay_provider
+    )
     hub.stadium_service.session_factory = getattr(app.state, "session_factory", hub.session_factory)
     hub.commentary_engine.configure(
         settings=getattr(app.state, "settings", None),
@@ -1109,7 +1140,16 @@ def _live_experience_layer(
 ) -> MatchExperienceLayerView:
     pressure = _pressure_value(raw_event.metadata.get("pressure_level"))
     speed = _clamp_float(float(meta.get("ball_speed", 0.0) or 0.0) / 36.0, 0.0, 1.0)
-    shoot_score = 0.72 if raw_event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.PENALTY_SCORED} else 0.46 if raw_event.event_type in {MatchEventType.SHOT, MatchEventType.SHOT_ON_TARGET, MatchEventType.MISSED_BIG_CHANCE} else 0.08
+    shoot_score = (
+        0.72
+        if raw_event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.PENALTY_SCORED}
+        else (
+            0.46
+            if raw_event.event_type
+            in {MatchEventType.SHOT, MatchEventType.SHOT_ON_TARGET, MatchEventType.MISSED_BIG_CHANCE}
+            else 0.08
+        )
+    )
     sprint_score = 0.20 + (pressure * 0.42) + (speed * 0.24)
     run_score = 0.28 + ((1.0 - pressure) * 0.20)
     total = max(run_score + sprint_score + shoot_score, 0.0001)
@@ -1117,7 +1157,13 @@ def _live_experience_layer(
     position = meta.get("curve", 0.0)
     home = _clamp_float(float(raw_event.metadata.get("crowd_home", 0.5) or 0.5), 0.0, 1.0)
     away = _clamp_float(float(raw_event.metadata.get("crowd_away", 0.5) or 0.5), 0.0, 1.0)
-    top_moment = raw_event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.PENALTY_SCORED, MatchEventType.MISSED_BIG_CHANCE, MatchEventType.RED_CARD}
+    top_moment = raw_event.event_type in {
+        MatchEventType.GOAL,
+        MatchEventType.PENALTY_GOAL,
+        MatchEventType.PENALTY_SCORED,
+        MatchEventType.MISSED_BIG_CHANCE,
+        MatchEventType.RED_CARD,
+    }
     rivalry_intensity = _clamp_float(
         _float_value(raw_event.metadata.get("rivalry_intensity"), default=0.0)
         or (0.85 if str(profile).strip().lower() in {"derby", "fever", "volatile"} else 0.35),
@@ -1135,14 +1181,33 @@ def _live_experience_layer(
     )
 
     commentary_line = generated_commentary.line if generated_commentary is not None else raw_event.commentary
-    commentary_tone = generated_commentary.tone if generated_commentary is not None else "hype" if top_moment else "tactical"
-    commentary_commentator = generated_commentary.commentator if generated_commentary is not None else "lead" if top_moment else "analyst"
-    commentary_intensity = generated_commentary.intensity if generated_commentary is not None else round(_clamp_float(((int(meta.get("importance", 1) or 1) - 1) / 4.0) + (0.25 if top_moment else 0.0), 0.18, 1.0), 3)
-    commentary_audio_channel = generated_commentary.audio_channel if generated_commentary is not None else "headline" if top_moment else "match_bed"
+    commentary_tone = (
+        generated_commentary.tone if generated_commentary is not None else "hype" if top_moment else "tactical"
+    )
+    commentary_commentator = (
+        generated_commentary.commentator if generated_commentary is not None else "lead" if top_moment else "analyst"
+    )
+    commentary_intensity = (
+        generated_commentary.intensity
+        if generated_commentary is not None
+        else round(
+            _clamp_float(((int(meta.get("importance", 1) or 1) - 1) / 4.0) + (0.25 if top_moment else 0.0), 0.18, 1.0),
+            3,
+        )
+    )
+    commentary_audio_channel = (
+        generated_commentary.audio_channel
+        if generated_commentary is not None
+        else "headline" if top_moment else "match_bed"
+    )
     speaker_role = "lead" if commentary_commentator in {"lead", "main", "play_by_play"} else "analyst"
     voice_profile = "play_by_play" if speaker_role == "lead" else "analyst"
     speech_rate = round(_clamp_float(0.92 + (commentary_intensity * 0.38), 0.85, 1.3), 3)
-    interrupt_priority = 95 if raw_event_type in {"goal", "penalty_goal", "penalty_scored"} else 82 if raw_event_type in {"red_card", "card"} else 68 if top_moment else 36
+    interrupt_priority = (
+        95
+        if raw_event_type in {"goal", "penalty_goal", "penalty_scored"}
+        else 82 if raw_event_type in {"red_card", "card"} else 68 if top_moment else 36
+    )
 
     return MatchExperienceLayerView(
         motion=MatchMotionPredictionView(
