@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../../data/match_gift_api.dart';
+
+typedef MatchGiftSelectionHandler =
+    Future<void> Function(MatchGiftCatalogItem gift);
+
 class GtexGiftingSheet extends StatelessWidget {
   const GtexGiftingSheet({super.key, required this.onSelected});
 
-  final ValueChanged<double> onSelected;
+  final MatchGiftSelectionHandler onSelected;
 
   static Future<void> show(
     BuildContext context, {
-    required ValueChanged<double> onSelected,
+    required MatchGiftSelectionHandler onSelected,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -20,11 +25,6 @@ class GtexGiftingSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const List<_GiftOption> options = <_GiftOption>[
-      _GiftOption(label: 'Fire', amount: 2),
-      _GiftOption(label: 'Applause', amount: 5),
-      _GiftOption(label: 'Crown', amount: 20),
-    ];
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -41,7 +41,7 @@ class GtexGiftingSheet extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Match support runs on GTEX Coin. These controls stay wired as clean integration hooks for live settlement.',
+              'Match support settles through the live gift engine. Pick a real catalog item and send it to the verified match host.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
@@ -50,18 +50,36 @@ class GtexGiftingSheet extends StatelessWidget {
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: options
-                  .map((_GiftOption option) {
-                    return FilledButton(
-                      onPressed: () {
+              children: kMatchGiftCatalog
+                  .map(
+                    (MatchGiftCatalogItem option) => FilledButton(
+                      onPressed: () async {
                         Navigator.of(context).pop();
-                        onSelected(option.amount);
+                        await onSelected(option);
                       },
-                      child: Text(
-                        '${option.label} - ${option.amount.toStringAsFixed(0)} GTEX Coin',
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF0B1622),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 14,
+                        ),
                       ),
-                    );
-                  })
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            option.label,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${option.fanCoinAmount.toStringAsFixed(0)} Fan Coin',
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                   .toList(growable: false),
             ),
           ],
@@ -69,11 +87,4 @@ class GtexGiftingSheet extends StatelessWidget {
       ),
     );
   }
-}
-
-class _GiftOption {
-  const _GiftOption({required this.label, required this.amount});
-
-  final String label;
-  final double amount;
 }

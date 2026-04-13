@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/controllers/match_playback_controller.dart';
+import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/features/match/presentation/broadcast_package_repository.dart';
 import 'package:gte_frontend/features/match/presentation/real_match_scene_director.dart';
@@ -19,6 +21,7 @@ import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
+import 'package:gte_frontend/widgets/match/broadcast/gtex_gifting_sheet.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 import 'package:gte_frontend/widgets/match_3d/native_match_3d_surface.dart';
 import 'package:gte_frontend/widgets/match_3d/monetization/match_3d_upgrade_prompt.dart';
@@ -45,6 +48,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.entitlement = const Match3dUserEntitlement(),
     this.isSpectator = false,
     this.monetizationService,
+    this.giftClient,
     this.titleOverride,
     this.engineBridge,
   });
@@ -60,6 +64,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final Match3dUserEntitlement entitlement;
   final bool isSpectator;
   final Match3dMonetizationService? monetizationService;
+  final MatchGiftClient? giftClient;
   final String? titleOverride;
   final Match3DBridge? engineBridge;
 
@@ -250,6 +255,49 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
         _overlayBursts.removeRange(6, _overlayBursts.length);
       }
     });
+  }
+
+  MatchGiftTarget? _giftTargetFor(MatchViewState viewState) {
+    if (widget.giftClient == null) {
+      return null;
+    }
+    return MatchGiftTarget.fromMetadata(viewState.monetization.metadata);
+  }
+
+  Future<void> _openGiftSheet(MatchViewState viewState) async {
+    if (_giftTargetFor(viewState) == null) {
+      return;
+    }
+    await GtexGiftingSheet.show(
+      context,
+      onSelected: (MatchGiftCatalogItem gift) => _sendGift(viewState, gift),
+    );
+  }
+
+  Future<void> _sendGift(
+    MatchViewState viewState,
+    MatchGiftCatalogItem gift,
+  ) async {
+    final MatchGiftClient? giftClient = widget.giftClient;
+    final MatchGiftTarget? target = _giftTargetFor(viewState);
+    if (giftClient == null || target == null) {
+      return;
+    }
+    _setStatusMessage('Sending ${gift.label} to ${target.recipientLabel}...');
+    try {
+      final MatchGiftReceipt receipt = await giftClient.sendGift(
+        target: target,
+        gift: gift,
+      );
+      _setStatusMessage(receipt.confirmationMessage);
+    } catch (error) {
+      _setStatusMessage(
+        AppFeedback.messageFor(
+          error,
+          fallback: 'The live gift could not be sent.',
+        ),
+      );
+    }
   }
 
   Future<void> _selectRenderMode(
@@ -626,6 +674,14 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           _StatusCard(message: _nativeRuntimeStatusMessage!),
                           const SizedBox(height: 12),
                         ],
+                        if (_giftTargetFor(viewState)
+                            case final MatchGiftTarget giftTarget) ...<Widget>[
+                          _MatchGiftActionCard(
+                            recipientLabel: giftTarget.recipientLabel,
+                            onSendGift: () => _openGiftSheet(viewState),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         PremiumControls(
                           entitlement: monetizationService.effectiveEntitlement,
                           selectedRenderMode:
@@ -946,6 +1002,54 @@ class _StatusCard extends StatelessWidget {
           color: Colors.white,
           fontWeight: FontWeight.w600,
         ),
+      ),
+    );
+  }
+}
+
+class _MatchGiftActionCard extends StatelessWidget {
+  const _MatchGiftActionCard({
+    required this.recipientLabel,
+    required this.onSendGift,
+  });
+
+  final String recipientLabel;
+  final VoidCallback onSendGift;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: const Color(0xD7101B2A),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Live support gifting',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Send a verified match gift to $recipientLabel through the live gift engine.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onSendGift,
+            icon: const Icon(Icons.card_giftcard_rounded),
+            label: const Text('Send gift'),
+          ),
+        ],
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
+import 'package:gte_frontend/data/match_gift_api.dart';
 
 import '../../../controllers/match_3d_timeline_controller.dart';
 import '../../../models/competition_models.dart';
@@ -13,6 +15,7 @@ import '../../../models/match_view_state.dart';
 import '../../../widgets/gte_shell_theme.dart';
 import '../../../widgets/gte_state_panel.dart';
 import '../../../widgets/gte_surface_panel.dart';
+import '../../../widgets/match/broadcast/gtex_gifting_sheet.dart';
 import '../../../widgets/match/broadcast/gtex_match_canvas_layer.dart';
 import 'broadcast_package_models.dart';
 import 'broadcast_package_repository.dart';
@@ -34,12 +37,14 @@ class BroadcastPackageScreen extends StatefulWidget {
     required this.competition,
     required this.viewStateLoader,
     this.initialViewState,
+    this.giftClient,
   });
 
   final String matchKey;
   final CompetitionSummary competition;
   final BroadcastPackageViewStateLoader viewStateLoader;
   final MatchViewState? initialViewState;
+  final MatchGiftClient? giftClient;
 
   @override
   State<BroadcastPackageScreen> createState() => _BroadcastPackageScreenState();
@@ -56,6 +61,7 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
   Match3dTimelineController? _controller;
   Timer? _sceneTimer;
   double _packageSeconds = 0;
+  String? _giftStatusMessage;
 
   @override
   void initState() {
@@ -135,6 +141,60 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
     );
     _controller = created;
     return created;
+  }
+
+  MatchGiftTarget? _giftTargetFor(MatchViewState viewState) {
+    if (widget.giftClient == null) {
+      return null;
+    }
+    return MatchGiftTarget.fromMetadata(viewState.monetization.metadata);
+  }
+
+  Future<void> _openGiftSheet(MatchViewState viewState) async {
+    if (_giftTargetFor(viewState) == null) {
+      return;
+    }
+    await GtexGiftingSheet.show(
+      context,
+      onSelected: (MatchGiftCatalogItem gift) => _sendGift(viewState, gift),
+    );
+  }
+
+  Future<void> _sendGift(
+    MatchViewState viewState,
+    MatchGiftCatalogItem gift,
+  ) async {
+    final MatchGiftClient? giftClient = widget.giftClient;
+    final MatchGiftTarget? target = _giftTargetFor(viewState);
+    if (giftClient == null || target == null) {
+      return;
+    }
+    setState(() {
+      _giftStatusMessage =
+          'Sending ${gift.label} to ${target.recipientLabel}...';
+    });
+    try {
+      final MatchGiftReceipt receipt = await giftClient.sendGift(
+        target: target,
+        gift: gift,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _giftStatusMessage = receipt.confirmationMessage;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _giftStatusMessage = AppFeedback.messageFor(
+          error,
+          fallback: 'The live gift could not be sent.',
+        );
+      });
+    }
   }
 
   @override
@@ -223,6 +283,7 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
             final Match3dTimelineController controller = _ensureController(
               viewState,
             );
+            final MatchGiftTarget? giftTarget = _giftTargetFor(viewState);
 
             return ListenableBuilder(
               listenable: controller,
@@ -249,17 +310,30 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
                         data.package.away.starters.isNotEmpty;
                     final bool showContext = data.package.context.hasAnyContent;
                     final bool showStoryline = data.hasStorylinePanel;
-                    final Widget mainColumn = _buildMainColumn(
-                      context: context,
-                      wide: wide,
-                      data: data,
-                      liveWindow: liveWindow,
-                      scene: scene,
-                      phaseLabel: phaseLabel,
-                      viewState: viewState,
-                      showRoster: showRoster,
-                      showContext: showContext,
-                      showStoryline: showStoryline,
+                    final Widget mainColumn = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        if (giftTarget != null) ...<Widget>[
+                          _BroadcastGiftPanel(
+                            recipientLabel: giftTarget.recipientLabel,
+                            statusMessage: _giftStatusMessage,
+                            onSendGift: () => _openGiftSheet(viewState),
+                          ),
+                          const SizedBox(height: 18),
+                        ],
+                        _buildMainColumn(
+                          context: context,
+                          wide: wide,
+                          data: data,
+                          liveWindow: liveWindow,
+                          scene: scene,
+                          phaseLabel: phaseLabel,
+                          viewState: viewState,
+                          showRoster: showRoster,
+                          showContext: showContext,
+                          showStoryline: showStoryline,
+                        ),
+                      ],
                     );
                     if (!wide) {
                       return SafeArea(
@@ -1105,6 +1179,49 @@ String _cameraLabel(MatchSimCameraState state) {
       return 'HALFTIME BOARD';
     case MatchSimCameraState.fulltimeBoard:
       return 'FULL-TIME BOARD';
+  }
+}
+
+class _BroadcastGiftPanel extends StatelessWidget {
+  const _BroadcastGiftPanel({
+    required this.recipientLabel,
+    required this.statusMessage,
+    required this.onSendGift,
+  });
+
+  final String recipientLabel;
+  final String? statusMessage;
+  final VoidCallback onSendGift;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accentArena,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Live support gifting',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Send a verified live gift to $recipientLabel while the broadcast package is on air.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (statusMessage != null) ...<Widget>[
+            const SizedBox(height: 12),
+            Text(statusMessage!, style: Theme.of(context).textTheme.bodySmall),
+          ],
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onSendGift,
+            icon: const Icon(Icons.card_giftcard_rounded),
+            label: const Text('Send gift'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
