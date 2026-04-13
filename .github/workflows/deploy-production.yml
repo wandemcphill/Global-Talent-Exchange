@@ -59,11 +59,108 @@ jobs:
           backend/tests/wallets/test_wallet_event_backbone.py
           -q
 
+  backend-live-playback-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pytest
+      - run: >
+          python -m pytest
+          backend/tests/live_matches/test_live_match_router.py
+          backend/tests/live_matches/test_live_match_hot_path_cache.py
+          backend/tests/live_matches/test_live_match_sampling.py
+          backend/tests/match_engine/test_live_match_experience_contract.py
+          backend/tests/test_match_timeline_service.py
+          -q
+
+  unity-windows-build:
+    if: vars.GTEX_ENABLE_WINDOWS_UNITY_CI == 'true'
+    runs-on:
+      - self-hosted
+      - windows
+      - unity
+    timeout-minutes: 90
+    env:
+      UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
+      GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
+      GTEX_UNITY_BUILD_LOG: ${{ runner.temp }}\gtex_test_migration_windows_build.log
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Unity CI configuration
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)) {
+            throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
+          }
+          if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
+            throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
+          }
+          if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
+            throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
+          }
+      - name: Build GTEX Windows player
+        shell: pwsh
+        run: |
+          & $env:UNITY_EDITOR_PATH `
+            -batchmode -quit -nographics `
+            -buildTarget StandaloneWindows64 `
+            -projectPath $env:GTEX_UNITY_PROJECT_PATH `
+            -executeMethod FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64FromCommandLine `
+            -logFile $env:GTEX_UNITY_BUILD_LOG
+
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            if (Test-Path $env:GTEX_UNITY_BUILD_LOG) {
+              Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
+            }
+            throw "Unity Windows batch build failed with exit code $exitCode."
+          }
+      - name: Verify Unity build log
+        shell: pwsh
+        run: |
+          if (-not (Test-Path $env:GTEX_UNITY_BUILD_LOG)) {
+            throw "Unity build log was not produced: $env:GTEX_UNITY_BUILD_LOG"
+          }
+
+          $errorPatterns = @(
+            'error CS',
+            'Compilation failed',
+            "Build completed with a result of 'Failed'",
+            'Aborting batchmode due to failure'
+          )
+
+          foreach ($pattern in $errorPatterns) {
+            if (Select-String -Path $env:GTEX_UNITY_BUILD_LOG -Pattern $pattern -Quiet) {
+              Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
+              throw "Unity build log contains failure marker: $pattern"
+            }
+          }
+      - name: Upload Unity build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtex-test-migration-windows-build-log
+          path: ${{ env.GTEX_UNITY_BUILD_LOG }}
+          if-no-files-found: error
+
   deploy-production:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      needs.frontend-tests.result == 'success' &&
+      needs.backend-tests.result == 'success' &&
+      needs.backend-live-playback-tests.result == 'success' &&
+      (needs.unity-windows-build.result == 'success' || needs.unity-windows-build.result == 'skipped')
     needs:
       - frontend-tests
       - backend-tests
+      - backend-live-playback-tests
+      - unity-windows-build
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
@@ -74,7 +171,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-      - run: python -m py_compile ops/render/deploy.py ops/render/verify_unity_routes.py
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install httpx websockets
+      - run: python -m py_compile ops/render/deploy.py ops/render/verify_unity_routes.py tools/provision_gtex_live_match.py
       - name: Check Render deploy config
         id: render-config
         shell: bash
@@ -110,3 +209,15 @@ jobs:
           RENDER_HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
           RENDER_VERIFY_UNITY_ROUTES: "true"
           RENDER_UNITY_ROUTE_PROBE_MATCH_ID: gtex-render-route-probe
+          RENDER_VERIFY_UNITY_LIVE_PLAYBACK: ${{ vars.RENDER_VERIFY_UNITY_LIVE_PLAYBACK }}
+          RENDER_UNITY_LIVE_VERIFY_PROFILE: production
+          RENDER_UNITY_LIVE_VERIFY_BASE_URL: ${{ vars.RENDER_UNITY_LIVE_VERIFY_BASE_URL }}
+          RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN }}
+          RENDER_UNITY_LIVE_VERIFY_USER_EMAIL: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_EMAIL }}
+          RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD }}
+          RENDER_UNITY_LIVE_VERIFY_MATCH_ID: ${{ vars.RENDER_UNITY_LIVE_VERIFY_MATCH_ID }}
+          RENDER_UNITY_LIVE_VERIFY_ALLOW_MATCH_GENERATION: ${{ vars.RENDER_UNITY_LIVE_VERIFY_ALLOW_MATCH_GENERATION }}
+          RENDER_UNITY_LIVE_VERIFY_SKIP_WEBSOCKET: ${{ vars.RENDER_UNITY_LIVE_VERIFY_SKIP_WEBSOCKET }}
+          RENDER_UNITY_LIVE_VERIFY_PAY_TO_VIEW: ${{ vars.RENDER_UNITY_LIVE_VERIFY_PAY_TO_VIEW }}
+          RENDER_UNITY_LIVE_VERIFY_TICK_COUNT: ${{ vars.RENDER_UNITY_LIVE_VERIFY_TICK_COUNT }}
+          RENDER_UNITY_LIVE_VERIFY_TIMEOUT_SECONDS: ${{ vars.RENDER_UNITY_LIVE_VERIFY_TIMEOUT_SECONDS }}

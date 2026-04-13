@@ -36,7 +36,17 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[CompetitionMatch.__table__, User.__table__, SpectatorSession.__table__])
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            CompetitionMatch.__table__,
+            User.__table__,
+            SpectatorSession.__table__,
+            BroadcastRight.__table__,
+            BroadcastAccessGrant.__table__,
+            ViewSession.__table__,
+        ],
+    )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     app.state.session_factory = session_factory
     return app, session_factory
