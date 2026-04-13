@@ -93,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify Unity CI configuration
-        shell: pwsh
+        shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
@@ -110,7 +110,7 @@ jobs:
             throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
           }
       - name: Build GTEX Windows player
-        shell: pwsh
+        shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
@@ -129,7 +129,7 @@ jobs:
             throw "Unity Windows batch build failed with exit code $exitCode."
           }
       - name: Verify Unity build log
-        shell: pwsh
+        shell: powershell
         run: |
           if (-not (Test-Path $env:GTEX_UNITY_BUILD_LOG)) {
             throw "Unity build log was not produced: $env:GTEX_UNITY_BUILD_LOG"

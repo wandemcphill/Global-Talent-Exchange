@@ -752,13 +752,14 @@ def get_referral_orchestrator(
     request: Request,
     session: Session = Depends(get_session),
 ) -> ReferralOrchestrator:
-    orchestrator = getattr(request.app.state, "referral_orchestrator", None)
-    if orchestrator is None:
-        store = getattr(request.app.state, "referral_runtime_store", None)
-        if store is None:
-            store = getattr(request.app.state, "referral_store", None)
-        if store is None:
-            store = ReferralRuntimeStore()
-        request.app.state.referral_runtime_store = store
-        orchestrator = ReferralOrchestrator(store=store, session=session)
-    return orchestrator
+    store = getattr(request.app.state, "referral_runtime_store", None)
+    if store is None:
+        store = getattr(request.app.state, "referral_store", None)
+    if store is None:
+        store = ReferralRuntimeStore()
+    request.app.state.referral_runtime_store = store
+
+    # Do not cache a request-scoped SQLAlchemy session on app.state.
+    # A fresh orchestrator per request preserves the shared runtime store
+    # while avoiding stale-session reads across app instances and restarts.
+    return ReferralOrchestrator(store=store, session=session)

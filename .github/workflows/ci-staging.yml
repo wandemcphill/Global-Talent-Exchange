@@ -35,6 +35,45 @@ jobs:
             flutter test
           fi
 
+  frontend-live-fallback-regressions:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test test/secondary_api_backend_mode_test.dart -r compact
+      - run: >
+          flutter test
+          test/live_clients_provider_test.dart
+          --plain-name "active-shell routed providers clamp liveThenFixture down to live"
+          -r compact
+      - run: >
+          flutter test
+          test/gte_api_repository_test.dart
+          --plain-name "does not fall back"
+          -r compact
+      - run: >
+          flutter test
+          test/gte_api_repository_test.dart
+          --plain-name "fail closed in live mode without consulting fixtures"
+          -r compact
+      - run: >
+          flutter test
+          test/gte_api_repository_test.dart
+          --plain-name "policy document reads no longer fall back to fixtures in live-then-fixture mode"
+          -r compact
+      - run: >
+          flutter test
+          test/gte_api_repository_test.dart
+          --plain-name "policy acceptance reads no longer fall back to fixtures in live-then-fixture mode"
+          -r compact
+
   backend-tests:
     runs-on: ubuntu-latest
     steps:
@@ -106,6 +145,8 @@ jobs:
 
   backend-referral-durability:
     runs-on: ubuntu-latest
+    env:
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -122,6 +163,28 @@ jobs:
           backend/tests/referrals/test_api_attribution.py::test_attribution_survives_restart_and_progresses_on_fresh_instance
           backend/tests/referrals/test_api_attribution.py::test_attribution_and_competition_views_stay_consistent_across_app_instances
           backend/tests/referrals/test_referrals_admin_analytics.py::test_admin_referral_state_survives_restart
+          -q
+
+  backend-highlight-regressions:
+    runs-on: ubuntu-latest
+    env:
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pytest
+      - run: >
+          python -m pytest
+          backend/tests/highlights/test_service.py::test_prepare_manifest_returns_unavailable_when_no_source_footage_is_configured
+          backend/tests/highlights/test_service.py::test_prepare_manifest_returns_pending_when_source_footage_is_not_ready
+          backend/tests/highlights/test_worker.py::test_highlight_worker_requeues_pending_source_jobs_without_storing_placeholder
+          backend/tests/highlights/test_worker.py::test_highlight_worker_marks_missing_source_as_unavailable_without_storing_asset
+          backend/tests/match_engine/test_match_engine_api.py::test_match_engine_highlights_route_exposes_clip_manifests
           -q
 
   backend-migration-integrity:
@@ -156,7 +219,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify Unity CI configuration
-        shell: pwsh
+        shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
@@ -173,7 +236,7 @@ jobs:
             throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
           }
       - name: Build GTEX Windows player
-        shell: pwsh
+        shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
@@ -192,7 +255,7 @@ jobs:
             throw "Unity Windows batch build failed with exit code $exitCode."
           }
       - name: Verify Unity build log
-        shell: pwsh
+        shell: powershell
         run: |
           if (-not (Test-Path $env:GTEX_UNITY_BUILD_LOG)) {
             throw "Unity build log was not produced: $env:GTEX_UNITY_BUILD_LOG"
@@ -224,18 +287,22 @@ jobs:
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.frontend-tests.result == 'success' &&
+      needs.frontend-live-fallback-regressions.result == 'success' &&
       needs.backend-tests.result == 'success' &&
       needs.backend-live-playback-tests.result == 'success' &&
       needs.backend-payment-regressions.result == 'success' &&
       needs.backend-referral-durability.result == 'success' &&
+      needs.backend-highlight-regressions.result == 'success' &&
       needs.backend-migration-integrity.result == 'success' &&
       (needs.unity-windows-build.result == 'success' || needs.unity-windows-build.result == 'skipped')
     needs:
       - frontend-tests
+      - frontend-live-fallback-regressions
       - backend-tests
       - backend-live-playback-tests
       - backend-payment-regressions
       - backend-referral-durability
+      - backend-highlight-regressions
       - backend-migration-integrity
       - unity-windows-build
     runs-on: ubuntu-latest
