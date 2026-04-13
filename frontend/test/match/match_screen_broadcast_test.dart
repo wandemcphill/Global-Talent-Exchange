@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/core/theme/app_theme.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/match/live_match_overview_provider.dart';
@@ -18,6 +19,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
           initialAuthSessionProvider.overrideWithValue(
             const AuthSession(
               userId: 'user-1',
@@ -61,8 +63,9 @@ void main() {
     expect(find.text('Open 2D'), findsOneWidget);
     expect(find.text('Open Broadcast+'), findsOneWidget);
     expect(find.text('Open 3D'), findsOneWidget);
-    await _scrollTo(tester, find.text('Open spectate probe'));
-    expect(find.text('Open spectate probe'), findsOneWidget);
+    expect(find.text('Open spectate probe'), findsNothing);
+    expect(find.text('View coming soon note'), findsNothing);
+    expect(find.text('Open simulation'), findsNothing);
   });
 
   testWidgets('match screen shows blocked state with no fake live fallback', (
@@ -71,6 +74,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
           initialAuthSessionProvider.overrideWithValue(
             const AuthSession(
               userId: 'user-1',
@@ -143,3 +147,8 @@ class _FakeLiveMatchOverviewRepository implements LiveMatchOverviewRepository {
     return overview!;
   }
 }
+
+const GteAppConfig _testAppConfig = GteAppConfig(
+  apiBaseUrl: 'https://example.test',
+  backendMode: GteBackendMode.live,
+);
