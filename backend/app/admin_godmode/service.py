@@ -28,6 +28,9 @@ from app.wallets.service import LedgerPosting, WalletService
 from app.observability.audit_service import AuditTrailService
 
 from .runtime_paths import (
+    ADMIN_GODMODE_FILE as ADMIN_GODMODE_FILENAME,
+    ADMIN_RUNTIME_DIR,
+    AUDIT_LOG_FILE as AUDIT_LOG_FILENAME,
     admin_godmode_audit_path,
     admin_godmode_state_path,
 )
@@ -62,6 +65,9 @@ from .schemas import (
     WithdrawalSummaryView,
 )
 
+# Backward-compatible relative paths for callers that still join these onto config_root.
+ADMIN_GODMODE_FILE = str(Path(ADMIN_RUNTIME_DIR) / ADMIN_GODMODE_FILENAME)
+AUDIT_LOG_FILE = str(Path(ADMIN_RUNTIME_DIR) / AUDIT_LOG_FILENAME)
 ADMIN_GODMODE_STATE_KEY = "admin_god_mode"
 GOD_MODE_ROLE_NAME = "god_mode"
 SCOPED_ADMIN_ROLE_NAME = "scoped_admin"
