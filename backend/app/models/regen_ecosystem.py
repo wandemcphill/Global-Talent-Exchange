@@ -77,7 +77,9 @@ class RegenAttributeProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     visible_stats_json: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict)
     hidden_stats_json: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict)
-    personality_state_json: Mapped[dict[str, int | float | str | bool]] = mapped_column(JSON, nullable=False, default=dict)
+    personality_state_json: Mapped[dict[str, int | float | str | bool]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     injury_risk: Mapped[float] = mapped_column(Float, nullable=False, default=20.0, server_default="20.0")
     injury_history_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     rarity_tier: Mapped[str] = mapped_column(String(24), nullable=False, default="common", server_default="common")
@@ -137,9 +139,7 @@ class CareerEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class Agent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "regen_agents"
-    __table_args__ = (
-        Index("ix_regen_agents_name", "name"),
-    )
+    __table_args__ = (Index("ix_regen_agents_name", "name"),)
 
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     negotiation_skill: Mapped[int] = mapped_column(Integer, nullable=False, default=50, server_default="50")
@@ -195,7 +195,9 @@ class NationalRegenSeed(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     country_code: Mapped[str] = mapped_column(String(8), nullable=False)
     country_name: Mapped[str] = mapped_column(String(120), nullable=False)
     confederation_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    seed_type: Mapped[str] = mapped_column(String(40), nullable=False, default="preseeded_national_pool", server_default="preseeded_national_pool")
+    seed_type: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="preseeded_national_pool", server_default="preseeded_national_pool"
+    )
     generation_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     primary_position: Mapped[str] = mapped_column(String(40), nullable=False)
     secondary_positions_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)

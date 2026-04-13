@@ -20,12 +20,16 @@ class CardLoanListing(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_card_loan_listings_status_fee_duration", "status", "loan_fee_credits", "duration_days"),
     )
 
-    player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
+    player_card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False
+    )
     owner_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     total_slots: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     available_slots: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7, server_default="7")
-    loan_fee_credits: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    loan_fee_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     currency: Mapped[str] = mapped_column(String(12), nullable=False, default="coin", server_default="coin")
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="open", server_default="open")
     is_negotiable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
@@ -47,14 +51,26 @@ class CardLoanNegotiation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_card_loan_negotiations_supersedes", "supersedes_negotiation_id"),
     )
 
-    listing_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_loan_listings.id", ondelete="CASCADE"), nullable=False)
-    player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
+    listing_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("card_loan_listings.id", ondelete="CASCADE"), nullable=False
+    )
+    player_card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False
+    )
     owner_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    borrower_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    proposer_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    counterparty_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    borrower_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    proposer_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    counterparty_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     proposed_duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
-    proposed_loan_fee_credits: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    proposed_loan_fee_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", server_default="pending")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     supersedes_negotiation_id: Mapped[str | None] = mapped_column(
@@ -79,24 +95,40 @@ class CardLoanContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_card_loan_contracts_settlement_reference", "settlement_reference"),
     )
 
-    listing_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_loan_listings.id", ondelete="CASCADE"), nullable=False)
+    listing_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("card_loan_listings.id", ondelete="CASCADE"), nullable=False
+    )
     accepted_negotiation_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("card_loan_negotiations.id", ondelete="SET NULL"),
         nullable=True,
     )
-    player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
+    player_card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False
+    )
     owner_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    borrower_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    loan_fee_credits: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    requested_loan_fee_credits: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    platform_fee_credits: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    lender_net_credits: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    borrower_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    loan_fee_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    requested_loan_fee_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    platform_fee_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    lender_net_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     platform_fee_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     fee_floor_applied: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     loan_duration_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     currency: Mapped[str] = mapped_column(String(12), nullable=False, default="coin", server_default="coin")
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="accepted_pending_settlement", server_default="accepted_pending_settlement")
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="accepted_pending_settlement", server_default="accepted_pending_settlement"
+    )
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     borrowed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -120,7 +152,9 @@ class CardSwapListing(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_card_swap_listings_requested_player_card_id", "requested_player_card_id"),
     )
 
-    player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
+    player_card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False
+    )
     owner_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     requested_player_card_id: Mapped[str | None] = mapped_column(
         String(36),
@@ -149,11 +183,19 @@ class CardSwapExecution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_card_swap_executions_status", "status"),
     )
 
-    listing_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_swap_listings.id", ondelete="CASCADE"), nullable=False)
+    listing_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("card_swap_listings.id", ondelete="CASCADE"), nullable=False
+    )
     owner_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    counterparty_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    owner_player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
-    counterparty_player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
+    counterparty_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    owner_player_card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False
+    )
+    counterparty_player_card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False
+    )
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="executed", server_default="executed")
     settled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
@@ -172,8 +214,12 @@ class CardMarketplaceAuditEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     listing_type: Mapped[str] = mapped_column(String(24), nullable=False)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
-    actor_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    player_card_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="SET NULL"), nullable=True)
+    actor_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    player_card_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="SET NULL"), nullable=True
+    )
     listing_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     loan_contract_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     negotiation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -191,9 +237,13 @@ class StarterSquadRental(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
+    club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", server_default="active")
-    rental_fee_credits: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    rental_fee_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     currency: Mapped[str] = mapped_column(String(12), nullable=False, default="credit", server_default="credit")
     term_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7, server_default="7")
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
@@ -204,6 +254,7 @@ class StarterSquadRental(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     roster_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     academy_roster_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
 
 __all__ = [
     "CardLoanContract",
