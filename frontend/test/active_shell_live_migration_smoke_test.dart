@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_hub_screen.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
 import 'package:gte_frontend/features/match/live_match_overview_provider.dart';
@@ -32,6 +34,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            appConfigProvider.overrideWithValue(_testAppConfig),
             authProvider.overrideWith((Ref ref) => session),
             marketDashboardProvider.overrideWith((Ref ref) async {
               return const MarketDashboardData(
@@ -108,6 +111,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
           competitionHubProvider.overrideWith((Ref ref) async {
             return CompetitionHubData(
               gtexCompetitions: <CompetitionSummary>[_sampleCompetition()],
@@ -139,6 +143,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
           worldAggregateProvider.overrideWith((Ref ref) async {
             return WorldAggregateData(
               risingStars: const <Map<String, Object?>>[
@@ -194,6 +199,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
           authProvider.overrideWith((Ref ref) => session),
           liveMatchOverviewProvider.overrideWith(
             (Ref ref) async => const LiveMatchOverview(
@@ -221,10 +227,11 @@ void main() {
     await _scrollTo(tester, find.text('Open 2D'));
     expect(find.text('Open 2D'), findsOneWidget);
     expect(find.text('Open Broadcast+'), findsOneWidget);
-    await _scrollTo(tester, find.text('View coming soon note'));
-    expect(find.text('View coming soon note'), findsOneWidget);
-    await _scrollTo(tester, find.text('Open simulate'));
-    expect(find.text('Open simulate'), findsOneWidget);
+    await _scrollTo(tester, find.text('Open 3D'));
+    expect(find.text('Open 3D'), findsOneWidget);
+    expect(find.text('View coming soon note'), findsNothing);
+    expect(find.text('Open simulate'), findsNothing);
+    expect(find.text('Open simulation'), findsNothing);
   });
 
   testWidgets('tasks screen renders live daily challenges', (
@@ -233,6 +240,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appConfigProvider.overrideWithValue(_testAppConfig),
           liveTasksProvider.overrideWith((Ref ref) async {
             return const LiveTasksData(
               featureEnabled: true,
@@ -240,8 +248,16 @@ void main() {
               currentStreak: 4,
               longestStreak: 8,
               nextBonusAmount: 25,
-              claimsToday: <Map<String, Object?>>[
-                <String, Object?>{'challenge_key': 'login-bonus'},
+              claimsToday: <DailyChallengeClaimSummary>[
+                DailyChallengeClaimSummary(
+                  claimId: 'claim-1',
+                  challengeKey: 'login-bonus',
+                  challengeTitle: 'Login bonus',
+                  rewardLabel: '25 coins',
+                  bonusAwardedLabel: '',
+                  claimedAt: null,
+                  streakBeforeClaim: 3,
+                ),
               ],
               challenges: <DailyChallengeSummary>[
                 DailyChallengeSummary(
@@ -250,7 +266,8 @@ void main() {
                   description: 'Claim your daily login reward.',
                   rewardSummary: '25 coins',
                   claimLimitPerDay: 1,
-                  availableToday: true,
+                  claimedToday: true,
+                  availableToday: false,
                 ),
               ],
             );
@@ -264,7 +281,7 @@ void main() {
 
     await _scrollTo(tester, find.text('Daily challenges'));
     expect(find.text('Daily challenges'), findsOneWidget);
-    expect(find.text('Login bonus'), findsOneWidget);
+    expect(find.text('Login bonus'), findsWidgets);
     expect(find.text('CURRENT STREAK'), findsWidgets);
     expect(find.text('4'), findsWidgets);
   });
@@ -284,6 +301,11 @@ void main() {
     expect(find.text('You are not signed in.'), findsOneWidget);
   });
 }
+
+const GteAppConfig _testAppConfig = GteAppConfig(
+  apiBaseUrl: 'https://example.test',
+  backendMode: GteBackendMode.live,
+);
 
 CompetitionSummary _sampleCompetition() {
   return CompetitionSummary(

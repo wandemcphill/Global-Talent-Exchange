@@ -1505,7 +1505,8 @@ class _BackdropPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-final String _frontendAuditBaseUrl = resolveGteApiBaseUrlFromEnvironment();
+final String _frontendAuditBaseUrl =
+    resolveGteApiBaseUrlForRuntimeEnvironment();
 
 class _LoadingState extends StatelessWidget {
   const _LoadingState();

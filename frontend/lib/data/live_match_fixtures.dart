@@ -258,7 +258,7 @@ Future<LiveMatchSnapshot> loadLiveMatchSnapshot(
   return merged;
 }
 
-final GteAppConfig _matchApiConfig = GteAppConfig.fromEnvironment();
+final GteAppConfig _matchApiConfig = GteAppConfig.fromRuntimeEnvironment();
 final GteExchangeApiClient _matchApiClient = GteExchangeApiClient.standard(
   baseUrl: _matchApiConfig.apiBaseUrl,
   mode: _matchApiConfig.activeShellBackendMode,

@@ -6,13 +6,14 @@ import 'live_match_session.dart';
 
 class LiveMatchSessionService {
   LiveMatchSessionService({GteAppConfig? config, GteExchangeApiClient? api})
-    : _config = config ?? GteAppConfig.fromEnvironment(),
+    : _config = config ?? GteAppConfig.fromRuntimeEnvironment(),
       _api =
           api ??
           GteExchangeApiClient.standard(
-            baseUrl: (config ?? GteAppConfig.fromEnvironment()).apiBaseUrl,
+            baseUrl:
+                (config ?? GteAppConfig.fromRuntimeEnvironment()).apiBaseUrl,
             mode:
-                (config ?? GteAppConfig.fromEnvironment())
+                (config ?? GteAppConfig.fromRuntimeEnvironment())
                     .activeShellBackendMode,
           );
 

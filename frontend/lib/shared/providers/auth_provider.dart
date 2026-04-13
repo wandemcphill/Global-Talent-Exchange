@@ -157,7 +157,7 @@ final Provider<Match3dUserEntitlement> match3dEntitlementProvider =
     });
 
 final Provider<GteAppConfig> appConfigProvider = Provider<GteAppConfig>(
-  (Ref ref) => GteAppConfig.fromEnvironment(),
+  (Ref ref) => GteAppConfig.fromRuntimeEnvironment(),
 );
 
 final Provider<String> apiBaseUrlProvider = Provider<String>(

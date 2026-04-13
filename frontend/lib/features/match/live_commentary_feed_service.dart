@@ -26,16 +26,17 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
     LiveCommentaryFeedService? fallback,
     LiveMatchSessionService? sessionService,
     GteExchangeApiClient? api,
-  }) : _config = config ?? GteAppConfig.fromEnvironment(),
+  }) : _config = config ?? GteAppConfig.fromRuntimeEnvironment(),
        _sessionService =
            sessionService ?? LiveMatchSessionService(config: config),
        _fallback = fallback ?? const StaticLiveCommentaryFeedService(),
        _api =
            api ??
            GteExchangeApiClient.standard(
-             baseUrl: (config ?? GteAppConfig.fromEnvironment()).apiBaseUrl,
+             baseUrl:
+                 (config ?? GteAppConfig.fromRuntimeEnvironment()).apiBaseUrl,
              mode:
-                 (config ?? GteAppConfig.fromEnvironment())
+                 (config ?? GteAppConfig.fromRuntimeEnvironment())
                      .activeShellBackendMode,
            );
 

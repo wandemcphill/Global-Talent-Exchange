@@ -27,9 +27,10 @@ class HybridLiveMatchSnapshotFeedService
        _api =
            api ??
            GteExchangeApiClient.standard(
-             baseUrl: (config ?? GteAppConfig.fromEnvironment()).apiBaseUrl,
+             baseUrl:
+                 (config ?? GteAppConfig.fromRuntimeEnvironment()).apiBaseUrl,
              mode:
-                 (config ?? GteAppConfig.fromEnvironment())
+                 (config ?? GteAppConfig.fromRuntimeEnvironment())
                      .activeShellBackendMode,
            );
 

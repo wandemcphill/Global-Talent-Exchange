@@ -329,7 +329,7 @@ class EventService {
     String? deviceId,
   }) {
     final String resolvedBaseUrl =
-        baseUrl ?? resolveGteApiBaseUrlFromEnvironment();
+        baseUrl ?? resolveGteApiBaseUrlForRuntimeEnvironment();
     return EventService(
       transport: ClipEventsApiTransport(
         config: GteRepositoryConfig(

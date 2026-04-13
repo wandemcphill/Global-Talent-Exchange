@@ -12,7 +12,7 @@ import 'package:gte_frontend/models/match_view_state.dart';
 class MatchViewerMapper {
   MatchViewerMapper._();
 
-  static final GteAppConfig _config = GteAppConfig.fromEnvironment();
+  static final GteAppConfig _config = GteAppConfig.fromRuntimeEnvironment();
   static final GteExchangeApiClient _api = GteExchangeApiClient.standard(
     baseUrl: _config.apiBaseUrl,
     mode: _config.activeShellBackendMode,

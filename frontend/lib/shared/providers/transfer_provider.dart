@@ -225,7 +225,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
   static const String _fallbackUserClubName = 'GTEX United';
   static const Duration _refreshInterval = Duration(seconds: 20);
 
-  final GteAppConfig _config = GteAppConfig.fromEnvironment();
+  final GteAppConfig _config = GteAppConfig.fromRuntimeEnvironment();
   late final GteBackendMode _backendMode = _config.activeShellBackendMode;
   final Map<String, ReliableWebSocketManager> _listingStreams =
       <String, ReliableWebSocketManager>{};

@@ -53,7 +53,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   @override
   void initState() {
     super.initState();
-    _config = widget.config ?? GteAppConfig.fromEnvironment();
+    _config = widget.config ?? GteAppConfig.fromRuntimeEnvironment();
     final GteBackendMode activeBackendMode = _config.activeShellBackendMode;
     _ownsController = widget.controller == null;
     _ownsThemeController = widget.themeController == null;

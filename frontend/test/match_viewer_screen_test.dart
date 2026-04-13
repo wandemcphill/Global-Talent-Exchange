@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
+import 'package:gte_frontend/models/match_monetization.dart';
 import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
@@ -10,6 +12,8 @@ import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 import 'package:gte_frontend/widgets/match_3d/monetization/gifting_overlay.dart';
+
+import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   test('large frame gaps snap to the nearest authoritative frame', () {
@@ -231,6 +235,58 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Replay lane'), findsOneWidget);
   });
+
+  testWidgets('match viewer sends live gifts through the backend contract', (
+    WidgetTester tester,
+  ) async {
+    final CompetitionSummary competition = _buildCompetition(
+      id: 'match-viewer-gifting',
+    );
+    final _FakeMatchGiftClient giftClient = _FakeMatchGiftClient();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GtexMatchViewerScreen(
+          competition: competition,
+          matchKey: competition.id,
+          viewStateLoader:
+              () async => buildBroadcastTestViewState().copyWith(
+                monetization: const MatchViewerMonetization(
+                  metadata: <String, Object?>{
+                    'gift_recipient_user_id': 'creator-user-1',
+                    'gift_recipient_label': 'Studio Kai',
+                    'gift_source_scope': 'user_hosted',
+                  },
+                ),
+              ),
+          giftClient: giftClient,
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.scrollUntilVisible(
+      find.widgetWithText(FilledButton, 'Send gift'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Send gift'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Fire'));
+    await tester.pumpAndSettle();
+
+    expect(giftClient.lastTarget?.recipientUserId, 'creator-user-1');
+    expect(giftClient.lastTarget?.sourceScope, 'user_hosted');
+    expect(giftClient.lastGift?.key, 'fire');
+    expect(
+      find.text('Fire sent to Studio Kai for 2.0000 Fan Coin.'),
+      findsOneWidget,
+    );
+  });
 }
 
 CompetitionSummary _buildCompetition({required String id}) {
@@ -259,4 +315,24 @@ CompetitionSummary _buildCompetition({required String id}) {
     createdAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 2),
   );
+}
+
+class _FakeMatchGiftClient implements MatchGiftClient {
+  MatchGiftTarget? lastTarget;
+  MatchGiftCatalogItem? lastGift;
+
+  @override
+  Future<MatchGiftReceipt> sendGift({
+    required MatchGiftTarget target,
+    required MatchGiftCatalogItem gift,
+  }) async {
+    lastTarget = target;
+    lastGift = gift;
+    return MatchGiftReceipt(
+      giftKey: gift.key,
+      giftDisplayName: gift.label,
+      grossAmount: gift.fanCoinAmount.toStringAsFixed(4),
+      recipientLabel: target.recipientLabel,
+    );
+  }
 }

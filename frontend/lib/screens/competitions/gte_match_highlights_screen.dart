@@ -32,7 +32,7 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
   }
 
   Future<_MatchHighlightsSnapshot> _load() async {
-    final GteAppConfig config = GteAppConfig.fromEnvironment();
+    final GteAppConfig config = GteAppConfig.fromRuntimeEnvironment();
     if (config.activeShellBackendMode == GteBackendMode.fixture) {
       throw const GteApiException(
         type: GteApiErrorType.unavailable,

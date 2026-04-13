@@ -43,7 +43,7 @@ class ViralFeedApiRepository implements ViralFeedRepository {
     String? deviceId,
   }) {
     final String resolvedBaseUrl =
-        baseUrl ?? resolveGteApiBaseUrlFromEnvironment();
+        baseUrl ?? resolveGteApiBaseUrlForRuntimeEnvironment();
     return ViralFeedApiRepository(
       client: GteAuthedApi(
         config: GteRepositoryConfig(
