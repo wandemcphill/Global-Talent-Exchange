@@ -611,7 +611,7 @@ ProviderContainer _buildRouterContainer({
           authenticated: true,
           featureEnabled: true,
           challenges: <DailyChallengeSummary>[],
-          claimsToday: <Map<String, Object?>>[],
+          claimsToday: <DailyChallengeClaimSummary>[],
           currentStreak: 0,
           longestStreak: 0,
           nextBonusAmount: 0,
