@@ -205,7 +205,12 @@ class NationalRegenSeed(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     personality_seed_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     rarity_tier: Mapped[str] = mapped_column(String(24), nullable=False, default="common", server_default="common")
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="available", server_default="available")
-    preseed_batch: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preseed_batch: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="system_start",
+        server_default="system_start",
+    )
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 

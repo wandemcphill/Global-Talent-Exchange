@@ -23,9 +23,14 @@ from app.models.wallet import (
     PayoutStatus,
 )
 from app.players.read_models import PlayerSummaryReadModel
+from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
 from app.wallets.service import LedgerPosting, WalletService
 from app.observability.audit_service import AuditTrailService
 
+from .runtime_paths import (
+    admin_godmode_audit_path,
+    admin_godmode_state_path,
+)
 from .schemas import (
     AdminRoleCatalogUpdate,
     AdminRoleCatalogView,
@@ -57,8 +62,6 @@ from .schemas import (
     WithdrawalSummaryView,
 )
 
-ADMIN_GODMODE_FILE = "admin_god_mode.json"
-AUDIT_LOG_FILE = "admin_god_mode.audit.jsonl"
 ADMIN_GODMODE_STATE_KEY = "admin_god_mode"
 GOD_MODE_ROLE_NAME = "god_mode"
 SCOPED_ADMIN_ROLE_NAME = "scoped_admin"
@@ -99,43 +102,32 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     SCOPED_ADMIN_ROLE_NAME: [],
 }
 
-DEFAULT_PAYMENT_RAILS: list[dict[str, Any]] = [
-    {
-        "provider": "bank_transfer_manual",
-        "deposits_enabled": True,
-        "withdrawals_enabled": True,
-        "is_live": True,
-        "maintenance_message": "Manual bank-transfer desk is enabled.",
-    },
-    {
-        "provider": "paystack",
-        "deposits_enabled": True,
-        "withdrawals_enabled": True,
-        "is_live": True,
-        "maintenance_message": None,
-    },
-    {
-        "provider": "korapay",
-        "deposits_enabled": True,
-        "withdrawals_enabled": True,
-        "is_live": True,
-        "maintenance_message": None,
-    },
-    {
-        "provider": "flutterwave",
+SUPPORTED_ADMIN_PAYMENT_RAILS: tuple[str, ...] = ("bank_transfer_manual", *SUPPORTED_TOP_UP_PROVIDER_KEYS)
+
+
+def _default_payment_rail(provider: str) -> dict[str, Any]:
+    if provider == "bank_transfer_manual":
+        return {
+            "provider": provider,
+            "deposits_enabled": True,
+            "withdrawals_enabled": True,
+            "is_live": True,
+            "maintenance_message": "Manual bank-transfer desk is enabled.",
+        }
+    return {
+        "provider": provider,
         "deposits_enabled": True,
         "withdrawals_enabled": True,
         "is_live": True,
         "maintenance_message": None,
-    },
-    {
-        "provider": "monnify",
-        "deposits_enabled": True,
-        "withdrawals_enabled": True,
-        "is_live": True,
-        "maintenance_message": None,
-    },
-]
+    }
+
+
+def _default_payment_rails() -> list[dict[str, Any]]:
+    return [_default_payment_rail(provider) for provider in SUPPORTED_ADMIN_PAYMENT_RAILS]
+
+
+DEFAULT_PAYMENT_RAILS: list[dict[str, Any]] = _default_payment_rails()
 
 DEFAULT_COMMISSION_SETTINGS: dict[str, Any] = {
     "buy_commission_bps": 150,
@@ -272,12 +264,23 @@ class AdminGodModeService:
         profile = self.resolve_profile(actor, state)
         self._assert_has_permission(profile, "manage_payment_rails")
         now = utcnow().isoformat()
-        updated_rails = []
+        existing_rails = {
+            rail["provider"]: dict(rail) for rail in self._normalize_payment_rails(state.get("payment_rails") or [])
+        }
+        seen_providers: set[str] = set()
         for item in payload.rails:
+            provider = item.provider.strip().lower()
+            if provider not in existing_rails:
+                raise GodModeError(f"Unsupported payment rail provider '{provider}'.")
+            if provider in seen_providers:
+                raise GodModeError(f"Duplicate payment rail provider '{provider}'.")
+            seen_providers.add(provider)
             record = item.model_dump(mode="json")
+            record["provider"] = provider
             record["updated_at"] = now
             record["updated_by"] = actor.id
-            updated_rails.append(record)
+            existing_rails[provider] = self._normalize_payment_rail_record(record, defaults=existing_rails[provider])
+        updated_rails = [existing_rails[provider] for provider in SUPPORTED_ADMIN_PAYMENT_RAILS]
         state["payment_rails"] = updated_rails
         self._save_state(app, state)
         self._append_audit(
@@ -308,8 +311,6 @@ class AdminGodModeService:
         self, app: FastAPI, actor: User, payload: WithdrawalControlUpdate
     ) -> WithdrawalControlView:
         state = self._load_state(app)
-        profile = self.resolve_profile(actor, state)
-        self._assert_has_permission(profile, "manage_payment_rails")
         updated = payload.model_dump(mode="json")
         updated["updated_at"] = utcnow().isoformat()
         updated["updated_by"] = actor.id
@@ -340,8 +341,6 @@ class AdminGodModeService:
         self, app: FastAPI, actor: User, payload: CompetitionControlUpdate
     ) -> CompetitionControlView:
         state = self._load_state(app)
-        profile = self.resolve_profile(actor, state)
-        self._assert_has_permission(profile, "manage_commissions")
         updated = payload.model_dump(mode="json")
         updated["updated_at"] = utcnow().isoformat()
         updated["updated_by"] = actor.id
@@ -914,10 +913,10 @@ class AdminGodModeService:
         ]
 
     def _state_path(self, app: FastAPI) -> Path:
-        return app.state.settings.config_root / ADMIN_GODMODE_FILE
+        return admin_godmode_state_path(app.state.settings.config_root)
 
     def _audit_path(self, app: FastAPI) -> Path:
-        return app.state.settings.config_root / AUDIT_LOG_FILE
+        return admin_godmode_audit_path(app.state.settings.config_root)
 
     def _session_factory(self, app: FastAPI):
         return getattr(app.state, "session_factory", None)
@@ -1005,7 +1004,7 @@ class AdminGodModeService:
                 "assignments": [],
             },
             "commissions": DEFAULT_COMMISSION_SETTINGS,
-            "payment_rails": DEFAULT_PAYMENT_RAILS,
+            "payment_rails": _default_payment_rails(),
             "withdrawal_controls": DEFAULT_WITHDRAWAL_CONTROLS,
             "competition_controls": DEFAULT_COMPETITION_CONTROLS,
             "liquidity_interventions": [],
@@ -1015,7 +1014,43 @@ class AdminGodModeService:
     def _normalize_state(self, state: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(state)
         normalized["roles"] = self._normalize_roles_block(state.get("roles") or {})
+        normalized["payment_rails"] = self._normalize_payment_rails(state.get("payment_rails") or [])
         return normalized
+
+    def _normalize_payment_rails(self, rails_block: Any) -> list[dict[str, Any]]:
+        defaults_by_provider = {rail["provider"]: rail for rail in _default_payment_rails()}
+        normalized_by_provider = {provider: dict(defaults) for provider, defaults in defaults_by_provider.items()}
+        for rail in rails_block if isinstance(rails_block, list) else []:
+            if not isinstance(rail, dict):
+                continue
+            provider = str(rail.get("provider") or "").strip().lower()
+            if provider not in normalized_by_provider:
+                continue
+            normalized_by_provider[provider] = self._normalize_payment_rail_record(
+                rail,
+                defaults=normalized_by_provider[provider],
+            )
+        return [normalized_by_provider[provider] for provider in SUPPORTED_ADMIN_PAYMENT_RAILS]
+
+    def _normalize_payment_rail_record(self, rail: dict[str, Any], *, defaults: dict[str, Any]) -> dict[str, Any]:
+        record = dict(defaults)
+        record["provider"] = str(rail.get("provider") or defaults["provider"]).strip().lower() or defaults["provider"]
+        if "deposits_enabled" in rail:
+            record["deposits_enabled"] = bool(rail.get("deposits_enabled"))
+        if "withdrawals_enabled" in rail:
+            record["withdrawals_enabled"] = bool(rail.get("withdrawals_enabled"))
+        if "is_live" in rail:
+            record["is_live"] = bool(rail.get("is_live"))
+        if "maintenance_message" in rail:
+            message = rail.get("maintenance_message")
+            record["maintenance_message"] = None if message is None else (str(message).strip() or None)
+        if "updated_at" in rail:
+            updated_at = rail.get("updated_at")
+            record["updated_at"] = None if updated_at is None else str(updated_at)
+        if "updated_by" in rail:
+            updated_by = rail.get("updated_by")
+            record["updated_by"] = None if updated_by is None else str(updated_by)
+        return record
 
     def _normalize_roles_block(self, roles_block: dict[str, Any]) -> dict[str, Any]:
         available_roles = {role_name: list(permissions) for role_name, permissions in DEFAULT_ROLE_PERMISSIONS.items()}

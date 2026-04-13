@@ -12,11 +12,7 @@ from sqlalchemy.orm import Session
 from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.admin_finance.service import AdminFinanceService
 from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
-from app.admin_godmode.service import (
-    AdminGodModeService,
-    DEFAULT_COMMISSION_SETTINGS,
-    DEFAULT_WITHDRAWAL_CONTROLS,
-)
+from app.admin_godmode.service import AdminGodModeService
 from app.economy.governor_service import EconomyGovernorService
 from app.models.user import User
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
@@ -331,22 +327,20 @@ def _build_withdrawal_quote(
 def _load_admin_god_mode_state(request: Request | None) -> dict[str, object]:
     if request is None or not hasattr(request.app.state, "settings"):
         return {}
-    config_root = getattr(request.app.state.settings, "config_root", None)
-    if config_root is None:
-        return {}
-    path = admin_godmode_state_path(config_root)
-    if not path.exists():
-        return {
-            "commissions": dict(DEFAULT_COMMISSION_SETTINGS),
-            "withdrawal_controls": dict(DEFAULT_WITHDRAWAL_CONTROLS),
-        }
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {
-            "commissions": dict(DEFAULT_COMMISSION_SETTINGS),
-            "withdrawal_controls": dict(DEFAULT_WITHDRAWAL_CONTROLS),
-        }
+        service = AdminGodModeService(wallet_service=_build_wallet_service(request))
+        return service._load_state(request.app)
+    except Exception:
+        config_root = getattr(request.app.state.settings, "config_root", None)
+        if config_root is None:
+            return {}
+        path = admin_godmode_state_path(config_root)
+        if not path.exists():
+            return {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
 
 
 def _withdrawal_controls(request: Request | None) -> dict[str, object]:

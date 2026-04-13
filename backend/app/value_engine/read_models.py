@@ -149,7 +149,12 @@ class PlayerValueRunRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     config_version: Mapped[str] = mapped_column(String(64), nullable=False, default="baseline-v1", server_default="baseline-v1")
     triggered_by: Mapped[str] = mapped_column(String(32), nullable=False, default="system", server_default="system")
-    actor_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    actor_user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     candidate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     processed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     snapshot_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
@@ -163,7 +168,12 @@ class PlayerValueAdminAuditRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "player_value_admin_audits"
 
     action_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
-    actor_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    actor_user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     actor_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
     config_version: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     target_player_id: Mapped[str | None] = mapped_column(

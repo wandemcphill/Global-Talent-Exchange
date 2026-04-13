@@ -42,6 +42,7 @@ class SettledExecution:
     price: Decimal
     gross_amount: Decimal
     occurred_at: datetime
+    cash_unit: LedgerUnit
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +69,7 @@ class PortfolioSummary:
 class PortfolioSnapshot:
     holdings: list[PortfolioHolding]
     summary: PortfolioSummary
+    cash_unit: LedgerUnit
 
 
 @dataclass(slots=True)
@@ -143,7 +145,11 @@ class PortfolioService:
             )
 
         holdings.sort(key=lambda item: (-item.market_value, item.player_id))
-        wallet_summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+        wallet_summary = self.wallet_service.get_wallet_summary(
+            session,
+            user,
+            currency=self._select_reporting_cash_unit(session, user, executions),
+        )
         return PortfolioSnapshot(
             holdings=holdings,
             summary=PortfolioSummary(
@@ -153,6 +159,7 @@ class PortfolioService:
                 unrealized_pl_total=unrealized_pl_total,
                 realized_pl_total=realized_pl_total,
             ),
+            cash_unit=wallet_summary.currency,
         )
 
     def build_holdings(self, session: Session, user: User) -> list[PortfolioHolding]:
@@ -165,6 +172,8 @@ class PortfolioService:
         user_cash_account_codes = {
             f"user:{user.id}:credit",
             f"user:{user.id}:coin",
+            f"user:{user.id}:credit:escrow",
+            f"user:{user.id}:coin:escrow",
         }
         rows = session.execute(
             select(LedgerEntry, LedgerAccount)
@@ -191,14 +200,16 @@ class PortfolioService:
             asset_entry: LedgerEntry | None = None
             asset_account: LedgerAccount | None = None
             cash_entry: LedgerEntry | None = None
+            cash_account: LedgerAccount | None = None
             for entry, account in execution_rows:
                 if account.code.startswith("position:"):
                     asset_entry = entry
                     asset_account = account
                 elif account.code in user_cash_account_codes:
                     cash_entry = entry
+                    cash_account = account
 
-            if asset_entry is None or asset_account is None or cash_entry is None:
+            if asset_entry is None or asset_account is None or cash_entry is None or cash_account is None:
                 continue
 
             quantity = self._normalize_amount(abs(asset_entry.amount))
@@ -215,11 +226,28 @@ class PortfolioService:
                     price=self._normalize_amount(gross_amount / quantity),
                     gross_amount=gross_amount,
                     occurred_at=asset_entry.created_at,
+                    cash_unit=LedgerUnit(cash_account.unit),
                 )
             )
 
         executions.sort(key=lambda item: (item.occurred_at, item.execution_id))
         return executions
+
+    def _select_reporting_cash_unit(
+        self,
+        session: Session,
+        user: User,
+        executions: list[SettledExecution],
+    ) -> LedgerUnit:
+        credit_summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
+        coin_summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+        if credit_summary.total_balance > coin_summary.total_balance:
+            return LedgerUnit.CREDIT
+        if coin_summary.total_balance > credit_summary.total_balance:
+            return LedgerUnit.COIN
+        if executions:
+            return executions[-1].cash_unit
+        return LedgerUnit.COIN
 
     def _resolve_current_price(self, session: Session, player_id: str) -> Decimal:
         summary = session.get(PlayerSummaryReadModel, player_id)

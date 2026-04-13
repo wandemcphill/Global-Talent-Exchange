@@ -27,6 +27,7 @@ class TradeExecution:
     order_id: str | None = None
     reserve_before_settlement: bool = False
     use_reserved_balance: bool = False
+    cash_unit: LedgerUnit | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +59,7 @@ class SettlementService:
         user: User,
         execution: TradeExecution,
     ) -> list[LedgerEntry]:
+        cash_unit = self._resolve_cash_unit(session, user=user, execution=execution, use_reserved_balance=False)
         side, quantity, _price, gross_amount = self.risk_service.validate_trade(
             session,
             user,
@@ -65,7 +67,7 @@ class SettlementService:
             side=execution.side,
             quantity=execution.quantity,
             price=execution.price,
-            cash_unit=LedgerUnit.COIN,
+            cash_unit=cash_unit,
         )
         reference = execution.order_id or execution.execution_id
         if side is TradeSide.BUY:
@@ -75,7 +77,7 @@ class SettlementService:
                 amount=gross_amount,
                 reference=reference,
                 description=f"Reserve funds for settlement {execution.execution_id}",
-                unit=LedgerUnit.COIN,
+                unit=cash_unit,
                 source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
             )
         return self.wallet_service.reserve_position_units(
@@ -128,6 +130,12 @@ class SettlementService:
         self.risk_service.ensure_execution_not_settled(session, execution.execution_id)
         order = session.get(Order, execution.order_id) if execution.order_id else None
         use_reserved_balance = execution.use_reserved_balance or bool(order is not None and order.hold_transaction_id)
+        cash_unit = self._resolve_cash_unit(
+            session,
+            user=user,
+            execution=execution,
+            use_reserved_balance=use_reserved_balance,
+        )
 
         if execution.reserve_before_settlement and not use_reserved_balance:
             self.reserve_execution_requirements(session, user=user, execution=execution)
@@ -140,7 +148,7 @@ class SettlementService:
             side=execution.side,
             quantity=execution.quantity,
             price=execution.price,
-            cash_unit=LedgerUnit.COIN,
+            cash_unit=cash_unit,
             use_reserved_balance=use_reserved_balance,
         )
 
@@ -154,7 +162,7 @@ class SettlementService:
                     reference=reference,
                     description=f"Settle buy execution {execution.execution_id}",
                     external_reference=execution.execution_id,
-                    unit=LedgerUnit.COIN,
+                    unit=cash_unit,
                     source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
                 )
                 if use_reserved_balance
@@ -165,7 +173,7 @@ class SettlementService:
                     reference=reference,
                     description=f"Settle buy execution {execution.execution_id}",
                     external_reference=execution.execution_id,
-                    unit=LedgerUnit.COIN,
+                    unit=cash_unit,
                     source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
                 )
             )
@@ -215,7 +223,7 @@ class SettlementService:
                 reference=reference,
                 description=f"Credit sell execution {execution.execution_id}",
                 external_reference=execution.execution_id,
-                unit=LedgerUnit.COIN,
+                unit=cash_unit,
                 source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
             )
 
@@ -234,6 +242,64 @@ class SettlementService:
             cash_entries=cash_entries,
             position_entries=position_entries,
         )
+
+    def _resolve_cash_unit(
+        self,
+        session: Session,
+        *,
+        user: User,
+        execution: TradeExecution,
+        use_reserved_balance: bool,
+    ) -> LedgerUnit:
+        if execution.cash_unit is not None:
+            return execution.cash_unit
+        order = session.get(Order, execution.order_id) if execution.order_id else None
+        if order is not None:
+            return order.currency
+
+        normalized_side = TradeSide(str(execution.side).lower())
+        if normalized_side is TradeSide.SELL:
+            return self._preferred_cash_unit(session, user)
+
+        normalized_quantity = self.wallet_service._normalize_amount(execution.quantity)
+        normalized_price = self.wallet_service._normalize_amount(execution.price)
+        gross_amount = self.wallet_service._normalize_amount(normalized_quantity * normalized_price)
+        credit_balance = self._cash_balance(
+            session,
+            user,
+            unit=LedgerUnit.CREDIT,
+            use_reserved_balance=use_reserved_balance,
+        )
+        coin_balance = self._cash_balance(
+            session,
+            user,
+            unit=LedgerUnit.COIN,
+            use_reserved_balance=use_reserved_balance,
+        )
+        if credit_balance >= gross_amount and coin_balance < gross_amount:
+            return LedgerUnit.CREDIT
+        if coin_balance >= gross_amount and credit_balance < gross_amount:
+            return LedgerUnit.COIN
+        if credit_balance >= gross_amount and coin_balance >= gross_amount:
+            return LedgerUnit.CREDIT
+        return LedgerUnit.CREDIT if credit_balance >= coin_balance else LedgerUnit.COIN
+
+    def _preferred_cash_unit(self, session: Session, user: User) -> LedgerUnit:
+        credit_total = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT).total_balance
+        coin_total = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN).total_balance
+        return LedgerUnit.CREDIT if credit_total >= coin_total else LedgerUnit.COIN
+
+    def _cash_balance(
+        self,
+        session: Session,
+        user: User,
+        *,
+        unit: LedgerUnit,
+        use_reserved_balance: bool,
+    ) -> Decimal:
+        if use_reserved_balance:
+            return self.wallet_service.get_reserved_cash_balance(session, user, unit=unit)
+        return self.wallet_service.get_wallet_summary(session, user, currency=unit).available_balance
 
     def _release_buy_remainder_if_needed(
         self,
