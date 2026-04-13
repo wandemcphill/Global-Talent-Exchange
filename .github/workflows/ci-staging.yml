@@ -82,6 +82,48 @@ jobs:
           backend/tests/test_match_timeline_service.py
           -q
 
+  backend-payment-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pytest
+      - run: >
+          python -m pytest
+          backend/tests/admin_godmode/test_payment_rails_truth.py::test_payment_rails_drop_stale_non_live_defaults
+          backend/tests/admin_godmode/test_payment_rails_truth.py::test_payment_rail_update_rejects_unsupported_provider
+          backend/tests/admin_finance/test_payment_webhook_fraud_regressions.py::test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured
+          backend/tests/admin_finance/test_payment_webhook_fraud_regressions.py::test_korapay_webhook_rejects_invalid_signature_when_secret_is_configured
+          backend/tests/wallets/test_wallet_http.py::test_wallet_overview_surfaces_provider_status_and_live_restrictions
+          backend/tests/wallets/test_wallet_http.py::test_provider_webhook_rejects_stub_provider
+          backend/tests/wallets/test_wallet_http.py::test_purchase_order_quote_rejects_stub_provider
+          -q
+
+  backend-referral-durability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pytest
+      - run: >
+          python -m pytest
+          backend/tests/referrals/test_api_creator_profiles.py::test_creator_profile_survives_app_restart
+          backend/tests/referrals/test_api_creator_profiles.py::test_creator_profile_updates_are_visible_across_app_instances
+          backend/tests/referrals/test_api_attribution.py::test_attribution_survives_restart_and_progresses_on_fresh_instance
+          backend/tests/referrals/test_api_attribution.py::test_attribution_and_competition_views_stay_consistent_across_app_instances
+          backend/tests/referrals/test_referrals_admin_analytics.py::test_admin_referral_state_survives_restart
+          -q
+
   backend-migration-integrity:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -116,13 +158,18 @@ jobs:
       - name: Verify Unity CI configuration
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
+
           if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)) {
+            "Missing GTEX_UNITY_EDITOR_PATH on runner." | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
             throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
           }
           if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
+            "Unity editor path does not exist: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
             throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
           }
           if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
+            "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
             throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
           }
       - name: Build GTEX Windows player
@@ -165,12 +212,12 @@ jobs:
             }
           }
       - name: Upload Unity build log
-        if: always()
+        if: always() && hashFiles('tmp/gtex_test_migration_windows_build.log') != ''
         uses: actions/upload-artifact@v4
         with:
           name: gtex-test-migration-windows-build-log
-          path: ${{ env.GTEX_UNITY_BUILD_LOG }}
-          if-no-files-found: error
+          path: tmp/gtex_test_migration_windows_build.log
+          if-no-files-found: warn
 
   deploy-staging:
     if: >-
@@ -179,12 +226,16 @@ jobs:
       needs.frontend-tests.result == 'success' &&
       needs.backend-tests.result == 'success' &&
       needs.backend-live-playback-tests.result == 'success' &&
+      needs.backend-payment-regressions.result == 'success' &&
+      needs.backend-referral-durability.result == 'success' &&
       needs.backend-migration-integrity.result == 'success' &&
       (needs.unity-windows-build.result == 'success' || needs.unity-windows-build.result == 'skipped')
     needs:
       - frontend-tests
       - backend-tests
       - backend-live-playback-tests
+      - backend-payment-regressions
+      - backend-referral-durability
       - backend-migration-integrity
       - unity-windows-build
     runs-on: ubuntu-latest
