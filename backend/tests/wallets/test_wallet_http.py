@@ -16,6 +16,7 @@ import app.ingestion.models  # noqa: F401
 import app.ledger.models  # noqa: F401
 import app.models  # noqa: F401
 import app.orders.models  # noqa: F401
+from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.ingestion.models import Player
@@ -381,7 +382,9 @@ def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabl
     _provision_withdrawable_user(session, current_user)
     _enable_automatic_withdrawals(session)
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
-    (client.app.state.settings.config_root / "admin_god_mode.json").write_text(
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
         '{"commissions":{"withdrawal_fee_bps":1000,"minimum_withdrawal_fee_credits":"5.0000"},"withdrawal_controls":{"egame_withdrawals_enabled":false,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
         encoding="utf-8",
     )
@@ -405,7 +408,9 @@ def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> Non
     client, session, current_user = api_context
     _fund_user(session, current_user, amount=Decimal("50"))
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
-    (client.app.state.settings.config_root / "admin_god_mode.json").write_text(
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
         '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"manual_bank_transfer","deposits_via_bank_transfer":true,"payouts_via_bank_transfer":true}}',
         encoding="utf-8",
     )
@@ -430,7 +435,9 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
     monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
-    (client.app.state.settings.config_root / "admin_god_mode.json").write_text(
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
         '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
         encoding="utf-8",
     )
@@ -446,6 +453,15 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     assert payload["withdrawal_mode"] == "bank_transfer"
     assert payload["payment_provider_status"]["paystack"] == "mock"
     assert payload["payment_provider_status"]["korapay"] == "unavailable"
+
+
+def test_provider_webhook_rejects_stub_provider(api_context) -> None:
+    client, _, _ = api_context
+
+    response = client.post("/wallets/providers/cards/webhook", json={})
+
+    assert response.status_code == 404
+    assert "not currently available" in response.json()["detail"]
 
 
 def test_wallet_overview_handles_missing_country_policy_rows(api_context) -> None:

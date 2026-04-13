@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/hosted_competition_api.dart';
@@ -127,6 +128,84 @@ void main() {
       expect(federationsApi.membershipRequests, 1);
       expect(
         find.textContaining('membership request recorded as active'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'federation detail creates governance proposals for active participants',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+      final _FakeFederationsApi federationsApi = _FakeFederationsApi();
+
+      await tester.pumpWidget(
+        _screenHost(
+          child: const FederationDetailScreen(
+            federationId: _FakeFederationsApi.id,
+          ),
+          session: _clubSession(),
+          overrides: [federationsApiProvider.overrideWithValue(federationsApi)],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Create proposal'),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create proposal'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Title'),
+        'Expand youth qualifier slots',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Summary'),
+        'Increase the number of youth qualification spots for the next cycle.',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+      await tester.pumpAndSettle();
+
+      expect(federationsApi.proposalCreates, 1);
+      expect(
+        find.textContaining(
+          'proposal "Expand youth qualifier slots" is now open',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'federation detail records governance votes for active participants',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+      final _FakeFederationsApi federationsApi = _FakeFederationsApi();
+
+      await tester.pumpWidget(
+        _screenHost(
+          child: const FederationDetailScreen(
+            federationId: _FakeFederationsApi.id,
+          ),
+          session: _clubSession(),
+          overrides: [federationsApiProvider.overrideWithValue(federationsApi)],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Vote'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Vote'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Vote yes'));
+      await tester.pumpAndSettle();
+
+      expect(federationsApi.proposalVotes, 1);
+      expect(
+        find.textContaining(
+          'Vote yes recorded for "Expand regional qualifiers"',
+        ),
         findsOneWidget,
       );
     },
@@ -515,27 +594,9 @@ void main() {
 
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.widgetWithText(FilledButton, 'Open spectate probe'),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('2D Spectate Probe'), findsWidgets);
-      expect(find.text('Route blocked'), findsOneWidget);
-
-      router.go(AppRoutes.matches);
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.widgetWithText(FilledButton, 'View coming soon note'),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Native 3D is coming soon'), findsOneWidget);
-
-      router.go(AppRoutes.matches);
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Open simulate'));
-      await tester.pumpAndSettle();
-      expect(find.text('Simulation sandbox blocked'), findsWidgets);
-      expect(find.text('Launch simulation'), findsNothing);
+      expect(find.text('Open spectate probe'), findsNothing);
+      expect(find.text('View coming soon note'), findsNothing);
+      expect(find.text('Open simulation'), findsNothing);
     },
   );
 }
@@ -581,6 +642,7 @@ ProviderContainer _buildRouterContainer({
 
   return ProviderContainer(
     overrides: [
+      appConfigProvider.overrideWithValue(_testAppConfig),
       authProvider.overrideWith((Ref ref) => session),
       authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
       deviceIdentityStoreProvider.overrideWithValue(
@@ -642,6 +704,11 @@ ProviderContainer _buildRouterContainer({
     ],
   );
 }
+
+const GteAppConfig _testAppConfig = GteAppConfig(
+  apiBaseUrl: 'https://example.test',
+  backendMode: GteBackendMode.live,
+);
 
 Widget _screenHost({
   required Widget child,
@@ -1225,6 +1292,24 @@ class _FakeFederationsApi extends FederationsApi {
   );
 
   int membershipRequests = 0;
+  int proposalCreates = 0;
+  int proposalVotes = 0;
+
+  final List<JsonMap> _members = <JsonMap>[
+    <String, Object?>{'club_id': 'ibadan-lions', 'status': 'active'},
+  ];
+  final List<JsonMap> _proposals = <JsonMap>[
+    <String, Object?>{
+      'id': 'proposal-1',
+      'title': 'Expand regional qualifiers',
+      'summary': 'Increase the federation qualifier slots for the next cycle.',
+      'status': 'open',
+      'yes_votes': 7,
+      'no_votes': 2,
+      'abstain_votes': 1,
+    },
+  ];
+  final List<JsonMap> _votes = <JsonMap>[];
 
   @override
   Future<List<FederationRecord>> listFederations() async {
@@ -1271,9 +1356,7 @@ class _FakeFederationsApi extends FederationsApi {
         },
       ],
       'rules': <String, Object?>{'salary_cap': 'enabled', 'foreign_limit': 5},
-      'members': <Map<String, Object?>>[
-        <String, Object?>{'club_id': 'ibadan-lions', 'status': 'active'},
-      ],
+      'members': _members,
       'reputation': <String, Object?>{
         'score': 91.4,
         'ranking_score': 94.2,
@@ -1285,15 +1368,8 @@ class _FakeFederationsApi extends FederationsApi {
   @override
   Future<JsonMap> fetchGovernance(String federationId) async {
     return <String, Object?>{
-      'proposals': <Map<String, Object?>>[
-        <String, Object?>{
-          'title': 'Expand regional qualifiers',
-          'status': 'open',
-          'yes_votes': 7,
-          'no_votes': 2,
-          'abstain_votes': 1,
-        },
-      ],
+      'proposals': _proposals,
+      'votes': _votes,
       'sanctions': <Map<String, Object?>>[
         <String, Object?>{
           'sanction_type': 'fine',
@@ -1320,10 +1396,84 @@ class _FakeFederationsApi extends FederationsApi {
     String? userId,
   }) async {
     membershipRequests += 1;
+    final bool alreadyMember = _members.any(
+      (JsonMap item) => (item['club_id']?.toString() ?? '') == clubId,
+    );
+    if (!alreadyMember) {
+      _members.add(<String, Object?>{'club_id': clubId, 'status': 'active'});
+    }
     return const FederationMembershipResult(
       status: 'active',
       role: 'member_club',
       violations: <String>[],
+    );
+  }
+
+  @override
+  Future<FederationProposalActionResult> createProposal({
+    required String federationId,
+    required String title,
+    required String summary,
+    String proposalType = 'rule_change',
+    String? leagueId,
+    DateTime? votingEndsAt,
+  }) async {
+    proposalCreates += 1;
+    _proposals.insert(0, <String, Object?>{
+      'id': 'proposal-${proposalCreates + 1}',
+      'title': title,
+      'summary': summary,
+      'status': 'open',
+      'yes_votes': 0,
+      'no_votes': 0,
+      'abstain_votes': 0,
+      'proposal_type': proposalType,
+      'league_id': leagueId,
+      'voting_ends_at': votingEndsAt?.toIso8601String(),
+    });
+    return FederationProposalActionResult(
+      id: _proposals.first['id']?.toString() ?? '',
+      title: title,
+      status: 'open',
+    );
+  }
+
+  @override
+  Future<FederationProposalActionResult> castProposalVote({
+    required String proposalId,
+    required String voteType,
+    String? comment,
+  }) async {
+    proposalVotes += 1;
+    for (final JsonMap proposal in _proposals) {
+      if ((proposal['id']?.toString() ?? '') != proposalId) {
+        continue;
+      }
+      final int yesVotes = (proposal['yes_votes'] as num?)?.toInt() ?? 0;
+      final int noVotes = (proposal['no_votes'] as num?)?.toInt() ?? 0;
+      final int abstainVotes =
+          (proposal['abstain_votes'] as num?)?.toInt() ?? 0;
+      proposal['yes_votes'] = voteType == 'yes' ? yesVotes + 1 : yesVotes;
+      proposal['no_votes'] = voteType == 'no' ? noVotes + 1 : noVotes;
+      proposal['abstain_votes'] =
+          voteType == 'abstain' ? abstainVotes + 1 : abstainVotes;
+      _votes.insert(0, <String, Object?>{
+        'proposal_id': proposalId,
+        'user_id': 'user-1',
+        'vote_type': voteType,
+      });
+      return FederationProposalActionResult(
+        id: proposalId,
+        title: proposal['title']?.toString() ?? 'Proposal',
+        status: proposal['status']?.toString() ?? 'open',
+        voteType: voteType,
+      );
+    }
+    return FederationProposalActionResult(
+      id: proposalId,
+      title: 'Proposal',
+      status: 'open',
+      voteType: voteType,
     );
   }
 }

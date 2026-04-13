@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from shutil import copyfile
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 import pytest
@@ -16,6 +17,8 @@ from app.models.user import User
 from app.models.user_wallet import WalletTransactionRecord
 from app.treasury.service import TreasuryService
 from app.wallets.router import (
+    create_purchase_order,
+    create_purchase_order_quote,
     create_payment_event,
     create_wallet_conversion,
     get_wallet_profile,
@@ -27,6 +30,8 @@ from app.wallets.router import (
 )
 from app.wallets.schemas import (
     PaymentEventCreate,
+    PurchaseOrderCreateRequest,
+    PurchaseOrderQuoteRequest,
     WalletConversionQuoteRequest,
     WalletConversionRequest,
     WalletTopUpInitiateRequest,
@@ -211,3 +216,45 @@ def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> 
     assert verified.transaction.status == "verified"
     assert stored_transaction is not None
     assert stored_transaction.status == "verified"
+
+
+def test_purchase_order_quote_rejects_stub_provider(session) -> None:
+    current_user = _register_and_load_user(session)
+    _seed_global_policy(session)
+    _enable_automatic_deposits(session)
+
+    with pytest.raises(HTTPException) as exc_info:
+        create_purchase_order_quote(
+            PurchaseOrderQuoteRequest(
+                amount=Decimal("25"),
+                input_unit="fiat",
+                provider_key="cards",
+                unit=LedgerUnit.COIN,
+            ),
+            session=session,
+            current_user=current_user,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert "not currently available" in str(exc_info.value.detail)
+
+
+def test_purchase_order_create_rejects_stub_provider(session) -> None:
+    current_user = _register_and_load_user(session)
+    _seed_global_policy(session)
+    _enable_automatic_deposits(session)
+
+    with pytest.raises(HTTPException) as exc_info:
+        create_purchase_order(
+            PurchaseOrderCreateRequest(
+                amount=Decimal("25"),
+                input_unit="fiat",
+                provider_key="apple_pay",
+                unit=LedgerUnit.COIN,
+            ),
+            session=session,
+            current_user=current_user,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert "not currently available" in str(exc_info.value.detail)

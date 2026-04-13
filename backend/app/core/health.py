@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.config import Settings, get_settings
 from app.core.database import DatabaseRuntime
@@ -21,11 +21,15 @@ class ServiceCheck(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"]
     checks: dict[str, ServiceCheck]
+    runtime_mode: Literal["normal", "degraded"]
+    mode_reasons: list[str] = Field(default_factory=list)
 
 
 class ReadinessResponse(BaseModel):
     status: Literal["ready", "not_ready"]
     checks: dict[str, ServiceCheck]
+    runtime_mode: Literal["normal", "degraded"]
+    mode_reasons: list[str] = Field(default_factory=list)
 
 
 class VersionResponse(BaseModel):
@@ -43,6 +47,9 @@ class DiagnosticsResponse(BaseModel):
     modules: list[str]
     route_count: int
     config_checks: dict[str, bool]
+    dependency_checks: dict[str, ServiceCheck]
+    runtime_mode: Literal["normal", "degraded"]
+    mode_reasons: list[str] = Field(default_factory=list)
     dependency_notes: list[str]
     scaffolding_gaps: list[str]
 
@@ -58,28 +65,31 @@ class RootResponse(BaseModel):
 
 class SystemStatusService:
     def build_health(self, request: Request) -> HealthResponse:
-        database = request.app.state.context.database
-        checks = {
-            "api": ServiceCheck(status="ok"),
-            "database": self._database_check(database),
-            "redis": self._redis_check(request),
-        }
+        checks = self._build_dependency_checks(request)
+        runtime_mode, mode_reasons = self._runtime_mode_from_checks(checks)
         has_errors = any(check.status == "error" for check in checks.values())
-        return HealthResponse(status="degraded" if has_errors else "ok", checks=checks)
+        return HealthResponse(
+            status="degraded" if has_errors else "ok",
+            checks=checks,
+            runtime_mode=runtime_mode,
+            mode_reasons=mode_reasons,
+        )
 
     def build_readiness(self, request: Request, *, check_schema: bool = True) -> ReadinessResponse:
         database = request.app.state.context.database
-        checks: dict[str, ServiceCheck] = {
-            "api": ServiceCheck(status="ok"),
-            "database": self._database_check(database),
-            "redis": self._redis_check(request),
-        }
+        checks = self._build_dependency_checks(request)
 
         if checks["database"].status == "ok" and check_schema and os.getenv("SKIP_SCHEMA_CHECK") != "true":
             checks["schema"] = self._schema_check(database)
 
+        runtime_mode, mode_reasons = self._runtime_mode_from_checks(checks)
         has_errors = any(check.status == "error" for check in checks.values())
-        return ReadinessResponse(status="not_ready" if has_errors else "ready", checks=checks)
+        return ReadinessResponse(
+            status="not_ready" if has_errors else "ready",
+            checks=checks,
+            runtime_mode=runtime_mode,
+            mode_reasons=mode_reasons,
+        )
 
     def build_version(self, settings: Settings) -> VersionResponse:
         return VersionResponse(
@@ -95,6 +105,8 @@ class SystemStatusService:
         frontend_root = project_root / "frontend"
         backend_root = project_root / "backend"
         config_root = Path(settings.config_root)
+        dependency_checks = self._build_dependency_checks(request)
+        runtime_mode, mode_reasons = self._runtime_mode_from_checks(dependency_checks)
         checks = {
             "player_universe_weighting.toml": (config_root / "player_universe_weighting.toml").exists(),
             "supply_tiers.toml": (config_root / "supply_tiers.toml").exists(),
@@ -123,7 +135,12 @@ class SystemStatusService:
             scaffolding_gaps.append("Frontend pubspec.yaml is missing.")
         if not (frontend_root / "lib/main.dart").exists():
             scaffolding_gaps.append("Frontend lib/main.dart is missing.")
-        status_value: Literal["ok", "warning"] = "ok" if all(checks.values()) and not scaffolding_gaps else "warning"
+        has_dependency_errors = any(check.status == "error" for check in dependency_checks.values())
+        status_value: Literal["ok", "warning"] = (
+            "ok"
+            if all(checks.values()) and not scaffolding_gaps and not has_dependency_errors and runtime_mode == "normal"
+            else "warning"
+        )
         return DiagnosticsResponse(
             status=status_value,
             app_name=settings.app_name,
@@ -132,9 +149,30 @@ class SystemStatusService:
             modules=list(getattr(request.app.state, "domain_modules", [])),
             route_count=len(getattr(request.app.router, "routes", [])),
             config_checks=checks,
+            dependency_checks=dependency_checks,
+            runtime_mode=runtime_mode,
+            mode_reasons=mode_reasons,
             dependency_notes=dependency_notes,
             scaffolding_gaps=scaffolding_gaps,
         )
+
+    def _build_dependency_checks(self, request: Request) -> dict[str, ServiceCheck]:
+        database = request.app.state.context.database
+        return {
+            "api": ServiceCheck(status="ok"),
+            "database": self._database_check(database),
+            "redis": self._redis_check(request),
+            "kafka": self._kafka_check(request),
+        }
+
+    @staticmethod
+    def _runtime_mode_from_checks(checks: dict[str, ServiceCheck]) -> tuple[Literal["normal", "degraded"], list[str]]:
+        reasons = [
+            check.detail
+            for name, check in checks.items()
+            if name != "api" and check.status != "ok" and check.detail is not None
+        ]
+        return ("degraded", reasons) if reasons else ("normal", [])
 
     @staticmethod
     def _database_check(database: DatabaseRuntime) -> ServiceCheck:
@@ -158,7 +196,10 @@ class SystemStatusService:
     def _redis_check(request: Request) -> ServiceCheck:
         settings = getattr(request.app.state, "settings", get_settings())
         if not settings.redis_url:
-            return ServiceCheck(status="skipped", detail="Redis is not configured.")
+            return ServiceCheck(
+                status="skipped",
+                detail="Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+            )
         cache_backend = getattr(request.app.state, "cache_backend", None)
         if cache_backend is None:
             return ServiceCheck(status="error", detail="Redis cache backend is unavailable.")
@@ -168,6 +209,21 @@ class SystemStatusService:
         except Exception as exc:
             return ServiceCheck(status="error", detail=str(exc))
         return ServiceCheck(status="error", detail="Redis connectivity check failed.")
+
+    @staticmethod
+    def _kafka_check(request: Request) -> ServiceCheck:
+        settings = getattr(request.app.state, "settings", get_settings())
+        if not settings.kafka_enabled:
+            return ServiceCheck(
+                status="skipped",
+                detail="Kafka brokers are not configured; event streaming is running in local fallback mode.",
+            )
+        if settings.outbox_relay_enabled and getattr(request.app.state, "outbox_relay", None) is None:
+            return ServiceCheck(
+                status="error",
+                detail="Kafka brokers are configured but the outbox relay is unavailable.",
+            )
+        return ServiceCheck(status="ok")
 
 
 def get_system_status_service() -> SystemStatusService:

@@ -26,7 +26,7 @@ import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets(
-    'router mounts live 2D routes, live broadcast, gated Flutter 3D, and admin redirect',
+    'router mounts live 2D routes, live broadcast, gated Flutter 3D, and profile admin',
     (WidgetTester tester) async {
       final ProviderContainer container = _buildContainer(
         session: const AuthSession(
@@ -72,11 +72,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Streamer Tournament Engine'), findsOneWidget);
 
-      router.go(AppRoutes.profileGodMode);
+      router.go(AppRoutes.profileAdmin);
       await tester.pumpAndSettle();
       expect(find.text('Profile > Admin'), findsOneWidget);
       expect(find.text('Admin tooling is blocked'), findsOneWidget);
-      expect(find.text('God Mode blocked'), findsNothing);
     },
   );
 
@@ -86,6 +85,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appConfigProvider.overrideWithValue(
+            const GteAppConfig(
+              apiBaseUrl: 'https://example.test',
+              backendMode: GteBackendMode.live,
+            ),
+          ),
           profileDataProvider.overrideWith(
             (Ref ref) async => const ProfileData.unauthenticated(),
           ),

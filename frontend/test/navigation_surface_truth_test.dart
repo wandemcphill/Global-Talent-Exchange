@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/match/match_native_3d_blocked_screen.dart';
@@ -14,6 +16,7 @@ import 'package:gte_frontend/features/world/world_screen.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/hosted_competition_models.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
+import 'package:gte_frontend/shared/providers/auth_provider.dart';
 
 void main() {
   test('primary nav excludes placeholder routes and records live routes', () {
@@ -36,6 +39,40 @@ void main() {
       appRouteSurfaceFor(AppRoutes.matchesSimulate)?.state,
       AppRouteSurfaceState.hidden,
     );
+    expect(appRouteSurfaceFor('/profile/admin/god-mode'), isNull);
+  });
+
+  test('quick-action inventory excludes placeholder and hidden routes', () {
+    final Set<String> quickActionLocations =
+        appRouteInventory
+            .where((AppRouteSurface surface) => surface.showInQuickActions)
+            .map((AppRouteSurface surface) => surface.location)
+            .toSet();
+
+    expect(quickActionLocations, contains(AppRoutes.world));
+    expect(
+      quickActionLocations,
+      isNot(contains(AppRoutes.matchesNativeThreeD)),
+    );
+    expect(quickActionLocations, isNot(contains(AppRoutes.matchesSimulate)));
+  });
+
+  test('all visible route surfaces stay live', () {
+    final Iterable<AppRouteSurface> visibleSurfaces = appRouteInventory.where(
+      (AppRouteSurface surface) =>
+          surface.showInPrimaryNav || surface.showInQuickActions,
+    );
+
+    expect(visibleSurfaces, isNotEmpty);
+    for (final AppRouteSurface surface in visibleSurfaces) {
+      expect(
+        surface.state,
+        AppRouteSurfaceState.live,
+        reason:
+            'Visible route surface ${surface.label} (${surface.location}) '
+            'must stay live.',
+      );
+    }
   });
 
   test(
@@ -117,6 +154,7 @@ Widget _surfaceHost(Widget child) {
 
   return ProviderScope(
     overrides: [
+      appConfigProvider.overrideWithValue(_testAppConfig),
       profileDataProvider.overrideWith(
         (Ref ref) async => const ProfileData.unauthenticated(),
       ),
@@ -175,3 +213,8 @@ Widget _surfaceHost(Widget child) {
     child: MaterialApp(home: Scaffold(body: child)),
   );
 }
+
+const GteAppConfig _testAppConfig = GteAppConfig(
+  apiBaseUrl: 'https://example.test',
+  backendMode: GteBackendMode.live,
+);

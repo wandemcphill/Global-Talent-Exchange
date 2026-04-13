@@ -156,6 +156,40 @@ class FederationMembershipResult {
   }
 }
 
+class FederationProposalActionResult {
+  const FederationProposalActionResult({
+    required this.id,
+    required this.title,
+    required this.status,
+    this.voteType,
+  });
+
+  final String id;
+  final String title;
+  final String status;
+  final String? voteType;
+
+  factory FederationProposalActionResult.fromProposalJson(Object? value) {
+    final JsonMap json = jsonMap(value, label: 'federation proposal action');
+    return FederationProposalActionResult(
+      id: stringValue(json['id']),
+      title: stringValue(json['title'], fallback: 'Proposal'),
+      status: stringValue(json['status'], fallback: 'open'),
+      voteType: null,
+    );
+  }
+
+  factory FederationProposalActionResult.fromVoteJson(Object? value) {
+    final JsonMap json = jsonMap(value, label: 'federation vote action');
+    return FederationProposalActionResult(
+      id: stringValue(json['proposal_id']),
+      title: stringValue(json['proposal_title'], fallback: 'Proposal'),
+      status: stringValue(json['status'], fallback: 'open'),
+      voteType: stringValue(json['vote_type'], fallback: ''),
+    );
+  }
+}
+
 class FederationsApi {
   const FederationsApi({required this.client});
 
@@ -223,6 +257,56 @@ class FederationsApi {
       },
     );
     return FederationMembershipResult.fromJson(payload);
+  }
+
+  Future<FederationProposalActionResult> createProposal({
+    required String federationId,
+    required String title,
+    required String summary,
+    String proposalType = 'rule_change',
+    String? leagueId,
+    DateTime? votingEndsAt,
+  }) async {
+    final Object? payload = await client.post(
+      '/federations/$federationId/proposals',
+      body: <String, Object?>{
+        'league_id': leagueId,
+        'proposal_type': proposalType,
+        'title': title,
+        'summary': summary,
+        if (votingEndsAt != null)
+          'voting_ends_at': votingEndsAt.toUtc().toIso8601String(),
+        'payload_json': const <String, Object?>{},
+        'metadata_json': const <String, Object?>{'source': 'federations_hub'},
+      },
+    );
+    return FederationProposalActionResult.fromProposalJson(payload);
+  }
+
+  Future<FederationProposalActionResult> castProposalVote({
+    required String proposalId,
+    required String voteType,
+    String? comment,
+  }) async {
+    final Object? payload = await client.post(
+      '/federations/proposals/$proposalId/votes',
+      body: <String, Object?>{
+        'vote_type': voteType,
+        if (comment != null && comment.trim().isNotEmpty)
+          'comment': comment.trim(),
+      },
+    );
+    final JsonMap vote = jsonMap(payload, label: 'federation vote');
+    return FederationProposalActionResult.fromVoteJson(<String, Object?>{
+      ...vote,
+      'proposal_id': stringValue(vote['proposal_id'], fallback: proposalId),
+      'proposal_title': stringValue(
+        vote['proposal_title'],
+        fallback: 'Proposal',
+      ),
+      'status': 'open',
+      'vote_type': stringValue(vote['vote_type']),
+    });
   }
 }
 

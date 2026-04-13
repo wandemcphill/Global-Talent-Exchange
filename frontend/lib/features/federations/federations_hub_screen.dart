@@ -272,12 +272,36 @@ class _FederationDetailScreenState
               detail.governance['proposals'],
               label: 'federation proposals',
             );
+            final List<JsonMap> votes = jsonMapList(
+              detail.governance['votes'],
+              label: 'federation votes',
+            );
             final List<JsonMap> sanctions = jsonMapList(
               detail.governance['sanctions'],
               label: 'federation sanctions',
             );
             final clubContext = ref.watch(clubContextProvider);
+            final String? currentUserId = ref.watch(currentUserIdProvider);
+            final bool isAdmin =
+                ref.watch(isAdminProvider) || ref.watch(isSuperAdminProvider);
+            final List<JsonMap> members = jsonMapList(
+              detail.dashboard['members'],
+              label: 'federation members',
+            );
             final bool canRequestMembership = clubContext != null;
+            final bool hasActiveClubMembership =
+                clubContext != null &&
+                members.any(
+                  (JsonMap member) =>
+                      stringValue(member['club_id']) == clubContext.id &&
+                      stringValue(member['status'], fallback: 'pending') ==
+                          'active',
+                );
+            final bool canParticipateInGovernance =
+                currentUserId != null &&
+                (isAdmin ||
+                    federationContext?.id == widget.federationId ||
+                    hasActiveClubMembership);
             return Column(
               children: <Widget>[
                 GtexHeroPanel(
@@ -381,15 +405,47 @@ class _FederationDetailScreenState
                   title: 'Governance',
                   subtitle:
                       'Live proposals and sanctions from federation governance.',
+                  trailing: FilledButton.tonal(
+                    onPressed:
+                        canParticipateInGovernance
+                            ? () => _openProposalComposer(detail)
+                            : null,
+                    child: Text(
+                      canParticipateInGovernance
+                          ? 'Create proposal'
+                          : 'Access required',
+                    ),
+                  ),
                   child: Column(
                     children: <Widget>[
+                      if (!canParticipateInGovernance)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: spacingSM),
+                          child: _EmptyState(
+                            message:
+                                'Governance actions unlock once this session has active federation participation.',
+                          ),
+                        ),
                       if (proposals.isEmpty)
                         const _EmptyState(
                           message: 'No live proposals returned yet.',
                         )
                       else
-                        ...proposals.map(
-                          (JsonMap proposal) => Padding(
+                        ...proposals.map((JsonMap proposal) {
+                          final String proposalId = stringValue(proposal['id']);
+                          JsonMap? myVote;
+                          if (currentUserId != null) {
+                            for (final JsonMap vote in votes) {
+                              if (stringValue(vote['proposal_id']) ==
+                                      proposalId &&
+                                  stringValue(vote['user_id']) ==
+                                      currentUserId) {
+                                myVote = vote;
+                                break;
+                              }
+                            }
+                          }
+                          return Padding(
                             padding: const EdgeInsets.only(bottom: spacingSM),
                             child: GtexListTile(
                               title: stringValue(
@@ -400,9 +456,28 @@ class _FederationDetailScreenState
                                   '${stringValue(proposal['status'], fallback: 'open')} | yes ${intValue(proposal['yes_votes'])} | no ${intValue(proposal['no_votes'])} | abstain ${intValue(proposal['abstain_votes'])}',
                               leadingIcon: Icons.how_to_vote_rounded,
                               tone: GtexSurfaceTone.warning,
+                              trailing:
+                                  myVote != null
+                                      ? GtexPill(
+                                        label:
+                                            'Voted ${stringValue(myVote['vote_type'], fallback: 'recorded').toUpperCase()}',
+                                        tone: GtexSurfaceTone.success,
+                                      )
+                                      : canParticipateInGovernance &&
+                                          stringValue(
+                                                proposal['status'],
+                                                fallback: 'open',
+                                              ) ==
+                                              'open'
+                                      ? FilledButton.tonal(
+                                        onPressed:
+                                            () => _openVoteSheet(proposal),
+                                        child: const Text('Vote'),
+                                      )
+                                      : null,
                             ),
-                          ),
-                        ),
+                          );
+                        }),
                       if (sanctions.isNotEmpty) ...<Widget>[
                         const SizedBox(height: spacingMD),
                         Text(
@@ -529,6 +604,315 @@ class _FederationDetailScreenState
     );
   }
 
+  Future<void> _openProposalComposer(FederationDetailData detail) async {
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+    final TextEditingController titleController = TextEditingController();
+    final TextEditingController summaryController = TextEditingController();
+    String proposalType = 'rule_change';
+    bool submitting = false;
+    String? inlineError;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext sheetContext) {
+        return StatefulBuilder(
+          builder: (
+            BuildContext context,
+            void Function(void Function()) setState,
+          ) {
+            final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, bottomInset + 20),
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Create proposal',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Submit a live federation governance proposal.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      if (inlineError != null) ...<Widget>[
+                        const SizedBox(height: spacingSM),
+                        Text(
+                          inlineError!,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: spacingMD),
+                      DropdownButtonFormField<String>(
+                        value: proposalType,
+                        items: const <DropdownMenuItem<String>>[
+                          DropdownMenuItem<String>(
+                            value: 'rule_change',
+                            child: Text('Rule change'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'schedule_change',
+                            child: Text('Schedule change'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'competition_change',
+                            child: Text('Competition change'),
+                          ),
+                        ],
+                        onChanged:
+                            submitting
+                                ? null
+                                : (String? value) {
+                                  if (value == null) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    proposalType = value;
+                                  });
+                                },
+                        decoration: const InputDecoration(
+                          labelText: 'Proposal type',
+                        ),
+                      ),
+                      const SizedBox(height: spacingSM),
+                      TextFormField(
+                        controller: titleController,
+                        decoration: const InputDecoration(labelText: 'Title'),
+                        validator: (String? value) {
+                          final String trimmed = value?.trim() ?? '';
+                          if (trimmed.length < 4) {
+                            return 'Enter a proposal title.';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: spacingSM),
+                      TextFormField(
+                        controller: summaryController,
+                        decoration: const InputDecoration(labelText: 'Summary'),
+                        minLines: 3,
+                        maxLines: 6,
+                        validator: (String? value) {
+                          final String trimmed = value?.trim() ?? '';
+                          if (trimmed.length < 10) {
+                            return 'Enter a summary with enough detail.';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: spacingMD),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed:
+                                  submitting
+                                      ? null
+                                      : () => Navigator.of(sheetContext).pop(),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: spacingSM),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed:
+                                  submitting
+                                      ? null
+                                      : () async {
+                                        if (!formKey.currentState!.validate()) {
+                                          return;
+                                        }
+                                        setState(() {
+                                          submitting = true;
+                                          inlineError = null;
+                                        });
+                                        try {
+                                          final FederationProposalActionResult
+                                          result = await ref
+                                              .read(federationsApiProvider)
+                                              .createProposal(
+                                                federationId:
+                                                    widget.federationId,
+                                                title:
+                                                    titleController.text.trim(),
+                                                summary:
+                                                    summaryController.text
+                                                        .trim(),
+                                                proposalType: proposalType,
+                                              );
+                                          ref.invalidate(
+                                            federationDetailProvider(
+                                              widget.federationId,
+                                            ),
+                                          );
+                                          if (sheetContext.mounted) {
+                                            Navigator.of(sheetContext).pop();
+                                          }
+                                          if (!mounted) {
+                                            return;
+                                          }
+                                          trackFeatureEvent(
+                                            topic: 'federations',
+                                            name: 'federation_proposal_created',
+                                            payload: <String, Object?>{
+                                              'federation_id':
+                                                  widget.federationId,
+                                              'proposal_id': result.id,
+                                              'proposal_type': proposalType,
+                                            },
+                                          );
+                                          AppFeedback.showSuccess(
+                                            this.context,
+                                            '${detail.federation.name} proposal "${result.title}" is now ${result.status}.',
+                                          );
+                                        } catch (error) {
+                                          setState(() {
+                                            inlineError =
+                                                AppFeedback.messageFor(error);
+                                          });
+                                        } finally {
+                                          if (sheetContext.mounted) {
+                                            setState(() {
+                                              submitting = false;
+                                            });
+                                          }
+                                        }
+                                      },
+                              child: const Text('Submit'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openVoteSheet(JsonMap proposal) async {
+    final String title = stringValue(proposal['title'], fallback: 'Proposal');
+    final String summary = stringValue(
+      proposal['summary'],
+      fallback: 'No proposal summary provided.',
+    );
+    final String proposalId = stringValue(proposal['id']);
+    if (proposalId.isEmpty) {
+      AppFeedback.showError(
+        context,
+        const FormatException('Proposal id is missing from the live payload.'),
+      );
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: spacingSM),
+                Text(summary, style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: spacingMD),
+                Wrap(
+                  spacing: spacingSM,
+                  runSpacing: spacingSM,
+                  children: <Widget>[
+                    FilledButton(
+                      onPressed:
+                          () => _castVote(
+                            context,
+                            proposalId: proposalId,
+                            title: title,
+                            voteType: 'yes',
+                          ),
+                      child: const Text('Vote yes'),
+                    ),
+                    FilledButton.tonal(
+                      onPressed:
+                          () => _castVote(
+                            context,
+                            proposalId: proposalId,
+                            title: title,
+                            voteType: 'no',
+                          ),
+                      child: const Text('Vote no'),
+                    ),
+                    OutlinedButton(
+                      onPressed:
+                          () => _castVote(
+                            context,
+                            proposalId: proposalId,
+                            title: title,
+                            voteType: 'abstain',
+                          ),
+                      child: const Text('Abstain'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _castVote(
+    BuildContext sheetContext, {
+    required String proposalId,
+    required String title,
+    required String voteType,
+  }) async {
+    try {
+      final FederationProposalActionResult result = await ref
+          .read(federationsApiProvider)
+          .castProposalVote(proposalId: proposalId, voteType: voteType);
+      ref.invalidate(federationDetailProvider(widget.federationId));
+      if (sheetContext.mounted) {
+        Navigator.of(sheetContext).pop();
+      }
+      if (!mounted) {
+        return;
+      }
+      trackFeatureEvent(
+        topic: 'federations',
+        name: 'federation_vote_cast',
+        payload: <String, Object?>{
+          'federation_id': widget.federationId,
+          'proposal_id': proposalId,
+          'vote_type': voteType,
+        },
+      );
+      AppFeedback.showSuccess(
+        context,
+        'Vote ${result.voteType ?? voteType} recorded for "$title".',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showError(context, error);
+    }
+  }
+
   Future<void> _requestMembership(
     FederationDetailData detail,
     String clubId,
@@ -577,15 +961,22 @@ class _SectionCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    this.trailing,
   });
 
   final String title;
   final String subtitle;
   final Widget child;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    return GtexSectionPanel(title: title, subtitle: subtitle, child: child);
+    return GtexSectionPanel(
+      title: title,
+      subtitle: subtitle,
+      trailing: trailing,
+      child: child,
+    );
   }
 }
 

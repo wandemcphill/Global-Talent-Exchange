@@ -247,12 +247,6 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
                 ),
       ),
       GoRoute(
-        path: AppRoutes.profileGodMode,
-        redirect: (BuildContext context, GoRouterState state) {
-          return AppRoutes.profileAdmin;
-        },
-      ),
-      GoRoute(
         path: AppRoutes.competitions,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>

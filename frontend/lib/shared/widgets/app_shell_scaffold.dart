@@ -26,7 +26,7 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authPresentationProvider);
-    final GteAppConfig appConfig = GteAppConfig.fromEnvironment();
+    final GteAppConfig appConfig = ref.watch(appConfigProvider);
     final tokens = GteShellTheme.tokensOf(context);
     final visuals = GteShellTheme.visualsOf(context);
     final theme = GteShellTheme.definitionOf(context);

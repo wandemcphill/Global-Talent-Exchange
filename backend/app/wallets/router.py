@@ -64,7 +64,7 @@ from app.wallets.funding_service import (
 )
 from app.wallets.service import LedgerError, WalletService
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
-from app.wallets.providers import get_live_provider_adapter
+from app.wallets.providers.registry import get_live_provider_adapter
 from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict
