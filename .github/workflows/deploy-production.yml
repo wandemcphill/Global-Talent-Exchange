@@ -89,7 +89,7 @@ jobs:
     env:
       UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
       GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
-      GTEX_UNITY_BUILD_LOG: ${{ runner.temp }}\gtex_test_migration_windows_build.log
+      GTEX_UNITY_BUILD_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_windows_build.log
     steps:
       - uses: actions/checkout@v4
       - name: Verify Unity CI configuration
@@ -107,6 +107,8 @@ jobs:
       - name: Build GTEX Windows player
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
+
           & $env:UNITY_EDITOR_PATH `
             -batchmode -quit -nographics `
             -buildTarget StandaloneWindows64 `

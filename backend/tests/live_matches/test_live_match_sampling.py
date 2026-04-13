@@ -58,11 +58,15 @@ def test_sample_viewer_frame_interpolates_live_motion_between_timeline_frames() 
         next_player = next(player for player in next_frame.players if player.player_id == moving_player_id)
         sampled_player = next(player for player in sampled_frame.players if player.player_id == moving_player_id)
 
-        assert min(previous_player.position.x, next_player.position.x) <= sampled_player.position.x <= max(
-            previous_player.position.x, next_player.position.x
+        assert (
+            min(previous_player.position.x, next_player.position.x)
+            <= sampled_player.position.x
+            <= max(previous_player.position.x, next_player.position.x)
         )
-        assert min(previous_player.position.y, next_player.position.y) <= sampled_player.position.y <= max(
-            previous_player.position.y, next_player.position.y
+        assert (
+            min(previous_player.position.y, next_player.position.y)
+            <= sampled_player.position.y
+            <= max(previous_player.position.y, next_player.position.y)
         )
         assert (
             abs(sampled_player.position.x - previous_player.position.x) > 0.001
@@ -70,11 +74,15 @@ def test_sample_viewer_frame_interpolates_live_motion_between_timeline_frames() 
         )
 
     if ball_moved:
-        assert min(previous_frame.ball.position.x, next_frame.ball.position.x) <= sampled_frame.ball.position.x <= max(
-            previous_frame.ball.position.x, next_frame.ball.position.x
+        assert (
+            min(previous_frame.ball.position.x, next_frame.ball.position.x)
+            <= sampled_frame.ball.position.x
+            <= max(previous_frame.ball.position.x, next_frame.ball.position.x)
         )
-        assert min(previous_frame.ball.position.y, next_frame.ball.position.y) <= sampled_frame.ball.position.y <= max(
-            previous_frame.ball.position.y, next_frame.ball.position.y
+        assert (
+            min(previous_frame.ball.position.y, next_frame.ball.position.y)
+            <= sampled_frame.ball.position.y
+            <= max(previous_frame.ball.position.y, next_frame.ball.position.y)
         )
         assert (
             abs(sampled_frame.ball.position.x - previous_frame.ball.position.x) > 0.001

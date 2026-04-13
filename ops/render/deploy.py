@@ -393,8 +393,7 @@ def _run_unity_live_playback_check(*, health_url: str) -> None:
         summary = json.loads(stdout)
     except json.JSONDecodeError as exc:
         raise RenderDeployError(
-            "Unity live playback verification did not return valid JSON. "
-            f"stdout={stdout!r} stderr={stderr!r}"
+            "Unity live playback verification did not return valid JSON. " f"stdout={stdout!r} stderr={stderr!r}"
         ) from exc
 
     if not isinstance(summary, dict):
