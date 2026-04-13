@@ -24,7 +24,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final GteAppConfig appConfig = GteAppConfig.fromEnvironment();
+    final GteAppConfig appConfig = ref.watch(appConfigProvider);
     final AsyncValue<ProfileData> profileValue = ref.watch(profileDataProvider);
     final AsyncValue<CompetitionHubData> competitionsValue = ref.watch(
       competitionHubProvider,

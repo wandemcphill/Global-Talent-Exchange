@@ -20,7 +20,6 @@ class AppRoutes {
   static const String profileLogin = '/profile/login';
   static const String profileSignup = '/profile/signup';
   static const String profileAdmin = '/profile/admin';
-  static const String profileGodMode = '/profile/admin/god-mode';
   static const String competitions = '/competitions';
   static const String competitionsFamily = '/competitions/:family';
   static const String competitionsDetail = '/competitions/:family/:id';
@@ -94,7 +93,9 @@ class AppRouteSurface {
       primaryNav && state != AppRouteSurfaceState.placeholder;
 
   bool get showInQuickActions =>
-      quickAction && state != AppRouteSurfaceState.hidden;
+      quickAction &&
+      state != AppRouteSurfaceState.hidden &&
+      state != AppRouteSurfaceState.placeholder;
 }
 
 class AppDestination {
@@ -236,13 +237,6 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.profileAdmin,
     state: AppRouteSurfaceState.hidden,
     summary: 'Permission-gated admin tooling.',
-  ),
-  AppRouteSurface(
-    label: 'God Mode',
-    location: AppRoutes.profileGodMode,
-    state: AppRouteSurfaceState.hidden,
-    summary:
-        'Hidden admin console route that now redirects back to the active-shell admin surface.',
   ),
   AppRouteSurface(
     label: 'Competitions',

@@ -109,8 +109,10 @@ class MatchScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                _ActionDeck(fixtureMode: fixtureMode),
+                if (fixtureMode) ...<Widget>[
+                  const SizedBox(height: 24),
+                  const _FixtureSimulationDeck(),
+                ],
               ],
             );
           },
@@ -130,8 +132,10 @@ class MatchScreen extends ConsumerWidget {
                     icon: Icons.error_outline_rounded,
                     accentColor: Theme.of(context).colorScheme.error,
                   ),
-                  const SizedBox(height: 24),
-                  _ActionDeck(fixtureMode: fixtureMode),
+                  if (fixtureMode) ...<Widget>[
+                    const SizedBox(height: 24),
+                    const _FixtureSimulationDeck(),
+                  ],
                 ],
               ),
         ),
@@ -200,49 +204,24 @@ class _LiveMatchCard extends StatelessWidget {
   }
 }
 
-class _ActionDeck extends StatelessWidget {
-  const _ActionDeck({required this.fixtureMode});
-
-  final bool fixtureMode;
+class _FixtureSimulationDeck extends StatelessWidget {
+  const _FixtureSimulationDeck();
 
   @override
   Widget build(BuildContext context) {
     return GtexSectionPanel(
-      eyebrow: 'VIEWER LANES',
-      title: 'Blocked probes and truth-preserving side routes',
+      eyebrow: 'FIXTURE TOOLS',
+      title: 'Local simulation sandbox',
       subtitle:
-          'These routes stay explicit so live, blocked, and fixture-mode-only states are never confused.',
+          'This route is only exposed during explicit fixture-mode runs, so the live shell never advertises a local-only match path as backend-backed.',
       child: Column(
         children: <Widget>[
           _ActionCard(
-            title: 'Open by match key',
-            description:
-                'Manual launch path. This route is addressable, but it stays visibly blocked until the live viewer session can be served without fabricated fallback state.',
-            chips: const <String>['BLOCKED', '2D'],
-            primaryLabel: 'Open spectate probe',
-            onPrimaryTap: () => context.push(AppRoutes.matchesSpectate),
-          ),
-          const SizedBox(height: 12),
-          _ActionCard(
-            title: 'Native 3D preview',
-            description:
-                'Product visibility only. The active shell keeps native 3D unshipped until a verified platform bridge is present.',
-            chips: const <String>['COMING SOON', 'NATIVE_3D'],
-            primaryLabel: 'View coming soon note',
-            onPrimaryTap: () => context.push(AppRoutes.matchesNativeThreeD),
-          ),
-          const SizedBox(height: 12),
-          _ActionCard(
             title: 'Simulation sandbox',
             description:
-                fixtureMode
-                    ? 'Explicit fixture-mode local simulation path. This route does not present itself as a live backend feed.'
-                    : 'This local simulation route is disabled in live shells and only opens during explicit fixture-mode QA runs.',
-            chips:
-                fixtureMode
-                    ? const <String>['FIXTURE MODE', 'LOCAL']
-                    : const <String>['BLOCKED', 'FIXTURE ONLY'],
-            primaryLabel: 'Open simulate',
+                'Explicit fixture-mode local simulation path. This route does not present itself as a live backend feed.',
+            chips: const <String>['FIXTURE MODE', 'LOCAL'],
+            primaryLabel: 'Open simulation',
             onPrimaryTap: () => context.push(AppRoutes.matchesSimulate),
           ),
         ],
