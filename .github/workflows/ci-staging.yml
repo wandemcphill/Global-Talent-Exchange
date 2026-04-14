@@ -240,14 +240,28 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
-          & $env:UNITY_EDITOR_PATH `
-            -batchmode -quit -nographics `
-            -buildTarget StandaloneWindows64 `
-            -projectPath $env:GTEX_UNITY_PROJECT_PATH `
-            -executeMethod FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64FromCommandLine `
-            -logFile $env:GTEX_UNITY_BUILD_LOG
+          $unityArgs = @(
+            '-batchmode'
+            '-quit'
+            '-nographics'
+            '-buildTarget'
+            'StandaloneWindows64'
+            '-projectPath'
+            ('"{0}"' -f $env:GTEX_UNITY_PROJECT_PATH)
+            '-executeMethod'
+            'FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64FromCommandLine'
+            '-logFile'
+            ('"{0}"' -f $env:GTEX_UNITY_BUILD_LOG)
+          ) -join ' '
 
-          $exitCode = $LASTEXITCODE
+          $unityProcess = Start-Process `
+            -FilePath $env:UNITY_EDITOR_PATH `
+            -ArgumentList $unityArgs `
+            -NoNewWindow `
+            -Wait `
+            -PassThru
+
+          $exitCode = [int]$unityProcess.ExitCode
           if ($exitCode -ne 0) {
             if (Test-Path $env:GTEX_UNITY_BUILD_LOG) {
               Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
