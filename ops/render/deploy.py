@@ -13,6 +13,7 @@ from urllib import error, parse, request
 from verify_unity_routes import RenderUnityRouteVerificationError, derive_api_base_url, verify_unity_live_routes
 
 DEFAULT_SERVICE_ORDER = ("API", "OUTBOX", "SIMULATION", "PROJECTIONS", "WEB")
+RENDER_API_BASE_URL = "https://api.render.com/v1"
 SUCCESS_STATUSES = {"active", "deployed", "live", "success", "succeeded"}
 FAILURE_STATUSES = {
     "build_failed",
@@ -56,6 +57,13 @@ def _log(message: str) -> None:
 
 def _optional_env(name: str) -> str:
     return os.getenv(name, "").strip()
+
+
+def _required_env(name: str) -> str:
+    value = _optional_env(name)
+    if not value:
+        raise RenderDeployError(f"{name} must be set.")
+    return value
 
 
 def _get_int_env(name: str, default: int) -> int:
@@ -242,6 +250,15 @@ def _request_json(
 
 
 class RenderHookClient:
+    def __init__(self, *, api_key: str | None = None) -> None:
+        self._api_key = (api_key or _required_env("RENDER_API_KEY")).strip()
+
+    def _render_api_headers(self) -> dict[str, str]:
+        return {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self._api_key}",
+        }
+
     def trigger_deploy(self, deploy_hook_url: str) -> dict[str, Any]:
         return _request_json(
             method="POST",
@@ -255,7 +272,8 @@ class RenderHookClient:
         safe_deploy_id = parse.quote(deploy_id, safe="")
         return _request_json(
             method="GET",
-            url=f"https://api.render.com/deploy/{safe_service_id}/{safe_deploy_id}",
+            url=f"{RENDER_API_BASE_URL}/services/{safe_service_id}/deploys/{safe_deploy_id}",
+            headers=self._render_api_headers(),
             request_label="Render API",
         )
 
@@ -469,7 +487,7 @@ def main() -> int:
                 _run_unity_live_playback_check(health_url=health_url)
 
     except Exception as exc:  # noqa: BLE001
-        _log("Automatic rollback is not available in hook-only mode.")
+        _log("Automatic rollback is not configured in this deploy workflow.")
         _log(f"Deployment failed: {exc}")
         return 1
 

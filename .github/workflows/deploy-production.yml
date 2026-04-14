@@ -191,6 +191,7 @@ jobs:
         id: render-config
         shell: bash
         env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_API: ${{ secrets.RENDER_SERVICE_API }}
           RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
           RENDER_SERVICE_WEB: ${{ secrets.RENDER_SERVICE_WEB }}
@@ -198,6 +199,7 @@ jobs:
           RENDER_HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
         run: |
           missing=()
+          [[ -n "$RENDER_API_KEY" ]] || missing+=("RENDER_API_KEY")
           [[ -n "$RENDER_SERVICE_API" ]] || missing+=("RENDER_SERVICE_API")
           [[ -n "$RENDER_DEPLOY_HOOK_API" ]] || missing+=("RENDER_DEPLOY_HOOK_API")
           [[ -n "$RENDER_SERVICE_WEB" ]] || missing+=("RENDER_SERVICE_WEB")
@@ -214,6 +216,7 @@ jobs:
       - run: python ops/render/deploy.py
         if: steps.render-config.outputs.configured == 'true'
         env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_API: ${{ secrets.RENDER_SERVICE_API }}
           RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
           RENDER_SERVICE_WEB: ${{ secrets.RENDER_SERVICE_WEB }}
