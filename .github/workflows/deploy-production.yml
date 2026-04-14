@@ -86,6 +86,9 @@ jobs:
       - windows
       - unity
     timeout-minutes: 90
+    defaults:
+      run:
+        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -command ". '{0}'"
     env:
       UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
       GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
@@ -93,7 +96,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify Unity CI configuration
-        shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
@@ -110,7 +112,6 @@ jobs:
             throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
           }
       - name: Build GTEX Windows player
-        shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
@@ -129,7 +130,6 @@ jobs:
             throw "Unity Windows batch build failed with exit code $exitCode."
           }
       - name: Verify Unity build log
-        shell: powershell
         run: |
           if (-not (Test-Path $env:GTEX_UNITY_BUILD_LOG)) {
             throw "Unity build log was not produced: $env:GTEX_UNITY_BUILD_LOG"
