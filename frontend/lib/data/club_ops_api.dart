@@ -78,8 +78,13 @@ class ClubOpsApi {
     String? clubName,
   }) {
     return _withFallback<SponsorshipDashboard>(
-      () async => _parseSponsorships(
-        _asMap(await _request('GET', '/api/clubs/$clubId/sponsorships')),
+      () async => _mergeSponsorships(
+        overview: _asMap(
+          await _request('GET', '/api/clubs/$clubId/sponsorships'),
+        ),
+        catalog: _asMap(
+          await _request('GET', '/api/clubs/$clubId/sponsorships/catalog'),
+        ),
         fallbackClubId: clubId,
         fallbackClubName: clubName,
       ),
@@ -87,6 +92,43 @@ class ClubOpsApi {
         await Future<void>.delayed(latency);
         return fixtureSponsorships(clubId, clubName);
       },
+    );
+  }
+
+  Future<SponsorshipContract> createSponsorshipContract({
+    required String clubId,
+    required SponsorshipApplicationDraft draft,
+    Map<String, String> packageNamesByCode = const <String, String>{},
+  }) async {
+    final Map<String, Object?> payload = _asMap(
+      await _request(
+        'POST',
+        '/api/clubs/$clubId/sponsorships/contracts',
+        body: draft.toJson(),
+      ),
+    );
+    return _parseSponsorshipContract(
+      payload,
+      packageNamesByCode: packageNamesByCode,
+    );
+  }
+
+  Future<SponsorshipContract> updateSponsorshipContract({
+    required String clubId,
+    required String contractId,
+    required SponsorshipContractUpdateDraft draft,
+    Map<String, String> packageNamesByCode = const <String, String>{},
+  }) async {
+    final Map<String, Object?> payload = _asMap(
+      await _request(
+        'PATCH',
+        '/api/clubs/$clubId/sponsorships/contracts/$contractId',
+        body: draft.toJson(),
+      ),
+    );
+    return _parseSponsorshipContract(
+      payload,
+      packageNamesByCode: packageNamesByCode,
     );
   }
 
@@ -230,12 +272,16 @@ class ClubOpsApi {
     String method,
     String path, {
     Map<String, Object?> query = const <String, Object?>{},
+    Object? body,
   }) async {
     try {
       final String? resolvedAccessToken = await _readAccessToken();
       final Map<String, String> headers = <String, String>{
         'Accept': 'application/json',
       };
+      if (body != null) {
+        headers['Content-Type'] = 'application/json';
+      }
       if (resolvedAccessToken != null &&
           resolvedAccessToken.trim().isNotEmpty) {
         headers['Authorization'] = 'Bearer ${resolvedAccessToken.trim()}';
@@ -245,6 +291,7 @@ class ClubOpsApi {
           method: method,
           uri: config.uriFor(path, query),
           headers: headers,
+          body: body,
         ),
       );
       if (response.statusCode >= 400) {
@@ -363,36 +410,72 @@ class ClubOpsApi {
     );
   }
 
-  SponsorshipDashboard _parseSponsorships(
-    Map<String, Object?> json, {
+  SponsorshipDashboard _mergeSponsorships({
+    required Map<String, Object?> overview,
+    required Map<String, Object?> catalog,
     required String fallbackClubId,
     String? fallbackClubName,
   }) {
-    if (!json.containsKey('packages') &&
-        !json.containsKey('contracts') &&
-        !json.containsKey('asset_slots')) {
+    if (!overview.containsKey('contracts') &&
+        !overview.containsKey('visible_assets')) {
       throw const GteParsingException(
-        'Sponsorship payload missing catalog and contract fields.',
+        'Sponsorship overview payload missing contracts and assets.',
       );
     }
+    if (!catalog.containsKey('packages')) {
+      throw const GteParsingException(
+        'Sponsorship catalog payload missing packages.',
+      );
+    }
+    final List<SponsorshipPackage> packages = _packageList(catalog['packages']);
+    final Map<String, String> packageNamesByCode = <String, String>{
+      for (final SponsorshipPackage package in packages)
+        package.code: package.name,
+    };
+    final List<SponsorshipContract> contracts = _contractList(
+      overview['contracts'],
+      packageNamesByCode: packageNamesByCode,
+    );
     return SponsorshipDashboard(
-      clubId: _string(json, <String>['club_id', 'clubId'], fallbackClubId),
-      clubName: _string(json, <String>[
+      clubId: _string(overview, <String>['club_id', 'clubId'], fallbackClubId),
+      clubName: _string(overview, <String>[
         'club_name',
         'clubName',
       ], fallbackClubName ?? clubOpsDisplayClubName(fallbackClubId)),
-      activeContractValue: _number(json, <String>[
-        'active_contract_value',
-        'activeContractValue',
-      ], 0),
-      projectedRenewalValue: _number(json, <String>[
-        'projected_renewal_value',
-        'projectedRenewalValue',
-      ], 0),
-      packages: _packageList(json['packages']),
-      contracts: _contractList(json['contracts']),
-      assetSlots: _assetSlotList(json['asset_slots'] ?? json['assetSlots']),
-      notes: _stringList(json['notes']),
+      activeContractValue: contracts
+          .where(
+            (SponsorshipContract contract) =>
+                contract.status == SponsorshipContractStatus.active,
+          )
+          .fold<double>(
+            0,
+            (double total, SponsorshipContract contract) =>
+                total + contract.totalValue,
+          ),
+      activeContractCount: _integer(
+        overview,
+        <String>['active_contract_count', 'activeContractCount'],
+        contracts
+            .where(
+              (SponsorshipContract contract) =>
+                  contract.status == SponsorshipContractStatus.active,
+            )
+            .length,
+      ),
+      settledRevenue: _minorToMajor(
+        _integer(overview, <String>[
+          'total_settled_revenue_minor',
+          'totalSettledRevenueMinor',
+        ], 0),
+      ),
+      packages: packages,
+      contracts: contracts,
+      assetSlots: _assetSlotList(
+        overview['visible_assets'] ??
+            overview['asset_slots'] ??
+            overview['assetSlots'],
+      ),
+      notes: _stringList(overview['notes']),
     );
   }
 
@@ -784,31 +867,65 @@ class ClubOpsApi {
     return _asList(value)
         .map((Object? item) {
           final Map<String, Object?> json = _asMap(item);
+          final String assetType = _string(json, <String>[
+            'asset_type',
+            'assetType',
+          ], 'club_banner');
+          final String payoutSchedule = _string(json, <String>[
+            'payout_schedule',
+            'payoutSchedule',
+          ], 'monthly');
+          final int durationMonths = _integer(json, <String>[
+            'duration_months',
+            'durationMonths',
+            'default_duration_months',
+            'defaultDurationMonths',
+          ], 12);
           return SponsorshipPackage(
             id: _string(json, <String>['id'], 'package'),
+            code: _string(json, <String>[
+              'code',
+              'package_code',
+              'packageCode',
+            ], _string(json, <String>['id'], 'package')),
             name: _string(json, <String>['name'], 'Package'),
             tierLabel: _string(json, <String>[
               'tier_label',
               'tierLabel',
-            ], 'Club'),
+            ], _assetTypeLabel(assetType)),
             description: _string(json, <String>[
               'description',
             ], 'Sponsorship package'),
-            value: _number(json, <String>['value'], 0),
-            durationMonths: _integer(json, <String>[
-              'duration_months',
-              'durationMonths',
-            ], 12),
+            value: _number(
+              json,
+              <String>['value'],
+              _minorToMajor(
+                _integer(json, <String>[
+                  'base_amount_minor',
+                  'baseAmountMinor',
+                ], 0),
+              ),
+            ),
+            currency: _string(json, <String>['currency'], 'USD'),
+            durationMonths: durationMonths,
             assetCount: _integer(json, <String>[
               'asset_count',
               'assetCount',
-            ], 0),
-            inventorySummary: _string(json, <String>[
-              'inventory_summary',
-              'inventorySummary',
-            ], ''),
+            ], 1),
+            assetType: assetType,
+            payoutSchedule: payoutSchedule,
+            inventorySummary: _string(
+              json,
+              <String>['inventory_summary', 'inventorySummary'],
+              '${_assetTypeLabel(assetType)} placement | ${_scheduleLabel(payoutSchedule)} payouts',
+            ),
             deliverables: _stringList(
-              json['deliverables'] ?? json['deliverableList'],
+              json['deliverables'] ??
+                  json['deliverableList'] ??
+                  <Object?>[
+                    '$durationMonths-month default term',
+                    '${_scheduleLabel(payoutSchedule)} payout cadence',
+                  ],
             ),
             isFeatured: _boolean(json, <String>[
               'is_featured',
@@ -819,86 +936,207 @@ class ClubOpsApi {
         .toList(growable: false);
   }
 
-  List<SponsorshipContract> _contractList(Object? value) {
+  List<SponsorshipContract> _contractList(
+    Object? value, {
+    Map<String, String> packageNamesByCode = const <String, String>{},
+  }) {
     return _asList(value)
         .map((Object? item) {
           final Map<String, Object?> json = _asMap(item);
-          return SponsorshipContract(
-            id: _string(json, <String>['id'], 'contract'),
-            sponsorName: _string(json, <String>[
-              'sponsor_name',
-              'sponsorName',
-            ], 'Sponsor'),
-            packageName: _string(json, <String>[
-              'package_name',
-              'packageName',
-            ], 'Package'),
-            status: _contractStatus(
-              _string(json, <String>['status'], 'active').toLowerCase(),
-            ),
-            totalValue: _number(json, <String>['total_value', 'totalValue'], 0),
-            startDate: _dateTime(json, <String>[
-              'start_date',
-              'startDate',
-            ], DateTime.utc(2026, 1, 1)),
-            endDate: _dateTime(json, <String>[
-              'end_date',
-              'endDate',
-            ], DateTime.utc(2026, 12, 31)),
-            renewalWindowLabel: _string(json, <String>[
-              'renewal_window_label',
-              'renewalWindowLabel',
-            ], 'Review 60 days before expiry'),
-            visibilityLabel: _string(json, <String>[
-              'visibility_label',
-              'visibilityLabel',
-            ], 'High visibility'),
-            contactName: _string(json, <String>[
-              'contact_name',
-              'contactName',
-            ], ''),
-            moderationState: _moderationState(
-              _string(json, <String>[
-                'moderation_state',
-                'moderationState',
-              ], 'approved'),
-            ),
-            deliverables: _stringList(json['deliverables']),
-            notes: _stringList(json['notes']),
+          return _parseSponsorshipContract(
+            json,
+            packageNamesByCode: packageNamesByCode,
           );
         })
         .toList(growable: false);
+  }
+
+  SponsorshipContract _parseSponsorshipContract(
+    Map<String, Object?> json, {
+    Map<String, String> packageNamesByCode = const <String, String>{},
+  }) {
+    final String packageCode = _string(json, <String>[
+      'package_code',
+      'packageCode',
+      'package_name',
+      'packageName',
+    ], 'package');
+    final String payoutSchedule = _string(json, <String>[
+      'payout_schedule',
+      'payoutSchedule',
+    ], 'monthly');
+    final List<String> assetSlotCodes = _stringList(
+      json['asset_slot_codes'] ?? json['assetSlotCodes'],
+    );
+    final String assetType = _string(json, <String>[
+      'asset_type',
+      'assetType',
+    ], 'club_banner');
+    final int durationMonths = _integer(json, <String>[
+      'duration_months',
+      'durationMonths',
+    ], 0);
+    final int outstandingAmountMinor = _integer(json, <String>[
+      'outstanding_amount_minor',
+      'outstandingAmountMinor',
+    ], 0);
+    final int settledAmountMinor = _integer(json, <String>[
+      'settled_amount_minor',
+      'settledAmountMinor',
+    ], 0);
+    final String currency = _string(json, <String>['currency'], 'USD');
+    final String? customCopy = _nullableString(json, <String>[
+      'custom_copy',
+      'customCopy',
+    ]);
+    final String? customLogoUrl = _nullableString(json, <String>[
+      'custom_logo_url',
+      'customLogoUrl',
+    ]);
+    final bool moderationRequired = _boolean(json, <String>[
+      'moderation_required',
+      'moderationRequired',
+    ], false);
+    final List<String> notes = _stringList(
+      json['notes'] ??
+          <Object?>[
+            if (moderationRequired) 'Moderation required before activation.',
+            if (outstandingAmountMinor > 0)
+              'Outstanding balance: ${_formatMinorCurrency(outstandingAmountMinor, currency)}',
+            if (customCopy != null) 'Submitted copy: $customCopy',
+            if (customLogoUrl != null) 'Submitted logo: $customLogoUrl',
+          ],
+    );
+    return SponsorshipContract(
+      id: _string(json, <String>['id'], 'contract'),
+      sponsorName: _string(json, <String>[
+        'sponsor_name',
+        'sponsorName',
+      ], 'Sponsor'),
+      packageCode: packageCode,
+      packageName:
+          packageNamesByCode[packageCode] ??
+          _string(json, <String>[
+            'package_name',
+            'packageName',
+          ], _humanizeToken(packageCode)),
+      status: _contractStatus(
+        _string(json, <String>['status'], 'active').toLowerCase(),
+      ),
+      totalValue: _number(
+        json,
+        <String>['total_value', 'totalValue'],
+        _minorToMajor(
+          _integer(json, <String>[
+            'contract_amount_minor',
+            'contractAmountMinor',
+          ], 0),
+        ),
+      ),
+      currency: currency,
+      payoutSchedule: payoutSchedule,
+      startDate: _dateTime(json, <String>[
+        'start_at',
+        'start_date',
+        'startDate',
+      ], DateTime.utc(2026, 1, 1)),
+      endDate: _dateTime(json, <String>[
+        'end_at',
+        'end_date',
+        'endDate',
+      ], DateTime.utc(2026, 12, 31)),
+      assetSlotCodes: assetSlotCodes,
+      renewalWindowLabel: _string(
+        json,
+        <String>['renewal_window_label', 'renewalWindowLabel'],
+        '$durationMonths-month term | ${_scheduleLabel(payoutSchedule)} payouts',
+      ),
+      visibilityLabel: _string(
+        json,
+        <String>['visibility_label', 'visibilityLabel'],
+        assetSlotCodes.isEmpty
+            ? _assetTypeLabel(assetType)
+            : 'Slots: ${assetSlotCodes.join(', ')}',
+      ),
+      contactName: _string(json, <String>['contact_name', 'contactName'], ''),
+      moderationState: _moderationState(
+        _string(json, <String>[
+          'moderation_status',
+          'moderation_state',
+          'moderationStatus',
+          'moderationState',
+        ], 'approved'),
+      ),
+      moderationRequired: moderationRequired,
+      settledValue: _minorToMajor(settledAmountMinor),
+      outstandingValue: _minorToMajor(outstandingAmountMinor),
+      deliverables: _stringList(
+        json['deliverables'] ??
+            <Object?>[
+              _assetTypeLabel(assetType),
+              if (assetSlotCodes.isNotEmpty)
+                'Slots: ${assetSlotCodes.join(', ')}',
+              '${_scheduleLabel(payoutSchedule)} payouts',
+            ],
+      ),
+      notes: notes,
+      customCopy: customCopy,
+      customLogoUrl: customLogoUrl,
+    );
   }
 
   List<SponsorAssetSlot> _assetSlotList(Object? value) {
     return _asList(value)
         .map((Object? item) {
           final Map<String, Object?> json = _asMap(item);
+          final String assetType = _string(json, <String>[
+            'asset_type',
+            'assetType',
+          ], 'club_banner');
+          final String slotCode = _string(json, <String>[
+            'slot_code',
+            'slotCode',
+          ], _string(json, <String>['id'], 'slot'));
+          final bool isVisible = _boolean(json, <String>[
+            'is_visible',
+            'isVisible',
+          ], true);
           return SponsorAssetSlot(
             id: _string(json, <String>['id'], 'slot'),
+            slotCode: slotCode,
+            assetType: assetType,
+            isVisible: isVisible,
             surfaceName: _string(json, <String>[
               'surface_name',
               'surfaceName',
-            ], 'Asset slot'),
+            ], _assetTypeLabel(assetType)),
             placementLabel: _string(json, <String>[
               'placement_label',
               'placementLabel',
-            ], ''),
-            visibilityLabel: _string(json, <String>[
-              'visibility_label',
-              'visibilityLabel',
-            ], ''),
+            ], _humanizeToken(slotCode)),
+            visibilityLabel: _string(
+              json,
+              <String>['visibility_label', 'visibilityLabel'],
+              isVisible
+                  ? 'Visible in live inventory'
+                  : 'Hidden from live inventory',
+            ),
             moderationState: _moderationState(
               _string(json, <String>[
+                'moderation_status',
                 'moderation_state',
+                'moderationStatus',
                 'moderationState',
               ], 'approved'),
             ),
             sponsorName: _nullableString(json, <String>[
+              'rendered_text',
               'sponsor_name',
               'sponsorName',
             ]),
-            note: _nullableString(json, <String>['note']),
+            note:
+                _nullableString(json, <String>['note']) ??
+                _nullableString(json, <String>['asset_url', 'assetUrl']),
           );
         })
         .toList(growable: false);
@@ -1395,6 +1633,50 @@ List<String> _stringList(Object? value) {
       .toList(growable: false);
 }
 
+double _minorToMajor(int amountMinor) {
+  return amountMinor / 100;
+}
+
+String _formatMinorCurrency(int amountMinor, String currency) {
+  final double amount = _minorToMajor(amountMinor);
+  if (currency.toUpperCase() == 'USD') {
+    return '\$${amount.toStringAsFixed(2)}';
+  }
+  return '${amount.toStringAsFixed(2)} ${currency.toUpperCase()}';
+}
+
+String _assetTypeLabel(String raw) {
+  return _humanizeToken(raw);
+}
+
+String _scheduleLabel(String raw) {
+  switch (raw.toLowerCase()) {
+    case 'upfront':
+      return 'Upfront';
+    case 'quarterly':
+      return 'Quarterly';
+    case 'monthly':
+    default:
+      return 'Monthly';
+  }
+}
+
+String _humanizeToken(String raw) {
+  final List<String> parts = raw
+      .split(RegExp(r'[_\-\s]+'))
+      .where((String part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return raw;
+  }
+  return parts
+      .map(
+        (String part) =>
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+      )
+      .join(' ');
+}
+
 SponsorshipContractStatus _contractStatus(String raw) {
   switch (raw) {
     case 'renewal_due':
@@ -1413,9 +1695,13 @@ SponsorshipContractStatus _contractStatus(String raw) {
 
 SponsorModerationState _moderationState(String raw) {
   switch (raw.toLowerCase()) {
+    case 'pending':
     case 'under_review':
     case 'underreview':
       return SponsorModerationState.underReview;
+    case 'not_required':
+    case 'notrequired':
+      return SponsorModerationState.approved;
     case 'needs_changes':
     case 'needschanges':
       return SponsorModerationState.needsChanges;

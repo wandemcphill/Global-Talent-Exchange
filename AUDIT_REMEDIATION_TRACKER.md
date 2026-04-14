@@ -96,7 +96,7 @@ Phase acceptance criteria:
 | A4-003 | Remove `liveThenFixture` from production-bound secondary APIs. | Frontend data layer | A0-005 | Live-path API errors surface as real failures instead of seeded fixture data. | DONE |
 | A4-004 | Re-enable globally suppressed Flutter lints and fix the underlying async-context issues. | Frontend app | A0-005 | `use_build_context_synchronously` is not globally ignored and code passes lint with explicit mounted handling. | DONE |
 | A4-005 | Remove or gate localhost defaults from release-capable frontend config. | Frontend config | A0-005 | Release configuration fails fast when API base URL is missing. | DONE |
-| A4-006 | Align task/challenge reward UX with real backend claim payloads instead of shallow local-only demos where applicable. | Frontend tasks | A4-003 | Claim flows show backend-driven reward/streak state or are clearly marked as demo-only. | PENDING |
+| A4-006 | Align task/challenge reward UX with real backend claim payloads instead of shallow local-only demos where applicable. | Frontend tasks | A4-003 | Claim flows show backend-driven reward/streak state or are clearly marked as demo-only. | DONE |
 
 ## Phase A5: Route Integrity and Shell Cleanup
 
@@ -106,11 +106,11 @@ Phase acceptance criteria:
 
 | Task ID | Description | Owner/System | Dependency | Acceptance Test | Status |
 |---|---|---|---|---|---|
-| A5-001 | Audit all blocked and hidden routes in the active shell and admin shell. | Frontend routing | A0-005 | Every blocked/hidden route is listed with keep/remove/implement decision. | PENDING |
-| A5-002 | Remove dead routes from visible navigation and quick actions. | Frontend navigation | A5-001 | No visible nav item routes to an integrity wall. | PENDING |
-| A5-003 | Wire or intentionally disable admin surfaces such as God Mode, treasury ops, admin finance, creator leaderboard, and club admin. | Frontend admin + backend admin APIs | A5-001 | Admin routes either work end-to-end behind role checks or are removed from the active shell. | PENDING |
-| A5-004 | Resolve community hub status by wiring it or removing it from active shell exposure. | Frontend community | A5-001 | Community route no longer lands on `GteRouteIntegrityScreen.hidden` in production-visible flows. | PENDING |
-| A5-005 | Add route-integrity regression tests for visible route surfaces. | Frontend tests | A5-002, A5-003, A5-004 | Test suite fails if a visible route regresses to a blocked or hidden wall. | PENDING |
+| A5-001 | Audit all blocked and hidden routes in the active shell and admin shell. | Frontend routing | A0-005 | Every blocked/hidden route is listed with keep/remove/implement decision. | DONE |
+| A5-002 | Remove dead routes from visible navigation and quick actions. | Frontend navigation | A5-001 | No visible nav item routes to an integrity wall. | DONE |
+| A5-003 | Wire or intentionally disable admin surfaces such as God Mode, treasury ops, admin finance, creator leaderboard, and club admin. | Frontend admin + backend admin APIs | A5-001 | Admin routes either work end-to-end behind role checks or are removed from the active shell. | DONE |
+| A5-004 | Resolve community hub status by wiring it or removing it from active shell exposure. | Frontend community | A5-001 | Community route no longer lands on `GteRouteIntegrityScreen.hidden` in production-visible flows. | DONE |
+| A5-005 | Add route-integrity regression tests for visible route surfaces. | Frontend tests | A5-002, A5-003, A5-004 | Test suite fails if a visible route regresses to a blocked or hidden wall. | DONE |
 
 ## Phase A6: Missing Action Wiring for Shipping Features
 
@@ -120,11 +120,11 @@ Phase acceptance criteria:
 
 | Task ID | Description | Owner/System | Dependency | Acceptance Test | Status |
 |---|---|---|---|---|---|
-| A6-001 | Wire gifting from reachable broadcast/match UI into the backend gift send flow. | Frontend match UI + backend gift engine | A0-005, A1-005 | A user can open gifting from a live screen and successfully send a gift through the backend. | PENDING |
-| A6-002 | Add sponsorship offer discovery and application flow if sponsorship engine is a shipping feature. | Frontend sponsorship + backend sponsorship engine | A0-005 | Users can browse offers and submit an application from the frontend. | PENDING |
-| A6-003 | Add actionable governance UI where governance is meant to be interactive. | Frontend governance/federations + backend governance | A0-005 | Users can complete the intended governance action set, not just read proposal data. | PENDING |
-| A6-004 | Add intended community actions that already have backend support. | Frontend community + backend community/club-social | A0-005, A5-004 | Exposed community actions map to real backend endpoints and error handling. | PENDING |
-| A6-005 | Wire creator/media finance surfaces that currently rely on coarser summaries when more specific backend endpoints exist. | Frontend creator/media finance | A0-005 | Frontend uses the intended endpoint for clip or media earnings where the backend provides it. | PENDING |
+| A6-001 | Wire gifting from reachable broadcast/match UI into the backend gift send flow. | Frontend match UI + backend gift engine | A0-005, A1-005 | A user can open gifting from a live screen and successfully send a gift through the backend. | DONE |
+| A6-002 | Add sponsorship offer discovery and application flow if sponsorship engine is a shipping feature. | Frontend sponsorship + backend sponsorship engine | A0-005 | Users can browse offers and submit an application from the frontend. | DONE |
+| A6-003 | Add actionable governance UI where governance is meant to be interactive. | Frontend governance/federations + backend governance | A0-005 | Users can complete the intended governance action set, not just read proposal data. | DONE |
+| A6-004 | Add intended community actions that already have backend support. | Frontend community + backend community/club-social | A0-005, A5-004 | Exposed community actions map to real backend endpoints and error handling. | DONE |
+| A6-005 | Wire creator/media finance surfaces that currently rely on coarser summaries when more specific backend endpoints exist. | Frontend creator/media finance | A0-005 | Frontend uses the intended endpoint for clip or media earnings where the backend provides it. | DONE |
 
 ## Phase A7: Backend Module Portfolio Decision
 
@@ -134,10 +134,10 @@ Phase acceptance criteria:
 
 | Task ID | Description | Owner/System | Dependency | Acceptance Test | Status |
 |---|---|---|---|---|---|
-| A7-001 | Decide ship/hide/deprecate for commercial and monetization modules still lacking real UI paths, including `reward_engine`, `broadcast_rights`, `creator_campaign_engine`, and `ticketing`. | Product + backend + frontend | A0-005 | Each module has an owner, status, and either a UI plan or a hide/deprecate plan. | PENDING |
-| A7-002 | Decide ship/hide/deprecate for competitive/meta modules including `manager_duels`, `simulation_matchmaking`, `ultimate_league`, `infinite_league`, and `fast_cups`. | Product + gameplay systems | A0-005 | Each module is either scheduled for UI work or explicitly removed from active product claims. | PENDING |
-| A7-003 | Decide ship/hide/deprecate for social/engagement modules including `club_social`, `history_engagement`, `legend_layer`, `live_ops`, and `moments`. | Product + social systems | A0-005 | Each module has a disposition and no orphaned implied-live status remains. | PENDING |
-| A7-004 | Decide ship/hide/deprecate for infrastructure/admin-sensitive modules including `club_infra_engine`, `regen_ecosystem`, `surveillance`, and `betting`. | Product + platform + compliance | A0-005 | Risk-sensitive modules are either deliberately exposed with scope or explicitly hidden/deprecated. | PENDING |
+| A7-001 | Decide ship/hide/deprecate for commercial and monetization modules still lacking real UI paths, including `reward_engine`, `broadcast_rights`, `creator_campaign_engine`, and `ticketing`. | Product + backend + frontend | A0-005 | Each module has an owner, status, and either a UI plan or a hide/deprecate plan. | DONE |
+| A7-002 | Decide ship/hide/deprecate for competitive/meta modules including `manager_duels`, `simulation_matchmaking`, `ultimate_league`, `infinite_league`, and `fast_cups`. | Product + gameplay systems | A0-005 | Each module is either scheduled for UI work or explicitly removed from active product claims. | DONE |
+| A7-003 | Decide ship/hide/deprecate for social/engagement modules including `club_social`, `history_engagement`, `legend_layer`, `live_ops`, and `moments`. | Product + social systems | A0-005 | Each module has a disposition and no orphaned implied-live status remains. | DONE |
+| A7-004 | Decide ship/hide/deprecate for infrastructure/admin-sensitive modules including `club_infra_engine`, `regen_ecosystem`, `surveillance`, and `betting`. | Product + platform + compliance | A0-005 | Risk-sensitive modules are either deliberately exposed with scope or explicitly hidden/deprecated. | DONE |
 
 ## Phase A8: Partial Feature Completion
 
@@ -147,11 +147,11 @@ Phase acceptance criteria:
 
 | Task ID | Description | Owner/System | Dependency | Acceptance Test | Status |
 |---|---|---|---|---|---|
-| A8-001 | Complete Fan Wars action coverage or reduce product claims to read-only scope. | Frontend Fan Wars + backend fan wars | A0-005 | Users can complete the intended Fan Wars participation path, or UI copy clearly scopes it as read-only. | PENDING |
-| A8-002 | Decide whether federation governance remains read-only or gains vote/action support. | Frontend federations + backend federation/governance | A6-003 | Federation governance surfaces align with the intended product capability. | PENDING |
-| A8-003 | Align replay entry points with the intended replay/archive policy layer. | Frontend replay + backend matches/replay archive | A0-005 | Replay entry points use the approved backend policy surface and preserve access rules. | PENDING |
-| A8-004 | Deepen sponsorship surfaces beyond package/contract read-only views where shipping scope requires it. | Frontend sponsorship | A6-002 | Sponsorship UI covers the intended end-to-end club flow. | PENDING |
-| A8-005 | Review remaining read-only surfaces that visually imply complete functionality and either finish or relabel them. | Frontend product surfaces | A0-005 | No read-only surface is presented as a complete transactional feature without scope labeling. | PENDING |
+| A8-001 | Complete Fan Wars action coverage or reduce product claims to read-only scope. | Frontend Fan Wars + backend fan wars | A0-005 | Users can complete the intended Fan Wars participation path, or UI copy clearly scopes it as read-only. | DONE |
+| A8-002 | Decide whether federation governance remains read-only or gains vote/action support. | Frontend federations + backend federation/governance | A6-003 | Federation governance surfaces align with the intended product capability. | DONE |
+| A8-003 | Align replay entry points with the intended replay/archive policy layer. | Frontend replay + backend matches/replay archive | A0-005 | Replay entry points use the approved backend policy surface and preserve access rules. | DONE |
+| A8-004 | Deepen sponsorship surfaces beyond package/contract read-only views where shipping scope requires it. | Frontend sponsorship | A6-002 | Sponsorship UI covers the intended end-to-end club flow. | DONE |
+| A8-005 | Review remaining read-only surfaces that visually imply complete functionality and either finish or relabel them. | Frontend product surfaces | A0-005 | No read-only surface is presented as a complete transactional feature without scope labeling. | DONE |
 
 ## Phase A9: Testing and Observability
 
@@ -161,12 +161,12 @@ Phase acceptance criteria:
 
 | Task ID | Description | Owner/System | Dependency | Acceptance Test | Status |
 |---|---|---|---|---|---|
-| A9-001 | Add regression tests for payment-provider exposure and webhook fraud paths. | Backend tests | A1-001, A1-003 | CI fails if stub providers become user-visible again or fraud validation regresses. | PENDING |
-| A9-002 | Add restart/durability tests for creator/referral runtime state. | Backend tests | A3-001, A3-002, A3-003 | CI fails if durable services regress to in-memory behavior. | PENDING |
-| A9-003 | Add highlight placeholder gating tests. | Backend tests | A4-001, A4-002 | CI fails if placeholder highlight renders are treated as successful live artifacts. | PENDING |
-| A9-004 | Add tests that fail on silent fixture fallback in live production-bound paths. | Frontend tests | A4-003 | CI fails if live-path fallback silently reappears. | PENDING |
-| A9-005 | Add route-integrity and shell-surface regression tests. | Frontend tests | A5-005 | CI fails if a visible route becomes blocked or hidden again. | PENDING |
-| A9-006 | Improve health and diagnostics output for backbone availability, degraded mode, and config gaps. | Backend health + ops | A2-005 | Health endpoints clearly identify dependency and config problems. | PENDING |
+| A9-001 | Add regression tests for payment-provider exposure and webhook fraud paths. | Backend tests | A1-001, A1-003 | CI fails if stub providers become user-visible again or fraud validation regresses. | DONE |
+| A9-002 | Add restart/durability tests for creator/referral runtime state. | Backend tests | A3-001, A3-002, A3-003 | CI fails if durable services regress to in-memory behavior. | DONE |
+| A9-003 | Add highlight placeholder gating tests. | Backend tests | A4-001, A4-002 | CI fails if placeholder highlight renders are treated as successful live artifacts. | DONE |
+| A9-004 | Add tests that fail on silent fixture fallback in live production-bound paths. | Frontend tests | A4-003 | CI fails if live-path fallback silently reappears. | DONE |
+| A9-005 | Add route-integrity and shell-surface regression tests. | Frontend tests | A5-005 | CI fails if a visible route becomes blocked or hidden again. | DONE |
+| A9-006 | Improve health and diagnostics output for backbone availability, degraded mode, and config gaps. | Backend health + ops | A2-005 | Health endpoints clearly identify dependency and config problems. | DONE |
 
 ## Phase A10: Code-Lie, Naming, and Documentation Cleanup
 
@@ -176,9 +176,9 @@ Phase acceptance criteria:
 
 | Task ID | Description | Owner/System | Dependency | Acceptance Test | Status |
 |---|---|---|---|---|---|
-| A10-001 | Rename or remove misleading abstractions that imply production support or durability when they are demo-only. | Backend + frontend codebase | A3-004, A4-003 | No production-path class or API name materially misdescribes its storage or behavior. | PENDING |
-| A10-002 | Remove dead scaffolding, dead exports, and fake-complete surface area that survived refactors. | Backend + frontend codebase | A7-001, A7-002, A7-003, A7-004 | Dead or misleading scaffolding is either removed or explicitly marked non-production. | PENDING |
-| A10-003 | Align docs, route descriptions, and product copy with actual runtime behavior and shipped scope. | Docs + frontend copy | A5-002, A7-001, A7-002, A7-003, A7-004 | Docs and in-app copy no longer claim features that are hidden, stubbed, or incomplete. | PENDING |
+| A10-001 | Rename or remove misleading abstractions that imply production support or durability when they are demo-only. | Backend + frontend codebase | A3-004, A4-003 | No production-path class or API name materially misdescribes its storage or behavior. | DONE |
+| A10-002 | Remove dead scaffolding, dead exports, and fake-complete surface area that survived refactors. | Backend + frontend codebase | A7-001, A7-002, A7-003, A7-004 | Dead or misleading scaffolding is either removed or explicitly marked non-production. | DONE |
+| A10-003 | Align docs, route descriptions, and product copy with actual runtime behavior and shipped scope. | Docs + frontend copy | A5-002, A7-001, A7-002, A7-003, A7-004 | Docs and in-app copy no longer claim features that are hidden, stubbed, or incomplete. | DONE |
 
 ## Phase 0 Evidence Already Verified In This Checkout
 

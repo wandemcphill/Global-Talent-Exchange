@@ -16,7 +16,7 @@ The repo already contains meaningful primitives for the next phase:
 - Redis and Kafka backbone wiring via `backend/app/core/config.py` and `backend/app/core/container.py`
 - audit/risk scaffolding via `backend/app/observability/audit_service.py`, `backend/app/risk/fraud_service.py`, and `backend/app/risk_ops_engine/service.py`
 - treasury, wallet, and admin finance surfaces via `backend/app/treasury/*`, `backend/app/wallets/*`, and `backend/app/admin_finance/*`
-- replay, tournaments, and matchmaking surfaces via `backend/app/replay_archive/*`, `backend/app/streamer_tournament_engine/*`, and `backend/app/simulation_matchmaking/*`
+- replay and tournament surfaces plus a backend-only matchmaking seam via `backend/app/replay_archive/*`, `backend/app/streamer_tournament_engine/*`, and `backend/app/simulation_matchmaking/*`
 - referral, daily reward, and engagement loops via `backend/app/routes/referrals.py`, `backend/app/services/referral_risk_service.py`, and `backend/app/daily_challenge_engine/*`
 
 ## Recommended Tranche Order
@@ -148,7 +148,7 @@ Do this after telemetry and controls are reliable:
   - Repo anchors: `backend/app/fast_cups/*`, `backend/app/streamer_tournament_engine/*`, `backend/app/world_super_cup/*`
   - Tranche: `3`
 - Ranked matchmaking: `partial`
-  - Matchmaking services and matchmaking ratings exist, but a persistent ranked season loop, promotion rules, and leaderboard surfaces are incomplete.
+  - Matchmaking services and matchmaking ratings exist, but they are still backend-only. A persistent ranked season loop, promotion rules, and routed leaderboard surfaces are incomplete.
   - Repo anchors: `backend/app/simulation_matchmaking/*`, `backend/app/competitive_integrity/service.py`
   - Tranche: `3`
 - Player injuries + fatigue: `partial`
@@ -240,7 +240,7 @@ Do this after telemetry and controls are reliable:
   - Repo anchors: `backend/app/routes/referrals.py`, `backend/app/services/referral_risk_service.py`, `frontend/lib/screens/referrals/*`
   - Tranche: `3` reward tuning only
 - Influencer leaderboard: `missing`
-  - Creator and referral metrics exist, but there is no leaderboard product around them yet.
+  - Creator and referral metrics exist, including backend-only creator-campaign analytics, but there is no shipped leaderboard product around them yet.
   - Repo anchors: `backend/app/creator_campaign_engine/*`, `backend/app/services/referral_analytics_service.py`
   - Tranche: `3`
 - Social sharing (match highlights): `partial`

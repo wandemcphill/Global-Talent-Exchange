@@ -33,9 +33,9 @@ class ScoutingDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClubOpsScreenHost(
-      title: 'Recruiter dashboard',
+      title: 'Recruiter planning board',
       subtitle:
-          'Track talent, run the shortlist, move deals across the pipeline, and spot patterns fast.',
+          'Review live scouting data, arrange a local board, and plan the next real club action.',
       clubId: clubId,
       clubName: clubName,
       baseUrl: baseUrl,
@@ -47,9 +47,9 @@ class ScoutingDashboardScreen extends StatelessWidget {
           return const Padding(
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
-              title: 'Loading recruiter dashboard',
+              title: 'Loading recruiter planning board',
               message:
-                  'Preparing your tracked players, shortlist movement, and recommendation signals.',
+                  'Preparing live scouting data and the local planning board overlay.',
               icon: Icons.travel_explore_outlined,
             ),
           );
@@ -61,9 +61,9 @@ class ScoutingDashboardScreen extends StatelessWidget {
           return const Padding(
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
-              title: 'Recruiter dashboard unavailable',
+              title: 'Recruiter planning board unavailable',
               message:
-                  'The scouting board did not return enough data to build the recruiter control panel.',
+                  'The scouting board did not return enough data to build the planning view.',
               icon: Icons.person_search_outlined,
             ),
           );
@@ -129,10 +129,12 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
   List<Prospect> get _prospects => widget.scouting.prospects;
 
   List<Prospect> get _shortlistProspects {
-    final List<Prospect> prospects = _prospects.where((Prospect prospect) {
-      return !_removedFromShortlist.contains(prospect.id) &&
-          _stageForProspect(prospect) != _RecruiterPipelineStage.signed;
-    }).toList(growable: false);
+    final List<Prospect> prospects = _prospects
+        .where((Prospect prospect) {
+          return !_removedFromShortlist.contains(prospect.id) &&
+              _stageForProspect(prospect) != _RecruiterPipelineStage.signed;
+        })
+        .toList(growable: false);
     prospects.sort((Prospect a, Prospect b) {
       final int scoreCompare = b.readinessScore.compareTo(a.readinessScore);
       if (scoreCompare != 0) {
@@ -173,19 +175,23 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
   }
 
   List<Prospect> get _filteredShortlist {
-    return _shortlistProspects.where((Prospect prospect) {
-      final bool matchesPosition = _positionFilter == _allPositionsLabel ||
-          prospect.position == _positionFilter;
-      final bool matchesStatus =
-          _statusFilter.matches(_shortlistStatusFor(prospect));
-      return matchesPosition && matchesStatus;
-    }).toList(growable: false);
+    return _shortlistProspects
+        .where((Prospect prospect) {
+          final bool matchesPosition =
+              _positionFilter == _allPositionsLabel ||
+              prospect.position == _positionFilter;
+          final bool matchesStatus = _statusFilter.matches(
+            _shortlistStatusFor(prospect),
+          );
+          return matchesPosition && matchesStatus;
+        })
+        .toList(growable: false);
   }
 
   List<_ActivityEntry> get _recentActivities {
-    final List<Prospect> prospects = List<Prospect>.from(_prospects)
-      ..sort(
-          (Prospect a, Prospect b) => b.lastUpdated.compareTo(a.lastUpdated));
+    final List<Prospect> prospects = List<Prospect>.from(
+      _prospects,
+    )..sort((Prospect a, Prospect b) => b.lastUpdated.compareTo(a.lastUpdated));
     return prospects.take(5).map(_activityForProspect).toList(growable: false);
   }
 
@@ -201,15 +207,18 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
         return b.readinessScore.compareTo(a.readinessScore);
       });
 
-    return prospects.take(4).map((Prospect prospect) {
-      final _RecruiterPipelineStage stage = _stageForProspect(prospect);
-      return _ActionEntry(
-        title: prospect.name,
-        detail: prospect.nextAction,
-        caption: '${stage.label} | ${prospect.currentClub}',
-        icon: stage.icon,
-      );
-    }).toList(growable: false);
+    return prospects
+        .take(4)
+        .map((Prospect prospect) {
+          final _RecruiterPipelineStage stage = _stageForProspect(prospect);
+          return _ActionEntry(
+            title: prospect.name,
+            detail: prospect.nextAction,
+            caption: '${stage.label} | ${prospect.currentClub}',
+            icon: stage.icon,
+          );
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -261,9 +270,9 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: <Widget>[
         ClubOpsHeadlinePanel(
-          title: '${widget.scouting.clubName} recruiter desk',
+          title: '${widget.scouting.clubName} recruiter planning desk',
           subtitle:
-              'Who you are tracking, who looks promising, who you are already talking to, and what should happen next.',
+              'Live prospect reads with a local shortlist, local stage board, and local note layer for planning.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -274,30 +283,31 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                   ClubOpsStatTile(
                     label: 'Players viewed',
                     value: clubOpsFormatCompactNumber(
-                        widget.scouting.liveProspects),
+                      widget.scouting.liveProspects,
+                    ),
                     detail:
                         '${_prospects.length} active cards are surfaced on this board right now.',
                     icon: Icons.visibility_outlined,
                     highlight: true,
                   ),
                   ClubOpsStatTile(
-                    label: 'Shortlisted',
+                    label: 'Board shortlist',
                     value: '${_shortlistProspects.length}',
                     detail: 'Players still active in your recruiter watchlist.',
                     icon: Icons.bookmark_added_outlined,
                   ),
                   ClubOpsStatTile(
-                    label: 'Contacted',
+                    label: 'Contact planned',
                     value: '$_contactedCount',
                     detail:
-                        'Players already at contact, negotiation, or signed stage.',
+                        'Players queued at contact, negotiation, or signed stage on this board.',
                     icon: Icons.mail_outline,
                   ),
                   ClubOpsStatTile(
-                    label: 'Active conversations',
+                    label: 'Negotiation planned',
                     value: '$_activeConversationCount',
                     detail:
-                        'Open recruiting threads that still need follow-up.',
+                        'Players currently staged at contact or negotiation on this board.',
                     icon: Icons.forum_outlined,
                   ),
                 ],
@@ -323,6 +333,11 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              Text(
+                'Board scope: prospect profiles, reports, and pipeline counts come from live scouting data. Board stages and notes are local planning aids until a persisted recruiting workflow ships.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             ],
           ),
         ),
@@ -343,7 +358,7 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
               'Top five matches from the current board with score and fit reasons.',
           action: FilledButton.tonal(
             onPressed: () => DefaultTabController.of(context).animateTo(1),
-            child: const Text('Open shortlist'),
+            child: const Text('Open shortlist board'),
           ),
         ),
         const SizedBox(height: 12),
@@ -354,16 +369,20 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
               minItemWidth: 280,
               maxColumns: 3,
             );
-            final double cardWidth =
-                _cardWidthFor(constraints.maxWidth, columns);
+            final double cardWidth = _cardWidthFor(
+              constraints.maxWidth,
+              columns,
+            );
             return Wrap(
               spacing: 16,
               runSpacing: 16,
               children: _recommendedProspects
-                  .map((Prospect prospect) => SizedBox(
-                        width: cardWidth,
-                        child: _buildRecommendedPlayerCard(context, prospect),
-                      ))
+                  .map(
+                    (Prospect prospect) => SizedBox(
+                      width: cardWidth,
+                      child: _buildRecommendedPlayerCard(context, prospect),
+                    ),
+                  )
                   .toList(growable: false),
             );
           },
@@ -377,9 +396,9 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: <Widget>[
         ClubOpsSectionHeader(
-          title: 'Shortlist',
+          title: 'Shortlist board',
           subtitle:
-              'Filter the talent watchlist by recruiter status and position before taking the next step.',
+              'Filter the local planning board by status and position before deciding the next real scouting action.',
           action: FilledButton.tonal(
             onPressed: _resetFilters,
             child: const Text('Reset filters'),
@@ -396,15 +415,17 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                 spacing: 8,
                 runSpacing: 8,
                 children: _ShortlistFilter.values
-                    .map((filter) => ChoiceChip(
-                          label: Text(filter.label),
-                          selected: _statusFilter == filter,
-                          onSelected: (_) {
-                            setState(() {
-                              _statusFilter = filter;
-                            });
-                          },
-                        ))
+                    .map(
+                      (filter) => ChoiceChip(
+                        label: Text(filter.label),
+                        selected: _statusFilter == filter,
+                        onSelected: (_) {
+                          setState(() {
+                            _statusFilter = filter;
+                          });
+                        },
+                      ),
+                    )
                     .toList(growable: false),
               ),
               const SizedBox(height: 16),
@@ -413,19 +434,18 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: <String>[
-                  _allPositionsLabel,
-                  ..._availablePositions,
-                ]
-                    .map((String position) => ChoiceChip(
-                          label: Text(position),
-                          selected: _positionFilter == position,
-                          onSelected: (_) {
-                            setState(() {
-                              _positionFilter = position;
-                            });
-                          },
-                        ))
+                children: <String>[_allPositionsLabel, ..._availablePositions]
+                    .map(
+                      (String position) => ChoiceChip(
+                        label: Text(position),
+                        selected: _positionFilter == position,
+                        onSelected: (_) {
+                          setState(() {
+                            _positionFilter = position;
+                          });
+                        },
+                      ),
+                    )
                     .toList(growable: false),
               ),
               const SizedBox(height: 16),
@@ -452,16 +472,20 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                 minItemWidth: 360,
                 maxColumns: 2,
               );
-              final double cardWidth =
-                  _cardWidthFor(constraints.maxWidth, columns);
+              final double cardWidth = _cardWidthFor(
+                constraints.maxWidth,
+                columns,
+              );
               return Wrap(
                 spacing: 16,
                 runSpacing: 16,
                 children: _filteredShortlist
-                    .map((Prospect prospect) => SizedBox(
-                          width: cardWidth,
-                          child: _buildShortlistCard(context, prospect),
-                        ))
+                    .map(
+                      (Prospect prospect) => SizedBox(
+                        width: cardWidth,
+                        child: _buildShortlistCard(context, prospect),
+                      ),
+                    )
                     .toList(growable: false),
               );
             },
@@ -475,11 +499,13 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Recent activity',
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Recent activity',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 8),
           Text(
-            'The most recent movement across your shortlist and pipeline.',
+            'The most recent movement across this local planning board.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -501,11 +527,15 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(activity.title,
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        activity.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 2),
-                      Text(activity.detail,
-                          style: Theme.of(context).textTheme.bodyMedium),
+                      Text(
+                        activity.detail,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ],
                   ),
                 ),
@@ -526,18 +556,20 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
           Row(
             children: <Widget>[
               Expanded(
-                child: Text('Next actions',
-                    style: Theme.of(context).textTheme.titleLarge),
+                child: Text(
+                  'Next actions',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               ),
               FilledButton.tonal(
                 onPressed: () => DefaultTabController.of(context).animateTo(2),
-                child: const Text('Open pipeline'),
+                child: const Text('Open stage board'),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            'Use these reminders to keep the board moving while the signal is still fresh.',
+            'Use these reminders to keep the planning board current while you decide the next live scouting move.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -551,14 +583,20 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(action.title,
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        action.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 2),
-                      Text(action.detail,
-                          style: Theme.of(context).textTheme.bodyMedium),
+                      Text(
+                        action.detail,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                       const SizedBox(height: 2),
-                      Text(action.caption,
-                          style: Theme.of(context).textTheme.bodySmall),
+                      Text(
+                        action.caption,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ],
                   ),
                 ),
@@ -572,7 +610,8 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
   }
 
   Widget _buildRecommendedPlayerCard(BuildContext context, Prospect prospect) {
-    final bool canMove = _stageForProspect(prospect).index <
+    final bool canMove =
+        _stageForProspect(prospect).index <
         _RecruiterPipelineStage.contacted.index;
     final List<String> reasons = _fitReasonsFor(prospect);
     return GteSurfacePanel(
@@ -592,8 +631,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(prospect.name,
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      prospect.name,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '${prospect.position} | ${prospect.currentClub}',
@@ -606,12 +647,16 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
             ],
           ),
           const SizedBox(height: 14),
-          Text('Why this match looks strong',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Why this match looks strong',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
-          for (int index = 0;
-              index < reasons.take(3).length;
-              index++) ...<Widget>[
+          for (
+            int index = 0;
+            index < reasons.take(3).length;
+            index++
+          ) ...<Widget>[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
@@ -643,7 +688,7 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
               FilledButton.tonalIcon(
                 onPressed: canMove ? () => _moveIntoPipeline(prospect) : null,
                 icon: const Icon(Icons.swap_horiz),
-                label: Text(canMove ? 'Move to pipeline' : 'In pipeline'),
+                label: Text(canMove ? 'Queue on board' : 'On board'),
               ),
             ],
           ),
@@ -674,8 +719,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(prospect.name,
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      prospect.name,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '${prospect.position} | ${prospect.region}',
@@ -728,17 +775,17 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
               FilledButton.tonalIcon(
                 onPressed: canMove ? () => _moveIntoPipeline(prospect) : null,
                 icon: const Icon(Icons.swap_horiz),
-                label: Text(canMove ? 'Move to pipeline' : 'In pipeline'),
+                label: Text(canMove ? 'Queue on board' : 'On board'),
               ),
               OutlinedButton.icon(
                 onPressed: () => _openNoteComposer(prospect),
                 icon: const Icon(Icons.note_add_outlined),
-                label: const Text('Add note'),
+                label: const Text('Add local note'),
               ),
               OutlinedButton.icon(
                 onPressed: () => _removeFromShortlist(prospect),
                 icon: const Icon(Icons.remove_circle_outline),
-                label: const Text('Remove from shortlist'),
+                label: const Text('Hide from board'),
               ),
             ],
           ),
@@ -752,9 +799,9 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: <Widget>[
         ClubOpsHeadlinePanel(
-          title: 'Acquisition flow',
+          title: 'Planning flow',
           subtitle:
-              'Turn player discovery into a process. Drag any card across the board to update the current recruiting stage.',
+              'Organize player discovery on a local board. Drag any card across the board to update the planning stage shown in this session.',
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -765,24 +812,24 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
               ),
               _MetaChip(
                 icon: Icons.chat_bubble_outline,
-                label: '$_activeConversationCount active conversations',
+                label: '$_activeConversationCount planned conversations',
               ),
               _MetaChip(
                 icon: Icons.verified_outlined,
                 label:
-                    '${_countAtOrBeyond(_RecruiterPipelineStage.signed)} signed',
+                    '${_countAtOrBeyond(_RecruiterPipelineStage.signed)} onboarding-ready',
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
         ClubOpsSectionHeader(
-          title: 'Pipeline board',
+          title: 'Stage board',
           subtitle:
-              'Discovered to signed. Drag cards across stages and keep notes close to the player.',
+              'Discovery to onboarding plan. Drag cards across local stages and keep local notes close to the player.',
           action: FilledButton.tonal(
             onPressed: _resetBoard,
-            child: const Text('Reset board'),
+            child: const Text('Reset local board'),
           ),
         ),
         const SizedBox(height: 12),
@@ -791,17 +838,18 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: _RecruiterPipelineStage.values
-                .map((stage) => Padding(
-                      padding: EdgeInsets.only(
-                        right: stage == _RecruiterPipelineStage.values.last
-                            ? 0
-                            : 16,
-                      ),
-                      child: SizedBox(
-                        width: 300,
-                        child: _buildPipelineColumn(context, stage),
-                      ),
-                    ))
+                .map(
+                  (stage) => Padding(
+                    padding: EdgeInsets.only(
+                      right:
+                          stage == _RecruiterPipelineStage.values.last ? 0 : 16,
+                    ),
+                    child: SizedBox(
+                      width: 300,
+                      child: _buildPipelineColumn(context, stage),
+                    ),
+                  ),
+                )
                 .toList(growable: false),
           ),
         ),
@@ -814,16 +862,17 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
     _RecruiterPipelineStage stage,
   ) {
     final Color accent = _stageColor(context, stage);
-    final List<Prospect> prospects = _prospects.where((Prospect prospect) {
-      return _stageForProspect(prospect) == stage;
-    }).toList(growable: false)
-      ..sort((Prospect a, Prospect b) {
-        final int scoreCompare = b.readinessScore.compareTo(a.readinessScore);
-        if (scoreCompare != 0) {
-          return scoreCompare;
-        }
-        return a.name.compareTo(b.name);
-      });
+    final List<Prospect> prospects = _prospects
+      .where((Prospect prospect) {
+        return _stageForProspect(prospect) == stage;
+      })
+      .toList(growable: false)..sort((Prospect a, Prospect b) {
+      final int scoreCompare = b.readinessScore.compareTo(a.readinessScore);
+      if (scoreCompare != 0) {
+        return scoreCompare;
+      }
+      return a.name.compareTo(b.name);
+    });
 
     return DragTarget<_PipelineDragData>(
       onWillAccept: (_PipelineDragData? data) => data != null,
@@ -851,18 +900,19 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(stage.label,
-                            style: Theme.of(context).textTheme.titleLarge),
+                        Text(
+                          stage.label,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                         const SizedBox(height: 4),
-                        Text(stage.description,
-                            style: Theme.of(context).textTheme.bodyMedium),
+                        Text(
+                          stage.description,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       ],
                     ),
                   ),
-                  _StatusBadge(
-                    label: '${prospects.length}',
-                    color: accent,
-                  ),
+                  _StatusBadge(label: '${prospects.length}', color: accent),
                 ],
               ),
               const SizedBox(height: 16),
@@ -889,17 +939,9 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                     ),
                     childWhenDragging: Opacity(
                       opacity: 0.34,
-                      child: _buildPipelinePlayerCard(
-                        context,
-                        prospect,
-                        stage,
-                      ),
+                      child: _buildPipelinePlayerCard(context, prospect, stage),
                     ),
-                    child: _buildPipelinePlayerCard(
-                      context,
-                      prospect,
-                      stage,
-                    ),
+                    child: _buildPipelinePlayerCard(context, prospect, stage),
                   ),
                   if (prospect != prospects.last) const SizedBox(height: 12),
                 ],
@@ -927,8 +969,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
           Row(
             children: <Widget>[
               Expanded(
-                child: Text(prospect.name,
-                    style: Theme.of(context).textTheme.titleMedium),
+                child: Text(
+                  prospect.name,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
               _ScoreBadge(score: prospect.readinessScore),
             ],
@@ -973,7 +1017,7 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                 OutlinedButton.icon(
                   onPressed: () => _openNoteComposer(prospect),
                   icon: const Icon(Icons.note_add_outlined),
-                  label: const Text('Add note'),
+                  label: const Text('Add local note'),
                 ),
               ],
             ),
@@ -1045,35 +1089,40 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
               minItemWidth: 240,
               maxColumns: 4,
             );
-            final double cardWidth =
-                _cardWidthFor(constraints.maxWidth, columns);
+            final double cardWidth = _cardWidthFor(
+              constraints.maxWidth,
+              columns,
+            );
             return Wrap(
               spacing: 16,
               runSpacing: 16,
               children: _conversionMetrics
-                  .map((metric) => SizedBox(
-                        width: cardWidth,
-                        child: GteSurfacePanel(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(metric.percentLabel,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall),
-                              const SizedBox(height: 6),
-                              Text(metric.label,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${metric.numerator} of ${metric.denominator} players',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ],
-                          ),
+                  .map(
+                    (metric) => SizedBox(
+                      width: cardWidth,
+                      child: GteSurfacePanel(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              metric.percentLabel,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              metric.label,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${metric.numerator} of ${metric.denominator} players',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
                         ),
-                      ))
+                      ),
+                    ),
+                  )
                   .toList(growable: false),
             );
           },
@@ -1084,8 +1133,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('Key insight',
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Key insight',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 8),
               Text(
                 _headlineInsight,
@@ -1099,17 +1150,21 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('Board notes',
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Board notes',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 12),
               for (final String note in <String>[
                 ...widget.scouting.notes,
-                ...widget.youthPipeline.notes.take(2)
+                ...widget.youthPipeline.notes.take(2),
               ])
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child:
-                      Text(note, style: Theme.of(context).textTheme.bodyMedium),
+                  child: Text(
+                    note,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ),
             ],
           ),
@@ -1123,8 +1178,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Most scouted positions',
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Most scouted positions',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 12),
           for (final _CountMetric metric in _positionMetrics.take(4))
             ClubOpsMetricRow(
@@ -1142,8 +1199,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Preferred countries',
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Preferred countries',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 12),
           for (final _CountryPreference country in _countryPreferences.take(4))
             ClubOpsMetricRow(
@@ -1160,12 +1219,17 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
   List<_CountMetric> get _positionMetrics {
     final Map<String, int> counts = <String, int>{};
     for (final Prospect prospect in _prospects) {
-      counts.update(prospect.position, (int current) => current + 1,
-          ifAbsent: () => 1);
+      counts.update(
+        prospect.position,
+        (int current) => current + 1,
+        ifAbsent: () => 1,
+      );
     }
     final List<_CountMetric> metrics = counts.entries
-        .map((_MapEntry<String, int> entry) =>
-            _CountMetric(label: entry.key, value: entry.value))
+        .map(
+          (_MapEntry<String, int> entry) =>
+              _CountMetric(label: entry.key, value: entry.value),
+        )
         .toList(growable: false);
     metrics.sort((_CountMetric a, _CountMetric b) {
       final int countCompare = b.value.compareTo(a.value);
@@ -1183,18 +1247,20 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
       buckets.putIfAbsent(prospect.region, () => <Prospect>[]).add(prospect);
     }
 
-    final List<_CountryPreference> countries =
-        buckets.entries.map((_MapEntry<String, List<Prospect>> entry) {
-      final int totalScore = entry.value.fold<int>(
-        0,
-        (int running, Prospect prospect) => running + prospect.readinessScore,
-      );
-      return _CountryPreference(
-        country: entry.key,
-        trackedPlayers: entry.value.length,
-        averageScore: totalScore / entry.value.length,
-      );
-    }).toList(growable: false);
+    final List<_CountryPreference> countries = buckets.entries
+        .map((_MapEntry<String, List<Prospect>> entry) {
+          final int totalScore = entry.value.fold<int>(
+            0,
+            (int running, Prospect prospect) =>
+                running + prospect.readinessScore,
+          );
+          return _CountryPreference(
+            country: entry.key,
+            trackedPlayers: entry.value.length,
+            averageScore: totalScore / entry.value.length,
+          );
+        })
+        .toList(growable: false);
 
     countries.sort((_CountryPreference a, _CountryPreference b) {
       final int countCompare = b.trackedPlayers.compareTo(a.trackedPlayers);
@@ -1207,14 +1273,18 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
   }
 
   List<_ConversionMetric> get _conversionMetrics {
-    final int discoveredBase =
-        _countAtOrBeyond(_RecruiterPipelineStage.discovered);
-    final int shortlistedBase =
-        _countAtOrBeyond(_RecruiterPipelineStage.shortlisted);
-    final int contactedBase =
-        _countAtOrBeyond(_RecruiterPipelineStage.contacted);
-    final int negotiationBase =
-        _countAtOrBeyond(_RecruiterPipelineStage.negotiation);
+    final int discoveredBase = _countAtOrBeyond(
+      _RecruiterPipelineStage.discovered,
+    );
+    final int shortlistedBase = _countAtOrBeyond(
+      _RecruiterPipelineStage.shortlisted,
+    );
+    final int contactedBase = _countAtOrBeyond(
+      _RecruiterPipelineStage.contacted,
+    );
+    final int negotiationBase = _countAtOrBeyond(
+      _RecruiterPipelineStage.negotiation,
+    );
 
     return <_ConversionMetric>[
       _ConversionMetric(
@@ -1245,9 +1315,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
       return 'The board needs more live signals before a reliable pattern emerges.';
     }
     final Prospect lead = _recommendedProspects.first;
-    final int sameRegionCount = _recommendedProspects
-        .where((Prospect prospect) => prospect.region == lead.region)
-        .length;
+    final int sameRegionCount =
+        _recommendedProspects
+            .where((Prospect prospect) => prospect.region == lead.region)
+            .length;
     final bool attackingProfile = _isAttackingPosition(lead.position);
     final String profileLabel =
         attackingProfile ? 'attacking profiles' : '${lead.position} profiles';
@@ -1272,8 +1343,9 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
   }
 
   List<String> _seedNotesForProspect(Prospect prospect) {
-    final ProspectReport? report =
-        widget.controller.reportForProspect(prospect.id);
+    final ProspectReport? report = widget.controller.reportForProspect(
+      prospect.id,
+    );
     final List<String> notes = <String>[];
     if (report != null && report.headline.isNotEmpty) {
       notes.add(report.headline);
@@ -1289,8 +1361,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
 
   String _prospectSignature(List<Prospect> prospects) {
     return prospects
-        .map((Prospect prospect) =>
-            '${prospect.id}:${prospect.stage.name}:${prospect.lastUpdated.toIso8601String()}')
+        .map(
+          (Prospect prospect) =>
+              '${prospect.id}:${prospect.stage.name}:${prospect.lastUpdated.toIso8601String()}',
+        )
         .join('|');
   }
 
@@ -1377,10 +1451,7 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
     });
   }
 
-  void _moveProspectToStage(
-    Prospect prospect,
-    _RecruiterPipelineStage stage,
-  ) {
+  void _moveProspectToStage(Prospect prospect, _RecruiterPipelineStage stage) {
     setState(() {
       _pipelineStageByProspectId[prospect.id] = stage;
     });
@@ -1423,12 +1494,12 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Add note for ${prospect.name}',
+                'Add local note for ${prospect.name}',
                 style: Theme.of(sheetContext).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               Text(
-                'Keep the note specific enough to drive the next action.',
+                'Keep the note specific enough to drive the next action. It stays on this local planning board and does not update the live scouting record.',
                 style: Theme.of(sheetContext).textTheme.bodyMedium,
               ),
               const SizedBox(height: 16),
@@ -1455,14 +1526,15 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                         return;
                       }
                       setState(() {
-                        final List<String> existing =
-                            List<String>.from(_notesForProspect(prospect));
+                        final List<String> existing = List<String>.from(
+                          _notesForProspect(prospect),
+                        );
                         existing.insert(0, note);
                         _notesByProspectId[prospect.id] = existing;
                       });
                       Navigator.of(sheetContext).pop();
                     },
-                    child: const Text('Save note'),
+                    child: const Text('Save local note'),
                   ),
                 ],
               ),
@@ -1476,12 +1548,13 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
   void _openProspectProfile(Prospect prospect) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => ScoutingProspectDetailScreen(
-          prospectId: prospect.id,
-          controller: widget.controller,
-          clubId: widget.clubId,
-          clubName: widget.clubName,
-        ),
+        builder:
+            (BuildContext context) => ScoutingProspectDetailScreen(
+              prospectId: prospect.id,
+              controller: widget.controller,
+              clubId: widget.clubId,
+              clubName: widget.clubName,
+            ),
       ),
     );
   }
@@ -1496,18 +1569,10 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
     ];
   }
 
-  Widget _buildTwoUpLayout(
-    double maxWidth,
-    Widget left,
-    Widget right,
-  ) {
+  Widget _buildTwoUpLayout(double maxWidth, Widget left, Widget right) {
     if (maxWidth < 920) {
       return Column(
-        children: <Widget>[
-          left,
-          const SizedBox(height: 16),
-          right,
-        ],
+        children: <Widget>[left, const SizedBox(height: 16), right],
       );
     }
     final double panelWidth = (maxWidth - 16) / 2;
@@ -1577,7 +1642,7 @@ enum _RecruiterPipelineStage {
   shortlisted,
   contacted,
   negotiation,
-  signed
+  signed,
 }
 
 extension _RecruiterPipelineStagePresentation on _RecruiterPipelineStage {
@@ -1588,11 +1653,11 @@ extension _RecruiterPipelineStagePresentation on _RecruiterPipelineStage {
       case _RecruiterPipelineStage.shortlisted:
         return 'Shortlisted';
       case _RecruiterPipelineStage.contacted:
-        return 'Contacted';
+        return 'Contact planned';
       case _RecruiterPipelineStage.negotiation:
-        return 'Negotiation';
+        return 'Negotiation planned';
       case _RecruiterPipelineStage.signed:
-        return 'Signed';
+        return 'Onboarding planned';
     }
   }
 
@@ -1603,11 +1668,11 @@ extension _RecruiterPipelineStagePresentation on _RecruiterPipelineStage {
       case _RecruiterPipelineStage.shortlisted:
         return 'Tracked closely and worth deeper evaluation.';
       case _RecruiterPipelineStage.contacted:
-        return 'Agent or club contact already opened.';
+        return 'Queued for the next real contact step.';
       case _RecruiterPipelineStage.negotiation:
-        return 'Terms, welfare, or fit details being worked through.';
+        return 'Queued for terms, welfare, or fit review.';
       case _RecruiterPipelineStage.signed:
-        return 'Closed and ready for onboarding.';
+        return 'Queued as the preferred onboarding outcome.';
     }
   }
 
@@ -1618,11 +1683,11 @@ extension _RecruiterPipelineStagePresentation on _RecruiterPipelineStage {
       case _RecruiterPipelineStage.shortlisted:
         return 'Shortlisted';
       case _RecruiterPipelineStage.contacted:
-        return 'Contacted agent for';
+        return 'Queued contact for';
       case _RecruiterPipelineStage.negotiation:
-        return 'Opened terms for';
+        return 'Queued negotiation for';
       case _RecruiterPipelineStage.signed:
-        return 'Signed';
+        return 'Marked onboarding-ready';
     }
   }
 
@@ -1652,7 +1717,7 @@ extension _ShortlistStatusPresentation on _ShortlistStatus {
       case _ShortlistStatus.reviewed:
         return 'Reviewed';
       case _ShortlistStatus.contacted:
-        return 'Contacted';
+        return 'Contact planned';
     }
   }
 }
@@ -1669,7 +1734,7 @@ extension _ShortlistFilterPresentation on _ShortlistFilter {
       case _ShortlistFilter.reviewed:
         return 'Reviewed';
       case _ShortlistFilter.contacted:
-        return 'Contacted';
+        return 'Contact planned';
     }
   }
 
@@ -1716,10 +1781,7 @@ class _ActionEntry {
 }
 
 class _CountMetric {
-  const _CountMetric({
-    required this.label,
-    required this.value,
-  });
+  const _CountMetric({required this.label, required this.value});
 
   final String label;
   final int value;
@@ -1757,35 +1819,25 @@ class _ConversionMetric {
 }
 
 class _PipelineDragData {
-  const _PipelineDragData({
-    required this.prospectId,
-  });
+  const _PipelineDragData({required this.prospectId});
 
   final String prospectId;
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({
-    required this.icon,
-    required this.label,
-  });
+  const _MetaChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 18),
-      label: Text(label),
-    );
+    return Chip(avatar: Icon(icon, size: 18), label: Text(label));
   }
 }
 
 class _ReminderChip extends StatelessWidget {
-  const _ReminderChip({
-    required this.label,
-  });
+  const _ReminderChip({required this.label});
 
   final String label;
 
@@ -1799,19 +1851,13 @@ class _ReminderChip extends StatelessWidget {
         color: tokens.surfaceHighlight.withValues(alpha: 0.08),
         border: Border.all(color: tokens.stroke),
       ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
+      child: Text(label, style: Theme.of(context).textTheme.bodySmall),
     );
   }
 }
 
 class _PlayerAvatar extends StatelessWidget {
-  const _PlayerAvatar({
-    required this.label,
-    required this.accent,
-  });
+  const _PlayerAvatar({required this.label, required this.accent});
 
   final String label;
   final Color accent;
@@ -1841,9 +1887,7 @@ class _PlayerAvatar extends StatelessWidget {
 }
 
 class _ScoreBadge extends StatelessWidget {
-  const _ScoreBadge({
-    required this.score,
-  });
+  const _ScoreBadge({required this.score});
 
   final int score;
 
@@ -1866,10 +1910,7 @@ class _ScoreBadge extends StatelessWidget {
 }
 
 class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
-    required this.label,
-    required this.color,
-  });
+  const _StatusBadge({required this.label, required this.color});
 
   final String label;
   final Color color;
@@ -1885,10 +1926,10 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context)
-            .textTheme
-            .bodySmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w700),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

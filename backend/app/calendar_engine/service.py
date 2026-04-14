@@ -559,7 +559,6 @@ class CalendarEngineService:
             "match_route": f"/matches/{event.match_id}" if event.match_id else None,
             "pre_match_show_route": f"/shows/pre-match/{event.match_id}" if event.match_id else None,
             "post_match_show_route": f"/shows/post-match/{event.match_id}" if event.match_id else None,
-            "betting_route": f"/bets/odds/{event.match_id}" if event.match_id else None,
         }
         return {
             "id": event.id,

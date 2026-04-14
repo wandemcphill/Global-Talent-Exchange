@@ -12,7 +12,7 @@ void main() {
   test(
     'live-then-fixture mode falls back to fixtures for market reads',
     () async {
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.liveThenFixture,
@@ -51,7 +51,7 @@ void main() {
       );
       final _RecordingPlayersFixtureApi fixtures =
           _RecordingPlayersFixtureApi();
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.live,
@@ -84,7 +84,7 @@ void main() {
     () async {
       final _RecordingPlayersFixtureApi fixtures =
           _RecordingPlayersFixtureApi();
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.fixture,
@@ -105,7 +105,7 @@ void main() {
   test(
     'login does not fall back to fixture auth on transport failure',
     () async {
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.liveThenFixture,
@@ -150,7 +150,7 @@ void main() {
         ),
       ],
     );
-    final GteReliableApiRepository repository = GteReliableApiRepository(
+    final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
       config: const GteRepositoryConfig(
         baseUrl: 'http://127.0.0.1:8000',
         mode: GteBackendMode.live,
@@ -183,7 +183,7 @@ void main() {
   });
 
   test('register surfaces FastAPI validation detail lists', () async {
-    final GteReliableApiRepository repository = GteReliableApiRepository(
+    final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
       config: const GteRepositoryConfig(
         baseUrl: 'http://127.0.0.1:8000',
         mode: GteBackendMode.live,
@@ -236,7 +236,7 @@ void main() {
     () async {
       final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
       await tokenStore.writeToken('stale-token');
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.liveThenFixture,
@@ -272,7 +272,7 @@ void main() {
     'policy document reads still resolve from fixtures in explicit fixture mode',
     () async {
       final _RecordingPolicyFixtureApi fixtures = _RecordingPolicyFixtureApi();
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.fixture,
@@ -327,7 +327,7 @@ void main() {
     'policy acceptance reads still resolve from fixtures in explicit fixture mode',
     () async {
       final _RecordingPolicyFixtureApi fixtures = _RecordingPolicyFixtureApi();
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.fixture,
@@ -387,7 +387,7 @@ void main() {
         ],
       );
       final _RecordingPulseFixtureApi fixtures = _RecordingPulseFixtureApi();
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.live,
@@ -415,7 +415,7 @@ void main() {
     'fetch market pulse in fixture mode still returns fixture pulse',
     () async {
       final _RecordingPulseFixtureApi fixtures = _RecordingPulseFixtureApi();
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.fixture,
@@ -506,7 +506,7 @@ void main() {
           },
         ),
       ]);
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.live,
@@ -610,7 +610,7 @@ void main() {
       ]);
       final _RecordingProfileFixtureApi fixtures =
           _RecordingProfileFixtureApi();
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.liveThenFixture,
@@ -631,7 +631,7 @@ void main() {
   test(
     'fetch player profile in live mode does not fall back to fixture truth on transport failure',
     () async {
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.live,
@@ -702,7 +702,7 @@ void main() {
       );
       final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
       final MemoryAuthSessionStore authSessionStore = MemoryAuthSessionStore();
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.live,
@@ -740,7 +740,7 @@ void main() {
   test('logout clears persisted auth session', () async {
     final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
     final MemoryAuthSessionStore authSessionStore = MemoryAuthSessionStore();
-    final GteReliableApiRepository repository = GteReliableApiRepository(
+    final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
       config: const GteRepositoryConfig(
         baseUrl: 'http://127.0.0.1:8000',
         mode: GteBackendMode.live,
@@ -785,7 +785,7 @@ void main() {
       );
       final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
       await tokenStore.writeToken('orders-token');
-      final GteReliableApiRepository repository = GteReliableApiRepository(
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.live,
@@ -819,7 +819,7 @@ Future<void> _expectPolicyDocumentSurfaceFailuresWithoutFixtureFallback(
   GteBackendMode mode,
 ) async {
   final _RecordingPolicyFixtureApi fixtures = _RecordingPolicyFixtureApi();
-  final GteReliableApiRepository repository = GteReliableApiRepository(
+  final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
     config: GteRepositoryConfig(baseUrl: 'http://127.0.0.1:8000', mode: mode),
     transport: _ThrowingTransport(),
     fixtures: fixtures,
@@ -851,7 +851,7 @@ Future<void> _expectPolicyAcceptanceSurfaceFailuresWithoutFixtureFallback(
   GteBackendMode mode,
 ) async {
   final _RecordingPolicyFixtureApi fixtures = _RecordingPolicyFixtureApi();
-  final GteReliableApiRepository repository = GteReliableApiRepository(
+  final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
     config: GteRepositoryConfig(baseUrl: 'http://127.0.0.1:8000', mode: mode),
     transport: _ThrowingTransport(),
     fixtures: fixtures,

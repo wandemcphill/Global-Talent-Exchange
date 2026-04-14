@@ -464,6 +464,22 @@ def test_provider_webhook_rejects_stub_provider(api_context) -> None:
     assert "not currently available" in response.json()["detail"]
 
 
+def test_purchase_order_quote_rejects_stub_provider(api_context) -> None:
+    client, _, _ = api_context
+
+    response = client.post(
+        "/wallets/purchase-orders/quote",
+        json={
+            "amount": "1000.0000",
+            "input_unit": "fiat",
+            "provider_key": "cards",
+            "unit": "coin",
+            "source_scope": "wallet",
+        },
+    )
+
+    assert response.status_code == 404
+    assert "not currently available" in response.json()["detail"]
 def test_wallet_overview_handles_missing_country_policy_rows(api_context) -> None:
     client, session, current_user = api_context
     policy_service = PolicyService(session)

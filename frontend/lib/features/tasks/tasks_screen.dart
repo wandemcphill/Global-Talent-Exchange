@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_feedback.dart';
+import '../../core/widgets/task_reward_pop.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
-import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import 'live_tasks_provider.dart';
 
@@ -145,23 +145,26 @@ class _TasksBody extends ConsumerWidget {
                     child: GtexListTile(
                       title: item.title,
                       subtitle:
-                          '${item.description}\nReward: ${item.rewardSummary}',
+                          '${item.description}\nReward: ${item.rewardSummary}\n${_challengeStatusLabel(item)}',
                       leadingIcon: Icons.flag_rounded,
                       tone:
-                          item.availableToday
+                          item.claimedToday
+                              ? GtexSurfaceTone.success
+                              : item.availableToday
                               ? GtexSurfaceTone.live
                               : GtexSurfaceTone.warning,
                       trailing: FilledButton(
                         onPressed:
-                            !tasks.authenticated || !item.availableToday
+                            !tasks.authenticated ||
+                                    item.claimedToday ||
+                                    !item.availableToday
                                 ? null
                                 : () => _claimChallenge(
                                   context,
                                   ref,
                                   item.challengeKey,
-                                  item.rewardSummary,
                                 ),
-                        child: Text(item.availableToday ? 'Claim' : 'Blocked'),
+                        child: Text(_claimActionLabel(tasks, item)),
                       ),
                     ),
                   ),
@@ -169,23 +172,80 @@ class _TasksBody extends ConsumerWidget {
                 .toList(growable: false),
           ),
         ),
+        if (tasks.claimsToday.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 24),
+          GtexSectionPanel(
+            eyebrow: 'CLAIMS TODAY',
+            title: 'Settled rewards',
+            subtitle:
+                'These entries are rendered from live daily-challenge claim payloads.',
+            child: Column(
+              children: tasks.claimsToday
+                  .map(
+                    (DailyChallengeClaimSummary claim) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: GtexListTile(
+                        title: claim.challengeTitle,
+                        subtitle: claim.rewardDetail,
+                        leadingIcon: Icons.task_alt_rounded,
+                        tone: GtexSurfaceTone.success,
+                        trailing: const Icon(Icons.verified_rounded, size: 18),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+        ],
       ],
     );
+  }
+
+  String _challengeStatusLabel(DailyChallengeSummary item) {
+    if (!tasks.authenticated) {
+      return 'Sign in to claim this live challenge.';
+    }
+    if (item.claimedToday) {
+      return 'Claim already settled today.';
+    }
+    if (item.availableToday) {
+      return 'Available to claim now.';
+    }
+    return 'Unavailable right now.';
+  }
+
+  String _claimActionLabel(LiveTasksData tasks, DailyChallengeSummary item) {
+    if (!tasks.authenticated) {
+      return 'Sign in';
+    }
+    if (item.claimedToday) {
+      return 'Claimed';
+    }
+    if (item.availableToday) {
+      return 'Claim';
+    }
+    return 'Unavailable';
   }
 
   Future<void> _claimChallenge(
     BuildContext context,
     WidgetRef ref,
     String challengeKey,
-    String rewardSummary,
   ) async {
     try {
-      await ref
+      final Object? claimResponse = await ref
           .read(authedApiProvider)
           .post('/daily-challenges/$challengeKey/claim');
-      ref.invalidate(liveTasksProvider);
+      final LiveTasksData refreshedTasks = await ref.refresh(
+        liveTasksProvider.future,
+      );
+      final DailyChallengeClaimFeedback feedback =
+          DailyChallengeClaimFeedback.fromResponse(
+            claimResponse,
+            refreshedTasks: refreshedTasks,
+          );
       if (context.mounted) {
-        await _showClaimCelebration(context, rewardSummary);
+        await showTaskRewardCelebration(context, feedback);
       }
     } catch (error) {
       if (context.mounted) {
@@ -194,94 +254,5 @@ class _TasksBody extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(AppFeedback.messageFor(error))));
       }
     }
-  }
-
-  Future<void> _showClaimCelebration(
-    BuildContext context,
-    String rewardSummary,
-  ) {
-    final tokens = GteShellTheme.tokensOf(context);
-    final theme = GteShellTheme.definitionOf(context);
-    return showGeneralDialog<void>(
-      context: context,
-      barrierLabel: 'Dismiss reward',
-      barrierDismissible: true,
-      barrierColor: Colors.black.withValues(alpha: 0.56),
-      transitionDuration: const Duration(milliseconds: 240),
-      pageBuilder: (
-        BuildContext context,
-        Animation<double> animation,
-        Animation<double> secondaryAnimation,
-      ) {
-        return Center(
-          child: Material(
-            color: Colors.transparent,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0.92, end: 1),
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              builder:
-                  (BuildContext context, double value, Widget? child) =>
-                      Transform.scale(scale: value, child: child),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 360),
-                padding: EdgeInsets.all(tokens.spaceLg),
-                decoration: BoxDecoration(
-                  color: theme.tokens.panel,
-                  borderRadius: BorderRadius.circular(tokens.radiusLarge),
-                  border: Border.all(
-                    color: theme.primaryColor.withValues(alpha: 0.38),
-                  ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: theme.primaryColor.withValues(alpha: 0.24),
-                      blurRadius: 30,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      Icons.emoji_events_rounded,
-                      color: theme.primaryColor,
-                      size: 40,
-                    ),
-                    SizedBox(height: tokens.spaceMd),
-                    Text(
-                      'Challenge claimed.',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: tokens.spaceXs),
-                    Text(
-                      rewardSummary,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: theme.secondaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (
-        BuildContext context,
-        Animation<double> animation,
-        Animation<double> secondaryAnimation,
-        Widget child,
-      ) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-    ).then((_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Challenge claimed.')));
-      }
-    });
   }
 }

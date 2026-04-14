@@ -22,8 +22,12 @@ class ClubOpsController extends ChangeNotifier {
 
   bool isLoadingClubData = false;
   bool isLoadingAdminData = false;
+  bool isSubmittingSponsorshipApplication = false;
+  bool isUpdatingSponsorshipContract = false;
   String? clubErrorMessage;
   String? adminErrorMessage;
+  String? sponsorshipApplicationErrorMessage;
+  String? sponsorshipContractErrorMessage;
 
   ClubFinanceSnapshot? finance;
   SponsorshipDashboard? sponsorships;
@@ -60,8 +64,10 @@ class ClubOpsController extends ChangeNotifier {
       clubId
           .split('-')
           .where((String fragment) => fragment.isNotEmpty)
-          .map((String fragment) =>
-              '${fragment[0].toUpperCase()}${fragment.substring(1)}')
+          .map(
+            (String fragment) =>
+                '${fragment[0].toUpperCase()}${fragment.substring(1)}',
+          )
           .join(' ');
 
   Future<void> loadClubData({bool force = false}) async {
@@ -77,13 +83,14 @@ class ClubOpsController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<Object?> payload = await Future.wait<Object?>(<Future<Object?>>[
-        _api.fetchFinance(clubId: clubId, clubName: clubName),
-        _api.fetchSponsorships(clubId: clubId, clubName: clubName),
-        _api.fetchAcademy(clubId: clubId, clubName: clubName),
-        _api.fetchScouting(clubId: clubId, clubName: clubName),
-        _api.fetchYouthPipeline(clubId: clubId, clubName: clubName),
-      ]);
+      final List<Object?> payload =
+          await Future.wait<Object?>(<Future<Object?>>[
+            _api.fetchFinance(clubId: clubId, clubName: clubName),
+            _api.fetchSponsorships(clubId: clubId, clubName: clubName),
+            _api.fetchAcademy(clubId: clubId, clubName: clubName),
+            _api.fetchScouting(clubId: clubId, clubName: clubName),
+            _api.fetchYouthPipeline(clubId: clubId, clubName: clubName),
+          ]);
       if (!_clubGate.isActive(requestId)) {
         return;
       }
@@ -118,13 +125,14 @@ class ClubOpsController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<Object?> payload = await Future.wait<Object?>(<Future<Object?>>[
-        _api.fetchClubOpsAdmin(),
-        _api.fetchFinanceAnalytics(),
-        _api.fetchSponsorshipAnalytics(),
-        _api.fetchAcademyAnalytics(),
-        _api.fetchScoutingAnalytics(),
-      ]);
+      final List<Object?> payload =
+          await Future.wait<Object?>(<Future<Object?>>[
+            _api.fetchClubOpsAdmin(),
+            _api.fetchFinanceAnalytics(),
+            _api.fetchSponsorshipAnalytics(),
+            _api.fetchAcademyAnalytics(),
+            _api.fetchScoutingAnalytics(),
+          ]);
       if (!_adminGate.isActive(requestId)) {
         return;
       }
@@ -150,6 +158,82 @@ class ClubOpsController extends ChangeNotifier {
 
   Future<void> refreshAdminData() => loadAdminData(force: true);
 
+  Future<SponsorshipContract> applySponsorship({
+    required SponsorshipApplicationDraft draft,
+  }) async {
+    if (isSubmittingSponsorshipApplication) {
+      throw StateError('Sponsorship application already in progress.');
+    }
+
+    isSubmittingSponsorshipApplication = true;
+    sponsorshipApplicationErrorMessage = null;
+    notifyListeners();
+
+    try {
+      final Map<String, String> packageNamesByCode = <String, String>{
+        for (final SponsorshipPackage package
+            in sponsorships?.packages ?? const <SponsorshipPackage>[])
+          package.code: package.name,
+      };
+      final SponsorshipContract contract = await _api.createSponsorshipContract(
+        clubId: clubId,
+        draft: draft,
+        packageNamesByCode: packageNamesByCode,
+      );
+      sponsorships = await _api.fetchSponsorships(
+        clubId: clubId,
+        clubName: clubName,
+      );
+      sponsorshipApplicationErrorMessage = null;
+      return contract;
+    } catch (error) {
+      sponsorshipApplicationErrorMessage = AppFeedback.messageFor(error);
+      rethrow;
+    } finally {
+      isSubmittingSponsorshipApplication = false;
+      notifyListeners();
+    }
+  }
+
+  Future<SponsorshipContract> updateSponsorshipContract({
+    required String contractId,
+    required SponsorshipContractUpdateDraft draft,
+  }) async {
+    if (isUpdatingSponsorshipContract) {
+      throw StateError('Sponsorship contract update already in progress.');
+    }
+
+    isUpdatingSponsorshipContract = true;
+    sponsorshipContractErrorMessage = null;
+    notifyListeners();
+
+    try {
+      final Map<String, String> packageNamesByCode = <String, String>{
+        for (final SponsorshipPackage package
+            in sponsorships?.packages ?? const <SponsorshipPackage>[])
+          package.code: package.name,
+      };
+      final SponsorshipContract contract = await _api.updateSponsorshipContract(
+        clubId: clubId,
+        contractId: contractId,
+        draft: draft,
+        packageNamesByCode: packageNamesByCode,
+      );
+      sponsorships = await _api.fetchSponsorships(
+        clubId: clubId,
+        clubName: clubName,
+      );
+      sponsorshipContractErrorMessage = null;
+      return contract;
+    } catch (error) {
+      sponsorshipContractErrorMessage = AppFeedback.messageFor(error);
+      rethrow;
+    } finally {
+      isUpdatingSponsorshipContract = false;
+      notifyListeners();
+    }
+  }
+
   SponsorshipContract? contractById(String contractId) {
     for (final SponsorshipContract contract
         in sponsorships?.contracts ?? const <SponsorshipContract>[]) {
@@ -171,8 +255,7 @@ class ClubOpsController extends ChangeNotifier {
   }
 
   Prospect? prospectById(String prospectId) {
-    for (final Prospect prospect
-        in scouting?.prospects ?? const <Prospect>[]) {
+    for (final Prospect prospect in scouting?.prospects ?? const <Prospect>[]) {
       if (prospect.id == prospectId) {
         return prospect;
       }

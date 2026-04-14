@@ -23,6 +23,7 @@ class HealthResponse(BaseModel):
     checks: dict[str, ServiceCheck]
     runtime_mode: Literal["normal", "degraded"]
     mode_reasons: list[str] = Field(default_factory=list)
+    dependency_issues: dict[str, str] = Field(default_factory=dict)
 
 
 class ReadinessResponse(BaseModel):
@@ -30,6 +31,7 @@ class ReadinessResponse(BaseModel):
     checks: dict[str, ServiceCheck]
     runtime_mode: Literal["normal", "degraded"]
     mode_reasons: list[str] = Field(default_factory=list)
+    dependency_issues: dict[str, str] = Field(default_factory=dict)
 
 
 class VersionResponse(BaseModel):
@@ -50,6 +52,8 @@ class DiagnosticsResponse(BaseModel):
     dependency_checks: dict[str, ServiceCheck]
     runtime_mode: Literal["normal", "degraded"]
     mode_reasons: list[str] = Field(default_factory=list)
+    config_issues: dict[str, str] = Field(default_factory=dict)
+    dependency_issues: dict[str, str] = Field(default_factory=dict)
     dependency_notes: list[str]
     scaffolding_gaps: list[str]
 
@@ -73,6 +77,7 @@ class SystemStatusService:
             checks=checks,
             runtime_mode=runtime_mode,
             mode_reasons=mode_reasons,
+            dependency_issues=self._dependency_issues_from_checks(checks),
         )
 
     def build_readiness(self, request: Request, *, check_schema: bool = True) -> ReadinessResponse:
@@ -89,6 +94,7 @@ class SystemStatusService:
             checks=checks,
             runtime_mode=runtime_mode,
             mode_reasons=mode_reasons,
+            dependency_issues=self._dependency_issues_from_checks(checks),
         )
 
     def build_version(self, settings: Settings) -> VersionResponse:
@@ -107,6 +113,18 @@ class SystemStatusService:
         config_root = Path(settings.config_root)
         dependency_checks = self._build_dependency_checks(request)
         runtime_mode, mode_reasons = self._runtime_mode_from_checks(dependency_checks)
+        config_check_messages = {
+            "player_universe_weighting.toml": "Missing backend config file player_universe_weighting.toml.",
+            "supply_tiers.toml": "Missing backend config file supply_tiers.toml.",
+            "liquidity_bands.toml": "Missing backend config file liquidity_bands.toml.",
+            "value_engine_weighting.toml": "Missing backend config file value_engine_weighting.toml.",
+            "media_storage.toml": "Missing backend config file media_storage.toml.",
+            "sponsorship_inventory.toml": "Missing backend config file sponsorship_inventory.toml.",
+            "frontend_android_folder": "Frontend android/ scaffold is missing.",
+            "frontend_android_wrapper_jar": "Frontend android Gradle wrapper JAR is missing.",
+            "backend_requirements_txt": "Backend requirements.txt is missing.",
+            "backend_env_example": "Backend .env.example is missing.",
+        }
         checks = {
             "player_universe_weighting.toml": (config_root / "player_universe_weighting.toml").exists(),
             "supply_tiers.toml": (config_root / "supply_tiers.toml").exists(),
@@ -119,6 +137,7 @@ class SystemStatusService:
             "backend_requirements_txt": (backend_root / "requirements.txt").exists(),
             "backend_env_example": (backend_root / ".env.example").exists(),
         }
+        config_issues = {name: config_check_messages[name] for name, is_present in checks.items() if not is_present}
         dependency_notes: list[str] = []
         if not checks["frontend_android_wrapper_jar"]:
             dependency_notes.append(
@@ -152,6 +171,8 @@ class SystemStatusService:
             dependency_checks=dependency_checks,
             runtime_mode=runtime_mode,
             mode_reasons=mode_reasons,
+            config_issues=config_issues,
+            dependency_issues=self._dependency_issues_from_checks(dependency_checks),
             dependency_notes=dependency_notes,
             scaffolding_gaps=scaffolding_gaps,
         )
@@ -173,6 +194,15 @@ class SystemStatusService:
             if name != "api" and check.status != "ok" and check.detail is not None
         ]
         return ("degraded", reasons) if reasons else ("normal", [])
+
+    @staticmethod
+    def _dependency_issues_from_checks(checks: dict[str, ServiceCheck]) -> dict[str, str]:
+        issues: dict[str, str] = {}
+        for name, check in checks.items():
+            if name == "api" or check.status == "ok":
+                continue
+            issues[name] = check.detail or f"{name} reported {check.status}."
+        return issues
 
     @staticmethod
     def _database_check(database: DatabaseRuntime) -> ServiceCheck:

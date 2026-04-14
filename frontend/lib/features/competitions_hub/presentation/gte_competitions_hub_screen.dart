@@ -116,7 +116,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                 eyebrow: 'COMPETITIONS HUB',
                 title: 'All competitions live here.',
                 description:
-                    'Browse leagues, cups, live simulations, and user-created competitions from one hub.',
+                    'Browse leagues, cups, fast cups, and user-created competitions from one hub.',
                 accent: Colors.deepPurpleAccent,
                 chips: <Widget>[
                   GteMetricChip(
@@ -232,7 +232,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                     value:
                         '${competitions.where((CompetitionSummary item) => item.isLeague).length}L / ${competitions.where((CompetitionSummary item) => item.isCup).length}C',
                     caption:
-                        'Leagues, cups, fast leagues, and future world-stage routes stay visible in one arena stack.',
+                        'Leagues, cups, fast cups, and future world-stage routes stay visible in one arena stack.',
                     icon: Icons.emoji_events_outlined,
                     color: const Color(0xFF8ED8FF),
                   ),

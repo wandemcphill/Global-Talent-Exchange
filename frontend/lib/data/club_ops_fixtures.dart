@@ -7,8 +7,10 @@ String clubOpsDisplayClubName(String clubId) {
   return clubId
       .split('-')
       .where((String fragment) => fragment.isNotEmpty)
-      .map((String fragment) =>
-          '${fragment[0].toUpperCase()}${fragment.substring(1)}')
+      .map(
+        (String fragment) =>
+            '${fragment[0].toUpperCase()}${fragment.substring(1)}',
+      )
       .join(' ');
 }
 
@@ -222,17 +224,22 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
     clubId: clubId,
     clubName: resolvedClubName,
     activeContractValue: 4980000,
-    projectedRenewalValue: 5410000,
+    activeContractCount: 2,
+    settledRevenue: 410000,
     packages: const <SponsorshipPackage>[
       SponsorshipPackage(
         id: 'principal-package',
+        code: 'principal-partnership',
         name: 'Principal partnership',
         tierLabel: 'Premier',
         description:
             'Front-of-shirt placement, matchday storytelling, and academy impact programming.',
         value: 2100000,
+        currency: 'USD',
         durationMonths: 24,
         assetCount: 6,
+        assetType: 'shirt_front',
+        payoutSchedule: 'quarterly',
         inventorySummary:
             'Shirt front, backdrop, content series, and academy clinic rights.',
         deliverables: <String>[
@@ -244,13 +251,17 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
       ),
       SponsorshipPackage(
         id: 'sleeve-package',
+        code: 'matchday-sleeve-partner',
         name: 'Matchday sleeve partner',
         tierLabel: 'Club',
         description:
             'Premium sleeve visibility paired with hospitality and social content delivery.',
         value: 720000,
+        currency: 'USD',
         durationMonths: 18,
         assetCount: 4,
+        assetType: 'sleeve_slot',
+        payoutSchedule: 'quarterly',
         inventorySummary:
             'Sleeve logo, hospitality allocation, and social recap support.',
         deliverables: <String>[
@@ -261,13 +272,17 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
       ),
       SponsorshipPackage(
         id: 'academy-package',
+        code: 'academy-pathway-partner',
         name: 'Academy pathway partner',
         tierLabel: 'Development',
         description:
             'Training centre visibility and education support attached to youth development outcomes.',
         value: 560000,
+        currency: 'USD',
         durationMonths: 12,
         assetCount: 5,
+        assetType: 'training_centre',
+        payoutSchedule: 'monthly',
         inventorySummary:
             'Training centre signage, scholarship stories, and grassroots clinics.',
         deliverables: <String>[
@@ -281,15 +296,22 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
       SponsorshipContract(
         id: 'contract-north-star',
         sponsorName: 'North Star Mobility',
+        packageCode: 'principal-partnership',
         packageName: 'Principal partnership',
         status: SponsorshipContractStatus.active,
         totalValue: 2100000,
+        currency: 'USD',
+        payoutSchedule: 'quarterly',
         startDate: DateTime.utc(2025, 7, 1),
         endDate: DateTime.utc(2027, 6, 30),
+        assetSlotCodes: <String>['shirt-front'],
         renewalWindowLabel: 'Review begins in January 2027',
         visibilityLabel: 'Highest visibility inventory',
         contactName: 'Amina Yusuf',
         moderationState: SponsorModerationState.approved,
+        moderationRequired: false,
+        settledValue: 185000,
+        outstandingValue: 1915000,
         deliverables: const <String>[
           'Shirt front placement',
           'Academy pathway content series',
@@ -303,15 +325,22 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
       SponsorshipContract(
         id: 'contract-solaris',
         sponsorName: 'Solaris Bank',
+        packageCode: 'matchday-sleeve-partner',
         packageName: 'Matchday sleeve partner',
         status: SponsorshipContractStatus.renewalDue,
         totalValue: 720000,
+        currency: 'USD',
+        payoutSchedule: 'quarterly',
         startDate: DateTime.utc(2025, 1, 15),
         endDate: DateTime.utc(2026, 7, 15),
+        assetSlotCodes: <String>['led-ribbon'],
         renewalWindowLabel: 'Renewal pack due in six weeks',
         visibilityLabel: 'Broadcast-facing inventory',
         contactName: 'Marco Alves',
         moderationState: SponsorModerationState.approved,
+        moderationRequired: false,
+        settledValue: 225000,
+        outstandingValue: 495000,
         deliverables: const <String>[
           'Sleeve branding',
           'Tunnel camera board',
@@ -324,28 +353,38 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
       SponsorshipContract(
         id: 'contract-greenroots',
         sponsorName: 'GreenRoots Foods',
+        packageCode: 'academy-pathway-partner',
         packageName: 'Academy pathway partner',
         status: SponsorshipContractStatus.pendingApproval,
         totalValue: 560000,
+        currency: 'USD',
+        payoutSchedule: 'monthly',
         startDate: DateTime.utc(2026, 4, 1),
         endDate: DateTime.utc(2027, 3, 31),
+        assetSlotCodes: <String>['academy-wall', 'content-title'],
         renewalWindowLabel: 'Launch after asset moderation closes',
         visibilityLabel: 'Academy and community inventory',
         contactName: 'Leila Okafor',
         moderationState: SponsorModerationState.underReview,
+        moderationRequired: true,
+        settledValue: 0,
+        outstandingValue: 560000,
         deliverables: const <String>[
           'Academy facility branding',
           'Nutrition education workshops',
           'Scholarship launch event',
         ],
-        notes: const <String>[
-          'Two asset variants still in moderation review.',
-        ],
+        notes: const <String>['Two asset variants still in moderation review.'],
+        customCopy: 'GreenRoots Pathway Nutrition',
+        customLogoUrl: 'https://cdn.example.com/greenroots-pathway.png',
       ),
     ],
     assetSlots: const <SponsorAssetSlot>[
       SponsorAssetSlot(
         id: 'slot-shirt-front',
+        slotCode: 'shirt-front',
+        assetType: 'shirt_front',
+        isVisible: true,
         surfaceName: 'First-team shirt front',
         placementLabel: 'Home, away, and cup kits',
         visibilityLabel: 'Peak live match visibility',
@@ -354,6 +393,9 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
       ),
       SponsorAssetSlot(
         id: 'slot-led-ribbon',
+        slotCode: 'led-ribbon',
+        assetType: 'stadium_led',
+        isVisible: true,
         surfaceName: 'Matchday LED ribbon',
         placementLabel: 'Touchline rotation',
         visibilityLabel: 'High in-stadium and broadcast visibility',
@@ -362,6 +404,9 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
       ),
       SponsorAssetSlot(
         id: 'slot-academy-wall',
+        slotCode: 'academy-wall',
+        assetType: 'training_centre',
+        isVisible: true,
         surfaceName: 'Academy welcome wall',
         placementLabel: 'Training centre entrance',
         visibilityLabel: 'Player, guardian, and visitor visibility',
@@ -371,6 +416,9 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
       ),
       SponsorAssetSlot(
         id: 'slot-content-title',
+        slotCode: 'content-title',
+        assetType: 'content_series',
+        isVisible: true,
         surfaceName: 'Pathway content title card',
         placementLabel: 'Owned video series',
         visibilityLabel: 'Club channels and partner media',
@@ -853,44 +901,65 @@ ClubFinanceAnalyticsSnapshot fixtureFinanceAnalytics() {
     topExpenseLabel: 'Payroll remains the largest cost centre',
     categoryMix: <FinanceCategoryBreakdown>[
       FinanceCategoryBreakdown(
-          label: 'Payroll', amount: 82200000, sharePercent: 49.2),
+        label: 'Payroll',
+        amount: 82200000,
+        sharePercent: 49.2,
+      ),
       FinanceCategoryBreakdown(
-          label: 'Academy pathway', amount: 36000000, sharePercent: 21.6),
+        label: 'Academy pathway',
+        amount: 36000000,
+        sharePercent: 21.6,
+      ),
       FinanceCategoryBreakdown(
-          label: 'Facilities', amount: 24400000, sharePercent: 14.6),
+        label: 'Facilities',
+        amount: 24400000,
+        sharePercent: 14.6,
+      ),
       FinanceCategoryBreakdown(
-          label: 'Scouting pipeline', amount: 15700000, sharePercent: 9.4),
+        label: 'Scouting pipeline',
+        amount: 15700000,
+        sharePercent: 9.4,
+      ),
       FinanceCategoryBreakdown(
-          label: 'Commercial delivery', amount: 8900000, sharePercent: 5.2),
+        label: 'Commercial delivery',
+        amount: 8900000,
+        sharePercent: 5.2,
+      ),
     ],
     quarterlyCashflow: <CashflowPoint>[
       CashflowPoint(
-          label: 'Q1',
-          inflow: 41800000,
-          outflow: 37400000,
-          closingBalance: 65800000),
+        label: 'Q1',
+        inflow: 41800000,
+        outflow: 37400000,
+        closingBalance: 65800000,
+      ),
       CashflowPoint(
-          label: 'Q2',
-          inflow: 43600000,
-          outflow: 38400000,
-          closingBalance: 71000000),
+        label: 'Q2',
+        inflow: 43600000,
+        outflow: 38400000,
+        closingBalance: 71000000,
+      ),
       CashflowPoint(
-          label: 'Q3',
-          inflow: 40100000,
-          outflow: 37200000,
-          closingBalance: 73900000),
+        label: 'Q3',
+        inflow: 40100000,
+        outflow: 37200000,
+        closingBalance: 73900000,
+      ),
       CashflowPoint(
-          label: 'Q4',
-          inflow: 44800000,
-          outflow: 39400000,
-          closingBalance: 79300000),
+        label: 'Q4',
+        inflow: 44800000,
+        outflow: 39400000,
+        closingBalance: 79300000,
+      ),
     ],
   );
 }
 
 SponsorshipAnalyticsSnapshot fixtureSponsorshipAnalytics() {
-  final SponsorshipDashboard dashboard =
-      fixtureSponsorships('royal-lagos-fc', 'Royal Lagos FC');
+  final SponsorshipDashboard dashboard = fixtureSponsorships(
+    'royal-lagos-fc',
+    'Royal Lagos FC',
+  );
   return SponsorshipAnalyticsSnapshot(
     totalRevenue: 21400000,
     averageContractValue: 792000,
@@ -900,15 +969,19 @@ SponsorshipAnalyticsSnapshot fixtureSponsorshipAnalytics() {
     flaggedAssets: 2,
     topContracts: dashboard.contracts,
     reviewQueue: dashboard.assetSlots
-        .where((SponsorAssetSlot slot) =>
-            slot.moderationState != SponsorModerationState.approved)
+        .where(
+          (SponsorAssetSlot slot) =>
+              slot.moderationState != SponsorModerationState.approved,
+        )
         .toList(growable: false),
   );
 }
 
 AcademyAnalyticsSnapshot fixtureAcademyAnalytics() {
-  final AcademyDashboard dashboard =
-      fixtureAcademy('royal-lagos-fc', 'Royal Lagos FC');
+  final AcademyDashboard dashboard = fixtureAcademy(
+    'royal-lagos-fc',
+    'Royal Lagos FC',
+  );
   return AcademyAnalyticsSnapshot(
     conversionRatePercent: 12.4,
     retentionRatePercent: 86.0,
@@ -921,8 +994,10 @@ AcademyAnalyticsSnapshot fixtureAcademyAnalytics() {
 }
 
 ScoutingAnalyticsSnapshot fixtureScoutingAnalytics() {
-  final ScoutingDashboard dashboard =
-      fixtureScouting('royal-lagos-fc', 'Royal Lagos FC');
+  final ScoutingDashboard dashboard = fixtureScouting(
+    'royal-lagos-fc',
+    'Royal Lagos FC',
+  );
   return ScoutingAnalyticsSnapshot(
     assignmentCompletionPercent: 79.0,
     regionalCoveragePercent: 84.0,

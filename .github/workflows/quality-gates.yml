@@ -37,5 +37,6 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r backend/requirements.txt black ruff detect-secrets
+      - run: python tools/check_python_runtime_alignment.py
       - run: python tools/quality/run_changed_quality.py --base "$QUALITY_BASE_SHA" --head "$QUALITY_HEAD_SHA"
         shell: bash

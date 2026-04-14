@@ -7,6 +7,7 @@ Use this when bringing up the current GTEX tree locally without changing product
 ## Backend quick start
 
 Repository root: `C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE`
+Supported Python runtime: `Python 3.14`
 
 No Redis server is required for the local paths below.
 

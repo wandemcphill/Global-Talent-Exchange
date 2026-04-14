@@ -149,7 +149,7 @@ void main() {
   );
 
   test(
-    'live spectate sessions fail closed without the real backend repository',
+    'live spectate sessions fail closed without the backend-connected repository',
     () async {
       final GteExchangeApiClient client = GteExchangeApiClient(
         config: const GteRepositoryConfig(

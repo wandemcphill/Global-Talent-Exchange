@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../shared/providers/tasks_provider.dart';
+import '../../features/tasks/live_tasks_provider.dart';
 import '../constants/app_spacing.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 
 Future<void> showTaskRewardCelebration(
   BuildContext context,
-  TaskClaimResult result,
+  DailyChallengeClaimFeedback result,
 ) {
   return showGeneralDialog<void>(
     context: context,
@@ -53,7 +53,7 @@ Future<void> showTaskRewardCelebration(
 class _TaskRewardPop extends StatefulWidget {
   const _TaskRewardPop({required this.result});
 
-  final TaskClaimResult result;
+  final DailyChallengeClaimFeedback result;
 
   @override
   State<_TaskRewardPop> createState() => _TaskRewardPopState();
@@ -85,9 +85,9 @@ class _TaskRewardPopState extends State<_TaskRewardPop> {
   @override
   Widget build(BuildContext context) {
     final bool highlightUnlock =
-        widget.result.multiplierIncreased || widget.result.streakAdvanced;
+        widget.result.bonusAwarded || widget.result.streakAdvanced;
     final Color accent =
-        widget.result.multiplierIncreased ? AppColors.gold : AppColors.primary;
+        widget.result.bonusAwarded ? AppColors.gold : AppColors.primary;
 
     return Material(
       color: Colors.transparent,
@@ -173,17 +173,21 @@ class _TaskRewardPopState extends State<_TaskRewardPop> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
-                                highlightUnlock
-                                    ? 'Achievement Unlocked'
-                                    : 'Reward Claimed',
+                                'Live reward settled',
                                 style: Theme.of(context).textTheme.headlineSmall
                                     ?.copyWith(color: AppColors.textPrimary),
                               ),
                               const SizedBox(height: spacingXS),
                               Text(
-                                widget.result.multiplierIncreased
-                                    ? 'Multiplier upgraded to ${widget.result.multiplierLabel}.'
-                                    : 'Reward banked into the live loop.',
+                                widget.result.challengeTitle,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(color: accent),
+                              ),
+                              const SizedBox(height: spacingXS),
+                              Text(
+                                widget.result.streakAdvanced
+                                    ? 'Backend streak state updated.'
+                                    : 'Backend claim recorded.',
                                 style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(color: AppColors.textSecondary),
                               ),
@@ -199,24 +203,30 @@ class _TaskRewardPopState extends State<_TaskRewardPop> {
                       children: <Widget>[
                         _RewardChip(
                           icon: Icons.monetization_on_rounded,
-                          label: widget.result.reward,
+                          label: widget.result.rewardLabel,
                           color: AppColors.gold,
                         ),
+                        if (widget.result.bonusAwarded)
+                          _RewardChip(
+                            icon: Icons.bolt_rounded,
+                            label: 'Bonus ${widget.result.bonusAwardedLabel}',
+                            color: accent,
+                          ),
                         _RewardChip(
                           icon: Icons.local_fire_department_rounded,
                           label: '${widget.result.currentStreak} day streak',
                           color: AppColors.primary,
                         ),
                         _RewardChip(
-                          icon: Icons.bolt_rounded,
-                          label: widget.result.multiplierLabel,
+                          icon: Icons.trending_up_rounded,
+                          label: widget.result.nextBonusLabel,
                           color: accent,
                         ),
                       ],
                     ),
                     const SizedBox(height: spacingLG),
                     Text(
-                      widget.result.message,
+                      widget.result.statusMessage,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textPrimary,
                       ),

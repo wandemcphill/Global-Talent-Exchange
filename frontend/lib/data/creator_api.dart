@@ -20,12 +20,13 @@ class CreatorApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return CreatorApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: createModeAwareTransport(resolvedMode),
+        transport: transport ?? createModeAwareTransport(resolvedMode),
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -38,6 +39,7 @@ class CreatorApi {
     String baseUrl = 'https://community.gte.local',
     CreatorProfile? profile,
     CreatorFinanceSummary? financeSummary,
+    GteTransport? transport,
   }) {
     final CreatorProfile seededProfile =
         profile ?? _buildFixtureProfile(baseUrl);
@@ -47,7 +49,8 @@ class CreatorApi {
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.fixture,
         ),
-        transport: createModeAwareTransport(GteBackendMode.fixture),
+        transport:
+            transport ?? createModeAwareTransport(GteBackendMode.fixture),
         accessToken: 'fixture-token',
         mode: GteBackendMode.fixture,
       ),
@@ -131,7 +134,15 @@ class CreatorApi {
     final Map<String, dynamic> financePayload = await _getMapWithLegacyFallback(
       '/api/creators/me/finance',
     );
-    return _creatorFinanceFromJson(financePayload);
+    final CreatorFinanceSummary finance = _creatorFinanceFromJson(
+      financePayload,
+    );
+    final Map<String, dynamic>? clipEarningsPayload =
+        await _tryGetMapWithLegacyFallback('/api/media/me/clip-earnings');
+    if (clipEarningsPayload == null) {
+      return finance;
+    }
+    return _mergeCreatorFinanceWithClipEarnings(finance, clipEarningsPayload);
   }
 
   Future<CreatorProfile> _fetchCurrentCreatorProfile() async {
@@ -160,6 +171,20 @@ class CreatorApi {
       path,
       (String resolvedPath) => client.getMap(resolvedPath, auth: auth),
     );
+  }
+
+  Future<Map<String, dynamic>?> _tryGetMapWithLegacyFallback(
+    String path, {
+    bool auth = true,
+  }) async {
+    try {
+      return await _getMapWithLegacyFallback(path, auth: auth);
+    } on GteApiException catch (error) {
+      if (error.type == GteApiErrorType.notFound) {
+        return null;
+      }
+      rethrow;
+    }
   }
 
   Future<List<dynamic>> _getListWithLegacyFallback(
@@ -371,33 +396,115 @@ CreatorFinanceSummary _creatorFinanceFromJson(Object? value) {
       value as Map<String, dynamic>? ?? <String, dynamic>{};
   return CreatorFinanceSummary(
     currency: json['currency']?.toString() ?? 'credits',
-    totalGiftIncome: (json['total_gift_income'] as num?)?.toDouble() ?? 0,
-    totalRewardIncome: (json['total_reward_income'] as num?)?.toDouble() ?? 0,
-    totalClipIncome: (json['total_clip_income'] as num?)?.toDouble() ?? 0,
-    totalClipViews: (json['total_clip_views'] as num?)?.toInt() ?? 0,
-    monetizedClips: (json['monetized_clips'] as num?)?.toInt() ?? 0,
-    viralClipCount: (json['viral_clip_count'] as num?)?.toInt() ?? 0,
-    totalViralBonus: (json['total_viral_bonus'] as num?)?.toDouble() ?? 0,
-    totalReferralBonus: (json['total_referral_bonus'] as num?)?.toDouble() ?? 0,
-    totalWeeklyTopCreatorBonus:
-        (json['total_weekly_top_creator_bonus'] as num?)?.toDouble() ?? 0,
-    totalWithdrawnGross:
-        (json['total_withdrawn_gross'] as num?)?.toDouble() ?? 0,
-    totalWithdrawalFees:
-        (json['total_withdrawal_fees'] as num?)?.toDouble() ?? 0,
-    totalWithdrawnNet: (json['total_withdrawn_net'] as num?)?.toDouble() ?? 0,
-    pendingWithdrawals: (json['pending_withdrawals'] as num?)?.toDouble() ?? 0,
-    walletBalance: (json['wallet_balance'] as num?)?.toDouble() ?? 0,
-    walletAvailableBalance:
-        (json['wallet_available_balance'] as num?)?.toDouble() ?? 0,
+    totalGiftIncome: _doubleValue(json['total_gift_income']),
+    totalRewardIncome: _doubleValue(json['total_reward_income']),
+    totalClipIncome: _doubleValue(json['total_clip_income']),
+    totalClipViews: _intValue(json['total_clip_views']),
+    monetizedClips: _intValue(json['monetized_clips']),
+    viralClipCount: _intValue(json['viral_clip_count']),
+    totalViralBonus: _doubleValue(json['total_viral_bonus']),
+    totalReferralBonus: _doubleValue(json['total_referral_bonus']),
+    totalWeeklyTopCreatorBonus: _doubleValue(
+      json['total_weekly_top_creator_bonus'],
+    ),
+    totalWithdrawnGross: _doubleValue(json['total_withdrawn_gross']),
+    totalWithdrawalFees: _doubleValue(json['total_withdrawal_fees']),
+    totalWithdrawnNet: _doubleValue(json['total_withdrawn_net']),
+    pendingWithdrawals: _doubleValue(json['pending_withdrawals']),
+    walletBalance: _doubleValue(json['wallet_balance']),
+    walletAvailableBalance: _doubleValue(json['wallet_available_balance']),
     walletCurrency: json['wallet_currency']?.toString() ?? 'credits',
-    activeCompetitions: (json['active_competitions'] as num?)?.toInt() ?? 0,
-    attributedSignups: (json['attributed_signups'] as num?)?.toInt() ?? 0,
-    qualifiedJoins: (json['qualified_joins'] as num?)?.toInt() ?? 0,
-    insights: (json['insights'] as List<dynamic>? ?? const <dynamic>[])
-        .map((dynamic item) => item.toString())
-        .toList(growable: false),
+    activeCompetitions: _intValue(json['active_competitions']),
+    attributedSignups: _intValue(json['attributed_signups']),
+    qualifiedJoins: _intValue(json['qualified_joins']),
+    insights: _stringListValue(json['insights']),
   );
+}
+
+CreatorFinanceSummary _mergeCreatorFinanceWithClipEarnings(
+  CreatorFinanceSummary finance,
+  Object? value,
+) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  final List<String> mergedInsights = <String>[
+    ...finance.insights,
+    ..._stringListValue(
+      json['incentives'],
+    ).where((String item) => !finance.insights.contains(item)),
+  ];
+  return CreatorFinanceSummary(
+    currency: finance.currency,
+    totalGiftIncome: finance.totalGiftIncome,
+    totalRewardIncome: finance.totalRewardIncome,
+    totalClipIncome: _doubleValue(
+      json['total_creator_payout_credit'],
+      fallback: finance.totalClipIncome,
+    ),
+    totalClipViews: _intValue(
+      json['total_views'],
+      fallback: finance.totalClipViews,
+    ),
+    monetizedClips: _intValue(
+      json['monetized_clip_count'],
+      fallback: finance.monetizedClips,
+    ),
+    viralClipCount: _intValue(
+      json['viral_clip_count'],
+      fallback: finance.viralClipCount,
+    ),
+    totalViralBonus: _doubleValue(
+      json['total_viral_bonus_credit'],
+      fallback: finance.totalViralBonus,
+    ),
+    totalReferralBonus: _doubleValue(
+      json['total_referral_bonus_credit'],
+      fallback: finance.totalReferralBonus,
+    ),
+    totalWeeklyTopCreatorBonus: _doubleValue(
+      json['total_weekly_top_creator_bonus_credit'],
+      fallback: finance.totalWeeklyTopCreatorBonus,
+    ),
+    totalWithdrawnGross: finance.totalWithdrawnGross,
+    totalWithdrawalFees: finance.totalWithdrawalFees,
+    totalWithdrawnNet: finance.totalWithdrawnNet,
+    pendingWithdrawals: finance.pendingWithdrawals,
+    walletBalance: _doubleValue(
+      json['wallet_balance_credit'],
+      fallback: finance.walletBalance,
+    ),
+    walletAvailableBalance: _doubleValue(
+      json['wallet_available_credit'],
+      fallback: finance.walletAvailableBalance,
+    ),
+    walletCurrency:
+        json['wallet_currency']?.toString() ?? finance.walletCurrency,
+    activeCompetitions: finance.activeCompetitions,
+    attributedSignups: finance.attributedSignups,
+    qualifiedJoins: finance.qualifiedJoins,
+    insights: mergedInsights,
+  );
+}
+
+double _doubleValue(Object? value, {double fallback = 0}) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+int _intValue(Object? value, {int fallback = 0}) {
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+List<String> _stringListValue(Object? value) {
+  return (value as List<dynamic>? ?? const <dynamic>[])
+      .map((dynamic item) => item.toString())
+      .where((String item) => item.trim().isNotEmpty)
+      .toList(growable: false);
 }
 
 class _CreatorFixtures {

@@ -27,6 +27,7 @@ import 'package:gte_frontend/features/football_world_simulation/football_world_s
 import 'package:gte_frontend/features/gift_economy_admin/gift_economy_admin.dart';
 import 'package:gte_frontend/features/jackpot/presentation/gtex_jackpot_route_screen.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
+import 'package:gte_frontend/features/match/replay_archive_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/player_card_marketplace/player_card_marketplace.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/streamer_tournament_engine.dart';
@@ -258,9 +259,8 @@ class GteAppRouteRegistry {
       );
     }
     if (route is ClubReplaysRouteData) {
-      return GteLiveMatchHubRouteScreen(
+      return GteReplayArchiveRouteScreen(
         dependencies: dependencies,
-        clubId: route.clubId,
         clubName: route.clubName,
       );
     }

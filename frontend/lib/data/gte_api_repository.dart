@@ -403,8 +403,8 @@ abstract class GteApiRepository {
   Future<GtePortfolioSummary> fetchPortfolioSummary();
 }
 
-class GteReliableApiRepository implements GteApiRepository {
-  GteReliableApiRepository({
+class GteModeAwareApiRepository implements GteApiRepository {
+  GteModeAwareApiRepository({
     required this.config,
     required this.transport,
     required this.fixtures,

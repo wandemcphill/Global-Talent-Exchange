@@ -8,10 +8,14 @@ class SponsorshipPackageCard extends StatelessWidget {
     super.key,
     required this.package,
     this.onOpen,
+    this.primaryActionLabel,
+    this.onPrimaryAction,
   });
 
   final SponsorshipPackage package;
   final VoidCallback? onOpen;
+  final String? primaryActionLabel;
+  final VoidCallback? onPrimaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -27,9 +31,15 @@ class SponsorshipPackageCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(package.name, style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      package.name,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 6),
-                    Text(package.tierLabel, style: Theme.of(context).textTheme.bodyMedium),
+                    Text(
+                      package.tierLabel,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ],
                 ),
               ),
@@ -40,22 +50,41 @@ class SponsorshipPackageCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(package.description, style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            package.description,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 12),
           Text(
-            '${package.durationMonths} months · ${package.assetCount} asset slots',
+            '${package.durationMonths} months | ${package.assetCount} asset slots',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 6),
-          Text(package.inventorySummary, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: package.deliverables
-                .map((String item) => Chip(label: Text(item)))
-                .toList(growable: false),
+          Text(
+            package.inventorySummary,
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
+          if (package.deliverables.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: package.deliverables
+                  .map((String item) => Chip(label: Text(item)))
+                  .toList(growable: false),
+            ),
+          ],
+          if (primaryActionLabel != null &&
+              onPrimaryAction != null) ...<Widget>[
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton(
+                onPressed: onPrimaryAction,
+                child: Text(primaryActionLabel!),
+              ),
+            ),
+          ],
         ],
       ),
     );

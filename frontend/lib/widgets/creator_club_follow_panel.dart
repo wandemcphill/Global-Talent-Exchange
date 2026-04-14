@@ -17,6 +17,7 @@ class CreatorClubFollowPanel extends StatefulWidget {
     this.accessToken,
     this.isAuthenticated = false,
     this.onOpenLogin,
+    this.api,
   });
 
   final String baseUrl;
@@ -26,6 +27,7 @@ class CreatorClubFollowPanel extends StatefulWidget {
   final String? accessToken;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
+  final CommunityApi? api;
 
   @override
   State<CreatorClubFollowPanel> createState() => _CreatorClubFollowPanelState();
@@ -48,7 +50,8 @@ class _CreatorClubFollowPanelState extends State<CreatorClubFollowPanel> {
         oldWidget.backendMode != widget.backendMode ||
         oldWidget.accessToken != widget.accessToken ||
         oldWidget.clubId != widget.clubId ||
-        oldWidget.isAuthenticated != widget.isAuthenticated) {
+        oldWidget.isAuthenticated != widget.isAuthenticated ||
+        oldWidget.api != widget.api) {
       _controller.dispose();
       _controller = _buildController();
       _controller.load();
@@ -63,11 +66,13 @@ class _CreatorClubFollowPanelState extends State<CreatorClubFollowPanel> {
 
   CreatorClubFollowController _buildController() {
     return CreatorClubFollowController(
-      api: CommunityApi.standard(
-        baseUrl: widget.baseUrl,
-        accessToken: widget.accessToken,
-        mode: widget.backendMode,
-      ),
+      api:
+          widget.api ??
+          CommunityApi.standard(
+            baseUrl: widget.baseUrl,
+            accessToken: widget.accessToken,
+            mode: widget.backendMode,
+          ),
       clubId: widget.clubId,
       isAuthenticated: widget.isAuthenticated,
     );
@@ -99,8 +104,10 @@ class _CreatorClubFollowPanelState extends State<CreatorClubFollowPanel> {
         ),
       );
     }
-    if (!widget.isAuthenticated ||
-        (widget.accessToken?.trim().isEmpty ?? true)) {
+    final bool hasAuthedApi =
+        widget.isAuthenticated &&
+        (widget.api != null || !(widget.accessToken?.trim().isEmpty ?? true));
+    if (!hasAuthedApi) {
       return GteSurfacePanel(
         child: Row(
           children: <Widget>[

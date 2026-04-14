@@ -327,7 +327,7 @@ class GtePlayerMatchService {
     }
     String? accessToken;
     final GteApiRepository repository = api.repository;
-    if (repository is GteReliableApiRepository) {
+    if (repository is GteModeAwareApiRepository) {
       accessToken = await repository.tokenStore.readToken();
     }
     return _BackendMatchClient(

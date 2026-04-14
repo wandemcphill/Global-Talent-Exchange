@@ -74,6 +74,32 @@ jobs:
           --plain-name "policy acceptance reads no longer fall back to fixtures in live-then-fixture mode"
           -r compact
 
+  frontend-route-integrity-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test test/navigation_surface_truth_test.dart -r compact
+      - run: flutter test test/match/match_screen_broadcast_test.dart -r compact
+      - run: >
+          flutter test
+          test/active_shell_route_mount_test.dart
+          --plain-name "router mounts live 2D routes, live broadcast, gated Flutter 3D, and profile admin"
+          -r compact
+      - run: >
+          flutter test
+          test/surface_runtime_proof_test.dart
+          --plain-name "router mounts federations, national teams, and transfer center routes"
+          -r compact
+
   backend-tests:
     runs-on: ubuntu-latest
     steps:
@@ -302,6 +328,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       needs.frontend-tests.result == 'success' &&
       needs.frontend-live-fallback-regressions.result == 'success' &&
+      needs.frontend-route-integrity-regressions.result == 'success' &&
       needs.backend-tests.result == 'success' &&
       needs.backend-live-playback-tests.result == 'success' &&
       needs.backend-payment-regressions.result == 'success' &&
@@ -312,6 +339,7 @@ jobs:
     needs:
       - frontend-tests
       - frontend-live-fallback-regressions
+      - frontend-route-integrity-regressions
       - backend-tests
       - backend-live-playback-tests
       - backend-payment-regressions

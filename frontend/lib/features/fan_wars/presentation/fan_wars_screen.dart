@@ -36,6 +36,10 @@ class FanWarsScreen extends StatefulWidget {
 }
 
 class _FanWarsScreenState extends State<FanWarsScreen> {
+  static const String _publicScopeMessage =
+      'Public Fan Wars is read-only here: browse boards, rivalry gaps, and Nations Cup status. '
+      'Scoring, rival links, country assignments, and cup progression stay admin-only.';
+
   late final FanWarsController _controller;
   late final FanWarsRepository _repository;
   late final NationalTeamApi _nationalTeamApi;
@@ -50,8 +54,10 @@ class _FanWarsScreenState extends State<FanWarsScreen> {
   bool _isLoadingNational = false;
   String _boardType = 'country';
 
-  bool get _isAdmin => <String>{'admin', 'super_admin'}
-      .contains((widget.currentUserRole ?? '').trim().toLowerCase());
+  bool get _isAdmin => <String>{
+    'admin',
+    'super_admin',
+  }.contains((widget.currentUserRole ?? '').trim().toLowerCase());
 
   @override
   void initState() {
@@ -88,27 +94,27 @@ class _FanWarsScreenState extends State<FanWarsScreen> {
     });
     try {
       final List<Future<void>> tasks = <Future<void>>[
-        _nationalTeamApi
-            .listCompetitions()
-            .then((List<NationalTeamCompetition> value) {
+        _nationalTeamApi.listCompetitions().then((
+          List<NationalTeamCompetition> value,
+        ) {
           _competitions = value;
         }),
         if (widget.entryId != null)
-          _nationalTeamApi
-              .fetchEntryDetail(widget.entryId!)
-              .then((NationalTeamEntryDetail value) {
+          _nationalTeamApi.fetchEntryDetail(widget.entryId!).then((
+            NationalTeamEntryDetail value,
+          ) {
             _entryDetail = value;
           }),
         if (widget.showHistory)
-          _nationalTeamApi
-              .fetchUserHistory()
-              .then((NationalTeamUserHistory value) {
+          _nationalTeamApi.fetchUserHistory().then((
+            NationalTeamUserHistory value,
+          ) {
             _history = value;
           }),
         if (_competitionId != null)
-          _repository
-              .fetchNationsCup(_competitionId!)
-              .then((NationsCupOverview value) {
+          _repository.fetchNationsCup(_competitionId!).then((
+            NationsCupOverview value,
+          ) {
             _nationsCup = value;
           }),
       ];
@@ -217,7 +223,7 @@ class _FanWarsScreenState extends State<FanWarsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          'Global, club, and country boards plus Nations Cup context are routed through the canonical fan-wars engine.',
+                          _publicScopeMessage,
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                         const SizedBox(height: 14),
@@ -231,7 +237,8 @@ class _FanWarsScreenState extends State<FanWarsScreen> {
                             ),
                             GteMetricChip(
                               label: 'Entries',
-                              value: _controller.leaderboard?.entries.length
+                              value:
+                                  _controller.leaderboard?.entries.length
                                       .toString() ??
                                   '0',
                             ),
@@ -249,9 +256,11 @@ class _FanWarsScreenState extends State<FanWarsScreen> {
                             FilledButton.tonalIcon(
                               onPressed: _resolveCompetitionId,
                               icon: const Icon(Icons.flag_outlined),
-                              label: Text(_competitionId == null
-                                  ? 'Load Nations Cup'
-                                  : 'Change competition'),
+                              label: Text(
+                                _competitionId == null
+                                    ? 'Load Nations Cup'
+                                    : 'Change competition',
+                              ),
                             ),
                             if (_isAdmin)
                               FilledButton.tonalIcon(
@@ -275,8 +284,10 @@ class _FanWarsScreenState extends State<FanWarsScreen> {
                     title: 'Leaderboards',
                     lines: (_controller.leaderboard?.entries ??
                             const <Map<String, Object?>>[])
-                        .map((Map<String, Object?> item) =>
-                            '${item['display_name'] ?? item['country_name'] ?? item['profile_id'] ?? 'Profile'} • ${item['total_points'] ?? item['points'] ?? 0}')
+                        .map(
+                          (Map<String, Object?> item) =>
+                              '${item['display_name'] ?? item['country_name'] ?? item['profile_id'] ?? 'Profile'} • ${item['total_points'] ?? item['points'] ?? 0}',
+                        )
                         .toList(growable: false),
                     loading: _controller.isLoadingBoards,
                     error: _controller.boardsError,
@@ -286,8 +297,10 @@ class _FanWarsScreenState extends State<FanWarsScreen> {
                     title: 'Rivalries',
                     lines: (_controller.rivalries?.entries ??
                             const <Map<String, Object?>>[])
-                        .map((Map<String, Object?> item) =>
-                            '${item['left_display_name']} vs ${item['right_display_name']} • gap ${item['points_gap']}')
+                        .map(
+                          (Map<String, Object?> item) =>
+                              '${item['left_display_name']} vs ${item['right_display_name']} • gap ${item['points_gap']}',
+                        )
                         .toList(growable: false),
                     loading: _controller.isLoadingBoards,
                     error: _controller.boardsError,
@@ -296,8 +309,10 @@ class _FanWarsScreenState extends State<FanWarsScreen> {
                   _SimpleFanWarsCard(
                     title: 'National-team competitions',
                     lines: _competitions
-                        .map((NationalTeamCompetition item) =>
-                            '${item.title} • ${item.seasonLabel} • ${item.status}')
+                        .map(
+                          (NationalTeamCompetition item) =>
+                              '${item.title} • ${item.seasonLabel} • ${item.status}',
+                        )
                         .toList(growable: false),
                     loading: _isLoadingNational,
                     error: _nationalError,
@@ -376,11 +391,15 @@ class _SimpleFanWarsCard extends StatelessWidget {
           else if (lines.isEmpty)
             const Text('No records available.')
           else
-            ...lines.take(6).map(
+            ...lines
+                .take(6)
+                .map(
                   (String line) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(line,
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    child: Text(
+                      line,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ),
                 ),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:gte_frontend/data/community_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
@@ -149,6 +150,140 @@ void main() {
   });
 
   test(
+    'community api maps live follow, watchlist, thread, and direct-message actions',
+    () async {
+      final _PathTransport transport = _PathTransport(
+        <String, GteTransportResponse>{
+          '/api/v1/community/creator-clubs/ibadan-lions/follow':
+              const GteTransportResponse(
+                statusCode: 201,
+                body: <String, Object?>{'status': 'created'},
+              ),
+          '/api/v1/community/watchlist': GteTransportResponse(
+            statusCode: 201,
+            body: <String, Object?>{
+              'id': 'watch-2',
+              'competition_key': 'all-stars',
+              'competition_title': 'All Stars Cup',
+              'competition_type': 'creator',
+              'notify_on_story': true,
+              'notify_on_launch': true,
+              'metadata_json': const <String, Object?>{},
+              'created_at': DateTime.utc(2026, 4, 13).toIso8601String(),
+              'updated_at': DateTime.utc(2026, 4, 13).toIso8601String(),
+            },
+          ),
+          '/api/v1/community/live-threads': GteTransportResponse(
+            statusCode: 201,
+            body: <String, Object?>{
+              'id': 'thread-2',
+              'thread_key': 'all-stars-watch',
+              'competition_key': 'all-stars',
+              'title': 'All Stars Watch Party',
+              'created_by_user_id': 'user-1',
+              'status': 'open',
+              'pinned': false,
+              'last_message_at': null,
+              'metadata_json': const <String, Object?>{},
+              'created_at': DateTime.utc(2026, 4, 13).toIso8601String(),
+              'updated_at': DateTime.utc(2026, 4, 13).toIso8601String(),
+            },
+          ),
+          '/api/v1/community/private-messages/threads': GteTransportResponse(
+            statusCode: 201,
+            body: <String, Object?>{
+              'id': 'pm-2',
+              'thread_key': 'all-stars-dm',
+              'created_by_user_id': 'user-1',
+              'status': 'open',
+              'subject': 'All Stars prep',
+              'last_message_at': null,
+              'metadata_json': const <String, Object?>{},
+              'created_at': DateTime.utc(2026, 4, 13).toIso8601String(),
+              'updated_at': DateTime.utc(2026, 4, 13).toIso8601String(),
+              'participants': <Object?>[
+                <String, Object?>{
+                  'id': 'part-1',
+                  'thread_id': 'pm-2',
+                  'user_id': 'user-1',
+                  'is_muted': false,
+                  'last_read_at': null,
+                  'joined_at': DateTime.utc(2026, 4, 13).toIso8601String(),
+                  'metadata_json': const <String, Object?>{},
+                },
+                <String, Object?>{
+                  'id': 'part-2',
+                  'thread_id': 'pm-2',
+                  'user_id': 'user-7',
+                  'is_muted': false,
+                  'last_read_at': null,
+                  'joined_at': DateTime.utc(2026, 4, 13).toIso8601String(),
+                  'metadata_json': const <String, Object?>{},
+                },
+              ],
+            },
+          ),
+        },
+      );
+      final CommunityApi api = CommunityApi.standard(
+        baseUrl: 'https://example.test',
+        accessToken: 'token-1',
+        mode: GteBackendMode.live,
+        transport: transport,
+      );
+
+      await api.followCreatorClub(clubId: 'ibadan-lions');
+      final watchlist = await api.addWatchlist(
+        competitionKey: 'all-stars',
+        competitionTitle: 'All Stars Cup',
+        competitionType: 'creator',
+      );
+      final thread = await api.createLiveThread(
+        threadKey: 'all-stars-watch',
+        title: 'All Stars Watch Party',
+        competitionKey: 'all-stars',
+      );
+      final privateThread = await api.createPrivateThread(
+        participantUserIds: const <String>['user-7'],
+        initialMessage: 'Let us align before kickoff.',
+        subject: 'All Stars prep',
+      );
+
+      expect(
+        transport.requests.map((GteTransportRequest request) => request.method),
+        <String>['POST', 'POST', 'POST', 'POST'],
+      );
+      expect(
+        transport.requests.map(
+          (GteTransportRequest request) => request.uri.path,
+        ),
+        <String>[
+          '/api/v1/community/creator-clubs/ibadan-lions/follow',
+          '/api/v1/community/watchlist',
+          '/api/v1/community/live-threads',
+          '/api/v1/community/private-messages/threads',
+        ],
+      );
+      expect(
+        (transport.requests[1].body as Map<String, Object?>)['competition_key'],
+        'all-stars',
+      );
+      expect(
+        (transport.requests[2].body as Map<String, Object?>)['thread_key'],
+        'all-stars-watch',
+      );
+      expect(
+        (transport.requests[3].body
+            as Map<String, Object?>)['participant_user_ids'],
+        const <String>['user-7'],
+      );
+      expect(watchlist.competitionTitle, 'All Stars Cup');
+      expect(thread.title, 'All Stars Watch Party');
+      expect(privateThread.subject, 'All Stars prep');
+    },
+  );
+
+  test(
     'federations hub provider composes live rankings and regional rollups',
     () async {
       final ProviderContainer container = _buildContainer(
@@ -210,6 +345,88 @@ void main() {
       expect(hub.rankings, hasLength(1));
       expect(hub.regionalTournaments, hasLength(1));
       expect(hub.regionalTournaments.single.regionLabel, 'West Africa');
+    },
+  );
+
+  test(
+    'federations api posts live governance proposal and vote actions',
+    () async {
+      final _PathTransport transport = _PathTransport(
+        <String, GteTransportResponse>{
+          '/api/v1/federations/fed-1/proposals': const GteTransportResponse(
+            statusCode: 201,
+            body: <String, Object?>{
+              'id': 'proposal-1',
+              'title': 'Expand qualifiers',
+              'status': 'open',
+            },
+          ),
+          '/api/v1/federations/proposals/proposal-1/votes':
+              const GteTransportResponse(
+                statusCode: 200,
+                body: <String, Object?>{
+                  'id': 'vote-1',
+                  'proposal_id': 'proposal-1',
+                  'vote_type': 'yes',
+                },
+              ),
+        },
+      );
+      final FederationsApi api = FederationsApi(
+        client: GteAuthedApi(
+          config: const GteRepositoryConfig(
+            baseUrl: 'https://example.test',
+            mode: GteBackendMode.live,
+          ),
+          transport: transport,
+          accessToken: 'token',
+          mode: GteBackendMode.live,
+        ),
+      );
+
+      final FederationProposalActionResult created = await api.createProposal(
+        federationId: 'fed-1',
+        title: 'Expand qualifiers',
+        summary: 'Increase regional qualifier access for the next season.',
+      );
+      final FederationProposalActionResult voted = await api.castProposalVote(
+        proposalId: 'proposal-1',
+        voteType: 'yes',
+      );
+
+      expect(created.id, 'proposal-1');
+      expect(voted.voteType, 'yes');
+      expect(transport.requests, hasLength(2));
+      expect(
+        transport.requests.first.uri.path,
+        '/api/v1/federations/fed-1/proposals',
+      );
+      expect(
+        transport.requests.first.body,
+        isA<Map<String, Object?>>()
+            .having(
+              (Map<String, Object?> body) => body['proposal_type'],
+              'proposal_type',
+              'rule_change',
+            )
+            .having(
+              (Map<String, Object?> body) => body['title'],
+              'title',
+              'Expand qualifiers',
+            ),
+      );
+      expect(
+        transport.requests.last.uri.path,
+        '/api/v1/federations/proposals/proposal-1/votes',
+      );
+      expect(
+        transport.requests.last.body,
+        isA<Map<String, Object?>>().having(
+          (Map<String, Object?> body) => body['vote_type'],
+          'vote_type',
+          'yes',
+        ),
+      );
     },
   );
 

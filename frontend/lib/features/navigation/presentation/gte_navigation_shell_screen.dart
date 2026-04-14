@@ -20,6 +20,7 @@ import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/shared/presentation/gte_no_club_onboarding_view.dart';
+import 'package:gte_frontend/features/social/social_screen.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_exchange_player_detail_screen.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
@@ -696,6 +697,21 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
+  Widget _buildCommunityDestination() {
+    return CommunityScreen(
+      key: const PageStorageKey<String>('community-screen'),
+      api: null,
+      baseUrl: widget.apiBaseUrl,
+      backendMode: _liveBackendMode,
+      accessToken: widget.controller.accessToken,
+      isAuthenticated: widget.controller.isAuthenticated,
+      currentClubId: _canonicalClubId(),
+      currentClubName: _canonicalClubName(),
+      onOpenLogin:
+          () => _openLogin(targetRoute: const GteNavigationRoute.community()),
+    );
+  }
+
   Widget _buildCurrentDestination() {
     switch (_route.primaryDestination) {
       case GtePrimaryDestination.home:
@@ -705,8 +721,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       case GtePrimaryDestination.market:
         return _buildMarketDestination();
       case GtePrimaryDestination.hub:
-      case GtePrimaryDestination.community:
         return _buildHubDestination();
+      case GtePrimaryDestination.community:
+        return _buildCommunityDestination();
       case GtePrimaryDestination.club:
         return _buildClubDestination();
       case GtePrimaryDestination.wallet:
@@ -1019,10 +1036,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.community:
         return GteSyncStatusCard(
-          title: 'Hub pulse',
+          title: 'Community',
           status:
-              'Community tools are routed through Hub in this production shell.',
-          syncedAt: widget.controller.marketSyncedAt,
+              widget.controller.isAuthenticated
+                  ? 'Watchlists, live threads, direct messages, and creator-club follows are wired to live community endpoints.'
+                  : 'Public live threads are visible. Sign in to manage watchlists, follows, and direct messages.',
+          syncedAt: null,
           accent: accent,
           isRefreshing: false,
           onRefresh: null,

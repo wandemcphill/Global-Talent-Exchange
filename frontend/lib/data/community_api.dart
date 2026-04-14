@@ -13,12 +13,13 @@ class CommunityApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return CommunityApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -26,14 +27,14 @@ class CommunityApi {
     );
   }
 
-  factory CommunityApi.fixture() {
+  factory CommunityApi.fixture({GteTransport? transport}) {
     return CommunityApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.fixture,
         ),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: 'fixture-token',
         mode: GteBackendMode.fixture,
       ),
@@ -51,28 +52,34 @@ class CommunityApi {
   }
 
   Future<bool> fetchCreatorClubFollowing({required String clubId}) async {
-    final Map<String, dynamic> payload = await client.getMap(
-      '/community/creator-clubs/$clubId/fan-state',
-    );
-    final Object? following = payload['following'];
-    if (following is bool) {
-      return following;
-    }
-    return following?.toString().trim().toLowerCase() == 'true';
+    return client.withFallback<bool>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/community/creator-clubs/$clubId/fan-state',
+      );
+      final Object? following = payload['following'];
+      if (following is bool) {
+        return following;
+      }
+      return following?.toString().trim().toLowerCase() == 'true';
+    }, () async => fixtures.creatorClubFollowing(clubId));
   }
 
   Future<void> followCreatorClub({required String clubId}) async {
-    await client.request(
-      'POST',
-      '/community/creator-clubs/$clubId/follow',
-      body: const <String, Object?>{
-        'metadata_json': <String, Object?>{'source': 'active_shell'},
-      },
-    );
+    await client.withFallback<void>(() async {
+      await client.request(
+        'POST',
+        '/community/creator-clubs/$clubId/follow',
+        body: const <String, Object?>{
+          'metadata_json': <String, Object?>{'source': 'active_shell'},
+        },
+      );
+    }, () async => fixtures.followCreatorClub(clubId));
   }
 
   Future<void> unfollowCreatorClub({required String clubId}) async {
-    await client.request('DELETE', '/community/creator-clubs/$clubId/follow');
+    await client.withFallback<void>(() async {
+      await client.request('DELETE', '/community/creator-clubs/$clubId/follow');
+    }, () async => fixtures.unfollowCreatorClub(clubId));
   }
 
   Future<List<CommunityWatchlistItem>> listWatchlist() {
@@ -261,19 +268,22 @@ class CommunityApi {
 
 class _CommunityFixtures {
   _CommunityFixtures({
+    required Map<String, bool> creatorClubFollowing,
     required CommunityDigest digest,
     required List<CommunityWatchlistItem> watchlist,
     required List<LiveThread> liveThreads,
     required Map<String, List<LiveThreadMessage>> threadMessages,
     required List<PrivateMessageThread> privateThreads,
     required Map<String, List<PrivateMessage>> privateMessages,
-  }) : _digest = digest,
+  }) : _creatorClubFollowing = creatorClubFollowing,
+       _digest = digest,
        _watchlist = watchlist,
        _liveThreads = liveThreads,
        _threadMessages = threadMessages,
        _privateThreads = privateThreads,
        _privateMessages = privateMessages;
 
+  final Map<String, bool> _creatorClubFollowing;
   CommunityDigest _digest;
   final List<CommunityWatchlistItem> _watchlist;
   final List<LiveThread> _liveThreads;
@@ -282,6 +292,9 @@ class _CommunityFixtures {
   final Map<String, List<PrivateMessage>> _privateMessages;
 
   static _CommunityFixtures seed() {
+    final Map<String, bool> creatorClubFollowing = <String, bool>{
+      'ibadan-lions': true,
+    };
     final List<CommunityWatchlistItem> watchlist = <CommunityWatchlistItem>[
       CommunityWatchlistItem(
         id: 'watch-1',
@@ -379,6 +392,7 @@ class _CommunityFixtures {
       unreadHintCount: 2,
     );
     return _CommunityFixtures(
+      creatorClubFollowing: creatorClubFollowing,
       digest: digest,
       watchlist: watchlist,
       liveThreads: threads,
@@ -389,6 +403,17 @@ class _CommunityFixtures {
   }
 
   Future<CommunityDigest> digest() async => _digest;
+
+  Future<bool> creatorClubFollowing(String clubId) async =>
+      _creatorClubFollowing[clubId] ?? false;
+
+  Future<void> followCreatorClub(String clubId) async {
+    _creatorClubFollowing[clubId] = true;
+  }
+
+  Future<void> unfollowCreatorClub(String clubId) async {
+    _creatorClubFollowing[clubId] = false;
+  }
 
   Future<List<CommunityWatchlistItem>> watchlist() async =>
       List<CommunityWatchlistItem>.of(_watchlist, growable: false);

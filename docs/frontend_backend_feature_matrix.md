@@ -23,13 +23,17 @@ Why these three:
 | Federations / world functionality | Y | Y | Y | Y | Y | Y |
 | National team engine | Y | Y | Y | Y | Y | Y |
 | Transfer center | Y | Y | Y | Y | Y | Y |
-| Fast cups / infinite league / regen universe | Y | Partial | N | Partial | N | N |
-| Broadcast rights and specialized modules | Y | N | N | N | N | N |
+| Fast cups | Y | Y | Y | Partial | N | N |
+| Regen universe | Y | Y | Y | Y | N | N |
+| Infinite league | Y | N | N | N | N | N |
+| Broadcast rights and other backend-only specialist modules | Y | N | N | N | N | N |
 
 ## Notes
 
 - `Federations / world functionality` is now exposed through a dedicated federations hub and federation detail route, with live ranking, governance, narrative, and membership-request flows.
 - `National team engine` is now exposed through a dedicated hub and competition detail route, with live lifecycle and presentation data plus a live draft-squad action.
 - `Transfer center` is now exposed through a dedicated route and listing detail route, with live bidders, negotiation context, bidding, watchlist, and contract-offer flows.
-- `Fast cups / infinite league / regen universe` remains the highest-value next wave after this one. Regen summaries are already visible on the world route, but fast cups and infinite league do not yet have routed frontend surfaces.
-- `Broadcast rights and specialized modules` remain backend-only from the shipped shell.
+- `Fast cups` are now discoverable in the competitions hub, but the shipped lane is still read-heavy rather than a fully dedicated fast-cup action surface.
+- `Regen universe` is already shipped through world and national-team surfaces with live routed data.
+- `Infinite league` remains backend-only from the shipped shell, even though it powers supporting generated-match infrastructure behind other surfaces.
+- `Broadcast rights and other backend-only specialist modules` remain hidden from the shipped shell until they gain explicit routed owners.

@@ -10,7 +10,6 @@ from .schemas import (
     AdminRoleCatalogUpdate,
     AdminRoleCatalogView,
     AuditEventView,
-    AuditQueryView,
     CommissionSettingsUpdate,
     CommissionSettingsView,
     CompetitionControlUpdate,
@@ -83,8 +82,6 @@ def update_roles(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
-
-
 @router.get("/audit-events", response_model=list[AuditEventView])
 def read_audit_events(
     request: Request,
@@ -134,6 +131,7 @@ def read_high_risk_actions(
 ) -> list[HighRiskActionView]:
     return service.list_high_risk_actions(request.app)
 
+
 @router.get("/commissions", response_model=CommissionSettingsView)
 def read_commissions(
     request: Request,
@@ -176,6 +174,8 @@ def update_payment_rails(
         return service.update_payment_rails(request.app, actor, payload)
     except PermissionDeniedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except GodModeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/withdrawal-controls", response_model=WithdrawalControlView)

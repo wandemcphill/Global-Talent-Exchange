@@ -128,7 +128,6 @@ class GlobalEventEngagementView(BaseModel):
     match_route: str | None = None
     pre_match_show_route: str | None = None
     post_match_show_route: str | None = None
-    betting_route: str | None = None
 
 
 class GlobalEventView(BaseModel):

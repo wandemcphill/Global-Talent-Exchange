@@ -33,7 +33,7 @@ class GteExchangeApiClient {
     return GteExchangeApiClient(
       config: config,
       transport: transport,
-      repository: GteReliableApiRepository(
+      repository: GteModeAwareApiRepository(
         config: config,
         transport: transport,
         fixtures: fixtures,
@@ -52,7 +52,7 @@ class GteExchangeApiClient {
     return GteExchangeApiClient(
       config: config,
       transport: transport,
-      repository: GteReliableApiRepository(
+      repository: GteModeAwareApiRepository(
         config: config,
         transport: transport,
         fixtures: fixtures,
@@ -547,11 +547,11 @@ class GteExchangeApiClient {
       return _fixtureSpectateSession(matchKey);
     }
     final GteApiRepository resolvedRepository = repository;
-    if (resolvedRepository is! GteReliableApiRepository) {
+    if (resolvedRepository is! GteModeAwareApiRepository) {
       throw const GteApiException(
         type: GteApiErrorType.unavailable,
         message:
-            'Live match spectate sessions require the real backend repository.',
+            'Live match spectate sessions require the backend-connected repository.',
       );
     }
     return resolvedRepository.requestJson(

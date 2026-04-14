@@ -279,7 +279,7 @@ class ClubHubScreen extends StatelessWidget {
                               ),
                             ),
                         icon: Icons.play_circle_outline,
-                        label: 'Open matchday hub',
+                        label: 'Replay archive',
                       ),
                     ],
                   ),

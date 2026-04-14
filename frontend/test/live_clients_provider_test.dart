@@ -36,9 +36,9 @@ void main() {
 
     final exchangeApiClient = container.read(exchangeApiClientProvider);
     expect(exchangeApiClient.config.mode, GteBackendMode.live);
-    expect(exchangeApiClient.repository, isA<GteReliableApiRepository>());
+    expect(exchangeApiClient.repository, isA<GteModeAwareApiRepository>());
     expect(
-      (exchangeApiClient.repository as GteReliableApiRepository).config.mode,
+      (exchangeApiClient.repository as GteModeAwareApiRepository).config.mode,
       GteBackendMode.live,
     );
 
