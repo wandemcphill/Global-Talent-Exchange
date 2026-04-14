@@ -88,9 +88,14 @@ class ReferralAdminService:
         pending_rewards = len(self.list_pending_rewards())
         blocked_states = self._share_code_moderation_states()
         frozen_states = self._creator_reward_freeze_states()
+        blocked_share_code_ids = {state.share_code_id for state in blocked_states.values() if state.blocked}
         return ReferralAdminDashboardView(
             total_share_codes=len(share_codes),
-            active_share_codes=sum(1 for metric in share_codes.values() if metric.active),
+            active_share_codes=sum(
+                1
+                for metric in share_codes.values()
+                if metric.active and metric.share_code_id not in blocked_share_code_ids
+            ),
             pending_rewards=pending_rewards,
             blocked_share_codes=sum(1 for state in blocked_states.values() if state.blocked),
             frozen_creators=sum(1 for state in frozen_states.values() if state.frozen),
@@ -320,6 +325,7 @@ class ReferralAdminService:
         self, metric, total_signups: int, flags_by_entity: dict[tuple[str, str], list[ReferralFlagView]]
     ) -> ShareCodeUsageSummaryView:
         flags = flags_by_entity.get(("share_code", metric.share_code_id), [])
+        moderation_state = self._share_code_moderation_states().get(metric.share_code_id)
         return ShareCodeUsageSummaryView(
             code_id=metric.share_code_id,
             code=metric.code,
@@ -327,7 +333,7 @@ class ReferralAdminService:
             owner_user_id=metric.owner_user_id,
             owner_creator_id=metric.owner_creator_id,
             linked_competition_id=metric.linked_competition_id,
-            active=metric.active,
+            active=metric.active and not (moderation_state.blocked if moderation_state is not None else False),
             max_uses=metric.max_uses,
             current_uses=metric.current_uses,
             usage_share=(Decimal(metric.attributed_signups) / Decimal(total_signups)).quantize(

@@ -242,7 +242,9 @@ class ReferralAnalyticsService:
         attributions = self._attributions()
 
         for attribution in attributions:
-            creator = creators.get(attribution.creator_profile_id) if attribution.creator_profile_id is not None else None
+            creator = (
+                creators.get(attribution.creator_profile_id) if attribution.creator_profile_id is not None else None
+            )
             share_code = share_codes.get(attribution.share_code_id)
             key = (
                 attribution.creator_profile_id,
@@ -433,20 +435,16 @@ class ReferralAnalyticsService:
         )
 
     def _share_codes(self) -> tuple[ShareCodeRecord, ...]:
-        with self.orchestrator.store.lock:
-            return tuple(self.orchestrator.store.share_codes_by_id.values())
+        return self.orchestrator.list_all_share_codes()
 
     def _creators(self) -> tuple[CreatorProfileRecord, ...]:
-        with self.orchestrator.store.lock:
-            return tuple(self.orchestrator.store.creators_by_id.values())
+        return self.orchestrator.creator_profiles.list_all()
 
     def _attributions(self) -> tuple[AttributionRecord, ...]:
-        with self.orchestrator.store.lock:
-            return tuple(self.orchestrator.store.attributions_by_id.values())
+        return self.orchestrator.attributions.list_all()
 
     def _rewards(self) -> tuple[RewardRecord, ...]:
-        with self.orchestrator.store.lock:
-            return tuple(self.orchestrator.store.rewards_by_id.values())
+        return self.orchestrator.rewards.list_all()
 
     @staticmethod
     def _is_qualified(attribution: AttributionRecord) -> bool:

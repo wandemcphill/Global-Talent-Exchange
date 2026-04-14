@@ -19,7 +19,7 @@ DOCKERFILES = (
 )
 DOC_REQUIREMENTS = {
     Path("README.md"): "Python 3.14",
-    Path("Docs/RUNBOOK_LOCAL_DEV.md"): "Supported Python runtime: `Python 3.14`",
+    Path("docs/RUNBOOK_LOCAL_DEV.md"): "Supported Python runtime: `Python 3.14`",
     Path("DEPLOYMENT_GUIDE.md"): "Supported GTEX application runtime: Python 3.14",
 }
 
@@ -42,9 +42,7 @@ def _check_workflows(errors: list[str]) -> None:
             errors.append(f"{relative_path} does not declare any python-version entries.")
             continue
         if any(version != SUPPORTED_PYTHON for version in versions):
-            errors.append(
-                f"{relative_path} must use python-version {SUPPORTED_PYTHON} everywhere, found {versions!r}."
-            )
+            errors.append(f"{relative_path} must use python-version {SUPPORTED_PYTHON} everywhere, found {versions!r}.")
 
 
 def _check_dockerfiles(errors: list[str]) -> None:

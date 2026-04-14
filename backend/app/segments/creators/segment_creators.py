@@ -49,10 +49,15 @@ def create_creator_profile(
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
 ) -> CreatorProfileView:
     try:
-        return CreatorProfileView.model_validate(
+        profile = CreatorProfileView.model_validate(
             orchestrator.create_creator_profile(current_user=current_user, payload=payload)
         )
+        if orchestrator.session is not None:
+            orchestrator.session.commit()
+        return profile
     except ReferralActionError as exc:
+        if orchestrator.session is not None:
+            orchestrator.session.rollback()
         raise _to_http_error(exc) from exc
 
 
@@ -63,10 +68,15 @@ def update_creator_profile(
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
 ) -> CreatorProfileView:
     try:
-        return CreatorProfileView.model_validate(
+        profile = CreatorProfileView.model_validate(
             orchestrator.update_creator_profile(current_user=current_user, payload=payload)
         )
+        if orchestrator.session is not None:
+            orchestrator.session.commit()
+        return profile
     except ReferralActionError as exc:
+        if orchestrator.session is not None:
+            orchestrator.session.rollback()
         raise _to_http_error(exc) from exc
 
 
@@ -115,18 +125,41 @@ def get_my_creator_finance(
     except ReferralActionError as exc:
         raise _to_http_error(exc) from exc
     wallet_service = WalletService()
-    total_gift_income = Decimal(session.scalar(select(func.coalesce(func.sum(GiftTransaction.recipient_net_amount), 0)).where(GiftTransaction.recipient_user_id == current_user.id, GiftTransaction.status == GiftTransactionStatus.SETTLED)) or 0)
-    total_reward_income = Decimal(session.scalar(select(func.coalesce(func.sum(RewardSettlement.net_amount), 0)).where(RewardSettlement.user_id == current_user.id, RewardSettlement.status == RewardSettlementStatus.SETTLED)) or 0)
-    rows = session.execute(select(TreasuryWithdrawalRequest, PayoutRequest).join(PayoutRequest, TreasuryWithdrawalRequest.payout_request_id == PayoutRequest.id).where(TreasuryWithdrawalRequest.user_id == current_user.id)).all()
-    total_withdrawn_gross = Decimal('0.0000')
-    total_withdrawal_fees = Decimal('0.0000')
-    total_withdrawn_net = Decimal('0.0000')
-    pending_withdrawals = Decimal('0.0000')
+    total_gift_income = Decimal(
+        session.scalar(
+            select(func.coalesce(func.sum(GiftTransaction.recipient_net_amount), 0)).where(
+                GiftTransaction.recipient_user_id == current_user.id,
+                GiftTransaction.status == GiftTransactionStatus.SETTLED,
+            )
+        )
+        or 0
+    )
+    total_reward_income = Decimal(
+        session.scalar(
+            select(func.coalesce(func.sum(RewardSettlement.net_amount), 0)).where(
+                RewardSettlement.user_id == current_user.id, RewardSettlement.status == RewardSettlementStatus.SETTLED
+            )
+        )
+        or 0
+    )
+    rows = session.execute(
+        select(TreasuryWithdrawalRequest, PayoutRequest)
+        .join(PayoutRequest, TreasuryWithdrawalRequest.payout_request_id == PayoutRequest.id)
+        .where(TreasuryWithdrawalRequest.user_id == current_user.id)
+    ).all()
+    total_withdrawn_gross = Decimal("0.0000")
+    total_withdrawal_fees = Decimal("0.0000")
+    total_withdrawn_net = Decimal("0.0000")
+    pending_withdrawals = Decimal("0.0000")
     for withdrawal, payout in rows:
         meta = wallet_service._parse_payout_meta(payout.notes if payout else None)
-        gross = Decimal(str(meta.get('requested_net_amount', withdrawal.amount_coin)))
-        fee = Decimal(str(meta.get('fee_amount', '0.0000')))
-        if withdrawal.status in {TreasuryWithdrawalStatus.PENDING_REVIEW, TreasuryWithdrawalStatus.APPROVED, TreasuryWithdrawalStatus.PROCESSING}:
+        gross = Decimal(str(meta.get("requested_net_amount", withdrawal.amount_coin)))
+        fee = Decimal(str(meta.get("fee_amount", "0.0000")))
+        if withdrawal.status in {
+            TreasuryWithdrawalStatus.PENDING_REVIEW,
+            TreasuryWithdrawalStatus.APPROVED,
+            TreasuryWithdrawalStatus.PROCESSING,
+        }:
             pending_withdrawals += gross
         if withdrawal.status == TreasuryWithdrawalStatus.PAID:
             total_withdrawn_gross += gross
@@ -142,16 +175,16 @@ def get_my_creator_finance(
         f"Gift income settled: {total_gift_income:.4f} credits.",
         f"Reward income settled: {total_reward_income:.4f} credits.",
     ]
-    if clip_summary.total_creator_payout_credit > Decimal('0.0000'):
+    if clip_summary.total_creator_payout_credit > Decimal("0.0000"):
         insights.append(
             f"Clip monetization has paid {clip_summary.total_creator_payout_credit:.4f} credits across {clip_summary.total_views} views."
         )
-    if clip_summary.total_viral_bonus_credit > Decimal('0.0000'):
+    if clip_summary.total_viral_bonus_credit > Decimal("0.0000"):
         insights.append(f"Viral clip bonuses added {clip_summary.total_viral_bonus_credit:.4f} credits.")
-    if pending_withdrawals > Decimal('0.0000'):
+    if pending_withdrawals > Decimal("0.0000"):
         insights.append(f"{pending_withdrawals:.4f} credits are still moving through the withdrawal queue.")
     return CreatorFinanceSummaryView(
-        currency='credits',
+        currency="credits",
         total_gift_income=total_gift_income,
         total_reward_income=total_reward_income,
         total_clip_income=clip_summary.total_creator_payout_credit,

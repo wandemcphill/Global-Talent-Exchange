@@ -75,19 +75,24 @@ def get_referral_share_code(
 def block_referral_share_code(
     share_code_id: str,
     payload: ShareCodeModerationRequest,
-    session: Session = Depends(get_session),
     current_user: User = Depends(_require_admin),
     admin_service: ReferralAdminService = Depends(get_referral_admin_service),
 ) -> ShareCodeUsageSummaryView:
     try:
-        result = admin_service.block_share_code(
+        admin_service.block_share_code(
             share_code_id=share_code_id,
             admin_user_id=current_user.id,
             payload=payload,
         )
-        session.commit()
-        return result
+        if admin_service.session is not None:
+            admin_service.session.commit()
+        refreshed = admin_service.get_share_code(share_code_id)
+        if refreshed is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="share_code_not_found")
+        return refreshed
     except ReferralActionError as exc:
+        if admin_service.session is not None:
+            admin_service.session.rollback()
         raise _to_http_error(exc) from exc
 
 
@@ -115,19 +120,24 @@ def get_referral_creator(
 def set_referral_creator_reward_freeze(
     creator_id: str,
     payload: CreatorRewardFreezeRequest,
-    session: Session = Depends(get_session),
     current_user: User = Depends(_require_admin),
     admin_service: ReferralAdminService = Depends(get_referral_admin_service),
 ) -> CreatorAdminSummaryView:
     try:
-        result = admin_service.set_creator_reward_freeze(
+        admin_service.set_creator_reward_freeze(
             creator_id=creator_id,
             admin_user_id=current_user.id,
             payload=payload,
         )
-        session.commit()
-        return result
+        if admin_service.session is not None:
+            admin_service.session.commit()
+        refreshed = admin_service.get_creator(creator_id)
+        if refreshed is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="creator_not_found")
+        return refreshed
     except ReferralActionError as exc:
+        if admin_service.session is not None:
+            admin_service.session.rollback()
         raise _to_http_error(exc) from exc
 
 
@@ -158,7 +168,6 @@ def list_pending_referral_rewards(
 def review_referral_reward(
     reward_id: str,
     payload: RewardReviewRequest,
-    session: Session = Depends(get_session),
     current_user: User = Depends(_require_admin),
     admin_service: ReferralAdminService = Depends(get_referral_admin_service),
 ) -> RewardReviewDecisionView:
@@ -168,9 +177,12 @@ def review_referral_reward(
             admin_user_id=current_user.id,
             payload=payload,
         )
-        session.commit()
+        if admin_service.session is not None:
+            admin_service.session.commit()
         return result
     except ReferralActionError as exc:
+        if admin_service.session is not None:
+            admin_service.session.rollback()
         raise _to_http_error(exc) from exc
 
 
