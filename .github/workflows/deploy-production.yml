@@ -148,6 +148,12 @@ jobs:
               throw "Unity build log contains failure marker: $pattern"
             }
           }
+      - name: Copy build log to local fallback folder
+        if: always()
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\runner-artifacts | Out-Null
+          Copy-Item "$env:GTEX_UNITY_BUILD_LOG" "C:\runner-artifacts\gtex_test_migration_windows_build.log" -Force
       - name: Upload Unity build log
         if: always() && hashFiles('tmp/gtex_test_migration_windows_build.log') != ''
         uses: actions/upload-artifact@v4
