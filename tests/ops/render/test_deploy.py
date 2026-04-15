@@ -26,6 +26,7 @@ def _load_deploy_module():
 
 
 deploy = _load_deploy_module()
+TEST_RENDER_CREDENTIAL = "render-api-key"  # pragma: allowlist secret
 
 
 def test_render_hook_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -59,7 +60,7 @@ def test_retrieve_deploy_uses_service_deploy_endpoint_with_bearer_auth(monkeypat
         return {"status": "deployed"}
 
     monkeypatch.setattr(deploy, "_request_json", fake_request_json)
-    client = deploy.RenderHookClient(api_key="render-api-key")
+    client = deploy.RenderHookClient(api_key=TEST_RENDER_CREDENTIAL)
 
     response = client.retrieve_deploy("srv/123", "dep 456")
 
@@ -69,7 +70,7 @@ def test_retrieve_deploy_uses_service_deploy_endpoint_with_bearer_auth(monkeypat
     assert captured["request_label"] == "Render API"
     assert captured["headers"] == {
         "Accept": "application/json",
-        "Authorization": "Bearer render-api-key",
+        "Authorization": f"Bearer {TEST_RENDER_CREDENTIAL}",
     }
 
 
@@ -81,7 +82,7 @@ def test_create_deploy_uses_service_deploy_collection_endpoint(monkeypatch: pyte
         return {"id": "dep-456"}
 
     monkeypatch.setattr(deploy, "_request_json", fake_request_json)
-    client = deploy.RenderHookClient(api_key="render-api-key")
+    client = deploy.RenderHookClient(api_key=TEST_RENDER_CREDENTIAL)
 
     response = client.create_deploy("srv/123")
 
@@ -92,7 +93,7 @@ def test_create_deploy_uses_service_deploy_collection_endpoint(monkeypatch: pyte
     assert captured["request_label"] == "Render API"
     assert captured["headers"] == {
         "Accept": "application/json",
-        "Authorization": "Bearer render-api-key",
+        "Authorization": f"Bearer {TEST_RENDER_CREDENTIAL}",
         "Content-Type": "application/json",
     }
 
@@ -120,7 +121,7 @@ def test_deploy_with_hook_only_falls_back_to_health_check_on_404(monkeypatch: py
     monkeypatch.setattr(deploy, "_log", messages.append)
 
     deploy._deploy_with_hook_only(
-        deploy.RenderHookClient(api_key="render-api-key"),
+        deploy.RenderHookClient(api_key=TEST_RENDER_CREDENTIAL),
         target=deploy.ServiceTarget(
             name="api",
             env_key="API",
