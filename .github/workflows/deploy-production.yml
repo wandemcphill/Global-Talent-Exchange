@@ -93,6 +93,8 @@ jobs:
       UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
       GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
       GTEX_UNITY_BUILD_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_windows_build.log
+      GTEX_UNITY_RUN_ATTEMPT: ${{ github.run_attempt }}
+      GTEX_UNITY_CLEAN_LIBRARY_ON_RETRY: ${{ vars.GTEX_UNITY_CLEAN_LIBRARY_ON_RETRY }}
     steps:
       - uses: actions/checkout@v4
       - name: Verify Unity CI configuration
@@ -110,6 +112,32 @@ jobs:
           if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
             "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
             throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
+          }
+      - name: Clean Unity incremental build folders
+        run: |
+          $pathsToClean = @(
+            (Join-Path $env:GTEX_UNITY_PROJECT_PATH 'Temp'),
+            (Join-Path $env:GTEX_UNITY_PROJECT_PATH 'obj')
+          )
+
+          foreach ($path in $pathsToClean) {
+            if (Test-Path $path) {
+              Write-Host "Removing $path"
+              Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
+            }
+          }
+
+          $runAttempt = 1
+          [void][int]::TryParse($env:GTEX_UNITY_RUN_ATTEMPT, [ref]$runAttempt)
+          $cleanLibraryOnRetry = $env:GTEX_UNITY_CLEAN_LIBRARY_ON_RETRY -match '^(?i:true|1|yes|on)$'
+          if ($runAttempt -gt 1 -and $cleanLibraryOnRetry) {
+            $libraryPath = Join-Path $env:GTEX_UNITY_PROJECT_PATH 'Library'
+            if (Test-Path $libraryPath) {
+              Write-Warning "Removing Unity Library on retry because GTEX_UNITY_CLEAN_LIBRARY_ON_RETRY is enabled."
+              Remove-Item -Path $libraryPath -Recurse -Force -ErrorAction Stop
+            }
+          } elseif ($runAttempt -gt 1) {
+            Write-Host "Skipping Library cleanup on retry. Enable GTEX_UNITY_CLEAN_LIBRARY_ON_RETRY=true for cache-corruption reruns."
           }
       - name: Build GTEX Windows player
         run: |
@@ -216,6 +244,7 @@ jobs:
       - run: python ops/render/deploy.py
         if: steps.render-config.outputs.configured == 'true'
         env:
+          RENDER_DEPLOY_MODE: hook-only
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_API: ${{ secrets.RENDER_SERVICE_API }}
           RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}

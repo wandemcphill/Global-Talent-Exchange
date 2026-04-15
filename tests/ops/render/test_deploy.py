@@ -35,6 +35,22 @@ def test_render_hook_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) ->
         deploy.RenderHookClient()
 
 
+def test_load_service_targets_allows_missing_hooks_in_api_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RENDER_SERVICE_API", "srv-api")
+    monkeypatch.delenv("RENDER_DEPLOY_HOOK_API", raising=False)
+
+    targets = deploy._load_service_targets("api")
+
+    assert targets == [
+        deploy.ServiceTarget(
+            name="api",
+            env_key="API",
+            service_id="srv-api",
+            deploy_hook_url="",
+        )
+    ]
+
+
 def test_retrieve_deploy_uses_service_deploy_endpoint_with_bearer_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
@@ -55,3 +71,78 @@ def test_retrieve_deploy_uses_service_deploy_endpoint_with_bearer_auth(monkeypat
         "Accept": "application/json",
         "Authorization": "Bearer render-api-key",
     }
+
+
+def test_create_deploy_uses_service_deploy_collection_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_request_json(**kwargs):
+        captured.update(kwargs)
+        return {"id": "dep-456"}
+
+    monkeypatch.setattr(deploy, "_request_json", fake_request_json)
+    client = deploy.RenderHookClient(api_key="render-api-key")
+
+    response = client.create_deploy("srv/123")
+
+    assert response == {"id": "dep-456"}
+    assert captured["method"] == "POST"
+    assert captured["url"] == "https://api.render.com/v1/services/srv%2F123/deploys"
+    assert captured["payload"] == {}
+    assert captured["request_label"] == "Render API"
+    assert captured["headers"] == {
+        "Accept": "application/json",
+        "Authorization": "Bearer render-api-key",
+        "Content-Type": "application/json",
+    }
+
+
+def test_deploy_with_hook_only_falls_back_to_health_check_on_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    messages: list[str] = []
+    wait_calls: list[dict[str, object]] = []
+    health_calls: list[dict[str, object]] = []
+
+    def fake_wait_for_deploy(*args, **kwargs):
+        wait_calls.append(kwargs)
+        raise deploy.RenderDeployHttpError(status_code=404, message="deploy status missing")
+
+    monkeypatch.setattr(
+        deploy.RenderHookClient,
+        "trigger_deploy",
+        lambda self, hook_url: {"id": "dep-123"},
+    )
+    monkeypatch.setattr(deploy, "_wait_for_deploy", fake_wait_for_deploy)
+    monkeypatch.setattr(
+        deploy,
+        "_run_health_check",
+        lambda **kwargs: health_calls.append(kwargs),
+    )
+    monkeypatch.setattr(deploy, "_log", messages.append)
+
+    deploy._deploy_with_hook_only(
+        deploy.RenderHookClient(api_key="render-api-key"),
+        target=deploy.ServiceTarget(
+            name="api",
+            env_key="API",
+            service_id="srv-123",
+            deploy_hook_url="https://example.test/hook",
+        ),
+        health_url="https://example.test/health",
+        deploy_timeout_seconds=30,
+        health_timeout_seconds=45,
+        poll_interval_seconds=1,
+    )
+
+    assert len(wait_calls) == 1
+    assert health_calls == [
+        {
+            "url": "https://example.test/health",
+            "timeout_seconds": 45,
+            "poll_interval_seconds": 1,
+        }
+    ]
+    assert messages == [
+        "[api] triggering deploy hook",
+        "[api] deploy status unavailable in hook-only mode; falling back to health check",
+        "[api] health check passed",
+    ]

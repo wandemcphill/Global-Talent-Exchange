@@ -51,6 +51,12 @@ class RenderDeployError(RuntimeError):
     pass
 
 
+class RenderDeployHttpError(RenderDeployError):
+    def __init__(self, *, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 def _log(message: str) -> None:
     print(message, flush=True)
 
@@ -88,7 +94,17 @@ def _get_bool_env(name: str, default: bool) -> bool:
     raise RenderDeployError(f"{name} must be a boolean.")
 
 
-def _load_service_targets() -> list[ServiceTarget]:
+def _get_deploy_mode() -> str:
+    raw_value = _optional_env("RENDER_DEPLOY_MODE") or "hook-only"
+    normalized = raw_value.lower().replace("_", "-").strip()
+    if normalized in {"hook", "hook-only"}:
+        return "hook-only"
+    if normalized in {"api", "full-api"}:
+        return "api"
+    raise RenderDeployError("RENDER_DEPLOY_MODE must be either 'hook-only' or 'api'.")
+
+
+def _load_service_targets(deploy_mode: str) -> list[ServiceTarget]:
     service_ids: dict[str, str] = {}
     deploy_hooks: dict[str, str] = {}
 
@@ -123,7 +139,7 @@ def _load_service_targets() -> list[ServiceTarget]:
                 f"Missing RENDER_SERVICE_{suffix}. " "Each configured service needs its Render service id."
             )
 
-        if not deploy_hook_url:
+        if deploy_mode == "hook-only" and not deploy_hook_url:
             raise RenderDeployError(
                 f"Missing RENDER_DEPLOY_HOOK_{suffix}. "
                 "Hook-only mode requires a deploy hook for every configured service."
@@ -231,7 +247,10 @@ def _request_json(
             content = response.read().decode("utf-8", errors="replace").strip()
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace").strip()
-        raise RenderDeployError(f"{request_label} {method} {url} failed with HTTP {exc.code}: {detail}") from exc
+        raise RenderDeployHttpError(
+            status_code=exc.code,
+            message=f"{request_label} {method} {url} failed with HTTP {exc.code}: {detail}",
+        ) from exc
     except error.URLError as exc:
         raise RenderDeployError(f"{request_label} {method} {url} failed: {exc}") from exc
 
@@ -253,11 +272,14 @@ class RenderHookClient:
     def __init__(self, *, api_key: str | None = None) -> None:
         self._api_key = (api_key or _required_env("RENDER_API_KEY")).strip()
 
-    def _render_api_headers(self) -> dict[str, str]:
-        return {
+    def _render_api_headers(self, *, include_content_type: bool = False) -> dict[str, str]:
+        headers = {
             "Accept": "application/json",
             "Authorization": f"Bearer {self._api_key}",
         }
+        if include_content_type:
+            headers["Content-Type"] = "application/json"
+        return headers
 
     def trigger_deploy(self, deploy_hook_url: str) -> dict[str, Any]:
         return _request_json(
@@ -265,6 +287,16 @@ class RenderHookClient:
             url=deploy_hook_url,
             payload={},
             request_label="Deploy hook",
+        )
+
+    def create_deploy(self, service_id: str) -> dict[str, Any]:
+        safe_service_id = parse.quote(service_id, safe="")
+        return _request_json(
+            method="POST",
+            url=f"{RENDER_API_BASE_URL}/services/{safe_service_id}/deploys",
+            payload={},
+            headers=self._render_api_headers(include_content_type=True),
+            request_label="Render API",
         )
 
     def retrieve_deploy(self, service_id: str, deploy_id: str) -> dict[str, Any]:
@@ -307,6 +339,15 @@ def _wait_for_deploy(
         time.sleep(poll_interval_seconds)
 
     raise RenderDeployError(f"Timed out waiting for deploy {deploy_id} on {target.name}.")
+
+
+def _health_url_for_target(target: ServiceTarget, default_health_url: str) -> str:
+    scoped_health_url = _optional_env(f"RENDER_HEALTH_URL_{target.env_key}")
+    if scoped_health_url:
+        return scoped_health_url
+    if target.env_key == "API":
+        return default_health_url
+    return ""
 
 
 def _run_health_check(*, url: str, timeout_seconds: int, poll_interval_seconds: int) -> None:
@@ -437,29 +478,21 @@ def _run_unity_live_playback_check(*, health_url: str) -> None:
     )
 
 
-def main() -> int:
-    targets = _load_service_targets()
-    health_url = _optional_env("RENDER_HEALTH_URL")
-    deploy_timeout_seconds = _get_int_env("RENDER_DEPLOY_TIMEOUT_SECONDS", 1800)
-    health_timeout_seconds = _get_int_env("RENDER_HEALTH_TIMEOUT_SECONDS", 180)
-    poll_interval_seconds = _get_int_env("RENDER_POLL_INTERVAL_SECONDS", 10)
-    verify_unity_routes_after_deploy = _get_bool_env("RENDER_VERIFY_UNITY_ROUTES", True)
-    unity_route_probe_match_id = _optional_env("RENDER_UNITY_ROUTE_PROBE_MATCH_ID") or "gtex-render-route-probe"
+def _deploy_with_hook_only(
+    client: RenderHookClient,
+    *,
+    target: ServiceTarget,
+    health_url: str,
+    deploy_timeout_seconds: int,
+    health_timeout_seconds: int,
+    poll_interval_seconds: int,
+) -> None:
+    _log(f"[{target.name}] triggering deploy hook")
+    deploy = client.trigger_deploy(target.deploy_hook_url)
+    deploy_id = _extract_deploy_id(deploy)
 
-    if any(target.env_key == "API" for target in targets) and not health_url:
-        raise RenderDeployError("RENDER_HEALTH_URL must be set when deploying the API service.")
-
-    client = RenderHookClient()
-
-    try:
-        for target in targets:
-            _log(f"[{target.name}] triggering deploy hook")
-            deploy = client.trigger_deploy(target.deploy_hook_url)
-
-            deploy_id = _extract_deploy_id(deploy)
-            if not deploy_id:
-                raise RenderDeployError(f"Deploy hook did not return a deploy id for {target.name}: {deploy!r}")
-
+    if deploy_id:
+        try:
             _wait_for_deploy(
                 client.retrieve_deploy,
                 target=target,
@@ -467,16 +500,98 @@ def main() -> int:
                 timeout_seconds=deploy_timeout_seconds,
                 poll_interval_seconds=poll_interval_seconds,
             )
+        except RenderDeployHttpError as exc:
+            if health_url and exc.status_code == 404:
+                _log(f"[{target.name}] deploy status unavailable in hook-only mode; falling back to health check")
+            else:
+                raise
+    elif not health_url:
+        raise RenderDeployError(f"Deploy hook did not return a deploy id for {target.name}: {deploy!r}")
 
-            if target.env_key == "API" and health_url:
-                _run_health_check(
-                    url=health_url,
-                    timeout_seconds=health_timeout_seconds,
+    if health_url:
+        _run_health_check(
+            url=health_url,
+            timeout_seconds=health_timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+        )
+        _log(f"[{target.name}] health check passed")
+
+
+def _deploy_with_render_api(
+    client: RenderHookClient,
+    *,
+    target: ServiceTarget,
+    health_url: str,
+    deploy_timeout_seconds: int,
+    health_timeout_seconds: int,
+    poll_interval_seconds: int,
+) -> None:
+    _log(f"[{target.name}] creating deploy via Render API")
+    deploy = client.create_deploy(target.service_id)
+    deploy_id = _extract_deploy_id(deploy)
+    if not deploy_id:
+        raise RenderDeployError(f"Render API did not return a deploy id for {target.name}: {deploy!r}")
+
+    _wait_for_deploy(
+        client.retrieve_deploy,
+        target=target,
+        deploy_id=deploy_id,
+        timeout_seconds=deploy_timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+    )
+
+    if health_url:
+        _run_health_check(
+            url=health_url,
+            timeout_seconds=health_timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+        )
+        _log(f"[{target.name}] health check passed")
+
+
+def main() -> int:
+    deploy_mode = _get_deploy_mode()
+    targets = _load_service_targets(deploy_mode)
+    health_url = _optional_env("RENDER_HEALTH_URL")
+    deploy_timeout_seconds = _get_int_env("RENDER_DEPLOY_TIMEOUT_SECONDS", 1800)
+    health_timeout_seconds = _get_int_env("RENDER_HEALTH_TIMEOUT_SECONDS", 180)
+    poll_interval_seconds = _get_int_env("RENDER_POLL_INTERVAL_SECONDS", 10)
+    verify_unity_routes_after_deploy = _get_bool_env("RENDER_VERIFY_UNITY_ROUTES", True)
+    unity_route_probe_match_id = _optional_env("RENDER_UNITY_ROUTE_PROBE_MATCH_ID") or "gtex-render-route-probe"
+    api_health_url = _optional_env("RENDER_HEALTH_URL_API") or health_url
+
+    if any(target.env_key == "API" for target in targets) and not api_health_url:
+        raise RenderDeployError("RENDER_HEALTH_URL must be set when deploying the API service.")
+
+    client = RenderHookClient()
+
+    try:
+        for target in targets:
+            target_health_url = _health_url_for_target(target, health_url)
+
+            if deploy_mode == "hook-only":
+                _deploy_with_hook_only(
+                    client,
+                    target=target,
+                    health_url=target_health_url,
+                    deploy_timeout_seconds=deploy_timeout_seconds,
+                    health_timeout_seconds=health_timeout_seconds,
                     poll_interval_seconds=poll_interval_seconds,
                 )
+            else:
+                _deploy_with_render_api(
+                    client,
+                    target=target,
+                    health_url=target_health_url,
+                    deploy_timeout_seconds=deploy_timeout_seconds,
+                    health_timeout_seconds=health_timeout_seconds,
+                    poll_interval_seconds=poll_interval_seconds,
+                )
+
+            if target.env_key == "API" and target_health_url:
                 if verify_unity_routes_after_deploy:
                     try:
-                        api_base_url = derive_api_base_url(health_url)
+                        api_base_url = derive_api_base_url(target_health_url)
                         verify_unity_live_routes(
                             api_base_url,
                             probe_match_id=unity_route_probe_match_id,
@@ -484,14 +599,17 @@ def main() -> int:
                     except RenderUnityRouteVerificationError as exc:
                         raise RenderDeployError(str(exc)) from exc
                     _log(f"[unity-routes] {api_base_url} passed")
-                _run_unity_live_playback_check(health_url=health_url)
+                _run_unity_live_playback_check(health_url=target_health_url)
 
     except Exception as exc:  # noqa: BLE001
-        _log("Automatic rollback is not configured in this deploy workflow.")
+        if deploy_mode == "hook-only":
+            _log("Automatic rollback is not available in hook-only mode.")
+        else:
+            _log("Automatic rollback is not configured in this deploy workflow.")
         _log(f"Deployment failed: {exc}")
         return 1
 
-    _log("Deployment completed successfully.")
+    _log("Deployment verified successfully.")
     return 0
 
 
