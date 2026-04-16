@@ -456,9 +456,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
       if (!widget.controller.isAuthenticated) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: GteStatePanel(
+        return _buildScrollableShellStatePanel(
+          GteStatePanel(
             eyebrow: 'CLUB SCOPE',
             title: 'Sign in to open Club HQ',
             message:
@@ -666,11 +665,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
+  Widget _buildScrollableShellStatePanel(Widget child) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: child,
+    );
+  }
+
   Widget _buildHubDestination() {
     if (!widget.controller.isAuthenticated) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: GteStatePanel(
+      return _buildScrollableShellStatePanel(
+        GteStatePanel(
           eyebrow: 'HUB ACCESS',
           title: 'Sign in to open Creator Hub',
           message:

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/gte_app_config.dart';
+import 'app/gte_bootstrap_failure_app.dart';
 import 'app/gte_frontend_app.dart';
 import 'data/gte_exchange_api_client.dart';
 import 'data/gte_models.dart';
@@ -19,43 +20,60 @@ late GteExchangeController _bootstrapController;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final GteAppConfig appConfig = GteAppConfig.fromEnvironment();
-  final SecureAuthSessionStore authSessionStore = SecureAuthSessionStore();
-  final AuthSession? storedSession = await authSessionStore.readSession();
-  // Ship the richer GTEX football shell by default on web builds.
   final GteThemeController themeController = await GteThemeController.bootstrap(
     initialThemeId: GteThemeRegistry.defaultTheme.metadata.id,
   );
-  final GteExchangeController controller = GteExchangeController(
-    api: GteExchangeApiClient.standard(
-      baseUrl: appConfig.apiBaseUrl,
-      mode: appConfig.activeShellBackendMode,
-      authSessionStore: authSessionStore,
-    ),
-  );
-  if (storedSession != null) {
-    controller.session = GteAuthSession.fromJson(
-      storedSession.rawJson.isNotEmpty
-          ? storedSession.rawJson
-          : storedSession.toJson(),
+  try {
+    final GteAppConfig appConfig = GteAppConfig.fromEnvironment();
+    final SecureAuthSessionStore authSessionStore = SecureAuthSessionStore();
+    final AuthSession? storedSession = await authSessionStore.readSession();
+    // Ship the richer GTEX football shell by default on web builds.
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.standard(
+        baseUrl: appConfig.apiBaseUrl,
+        mode: appConfig.activeShellBackendMode,
+        authSessionStore: authSessionStore,
+      ),
     );
-    unawaited(controller.refreshAccount());
-  }
-  _bootstrapConfig = appConfig;
-  _bootstrapController = controller;
+    if (storedSession != null) {
+      controller.session = GteAuthSession.fromJson(
+        storedSession.rawJson.isNotEmpty
+            ? storedSession.rawJson
+            : storedSession.toJson(),
+      );
+      unawaited(controller.refreshAccount());
+    }
+    _bootstrapConfig = appConfig;
+    _bootstrapController = controller;
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        authSessionStoreProvider.overrideWithValue(authSessionStore),
-        deviceIdentityStoreProvider.overrideWithValue(
-          SecureDeviceIdentityStore(),
-        ),
-        initialAuthSessionProvider.overrideWithValue(storedSession),
-      ],
-      child: GtexApp(themeController: themeController),
-    ),
-  );
+    runApp(
+      ProviderScope(
+        overrides: [
+          authSessionStoreProvider.overrideWithValue(authSessionStore),
+          deviceIdentityStoreProvider.overrideWithValue(
+            SecureDeviceIdentityStore(),
+          ),
+          initialAuthSessionProvider.overrideWithValue(storedSession),
+        ],
+        child: GtexApp(themeController: themeController),
+      ),
+    );
+  } on StateError catch (error, stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'GTEX bootstrap',
+        context: ErrorDescription('while bootstrapping the app configuration'),
+      ),
+    );
+    runApp(
+      GteBootstrapFailureApp(
+        themeController: themeController,
+        failure: GteBootstrapFailure.fromError(error),
+      ),
+    );
+  }
 }
 
 class GtexApp extends StatelessWidget {

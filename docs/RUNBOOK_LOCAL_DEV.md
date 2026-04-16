@@ -61,6 +61,25 @@ flutter pub get
 flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=live
 ```
 
+Physical Android note:
+
+- `127.0.0.1` only works on a phone if you bridge the device back to the host with `adb reverse tcp:8000 tcp:8000`.
+- Use `tools/run_gtex_android_live.ps1` to do that automatically before `flutter run`.
+- If you want the phone to hit your laptop over LAN instead, start the backend on `0.0.0.0`, not `127.0.0.1`, and pass a LAN URL such as `http://192.168.43.162:8000`.
+- The helper now stops early if you give it a LAN URL while the backend is still listening only on loopback.
+
+```powershell
+cd 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE'
+powershell -ExecutionPolicy Bypass -File .\tools\run_gtex_android_live.ps1
+```
+
+LAN variant:
+
+```powershell
+python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+powershell -ExecutionPolicy Bypass -File .\tools\run_gtex_android_live.ps1 -ApiBaseUrl http://192.168.43.162:8000
+```
+
 Useful variants:
 
 ```powershell

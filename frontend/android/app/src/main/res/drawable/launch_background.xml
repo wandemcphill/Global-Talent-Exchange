@@ -5,6 +5,6 @@
         <bitmap
             android:antialias="true"
             android:gravity="center"
-            android:src="@mipmap/ic_launcher" />
+            android:src="@mipmap/gtex_foreground" />
     </item>
 </layer-list>
