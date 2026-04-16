@@ -31,6 +31,7 @@ class GteSyncStatusCard extends StatelessWidget {
     final tokens = GteShellTheme.tokensOf(context);
     final Color resolvedAccent = accent ?? tokens.accent;
     final bool isCompactLayout = MediaQuery.sizeOf(context).width < 480;
+    final bool showRefreshAction = onRefresh != null || isRefreshing;
     final Widget syncIcon = Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -57,23 +58,27 @@ class GteSyncStatusCard extends StatelessWidget {
         ),
       ],
     );
-    final Widget refreshAction = FilledButton.tonalIcon(
-      onPressed:
-          isRefreshing || onRefresh == null
-              ? null
-              : () {
-                onRefresh!.call();
-              },
-      icon:
-          isRefreshing
-              ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-              : const Icon(Icons.refresh),
-      label: Text(isRefreshing ? 'Syncing' : 'Refresh'),
-    );
+<<<<<<< HEAD
+    final Widget? refreshAction =
+        !showRefreshAction
+            ? null
+            : FilledButton.tonalIcon(
+              onPressed:
+                  isRefreshing || onRefresh == null
+                      ? null
+                      : () {
+                        onRefresh!.call();
+                      },
+              icon:
+                  isRefreshing
+                      ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.refresh),
+              label: Text(isRefreshing ? 'Syncing' : 'Refresh'),
+            );
 
     return GteSurfacePanel(
       accentColor: resolvedAccent,
@@ -89,11 +94,13 @@ class GteSyncStatusCard extends StatelessWidget {
               Expanded(child: copyBlock),
             ],
           ),
-          const SizedBox(height: 12),
-          if (isCompactLayout)
-            refreshAction
-          else
-            Align(alignment: Alignment.centerLeft, child: refreshAction),
+          if (refreshAction != null) ...<Widget>[
+            const SizedBox(height: 12),
+            if (isCompactLayout)
+              refreshAction
+            else
+              Align(alignment: Alignment.centerLeft, child: refreshAction),
+          ],
         ],
       ),
     );
