@@ -46,8 +46,8 @@ curl http://127.0.0.1:8000/diagnostics
 ## Seeded accounts
 
 - Local bootstrap users: `seed.fan@gte.local`, `seed.scout@gte.local`, `seed.admin@gte.local`
-- Local bootstrap password: `DemoPass123`
-- Auto-seeded super admin: `vidvimedialtd@gmail.com` / `NewPass1234!`
+- Local bootstrap password: `DemoPass123` <!-- pragma: allowlist secret -->
+- Auto-seeded super admin: `vidvimedialtd@gmail.com` / `NewPass1234!` <!-- pragma: allowlist secret -->
 
 ## Frontend quick start
 
