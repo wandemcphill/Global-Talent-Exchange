@@ -174,14 +174,6 @@ def get_history_records(
     return ok(service.list_history_records())
 
 
-@router.get("/federations", response_model=ApiEnvelope[dict[str, Any]])
-def get_federations(
-    _current_user: User = Depends(get_current_user),
-    service: GlobalApiV1Service = Depends(get_service),
-) -> ApiEnvelope[dict[str, Any]]:
-    return ok(service.list_federations())
-
-
 @router.get("/players/{player_id}", response_model=ApiEnvelope[dict[str, Any]])
 def get_player(
     player_id: str,
@@ -190,19 +182,6 @@ def get_player(
 ) -> ApiEnvelope[dict[str, Any]]:
     try:
         payload = service.get_player(player_id)
-    except GlobalApiV1Error as exc:
-        _raise_global_api_http_error(exc)
-    return ok(payload)
-
-
-@router.get("/clubs/{club_id}", response_model=ApiEnvelope[dict[str, Any]])
-def get_club(
-    club_id: str,
-    _current_user: User = Depends(get_current_user),
-    service: GlobalApiV1Service = Depends(get_service),
-) -> ApiEnvelope[dict[str, Any]]:
-    try:
-        payload = service.get_club(club_id)
     except GlobalApiV1Error as exc:
         _raise_global_api_http_error(exc)
     return ok(payload)

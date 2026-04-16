@@ -55,7 +55,7 @@ class CompetitionApi {
     return _withFallback<CompetitionListResponse>(() async {
       final Object? payload = await _sendBest('GET', const <String>[
         '/api/competitions',
-      ]);
+      ], auth: true);
       return CompetitionListResponse.fromJson(payload);
     }, () async => _fixtureStore.list(userId: userId));
   }

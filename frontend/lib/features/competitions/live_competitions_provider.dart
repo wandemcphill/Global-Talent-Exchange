@@ -110,17 +110,22 @@ final FutureProvider<CompetitionHubData> competitionHubProvider =
       final StreamerTournamentEngineRepository streamerApi = ref.watch(
         streamerTournamentRepositoryProvider,
       );
+      final bool isAuthenticated = ref.watch(isAuthenticatedProvider);
       final String? userId = ref.watch(currentUserIdProvider);
-      final CompetitionListResponse gtexList = await competitionApi
-          .fetchCompetitions(userId: userId)
-          .then(
-            (CompetitionListResponse value) => CompetitionListResponse(
-              total: value.total,
-              items: value.items
-                  .where((CompetitionSummary item) => item.isGtexHosted)
-                  .toList(growable: false),
-            ),
-          );
+      final CompetitionListResponse gtexList =
+          isAuthenticated
+              ? await competitionApi.fetchCompetitions(userId: userId).then(
+                (CompetitionListResponse value) => CompetitionListResponse(
+                  total: value.total,
+                  items: value.items
+                      .where((CompetitionSummary item) => item.isGtexHosted)
+                      .toList(growable: false),
+                ),
+              )
+              : const CompetitionListResponse(
+                total: 0,
+                items: <CompetitionSummary>[],
+              );
       final List<HostedCompetition> hostedCompetitions =
           await hostedApi.listCompetitions();
       final StreamerTournamentList streamerTournaments =
