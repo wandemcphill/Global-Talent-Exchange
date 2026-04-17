@@ -58,7 +58,6 @@ class GteSyncStatusCard extends StatelessWidget {
         ),
       ],
     );
-<<<<<<< HEAD
     final Widget? refreshAction =
         !showRefreshAction
             ? null
