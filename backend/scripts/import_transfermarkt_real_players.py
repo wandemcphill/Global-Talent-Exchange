@@ -37,8 +37,8 @@ from app.schemas.real_player_ingestion import RealPlayerIngestionRequest, RealPl
 
 logger = logging.getLogger("import_transfermarkt_real_players")
 
-_FALLBACK_AUTH_SECRET = "local-dev-refresh-secret"
-_FALLBACK_MEDIA_SECRET = "local-dev-refresh-media-secret"
+_FALLBACK_AUTH_SECRET = "local-dev-refresh-secret"  # pragma: allowlist secret
+_FALLBACK_MEDIA_SECRET = "local-dev-refresh-media-secret"  # pragma: allowlist secret
 _TM_BASE_URL = "https://www.transfermarkt.co.uk"
 _TM_HEADERS = {
     "User-Agent": (
