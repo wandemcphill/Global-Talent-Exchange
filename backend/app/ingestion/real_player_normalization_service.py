@@ -7,7 +7,6 @@ from app.schemas.real_player_ingestion import RealPlayerSeedInput
 
 from .real_player_identity_normalizer import NormalizedRealPlayerIdentity, normalize_real_player_identity
 
-
 NORMALIZATION_PROFILE_VERSION = "real_player_v1"
 
 _COMPETITION_STRENGTH_SCORES = {
@@ -192,8 +191,21 @@ class RealPlayerNormalizationService:
 
     def _competition_level(self, value: str | None) -> str:
         normalized = (value or "").strip().lower().replace("-", "_").replace(" ", "_")
-        if normalized in {"elite", "major", "continental", "top_flight", "first_division", "second_tier", "developmental", "youth"}:
+        if normalized in {
+            "elite",
+            "major",
+            "continental",
+            "top_flight",
+            "first_division",
+            "second_tier",
+            "developmental",
+            "youth",
+        }:
             return normalized
+        if normalized in {"international_youth", "youth_international", "national_team_youth"}:
+            return "youth"
+        if normalized in {"international", "international_senior", "national_team"}:
+            return "continental"
         if normalized in {"champions_league", "major_european", "major_league"}:
             return "elite"
         if normalized in {"top", "tier_1", "premier"}:
@@ -283,7 +295,9 @@ class RealPlayerNormalizationService:
         delta = abs(age_years - target_age)
         return round(min(max(92.0 - (delta * 4.5), 34.0), 92.0), 2)
 
-    def _market_prestige_signal(self, *, reference_market_value_eur: float | None, competition_strength_score: float) -> float:
+    def _market_prestige_signal(
+        self, *, reference_market_value_eur: float | None, competition_strength_score: float
+    ) -> float:
         if reference_market_value_eur is None:
             return round(min(max((competition_strength_score * 0.72), 36.0), 78.0), 2)
         if reference_market_value_eur >= 80_000_000:
@@ -298,9 +312,17 @@ class RealPlayerNormalizationService:
             return 48.0
         return 38.0
 
-    def _role_tier_signal(self, *, competition_strength_score: float, performance_score: float, minutes_played: int) -> float:
+    def _role_tier_signal(
+        self, *, competition_strength_score: float, performance_score: float, minutes_played: int
+    ) -> float:
         minutes_factor = min(minutes_played / 3000.0, 1.0) * 100.0
-        return round(min(max((competition_strength_score * 0.32) + (performance_score * 0.43) + (minutes_factor * 0.25), 34.0), 95.0), 2)
+        return round(
+            min(
+                max((competition_strength_score * 0.32) + (performance_score * 0.43) + (minutes_factor * 0.25), 34.0),
+                95.0,
+            ),
+            2,
+        )
 
     def _club_strength_score(
         self,
@@ -309,7 +331,16 @@ class RealPlayerNormalizationService:
         market_prestige_signal: float,
         role_tier_signal: float,
     ) -> float:
-        return round(min(max((competition_strength_score * 0.55) + (market_prestige_signal * 0.25) + (role_tier_signal * 0.20), 38.0), 94.0), 2)
+        return round(
+            min(
+                max(
+                    (competition_strength_score * 0.55) + (market_prestige_signal * 0.25) + (role_tier_signal * 0.20),
+                    38.0,
+                ),
+                94.0,
+            ),
+            2,
+        )
 
     def _form_signal(self, *, performance_score: float, role_tier_signal: float, injury_status: str | None) -> float:
         penalty = 10.0 if (injury_status or "").strip().lower() not in {"", "fit", "available", "none"} else 0.0

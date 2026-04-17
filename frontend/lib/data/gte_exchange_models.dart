@@ -8,6 +8,9 @@ class PlayerFilter {
     this.search,
     this.position,
     this.country,
+    this.nationalTeam,
+    this.club,
+    this.league,
     this.minAge,
     this.maxAge,
     this.availability,
@@ -16,6 +19,9 @@ class PlayerFilter {
   final String? search;
   final String? position;
   final String? country;
+  final String? nationalTeam;
+  final String? club;
+  final String? league;
   final int? minAge;
   final int? maxAge;
   final String? availability;
@@ -24,22 +30,31 @@ class PlayerFilter {
     Object? search = _playerFilterUnset,
     Object? position = _playerFilterUnset,
     Object? country = _playerFilterUnset,
+    Object? nationalTeam = _playerFilterUnset,
+    Object? club = _playerFilterUnset,
+    Object? league = _playerFilterUnset,
     Object? minAge = _playerFilterUnset,
     Object? maxAge = _playerFilterUnset,
     Object? availability = _playerFilterUnset,
   }) {
     return PlayerFilter(
       search: search == _playerFilterUnset ? this.search : search as String?,
-      position:
-          position == _playerFilterUnset ? this.position : position as String?,
-      country:
-          country == _playerFilterUnset ? this.country : country as String?,
+      position: position == _playerFilterUnset
+          ? this.position
+          : position as String?,
+      country: country == _playerFilterUnset
+          ? this.country
+          : country as String?,
+      nationalTeam: nationalTeam == _playerFilterUnset
+          ? this.nationalTeam
+          : nationalTeam as String?,
+      club: club == _playerFilterUnset ? this.club : club as String?,
+      league: league == _playerFilterUnset ? this.league : league as String?,
       minAge: minAge == _playerFilterUnset ? this.minAge : minAge as int?,
       maxAge: maxAge == _playerFilterUnset ? this.maxAge : maxAge as int?,
-      availability:
-          availability == _playerFilterUnset
-              ? this.availability
-              : availability as String?,
+      availability: availability == _playerFilterUnset
+          ? this.availability
+          : availability as String?,
     );
   }
 
@@ -50,6 +65,9 @@ class PlayerFilter {
       search: _trimOrNull(search),
       position: _trimOrNull(position),
       country: _trimOrNull(country),
+      nationalTeam: _trimOrNull(nationalTeam),
+      club: _trimOrNull(club),
+      league: _trimOrNull(league),
       minAge: minAge,
       maxAge: maxAge,
       availability: _trimOrNull(availability),
@@ -61,6 +79,9 @@ class PlayerFilter {
     return value.search != null ||
         value.position != null ||
         value.country != null ||
+        value.nationalTeam != null ||
+        value.club != null ||
+        value.league != null ||
         value.minAge != null ||
         value.maxAge != null ||
         value.availability != null;
@@ -72,14 +93,26 @@ class PlayerFilter {
         other.search == search &&
         other.position == position &&
         other.country == country &&
+        other.nationalTeam == nationalTeam &&
+        other.club == club &&
+        other.league == league &&
         other.minAge == minAge &&
         other.maxAge == maxAge &&
         other.availability == availability;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(search, position, country, minAge, maxAge, availability);
+  int get hashCode => Object.hash(
+    search,
+    position,
+    country,
+    nationalTeam,
+    club,
+    league,
+    minAge,
+    maxAge,
+    availability,
+  );
 }
 
 class GteMarketPlayersQuery {
@@ -90,6 +123,9 @@ class GteMarketPlayersQuery {
     this.search,
     this.position,
     this.country,
+    this.nationalTeam,
+    this.club,
+    this.league,
     this.minAge,
     this.maxAge,
     this.availability,
@@ -101,6 +137,9 @@ class GteMarketPlayersQuery {
   final String? search;
   final String? position;
   final String? country;
+  final String? nationalTeam;
+  final String? club;
+  final String? league;
   final int? minAge;
   final int? maxAge;
   final String? availability;
@@ -110,6 +149,9 @@ class GteMarketPlayersQuery {
     final String? trimmedCursor = cursor?.trim();
     final String? trimmedPosition = _trimOrNull(position);
     final String? trimmedCountry = _trimOrNull(country);
+    final String? trimmedNationalTeam = _trimOrNull(nationalTeam);
+    final String? trimmedClub = _trimOrNull(club);
+    final String? trimmedLeague = _trimOrNull(league);
     return <String, Object?>{
       'limit': limit,
       if (trimmedCursor != null && trimmedCursor.isNotEmpty)
@@ -120,6 +162,9 @@ class GteMarketPlayersQuery {
         'search': trimmedSearch,
       if (trimmedPosition != null) 'position': trimmedPosition,
       if (trimmedCountry != null) 'nationality': trimmedCountry,
+      if (trimmedNationalTeam != null) 'national_team': trimmedNationalTeam,
+      if (trimmedClub != null) 'club': trimmedClub,
+      if (trimmedLeague != null) 'league': trimmedLeague,
       if (minAge != null) 'min_age': minAge,
       if (maxAge != null) 'max_age': maxAge,
     };
@@ -931,20 +976,17 @@ class GtePlayerAgencySummary {
       ]),
       pressureState:
           GteJson.value(json, <String>['pressure_state', 'pressureState']) ==
-                  null
-              ? null
-              : GtePlayerAgencyPressureView.fromJson(
-                GteJson.value(json, <String>[
-                  'pressure_state',
-                  'pressureState',
-                ]),
-              ),
+              null
+          ? null
+          : GtePlayerAgencyPressureView.fromJson(
+              GteJson.value(json, <String>['pressure_state', 'pressureState']),
+            ),
       teamDynamics:
           GteJson.value(json, <String>['team_dynamics', 'teamDynamics']) == null
-              ? null
-              : GtePlayerAgencyTeamDynamicsView.fromJson(
-                GteJson.value(json, <String>['team_dynamics', 'teamDynamics']),
-              ),
+          ? null
+          : GtePlayerAgencyTeamDynamicsView.fromJson(
+              GteJson.value(json, <String>['team_dynamics', 'teamDynamics']),
+            ),
     );
   }
 
@@ -1066,14 +1108,11 @@ class GtePlayerLifecycleSnapshot {
       ),
       contractBadge:
           GteJson.value(json, <String>['contract_badge', 'contractBadge']) ==
-                  null
-              ? null
-              : GteContractBadgeView.fromJson(
-                GteJson.value(json, <String>[
-                  'contract_badge',
-                  'contractBadge',
-                ]),
-              ),
+              null
+          ? null
+          : GteContractBadgeView.fromJson(
+              GteJson.value(json, <String>['contract_badge', 'contractBadge']),
+            ),
       agencySummary: _agencySummaryFromJson(json),
       recentEvents: GteJson.typedList(json, <String>[
         'recent_events',
@@ -1385,14 +1424,11 @@ class GtePlayerOverview {
       ),
       contractBadge:
           GteJson.value(json, <String>['contract_badge', 'contractBadge']) ==
-                  null
-              ? null
-              : GteContractBadgeView.fromJson(
-                GteJson.value(json, <String>[
-                  'contract_badge',
-                  'contractBadge',
-                ]),
-              ),
+              null
+          ? null
+          : GteContractBadgeView.fromJson(
+              GteJson.value(json, <String>['contract_badge', 'contractBadge']),
+            ),
       transferStatus: GteTransferStatusView.fromJson(
         GteJson.value(json, <String>['transfer_status', 'transferStatus']) ??
             const <String, Object?>{},

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 
 class RealPlayerIngestionMode(str, Enum):
@@ -23,6 +23,9 @@ class RealPlayerSeedInput(BaseModel):
     known_aliases: list[str] = Field(default_factory=list)
     nationality: str | None = None
     nationality_code: str | None = None
+    national_team_name: str | None = None
+    national_team_code: str | None = None
+    national_team_age_group: str | None = None
     date_of_birth: date | None = None
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
     age: int | None = Field(default=None, ge=13, le=60)
@@ -44,6 +47,10 @@ class RealPlayerSeedInput(BaseModel):
     weight_kg: int | None = Field(default=None, ge=40, le=150)
     current_market_reference_value: float | None = Field(default=None, ge=0)
     market_reference_currency: str | None = "EUR"
+    photo_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("photo_url", "image_url", "image_path", "photo"),
+    )
     source_last_refreshed_at: datetime | None = None
     identity_confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
     is_verified_real_player: bool = True
@@ -56,6 +63,15 @@ class RealPlayerSeedInput(BaseModel):
             self.birth_year = self.date_of_birth.year
         if self.market_reference_currency is not None:
             self.market_reference_currency = self.market_reference_currency.upper()
+        if self.national_team_code is not None:
+            self.national_team_code = self.national_team_code.upper()
+        if self.national_team_age_group is not None:
+            cleaned_age_group = self.national_team_age_group.strip().upper()
+            if cleaned_age_group and not cleaned_age_group.startswith("U"):
+                cleaned_age_group = f"U{cleaned_age_group}"
+            self.national_team_age_group = cleaned_age_group or None
+        if self.photo_url == "":
+            self.photo_url = None
         self.known_aliases = _dedupe_strings(self.known_aliases)
         self.secondary_positions = _dedupe_strings(self.secondary_positions)
         return self

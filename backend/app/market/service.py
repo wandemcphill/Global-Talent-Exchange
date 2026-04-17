@@ -137,9 +137,7 @@ class MarketEngine:
         if listing.status != ListingStatus.OPEN:
             raise MarketConflictError("listing is not open")
 
-        updated_listing = self._store_listing(
-            replace(listing, status=ListingStatus.CANCELLED, updated_at=utcnow())
-        )
+        updated_listing = self._store_listing(replace(listing, status=ListingStatus.CANCELLED, updated_at=utcnow()))
         self._reject_pending_offers(
             asset_id=listing.asset_id,
             seller_user_id=listing.seller_user_id,
@@ -284,9 +282,7 @@ class MarketEngine:
         if offer.listing_id is not None:
             listing = self.get_listing(offer.listing_id)
             if listing.status == ListingStatus.OPEN:
-                self._store_listing(
-                    replace(listing, status=ListingStatus.COMPLETED, updated_at=utcnow())
-                )
+                self._store_listing(replace(listing, status=ListingStatus.COMPLETED, updated_at=utcnow()))
 
         self._reject_pending_offers(
             asset_id=offer.asset_id,
@@ -554,16 +550,12 @@ class MarketEngine:
                 TradeIntentDirection.BUY,
                 TradeIntentDirection.SWAP,
             }:
-                self._store_trade_intent(
-                    replace(intent, status=TradeIntentStatus.FULFILLED, updated_at=utcnow())
-                )
+                self._store_trade_intent(replace(intent, status=TradeIntentStatus.FULFILLED, updated_at=utcnow()))
             if intent.user_id == offer.seller_user_id and intent.direction in {
                 TradeIntentDirection.SELL,
                 TradeIntentDirection.SWAP,
             }:
-                self._store_trade_intent(
-                    replace(intent, status=TradeIntentStatus.FULFILLED, updated_at=utcnow())
-                )
+                self._store_trade_intent(replace(intent, status=TradeIntentStatus.FULFILLED, updated_at=utcnow()))
 
     def _listing_matches_intent(self, listing: Listing, intent: TradeIntent) -> bool:
         if intent.direction == TradeIntentDirection.BUY:
@@ -893,7 +885,9 @@ class MarketPlayerQueryService:
         offset: int | None = 0,
         position: str | None = None,
         nationality: str | None = None,
+        national_team: str | None = None,
         club: str | None = None,
+        league: str | None = None,
         min_age: int | None = None,
         max_age: int | None = None,
         min_value: float | None = None,
@@ -903,7 +897,9 @@ class MarketPlayerQueryService:
     ) -> MarketPlayerListResult:
         normalized_position = self._normalize_optional_text(position)
         normalized_nationality = self._normalize_optional_text(nationality)
+        normalized_national_team = self._normalize_optional_text(national_team)
         normalized_club = self._normalize_optional_text(club)
+        normalized_league = self._normalize_optional_text(league)
         normalized_search = self._normalize_optional_text(search)
         normalized_offset = 0 if offset is None else offset
         self._validate_player_query(
@@ -921,7 +917,9 @@ class MarketPlayerQueryService:
             for record in self.repository.list_player_records()
             if self._matches_position(record, normalized_position)
             and self._matches_nationality(record, normalized_nationality)
+            and self._matches_national_team(record, normalized_national_team)
             and self._matches_club(record, normalized_club)
+            and self._matches_league(record, normalized_league)
             and self._matches_age(record, min_age=min_age, max_age=max_age)
             and self._matches_value(record, min_value=min_value, max_value=max_value)
             and self._matches_search(record, normalized_search)
@@ -932,7 +930,9 @@ class MarketPlayerQueryService:
             sort=sort,
             position=normalized_position,
             nationality=normalized_nationality,
+            national_team=normalized_national_team,
             club=normalized_club,
+            league=normalized_league,
             min_age=min_age,
             max_age=max_age,
             min_value=min_value,
@@ -949,7 +949,7 @@ class MarketPlayerQueryService:
             if cursor
             else normalized_offset
         )
-        paginated_records = sorted_records[start_index:start_index + limit + 1]
+        paginated_records = sorted_records[start_index : start_index + limit + 1]
         page_records = paginated_records[:limit]
         has_more = len(paginated_records) > limit
         next_cursor = (
@@ -976,7 +976,6 @@ class MarketPlayerQueryService:
             raise MarketNotFoundError(f"player {player_id} was not found")
 
         player = record.player
-        summary_payload = self._summary_payload(record)
         breakdown_payload = self._breakdown_payload(record)
         real_world_impact = self._real_world_impact(player.id)
 
@@ -1001,9 +1000,7 @@ class MarketPlayerQueryService:
                 current_club_name=player.current_club.name if player.current_club is not None else None,
                 current_competition_id=player.current_competition_id,
                 current_competition_name=(
-                    player.current_competition.name
-                    if player.current_competition is not None
-                    else None
+                    player.current_competition.name if player.current_competition is not None else None
                 ),
                 image_url=self._image_url(record),
                 avatar=self._avatar(record),
@@ -1039,16 +1036,8 @@ class MarketPlayerQueryService:
             ),
             trend=MarketPlayerTrendProfile(
                 trend_score=self._trend_score(record),
-                market_interest_score=(
-                    record.summary.market_interest_score
-                    if record.summary is not None
-                    else None
-                ),
-                average_rating=(
-                    record.summary.average_rating
-                    if record.summary is not None
-                    else None
-                ),
+                market_interest_score=(record.summary.market_interest_score if record.summary is not None else None),
+                average_rating=(record.summary.average_rating if record.summary is not None else None),
                 global_scouting_index=self._global_scouting_index(record),
                 previous_global_scouting_index=self._previous_global_scouting_index(record),
                 global_scouting_index_movement_pct=self._global_scouting_index_movement_pct(record),
@@ -1065,8 +1054,7 @@ class MarketPlayerQueryService:
             raise MarketNotFoundError(f"player {player_id} was not found")
 
         history = tuple(
-            self._build_history_point(snapshot)
-            for snapshot in self.repository.list_player_history(player_id)
+            self._build_history_point(snapshot) for snapshot in self.repository.list_player_history(player_id)
         )
         return MarketPlayerHistory(player_id=player_id, history=history)
 
@@ -1147,7 +1135,12 @@ class MarketPlayerQueryService:
         trending = tuple(
             sorted(
                 mover_items,
-                key=lambda item: ((item.trend_score or 0.0), item.volume_24h, abs(item.day_change_percent), item.player_name),
+                key=lambda item: (
+                    (item.trend_score or 0.0),
+                    item.volume_24h,
+                    abs(item.day_change_percent),
+                    item.player_name,
+                ),
                 reverse=True,
             )[:limit]
         )
@@ -1169,11 +1162,7 @@ class MarketPlayerQueryService:
             current_value_credits=self._current_value_credits(record),
             movement_pct=self._movement_pct(record),
             trend_score=self._trend_score(record),
-            market_interest_score=(
-                record.summary.market_interest_score
-                if record.summary is not None
-                else None
-            ),
+            market_interest_score=(record.summary.market_interest_score if record.summary is not None else None),
             average_rating=record.summary.average_rating if record.summary is not None else None,
             avatar=self._avatar(record),
         )
@@ -1188,21 +1177,18 @@ class MarketPlayerQueryService:
             previous_value_credits=round_gtex_display_value(snapshot.previous_credits) or snapshot.previous_credits,
             movement_pct=snapshot.movement_pct,
             football_truth_value_credits=(
-                round_gtex_display_value(snapshot.football_truth_value_credits)
-                or snapshot.football_truth_value_credits
+                round_gtex_display_value(snapshot.football_truth_value_credits) or snapshot.football_truth_value_credits
             ),
             market_signal_value_credits=(
-                round_gtex_display_value(snapshot.market_signal_value_credits)
-                or snapshot.market_signal_value_credits
+                round_gtex_display_value(snapshot.market_signal_value_credits) or snapshot.market_signal_value_credits
             ),
             published_card_value_credits=round_gtex_display_value(
                 self._coerce_float(breakdown_payload.get("published_card_value_credits"))
-            ) or snapshot.target_credits,
+            )
+            or snapshot.target_credits,
             trend_score=global_scouting_index,
             global_scouting_index=global_scouting_index,
-            previous_global_scouting_index=self._coerce_float(
-                breakdown_payload.get("previous_global_scouting_index")
-            ),
+            previous_global_scouting_index=self._coerce_float(breakdown_payload.get("previous_global_scouting_index")),
             global_scouting_index_movement_pct=self._coerce_float(
                 breakdown_payload.get("global_scouting_index_movement_pct")
             ),
@@ -1237,9 +1223,7 @@ class MarketPlayerQueryService:
         if min_value is not None and max_value is not None and min_value > max_value:
             raise MarketValidationError("min_value cannot exceed max_value")
         if sort not in PLAYER_DISCOVERY_SORTS:
-            raise MarketValidationError(
-                "sort must be one of: age, current_value, name, trend_score"
-            )
+            raise MarketValidationError("sort must be one of: age, current_value, name, trend_score")
 
     def _matches_position(self, record: MarketPlayerRecord, position: str | None) -> bool:
         if position is None:
@@ -1260,6 +1244,19 @@ class MarketPlayerQueryService:
         }
         return nationality in candidates
 
+    def _matches_national_team(self, record: MarketPlayerRecord, national_team: str | None) -> bool:
+        if national_team is None:
+            return True
+        payload = self._national_team_payload(record)
+        candidates = self._national_team_candidates(record)
+        if not candidates:
+            return False
+        if national_team in candidates:
+            return True
+        name = self._normalize_text(payload.get("name"))
+        code = self._normalize_text(payload.get("code"))
+        return bool((name and national_team.startswith(f"{name} ")) or (code and national_team.startswith(f"{code} ")))
+
     def _matches_club(self, record: MarketPlayerRecord, club: str | None) -> bool:
         if club is None:
             return True
@@ -1272,6 +1269,20 @@ class MarketPlayerQueryService:
             self._normalize_text(record.player.current_club.slug),
         }
         return club in candidates
+
+    def _matches_league(self, record: MarketPlayerRecord, league: str | None) -> bool:
+        if league is None:
+            return True
+        if record.player.current_competition is None:
+            return False
+        competition = record.player.current_competition
+        candidates = {
+            self._normalize_text(competition.name),
+            self._normalize_text(getattr(competition, "short_name", None)),
+            self._normalize_text(getattr(competition, "code", None)),
+            self._normalize_text(getattr(competition, "slug", None)),
+        }
+        return league in candidates
 
     def _matches_age(
         self,
@@ -1312,14 +1323,16 @@ class MarketPlayerQueryService:
     def _matches_search(self, record: MarketPlayerRecord, search: str | None) -> bool:
         if search is None:
             return True
-        haystacks = (
+        haystacks = [
             record.player.full_name,
             record.player.first_name,
             record.player.last_name,
             record.player.short_name,
             record.player.current_club.name if record.player.current_club is not None else None,
+            (record.player.current_competition.name if record.player.current_competition is not None else None),
             record.player.country.name if record.player.country is not None else None,
-        )
+            *self._national_team_search_terms(record),
+        ]
         return any(search in self._normalize_text(candidate) for candidate in haystacks)
 
     def _sort_player_records(
@@ -1336,7 +1349,9 @@ class MarketPlayerQueryService:
         sort: str,
         position: str | None,
         nationality: str | None,
+        national_team: str | None,
         club: str | None,
+        league: str | None,
         min_age: int | None,
         max_age: int | None,
         min_value: float | None,
@@ -1347,7 +1362,9 @@ class MarketPlayerQueryService:
             "sort": sort,
             "position": position,
             "nationality": nationality,
+            "national_team": national_team,
             "club": club,
+            "league": league,
             "min_age": min_age,
             "max_age": max_age,
             "min_value": min_value,
@@ -1419,9 +1436,7 @@ class MarketPlayerQueryService:
             if not raw_cursor:
                 raise ValueError("empty cursor")
             padding = "=" * (-len(raw_cursor) % 4)
-            payload = json.loads(
-                base64.urlsafe_b64decode(f"{raw_cursor}{padding}".encode("ascii")).decode("utf-8")
-            )
+            payload = json.loads(base64.urlsafe_b64decode(f"{raw_cursor}{padding}".encode("ascii")).decode("utf-8"))
         except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error) as exc:
             raise MarketValidationError("cursor is invalid") from exc
 
@@ -1456,6 +1471,47 @@ class MarketPlayerQueryService:
         if record.summary is None or not isinstance(record.summary.summary_json, dict):
             return {}
         return record.summary.summary_json
+
+    def _national_team_payload(self, record: MarketPlayerRecord) -> dict[str, Any]:
+        summary_payload = self._summary_payload(record)
+        national_team = summary_payload.get("national_team")
+        if isinstance(national_team, dict):
+            return national_team
+        real_player_profile = summary_payload.get("real_player_profile")
+        if isinstance(real_player_profile, dict):
+            nested_payload = real_player_profile.get("national_team")
+            if isinstance(nested_payload, dict):
+                return nested_payload
+        return {}
+
+    def _national_team_candidates(self, record: MarketPlayerRecord) -> set[str]:
+        national_team = self._national_team_payload(record)
+        if not national_team:
+            return set()
+        candidates = {
+            self._normalize_text(national_team.get("name")),
+            self._normalize_text(national_team.get("code")),
+            self._normalize_text(national_team.get("label")),
+        }
+        name = self._normalize_text(national_team.get("name"))
+        code = self._normalize_text(national_team.get("code"))
+        age_group = self._normalize_text(national_team.get("age_group"))
+        if name and age_group:
+            candidates.add(self._normalize_text(f"{name} {age_group}"))
+        if code and age_group:
+            candidates.add(self._normalize_text(f"{code} {age_group}"))
+        return {candidate for candidate in candidates if candidate}
+
+    def _national_team_search_terms(self, record: MarketPlayerRecord) -> list[str | None]:
+        national_team = self._national_team_payload(record)
+        if not national_team:
+            return []
+        return [
+            national_team.get("name"),
+            national_team.get("code"),
+            national_team.get("age_group"),
+            national_team.get("label"),
+        ]
 
     def _breakdown_payload(self, record: MarketPlayerRecord) -> dict[str, Any]:
         if record.latest_snapshot is None or not isinstance(record.latest_snapshot.breakdown_json, dict):
@@ -1587,9 +1643,7 @@ class MarketPlayerQueryService:
     def _require_reference_price(self, record: MarketPlayerRecord) -> float | None:
         reference_price = self._reference_price(record)
         if reference_price is None and record.player.is_real_player:
-            raise MarketValidationError(
-                f"Authoritative pricing is unavailable for real player '{record.player.id}'."
-            )
+            raise MarketValidationError(f"Authoritative pricing is unavailable for real player '{record.player.id}'.")
         return reference_price
 
     def _pricing_symbol(self, record: MarketPlayerRecord) -> str | None:
@@ -1666,11 +1720,7 @@ class MarketPlayerQueryService:
     def _nationality_code(self, record: MarketPlayerRecord) -> str | None:
         if record.player.country is None:
             return None
-        return (
-            record.player.country.alpha3_code
-            or record.player.country.fifa_code
-            or record.player.country.alpha2_code
-        )
+        return record.player.country.alpha3_code or record.player.country.fifa_code or record.player.country.alpha2_code
 
     def _last_snapshot_id(self, record: MarketPlayerRecord) -> str | None:
         if record.summary is not None and record.summary.last_snapshot_id is not None:

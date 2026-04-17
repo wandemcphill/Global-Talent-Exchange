@@ -15,10 +15,12 @@ from app.ingestion.models import (
     Club,
     Competition,
     Country,
+    ImageModerationStatus,
     InjuryStatus,
     MarketSignal,
     Player,
     PlayerClubTenure,
+    PlayerImageMetadata,
     PlayerSeasonStat,
     PlayerVerification,
     VerificationStatus,
@@ -217,7 +219,9 @@ class RealPlayerIngestionService:
                     )
                     raise RealPlayerBatchBlockedError(prepared.report)
 
-                ordered_snapshots = [prepared.preview_snapshots[item.gtex_player_id] for item in prepared.staged_players]
+                ordered_snapshots = [
+                    prepared.preview_snapshots[item.gtex_player_id] for item in prepared.staged_players
+                ]
                 self._persist_authoritative_snapshots(session, snapshots=ordered_snapshots)
                 item_results = self._finalize_batch(
                     session=session,
@@ -618,7 +622,10 @@ class RealPlayerIngestionService:
                 {
                     "finding_type": issue.issue_type,
                     "message": issue.message,
-                    "details": mapping_summary.get(issue.issue_type.removeprefix("unresolved_").removeprefix("skipped_").removesuffix("_mapping"), {}),
+                    "details": mapping_summary.get(
+                        issue.issue_type.removeprefix("unresolved_").removeprefix("skipped_").removesuffix("_mapping"),
+                        {},
+                    ),
                 }
                 for issue in mapping_issues
             ]
@@ -681,6 +688,12 @@ class RealPlayerIngestionService:
             ingestion_batch_id=ingestion_batch_id,
             ingestion_source_version=request.ingestion_source_version,
             mapping_summary=mapping_summary,
+            as_of=as_of,
+        )
+        self._upsert_player_image(
+            session,
+            player=player,
+            payload=payload,
             as_of=as_of,
         )
         self._upsert_tenure(session, player=player, payload=payload, club=club, as_of=as_of)
@@ -804,6 +817,7 @@ class RealPlayerIngestionService:
             )
             self._enrich_summary(
                 player=player,
+                profile=profile,
                 summary=summary,
                 staged=staged,
                 assignment_profile=assignment_profile,
@@ -888,10 +902,7 @@ class RealPlayerIngestionService:
         with self.session_factory() as session:
             player_id_tuple = tuple(player_ids)
             players = {
-                player.id: player
-                for player in session.scalars(
-                    select(Player).where(Player.id.in_(player_id_tuple))
-                )
+                player.id: player for player in session.scalars(select(Player).where(Player.id.in_(player_id_tuple)))
             }
             summaries = {
                 summary.player_id: summary
@@ -949,10 +960,14 @@ class RealPlayerIngestionService:
                 if canonical_name:
                     duplicate_groups.setdefault(canonical_name, set()).add(player_id)
 
-                if player is not None and (player.current_club_profile_id is not None or player_id in contracted_players):
+                if player is not None and (
+                    player.current_club_profile_id is not None or player_id in contracted_players
+                ):
                     agency_required_ids.add(player_id)
 
-                summary_payload = dict(summary.summary_json) if summary is not None and isinstance(summary.summary_json, dict) else {}
+                summary_payload = (
+                    dict(summary.summary_json) if summary is not None and isinstance(summary.summary_json, dict) else {}
+                )
                 avatar_seed_token = str(summary_payload.get("avatar_seed_token") or "").strip()
                 avatar_dna_seed = str(summary_payload.get("avatar_dna_seed") or "").strip()
                 if player is None or not avatar_seed_token or not avatar_dna_seed:
@@ -967,8 +982,12 @@ class RealPlayerIngestionService:
                 for group_player_ids in duplicate_groups.values()
                 if len(group_player_ids) > 1
             )
-            players_missing_authoritative_price_count = sum(1 for player_id in player_ids if player_id not in authoritative_snapshots)
-            players_missing_market_snapshot_count = sum(1 for player_id in player_ids if player_id not in market_snapshots)
+            players_missing_authoritative_price_count = sum(
+                1 for player_id in player_ids if player_id not in authoritative_snapshots
+            )
+            players_missing_market_snapshot_count = sum(
+                1 for player_id in player_ids if player_id not in market_snapshots
+            )
             agency_linkage_present_count = sum(1 for player_id in agency_required_ids if player_id in agency_states)
             agency_linkage_missing_count = max(len(agency_required_ids) - agency_linkage_present_count, 0)
 
@@ -1001,14 +1020,8 @@ class RealPlayerIngestionService:
                 f"{blocked_players}. No fallback pricing path was used."
             )
         if report.ambiguous_match_count:
-            blocked_players = [
-                issue.canonical_name
-                for issue in report.issues
-                if issue.issue_type == "ambiguous_match"
-            ]
-            raise RealPlayerIngestionError(
-                f"Ambiguous identity matches detected for {blocked_players}."
-            )
+            blocked_players = [issue.canonical_name for issue in report.issues if issue.issue_type == "ambiguous_match"]
+            raise RealPlayerIngestionError(f"Ambiguous identity matches detected for {blocked_players}.")
         blocked_messages = [issue.message for issue in report.issues]
         raise RealPlayerIngestionError(
             f"Real-player ingestion preflight failed with {report.hard_failure_count} hard failures: {blocked_messages}"
@@ -1159,7 +1172,6 @@ class RealPlayerIngestionService:
     ) -> Competition | None:
         if self.canonical_mapping_service is None or not payload.current_real_world_league:
             return None
-        country = self._resolve_country(session, payload)
         resolution = self.canonical_mapping_service.resolve_competition(
             session,
             source_name=payload.source_name,
@@ -1519,9 +1531,13 @@ class RealPlayerIngestionService:
         profile.normalized_signals_json = normalized.normalized_signals()
         profile.ingestion_batch_id = ingestion_batch_id
         profile.ingestion_source_version = ingestion_source_version
+        photo_url = self._normalized_photo_url(payload.photo_url)
+        national_team = self._national_team_payload(payload)
         profile.metadata_json = {
             "avatar_safe": True,
-            "no_real_photos": True,
+            "no_real_photos": photo_url is None,
+            "has_real_photo": photo_url is not None,
+            "photo_url": photo_url,
             "real_player_tier": normalized.real_player_tier,
             "source_name": payload.source_name,
             "source_player_key": payload.source_player_key,
@@ -1535,9 +1551,70 @@ class RealPlayerIngestionService:
             },
             "canonical_mapping": mapping_summary,
         }
+        if national_team is not None:
+            profile.metadata_json["national_team"] = national_team
+        if photo_url is not None:
+            profile.metadata_json["image"] = {
+                "source_url": photo_url,
+                "source_provider": payload.source_name,
+                "provider_external_id": payload.source_player_key,
+                "is_primary": True,
+                "moderation_status": self._trusted_photo_moderation_status(payload),
+                "rights_cleared": self._photo_rights_cleared(payload),
+            }
         profile.notes = "Normalized real-player profile. External reference value is an input signal only."
         session.flush()
         return profile
+
+    def _upsert_player_image(
+        self,
+        session: Session,
+        *,
+        player: Player,
+        payload: RealPlayerSeedInput,
+        as_of: datetime,
+    ) -> None:
+        photo_url = self._normalized_photo_url(payload.photo_url)
+        if photo_url is None:
+            return
+
+        provider_image = session.scalar(
+            select(PlayerImageMetadata).where(
+                PlayerImageMetadata.source_provider == payload.source_name,
+                PlayerImageMetadata.provider_external_id == payload.source_player_key,
+            )
+        )
+        portrait_image = session.scalar(
+            select(PlayerImageMetadata).where(
+                PlayerImageMetadata.player_id == player.id,
+                PlayerImageMetadata.image_role == "portrait",
+            )
+        )
+        image = provider_image or portrait_image
+        if image is None:
+            image = PlayerImageMetadata(
+                source_provider=payload.source_name,
+                provider_external_id=payload.source_player_key,
+                player_id=player.id,
+                image_role="portrait",
+            )
+            session.add(image)
+
+        image.source_provider = payload.source_name
+        image.provider_external_id = payload.source_player_key
+        image.player_id = player.id
+        image.image_role = "portrait"
+        image.source_url = photo_url
+        image.storage_key = None
+        image.width = None
+        image.height = None
+        image.mime_type = None
+        image.file_size_bytes = None
+        image.checksum_sha256 = None
+        image.moderation_status = self._trusted_photo_moderation_status(payload)
+        image.rights_cleared = self._photo_rights_cleared(payload)
+        image.is_primary = True
+        image.last_processed_at = as_of
 
     def _upsert_tenure(
         self,
@@ -1774,6 +1851,7 @@ class RealPlayerIngestionService:
         self,
         *,
         player: Player,
+        profile: RealPlayerProfile,
         summary: PlayerSummaryReadModel,
         staged: StagedRealPlayer,
         assignment_profile,
@@ -1787,6 +1865,8 @@ class RealPlayerIngestionService:
         summary.current_club_name = summary.current_club_name or player.real_world_club_name
         summary.current_competition_name = summary.current_competition_name or player.real_world_league_name
         summary_payload = dict(summary.summary_json) if isinstance(summary.summary_json, dict) else {}
+        photo_url = self._profile_photo_url(profile)
+        national_team = self._profile_national_team(profile)
         summary_payload.update(
             {
                 "source_type": "real_player",
@@ -1813,6 +1893,7 @@ class RealPlayerIngestionService:
                     "alpha3_code": getattr(player.country, "alpha3_code", None),
                     "fifa_code": getattr(player.country, "fifa_code", None),
                 },
+                "national_team": national_team,
                 "market_visibility": {
                     "eligible": bool(player.is_tradable and snapshot_record.target_credits > 0),
                     "status": "visible" if player.is_tradable and snapshot_record.target_credits > 0 else "hidden",
@@ -1834,7 +1915,9 @@ class RealPlayerIngestionService:
                     "source_name": staged.source_name,
                     "source_player_key": staged.source_player_key,
                     "source_last_refreshed_at": (
-                        player.source_last_refreshed_at.isoformat() if player.source_last_refreshed_at is not None else None
+                        player.source_last_refreshed_at.isoformat()
+                        if player.source_last_refreshed_at is not None
+                        else None
                     ),
                     "real_world_club_name": player.real_world_club_name,
                     "real_world_league_name": player.real_world_league_name,
@@ -1843,10 +1926,11 @@ class RealPlayerIngestionService:
                     "normalization_profile_version": player.normalization_profile_version,
                     "normalized_signals": staged.normalized.normalized_signals(),
                     "pricing_snapshot_id": snapshot_record.id,
+                    "photo_url": photo_url,
+                    "no_real_photos": photo_url is None,
+                    "national_team": national_team,
                     "valuation_lineage_id": (
-                        (
-                            snapshot_record.breakdown_json.get("real_player_valuation") or {}
-                        ).get("lineage_id")
+                        (snapshot_record.breakdown_json.get("real_player_valuation") or {}).get("lineage_id")
                         if isinstance(snapshot_record.breakdown_json, dict)
                         else None
                     ),
@@ -1871,7 +1955,9 @@ class RealPlayerIngestionService:
     ) -> RealPlayerImportBatch:
         provider_names = tuple(sorted({player.source_name for player in request.players}))
         provider_name = provider_names[0] if len(provider_names) == 1 else "multi-source"
-        batch = session.scalar(select(RealPlayerImportBatch).where(RealPlayerImportBatch.batch_key == ingestion_batch_id))
+        batch = session.scalar(
+            select(RealPlayerImportBatch).where(RealPlayerImportBatch.batch_key == ingestion_batch_id)
+        )
         if batch is None and request.ingestion_source_version:
             batch = session.scalar(
                 select(RealPlayerImportBatch).where(
@@ -2039,7 +2125,9 @@ class RealPlayerIngestionService:
         batch.created_player_count = sum(1 for item in item_results if item.action == "created")
         batch.updated_player_count = sum(1 for item in item_results if item.action == "updated")
         batch.skipped_row_count = max(report.source_row_count - len(item_results), 0)
-        batch.failed_row_count = report.hard_failure_count + report.ambiguous_match_count + report.missing_pricing_snapshot_count
+        batch.failed_row_count = (
+            report.hard_failure_count + report.ambiguous_match_count + report.missing_pricing_snapshot_count
+        )
         batch.authoritative_snapshot_count = len(item_results)
         batch.completed_at = report.as_of
         batch.status = (
@@ -2065,10 +2153,7 @@ class RealPlayerIngestionService:
         report: RealPlayerDryRunReport,
         as_of: datetime,
     ) -> None:
-        issue_by_key = {
-            (issue.source_name, issue.source_player_key): issue
-            for issue in report.issues
-        }
+        issue_by_key = {(issue.source_name, issue.source_player_key): issue for issue in report.issues}
         row_numbers = {
             (player.source_name, player.source_player_key): index
             for index, player in enumerate(request.players, start=1)
@@ -2089,8 +2174,14 @@ class RealPlayerIngestionService:
                         normalized = self.normalization_service.normalize(payload, as_of=as_of)
                     except Exception:
                         normalized = None
-                    status = RealPlayerImportRowStatus.MATCHED.value if issue is None else (
-                        RealPlayerImportRowStatus.SKIPPED.value if issue.issue_type == "ambiguous_match" else RealPlayerImportRowStatus.FAILED.value
+                    status = (
+                        RealPlayerImportRowStatus.MATCHED.value
+                        if issue is None
+                        else (
+                            RealPlayerImportRowStatus.SKIPPED.value
+                            if issue.issue_type == "ambiguous_match"
+                            else RealPlayerImportRowStatus.FAILED.value
+                        )
                     )
                     review_status = "open" if issue is not None else "resolved"
                     review_reason = issue.issue_type if issue is not None else None
@@ -2113,16 +2204,16 @@ class RealPlayerIngestionService:
                         payload=payload,
                         normalized=normalized,
                         status=status,
-                        match_action="ambiguous" if issue is not None and issue.issue_type == "ambiguous_match" else None,
+                        match_action=(
+                            "ambiguous" if issue is not None and issue.issue_type == "ambiguous_match" else None
+                        ),
                         import_action="blocked",
                         confidence_score=max((candidate["score"] for candidate in candidate_players), default=None),
                         review_status=review_status,
                         review_reason=review_reason,
                         validation_errors=[issue.message] if issue is not None else [],
                         audit_findings=(
-                            [{"finding_type": issue.issue_type, "message": issue.message}]
-                            if issue is not None
-                            else []
+                            [{"finding_type": issue.issue_type, "message": issue.message}] if issue is not None else []
                         ),
                         candidate_players=candidate_players,
                         gtex_player_id=issue.gtex_player_id if issue is not None else None,
@@ -2135,7 +2226,9 @@ class RealPlayerIngestionService:
                     item_results=[],
                     error_message=(
                         "Real-player batch blocked before commit."
-                        if report.hard_failure_count or report.missing_pricing_snapshot_count or report.ambiguous_match_count
+                        if report.hard_failure_count
+                        or report.missing_pricing_snapshot_count
+                        or report.ambiguous_match_count
                         else None
                     ),
                 )
@@ -2174,9 +2267,62 @@ class RealPlayerIngestionService:
             return f"{parts[0][0]}. {' '.join(parts[1:])}"[:80]
         return canonical_name[:80]
 
+    @staticmethod
+    def _normalized_photo_url(value: str | None) -> str | None:
+        normalized = str(value or "").strip()
+        return normalized or None
+
+    @staticmethod
+    def _photo_rights_cleared(payload: RealPlayerSeedInput) -> bool:
+        return str(payload.source_name or "").strip().lower() == "sportmonks"
+
+    def _trusted_photo_moderation_status(self, payload: RealPlayerSeedInput) -> str:
+        if self._photo_rights_cleared(payload):
+            return ImageModerationStatus.APPROVED.value
+        return ImageModerationStatus.PENDING.value
+
+    @staticmethod
+    def _profile_photo_url(profile: RealPlayerProfile) -> str | None:
+        metadata = dict(profile.metadata_json or {})
+        photo_url = metadata.get("photo_url")
+        if isinstance(photo_url, str) and photo_url.strip():
+            return photo_url.strip()
+        image_payload = metadata.get("image")
+        if isinstance(image_payload, dict):
+            source_url = image_payload.get("source_url")
+            if isinstance(source_url, str) and source_url.strip():
+                return source_url.strip()
+        return None
+
+    @staticmethod
+    def _national_team_payload(payload: RealPlayerSeedInput) -> dict[str, object] | None:
+        name = str(payload.national_team_name or "").strip() or None
+        code = str(payload.national_team_code or "").strip().upper() or None
+        age_group = str(payload.national_team_age_group or "").strip().upper() or None
+        if name is None and code is None and age_group is None:
+            return None
+        label_parts = [part for part in (name, age_group) if part]
+        return {
+            "name": name,
+            "code": code,
+            "age_group": age_group,
+            "label": " ".join(label_parts) if label_parts else code,
+            "kind": "youth" if age_group is not None else "senior",
+        }
+
+    @staticmethod
+    def _profile_national_team(profile: RealPlayerProfile) -> dict[str, object] | None:
+        metadata = dict(profile.metadata_json or {})
+        national_team = metadata.get("national_team")
+        if isinstance(national_team, dict):
+            return national_team
+        return None
+
     def _avatar_seed(self, *, source_name: str, source_player_key: str, canonical_name: str) -> tuple[str, str]:
-        digest = hashlib.sha256(f"{source_name}|{source_player_key}|{canonical_name}|avatar".encode("utf-8")).hexdigest()
-        return digest[:16], "-".join(digest[offset:offset + 8] for offset in range(0, 32, 8))
+        digest = hashlib.sha256(
+            f"{source_name}|{source_player_key}|{canonical_name}|avatar".encode("utf-8")
+        ).hexdigest()
+        return digest[:16], "-".join(digest[offset : offset + 8] for offset in range(0, 32, 8))
 
 
 __all__ = [

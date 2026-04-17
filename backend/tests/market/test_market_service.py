@@ -243,6 +243,20 @@ def _seed_market_player_catalog(session) -> None:
             "instant_sell_fee_bps": 200,
         },
     }
+    nigeria_u20 = {
+        "name": "Nigeria",
+        "code": "NGA",
+        "age_group": "U20",
+        "label": "Nigeria U20",
+        "kind": "youth",
+    }
+    spain_u17 = {
+        "name": "Spain",
+        "code": "ESP",
+        "age_group": "U17",
+        "label": "Spain U17",
+        "kind": "youth",
+    }
     session.add_all(
         [
             PlayerSummaryReadModel(
@@ -268,6 +282,7 @@ def _seed_market_player_catalog(session) -> None:
                     "global_scouting_index": 84.0,
                     "previous_global_scouting_index": 79.0,
                     "global_scouting_index_movement_pct": 6.33,
+                    "national_team": nigeria_u20,
                     **summary_common,
                 },
             ),
@@ -294,6 +309,7 @@ def _seed_market_player_catalog(session) -> None:
                     "global_scouting_index": 91.0,
                     "previous_global_scouting_index": 83.0,
                     "global_scouting_index_movement_pct": 9.64,
+                    "national_team": nigeria_u20,
                     **summary_common,
                 },
             ),
@@ -320,6 +336,7 @@ def _seed_market_player_catalog(session) -> None:
                     "global_scouting_index": 70.0,
                     "previous_global_scouting_index": 72.0,
                     "global_scouting_index_movement_pct": -2.78,
+                    "national_team": spain_u17,
                     **summary_common,
                 },
             ),
@@ -606,12 +623,45 @@ def test_market_player_list_filters_by_nationality(session) -> None:
     assert [item.player_id for item in payload.items] == ["player-1", "player-2"]
 
 
+def test_market_player_list_filters_by_national_team(session) -> None:
+    _seed_market_player_catalog(session)
+
+    payload = _build_market_query_service(session).list_players(national_team="Nigeria U20")
+
+    assert [item.player_id for item in payload.items] == ["player-1", "player-2"]
+
+
 def test_market_player_list_filters_by_club(session) -> None:
     _seed_market_player_catalog(session)
 
     payload = _build_market_query_service(session).list_players(club="Alpha FC")
 
     assert [item.player_id for item in payload.items] == ["player-1", "player-3"]
+
+
+def test_market_player_list_filters_by_league(session) -> None:
+    _seed_market_player_catalog(session)
+    la_liga = Competition(
+        id="competition-laliga",
+        source_provider="synthetic",
+        provider_external_id="competition-laliga",
+        name="La Liga",
+        slug="la-liga",
+    )
+    player_four = session.get(Player, "player-4")
+
+    assert player_four is not None
+
+    session.add(la_liga)
+    player_four.current_competition_id = la_liga.id
+    player_four.current_competition = la_liga
+    session.commit()
+
+    premier_payload = _build_market_query_service(session).list_players(league="Premier League")
+    la_liga_payload = _build_market_query_service(session).list_players(league="la-liga")
+
+    assert [item.player_id for item in premier_payload.items] == ["player-1", "player-2", "player-3"]
+    assert [item.player_id for item in la_liga_payload.items] == ["player-4"]
 
 
 def test_market_player_list_filters_by_age_range(session) -> None:
@@ -636,6 +686,22 @@ def test_market_player_list_filters_by_search(session) -> None:
     payload = _build_market_query_service(session).list_players(search="alpha")
 
     assert [item.player_id for item in payload.items] == ["player-1", "player-3"]
+
+
+def test_market_player_list_searches_by_league_name(session) -> None:
+    _seed_market_player_catalog(session)
+
+    payload = _build_market_query_service(session).list_players(search="premier")
+
+    assert [item.player_id for item in payload.items] == ["player-1", "player-2", "player-3", "player-4"]
+
+
+def test_market_player_list_searches_by_national_team_name(session) -> None:
+    _seed_market_player_catalog(session)
+
+    payload = _build_market_query_service(session).list_players(search="nigeria u20")
+
+    assert [item.player_id for item in payload.items] == ["player-1", "player-2"]
 
 
 def test_market_player_list_sorts_by_supported_keys(session) -> None:
@@ -756,6 +822,7 @@ def test_market_player_list_combines_filters(session) -> None:
         position="forward",
         nationality="Nigeria",
         club="Alpha FC",
+        league="Premier League",
         min_age=20,
         max_age=25,
         min_value=200.0,
@@ -775,7 +842,9 @@ def test_market_player_list_rejects_invalid_sort(session) -> None:
             offset=0,
             position=None,
             nationality=None,
+            national_team=None,
             club=None,
+            league=None,
             min_age=None,
             max_age=None,
             min_value=None,

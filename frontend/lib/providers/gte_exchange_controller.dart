@@ -89,6 +89,9 @@ class GteExchangeController extends ChangeNotifier {
       marketPage?.items ?? const <GteMarketPlayerListItem>[];
 
   String get marketSearch => marketFilter.search ?? '';
+  String get marketClub => marketFilter.club ?? '';
+  String get marketLeague => marketFilter.league ?? '';
+  String get marketNationalTeam => marketFilter.nationalTeam ?? '';
 
   MatchWeights get weights => _weights;
 
@@ -143,19 +146,19 @@ class GteExchangeController extends ChangeNotifier {
         return order;
       }
     }
-    final List<GteOrderRecord> fallback = _ordersById.values.toList(
-      growable: false,
-    )..sort((GteOrderRecord left, GteOrderRecord right) {
-      final DateTime leftStamp =
-          left.updatedAt ??
-          left.createdAt ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-      final DateTime rightStamp =
-          right.updatedAt ??
-          right.createdAt ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-      return rightStamp.compareTo(leftStamp);
-    });
+    final List<GteOrderRecord> fallback =
+        _ordersById.values.toList(growable: false)
+          ..sort((GteOrderRecord left, GteOrderRecord right) {
+            final DateTime leftStamp =
+                left.updatedAt ??
+                left.createdAt ??
+                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+            final DateTime rightStamp =
+                right.updatedAt ??
+                right.createdAt ??
+                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+            return rightStamp.compareTo(leftStamp);
+          });
     for (final GteOrderRecord order in fallback) {
       if (order.playerId == playerId) {
         return order;
@@ -209,11 +212,9 @@ class GteExchangeController extends ChangeNotifier {
     PlayerFilter? filter,
     bool reset = false,
   }) async {
-    final PlayerFilter nextFilter =
-        ((filter ?? marketFilter).copyWith(
-          search:
-              search ?? (filter == null ? marketFilter.search : filter.search),
-        )).normalized();
+    final PlayerFilter nextFilter = ((filter ?? marketFilter).copyWith(
+      search: search ?? (filter == null ? marketFilter.search : filter.search),
+    )).normalized();
     final bool shouldReset =
         reset || marketPage == null || nextFilter != marketFilter;
     if ((isLoadingMarket || isLoadingMoreMarket) && !shouldReset) {
@@ -244,6 +245,9 @@ class GteExchangeController extends ChangeNotifier {
           search: nextFilter.search,
           position: nextFilter.position,
           country: nextFilter.country,
+          nationalTeam: nextFilter.nationalTeam,
+          club: nextFilter.club,
+          league: nextFilter.league,
           minAge: nextFilter.minAge,
           maxAge: nextFilter.maxAge,
           availability: nextFilter.availability,
@@ -301,8 +305,9 @@ class GteExchangeController extends ChangeNotifier {
       hasMore: next.hasMore,
       nextCursor: next.nextCursor,
       offset: 0,
-      total:
-          next.total > uniquePlayers.length ? next.total : uniquePlayers.length,
+      total: next.total > uniquePlayers.length
+          ? next.total
+          : uniquePlayers.length,
     );
   }
 
@@ -498,8 +503,9 @@ class GteExchangeController extends ChangeNotifier {
     }
     final String resolvedClubId = clubId.trim();
     final String resolvedClubName = clubName.trim();
-    final String? resolvedClubSlug =
-        clubSlug == null || clubSlug.trim().isEmpty ? null : clubSlug.trim();
+    final String? resolvedClubSlug = clubSlug == null || clubSlug.trim().isEmpty
+        ? null
+        : clubSlug.trim();
     if (resolvedClubId.isEmpty || resolvedClubName.isEmpty) {
       return;
     }
