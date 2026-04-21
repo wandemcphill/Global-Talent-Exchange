@@ -163,13 +163,13 @@ class _FamilyOverview extends StatelessWidget {
         family: CompetitionFamilyRoute.hosted,
         count: hub.hostedCompetitions.length,
         description:
-            'User-hosted football competitions from /hosted-competitions.',
+            'User-hosted football competitions from /api/hosted-competitions.',
       ),
       _FamilyCardData(
         family: CompetitionFamilyRoute.streamer,
         count: hub.streamerTournaments.length,
         description:
-            'Creator-hosted e-game tournaments from /streamer-tournaments.',
+            'Creator-hosted e-game tournaments from /api/streamer-tournaments.',
       ),
     ];
 

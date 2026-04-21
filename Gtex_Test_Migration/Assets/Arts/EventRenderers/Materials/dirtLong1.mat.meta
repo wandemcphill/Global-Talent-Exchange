@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a65b67903de406a41806081874d15d85
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/EventRenderers/Materials/dirtLong1.mat
+  uploadId: 597280

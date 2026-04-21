@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 4a8dc63e4bf7d384cbd8623d79ac4e80
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/UI/KitRenderer.prefab
+  uploadId: 597280

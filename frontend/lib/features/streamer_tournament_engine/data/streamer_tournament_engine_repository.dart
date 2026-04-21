@@ -99,14 +99,14 @@ class StreamerTournamentEngineApiRepository
   @override
   Future<StreamerTournamentList> listPublicTournaments() async {
     return StreamerTournamentList.fromJson(
-      await _client.getMap('/streamer-tournaments', auth: false),
+      await _client.getMap('/api/streamer-tournaments', auth: false),
     );
   }
 
   @override
   Future<StreamerTournamentList> listMyTournaments() async {
     return StreamerTournamentList.fromJson(
-      await _client.getMap('/streamer-tournaments/mine'),
+      await _client.getMap('/api/streamer-tournaments/mine'),
     );
   }
 
@@ -153,7 +153,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournament.fromJson(
       await _client.request(
         'POST',
-        '/streamer-tournaments',
+        '/api/streamer-tournaments',
         body: request.toJson(),
       ),
     );
@@ -162,7 +162,10 @@ class StreamerTournamentEngineApiRepository
   @override
   Future<StreamerTournament> fetchTournament(String tournamentId) async {
     return StreamerTournament.fromJson(
-      await _client.getMap('/streamer-tournaments/$tournamentId', auth: false),
+      await _client.getMap(
+        '/api/streamer-tournaments/$tournamentId',
+        auth: false,
+      ),
     );
   }
 
@@ -174,7 +177,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournament.fromJson(
       await _client.request(
         'PATCH',
-        '/streamer-tournaments/$tournamentId',
+        '/api/streamer-tournaments/$tournamentId',
         body: request.toJson(),
       ),
     );
@@ -188,7 +191,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournament.fromJson(
       await _client.request(
         'PUT',
-        '/streamer-tournaments/$tournamentId/rewards',
+        '/api/streamer-tournaments/$tournamentId/rewards',
         body: request.toJson(),
       ),
     );
@@ -202,7 +205,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournament.fromJson(
       await _client.request(
         'POST',
-        '/streamer-tournaments/$tournamentId/invites',
+        '/api/streamer-tournaments/$tournamentId/invites',
         body: request.toJson(),
       ),
     );
@@ -216,7 +219,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournament.fromJson(
       await _client.request(
         'POST',
-        '/streamer-tournaments/$tournamentId/join',
+        '/api/streamer-tournaments/$tournamentId/join',
         body: request.toJson(),
       ),
     );
@@ -230,7 +233,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournament.fromJson(
       await _client.request(
         'POST',
-        '/streamer-tournaments/$tournamentId/publish',
+        '/api/streamer-tournaments/$tournamentId/publish',
         body: request.toJson(),
       ),
     );
@@ -239,7 +242,7 @@ class StreamerTournamentEngineApiRepository
   @override
   Future<StreamerTournamentPolicy> fetchPolicy() async {
     return StreamerTournamentPolicy.fromJson(
-      await _client.getMap('/admin/streamer-tournaments/policy'),
+      await _client.getMap('/api/admin/streamer-tournaments/policy'),
     );
   }
 
@@ -250,7 +253,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournamentPolicy.fromJson(
       await _client.request(
         'PUT',
-        '/admin/streamer-tournaments/policy',
+        '/api/admin/streamer-tournaments/policy',
         body: request.toJson(),
       ),
     );
@@ -264,7 +267,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournament.fromJson(
       await _client.request(
         'POST',
-        '/admin/streamer-tournaments/$tournamentId/review',
+        '/api/admin/streamer-tournaments/$tournamentId/review',
         body: request.toJson(),
       ),
     );
@@ -273,7 +276,7 @@ class StreamerTournamentEngineApiRepository
   @override
   Future<List<StreamerTournamentRiskSignal>> listRiskSignals() async {
     return parseList(
-      await _client.getList('/admin/streamer-tournaments/risk-signals'),
+      await _client.getList('/api/admin/streamer-tournaments/risk-signals'),
       StreamerTournamentRiskSignal.fromJson,
       label: 'streamer tournament risk signals',
     );
@@ -287,7 +290,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournamentRiskSignal.fromJson(
       await _client.request(
         'POST',
-        '/admin/streamer-tournaments/risk-signals/$signalId/review',
+        '/api/admin/streamer-tournaments/risk-signals/$signalId/review',
         body: request.toJson(),
       ),
     );
@@ -301,7 +304,7 @@ class StreamerTournamentEngineApiRepository
     return StreamerTournamentSettlement.fromJson(
       await _client.request(
         'POST',
-        '/admin/streamer-tournaments/$tournamentId/settle',
+        '/api/admin/streamer-tournaments/$tournamentId/settle',
         body: request.toJson(),
       ),
     );

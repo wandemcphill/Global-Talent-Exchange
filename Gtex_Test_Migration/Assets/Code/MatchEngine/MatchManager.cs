@@ -17,6 +17,7 @@ using FStudio.MatchEngine.Tactics;
 using Random = UnityEngine.Random;
 
 using System;
+using System.Threading;
 using FStudio.MatchEngine.Players.Referee;
 using System.Threading.Tasks;
 using Shared.Responses;
@@ -31,9 +32,11 @@ using FStudio.UI.Events;
 using FStudio.Database;
 using FStudio.UI.MatchThemes.MatchEvents;
 using FStudio.MatchEngine.Input;
+using FStudio.GTEX;
 
 namespace FStudio.MatchEngine {
     public class MatchManager : SceneObjectSingleton<MatchManager> {
+        private const int RequiredPlayersPerTeam = 11;
 
         [Header("Field Settings")]
         public int fieldEndX = default;
@@ -139,6 +142,7 @@ namespace FStudio.MatchEngine {
         /// First half, second half, extra time etc.
         /// </summary>
         private int halfIndex = default;
+        private CancellationTokenSource kickoffCounterToken;
 
         protected override void OnEnable() {
             base.OnEnable();
@@ -155,16 +159,13 @@ namespace FStudio.MatchEngine {
         }
 
         [Preserve]
-        private void OnDestroy() {
-            if (matchSceneManager != null) {
-                matchSceneManager.Dispose();
-                matchSceneManager = null;
-            }
-
-            if (Statistics != null) {
-                Statistics.Dispose();
-                Statistics = null;
-            }
+        protected override void OnDestroy() {
+            CancelKickoffCounter();
+            DisposeMatchScopedManagers();
+            AllPlayers = Enumerable.Empty<PlayerBase>();
+            CurrentMatchDetails = null;
+            UserTeam = null;
+            base.OnDestroy();
         }
 
         /// <summary>
@@ -241,13 +242,156 @@ namespace FStudio.MatchEngine {
         }
 
         public static void ClearMatchAssets() {
-            if (Current.Referees != null) {
-                foreach (var referee in Current.Referees) {
+            var current = Current;
+            if (current == null || current.Referees == null) {
+                return;
+            }
+
+            foreach (var referee in current.Referees) {
+                if (referee != null && referee.PlayerController != null && referee.PlayerController.UnityObject != null) {
                     Destroy(referee.PlayerController.UnityObject);
                 }
-
-                Current.Referees = null;
             }
+
+            current.Referees = null;
+        }
+
+        private void CancelKickoffCounter() {
+            if (kickoffCounterToken == null) {
+                return;
+            }
+
+            try {
+                kickoffCounterToken.Cancel();
+            }
+            catch {
+            }
+            finally {
+                kickoffCounterToken.Dispose();
+                kickoffCounterToken = null;
+            }
+        }
+
+        private void DisposeMatchScopedManagers() {
+            if (matchSceneManager != null) {
+                matchSceneManager.Dispose();
+                matchSceneManager = null;
+            }
+
+            if (Statistics != null) {
+                Statistics.Dispose();
+                Statistics = null;
+            }
+        }
+
+        private void ValidateRuntimeDependencies() {
+            if (GameTeam1 == null || GameTeam2 == null) {
+                throw new InvalidOperationException("[MatchManager] Match scene is missing one or both GameTeam components.");
+            }
+
+            if (goalNet1 == null || goalNet2 == null) {
+                throw new InvalidOperationException("[MatchManager] Match scene is missing one or both GoalNet references.");
+            }
+
+            if (ball == null) {
+                throw new InvalidOperationException("[MatchManager] Match scene is missing the Ball reference.");
+            }
+
+            if (CameraSystem.Current == null) {
+                throw new InvalidOperationException("[MatchManager] CameraSystem.Current is not available.");
+            }
+        }
+
+        private static void ValidateMatchDetails(MatchDetails matchDetails) {
+            if (Current == null) {
+                throw new InvalidOperationException("[MatchManager] Current instance is not available.");
+            }
+
+            if (matchDetails == null) {
+                throw new ArgumentNullException(nameof(matchDetails));
+            }
+
+            if (matchDetails.matchEvent == null) {
+                throw new InvalidOperationException("[MatchManager] MatchDetails is missing its match event payload.");
+            }
+
+            ValidateTeamEntry(matchDetails.homeTeam, "Home");
+            ValidateTeamEntry(matchDetails.awayTeam, "Away");
+            Current.ValidateRuntimeDependencies();
+        }
+
+        private static void ValidateTeamEntry(TeamEntry team, string teamLabel) {
+            if (team == null) {
+                throw new InvalidOperationException("[MatchManager] " + teamLabel + " team entry is null.");
+            }
+
+            if (team.Players == null || team.Players.Length < RequiredPlayersPerTeam) {
+                throw new InvalidOperationException(
+                    "[MatchManager] " +
+                    teamLabel +
+                    " team '" +
+                    team.TeamName +
+                    "' must provide at least " +
+                    RequiredPlayersPerTeam +
+                    " players.");
+            }
+
+            for (int index = 0; index < RequiredPlayersPerTeam; index++) {
+                if (team.Players[index] == null) {
+                    throw new InvalidOperationException(
+                        "[MatchManager] " +
+                        teamLabel +
+                        " team '" +
+                        team.TeamName +
+                        "' is missing player slot " +
+                        (index + 1) +
+                        ".");
+                }
+            }
+        }
+
+        private static MatchPlayer[] BuildMatchPlayers(TeamEntry team, string teamLabel) {
+            var formation = FormationRules.GetTeamFormation(team.Formation);
+            if (formation == null || formation.Positions == null || formation.Positions.Length < RequiredPlayersPerTeam) {
+                throw new InvalidOperationException(
+                    "[MatchManager] " +
+                    teamLabel +
+                    " team '" +
+                    team.TeamName +
+                    "' has no valid formation positions for " +
+                    team.Formation +
+                    ".");
+            }
+
+            var teamMatchPlayers = new MatchPlayer[RequiredPlayersPerTeam];
+            for (int index = 0; index < RequiredPlayersPerTeam; index++) {
+                teamMatchPlayers[index] = new MatchPlayer(
+                    index + 1,
+                    team.Players[index],
+                    formation.Positions[index]);
+            }
+
+            return teamMatchPlayers;
+        }
+
+        private static async Task<TeamTactics> LoadTeamTacticsAsync(TeamEntry team, string teamLabel) {
+            if (PlayableFormations.Current == null || PlayableFormations.Current.Formations == null) {
+                throw new InvalidOperationException("[MatchManager] PlayableFormations is not loaded.");
+            }
+
+            var tactics = await PlayableFormations.Current.Formations.FindAsync(team.Formation);
+            if (tactics == null) {
+                throw new InvalidOperationException(
+                    "[MatchManager] No TeamTactics found for " +
+                    teamLabel +
+                    " team formation " +
+                    team.Formation +
+                    " (" +
+                    team.TeamName +
+                    ").");
+            }
+
+            return tactics;
         }
 
         /// <summary>
@@ -270,23 +414,11 @@ namespace FStudio.MatchEngine {
         public static async Task CreateMatch(
                 MatchDetails matchDetails
             ) {
+            ValidateMatchDetails(matchDetails);
 
             CurrentMatchDetails = matchDetails;
-
-            var homeFormation = FormationRules.GetTeamFormation(matchDetails.homeTeam.Formation);
-
-            var homeTeamMatchPlayers = new MatchPlayer[11];
-            for (int i = 0; i < 11; i++) {
-                homeTeamMatchPlayers[i] = new MatchPlayer(
-                    i + 1,
-                    matchDetails.homeTeam.Players[i],
-                    11 > i ? homeFormation.Positions[i] : matchDetails.homeTeam.Players[i].Position);
-            }
-
-            var homeTactics = await PlayableFormations.
-                Current.
-                Formations.
-                FindAsync(matchDetails.homeTeam.Formation);
+            var homeTeamMatchPlayers = BuildMatchPlayers(matchDetails.homeTeam, "Home");
+            var homeTactics = await LoadTeamTacticsAsync(matchDetails.homeTeam, "Home");
 
             var details = matchDetails.matchEvent.details;
 
@@ -299,18 +431,8 @@ namespace FStudio.MatchEngine {
                 AILevel = details.userTeam == MatchCreateRequest.UserTeam.Home ? AILevel.Legendary : details.aiLevel
             };
 
-            var awayFormation = FormationRules.GetTeamFormation(matchDetails.awayTeam.Formation);
-
-            var awayTeamMatchPlayers = new MatchPlayer[11];
-
-            for (int i = 0; i < 11; i++) {
-                awayTeamMatchPlayers[i] = new MatchPlayer(
-                    i + 1,
-                    matchDetails.awayTeam.Players[i],
-                    11 > i ? awayFormation.Positions[i] : matchDetails.awayTeam.Players[i].Position);
-            }
-
-            var awayTactics = await PlayableFormations.Current.Formations.FindAsync(matchDetails.awayTeam.Formation);
+            var awayTeamMatchPlayers = BuildMatchPlayers(matchDetails.awayTeam, "Away");
+            var awayTactics = await LoadTeamTacticsAsync(matchDetails.awayTeam, "Away");
 
             var awayMatchTeam = new MatchTeam() {
                 Players = awayTeamMatchPlayers,
@@ -324,7 +446,18 @@ namespace FStudio.MatchEngine {
 
             EventManager.Trigger(new MatchDetailsEvent(matchDetails));
 
-            Current.generalInput = new GeneralUserInput("MatchEngine" , 0);
+            var enableInteractiveControls = ShouldEnableInteractiveMatchControls(details);
+            if (Current.generalInput != null) {
+                Current.generalInput.Clear();
+                Current.generalInput = null;
+            }
+
+            if (enableInteractiveControls) {
+                Current.generalInput = new GeneralUserInput("MatchEngine" , 0);
+            }
+
+            Current.GameTeam1.ClearAllInputListeners();
+            Current.GameTeam2.ClearAllInputListeners();
 
             switch (details.userTeam) {
                 case MatchCreateRequest.UserTeam.Home:
@@ -350,36 +483,61 @@ namespace FStudio.MatchEngine {
             }
             //
 
-            GameInput.SwitchToMatchEngine();
+            if (enableInteractiveControls) {
+                GameInput.SwitchToMatchEngine();
+            }
+        }
+
+        private static bool ShouldEnableInteractiveMatchControls(MatchCreateRequest details) {
+            if (details.userTeam != MatchCreateRequest.UserTeam.None) {
+                return true;
+            }
+
+            return UnityEngine.Object.FindFirstObjectByType<GtexMatchRuntime>() == null;
         }
 
         private async void StartKickoffCounter() {
-            await Task.Delay(refereeWhistleForKickOffDelay);
+            CancelKickoffCounter();
+            kickoffCounterToken = new CancellationTokenSource();
+            var token = kickoffCounterToken.Token;
 
-            if (ExternalPlaybackEnabled) {
+            try {
+                await Task.Delay(refereeWhistleForKickOffDelay, token);
+
+                if (token.IsCancellationRequested || this == null) {
+                    return;
+                }
+
+                if (ExternalPlaybackEnabled) {
+                    EventManager.Trigger(new ShowScoreboardEvent());
+                    return;
+                }
+
+                EventManager.Trigger(new RefereeShortWhistleEvent());
                 EventManager.Trigger(new ShowScoreboardEvent());
-                return;
+
+                await Task.Delay(kickOffAfterMilliSecs, token);
+
+                if (token.IsCancellationRequested || this == null || ExternalPlaybackEnabled) {
+                    return;
+                }
+
+                if (minutes == 0) {
+                    EventManager.Trigger(new FirstWhistleEvent());
+                }
+
+                EventManager.Trigger(new KickOffEvent());
             }
-
-            EventManager.Trigger(new RefereeShortWhistleEvent());
-            EventManager.Trigger(new ShowScoreboardEvent());
-
-            await Task.Delay(kickOffAfterMilliSecs);
-
-            if (ExternalPlaybackEnabled) {
-                return;
+            catch (OperationCanceledException) {
             }
-
-            if (minutes == 0) {
-                EventManager.Trigger(new FirstWhistleEvent());
-            }
-
-            EventManager.Trigger(new KickOffEvent());
         }
 
         private async Task CreateMatch (
             MatchTeam team1, 
             MatchTeam team2) {
+            ValidateRuntimeDependencies();
+            CancelKickoffCounter();
+            DisposeMatchScopedManagers();
 
             minutes = 0;
 
@@ -387,7 +545,21 @@ namespace FStudio.MatchEngine {
             GameTeam2.SetTeam(team2);
 
             // set all players.
-            AllPlayers = GameTeam1.GamePlayers.Concat(GameTeam2.GamePlayers);
+            var createdPlayers = GameTeam1.GamePlayers
+                .Where(x => x != null)
+                .Concat(GameTeam2.GamePlayers.Where(x => x != null))
+                .ToArray();
+
+            if (createdPlayers.Length != RequiredPlayersPerTeam * 2) {
+                throw new InvalidOperationException(
+                    "[MatchManager] Failed to create " +
+                    RequiredPlayersPerTeam * 2 +
+                    " player controllers. Created " +
+                    createdPlayers.Length +
+                    ".");
+            }
+
+            AllPlayers = createdPlayers;
 
             // create referee.
             await CreateReferees();
@@ -401,7 +573,12 @@ namespace FStudio.MatchEngine {
             ball.ResetBall(midPoint);
 
             // build statistics.
-            Statistics = new StatisticsManager(team1.Players.Concat (team2.Players).Select (x=>x.Player.id).ToArray (), ball);
+            Statistics = new StatisticsManager(
+                team1.Players.Concat(team2.Players)
+                    .Where(x => x != null && x.Player != null)
+                    .Select(x => x.Player.id)
+                    .ToArray(),
+                ball);
 
             matchSceneManager = new MatchSceneManager();
 
@@ -414,6 +591,10 @@ namespace FStudio.MatchEngine {
 
         public PlayerBase GoalScorer(int scorerTeamId) {
             var ball = Ball.Current;
+            if (ball == null) {
+                return null;
+            }
+
             var scorer = ball.HolderPlayer != null ? ball.HolderPlayer : ball.LastHolder;
             if (scorer == null || scorer.GameTeam.TeamId != scorerTeamId) {
                 scorer = ball.LastTouchedPlayer;
@@ -449,13 +630,23 @@ namespace FStudio.MatchEngine {
         }
 
         public void SetGoalColliders(bool value) {
-            goalNet1.GoalColliders.SetActive(value);
-            goalNet2.GoalColliders.SetActive(value);
+            if (goalNet1 != null && goalNet1.GoalColliders != null) {
+                goalNet1.GoalColliders.SetActive(value);
+            }
+
+            if (goalNet2 != null && goalNet2.GoalColliders != null) {
+                goalNet2.GoalColliders.SetActive(value);
+            }
         }
 
         public void SetOutColliders(bool value) {
-            goalNet1.OutColliders.SetActive(value);
-            goalNet2.OutColliders.SetActive(value);
+            if (goalNet1 != null && goalNet1.OutColliders != null) {
+                goalNet1.OutColliders.SetActive(value);
+            }
+
+            if (goalNet2 != null && goalNet2.OutColliders != null) {
+                goalNet2.OutColliders.SetActive(value);
+            }
         }
 
         public void SetExternalPlayback(bool value) {
@@ -490,6 +681,8 @@ namespace FStudio.MatchEngine {
                     }
                 }
 
+                ApplyExternalPlaybackCamera();
+
                 EventManager.Trigger(new ShowScoreboardEvent());
                 return;
             }
@@ -498,6 +691,18 @@ namespace FStudio.MatchEngine {
                 foreach (var referee in Referees) {
                     referee.PlayerController.IsPhysicsEnabled = true;
                 }
+            }
+        }
+
+        private async void ApplyExternalPlaybackCamera() {
+            if (CameraSystem.Current == null) {
+                return;
+            }
+
+            await CameraSystem.Current.SwitchCamera("Broadcast");
+
+            if (Ball.Current != null) {
+                CameraSystem.Current.FocusToBall();
             }
         }
 
@@ -513,14 +718,19 @@ namespace FStudio.MatchEngine {
         }
 
         public void ClearMatch () {
-            MatchFlags &= ~MatchFlags;
+            CancelKickoffCounter();
+            DisposeMatchScopedManagers();
+            MatchFlags = MatchStatus.NotPlaying;
             ExternalPlaybackEnabled = false;
 
             if (ball != null) {
                 ball.SetExternalPlayback(false);
             }
 
-            Current.generalInput.Clear();
+            if (generalInput != null) {
+                generalInput.Clear();
+                generalInput = null;
+            }
 
             ClearMatchAssets();
 
@@ -529,17 +739,34 @@ namespace FStudio.MatchEngine {
 
         public void ResetMatchState () {
             Debug.Log("[MatchManager] ResetMatchState ()");
-            GameTeam1.Clear();
-            GameTeam2.Clear();
+            CancelKickoffCounter();
+            DisposeMatchScopedManagers();
+            GameTeam1?.ClearAllInputListeners();
+            GameTeam2?.ClearAllInputListeners();
+            GameTeam1?.Clear();
+            GameTeam2?.Clear();
             ExternalPlaybackEnabled = false;
+
+            if (UserTeam != null) {
+                UserTeam.ClearAllInputListeners();
+                UserTeam = null;
+            }
 
             if (ball != null) {
                 ball.SetExternalPlayback(false);
+                var midPoint = new Vector3(fieldEndX / 2f, 0, fieldEndY / 2f);
+                ball.ResetBall(midPoint);
             }
 
-            var midPoint = new Vector3(fieldEndX / 2f, 0, fieldEndY / 2f);
-
-            ball.ResetBall(midPoint);
+            homeTeamScore = 0;
+            awayTeamScore = 0;
+            minutes = 0;
+            whichTeamStarted = 0;
+            halfIndex = 0;
+            AllPlayers = Enumerable.Empty<PlayerBase>();
+            CurrentMatchDetails = null;
+            SetGoalColliders(true);
+            SetOutColliders(true);
 
             MatchFlags = MatchStatus.NotPlaying;
         }
@@ -671,16 +898,16 @@ namespace FStudio.MatchEngine {
         }
 
         private void LateUpdate() {
+            if (ExternalPlaybackEnabled) {
+                return;
+            }
+
             if (matchSceneManager != null) {
                 var result = matchSceneManager.UpdateScenes();
                 if (result == ESceneResult.BlockLogic) {
                     // ignore rest
                     return;
                 }
-            }
-
-            if (ExternalPlaybackEnabled) {
-                return;
             }
 
             if (MatchFlags.HasFlag (MatchStatus.NotPlaying)) {

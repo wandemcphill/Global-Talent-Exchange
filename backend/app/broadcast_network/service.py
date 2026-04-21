@@ -446,8 +446,8 @@ class BroadcastNetworkRuntime:
                 focus_reason=focus_reason,
                 score=0.0,
                 is_live=bool(state.is_live),
-                watch_route=f"/matches/{match_id}/watch",
-                replay_route=f"/api/matches/{match_id}/highlights",
+                watch_route=f"/matches/broadcast/{match_id}",
+                replay_route=f"/api/matches/{match_id}/replay",
                 metadata={
                     "ai_match": False,
                     "is_final": self._is_final(match),
@@ -490,8 +490,8 @@ class BroadcastNetworkRuntime:
                 focus_reason="ai_highlight_loop" if goals > 0 else "ai_schedule_fill",
                 score=0.0,
                 is_live=True,
-                watch_route=f"/matches/{match.match_id}/watch",
-                replay_route=f"/api/matches/{match.match_id}/highlights",
+                watch_route=f"/matches/broadcast/{match.match_id}",
+                replay_route=f"/api/matches/{match.match_id}/replay",
                 metadata={
                     "ai_match": True,
                     "is_final": False,
@@ -583,7 +583,7 @@ class BroadcastNetworkRuntime:
             score=0.0,
             is_live=False,
             watch_route=None,
-            replay_route="/api/matches/highlights",
+            replay_route=None,
             metadata={"fallback_mode": "replay"},
         )
 
@@ -655,7 +655,7 @@ class BroadcastNetworkRuntime:
             presence_channel=f"match:{match_id}:events",
             presence_websocket_path=f"/ws/spectate/{match_id}",
             tts_websocket_path="/tts/live?voice=default",
-            replay_route=f"/api/matches/{match_id}/highlights",
+            replay_route=f"/api/matches/{match_id}/replay",
             speed_modes=[
                 LiveMatchSpeedModeView(key="normal", label="Normal", target_duration_seconds=90),
                 LiveMatchSpeedModeView(key="fast", label="Fast", target_duration_seconds=30),

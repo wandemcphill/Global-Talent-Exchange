@@ -11,6 +11,7 @@ import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/player_entity.dart' as runtime_player;
 import 'package:gte_frontend/models/real_match_engine_presentation.dart';
 import 'package:gte_frontend/services/match_3d_bridge.dart';
+import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
 import 'package:gte_frontend/widgets/match_3d/entities/pitch_entity.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 
@@ -26,6 +27,7 @@ class NativeMatch3dSurface extends StatefulWidget {
     this.runtimeBall,
     this.showRuntimeBadge = true,
     this.onRuntimeStatusMessageChanged,
+    this.androidLiveBootstrapProvisioner,
   });
 
   static const Key runtimeBadgeKey = Key('native-match-3d-runtime-badge');
@@ -39,6 +41,8 @@ class NativeMatch3dSurface extends StatefulWidget {
   final runtime_ball.BallEntity? runtimeBall;
   final bool showRuntimeBadge;
   final ValueChanged<String?>? onRuntimeStatusMessageChanged;
+  final Match3dAndroidLiveBootstrapProvisioner?
+  androidLiveBootstrapProvisioner;
 
   static Match3dNativeSessionDescriptor describeSession({
     required MatchViewState viewState,
@@ -92,12 +96,12 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
       Match3dNativeRuntimeEventType.unknown;
   bool _closingSession = false;
   bool _unexpectedSessionClosed = false;
+  String? _runtimeStatusOverride;
 
   @override
   void initState() {
     super.initState();
     _bridge = widget.bridge;
-    _subscribeToRuntimeEvents();
     unawaited(_probeNativeAvailability());
   }
 
@@ -127,6 +131,8 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
   Future<void> _probeNativeAvailability() async {
     final Match3DBridge? bridge = _bridge;
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      unawaited(_runtimeEventsSubscription?.cancel() ?? Future<void>.value());
+      _runtimeEventsSubscription = null;
       if (mounted) {
         setState(() {
           _nativeAvailable = false;
@@ -146,11 +152,20 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
         runtimeInfo.available && runtimeInfo.supportsSessions && bridge != null
             ? await bridge.getSessionState()
             : null;
+    if (runtimeInfo.available && bridge != null) {
+      _subscribeToRuntimeEvents();
+    } else {
+      unawaited(_runtimeEventsSubscription?.cancel() ?? Future<void>.value());
+      _runtimeEventsSubscription = null;
+    }
+    final bool nativeReady =
+        runtimeInfo.available &&
+        await _ensureAndroidLiveBootstrap(runtimeInfo: runtimeInfo);
     if (!mounted) {
       return;
     }
     setState(() {
-      _nativeAvailable = runtimeInfo.available;
+      _nativeAvailable = nativeReady;
       _hasProbedNativeAvailability = true;
       _runtimeInfo = runtimeInfo;
       _runtimeSessionState = sessionState;
@@ -158,7 +173,7 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
       _unexpectedSessionClosed = false;
     });
     _publishRuntimeStatusMessage(_deriveRuntimeStatusMessage());
-    if (runtimeInfo.available) {
+    if (nativeReady) {
       await _ensureNativeSession();
       await _syncNativeFrame();
     }
@@ -184,6 +199,16 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
   Future<void> _reopenNativeSession() async {
     await _closeNativeSession();
     if (!mounted) {
+      return;
+    }
+    if (!await _ensureAndroidLiveBootstrap()) {
+      if (mounted) {
+        setState(() {
+          _nativeAvailable = false;
+          _runtimeSessionState = null;
+        });
+      }
+      _publishRuntimeStatusMessage(_deriveRuntimeStatusMessage());
       return;
     }
     await _ensureNativeSession();
@@ -251,6 +276,38 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
     );
   }
 
+  Future<bool> _ensureAndroidLiveBootstrap({
+    Match3dNativeRuntimeInfo? runtimeInfo,
+  }) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return true;
+    }
+    final Match3dNativeRuntimeInfo resolvedRuntimeInfo =
+        runtimeInfo ?? _runtimeInfo;
+    final bool requiresUnityBootstrap =
+        resolvedRuntimeInfo.platform == 'unity' ||
+        resolvedRuntimeInfo.runtime == 'unity_match_3d';
+    if (!requiresUnityBootstrap) {
+      _runtimeStatusOverride = null;
+      return true;
+    }
+    final Match3dAndroidLiveBootstrapProvisioner? provisioner =
+        widget.androidLiveBootstrapProvisioner;
+    if (provisioner == null) {
+      _runtimeStatusOverride =
+          'Unity live bootstrap is unavailable on Android; Flutter 3D fallback active.';
+      return false;
+    }
+    final Match3dAndroidLiveBootstrapResult result = await provisioner
+        .provision(matchId: widget.viewState.matchId);
+    _runtimeStatusOverride =
+        result.staged
+            ? null
+            : (result.message ??
+                'Unity live bootstrap could not be staged on Android; Flutter 3D fallback active.');
+    return result.staged;
+  }
+
   void _subscribeToRuntimeEvents() {
     unawaited(_runtimeEventsSubscription?.cancel() ?? Future<void>.value());
     final Match3DBridge? bridge = _bridge;
@@ -281,6 +338,7 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
       if (runtimeEvent.type == Match3dNativeRuntimeEventType.sessionOpened ||
           runtimeEvent.type == Match3dNativeRuntimeEventType.runtimeReady) {
         _unexpectedSessionClosed = false;
+        _runtimeStatusOverride = null;
       }
       if (unexpectedSessionClose) {
         _nativeAvailable = false;
@@ -311,6 +369,10 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
     }
     if (_unexpectedSessionClosed) {
       return 'Native 3D session closed; Flutter 3D fallback active.';
+    }
+    if (_runtimeStatusOverride != null &&
+        _runtimeStatusOverride!.trim().isNotEmpty) {
+      return _runtimeStatusOverride;
     }
     if (!_nativeAvailable) {
       return 'Native Android 3D unavailable; Flutter 3D fallback active.';
@@ -345,9 +407,7 @@ class _NativeMatch3dSurfaceState extends State<NativeMatch3dSurface> {
       _runtimeInfo.viewType == _embeddedNativeViewType;
 
   bool get _usesUnityActivityRuntime =>
-      _runtimeInfo.viewType == _unityActivityViewType ||
-      _runtimeInfo.platform == 'unity' ||
-      _runtimeInfo.runtime == 'unity_match_3d';
+      _runtimeInfo.viewType == _unityActivityViewType;
 
   _RuntimeBadgeStyle get _runtimeBadgeStyle {
     if (!_hasProbedNativeAvailability) {

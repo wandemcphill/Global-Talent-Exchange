@@ -39,22 +39,22 @@ class PlayerFilter {
   }) {
     return PlayerFilter(
       search: search == _playerFilterUnset ? this.search : search as String?,
-      position: position == _playerFilterUnset
-          ? this.position
-          : position as String?,
-      country: country == _playerFilterUnset
-          ? this.country
-          : country as String?,
-      nationalTeam: nationalTeam == _playerFilterUnset
-          ? this.nationalTeam
-          : nationalTeam as String?,
+      position:
+          position == _playerFilterUnset ? this.position : position as String?,
+      country:
+          country == _playerFilterUnset ? this.country : country as String?,
+      nationalTeam:
+          nationalTeam == _playerFilterUnset
+              ? this.nationalTeam
+              : nationalTeam as String?,
       club: club == _playerFilterUnset ? this.club : club as String?,
       league: league == _playerFilterUnset ? this.league : league as String?,
       minAge: minAge == _playerFilterUnset ? this.minAge : minAge as int?,
       maxAge: maxAge == _playerFilterUnset ? this.maxAge : maxAge as int?,
-      availability: availability == _playerFilterUnset
-          ? this.availability
-          : availability as String?,
+      availability:
+          availability == _playerFilterUnset
+              ? this.availability
+              : availability as String?,
     );
   }
 
@@ -976,17 +976,20 @@ class GtePlayerAgencySummary {
       ]),
       pressureState:
           GteJson.value(json, <String>['pressure_state', 'pressureState']) ==
-              null
-          ? null
-          : GtePlayerAgencyPressureView.fromJson(
-              GteJson.value(json, <String>['pressure_state', 'pressureState']),
-            ),
+                  null
+              ? null
+              : GtePlayerAgencyPressureView.fromJson(
+                GteJson.value(json, <String>[
+                  'pressure_state',
+                  'pressureState',
+                ]),
+              ),
       teamDynamics:
           GteJson.value(json, <String>['team_dynamics', 'teamDynamics']) == null
-          ? null
-          : GtePlayerAgencyTeamDynamicsView.fromJson(
-              GteJson.value(json, <String>['team_dynamics', 'teamDynamics']),
-            ),
+              ? null
+              : GtePlayerAgencyTeamDynamicsView.fromJson(
+                GteJson.value(json, <String>['team_dynamics', 'teamDynamics']),
+              ),
     );
   }
 
@@ -1108,11 +1111,14 @@ class GtePlayerLifecycleSnapshot {
       ),
       contractBadge:
           GteJson.value(json, <String>['contract_badge', 'contractBadge']) ==
-              null
-          ? null
-          : GteContractBadgeView.fromJson(
-              GteJson.value(json, <String>['contract_badge', 'contractBadge']),
-            ),
+                  null
+              ? null
+              : GteContractBadgeView.fromJson(
+                GteJson.value(json, <String>[
+                  'contract_badge',
+                  'contractBadge',
+                ]),
+              ),
       agencySummary: _agencySummaryFromJson(json),
       recentEvents: GteJson.typedList(json, <String>[
         'recent_events',
@@ -1424,11 +1430,14 @@ class GtePlayerOverview {
       ),
       contractBadge:
           GteJson.value(json, <String>['contract_badge', 'contractBadge']) ==
-              null
-          ? null
-          : GteContractBadgeView.fromJson(
-              GteJson.value(json, <String>['contract_badge', 'contractBadge']),
-            ),
+                  null
+              ? null
+              : GteContractBadgeView.fromJson(
+                GteJson.value(json, <String>[
+                  'contract_badge',
+                  'contractBadge',
+                ]),
+              ),
       transferStatus: GteTransferStatusView.fromJson(
         GteJson.value(json, <String>['transfer_status', 'transferStatus']) ??
             const <String, Object?>{},

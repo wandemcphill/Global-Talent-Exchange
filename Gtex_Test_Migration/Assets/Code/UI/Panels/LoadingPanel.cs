@@ -1,4 +1,7 @@
 using TMPro;
+using FStudio.GTEX;
+using FStudio.GTEX.Core;
+using FStudio.MatchEngine;
 using FStudio.UI.Events;
 using UnityEngine;
 using FStudio.UI.GamepadInput;
@@ -8,6 +11,19 @@ namespace FStudio.UI {
         [SerializeField] private TextMeshProUGUI loadingText;
 
         [SerializeField] private GameObject infoPanel;
+
+        private static bool IsExternallyDrivenMatchActive() {
+            return GtexRuntimeBootstrap.IsLivePlaybackPendingOrActive() ||
+                (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackEnabled);
+        }
+
+        protected override void Update() {
+            base.Update();
+
+            if (IsActive && IsExternallyDrivenMatchActive()) {
+                Disappear();
+            }
+        }
 
         protected override void OnDisappeared () {
             base.OnDisappeared();
@@ -22,6 +38,11 @@ namespace FStudio.UI {
         }
 
         protected override void OnEventCalled(LoadingEvent eventObject) {
+            if (IsExternallyDrivenMatchActive()) {
+                Disappear();
+                return;
+            }
+
             if (eventObject == null) {
                 Debug.Log("closing loading");
                 Disappear();

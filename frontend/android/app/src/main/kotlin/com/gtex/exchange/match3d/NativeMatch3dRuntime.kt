@@ -451,10 +451,6 @@ private fun Map<*, *>?.stringValue(key: String, fallback: String = ""): String {
     return this[key]?.toString()?.takeIf { it.isNotBlank() } ?: fallback
 }
 
-private fun Map<String, Any?>.stringValue(key: String, fallback: String = ""): String {
-    return this[key]?.toString()?.takeIf { it.isNotBlank() } ?: fallback
-}
-
 private fun Map<*, *>?.nullableString(key: String): String? {
     if (this == null) {
         return null
@@ -489,34 +485,10 @@ private fun Map<*, *>?.intValue(key: String, fallback: Int = 0): Int {
     }
 }
 
-private fun Map<String, Any?>.intValue(key: String, fallback: Int = 0): Int {
-    return when (val value = this[key]) {
-        is Int -> value
-        is Long -> value.toInt()
-        is Float -> value.toInt()
-        is Double -> value.toInt()
-        is Number -> value.toInt()
-        is String -> value.toIntOrNull() ?: fallback
-        else -> fallback
-    }
-}
-
 private fun Map<*, *>?.floatValue(key: String, fallback: Float = 0f): Float {
     if (this == null) {
         return fallback
     }
-    return when (val value = this[key]) {
-        is Float -> value
-        is Double -> value.toFloat()
-        is Int -> value.toFloat()
-        is Long -> value.toFloat()
-        is Number -> value.toFloat()
-        is String -> value.toFloatOrNull() ?: fallback
-        else -> fallback
-    }
-}
-
-private fun Map<String, Any?>.floatValue(key: String, fallback: Float = 0f): Float {
     return when (val value = this[key]) {
         is Float -> value
         is Double -> value.toFloat()

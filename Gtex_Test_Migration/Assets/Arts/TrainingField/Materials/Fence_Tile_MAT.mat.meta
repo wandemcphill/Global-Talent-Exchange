@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fbfcb4ad69a88ec41b7d13148aaa99df
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/TrainingField/Materials/Fence_Tile_MAT.mat
+  uploadId: 597280

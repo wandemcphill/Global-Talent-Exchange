@@ -8,7 +8,10 @@ def test_health_endpoint_reports_ok(test_client) -> None:
     ready_response = test_client.get("/ready")
 
     assert health_response.status_code == 200
-    assert health_response.json() == {"status": "ok"}
+    assert health_response.json()["status"] == "ok"
+    assert health_response.json()["checks"]["database"]["status"] == "ok"
+    assert health_response.json()["checks"]["redis"]["status"] == "skipped"
+    assert health_response.json()["checks"]["kafka"]["status"] == "skipped"
     assert ready_response.status_code == 200
     assert ready_response.json()["status"] == "ready"
     assert ready_response.json()["checks"]["database"]["status"] == "ok"

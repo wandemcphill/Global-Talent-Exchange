@@ -135,6 +135,18 @@ void main() {
   testWidgets('native 3D route is labeled as coming soon', (
     WidgetTester tester,
   ) async {
+    final AppRouteSurface? nativeThreeD = appRouteSurfaceFor(
+      AppRoutes.matchesNativeThreeD,
+    );
+
+    expect(nativeThreeD, isNotNull);
+    expect(nativeThreeD!.summary, contains('stays blocked'));
+    expect(nativeThreeD.summary.toLowerCase(), contains('scaffold'));
+    expect(
+      nativeThreeD.summary.toLowerCase(),
+      isNot(contains('verified native bridge')),
+    );
+
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: MatchNative3dBlockedScreen())),
     );

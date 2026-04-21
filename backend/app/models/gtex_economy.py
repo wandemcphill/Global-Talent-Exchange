@@ -192,7 +192,7 @@ class GtexJackpotPayout(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class GtexCreatorAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "gtex_creator_assets"
 
-    subject_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    subject_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     subject_type: Mapped[GtexAssetSubjectType] = mapped_column(
         Enum(GtexAssetSubjectType, name="gtex_asset_subject_type", native_enum=False),
         nullable=False,
@@ -311,7 +311,7 @@ class GtexCreatorPriceHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class GtexLeague(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "gtex_leagues"
 
-    code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     league_type: Mapped[GtexLeagueType] = mapped_column(
         Enum(GtexLeagueType, name="gtex_league_type", native_enum=False),

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import md5
-from math import hypot
+from math import cos, hypot, sin, tau
 from typing import Any
 
 from app.live_matches.schemas import LiveMatchStateView, LiveMatchStreamEventView
@@ -1645,6 +1645,7 @@ class MatchTimelineService:
             home_attacks_right=home_attacks_right,
             active_event=active_event,
             stage=stage,
+            clock_minute=clock_minute,
             possession_side=possession_side,
         )
         ball_payload = self._ball_payload(
@@ -1690,6 +1691,7 @@ class MatchTimelineService:
         home_attacks_right: bool,
         active_event: _ViewerEventContext | None,
         stage: str,
+        clock_minute: float,
         possession_side: MatchViewerSide,
     ) -> list[dict[str, Any]]:
         payloads: list[dict[str, Any]] = []
@@ -1738,6 +1740,29 @@ class MatchTimelineService:
                         stage=stage,
                     )
 
+                if active_event is not None and not highlighted:
+                    position = self._apply_support_shape(
+                        runtime=runtime,
+                        player=player,
+                        line=line,
+                        position=position,
+                        active_event=active_event,
+                        possession_side=possession_side,
+                        attack_direction=attack_direction,
+                        home_attacks_right=home_attacks_right,
+                        stage=stage,
+                    )
+
+                variance_x, variance_y = self._player_variance_offset(
+                    player=player,
+                    line=line,
+                    stage=stage,
+                    clock_minute=clock_minute,
+                    highlighted=highlighted,
+                )
+                position["x"] = self._clamp(position["x"] + variance_x)
+                position["y"] = self._clamp(position["y"] + variance_y)
+
                 payloads.append(
                     {
                         "player_id": player.player_id,
@@ -1757,6 +1782,100 @@ class MatchTimelineService:
 
         self._resolve_collisions(payloads)
         return payloads
+
+    def _player_variance_offset(
+        self,
+        *,
+        player: _PlayerRuntime,
+        line: str,
+        stage: str,
+        clock_minute: float,
+        highlighted: bool,
+    ) -> tuple[float, float]:
+        if player.role is PlayerRole.GOALKEEPER:
+            lateral_amplitude = 0.45
+            vertical_amplitude = 0.65
+        elif line == "attack":
+            lateral_amplitude = 1.55
+            vertical_amplitude = 1.95
+        elif line == "midfield":
+            lateral_amplitude = 1.35
+            vertical_amplitude = 1.65
+        else:
+            lateral_amplitude = 1.15
+            vertical_amplitude = 1.35
+
+        stage_scale = 1.0
+        if stage == "reset":
+            stage_scale = 0.35
+        elif stage in {"event", "decision"}:
+            stage_scale = 0.6
+        elif stage == "post":
+            stage_scale = 0.75
+
+        if highlighted:
+            stage_scale *= 0.7
+
+        digest = md5(player.player_id.encode("utf-8")).digest()
+        phase_x = (int.from_bytes(digest[:4], "big") / 0xFFFFFFFF) * tau
+        phase_y = (int.from_bytes(digest[4:8], "big") / 0xFFFFFFFF) * tau
+
+        drift_x = sin((clock_minute * 1.85) + phase_x) * lateral_amplitude * stage_scale
+        drift_y = cos((clock_minute * 1.37) + phase_y) * vertical_amplitude * stage_scale
+        return round(drift_x, 3), round(drift_y, 3)
+
+    def _apply_support_shape(
+        self,
+        *,
+        runtime: _TeamRuntime,
+        player: _PlayerRuntime,
+        line: str,
+        position: dict[str, float],
+        active_event: _ViewerEventContext,
+        possession_side: MatchViewerSide,
+        attack_direction: float,
+        home_attacks_right: bool,
+        stage: str,
+    ) -> dict[str, float]:
+        if stage == "reset" or player.role is PlayerRole.GOALKEEPER:
+            return position
+
+        fallback_target = self._target_zone(
+            side=active_event.team_side or possession_side,
+            home_attacks_right=home_attacks_right,
+            event_id=active_event.view.event_id,
+            viewer_type=active_event.view.event_type,
+        )
+        event_target = self._render_point(active_event, "target") or fallback_target
+        digest = md5(player.player_id.encode("utf-8")).digest()
+        lane_seed = (int.from_bytes(digest[:2], "big") / 65535.0) - 0.5
+        depth_seed = (int.from_bytes(digest[2:4], "big") / 65535.0) - 0.5
+
+        if runtime.view.side is possession_side:
+            if line == "attack":
+                target_x = event_target["x"] - (attack_direction * (2.8 + (depth_seed * 2.6)))
+                target_y = event_target["y"] + (lane_seed * 10.0)
+                blend_x = 0.14 if stage == "pre" else 0.18
+                blend_y = 0.16
+            elif line == "midfield":
+                target_x = event_target["x"] - (attack_direction * (7.0 + (depth_seed * 3.4)))
+                target_y = event_target["y"] + (lane_seed * 12.0)
+                blend_x = 0.12 if stage == "pre" else 0.16
+                blend_y = 0.15
+            else:
+                return position
+        else:
+            if line in {"midfield", "defense"}:
+                target_x = event_target["x"] + (attack_direction * (3.6 + (depth_seed * 3.0)))
+                target_y = event_target["y"] + (lane_seed * 11.0)
+                blend_x = 0.12 if stage == "pre" else 0.15
+                blend_y = 0.14
+            else:
+                return position
+
+        position["x"] = self._clamp(self._lerp(position["x"], target_x, blend_x))
+        position["y"] = self._clamp(self._lerp(position["y"], target_y, blend_y))
+        return position
 
     def _apply_persistent_event(
         self,

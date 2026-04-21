@@ -115,7 +115,7 @@ class _FederationsHubScreenState extends ConsumerState<FederationsHubScreen> {
                   _SectionCard(
                     title: 'Global rankings',
                     subtitle:
-                        'Live ranking table from `/federations/rankings`.',
+                        'Live ranking table from `/api/federations/rankings`.',
                     child:
                         data.rankings.isEmpty
                             ? const _EmptyState(

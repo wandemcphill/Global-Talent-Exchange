@@ -43,9 +43,7 @@ abstract class FanWarsRepository {
 }
 
 class FanWarsApiRepository implements FanWarsRepository {
-  FanWarsApiRepository({
-    required GteAuthedApi client,
-  }) : _client = client;
+  FanWarsApiRepository({required GteAuthedApi client}) : _client = client;
 
   factory FanWarsApiRepository.standard({
     required String baseUrl,
@@ -70,7 +68,7 @@ class FanWarsApiRepository implements FanWarsRepository {
   ) async {
     return FanWarLeaderboard.fromJson(
       await _client.getMap(
-        '/fan-wars/leaderboards/$boardType',
+        '/api/fan-wars/leaderboards/$boardType',
         query: query.toQuery(),
         auth: false,
       ),
@@ -84,7 +82,7 @@ class FanWarsApiRepository implements FanWarsRepository {
   ) async {
     return RivalryLeaderboard.fromJson(
       await _client.getMap(
-        '/fan-wars/rivalries/$boardType',
+        '/api/fan-wars/rivalries/$boardType',
         query: query.toQuery(),
         auth: false,
       ),
@@ -98,7 +96,7 @@ class FanWarsApiRepository implements FanWarsRepository {
   ) async {
     return FanWarDashboard.fromJson(
       await _client.getMap(
-        '/fan-wars/profiles/$profileId/dashboard',
+        '/api/fan-wars/profiles/$profileId/dashboard',
         query: query.toQuery(),
         auth: false,
       ),
@@ -108,17 +106,21 @@ class FanWarsApiRepository implements FanWarsRepository {
   @override
   Future<NationsCupOverview> fetchNationsCup(String competitionId) async {
     return NationsCupOverview.fromJson(
-      await _client.getMap('/fan-wars/nations-cup/$competitionId', auth: false),
+      await _client.getMap(
+        '/api/fan-wars/nations-cup/$competitionId',
+        auth: false,
+      ),
     );
   }
 
   @override
   Future<FanWarProfile> upsertProfile(
-      FanWarProfileUpsertRequest request) async {
+    FanWarProfileUpsertRequest request,
+  ) async {
     return FanWarProfile.fromJson(
       await _client.request(
         'PUT',
-        '/admin/fan-wars/profiles',
+        '/api/admin/fan-wars/profiles',
         body: request.toJson(),
       ),
     );
@@ -132,7 +134,7 @@ class FanWarsApiRepository implements FanWarsRepository {
     return parseList(
       await _client.request(
         'POST',
-        '/admin/fan-wars/profiles/$profileId/rivals/$rivalProfileId',
+        '/api/admin/fan-wars/profiles/$profileId/rivals/$rivalProfileId',
       ),
       FanWarProfile.fromJson,
       label: 'fan war linked rivals',
@@ -144,7 +146,7 @@ class FanWarsApiRepository implements FanWarsRepository {
     return jsonMapList(
       await _client.request(
         'POST',
-        '/admin/fan-wars/points',
+        '/api/admin/fan-wars/points',
         body: request.toJson(),
       ),
       label: 'fan war points',
@@ -158,7 +160,7 @@ class FanWarsApiRepository implements FanWarsRepository {
     return CreatorCountryAssignment.fromJson(
       await _client.request(
         'POST',
-        '/admin/fan-wars/creator-country-assignments',
+        '/api/admin/fan-wars/creator-country-assignments',
         body: request.toJson(),
       ),
     );
@@ -171,7 +173,7 @@ class FanWarsApiRepository implements FanWarsRepository {
     return NationsCupOverview.fromJson(
       await _client.request(
         'POST',
-        '/admin/fan-wars/nations-cup',
+        '/api/admin/fan-wars/nations-cup',
         body: request.toJson(),
       ),
     );
@@ -185,7 +187,7 @@ class FanWarsApiRepository implements FanWarsRepository {
     return NationsCupOverview.fromJson(
       await _client.request(
         'POST',
-        '/admin/fan-wars/nations-cup/$competitionId/advance',
+        '/api/admin/fan-wars/nations-cup/$competitionId/advance',
         query: <String, Object?>{'force': force},
       ),
     );

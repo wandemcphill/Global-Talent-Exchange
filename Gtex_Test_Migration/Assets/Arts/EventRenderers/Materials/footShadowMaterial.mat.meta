@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: f30bed88e9815cb49a64fa5bc26af33f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/EventRenderers/Materials/footShadowMaterial.mat
+  uploadId: 597280

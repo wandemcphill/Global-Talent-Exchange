@@ -77,9 +77,8 @@ abstract class CreatorStadiumMonetizationRepository {
 
 class CreatorStadiumMonetizationApiRepository
     implements CreatorStadiumMonetizationRepository {
-  CreatorStadiumMonetizationApiRepository({
-    required GteAuthedApi client,
-  }) : _client = client;
+  CreatorStadiumMonetizationApiRepository({required GteAuthedApi client})
+    : _client = client;
 
   factory CreatorStadiumMonetizationApiRepository.standard({
     required String baseUrl,
@@ -100,7 +99,7 @@ class CreatorStadiumMonetizationApiRepository
   @override
   Future<List<CreatorBroadcastMode>> listBroadcastModes() async {
     return parseList(
-      await _client.getList('/media-engine/creator-league/broadcast-modes'),
+      await _client.getList('/api/media-engine/creator-league/broadcast-modes'),
       CreatorBroadcastMode.fromJson,
       label: 'creator broadcast modes',
     );
@@ -113,7 +112,7 @@ class CreatorStadiumMonetizationApiRepository
   ) async {
     return CreatorMatchAccess.fromJson(
       await _client.getMap(
-        '/media-engine/creator-league/matches/$matchId/access',
+        '/api/media-engine/creator-league/matches/$matchId/access',
         query: query.toQuery(),
       ),
     );
@@ -127,7 +126,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorBroadcastPurchase.fromJson(
       await _client.request(
         'POST',
-        '/media-engine/creator-league/matches/$matchId/purchase',
+        '/api/media-engine/creator-league/matches/$matchId/purchase',
         body: request.toJson(),
       ),
     );
@@ -140,7 +139,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorSeasonPass.fromJson(
       await _client.request(
         'POST',
-        '/media-engine/creator-league/season-passes',
+        '/api/media-engine/creator-league/season-passes',
         body: request.toJson(),
       ),
     );
@@ -149,7 +148,9 @@ class CreatorStadiumMonetizationApiRepository
   @override
   Future<List<CreatorSeasonPass>> listMySeasonPasses() async {
     return parseList(
-      await _client.getList('/media-engine/creator-league/season-passes/me'),
+      await _client.getList(
+        '/api/media-engine/creator-league/season-passes/me',
+      ),
       CreatorSeasonPass.fromJson,
       label: 'creator season passes',
     );
@@ -162,7 +163,7 @@ class CreatorStadiumMonetizationApiRepository
   ) async {
     return CreatorStadiumMonetization.fromJson(
       await _client.getMap(
-        '/media-engine/creator-league/clubs/$clubId/stadium',
+        '/api/media-engine/creator-league/clubs/$clubId/stadium',
         query: query.toQuery(),
       ),
     );
@@ -176,7 +177,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorStadiumMonetization.fromJson(
       await _client.request(
         'PUT',
-        '/media-engine/creator-league/clubs/$clubId/stadium',
+        '/api/media-engine/creator-league/clubs/$clubId/stadium',
         body: request.toJson(),
       ),
     );
@@ -187,8 +188,9 @@ class CreatorStadiumMonetizationApiRepository
     String matchId,
   ) async {
     return CreatorMatchStadiumOffer.fromJson(
-      await _client
-          .getMap('/media-engine/creator-league/matches/$matchId/stadium'),
+      await _client.getMap(
+        '/api/media-engine/creator-league/matches/$matchId/stadium',
+      ),
     );
   }
 
@@ -200,7 +202,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorStadiumTicketPurchase.fromJson(
       await _client.request(
         'POST',
-        '/media-engine/creator-league/matches/$matchId/tickets',
+        '/api/media-engine/creator-league/matches/$matchId/tickets',
         body: request.toJson(),
       ),
     );
@@ -210,7 +212,7 @@ class CreatorStadiumMonetizationApiRepository
   Future<List<CreatorStadiumPlacement>> listPlacements(String matchId) async {
     return parseList(
       await _client.getList(
-        '/media-engine/creator-league/matches/$matchId/stadium/placements',
+        '/api/media-engine/creator-league/matches/$matchId/stadium/placements',
       ),
       CreatorStadiumPlacement.fromJson,
       label: 'creator stadium placements',
@@ -225,7 +227,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorStadiumPlacement.fromJson(
       await _client.request(
         'POST',
-        '/media-engine/creator-league/matches/$matchId/stadium/placements',
+        '/api/media-engine/creator-league/matches/$matchId/stadium/placements',
         body: request.toJson(),
       ),
     );
@@ -239,7 +241,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorMatchGift.fromJson(
       await _client.request(
         'POST',
-        '/media-engine/creator-league/matches/$matchId/gifts',
+        '/api/media-engine/creator-league/matches/$matchId/gifts',
         body: request.toJson(),
       ),
     );
@@ -252,7 +254,7 @@ class CreatorStadiumMonetizationApiRepository
   ) async {
     return CreatorAnalyticsDashboard.fromJson(
       await _client.getMap(
-        '/media-engine/creator-league/matches/$matchId/analytics',
+        '/api/media-engine/creator-league/matches/$matchId/analytics',
         query: query.toQuery(),
       ),
     );
@@ -265,7 +267,7 @@ class CreatorStadiumMonetizationApiRepository
   ) async {
     return CreatorAnalyticsDashboard.fromJson(
       await _client.getMap(
-        '/admin/media-engine/creator-league/matches/$matchId/analytics',
+        '/api/admin/media-engine/creator-league/matches/$matchId/analytics',
         query: query.toQuery(),
       ),
     );
@@ -276,7 +278,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorRevenueSettlement.fromJson(
       await _client.request(
         'POST',
-        '/admin/media-engine/creator-league/matches/$matchId/settlement',
+        '/api/admin/media-engine/creator-league/matches/$matchId/settlement',
       ),
     );
   }
@@ -284,8 +286,9 @@ class CreatorStadiumMonetizationApiRepository
   @override
   Future<CreatorStadiumControl> fetchStadiumControl() async {
     return CreatorStadiumControl.fromJson(
-      await _client
-          .getMap('/admin/media-engine/creator-league/stadium-controls'),
+      await _client.getMap(
+        '/api/admin/media-engine/creator-league/stadium-controls',
+      ),
     );
   }
 
@@ -296,7 +299,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorStadiumControl.fromJson(
       await _client.request(
         'PUT',
-        '/admin/media-engine/creator-league/stadium-controls',
+        '/api/admin/media-engine/creator-league/stadium-controls',
         body: request.toJson(),
       ),
     );
@@ -310,7 +313,7 @@ class CreatorStadiumMonetizationApiRepository
     return CreatorStadiumProfile.fromJson(
       await _client.request(
         'PUT',
-        '/admin/media-engine/creator-league/clubs/$clubId/stadium-level',
+        '/api/admin/media-engine/creator-league/clubs/$clubId/stadium-level',
         body: request.toJson(),
       ),
     );

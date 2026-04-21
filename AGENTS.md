@@ -18,7 +18,7 @@
   -batchmode -quit -nographics `
   -buildTarget StandaloneWindows64 `
   -projectPath 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\Gtex_Test_Migration' `
-  -executeMethod FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64FromCommandLine `
+  -executeMethod FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64ProductionFromCommandLine `
   -logFile 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_test_migration_windows_build.log'
 ```
 

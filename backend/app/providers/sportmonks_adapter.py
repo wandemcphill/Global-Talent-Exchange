@@ -52,11 +52,7 @@ class SportMonksAdapter(BaseFootballProvider):
             if settings is not None
             else os.getenv(ENV_SPORTMONKS_BASE_URL, "https://api.sportmonks.com/v3/football")
         ).rstrip("/")
-        self.api_token = (
-            settings.sportmonks_api_token
-            if settings is not None
-            else os.getenv(ENV_SPORTMONKS_API_TOKEN)
-        )
+        self.api_token = settings.sportmonks_api_token if settings is not None else os.getenv(ENV_SPORTMONKS_API_TOKEN)
         self.default_timeout_seconds = settings.provider_timeout_seconds if settings is not None else 30
         self.session = requests.Session()
         self._last_request_started_at = 0.0
@@ -171,7 +167,9 @@ class SportMonksAdapter(BaseFootballProvider):
             return []
         response = self._get(
             f"/seasons/{resolved_season_id}",
-            params={"include": "league;fixtures.participants;fixtures.state;fixtures.venue;fixtures.round;fixtures.scores"},
+            params={
+                "include": "league;fixtures.participants;fixtures.state;fixtures.venue;fixtures.round;fixtures.scores"
+            },
         )
         season = response.get("data") or {}
         return [
@@ -294,15 +292,11 @@ class SportMonksAdapter(BaseFootballProvider):
         rate_limit_per_minute: int | None = None,
     ) -> dict[str, Any]:
         if not self.api_token:
-            raise ProviderConfigurationError(
-                f"{ENV_SPORTMONKS_API_TOKEN} is required for the sportmonks provider."
-            )
+            raise ProviderConfigurationError(f"{ENV_SPORTMONKS_API_TOKEN} is required for the sportmonks provider.")
         request_params = dict(params or {})
         request_params["api_token"] = self.api_token
         resolved_rate_limit = (
-            rate_limit_per_minute
-            if rate_limit_per_minute is not None
-            else self._request_rate_limit_override
+            rate_limit_per_minute if rate_limit_per_minute is not None else self._request_rate_limit_override
         )
         self._throttle(resolved_rate_limit)
         response = self.session.get(
@@ -387,6 +381,10 @@ class SportMonksAdapter(BaseFootballProvider):
     ) -> RealPlayerSourceItem:
         payload = dict(raw_player)
         payload["provider_player_id"] = str(raw_player.get("id") or "").strip()
+        photo_url = self._clean_text(raw_player.get("image_path") or raw_player.get("imagePath"))
+        if photo_url:
+            payload["image_path"] = photo_url
+            payload["photo_url"] = photo_url
         payload["currentClub"] = {
             "id": club_context["club_id"],
             "name": club_context["club_name"],
@@ -405,9 +403,7 @@ class SportMonksAdapter(BaseFootballProvider):
             first_name=self._clean_text(raw_player.get("firstName")),
             last_name=self._clean_text(raw_player.get("lastName")),
             short_name=self._clean_text(raw_player.get("shortName") or raw_player.get("commonName")),
-            display_position=self._clean_text(
-                raw_player.get("detailedPosition") or raw_player.get("position")
-            ),
+            display_position=self._clean_text(raw_player.get("detailedPosition") or raw_player.get("position")),
             nationality_name=self._clean_text(raw_player.get("nationality")),
             nationality_code=self._clean_text(raw_player.get("nationalityCode")),
             date_of_birth=self._parse_date(raw_player.get("dateOfBirth")),
@@ -416,6 +412,7 @@ class SportMonksAdapter(BaseFootballProvider):
             current_competition_id=club_context["competition_id"],
             current_competition_name=club_context["competition_name"],
             current_season_id=club_context["season_id"],
+            metadata_json={"photo_url": photo_url} if photo_url else {},
             raw_payload=payload,
         )
 
@@ -426,6 +423,7 @@ class SportMonksAdapter(BaseFootballProvider):
         nationality = raw_player.get("nationality") or {}
         country = raw_player.get("country") or {}
         provider_player_id = str(raw_player.get("id") or "").strip()
+        photo_url = self._clean_text(raw_player.get("image_path") or raw_player.get("imagePath"))
         payload = {
             "id": raw_player.get("id"),
             "provider_player_id": provider_player_id,
@@ -445,6 +443,8 @@ class SportMonksAdapter(BaseFootballProvider):
             "height": raw_player.get("height"),
             "weight": raw_player.get("weight"),
             "type_id": raw_player.get("type_id"),
+            "image_path": photo_url,
+            "photo_url": photo_url,
         }
         if team_context is not None:
             payload["currentClub"] = {
@@ -478,6 +478,7 @@ class SportMonksAdapter(BaseFootballProvider):
             current_competition_id=team_context["competition_id"] if team_context is not None else None,
             current_competition_name=team_context["competition_name"] if team_context is not None else None,
             current_season_id=team_context["season_id"] if team_context is not None else None,
+            metadata_json={"photo_url": photo_url} if photo_url else {},
             raw_payload=payload,
         )
 
@@ -497,7 +498,11 @@ class SportMonksAdapter(BaseFootballProvider):
         if date_of_birth is None:
             return False
         age_years = self._age_on(date_of_birth)
-        if age_years is None or age_years < _GLOBAL_DIRECTORY_MIN_AGE_YEARS or age_years > _GLOBAL_DIRECTORY_MAX_AGE_YEARS:
+        if (
+            age_years is None
+            or age_years < _GLOBAL_DIRECTORY_MIN_AGE_YEARS
+            or age_years > _GLOBAL_DIRECTORY_MAX_AGE_YEARS
+        ):
             return False
 
         return True
@@ -740,6 +745,8 @@ class SportMonksAdapter(BaseFootballProvider):
             "height": player.get("height"),
             "weight": player.get("weight"),
             "shirtNumber": payload.get("jersey_number"),
+            "imagePath": self._clean_text(player.get("image_path")),
+            "photo_url": self._clean_text(player.get("image_path")),
         }
 
     def _transform_player_statistics(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -811,9 +818,7 @@ class SportMonksAdapter(BaseFootballProvider):
             "goalsFor": goals_for,
             "goalsAgainst": goals_against,
             "goalDifference": (
-                goals_for - goals_against
-                if goals_for is not None and goals_against is not None
-                else None
+                goals_for - goals_against if goals_for is not None and goals_against is not None else None
             ),
             "points": payload.get("points"),
             "form": None,

@@ -115,7 +115,7 @@ def test_match_lifecycle_runs_from_fixture_to_replay_archive_and_notifications(
     assert updated_state.completed_fixture_count == 1
 
     home_user = participants[fixture.home_club_id]
-    notification_response = client.get("/notifications/me?limit=20", headers=home_user.headers)
+    notification_response = client.get("/api/notifications/me?limit=20", headers=home_user.headers)
     assert notification_response.status_code == 200
     template_keys = {item["template_key"] for item in notification_response.json()}
     assert "match_starts_10m" in template_keys

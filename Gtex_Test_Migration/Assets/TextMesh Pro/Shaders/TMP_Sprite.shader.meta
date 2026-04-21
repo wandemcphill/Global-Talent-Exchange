@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: cf81c85f95fe47e1a27f6ae460cf182c
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/TextMesh Pro/Shaders/TMP_Sprite.shader
+  uploadId: 597280

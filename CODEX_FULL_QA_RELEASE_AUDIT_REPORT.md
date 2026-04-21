@@ -6,6 +6,30 @@ This pass covered backend validation, migration integrity, route inventory, admi
 
 The release is still **not ready** for final sign-off. Two blockers remain. First, the audit environment does not have `flutter` or `dart`, so the actual Flutter app could not be analyzed, tested, built, or clicked through interactively. Second, the live canonical wallet UI still does not expose an end-user withdrawal request flow even though the backend withdrawal controls and request endpoints are implemented and tested.
 
+### 2026-04-19 follow-up
+
+The app-level backend harness has since been hardened and is now green in the current checkout:
+
+- `python -m pytest backend/tests/app/test_main.py backend/tests/app/test_module_registration_openapi.py backend/tests/app/test_module_registration_routes.py backend/tests/app/test_module_registration_hydration.py -q`
+  - Result: `496 passed in 353.35s`
+- `python -m pytest backend/tests/app -q --collect-only`
+  - Result: `557 tests collected in 71.91s`
+
+The main fixes behind that follow-up were:
+
+- split the old mounted-app contract monolith into dedicated OpenAPI, route, and hydration suites
+- move the mounted-app runtime to a shared migrated SQLite harness
+- reuse module-scoped app/client fixtures for route probes
+- disable distributed rate limiting inside the contract harness so route checks do not degrade into `429` noise
+- remove unnecessary lifespan startup from pure OpenAPI snapshot tests
+- fix lazy-import fallout in `backend/tests/app/test_main.py`
+
+The app-level harness was then optimized further by introducing a session-scoped migrated SQLite template database and copying that template into per-test databases instead of replaying the full migration chain repeatedly. On the current workstation that reduced:
+
+- `backend/tests/app/test_main.py` from roughly `21m` to roughly `5m38s`
+- the split mounted-app contract suite from roughly `15m` to roughly `4m51s`
+- the combined app-level backend run to `496 passed in 666.84s`
+
 ## 2. Project boot paths discovered
 
 - Backend app entry: `backend/app/main.py` -> `create_app()`
@@ -156,8 +180,10 @@ The release is still **not ready** for final sign-off. Two blockers remain. Firs
 - `backend/tests/app/test_main.py`
   - Removed expectations for the duplicate `club_reputation` and `dynasty` modules
 
-- `backend/tests/app/test_module_registration.py`
-  - Updated expected module registration set to `canonical_clubs`
+- `backend/tests/app/test_module_registration_openapi.py`
+- `backend/tests/app/test_module_registration_routes.py`
+- `backend/tests/app/test_module_registration_hydration.py`
+  - Updated expected module registration set to `canonical_clubs` and split the mounted-app contract suite by concern
 
 - `backend/tests/players/test_player_lifecycle.py`
   - Stabilized future-transfer assertions
@@ -399,7 +425,9 @@ Reason: backend is in good shape, but frontend release validation could not be e
 - `backend/app/match_engine/services/team_factory.py`
 - `backend/app/services/player_lifecycle_service.py`
 - `backend/tests/app/test_main.py`
-- `backend/tests/app/test_module_registration.py`
+- `backend/tests/app/test_module_registration_openapi.py`
+- `backend/tests/app/test_module_registration_routes.py`
+- `backend/tests/app/test_module_registration_hydration.py`
 - `backend/tests/app/test_api_contracts.py`
 - `backend/tests/players/test_player_lifecycle.py`
 - `backend/tests/smoke/test_demo_smoke.py`

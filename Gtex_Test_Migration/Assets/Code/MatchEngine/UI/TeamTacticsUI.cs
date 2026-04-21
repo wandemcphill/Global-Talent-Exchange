@@ -1,4 +1,5 @@
 ﻿using FStudio.Events;
+using FStudio.GTEX;
 using FStudio.MatchEngine.Events;
 using FStudio.UI;
 using UnityEngine;
@@ -33,8 +34,13 @@ namespace FStudio.MatchEngine.UI {
             Disappear();
         }
 
+        private static bool IsExternallyDrivenMatchActive() {
+            return Object.FindFirstObjectByType<GtexMatchRuntime>() != null ||
+                (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackEnabled);
+        }
+
         protected override void OnEventCalled(MatchInitializationCompletedEvent eventObject) {
-            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackEnabled) {
+            if (IsExternallyDrivenMatchActive()) {
                 Disappear();
                 return;
             }

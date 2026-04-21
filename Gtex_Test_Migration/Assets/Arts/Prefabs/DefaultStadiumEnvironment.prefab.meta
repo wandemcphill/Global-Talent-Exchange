@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: f7f98c01c925be84b8a2643c0d87f14b
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/Prefabs/DefaultStadiumEnvironment.prefab
+  uploadId: 597280

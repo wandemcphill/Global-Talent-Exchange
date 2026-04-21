@@ -9,6 +9,7 @@ import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/services/match_3d_bridge.dart';
+import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 import 'package:gte_frontend/widgets/match_3d/native_match_3d_surface.dart';
@@ -32,6 +33,8 @@ void main() {
               frame: viewState.firstFrame,
               activeEvent: viewState.events.first,
               bridge: Match3DBridge(backend: backend),
+              androidLiveBootstrapProvisioner:
+                  const _SuccessfulBootstrapProvisioner(),
             ),
           ),
         ),
@@ -76,6 +79,8 @@ void main() {
               frame: viewState.firstFrame,
               activeEvent: viewState.events.first,
               bridge: Match3DBridge(backend: backend),
+              androidLiveBootstrapProvisioner:
+                  const _SuccessfulBootstrapProvisioner(),
             ),
           ),
         ),
@@ -114,6 +119,8 @@ void main() {
               frame: viewState.firstFrame,
               activeEvent: viewState.events.first,
               bridge: Match3DBridge(backend: backend),
+              androidLiveBootstrapProvisioner:
+                  const _SuccessfulBootstrapProvisioner(),
             ),
           ),
         ),
@@ -128,6 +135,93 @@ void main() {
       expect(
         backend.openedSessionIds.single,
         'native_match_3d:${viewState.matchId}',
+      );
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.android,
+    }),
+  );
+
+  testWidgets(
+    'native surface mounts AndroidView when Unity reports the embedded native view type',
+    (WidgetTester tester) async {
+      final MatchViewState viewState = await _loadFallbackState(
+        _buildCompetition(id: 'native-match-3d-unity-embedded'),
+      );
+      final _FakeMatch3dBridgeBackend backend = _FakeMatch3dBridgeBackend(
+        available: true,
+        platform: 'unity',
+        runtime: 'unity_match_3d',
+        viewType: 'match_3d/native_view',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: NativeMatch3dSurface(
+              viewState: viewState,
+              frame: viewState.firstFrame,
+              activeEvent: viewState.events.first,
+              bridge: Match3DBridge(backend: backend),
+              androidLiveBootstrapProvisioner:
+                  const _SuccessfulBootstrapProvisioner(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(AndroidView), findsOneWidget);
+      expect(find.byType(Gtex3dScene), findsNothing);
+      expect(find.text('Opening Unity match engine'), findsNothing);
+      expect(
+        backend.openedSessionIds.single,
+        'native_match_3d:${viewState.matchId}',
+      );
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.android,
+    }),
+  );
+
+  testWidgets(
+    'native surface falls back to Flutter 3D when Unity bootstrap staging fails',
+    (WidgetTester tester) async {
+      final MatchViewState viewState = await _loadFallbackState(
+        _buildCompetition(id: 'native-match-3d-bootstrap-failure'),
+      );
+      final _FakeMatch3dBridgeBackend backend = _FakeMatch3dBridgeBackend(
+        available: true,
+        platform: 'unity',
+        runtime: 'unity_match_3d',
+        viewType: 'match_3d/native_view',
+      );
+      String? reportedStatus;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: NativeMatch3dSurface(
+              viewState: viewState,
+              frame: viewState.firstFrame,
+              activeEvent: viewState.events.first,
+              bridge: Match3DBridge(backend: backend),
+              androidLiveBootstrapProvisioner:
+                  const _FailingBootstrapProvisioner(),
+              onRuntimeStatusMessageChanged: (String? message) {
+                reportedStatus = message;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(Gtex3dScene), findsOneWidget);
+      expect(find.byType(AndroidView), findsNothing);
+      expect(
+        reportedStatus,
+        'Unity live bootstrap could not be staged on Android; Flutter 3D fallback active.',
       );
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
@@ -314,6 +408,17 @@ class _FakeMatch3dBridgeBackend
   }
 
   @override
+  Future<Map<String, dynamic>> stageLiveBootstrap(
+    Map<String, Object?> request,
+  ) async {
+    return <String, dynamic>{
+      'staged': true,
+      'bootstrapPath': '/android/files/tmp/gtex-live-bootstrap.json',
+      'matchId': request['matchId'] as String? ?? '',
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>> openSession(Map<String, Object?> request) async {
     final String sessionId = request['sessionId'] as String? ?? '';
     openedSessionIds.add(sessionId);
@@ -447,6 +552,37 @@ class _FakeMatch3dBridgeBackend
       'clockMinute': _sessionState.clockMinute,
       ...extra,
     };
+  }
+}
+
+class _FailingBootstrapProvisioner
+    implements Match3dAndroidLiveBootstrapProvisioner {
+  const _FailingBootstrapProvisioner();
+
+  @override
+  Future<Match3dAndroidLiveBootstrapResult> provision({
+    required String matchId,
+  }) async {
+    return const Match3dAndroidLiveBootstrapResult.unstaged(
+      message:
+          'Unity live bootstrap could not be staged on Android; Flutter 3D fallback active.',
+    );
+  }
+}
+
+class _SuccessfulBootstrapProvisioner
+    implements Match3dAndroidLiveBootstrapProvisioner {
+  const _SuccessfulBootstrapProvisioner();
+
+  @override
+  Future<Match3dAndroidLiveBootstrapResult> provision({
+    required String matchId,
+  }) async {
+    return Match3dAndroidLiveBootstrapResult(
+      staged: true,
+      bootstrapPath: '/android/files/tmp/gtex-live-bootstrap.json',
+      matchId: matchId,
+    );
   }
 }
 

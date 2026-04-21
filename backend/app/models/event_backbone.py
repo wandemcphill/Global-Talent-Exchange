@@ -35,7 +35,7 @@ class CompetitionQueueRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class EventOutbox(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "event_outbox"
 
-    event_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    event_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
     event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     aggregate_type: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     aggregate_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)

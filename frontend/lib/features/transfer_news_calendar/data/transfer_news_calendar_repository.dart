@@ -35,9 +35,7 @@ abstract class TransferNewsCalendarRepository {
 
   Future<List<EventEffectRule>> listEventRules(FootballEventRulesQuery query);
 
-  Future<EventEffectRule> upsertEventRule(
-    EventEffectRuleUpsertRequest request,
-  );
+  Future<EventEffectRule> upsertEventRule(EventEffectRuleUpsertRequest request);
 
   Future<List<EventEffectRule>> toggleEventCategory(
     EventCategoryToggleRequest request,
@@ -80,9 +78,8 @@ abstract class TransferNewsCalendarRepository {
 
 class TransferNewsCalendarApiRepository
     implements TransferNewsCalendarRepository {
-  TransferNewsCalendarApiRepository({
-    required GteAuthedApi client,
-  }) : _client = client;
+  TransferNewsCalendarApiRepository({required GteAuthedApi client})
+    : _client = client;
 
   factory TransferNewsCalendarApiRepository.standard({
     required String baseUrl,
@@ -103,8 +100,10 @@ class TransferNewsCalendarApiRepository
   @override
   Future<PlayerRealWorldImpact> fetchPlayerImpact(String playerId) async {
     return PlayerRealWorldImpact.fromJson(
-      await _client.getMap('/football-events/players/$playerId/impact',
-          auth: false),
+      await _client.getMap(
+        '/football-events/players/$playerId/impact',
+        auth: false,
+      ),
     );
   }
 
@@ -249,7 +248,7 @@ class TransferNewsCalendarApiRepository
   @override
   Future<CalendarDashboard> fetchCalendarDashboard() async {
     return CalendarDashboard.fromJson(
-      await _client.getMap('/calendar-engine/dashboard', auth: false),
+      await _client.getMap('/api/calendar-engine/dashboard', auth: false),
     );
   }
 
@@ -259,7 +258,7 @@ class TransferNewsCalendarApiRepository
   ) async {
     return parseList(
       await _client.getList(
-        '/calendar-engine/seasons',
+        '/api/calendar-engine/seasons',
         query: query.toQuery(),
         auth: false,
       ),
@@ -274,7 +273,7 @@ class TransferNewsCalendarApiRepository
   ) async {
     return parseList(
       await _client.getList(
-        '/calendar-engine/events',
+        '/api/calendar-engine/events',
         query: query.toQuery(),
         auth: false,
       ),
@@ -287,7 +286,7 @@ class TransferNewsCalendarApiRepository
   Future<PauseStatusViewModel> fetchPauseStatus(PauseStatusQuery query) async {
     return PauseStatusViewModel.fromJson(
       await _client.getMap(
-        '/calendar-engine/pause-status',
+        '/api/calendar-engine/pause-status',
         query: query.toQuery(),
         auth: false,
       ),
@@ -297,7 +296,7 @@ class TransferNewsCalendarApiRepository
   @override
   Future<List<CompetitionLifecycleRunViewModel>> listLifecycleRuns() async {
     return parseList(
-      await _client.getList('/calendar-engine/lifecycle-runs', auth: false),
+      await _client.getList('/api/calendar-engine/lifecycle-runs', auth: false),
       CompetitionLifecycleRunViewModel.fromJson,
       label: 'calendar lifecycle runs',
     );
@@ -310,7 +309,7 @@ class TransferNewsCalendarApiRepository
     return CalendarSeasonViewModel.fromJson(
       await _client.request(
         'POST',
-        '/admin/calendar-engine/seasons',
+        '/api/admin/calendar-engine/seasons',
         body: request.toJson(),
       ),
     );
@@ -323,7 +322,7 @@ class TransferNewsCalendarApiRepository
     return CalendarEventViewModel.fromJson(
       await _client.request(
         'POST',
-        '/admin/calendar-engine/events',
+        '/api/admin/calendar-engine/events',
         body: request.toJson(),
       ),
     );
@@ -337,7 +336,7 @@ class TransferNewsCalendarApiRepository
     return CompetitionLifecycleRunViewModel.fromJson(
       await _client.request(
         'POST',
-        '/admin/calendar-engine/hosted-competitions/$competitionId/launch',
+        '/api/admin/calendar-engine/hosted-competitions/$competitionId/launch',
         body: request.toJson(),
       ),
     );
@@ -351,7 +350,7 @@ class TransferNewsCalendarApiRepository
     return CompetitionLifecycleRunViewModel.fromJson(
       await _client.request(
         'POST',
-        '/admin/calendar-engine/national-competitions/$competitionId/launch',
+        '/api/admin/calendar-engine/national-competitions/$competitionId/launch',
         body: request.toJson(),
       ),
     );

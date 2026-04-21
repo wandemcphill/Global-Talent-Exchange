@@ -211,6 +211,17 @@ class _ViewerNativeBridgeBackend
   }
 
   @override
+  Future<Map<String, dynamic>> stageLiveBootstrap(
+    Map<String, Object?> request,
+  ) async {
+    return <String, dynamic>{
+      'staged': true,
+      'bootstrapPath': '/android/files/tmp/gtex-live-bootstrap.json',
+      'matchId': request['matchId'] as String? ?? '',
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>> openSession(Map<String, Object?> request) async {
     _sessionState = Match3dNativeSessionState(
       sessionId: request['sessionId'] as String? ?? '',

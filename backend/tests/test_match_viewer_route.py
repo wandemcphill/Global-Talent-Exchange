@@ -15,6 +15,7 @@ from app.fairness.fairness_guard import FairnessGuard
 from app.fairness.match_integrity_service import MatchIntegrityService
 from app.live_matches.service import ensure_live_match_hub
 from app.models.base import Base
+from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.replay_archive.persistence import InMemoryReplayArchiveRepository
 from app.replay_archive.policy import SpectatorVisibilityPolicyService
@@ -38,7 +39,10 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[CompetitionMatch.__table__])
+    Base.metadata.create_all(
+        engine,
+        tables=[UserCompetition.__table__, CompetitionMatch.__table__],
+    )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     def override_session():
@@ -52,6 +56,16 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
 
 def _insert_match(session_factory: sessionmaker[Session], match_id: str, metadata_json: dict[str, object]) -> None:
     with session_factory() as session:
+        session.add(
+            UserCompetition(
+                id="competition-1",
+                host_user_id="host-user-1",
+                name="Creator Match Night",
+                format="league",
+                currency="coin",
+                metadata_json={},
+            )
+        )
         session.add(
             CompetitionMatch(
                 id=match_id,
@@ -98,6 +112,29 @@ def test_match_viewer_route_scales_stored_payload_by_mode() -> None:
     assert "has_possession" in first_player
     assert "facing" in first_player
     assert "velocity" in first_player
+
+
+def test_match_viewer_route_exposes_match_gift_target_metadata() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=41))
+    base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
+    _insert_match(
+        session_factory,
+        replay_payload.match_id,
+        metadata_json={
+            "match_viewer": base_view.model_dump(mode="json"),
+            "creator_name": "Studio Kai",
+        },
+    )
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+
+    assert response.status_code == 200
+    monetization = response.json()["monetization"]
+    assert monetization["metadata"]["gift_recipient_user_id"] == "host-user-1"
+    assert monetization["metadata"]["gift_recipient_label"] == "Studio Kai"
+    assert monetization["metadata"]["gift_source_scope"] == "user_hosted"
 
 
 def test_match_viewer_route_scales_archive_fallback_by_mode() -> None:

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 4b8262c90d685664bad3b1e9054b490f
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/UI/MatchThemes/CompetitionMatchThemes/TownCup.prefab
+  uploadId: 597280

@@ -19,16 +19,25 @@ namespace FStudio.UI.Events {
         public PlayerEntry Member { get; set; }
 
         public void MarkAsActive() {
-            TargetElement.Appear();
+            if (TargetElement != null) {
+                TargetElement.Appear();
+            }
         }
 
         public void MarkAsDeactive() {
-            TargetElement.Disappear();
+            if (TargetElement != null) {
+                TargetElement.Disappear();
+            }
         }
 
         public void SetMinute (int minute) {
-            minuteText.text = minute + "\'";
-            scorerNameText.text = Member.Name;
+            if (minuteText != null) {
+                minuteText.text = minute + "\'";
+            }
+
+            if (scorerNameText != null) {
+                scorerNameText.text = Member != null ? Member.Name : string.Empty;
+            }
         }
 
 #pragma warning disable CS1998

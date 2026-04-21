@@ -58,7 +58,7 @@ worldAggregateProvider = FutureProvider<WorldAggregateData>((Ref ref) async {
     auth: false,
   );
   final List<dynamic> federationsPayload = await api.getList(
-    '/federations',
+    '/api/federations',
     auth: false,
   );
   final JsonMap trackingPayload = await api.getMap(

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class PolicyDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "policy_documents"
 
-    document_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    document_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     is_mandatory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")

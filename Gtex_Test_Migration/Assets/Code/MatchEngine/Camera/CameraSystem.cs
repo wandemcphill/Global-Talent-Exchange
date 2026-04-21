@@ -56,12 +56,12 @@ namespace FStudio.MatchEngine.Cameras {
             ActiveCameraChanged();
         }
 
-        public async Task SwitchCamera(string cameraType) {
+        public async Task SwitchCamera(string cameraType, bool instant = true) {
             Debug.Log($"[CameraSystem] Switch Camera: {cameraType}");
             CurrentCamera = await matchCameras.FindAsync(cameraType);
             CurrentCameraType = cameraType;
             isInTransition = false;
-            instantTransitionInNextFrame = true; 
+            instantTransitionInNextFrame = instant;
 
             ActiveCameraChanged();
         }
@@ -73,11 +73,11 @@ namespace FStudio.MatchEngine.Cameras {
         /// <summary>
         /// Make the transition instant.
         /// </summary>
-        public void FocusToBall () {
+        public void FocusToBall (bool instant = true) {
             SetTarget(Ball.Current.transform);
             TargetPosition = null;
 
-            instantTransitionInNextFrame = true;
+            instantTransitionInNextFrame = instant;
             isInTransition = false;
         }
 
@@ -124,10 +124,14 @@ namespace FStudio.MatchEngine.Cameras {
                     transform.rotation = rotation;
                     camera.fieldOfView = zoom / (ZoomMultiplier + 1);
                 } else {
-                    var positionDifference = (Vector3.Distance(transform.position, position)+1) * transitionValue;
-                    var rotationDifference = (1+ Quaternion.Angle(transform.rotation, rotation)) * transitionValue;
-                    transform.position = Vector3.Lerp(transform.position, position, dT * CameraPositionSpeed * positionDifference * positionDifferencePower);
-                    transform.rotation = Quaternion.Lerp(transform.rotation, rotation, dT * CameraRotationSpeed * rotationDifference * rotationDifferencePower);
+                    var rawPositionDifference = Vector3.Distance(transform.position, position) + 1f;
+                    var rawRotationDifference = Quaternion.Angle(transform.rotation, rotation) + 1f;
+                    var positionDifference = Mathf.Clamp(rawPositionDifference, 1f, 8f) * transitionValue;
+                    var rotationDifference = Mathf.Clamp(rawRotationDifference, 1f, 24f) * transitionValue;
+                    var positionLerp = Mathf.Clamp01(dT * CameraPositionSpeed * positionDifference * positionDifferencePower);
+                    var rotationLerp = Mathf.Clamp01(dT * CameraRotationSpeed * rotationDifference * rotationDifferencePower);
+                    transform.position = Vector3.Lerp(transform.position, position, positionLerp);
+                    transform.rotation = Quaternion.Lerp(transform.rotation, rotation, rotationLerp);
 
                     camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, zoom / (ZoomMultiplier + 1), dT * CameraZoomSpeed);
                 }

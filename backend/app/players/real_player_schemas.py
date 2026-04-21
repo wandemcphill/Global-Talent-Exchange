@@ -31,6 +31,7 @@ class RealPlayerUniverseListItemView(BaseModel):
     average_rating: float | None
     current_market_reference_value: float | None
     market_reference_currency: str | None
+    image_url: str | None
     source_name: str
     source_last_refreshed_at: datetime | None
     is_verified_real_player: bool
@@ -97,6 +98,7 @@ class RealPlayerUniverseDetailView(BaseModel):
     injury_status: str | None
     real_player_tier: str | None
     identity_confidence_score: float | None
+    image_url: str | None
     source_name: str
     source_player_key: str
     source_last_refreshed_at: datetime | None
@@ -263,12 +265,16 @@ class RealPlayerMatchRequest(BaseModel):
                 "height_cm": {
                     "min": filters.get("min_height") or filters.get("min_height_cm"),
                 },
-                "preferred_foot": [filters.get("preferred_foot") or filters.get("dominant_foot")]
-                if (filters.get("preferred_foot") or filters.get("dominant_foot"))
-                else [],
-                "countries": [filters.get("country") or filters.get("nationality")]
-                if (filters.get("country") or filters.get("nationality"))
-                else [],
+                "preferred_foot": (
+                    [filters.get("preferred_foot") or filters.get("dominant_foot")]
+                    if (filters.get("preferred_foot") or filters.get("dominant_foot"))
+                    else []
+                ),
+                "countries": (
+                    [filters.get("country") or filters.get("nationality")]
+                    if (filters.get("country") or filters.get("nationality"))
+                    else []
+                ),
                 "availability": [filters.get("availability")] if filters.get("availability") else [],
             },
             "pagination": {

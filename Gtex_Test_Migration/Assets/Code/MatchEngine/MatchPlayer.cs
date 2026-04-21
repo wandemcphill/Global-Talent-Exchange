@@ -44,27 +44,33 @@ namespace FStudio.MatchEngine {
         public int ActualJump { get; private set; }
 
         private void Setup () {
-            ActualStrength = ModifySkill(Player.strength, PlayerSkillCurves.Current.StrengthCurve);
+            var skillCurves = PlayerSkillCurves.Current;
+            var ballKeepingCurve =
+                skillCurves.BallKeepingCurve != null && skillCurves.BallKeepingCurve.length > 0
+                    ? skillCurves.BallKeepingCurve
+                    : skillCurves.TacklingCurve;
 
-            ActualAcceleration = ModifySkill(Player.acceleration, PlayerSkillCurves.Current.SpeedCurve);
-            ActualTopSpeed = ModifySkill(Player.topSpeed, PlayerSkillCurves.Current.SpeedCurve);
-            ActualDribbleSpeed = Mathf.RoundToInt(ModifySkill(Player.dribbleSpeed, PlayerSkillCurves.Current.DribbleSpeedCurve));
-            ActualPassing = Mathf.RoundToInt(ModifySkill(Player.passing, PlayerSkillCurves.Current.PassingCurve));
-            ActualLongBall = Mathf.RoundToInt(ModifySkill(Player.longBall, PlayerSkillCurves.Current.PassingCurve));
-            ActualAgility = Mathf.RoundToInt(ModifySkill(Player.agility, PlayerSkillCurves.Current.AgilityCurve));
-            ActualShooting = Mathf.RoundToInt(ModifySkill(Player.shooting, PlayerSkillCurves.Current.ShootingCurve));
-            ActualShootPower = ModifySkill(Player.shooting, PlayerSkillCurves.Current.ShootingCurve);
+            ActualStrength = ModifySkill(Player.strength, skillCurves.StrengthCurve);
+
+            ActualAcceleration = ModifySkill(Player.acceleration, skillCurves.SpeedCurve);
+            ActualTopSpeed = ModifySkill(Player.topSpeed, skillCurves.SpeedCurve);
+            ActualDribbleSpeed = Mathf.RoundToInt(ModifySkill(Player.dribbleSpeed, skillCurves.DribbleSpeedCurve));
+            ActualPassing = Mathf.RoundToInt(ModifySkill(Player.passing, skillCurves.PassingCurve));
+            ActualLongBall = Mathf.RoundToInt(ModifySkill(Player.longBall, skillCurves.PassingCurve));
+            ActualAgility = Mathf.RoundToInt(ModifySkill(Player.agility, skillCurves.AgilityCurve));
+            ActualShooting = Mathf.RoundToInt(ModifySkill(Player.shooting, skillCurves.ShootingCurve));
+            ActualShootPower = ModifySkill(Player.shootPower, skillCurves.ShootingCurve);
 
             /// chemistry and wrong positioning affects positioning skill.
-            ActualPositioning = Mathf.RoundToInt (ModifySkill(Player.positioning, PlayerSkillCurves.Current.PositioningCurve));
-            ActualReaction = Mathf.RoundToInt (ModifySkill(Player.positioning, PlayerSkillCurves.Current.ReactionCurve));
+            ActualPositioning = Mathf.RoundToInt (ModifySkill(Player.positioning, skillCurves.PositioningCurve));
+            ActualReaction = Mathf.RoundToInt (ModifySkill(Player.reaction, skillCurves.ReactionCurve));
             ///
 
-            ActualBallControl = ModifySkill(Player.ballControl, PlayerSkillCurves.Current.BallControlCurve);
-            ActualTackling = Mathf.RoundToInt(ModifySkill(Player.tackling, PlayerSkillCurves.Current.TacklingCurve));
-            ActualBallKeeping = ModifySkill(Player.ballKeeping, PlayerSkillCurves.Current.TacklingCurve);
+            ActualBallControl = ModifySkill(Player.ballControl, skillCurves.BallControlCurve);
+            ActualTackling = Mathf.RoundToInt(ModifySkill(Player.tackling, skillCurves.TacklingCurve));
+            ActualBallKeeping = ModifySkill(Player.ballKeeping, ballKeepingCurve);
 
-            ActualJump = ModifySkill(Player.jump, PlayerSkillCurves.Current.JumpingCurve);
+            ActualJump = ModifySkill(Player.jump, skillCurves.JumpingCurve);
         }
 
         #region GET FUNCTIONS with MODIFIERS, for in game match.

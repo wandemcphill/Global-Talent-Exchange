@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: b7e0ca5ac99ac6542a5127892d5c87fe
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/UI/MatchCompletedPanel/Statistics/matchHeaderHome.prefab
+  uploadId: 597280

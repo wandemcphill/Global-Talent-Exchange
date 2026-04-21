@@ -1,6 +1,7 @@
 package com.gtex.exchange
 
 import com.gtex.exchange.match3d.UnityMatch3dRuntime
+import com.gtex.exchange.match3d.UnityMatch3dPlatformViewFactory
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -11,6 +12,16 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         UnityMatch3dRuntime.attachHostActivity(this)
+        flutterEngine
+            .platformViewsController
+            .registry
+            .registerViewFactory(
+                UnityMatch3dPlatformViewFactory.viewType,
+                UnityMatch3dPlatformViewFactory(
+                    this,
+                    flutterEngine.dartExecutor.binaryMessenger,
+                ),
+            )
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -19,6 +30,21 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "ping",
                 "runtimeInfo" -> result.success(UnityMatch3dRuntime.runtimeInfoMap())
+
+                "stageLiveBootstrap" -> {
+                    val payload = call.arguments as? Map<*, *>
+                    if (payload == null) {
+                        result.error(
+                            "invalid_args",
+                            "Expected a map payload for match_3d.stageLiveBootstrap.",
+                            null,
+                        )
+                        return@setMethodCallHandler
+                    }
+                    result.success(
+                        UnityMatch3dRuntime.stageLiveBootstrap(payload.toStringKeyedMap()),
+                    )
+                }
 
                 "openSession" -> {
                     val payload = call.arguments as? Map<*, *>
@@ -77,6 +103,17 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         UnityMatch3dRuntime.attachHostActivity(this)
+        UnityMatch3dRuntime.onHostResumed()
+    }
+
+    override fun onPause() {
+        UnityMatch3dRuntime.onHostPaused()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        UnityMatch3dRuntime.onHostDestroyed(this)
+        super.onDestroy()
     }
 }
 

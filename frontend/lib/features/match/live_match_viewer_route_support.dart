@@ -64,12 +64,10 @@ class ApiLiveMatchViewerRepository implements LiveMatchViewerRepository {
   Future<LiveMatchViewerBootstrap> resolveBootstrap(String matchKey) async {
     final JsonMap viewer = await _fetchFirstMap(api, <String>[
       '/api/match-viewer/$matchKey',
-      '/match-viewer/$matchKey',
     ], auth: false);
     final MatchViewState initialViewState = MatchViewState.fromJson(
       await _fetchFirstMap(api, <String>[
         '/api/match-viewer/$matchKey/session',
-        '/match-viewer/$matchKey/session',
       ], auth: false),
     );
     if (isAuthenticated) {
@@ -94,10 +92,7 @@ class ApiLiveMatchViewerRepository implements LiveMatchViewerRepository {
   }) async {
     final JsonMap session = await _fetchFirstMap(
       api,
-      <String>[
-        '/api/match-viewer/$matchKey/session',
-        '/match-viewer/$matchKey/session',
-      ],
+      <String>['/api/match-viewer/$matchKey/session'],
       auth: false,
       query: <String, Object?>{
         if (continuationToken != null && continuationToken.isNotEmpty)

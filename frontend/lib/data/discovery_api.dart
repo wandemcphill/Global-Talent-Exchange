@@ -15,12 +15,14 @@ class DiscoveryApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
+    final GteTransport resolvedTransport = transport ?? GteHttpTransport();
     return DiscoveryApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: resolvedTransport,
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -46,7 +48,7 @@ class DiscoveryApi {
   Future<DiscoveryHome> fetchHome() {
     return client.withFallback<DiscoveryHome>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/discovery/home',
+        '/api/discovery/home',
       );
       return DiscoveryHome.fromJson(payload);
     }, fixtures.home);
@@ -59,7 +61,7 @@ class DiscoveryApi {
   }) {
     return client.withFallback<List<DiscoveryItem>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/discovery/search',
+        '/api/discovery/search',
         query: <String, Object?>{
           'q': query,
           'entity_scope': entityScope,
@@ -73,7 +75,7 @@ class DiscoveryApi {
   Future<List<SavedSearch>> listSavedSearches() {
     return client.withFallback<List<SavedSearch>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/discovery/saved-searches',
+        '/api/discovery/saved-searches',
       );
       return payload.map(SavedSearch.fromJson).toList(growable: false);
     }, fixtures.savedSearches);
@@ -87,7 +89,7 @@ class DiscoveryApi {
     return client.withFallback<SavedSearch>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/discovery/saved-searches',
+        '/api/discovery/saved-searches',
         body: <String, Object?>{
           'query': query,
           'entity_scope': entityScope,
@@ -100,14 +102,14 @@ class DiscoveryApi {
 
   Future<void> deleteSavedSearch(String searchId) {
     return client.withFallback<void>(() async {
-      await client.request('DELETE', '/discovery/saved-searches/$searchId');
+      await client.request('DELETE', '/api/discovery/saved-searches/$searchId');
     }, () async => fixtures.deleteSavedSearch(searchId));
   }
 
   Future<List<FeaturedRail>> listFeaturedRails() {
     return client.withFallback<List<FeaturedRail>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/admin/discovery/featured-rails',
+        '/api/admin/discovery/featured-rails',
       );
       return payload.map(FeaturedRail.fromJson).toList(growable: false);
     }, fixtures.featuredRails);
@@ -126,7 +128,7 @@ class DiscoveryApi {
     return client.withFallback<FeaturedRail>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/admin/discovery/featured-rails',
+        '/api/admin/discovery/featured-rails',
         body: <String, Object?>{
           'rail_key': railKey,
           'title': title,
@@ -226,7 +228,7 @@ class _DiscoveryFixtures {
           'minute': 54,
           'viewer_count': 2300,
           'featured': true,
-          'watch_route': '/matches/fixture-1/watch',
+          'watch_route': '/matches/viewer/fixture-1',
         },
       ),
     ];

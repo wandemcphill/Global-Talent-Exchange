@@ -359,38 +359,40 @@ class _FeatureFixtureTransport implements GteTransport {
     final String method = request.method.toUpperCase();
     final String path = _normalizePath(request.uri.path);
 
-    if (method == 'GET' && path == '/economy/gift-catalog') {
+    if (method == 'GET' && path == '/api/economy/gift-catalog') {
       return _ok(_giftCatalog);
     }
-    if (method == 'POST' && path == '/admin/economy/gift-catalog') {
+    if (method == 'POST' && path == '/api/admin/economy/gift-catalog') {
       return _ok(_upsertByKey(_giftCatalog, _requestMap(request.body), 'key'));
     }
-    if (method == 'GET' && path == '/admin/economy/revenue-share-rules') {
+    if (method == 'GET' && path == '/api/admin/economy/revenue-share-rules') {
       return _ok(_filterActive(_revenueRules, request.uri, fallback: true));
     }
-    if (method == 'POST' && path == '/admin/economy/revenue-share-rules') {
+    if (method == 'POST' && path == '/api/admin/economy/revenue-share-rules') {
       return _ok(
         _upsertByKey(_revenueRules, _requestMap(request.body), 'rule_key'),
       );
     }
-    if (method == 'GET' && path == '/admin/economy/gift-combo-rules') {
+    if (method == 'GET' && path == '/api/admin/economy/gift-combo-rules') {
       return _ok(_filterActive(_comboRules, request.uri, fallback: true));
     }
-    if (method == 'POST' && path == '/admin/economy/gift-combo-rules') {
+    if (method == 'POST' && path == '/api/admin/economy/gift-combo-rules') {
       return _ok(
         _upsertByKey(_comboRules, _requestMap(request.body), 'rule_key'),
       );
     }
-    if (method == 'GET' && path == '/admin/economy/burn-events') {
+    if (method == 'GET' && path == '/api/admin/economy/burn-events') {
       return _ok(_limitList(_burnEvents, request.uri));
     }
-    if (method == 'GET' && path == '/world/cultures') {
+    if (method == 'GET' && path == '/api/world/cultures') {
       return _ok(
         _limitList(_filterActive(_cultures, request.uri), request.uri),
       );
     }
-    if (method == 'PUT' && path.startsWith('/admin/world/cultures/')) {
-      final String cultureKey = path.substring('/admin/world/cultures/'.length);
+    if (method == 'PUT' && path.startsWith('/api/admin/world/cultures/')) {
+      final String cultureKey = path.substring(
+        '/api/admin/world/cultures/'.length,
+      );
       return _ok(
         _upsertByKey(_cultures, <String, Object?>{
           ..._requestMap(request.body),
@@ -399,27 +401,29 @@ class _FeatureFixtureTransport implements GteTransport {
         }, 'culture_key'),
       );
     }
-    if (method == 'GET' && path == '/federations') {
+    if (method == 'GET' && path == '/api/federations') {
       return _ok(_federations);
     }
     if (method == 'POST' &&
-        path.startsWith('/federations/') &&
+        path.startsWith('/api/federations/') &&
         path.endsWith('/memberships')) {
       return _ok(_joinFederation(path, _requestMap(request.body)));
     }
     if (method == 'GET' &&
-        path.startsWith('/world/clubs/') &&
+        path.startsWith('/api/world/clubs/') &&
         path.endsWith('/context')) {
       return _ok(
-        _clubContextFor(_extractScopedId(path, '/world/clubs/', '/context')),
+        _clubContextFor(
+          _extractScopedId(path, '/api/world/clubs/', '/context'),
+        ),
       );
     }
     if (method == 'PUT' &&
-        path.startsWith('/admin/world/clubs/') &&
+        path.startsWith('/api/admin/world/clubs/') &&
         path.endsWith('/context')) {
       final String clubId = _extractScopedId(
         path,
-        '/admin/world/clubs/',
+        '/api/admin/world/clubs/',
         '/context',
       );
       final JsonMap context = <String, Object?>{
@@ -436,22 +440,22 @@ class _FeatureFixtureTransport implements GteTransport {
       return _ok(context);
     }
     if (method == 'GET' &&
-        path.startsWith('/world/competitions/') &&
+        path.startsWith('/api/world/competitions/') &&
         path.endsWith('/context')) {
       return _ok(
         _competitionContextFor(
-          _extractScopedId(path, '/world/competitions/', '/context'),
+          _extractScopedId(path, '/api/world/competitions/', '/context'),
         ),
       );
     }
-    if (method == 'GET' && path == '/world/narratives') {
+    if (method == 'GET' && path == '/api/world/narratives') {
       return _ok(_limitList(_filterNarratives(request.uri), request.uri));
     }
-    if (method == 'GET' && path == '/broadcast/home') {
+    if (method == 'GET' && path == '/api/broadcast/home') {
       return _ok(_broadcastHomePayload());
     }
-    if (method == 'PUT' && path.startsWith('/admin/world/narratives/')) {
-      final String slug = path.substring('/admin/world/narratives/'.length);
+    if (method == 'PUT' && path.startsWith('/api/admin/world/narratives/')) {
+      final String slug = path.substring('/api/admin/world/narratives/'.length);
       final JsonMap requestBody = _requestMap(request.body);
       return _ok(
         _upsertByKey(_narratives, <String, Object?>{
@@ -481,11 +485,13 @@ class _FeatureFixtureTransport implements GteTransport {
   }
 
   String _normalizePath(String path) {
-    final String stripped = path.replaceFirst(RegExp(r'^/api/v1'), '');
-    if (stripped.isEmpty) {
-      return '/';
+    if (path == '/api/v1') {
+      return '/api';
     }
-    return stripped.startsWith('/') ? stripped : '/$stripped';
+    if (path.startsWith('/api/v1/')) {
+      return '/api${path.substring('/api/v1'.length)}';
+    }
+    return path;
   }
 
   JsonMap _requestMap(Object? body) {
@@ -624,7 +630,7 @@ class _FeatureFixtureTransport implements GteTransport {
   JsonMap _joinFederation(String path, JsonMap body) {
     final String federationId = _extractScopedId(
       path,
-      '/federations/',
+      '/api/federations/',
       '/memberships',
     );
     final String clubId = stringValue(body['club_id']);

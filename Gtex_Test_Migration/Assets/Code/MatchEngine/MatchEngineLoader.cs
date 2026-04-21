@@ -131,7 +131,7 @@ namespace FStudio.MatchEngine {
 
             // unload ball & stadium.
             template.ballLoader.UnloadBall();
-            template.stadiumLoader.Unload();
+            await template.stadiumLoader.Unload();
             // 
 
             SnapManager.Clear();

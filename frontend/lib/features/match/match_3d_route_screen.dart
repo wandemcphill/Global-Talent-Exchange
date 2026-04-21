@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_feedback.dart';
+import '../../data/match_gift_api.dart';
 import '../../models/match_view_state.dart';
 import '../../screens/match/gtex_match_3d_screen.dart';
+import '../../services/match_3d_bridge.dart';
+import '../../services/match_3d_live_bootstrap_service.dart';
 import '../../services/match_3d_monetization_service.dart';
 import '../../shared/models/auth_session.dart';
 import '../../shared/models/data_source_status.dart';
@@ -68,6 +71,9 @@ class Match3dRouteScreen extends ConsumerWidget {
         final LiveMatchViewerRepository repository = ref.read(
           liveMatchViewerRepositoryProvider,
         );
+        final MatchGiftClient giftClient = MatchGiftApi(
+          client: ref.watch(authedApiProvider),
+        );
         return MatchRouteCapabilityOverlay(
           capability: MatchViewerCapability.flutter3d,
           child: _QualifiedMatch3dRouteView(
@@ -77,6 +83,7 @@ class Match3dRouteScreen extends ConsumerWidget {
             initialViewState: value.initialViewState,
             entitlement: entitlement,
             repository: repository,
+            giftClient: giftClient,
           ),
         );
       },
@@ -105,7 +112,10 @@ class Match3dRouteScreen extends ConsumerWidget {
   }
 }
 
-bool _canOpen3dRoute(Match3dUserEntitlement entitlement, String resolvedMatchKey) {
+bool _canOpen3dRoute(
+  Match3dUserEntitlement entitlement,
+  String resolvedMatchKey,
+) {
   return entitlement.isPremiumUser ||
       entitlement.premiumCameraAccess ||
       entitlement.fastReplayAccess ||
@@ -113,7 +123,7 @@ bool _canOpen3dRoute(Match3dUserEntitlement entitlement, String resolvedMatchKey
       entitlement.tournamentBoostCompetitionIds.isNotEmpty;
 }
 
-class _QualifiedMatch3dRouteView extends StatefulWidget {
+class _QualifiedMatch3dRouteView extends ConsumerStatefulWidget {
   const _QualifiedMatch3dRouteView({
     super.key,
     required this.matchKey,
@@ -121,6 +131,7 @@ class _QualifiedMatch3dRouteView extends StatefulWidget {
     required this.initialViewState,
     required this.entitlement,
     required this.repository,
+    required this.giftClient,
   });
 
   final String matchKey;
@@ -128,15 +139,22 @@ class _QualifiedMatch3dRouteView extends StatefulWidget {
   final MatchViewState initialViewState;
   final Match3dUserEntitlement entitlement;
   final LiveMatchViewerRepository repository;
+  final MatchGiftClient giftClient;
 
   @override
-  State<_QualifiedMatch3dRouteView> createState() =>
+  ConsumerState<_QualifiedMatch3dRouteView> createState() =>
       _QualifiedMatch3dRouteViewState();
 }
 
 class _QualifiedMatch3dRouteViewState
-    extends State<_QualifiedMatch3dRouteView> {
+    extends ConsumerState<_QualifiedMatch3dRouteView> {
   bool _usedQualifiedInitialState = false;
+  late final Match3DBridge _engineBridge = Match3DBridge();
+  late final Match3dAndroidLiveBootstrapProvisioner
+  _androidLiveBootstrapProvisioner = Match3dAndroidLiveBootstrapService(
+    api: ref.read(authedApiProvider),
+    bridge: _engineBridge,
+  );
 
   @override
   void didUpdateWidget(covariant _QualifiedMatch3dRouteView oldWidget) {
@@ -156,6 +174,9 @@ class _QualifiedMatch3dRouteViewState
       entitlement: widget.entitlement,
       viewStateLoader: _loadInitialViewState,
       continuationLoader: _loadContinuation,
+      giftClient: widget.giftClient,
+      engineBridge: _engineBridge,
+      androidLiveBootstrapProvisioner: _androidLiveBootstrapProvisioner,
     );
   }
 

@@ -15,10 +15,6 @@ from backend.tests.support.secrets import (
     TEST_AUTH_SECRET,
     TEST_PASSWORD,
 )
-from app.core.config import load_settings, reset_settings_cache
-from app.models.user import User
-from app.models.wallet import LedgerUnit
-from app.wallets.service import WalletService
 
 SMOKE_DEMO_PLAYER_COUNT = 12
 DEFAULT_TEST_DATABASE_URL = (
@@ -37,6 +33,8 @@ os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME", "GTEX Test Admin")
 
 @pytest.fixture(scope="module")
 def test_settings(tmp_path_factory: pytest.TempPathFactory):
+    from app.core.config import load_settings, reset_settings_cache
+
     database_path = tmp_path_factory.mktemp("gte-app") / "gte_app.db"
     media_root = tmp_path_factory.mktemp("gte-media")
     database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
@@ -194,6 +192,10 @@ def auth_user_factory(client, app_session_factory):
         user_id = payload["user"]["id"]
 
         if funded_credit is not None or funded_coin is not None:
+            from app.models.user import User
+            from app.models.wallet import LedgerUnit
+            from app.wallets.service import WalletService
+
             wallet_service = WalletService()
             with app_session_factory() as session:
                 user = session.get(User, user_id)

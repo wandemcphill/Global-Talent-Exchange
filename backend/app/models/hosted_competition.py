@@ -62,7 +62,7 @@ class UserHostedCompetition(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     template_id: Mapped[str] = mapped_column(ForeignKey("competition_templates.id", ondelete="RESTRICT"), nullable=False, index=True)
     host_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
-    slug: Mapped[str] = mapped_column(String(180), nullable=False, unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String(180), nullable=False, unique=True)
     description: Mapped[str] = mapped_column(Text, nullable=False, default='')
     status: Mapped[HostedCompetitionStatus] = mapped_column(SqlEnum(HostedCompetitionStatus, name='hostedcompetitionstatus'), nullable=False, default=HostedCompetitionStatus.DRAFT)
     visibility: Mapped[str] = mapped_column(String(24), nullable=False, default='public')

@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import load_settings
 from app.core.database import load_model_modules
-from app.ingestion.models import Club, Competition, Country, Player
+from app.ingestion.models import Club, Competition, Country, PlayerImageMetadata
 from app.ingestion.real_player_bulk_ops_service import RealPlayerBulkImportOpsService
 from app.ingestion.real_player_import_models import (
     RealPlayerImportProcessingState,
@@ -21,7 +21,6 @@ from app.ingestion.real_player_import_models import (
 from app.models.base import Base
 from app.models.real_player_import_batch import RealPlayerImportBatch
 from app.models.real_player_reference_mapping import RealPlayerUnresolvedReference
-
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "real_player_bulk_import_sample.json"
 
@@ -394,11 +393,16 @@ def test_bulk_ops_reporting_counts_stay_consistent(tmp_path: Path) -> None:
             )
         )
 
-        assert report.run.inserted_rows + report.run.updated_rows + report.run.duplicate_skipped_rows == report.run.processed_rows
+        assert (
+            report.run.inserted_rows + report.run.updated_rows + report.run.duplicate_skipped_rows
+            == report.run.processed_rows
+        )
         assert report.run.mapped_rows == report.run.publish_ready_rows + report.run.published_rows
         assert report.run.unresolved_rows == unresolved_total
         assert report.run.failed_rows == failed_total
-        assert report.run.mapped_partial_rows == distribution.get(RealPlayerImportProcessingState.MAPPED_PARTIAL.value, 0)
+        assert report.run.mapped_partial_rows == distribution.get(
+            RealPlayerImportProcessingState.MAPPED_PARTIAL.value, 0
+        )
         assert report.run.mapped_ready_rows == report.run.publish_ready_rows
     finally:
         engine.dispose()
@@ -562,7 +566,12 @@ def test_bulk_ops_repair_mappings_can_auto_create_missing_club_context(tmp_path:
         assert report.run.publish_ready_rows == 4
 
         with session_factory() as session:
-            assert session.scalar(select(func.count()).select_from(Competition).where(Competition.name == "Unknown League")) == 1
+            assert (
+                session.scalar(
+                    select(func.count()).select_from(Competition).where(Competition.name == "Unknown League")
+                )
+                == 1
+            )
     finally:
         engine.dispose()
 
@@ -618,6 +627,8 @@ def test_bulk_ops_can_publish_provider_shaped_staging_rows() -> None:
                         "nationalityCode": "ENG",
                         "country": "England",
                         "height": 0,
+                        "image_path": "https://cdn.sportmonks.com/images/soccer/players/9/37672209.png",
+                        "photo_url": "https://cdn.sportmonks.com/images/soccer/players/9/37672209.png",
                         "provider_player_id": "37672209",
                         "currentClub": {"id": "fulham", "name": "Fulham"},
                         "currentCompetition": {"id": "premier-league", "name": "Premier League"},
@@ -657,6 +668,12 @@ def test_bulk_ops_can_publish_provider_shaped_staging_rows() -> None:
         assert report.run.published_rows == 1
         assert report.run.publish_ready_rows == 0
         assert report.run.processing_state_distribution["published"] == 1
+
+        with session_factory() as session:
+            image = session.scalar(select(PlayerImageMetadata))
+            assert image is not None
+            assert image.source_url == "https://cdn.sportmonks.com/images/soccer/players/9/37672209.png"
+            assert image.moderation_status == "approved"
     finally:
         engine.dispose()
 

@@ -11,6 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.auth.dependencies import get_current_user
 from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
 from app.competition_engine.match_dispatcher import MatchDispatcher
@@ -120,7 +121,9 @@ def test_gtex_happy_path_smoke() -> None:
 
     app = FastAPI()
     config_root = Path(mkdtemp(prefix="gtex-happy-path-smoke-"))
-    (config_root / "admin_god_mode.json").write_text(
+    state_path = admin_godmode_state_path(config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
         json.dumps(
             {
                 "roles": {
@@ -225,15 +228,21 @@ def test_gtex_happy_path_smoke() -> None:
     event_publisher.subscribe(replay_archive.handle_event)
     queue_publisher = InMemoryQueuePublisher(event_publisher=event_publisher)
     dispatcher = MatchDispatcher(queue_publisher=queue_publisher)
-    worker = LocalMatchExecutionWorker(dispatcher=dispatcher, event_publisher=event_publisher, league_service=league_service)
+    worker = LocalMatchExecutionWorker(
+        dispatcher=dispatcher, event_publisher=event_publisher, league_service=league_service
+    )
     event_publisher.subscribe(worker.handle_event)
-    execution = LeagueFixtureExecutionService(dispatcher=dispatcher, event_publisher=event_publisher, execution_worker=worker)
+    execution = LeagueFixtureExecutionService(
+        dispatcher=dispatcher, event_publisher=event_publisher, execution_worker=worker
+    )
 
     clubs = (
         LeagueClub(club_id=home_id, club_name="Metro FC", strength_rating=82),
         LeagueClub(club_id=away_id, club_name="River FC", strength_rating=79),
     )
-    season = league_service.register_season(season_id=competition_id, buy_in_tier=25, season_start=date(2026, 3, 12), clubs=clubs)
+    season = league_service.register_season(
+        season_id=competition_id, buy_in_tier=25, season_start=date(2026, 3, 12), clubs=clubs
+    )
     fixture = season.fixtures[0]
     execution.schedule_fixture(
         season_id=season.season_id,

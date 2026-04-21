@@ -287,6 +287,36 @@ class Match3dNativeSessionState {
       lifecycle == Match3dNativeSessionLifecycle.implicit;
 }
 
+class Match3dAndroidLiveBootstrapResult {
+  const Match3dAndroidLiveBootstrapResult({
+    required this.staged,
+    required this.bootstrapPath,
+    this.matchId,
+    this.message,
+  });
+
+  factory Match3dAndroidLiveBootstrapResult.fromMap(Object? value) {
+    final Map<String, dynamic> payload = _stringKeyedMap(value);
+    return Match3dAndroidLiveBootstrapResult(
+      staged: _booleanValue(payload['staged']),
+      bootstrapPath: _stringValue(payload['bootstrapPath']),
+      matchId: _nullableString(payload['matchId']),
+      message: _nullableString(payload['message']),
+    );
+  }
+
+  const Match3dAndroidLiveBootstrapResult.unstaged({
+    this.message,
+    this.matchId,
+  }) : staged = false,
+       bootstrapPath = '';
+
+  final bool staged;
+  final String bootstrapPath;
+  final String? matchId;
+  final String? message;
+}
+
 bool _containsSessionState(Map<String, dynamic> payload) {
   return payload.containsKey('status') ||
       payload.containsKey('sessionId') ||

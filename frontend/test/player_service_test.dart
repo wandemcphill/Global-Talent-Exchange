@@ -357,48 +357,51 @@ void main() {
     },
   );
 
-  test('player actions post to player action endpoints with auth', () async {
-    final _RecordingTransport transport =
-        _RecordingTransport(<GteTransportResponse>[
-          const GteTransportResponse(statusCode: 200, body: null),
-          const GteTransportResponse(statusCode: 200, body: null),
-          const GteTransportResponse(statusCode: 200, body: null),
-        ]);
-    final PlayerService service = PlayerService(
-      client: GteAuthedApi(
-        config: const GteRepositoryConfig(
-          baseUrl: 'http://127.0.0.1:8000',
+  test(
+    'player actions fail closed before transport when routes are not mounted',
+    () async {
+      final _RecordingTransport transport =
+          _RecordingTransport(<GteTransportResponse>[
+            const GteTransportResponse(statusCode: 200, body: null),
+            const GteTransportResponse(statusCode: 200, body: null),
+            const GteTransportResponse(statusCode: 200, body: null),
+          ]);
+      final PlayerService service = PlayerService(
+        client: GteAuthedApi(
+          config: const GteRepositoryConfig(
+            baseUrl: 'http://127.0.0.1:8000',
+            mode: GteBackendMode.live,
+          ),
+          transport: transport,
+          accessToken: 'demo-token',
           mode: GteBackendMode.live,
         ),
-        transport: transport,
-        accessToken: 'demo-token',
-        mode: GteBackendMode.live,
-      ),
-    );
+      );
 
-    await service.scout('player-osimhen');
-    await service.shortlist('player-osimhen');
-    await service.contact('player-osimhen');
-
-    expect(
-      transport.requests.map((GteTransportRequest request) => request.uri.path),
-      <String>[
-        '/api/v1/players/player-osimhen/scout',
-        '/api/v1/players/player-osimhen/shortlist',
-        '/api/v1/players/player-osimhen/contact',
-      ],
-    );
-    expect(
-      transport.requests.every(
-        (GteTransportRequest request) =>
-            request.headers['Authorization'] == 'Bearer demo-token',
-      ),
-      isTrue,
-    );
-  });
+      await expectLater(
+        service.scout('player-osimhen'),
+        throwsA(
+          isA<GteApiException>().having(
+            (GteApiException error) => error.type,
+            'type',
+            GteApiErrorType.unavailable,
+          ),
+        ),
+      );
+      await expectLater(
+        service.shortlist('player-osimhen'),
+        throwsA(isA<GteApiException>()),
+      );
+      await expectLater(
+        service.contact('player-osimhen'),
+        throwsA(isA<GteApiException>()),
+      );
+      expect(transport.requests, isEmpty);
+    },
+  );
 
   test(
-    'player actions surface backend failures instead of faking success',
+    'player action failures stay unavailable across all legacy entry points',
     () async {
       final _RecordingTransport transport = _RecordingTransport(
         <GteTransportResponse>[
@@ -429,19 +432,19 @@ void main() {
       );
 
       await expectLater(
-        () => service.scout('player-osimhen'),
+        service.scout('player-osimhen'),
         throwsA(isA<GteApiException>()),
       );
       await expectLater(
-        () => service.shortlist('player-osimhen'),
+        service.shortlist('player-osimhen'),
         throwsA(isA<GteApiException>()),
       );
       await expectLater(
-        () => service.contact('player-osimhen'),
+        service.contact('player-osimhen'),
         throwsA(isA<GteApiException>()),
       );
 
-      expect(transport.requests, hasLength(3));
+      expect(transport.requests, isEmpty);
     },
   );
 }

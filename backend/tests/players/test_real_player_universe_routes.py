@@ -14,7 +14,7 @@ from app.auth.service import AuthService
 from app.core.database import load_model_modules
 from app.ingestion.models import Country, Player
 from app.models.base import Base
-from app.models.player_match_learning import MatchWeight, PlayerFeatureSnapshot, UserPlayerEvent
+from app.models.player_match_learning import PlayerFeatureSnapshot, UserPlayerEvent
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.models.user import UserRole
@@ -87,6 +87,7 @@ def _seed_real_player(
     height_cm: int | None = None,
     secondary_positions: list[str] | None = None,
     injury_status: str | None = None,
+    photo_url: str | None = None,
 ) -> None:
     country = session.scalar(select(Country).where(Country.alpha2_code == nationality_code))
     if country is None:
@@ -159,7 +160,8 @@ def _seed_real_player(
         birth_year=date_of_birth.year,
         dominant_foot=dominant_foot,
         primary_position=primary_position,
-        secondary_positions_json=secondary_positions or (["forward"] if primary_position != "Winger" else ["attacking midfield"]),
+        secondary_positions_json=secondary_positions
+        or (["forward"] if primary_position != "Winger" else ["attacking midfield"]),
         height_cm=height_cm,
         current_club_name=club_name,
         current_league_name=league_name,
@@ -177,7 +179,10 @@ def _seed_real_player(
         ingestion_batch_id="launch-real-batch",
         ingestion_source_version="launch-pack-v1",
         pricing_snapshot_id=f"snapshot-{player_id}" if current_value_credits is not None else None,
-        metadata_json={"thread": "G"},
+        metadata_json={
+            "thread": "G",
+            **({"photo_url": photo_url} if photo_url is not None else {}),
+        },
     )
     session.add(profile)
 
@@ -450,6 +455,7 @@ def test_players_match_route_returns_empty_matches_when_prefilter_finds_nothing(
             current_value_credits=410.0,
             market_reference_value=60_000_000,
             source_last_refreshed_at=datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc),
+            photo_url="https://cdn.sportmonks.com/images/soccer/players/1/osimhen-001.png",
         )
         session.commit()
 
@@ -537,6 +543,7 @@ def test_real_player_universe_routes_support_list_search_filters_and_exclude_non
             current_value_credits=410.0,
             market_reference_value=60_000_000,
             source_last_refreshed_at=datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc),
+            photo_url="https://cdn.sportmonks.com/images/soccer/players/1/osimhen-001.png",
         )
         _seed_real_player(
             session=session,
@@ -666,6 +673,7 @@ def test_real_player_universe_detail_exposes_serialized_profile_and_rejects_non_
             current_value_credits=410.0,
             market_reference_value=60_000_000,
             source_last_refreshed_at=datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc),
+            photo_url="https://cdn.sportmonks.com/images/soccer/players/1/osimhen-001.png",
         )
         _seed_non_real_player(session)
         session.commit()
@@ -691,6 +699,7 @@ def test_real_player_universe_detail_exposes_serialized_profile_and_rejects_non_
         assert payload["source_player_key"] == "osimhen-001"
         assert payload["is_verified_real_player"] is True
         assert payload["current_club_name"] == "Istanbul Lions"
+        assert payload["image_url"] == "https://cdn.sportmonks.com/images/soccer/players/1/osimhen-001.png"
         assert payload["normalized_signals"]["competition_level"] == "elite"
         assert payload["summary_json"]["market_visibility"]["eligible"] is True
         assert payload["summary_json"]["ingestion_metadata"]["ingestion_batch_id"] == "launch-real-batch"

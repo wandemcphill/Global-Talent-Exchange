@@ -14,6 +14,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_UNITY_CONFIG = PROJECT_ROOT / "Gtex_Test_Migration" / "Assets" / "Resources" / "GTEX" / "match-config.json"
 DEFAULT_BOOTSTRAP_PATH = PROJECT_ROOT / "Gtex_Test_Migration" / "tmp" / "gtex-live-bootstrap.json"
+DEFAULT_WINDOWS_BUILD_ROOT = PROJECT_ROOT / "Gtex_Test_Migration" / "Builds"
+DEFAULT_WINDOWS_PLAYER_NAME = "GTEXMatch.exe"
 DEFAULT_USER_EMAIL = "unity-live@gtex.local"
 DEFAULT_USER_PASSWORD = "UnityLivePass123!"  # pragma: allowlist secret
 DEFAULT_USER_FULL_NAME = "GTEX Unity Live"
@@ -372,6 +374,7 @@ async def verify_websocket(base_url: str, match_id: str, unity_access_token: str
         websocket_url,
         open_timeout=30,
         close_timeout=10,
+        max_size=None,
         additional_headers={"Authorization": f"Bearer {unity_access_token}"},
     ) as websocket:
         first_payload = json.loads(await websocket.recv())
@@ -422,8 +425,35 @@ def write_unity_config(
     return payload
 
 
+def resolve_bootstrap_write_paths(primary_bootstrap_path: Path) -> list[Path]:
+    candidate_paths: list[Path] = []
+    seen: set[str] = set()
+
+    def add_candidate(path: Path) -> None:
+        normalized = str(path)
+        if normalized in seen:
+            return
+
+        seen.add(normalized)
+        candidate_paths.append(path)
+
+    add_candidate(primary_bootstrap_path)
+
+    if not DEFAULT_WINDOWS_BUILD_ROOT.exists():
+        return candidate_paths
+
+    player_executables = sorted(
+        DEFAULT_WINDOWS_BUILD_ROOT.rglob(DEFAULT_WINDOWS_PLAYER_NAME),
+        key=lambda path: str(path).lower(),
+    )
+    for executable_path in player_executables:
+        add_candidate(executable_path.parent / "tmp" / primary_bootstrap_path.name)
+
+    return candidate_paths
+
+
 def write_bootstrap_file(
-    bootstrap_path: Path,
+    bootstrap_paths: list[Path],
     *,
     profile: str,
     base_url: str,
@@ -450,8 +480,10 @@ def write_bootstrap_file(
     }
 
     if not dry_run:
-        bootstrap_path.parent.mkdir(parents=True, exist_ok=True)
-        bootstrap_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        serialized_payload = json.dumps(payload, indent=2) + "\n"
+        for bootstrap_path in bootstrap_paths:
+            bootstrap_path.parent.mkdir(parents=True, exist_ok=True)
+            bootstrap_path.write_text(serialized_payload, encoding="utf-8")
 
     return payload
 
@@ -463,6 +495,7 @@ def main() -> None:
     allow_register = should_allow_register(args)
     config_path = Path(args.unity_config).resolve()
     bootstrap_path = Path(args.bootstrap_path).resolve()
+    bootstrap_paths = resolve_bootstrap_write_paths(bootstrap_path)
     bootstrap_ttl_seconds = max(60, int(args.bootstrap_ttl_seconds))
     consume_bootstrap_on_load = not (args.keep_bootstrap_file or args.profile == LOCAL_PROFILE)
     try:
@@ -508,7 +541,7 @@ def main() -> None:
         dry_run=args.dry_run,
     )
     bootstrap_payload = write_bootstrap_file(
-        bootstrap_path,
+        bootstrap_paths,
         profile=args.profile,
         base_url=base_url,
         match_id=match_id,
@@ -527,6 +560,8 @@ def main() -> None:
         "base_url": base_url,
         "unity_config": str(config_path),
         "bootstrap_path": str(bootstrap_path),
+        "bootstrap_paths": [str(path) for path in bootstrap_paths],
+        "bootstrap_mirror_count": max(0, len(bootstrap_paths) - 1),
         "config_written": not args.dry_run,
         "bootstrap_written": not args.dry_run,
         "bootstrap_profile": bootstrap_payload.get("profile"),

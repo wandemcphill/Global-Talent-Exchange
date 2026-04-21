@@ -18,6 +18,8 @@ abstract interface class Match3dBridgeSessionBackend {
 
   Future<Map<String, dynamic>> getRuntimeInfo();
 
+  Future<Map<String, dynamic>> stageLiveBootstrap(Map<String, Object?> request);
+
   Future<Map<String, dynamic>> openSession(Map<String, Object?> request);
 
   Future<Map<String, dynamic>> closeSession({String? sessionId});
@@ -59,6 +61,17 @@ class PlatformMatch3dBridgeBackend
   @override
   Future<Map<String, dynamic>> getRuntimeInfo() async {
     final Object? result = await _channel.invokeMethod<Object?>('runtimeInfo');
+    return _normalizedMap(result);
+  }
+
+  @override
+  Future<Map<String, dynamic>> stageLiveBootstrap(
+    Map<String, Object?> request,
+  ) async {
+    final Object? result = await _channel.invokeMethod<Object?>(
+      'stageLiveBootstrap',
+      request,
+    );
     return _normalizedMap(result);
   }
 
@@ -119,6 +132,33 @@ class Match3DBridge {
       return const Match3dNativeRuntimeInfo.unavailable();
     } on PlatformException {
       return const Match3dNativeRuntimeInfo.unavailable();
+    }
+  }
+
+  Future<Match3dAndroidLiveBootstrapResult> stageLiveBootstrap(
+    Map<String, Object?> request,
+  ) async {
+    final Match3dBridgeSessionBackend? backend = _sessionBackendOrNull;
+    if (backend == null) {
+      return const Match3dAndroidLiveBootstrapResult.unstaged(
+        message:
+            'Unity live bootstrap is unavailable in this runtime; Flutter 3D fallback active.',
+      );
+    }
+    try {
+      return Match3dAndroidLiveBootstrapResult.fromMap(
+        await backend.stageLiveBootstrap(request),
+      );
+    } on MissingPluginException {
+      return const Match3dAndroidLiveBootstrapResult.unstaged(
+        message:
+            'Unity live bootstrap is unavailable in this runtime; Flutter 3D fallback active.',
+      );
+    } on PlatformException {
+      return const Match3dAndroidLiveBootstrapResult.unstaged(
+        message:
+            'Unity live bootstrap is unavailable in this runtime; Flutter 3D fallback active.',
+      );
     }
   }
 

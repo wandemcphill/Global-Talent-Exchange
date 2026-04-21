@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 62598f4d03a6e344c8c4b420a84931ba
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/UI/MatchThemes/BigScoreBoard/scorer_BigBoard.prefab
+  uploadId: 597280

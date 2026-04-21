@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: c8f6d2a7412df3a4dbab5b07a82a7dae
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  preprocessorOverride: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/Shaders/UIShaders/TeamPowerUIShader_Generated.shader
+  uploadId: 597280

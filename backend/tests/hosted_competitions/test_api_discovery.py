@@ -8,13 +8,13 @@ from app.hosted_competition_engine.service import HostedCompetitionService
 from app.models.hosted_competition import HostedCompetitionStatus, UserHostedCompetition
 
 
-def test_hosted_discovery_route_bypasses_lazy_module_hydration(app, client) -> None:
+def test_hosted_discovery_api_route_bypasses_lazy_module_hydration(app, client) -> None:
     assert app.state.modules_hydrated is False
 
-    response = client.get("/hosted-competitions")
+    response = client.get("/api/v1/hosted-competitions")
 
     assert response.status_code == 200
-    assert response.json() == {"competitions": []}
+    assert response.json() == {"success": True, "data": {"competitions": []}}
     assert app.state.modules_hydrated is False
 
 

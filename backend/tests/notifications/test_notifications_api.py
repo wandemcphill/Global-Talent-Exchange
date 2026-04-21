@@ -63,7 +63,7 @@ def test_my_notifications_cover_requested_competition_templates(app_client, part
     for event in events:
         app.state.event_publisher.publish(event)
 
-    response = client.get("/notifications/me", headers=participant_user.headers)
+    response = client.get("/api/notifications/me", headers=participant_user.headers)
 
     assert response.status_code == 200
     payload = response.json()

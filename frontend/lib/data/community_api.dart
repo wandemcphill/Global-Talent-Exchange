@@ -45,7 +45,7 @@ class CommunityApi {
   Future<CommunityDigest> fetchDigest() {
     return client.withFallback<CommunityDigest>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/community/digest',
+        '/api/community/digest',
       );
       return CommunityDigest.fromJson(payload);
     }, fixtures.digest);
@@ -54,7 +54,7 @@ class CommunityApi {
   Future<bool> fetchCreatorClubFollowing({required String clubId}) async {
     return client.withFallback<bool>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/community/creator-clubs/$clubId/fan-state',
+        '/api/community/creator-clubs/$clubId/fan-state',
       );
       final Object? following = payload['following'];
       if (following is bool) {
@@ -68,7 +68,7 @@ class CommunityApi {
     await client.withFallback<void>(() async {
       await client.request(
         'POST',
-        '/community/creator-clubs/$clubId/follow',
+        '/api/community/creator-clubs/$clubId/follow',
         body: const <String, Object?>{
           'metadata_json': <String, Object?>{'source': 'active_shell'},
         },
@@ -78,14 +78,17 @@ class CommunityApi {
 
   Future<void> unfollowCreatorClub({required String clubId}) async {
     await client.withFallback<void>(() async {
-      await client.request('DELETE', '/community/creator-clubs/$clubId/follow');
+      await client.request(
+        'DELETE',
+        '/api/community/creator-clubs/$clubId/follow',
+      );
     }, () async => fixtures.unfollowCreatorClub(clubId));
   }
 
   Future<List<CommunityWatchlistItem>> listWatchlist() {
     return client.withFallback<List<CommunityWatchlistItem>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/community/watchlist',
+        '/api/community/watchlist',
       );
       return payload
           .map(CommunityWatchlistItem.fromJson)
@@ -104,7 +107,7 @@ class CommunityApi {
       () async {
         final Object? payload = await client.request(
           'POST',
-          '/community/watchlist',
+          '/api/community/watchlist',
           body: <String, Object?>{
             'competition_key': competitionKey,
             'competition_title': competitionTitle,
@@ -125,14 +128,17 @@ class CommunityApi {
 
   Future<void> removeWatchlist(String competitionKey) {
     return client.withFallback<void>(() async {
-      await client.request('DELETE', '/community/watchlist/$competitionKey');
+      await client.request(
+        'DELETE',
+        '/api/community/watchlist/$competitionKey',
+      );
     }, () async => fixtures.removeWatchlist(competitionKey));
   }
 
   Future<List<LiveThread>> listLiveThreads({String? competitionKey}) {
     return client.withFallback<List<LiveThread>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/community/live-threads',
+        '/api/community/live-threads',
         query: <String, Object?>{
           if (competitionKey != null && competitionKey.isNotEmpty)
             'competition_key': competitionKey,
@@ -151,7 +157,7 @@ class CommunityApi {
       () async {
         final Object? payload = await client.request(
           'POST',
-          '/community/live-threads',
+          '/api/community/live-threads',
           body: <String, Object?>{
             'thread_key': threadKey,
             'title': title,
@@ -169,7 +175,7 @@ class CommunityApi {
   Future<LiveThread> fetchLiveThread(String threadId) {
     return client.withFallback<LiveThread>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/community/live-threads/$threadId',
+        '/api/community/live-threads/$threadId',
       );
       return LiveThread.fromJson(payload);
     }, () async => fixtures.getLiveThread(threadId));
@@ -178,7 +184,7 @@ class CommunityApi {
   Future<List<LiveThreadMessage>> listLiveThreadMessages(String threadId) {
     return client.withFallback<List<LiveThreadMessage>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/community/live-threads/$threadId/messages',
+        '/api/community/live-threads/$threadId/messages',
       );
       return payload.map(LiveThreadMessage.fromJson).toList(growable: false);
     }, () async => fixtures.liveThreadMessages(threadId));
@@ -191,7 +197,7 @@ class CommunityApi {
     return client.withFallback<LiveThreadMessage>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/community/live-threads/$threadId/messages',
+        '/api/community/live-threads/$threadId/messages',
         body: <String, Object?>{
           'body': body,
           'metadata_json': <String, Object?>{},
@@ -204,7 +210,7 @@ class CommunityApi {
   Future<List<PrivateMessageThread>> listPrivateThreads() {
     return client.withFallback<List<PrivateMessageThread>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/community/private-messages/threads',
+        '/api/community/private-messages/threads',
       );
       return payload.map(PrivateMessageThread.fromJson).toList(growable: false);
     }, fixtures.privateThreads);
@@ -218,7 +224,7 @@ class CommunityApi {
     return client.withFallback<PrivateMessageThread>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/community/private-messages/threads',
+        '/api/community/private-messages/threads',
         body: <String, Object?>{
           'participant_user_ids': participantUserIds,
           'subject': subject,
@@ -233,7 +239,7 @@ class CommunityApi {
   Future<PrivateMessageThread> fetchPrivateThread(String threadId) {
     return client.withFallback<PrivateMessageThread>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/community/private-messages/threads/$threadId',
+        '/api/community/private-messages/threads/$threadId',
       );
       return PrivateMessageThread.fromJson(payload);
     }, () async => fixtures.getPrivateThread(threadId));
@@ -242,7 +248,7 @@ class CommunityApi {
   Future<List<PrivateMessage>> listPrivateMessages(String threadId) {
     return client.withFallback<List<PrivateMessage>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/community/private-messages/threads/$threadId/messages',
+        '/api/community/private-messages/threads/$threadId/messages',
       );
       return payload.map(PrivateMessage.fromJson).toList(growable: false);
     }, () async => fixtures.privateMessages(threadId));
@@ -255,7 +261,7 @@ class CommunityApi {
     return client.withFallback<PrivateMessage>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/community/private-messages/threads/$threadId/messages',
+        '/api/community/private-messages/threads/$threadId/messages',
         body: <String, Object?>{
           'body': body,
           'metadata_json': <String, Object?>{},

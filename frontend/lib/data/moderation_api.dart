@@ -13,12 +13,13 @@ class ModerationApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return ModerationApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -53,7 +54,7 @@ class ModerationApi {
       () async {
         final Object? payload = await client.request(
           'POST',
-          '/moderation/reports',
+          '/api/moderation/reports',
           body: <String, Object?>{
             'target_type': targetType,
             'target_id': targetId,
@@ -73,7 +74,7 @@ class ModerationApi {
   Future<List<ModerationReport>> listMyReports() {
     return client.withFallback<List<ModerationReport>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/moderation/me/reports',
+        '/api/moderation/me/reports',
       );
       return payload.map(ModerationReport.fromJson).toList(growable: false);
     }, fixtures.listReports);
@@ -86,7 +87,7 @@ class ModerationApi {
   }) {
     return client.withFallback<List<ModerationReport>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/admin/moderation/reports',
+        '/api/admin/moderation/reports',
         query: <String, Object?>{
           if (status != null && status.isNotEmpty) 'status': status,
           if (priority != null && priority.isNotEmpty) 'priority': priority,
@@ -101,7 +102,7 @@ class ModerationApi {
   Future<ModerationSummary> fetchSummary() {
     return client.withFallback<ModerationSummary>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/admin/moderation/reports/summary',
+        '/api/admin/moderation/reports/summary',
       );
       return ModerationSummary.fromJson(payload);
     }, fixtures.summary);
@@ -115,7 +116,7 @@ class ModerationApi {
     return client.withFallback<ModerationReport>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/admin/moderation/reports/$reportId/assign',
+        '/api/admin/moderation/reports/$reportId/assign',
         body: <String, Object?>{
           if (adminUserId != null) 'admin_user_id': adminUserId,
           if (priority != null) 'priority': priority,
@@ -134,7 +135,7 @@ class ModerationApi {
     return client.withFallback<ModerationReport>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/admin/moderation/reports/$reportId/resolve',
+        '/api/admin/moderation/reports/$reportId/resolve',
         body: <String, Object?>{
           'resolution_action': resolutionAction,
           'resolution_note': resolutionNote,

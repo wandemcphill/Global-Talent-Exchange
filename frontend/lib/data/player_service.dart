@@ -131,19 +131,23 @@ class PlayerService {
   }
 
   Future<void> scout(String id) async {
-    await _performActionWithFallback('/players/$id/scout');
+    _throwUnsupportedPlayerAction('scout');
   }
 
   Future<void> shortlist(String id) async {
-    await _performActionWithFallback('/players/$id/shortlist');
+    _throwUnsupportedPlayerAction('shortlist');
   }
 
   Future<void> contact(String id) async {
-    await _performActionWithFallback('/players/$id/contact');
+    _throwUnsupportedPlayerAction('contact');
   }
 
-  Future<void> _performActionWithFallback(String path) async {
-    await _client.post(path);
+  Never _throwUnsupportedPlayerAction(String action) {
+    throw GteApiException(
+      type: GteApiErrorType.unavailable,
+      message:
+          'Player action "$action" is blocked because no live backend route is mounted for it.',
+    );
   }
 
   String? _resolveNextCursor(

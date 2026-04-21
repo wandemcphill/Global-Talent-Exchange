@@ -46,3 +46,12 @@ Gtex_Test_Migration/Assets/AddressableAssetsData/*/addressables_content_state.bi
 
 # Embedded Unity package payloads copied for offline local work
 Gtex_Test_Migration/Packages/com.unity.*/
+
+# Flutter host-side Unity Android export output
+frontend/android/unityExport/
+
+# Local agent/test/build scratch output
+.codex_tmp/
+/.tmp*
+/tmp/
+Gtex_Test_Migration/tmp/

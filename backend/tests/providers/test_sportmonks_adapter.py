@@ -41,6 +41,7 @@ def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch)
                         "common_name": "C. Mandas",
                         "firstname": "Christos",
                         "lastname": "Mandas",
+                        "image_path": "https://cdn.sportmonks.com/images/soccer/players/8/4237168.png",
                         "position": {"name": "Goalkeeper"},
                         "detailedposition": {"name": "Goalkeeper"},
                         "date_of_birth": "2001-09-17",
@@ -104,6 +105,13 @@ def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch)
     assert first_page.items[0].current_competition_name == "Premier League"
     assert first_page.items[0].raw_payload["position"] == "Goalkeeper"
     assert first_page.items[0].raw_payload["nationality"] == "Greece"
+    assert (
+        first_page.items[0].raw_payload["photo_url"] == "https://cdn.sportmonks.com/images/soccer/players/8/4237168.png"
+    )
+    assert (
+        first_page.items[0].metadata_json["photo_url"]
+        == "https://cdn.sportmonks.com/images/soccer/players/8/4237168.png"
+    )
     assert first_page.items[0].raw_payload["currentCompetition"]["id"] == "8"
     assert first_page.exhausted is False
     assert first_page.next_cursor == '{"page": 2, "per_page": 25, "player_index": 0}'
@@ -113,6 +121,7 @@ def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch)
 
 def test_fetch_player_directory_page_filters_non_current_or_overage_rows(monkeypatch) -> None:
     adapter = _adapter()
+
     def _fake_team_context(club_id: str):
         if club_id == "300":
             return {

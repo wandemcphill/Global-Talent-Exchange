@@ -18,6 +18,7 @@ namespace FStudio.MatchEngine {
         public AnimationCurve AgilityCurve;
         public AnimationCurve StrengthCurve;
         public AnimationCurve TacklingCurve;
+        public AnimationCurve BallKeepingCurve;
         public AnimationCurve PositioningCurve;
         public AnimationCurve ReactionCurve;
         public AnimationCurve BallControlCurve;

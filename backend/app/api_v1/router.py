@@ -515,7 +515,7 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
 
     try:
         while True:
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.1)
             payload = build_unity_live_payload_for_app(app, match_id)
             signature = _unity_payload_signature(payload)
             if signature != last_signature:
@@ -544,6 +544,19 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
 
 
 def _unity_payload_signature(payload: dict[str, Any]) -> tuple[object, ...]:
+    players = payload.get("players") or []
+    player_motion_sample: tuple[object, ...] = tuple(
+        (
+            str(player.get("playerId") or player.get("entityId") or ""),
+            round(float(player.get("x") or 0.0), 1),
+            round(float(player.get("z") or 0.0), 1),
+            round(float(player.get("velocityX") or 0.0), 1),
+            round(float(player.get("velocityZ") or 0.0), 1),
+            str(player.get("animationState") or ""),
+        )
+        for player in players[:6]
+    )
+    ball = payload.get("ballPosition") or {}
     return (
         payload.get("frameId"),
         payload.get("activeEventId"),
@@ -552,6 +565,15 @@ def _unity_payload_signature(payload: dict[str, Any]) -> tuple[object, ...]:
         payload.get("awayScore"),
         payload.get("status"),
         payload.get("isLive"),
+        payload.get("cameraPreset"),
+        player_motion_sample,
+        (
+            round(float(ball.get("x") or 0.0), 1),
+            round(float(ball.get("z") or 0.0), 1),
+            round(float(ball.get("velocityX") or 0.0), 1),
+            round(float(ball.get("velocityZ") or 0.0), 1),
+            str(ball.get("trajectoryType") or ""),
+        ),
     )
 
 

@@ -13,12 +13,13 @@ class SponsorshipAdminApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return SponsorshipAdminApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -44,7 +45,7 @@ class SponsorshipAdminApi {
   Future<List<SponsorshipPackageView>> listPackages() {
     return client.withFallback<List<SponsorshipPackageView>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/admin/sponsorship/packages',
+        '/api/admin/sponsorship/packages',
       );
       return payload
           .map(SponsorshipPackageView.fromJson)
@@ -55,7 +56,7 @@ class SponsorshipAdminApi {
   Future<List<SponsorshipContractView>> listClubContracts(String clubId) {
     return client.withFallback<List<SponsorshipContractView>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/sponsorship/clubs/$clubId/contracts',
+        '/api/sponsorship/clubs/$clubId/contracts',
         auth: false,
       );
       return payload
@@ -72,7 +73,7 @@ class SponsorshipAdminApi {
     return client.withFallback<SponsorshipContractView>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/admin/sponsorship/contracts/$contractId/review',
+        '/api/admin/sponsorship/contracts/$contractId/review',
         body: <String, Object?>{
           'action': action,
           'resolution_note': resolutionNote ?? '',

@@ -77,7 +77,7 @@ class NationalTeamsApi {
 
   Future<List<NationalTeamCompetition>> listCompetitions() async {
     final List<dynamic> payload = await client.getList(
-      '/national-team-engine/competitions',
+      '/api/national-team-engine/competitions',
       auth: false,
     );
     return payload
@@ -89,7 +89,7 @@ class NationalTeamsApi {
     int limit = 20,
   }) async {
     final List<dynamic> payload = await client.getList(
-      '/national-team-engine/rankings',
+      '/api/national-team-engine/rankings',
       auth: false,
       query: <String, Object?>{'limit': limit},
     );
@@ -100,7 +100,7 @@ class NationalTeamsApi {
 
   Future<NationalTeamCompetition> fetchCompetition(String competitionId) async {
     final JsonMap payload = await client.getMap(
-      '/national-team-engine/competitions/$competitionId',
+      '/api/national-team-engine/competitions/$competitionId',
       auth: false,
     );
     return NationalTeamCompetition.fromJson(payload);
@@ -108,21 +108,21 @@ class NationalTeamsApi {
 
   Future<JsonMap> fetchLifecycle(String competitionId) {
     return client.getMap(
-      '/national-team-engine/competitions/$competitionId/lifecycle',
+      '/api/national-team-engine/competitions/$competitionId/lifecycle',
       auth: false,
     );
   }
 
   Future<JsonMap> fetchPresentation(String competitionId) {
     return client.getMap(
-      '/national-team-engine/competitions/$competitionId/presentation',
+      '/api/national-team-engine/competitions/$competitionId/presentation',
       auth: false,
     );
   }
 
   Future<NationalTeamUserHistory> fetchUserHistory() async {
     final JsonMap payload = await client.getMap(
-      '/national-team-engine/me/history',
+      '/api/national-team-engine/me/history',
     );
     return NationalTeamUserHistory.fromJson(payload);
   }
@@ -153,7 +153,7 @@ class NationalTeamsApi {
     required String tactic,
   }) async {
     final Object? payload = await client.post(
-      '/national-team-engine/competitions/$competitionId/auto-build-squad',
+      '/api/national-team-engine/competitions/$competitionId/auto-build-squad',
       auth: false,
       body: <String, Object?>{
         'country_code': countryCode,

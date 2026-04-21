@@ -165,12 +165,12 @@ final FutureProvider<LiveTasksData> liveTasksProvider =
       final GteAuthedApi api = ref.watch(authedApiProvider);
       final bool authenticated = ref.watch(isAuthenticatedProvider);
       final JsonMap challengesPayload = await api.getMap(
-        '/daily-challenges',
+        '/api/daily-challenges',
         auth: false,
       );
       JsonMap? mePayload;
       if (authenticated) {
-        mePayload = await api.getMap('/daily-challenges/me');
+        mePayload = await api.getMap('/api/daily-challenges/me');
       }
       final List<JsonMap> claimsPayload = jsonMapList(
         mePayload?['claims_today'],

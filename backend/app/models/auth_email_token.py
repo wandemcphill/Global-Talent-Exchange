@@ -28,7 +28,7 @@ class AuthEmailToken(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

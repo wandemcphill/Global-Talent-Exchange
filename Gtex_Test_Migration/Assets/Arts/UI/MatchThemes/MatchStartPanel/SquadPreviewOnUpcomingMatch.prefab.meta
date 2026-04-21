@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 2c7d822e3c51489479697dd6a0f25af9
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/UI/MatchThemes/MatchStartPanel/SquadPreviewOnUpcomingMatch.prefab
+  uploadId: 597280

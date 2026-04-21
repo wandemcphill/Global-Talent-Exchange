@@ -262,7 +262,7 @@ namespace FStudio.MatchEngine.Tactics {
             #endregion
 
             #region Marking
-            if (markingTarget != null && markingTarget != null) {
+            if (markingTarget != null && markingTarget.PlayerController != null) {
                 var markingDistance = MarkingDistanceByPlayerFieldProgress.Evaluate (1- markingTarget.PlayerFieldProgress);
 
                 var targetPos = markingTarget.Position;

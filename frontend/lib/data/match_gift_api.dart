@@ -106,7 +106,7 @@ class MatchGiftApi implements MatchGiftClient {
     required MatchGiftCatalogItem gift,
   }) async {
     final Object? payload = await client.post(
-      '/gift-engine/send',
+      '/api/gift-engine/send',
       body: <String, Object?>{
         'recipient_user_id': target.recipientUserId,
         'gift_key': gift.key,

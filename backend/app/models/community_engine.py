@@ -45,7 +45,7 @@ class CompetitionWatchlist(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 class LiveThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "live_threads"
 
-    thread_key: Mapped[str] = mapped_column(String(140), nullable=False, unique=True, index=True)
+    thread_key: Mapped[str] = mapped_column(String(140), nullable=False, unique=True)
     competition_key: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     created_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -71,7 +71,7 @@ class LiveThreadMessage(Base, UUIDPrimaryKeyMixin):
 class PrivateMessageThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "private_message_threads"
 
-    thread_key: Mapped[str] = mapped_column(String(140), nullable=False, unique=True, index=True)
+    thread_key: Mapped[str] = mapped_column(String(140), nullable=False, unique=True)
     created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     status: Mapped[PrivateMessageThreadStatus] = mapped_column(SqlEnum(PrivateMessageThreadStatus, name="privatemessagethreadstatus"), nullable=False, default=PrivateMessageThreadStatus.ACTIVE)
     subject: Mapped[str] = mapped_column(String(180), nullable=False, default="")

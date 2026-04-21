@@ -14,8 +14,23 @@ namespace FStudio.Utilities {
         }
 
         protected virtual void OnEnable () {
-            if (_Current != null) {
+            var instance = this as T;
+            if (instance == null) {
+                return;
+            }
+
+            if (_Current != null && !ReferenceEquals(_Current, instance)) {
                 Debug.LogWarning($"{typeof(T)} has multiple instances. It won't break things, but it doesnt sound good tho.");
+                return;
+            }
+
+            _Current = instance;
+        }
+
+        protected virtual void OnDestroy() {
+            var instance = this as T;
+            if (instance != null && ReferenceEquals(_Current, instance)) {
+                _Current = null;
             }
         }
     }

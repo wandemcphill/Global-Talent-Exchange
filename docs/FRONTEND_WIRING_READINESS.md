@@ -47,6 +47,9 @@ This note tells later frontend threads which backend subsystems now exist, which
 ## Route families available to wire
 
 - Creator foundation:
+  - `/api/creators/...`
+  - `/creators/me/insights`
+  - `/creators/me/copilot/analyze`
   - `/creator/...`
   - `/api/creator/...`
   - `/admin/creator/...`
@@ -54,11 +57,16 @@ This note tells later frontend threads which backend subsystems now exist, which
 - Creator league:
   - `/creator-league/...`
 - Creator monetization and media:
+  - `/api/media-engine/me/clip-earnings`
+  - `/api/media-engine/creator-league/...`
+  - `/api/admin/media-engine/creator-league/...`
   - `/media-engine/creator-league/...`
   - `/admin/media-engine/creator-league/...`
   - `/media-engine/share-templates`
   - `/media-engine/share-exports`
   - `/media-engine/downloads`
+- Public creator web links:
+  - `/community/creator/{handle}`
 - Fan engagement:
   - `/community/creator-matches/...`
   - `/community/creator-clubs/...`

@@ -1,4 +1,6 @@
 using UnityEngine;
+using FStudio.GTEX.Core;
+using FStudio.GTEX.Engine;
 
 namespace FStudio.GTEX.Simulation
 {
@@ -33,7 +35,12 @@ namespace FStudio.GTEX.Simulation
         [SerializeField] private GtexSimHud simHud;
 
         private GtexSimEngine engine;
+        private GtexMatchConfig activeMatchConfig;
         private bool pendingBootstrapConsumed;
+        private float lastReportedMinute = -1f;
+        private int lastReportedHomeScore = -1;
+        private int lastReportedAwayScore = -1;
+        private GtexMatchPhase lastReportedPhase = GtexMatchPhase.None;
 
         public GtexSimEngine Engine => engine;
 
@@ -105,6 +112,13 @@ namespace FStudio.GTEX.Simulation
             if (Application.isBatchMode && !runInBatchMode)
             {
                 Debug.Log("[GTEX Sim Host] Skipping simulation host in batchmode.");
+                GtexMatchController.ReportRuntimeState(
+                    activeMatchConfig,
+                    GtexRuntimeMode.LocalSimulation,
+                    GtexMatchPhase.None,
+                    false,
+                    nameof(GtexSimRuntimeHost),
+                    "Simulation host skipped in batchmode.");
                 enabled = false;
                 return;
             }
@@ -148,10 +162,24 @@ namespace FStudio.GTEX.Simulation
 
             var deltaTime = useUnscaledTime ? Time.unscaledDeltaTime : Time.deltaTime;
             engine.UpdateMatch(deltaTime);
+            ReportSimulationSnapshot();
         }
 
         private void OnDestroy()
         {
+            GtexMatchController.ReportRuntimeState(
+                activeMatchConfig,
+                GtexRuntimeMode.LocalSimulation,
+                engine != null ? ResolveControllerPhase(engine.State) : GtexMatchPhase.None,
+                false,
+                nameof(GtexSimRuntimeHost),
+                "Simulation host destroyed.");
+
+            if (engine != null)
+            {
+                engine.StateChanged -= OnEngineStateChanged;
+            }
+
             if (simRenderer != null)
             {
                 simRenderer.Unbind();
@@ -179,6 +207,7 @@ namespace FStudio.GTEX.Simulation
             }
 
             engine.StartMatch();
+            ReportSimulationSnapshot(true, "Local simulation started.");
         }
 
         [ContextMenu("Stop Simulation")]
@@ -190,6 +219,7 @@ namespace FStudio.GTEX.Simulation
             }
 
             engine.EndMatch();
+            ReportSimulationSnapshot(true, "Local simulation stopped.");
         }
 
         private void EnsureInitialized()
@@ -211,6 +241,8 @@ namespace FStudio.GTEX.Simulation
             };
 
             engine = new GtexSimEngine(config);
+            engine.StateChanged += OnEngineStateChanged;
+            ResetReportedSnapshot();
 
             if (simRenderer == null)
             {
@@ -253,6 +285,13 @@ namespace FStudio.GTEX.Simulation
             }
 
             Debug.Log("[GTEX Sim Host] Simulation initialized.");
+            GtexMatchController.ReportRuntimeState(
+                activeMatchConfig,
+                GtexRuntimeMode.LocalSimulation,
+                GtexMatchPhase.Bootstrap,
+                false,
+                nameof(GtexSimRuntimeHost),
+                "Simulation host initialized.");
         }
 
         private void ApplyMatchConfig(GtexMatchConfig matchConfig)
@@ -287,8 +326,12 @@ namespace FStudio.GTEX.Simulation
                     uiBridge.Unbind();
                 }
 
+                engine.StateChanged -= OnEngineStateChanged;
                 engine = null;
             }
+
+            activeMatchConfig = matchConfig;
+            ResetReportedSnapshot();
         }
 
         private void ApplyBootstrapConfiguration(GtexMatchConfig matchConfig, bool allowBatchMode)
@@ -296,6 +339,75 @@ namespace FStudio.GTEX.Simulation
             runInBatchMode = allowBatchMode;
             autoStart = true;
             ApplyMatchConfig(matchConfig);
+        }
+
+        private void OnEngineStateChanged(GtexSimState nextState)
+        {
+            ReportSimulationSnapshot(true, "Local simulation state changed to " + nextState + ".");
+        }
+
+        private void ReportSimulationSnapshot(bool force = false, string message = null)
+        {
+            if (engine == null)
+            {
+                return;
+            }
+
+            var phase = ResolveControllerPhase(engine.State);
+            var minute = engine.Clock.CurrentMatchMinute;
+            var homeScore = engine.HomeScore;
+            var awayScore = engine.AwayScore;
+
+            if (!force &&
+                Mathf.Abs(minute - lastReportedMinute) < 0.25f &&
+                homeScore == lastReportedHomeScore &&
+                awayScore == lastReportedAwayScore &&
+                phase == lastReportedPhase)
+            {
+                return;
+            }
+
+            lastReportedMinute = minute;
+            lastReportedHomeScore = homeScore;
+            lastReportedAwayScore = awayScore;
+            lastReportedPhase = phase;
+
+            GtexMatchController.ReportMatchSnapshot(
+                GtexRuntimeMode.LocalSimulation,
+                phase,
+                engine.IsRunning,
+                nameof(GtexSimRuntimeHost),
+                minute,
+                homeScore,
+                awayScore,
+                message ?? "Local simulation advanced.");
+        }
+
+        private void ResetReportedSnapshot()
+        {
+            lastReportedMinute = -1f;
+            lastReportedHomeScore = -1;
+            lastReportedAwayScore = -1;
+            lastReportedPhase = GtexMatchPhase.None;
+        }
+
+        private static GtexMatchPhase ResolveControllerPhase(GtexSimState state)
+        {
+            switch (state)
+            {
+                case GtexSimState.Kickoff:
+                    return GtexMatchPhase.Kickoff;
+                case GtexSimState.FirstHalf:
+                    return GtexMatchPhase.FirstHalf;
+                case GtexSimState.HalfTime:
+                    return GtexMatchPhase.HalfTime;
+                case GtexSimState.SecondHalf:
+                    return GtexMatchPhase.SecondHalf;
+                case GtexSimState.FullTime:
+                    return GtexMatchPhase.FullTime;
+                default:
+                    return GtexMatchPhase.None;
+            }
         }
 
         private static T GetOrAddComponent<T>(GameObject host) where T : Component

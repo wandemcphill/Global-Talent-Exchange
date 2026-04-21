@@ -8,13 +8,12 @@ using UnityEngine;
 namespace FStudio {
     public class Boot : MonoBehaviour {
         private async void Start() {
-            await UILoader.Current.GeneralUILoader.Load();
-            await SceneLoader.LoadDefaultScene();
-
             if (GtexRuntimeBootstrap.TryAutoStart()) {
                 return;
             }
 
+            await UILoader.Current.GeneralUILoader.Load();
+            await SceneLoader.LoadDefaultScene();
             EventManager.Trigger(new MainMenuEvent());
         }
     }

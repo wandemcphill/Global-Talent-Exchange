@@ -17,6 +17,7 @@ import 'package:gte_frontend/models/match_viewer_presentation.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/real_match_engine_presentation.dart';
 import 'package:gte_frontend/services/match_3d_bridge.dart';
+import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -51,6 +52,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.giftClient,
     this.titleOverride,
     this.engineBridge,
+    this.androidLiveBootstrapProvisioner,
   });
 
   final CompetitionSummary competition;
@@ -67,6 +69,8 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final MatchGiftClient? giftClient;
   final String? titleOverride;
   final Match3DBridge? engineBridge;
+  final Match3dAndroidLiveBootstrapProvisioner?
+  androidLiveBootstrapProvisioner;
 
   @override
   State<GtexMatchViewerScreen> createState() => _GtexMatchViewerScreenState();
@@ -531,6 +535,9 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                                                     .cameraPreset,
                                               ),
                                               bridge: widget.engineBridge,
+                                              androidLiveBootstrapProvisioner:
+                                                  widget
+                                                      .androidLiveBootstrapProvisioner,
                                               onRuntimeStatusMessageChanged:
                                                   _setNativeRuntimeStatusMessage,
                                             )

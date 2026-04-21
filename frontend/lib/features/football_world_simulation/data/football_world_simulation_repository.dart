@@ -74,7 +74,7 @@ class FootballWorldSimulationApiRepository
   @override
   Future<List<WorldFederation>> listFederations() async {
     return parseList(
-      await _client.getList('/federations', auth: false),
+      await _client.getList('/api/federations', auth: false),
       WorldFederation.fromJson,
       label: 'world federations',
     );
@@ -122,7 +122,7 @@ class FootballWorldSimulationApiRepository
     return FootballCulture.fromJson(
       await _client.request(
         'PUT',
-        '/admin/world/cultures/$cultureKey',
+        '/api/admin/world/cultures/$cultureKey',
         body: request.toJson(),
       ),
     );
@@ -136,7 +136,7 @@ class FootballWorldSimulationApiRepository
     return ClubWorldContext.fromJson(
       await _client.request(
         'PUT',
-        '/admin/world/clubs/$clubId/context',
+        '/api/admin/world/clubs/$clubId/context',
         body: request.toJson(),
       ),
     );
@@ -150,7 +150,7 @@ class FootballWorldSimulationApiRepository
     return WorldNarrative.fromJson(
       await _client.request(
         'PUT',
-        '/admin/world/narratives/$narrativeSlug',
+        '/api/admin/world/narratives/$narrativeSlug',
         body: request.toJson(),
       ),
     );
@@ -164,7 +164,7 @@ class FootballWorldSimulationApiRepository
     return WorldFederationMembership.fromJson(
       await _client.request(
         'POST',
-        '/federations/$federationId/memberships',
+        '/api/federations/$federationId/memberships',
         body: <String, Object?>{
           'club_id': clubId,
           'auto_activate': true,

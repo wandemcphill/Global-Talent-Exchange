@@ -36,7 +36,9 @@ namespace FStudio.MatchEngine.Balls {
         [SerializeField] private new Rigidbody rigidbody = default;
 #pragma warning restore 0109
 
-        public Vector3 Velocity => rigidbody.linearVelocity;
+        private Vector3 externalPlaybackVelocity;
+
+        public Vector3 Velocity => ExternalPlaybackEnabled ? externalPlaybackVelocity : rigidbody.linearVelocity;
 
         public CapsuleCollider Collider;
         public bool ExternalPlaybackEnabled { get; private set; }
@@ -161,7 +163,11 @@ namespace FStudio.MatchEngine.Balls {
             ballVel.y = Mathf.Clamp(ballVel.y, -MAX_VELOCTIY_POW, MAX_VELOCTIY_POW);
             ballVel.z = Mathf.Clamp(ballVel.z, -MAX_VELOCTIY_POW, MAX_VELOCTIY_POW);
 
-            rigidbody.linearVelocity = ballVel;
+            if (ExternalPlaybackEnabled) {
+                externalPlaybackVelocity = ballVel;
+            } else if (!rigidbody.isKinematic) {
+                rigidbody.linearVelocity = ballVel;
+            }
 
             ballShadow.position = ballPos;
             // ball shadow power.
@@ -189,6 +195,11 @@ namespace FStudio.MatchEngine.Balls {
             HolderPlayer = basePlayer;
 
             holdedPosition = transform.position;
+            externalPlaybackVelocity = Vector3.zero;
+            if (!rigidbody.isKinematic) {
+                rigidbody.linearVelocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+            }
 
             rigidbody.isKinematic = true;
             Collider.enabled = false;
@@ -235,6 +246,9 @@ namespace FStudio.MatchEngine.Balls {
 
         public void SetExternalPlayback(bool value) {
             ExternalPlaybackEnabled = value;
+            if (!value) {
+                externalPlaybackVelocity = Vector3.zero;
+            }
 
             if (HolderPlayer != null) {
                 rigidbody.isKinematic = true;
@@ -260,10 +274,9 @@ namespace FStudio.MatchEngine.Balls {
                     Hold(holder);
                 }
 
+                externalPlaybackVelocity = Vector3.zero;
                 rigidbody.isKinematic = true;
                 Collider.enabled = false;
-                rigidbody.linearVelocity = Vector3.zero;
-                rigidbody.angularVelocity = Vector3.zero;
 
                 if (targetPosition.y > 0.35f) {
                     transform.position = targetPosition;
@@ -279,10 +292,9 @@ namespace FStudio.MatchEngine.Balls {
 
             rigidbody.isKinematic = true;
             Collider.enabled = false;
+            externalPlaybackVelocity = targetVelocity;
             transform.position = targetPosition;
             rigidbody.position = targetPosition;
-            rigidbody.linearVelocity = targetVelocity;
-            rigidbody.angularVelocity = Vector3.zero;
         }
 
         /// <summary>
@@ -302,7 +314,7 @@ namespace FStudio.MatchEngine.Balls {
 
                 followSpeed = followSpeedCurve.Evaluate(followSpeedProgress) * 1;
 
-                rigidbody.linearVelocity = Vector3.zero;
+                externalPlaybackVelocity = Vector3.zero;
 
                 var targetPosition = Vector3.Lerp(
                     holdedPosition,
@@ -587,8 +599,11 @@ namespace FStudio.MatchEngine.Balls {
         public void ResetBall (Vector3 target) {
             Debug.Log("Ball Reset ()");
             target.y = 0.1f;
-            rigidbody.linearVelocity = Vector3.zero;
-            rigidbody.angularVelocity = Vector3.zero;
+            externalPlaybackVelocity = Vector3.zero;
+            if (!rigidbody.isKinematic) {
+                rigidbody.linearVelocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+            }
             transform.position = target;
             rigidbody.MovePosition(target);
             LastHolder = null;

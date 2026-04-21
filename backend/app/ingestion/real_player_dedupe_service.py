@@ -66,7 +66,11 @@ class RealPlayerDedupeService:
     ) -> RealPlayerMatchResult:
         identity = normalized_identity or normalize_real_player_identity(
             payload,
-            as_of=(payload.source_last_refreshed_at.date() if payload.source_last_refreshed_at is not None else date.today()),
+            as_of=(
+                payload.source_last_refreshed_at.date()
+                if payload.source_last_refreshed_at is not None
+                else date.today()
+            ),
         )
 
         source_link = session.scalar(
@@ -95,10 +99,7 @@ class RealPlayerDedupeService:
         players_by_id = {player.id: player for player in candidates}
         ranked = tuple(
             sorted(
-                (
-                    self._score_candidate(player, identity)
-                    for player in candidates
-                ),
+                (self._score_candidate(player, identity) for player in candidates),
                 key=lambda item: (-item.score, item.player_id),
             )
         )
@@ -111,9 +112,8 @@ class RealPlayerDedupeService:
 
         top_candidate = ranked[0]
         second_candidate = ranked[1] if len(ranked) > 1 else None
-        if (
-            top_candidate.score >= self.confident_match_threshold
-            and (second_candidate is None or (top_candidate.score - second_candidate.score) >= self.ambiguity_margin)
+        if top_candidate.score >= self.confident_match_threshold and (
+            second_candidate is None or (top_candidate.score - second_candidate.score) >= self.ambiguity_margin
         ):
             return RealPlayerMatchResult(
                 action="matched_existing",
@@ -128,6 +128,13 @@ class RealPlayerDedupeService:
         )
         if exact_name_resolution is not None:
             return exact_name_resolution
+        create_new_override = self._resolve_conflicting_name_only_candidates(
+            ranked=ranked,
+            players_by_id=players_by_id,
+            identity=identity,
+        )
+        if create_new_override is not None:
+            return create_new_override
         if top_candidate.score >= self.ambiguous_match_threshold:
             raise AmbiguousRealPlayerMatchError(identity.canonical_name, ranked)
         return RealPlayerMatchResult(
@@ -175,12 +182,38 @@ class RealPlayerDedupeService:
         identity: NormalizedRealPlayerIdentity,
     ) -> RealPlayerMatchResult | None:
         for reason, score, player_ids in (
-            ("exact_identity_key", 0.98, self._player_ids_for_import_row_key(session, RealPlayerImportRow.exact_identity_key, identity.exact_identity_key)),
-            ("name_birthyear_club_key", 0.94, self._player_ids_for_import_row_key(session, RealPlayerImportRow.name_birthyear_club_key, identity.name_birthyear_club_key)),
-            ("name_birthyear_nationality_key", 0.90, self._player_ids_for_import_row_key(session, RealPlayerImportRow.name_birthyear_nationality_key, identity.name_birthyear_nationality_key)),
+            (
+                "exact_identity_key",
+                0.98,
+                self._player_ids_for_import_row_key(
+                    session, RealPlayerImportRow.exact_identity_key, identity.exact_identity_key
+                ),
+            ),
+            (
+                "name_birthyear_club_key",
+                0.94,
+                self._player_ids_for_import_row_key(
+                    session, RealPlayerImportRow.name_birthyear_club_key, identity.name_birthyear_club_key
+                ),
+            ),
+            (
+                "name_birthyear_nationality_key",
+                0.90,
+                self._player_ids_for_import_row_key(
+                    session, RealPlayerImportRow.name_birthyear_nationality_key, identity.name_birthyear_nationality_key
+                ),
+            ),
             ("exact_name_dob", 0.96, self._player_ids_for_exact_name_dob(session, identity)),
-            ("name_birthyear_club_anchor", 0.92, self._player_ids_for_birthyear_anchor(session, identity, require_club=True)),
-            ("name_birthyear_nationality_anchor", 0.88, self._player_ids_for_birthyear_anchor(session, identity, require_club=False)),
+            (
+                "name_birthyear_club_anchor",
+                0.92,
+                self._player_ids_for_birthyear_anchor(session, identity, require_club=True),
+            ),
+            (
+                "name_birthyear_nationality_anchor",
+                0.88,
+                self._player_ids_for_birthyear_anchor(session, identity, require_club=False),
+            ),
         ):
             if not player_ids:
                 continue
@@ -189,7 +222,9 @@ class RealPlayerDedupeService:
                     action="matched_existing",
                     player_id=player_ids[0],
                     confidence_score=score,
-                    candidates=self._rank_candidates(session, player_ids, identity, base_reason=reason, base_score=score),
+                    candidates=self._rank_candidates(
+                        session, player_ids, identity, base_reason=reason, base_score=score
+                    ),
                 )
             raise AmbiguousRealPlayerMatchError(
                 identity.canonical_name,
@@ -214,7 +249,9 @@ class RealPlayerDedupeService:
         )
         return tuple(dict.fromkeys(row.gtex_player_id for row in rows if row.gtex_player_id))
 
-    def _player_ids_for_exact_name_dob(self, session: Session, identity: NormalizedRealPlayerIdentity) -> tuple[str, ...]:
+    def _player_ids_for_exact_name_dob(
+        self, session: Session, identity: NormalizedRealPlayerIdentity
+    ) -> tuple[str, ...]:
         if identity.date_of_birth is None:
             return ()
         search_terms = self._search_terms(identity)
@@ -246,7 +283,9 @@ class RealPlayerDedupeService:
             return ()
         if require_club and not identity.club_reference_key:
             return ()
-        if not require_club and not (identity.club_reference_key or identity.normalized_nationality or identity.nationality_code):
+        if not require_club and not (
+            identity.club_reference_key or identity.normalized_nationality or identity.nationality_code
+        ):
             return ()
         statement = self._candidate_statement().where(
             Player.date_of_birth.is_not(None),
@@ -256,11 +295,7 @@ class RealPlayerDedupeService:
             player
             for player in session.scalars(statement)
             if self._candidate_matches_name(player, identity)
-            and (
-                self._club_matches(player, identity)
-                if require_club
-                else self._country_matches(player, identity)
-            )
+            and (self._club_matches(player, identity) if require_club else self._country_matches(player, identity))
         ]
         return tuple(dict.fromkeys(player.id for player in players))
 
@@ -299,7 +334,9 @@ class RealPlayerDedupeService:
             return []
         return [
             player
-            for player in session.scalars(self._candidate_statement().where(Player.date_of_birth == identity.date_of_birth))
+            for player in session.scalars(
+                self._candidate_statement().where(Player.date_of_birth == identity.date_of_birth)
+            )
             if player.id not in exclude_ids
         ]
 
@@ -310,7 +347,9 @@ class RealPlayerDedupeService:
         *,
         exclude_ids: set[str],
     ) -> list[Player]:
-        if identity.birth_year is None or not (identity.club_reference_key or identity.normalized_nationality or identity.nationality_code):
+        if identity.birth_year is None or not (
+            identity.club_reference_key or identity.normalized_nationality or identity.nationality_code
+        ):
             return []
         statement = self._candidate_statement().where(
             Player.date_of_birth.is_not(None),
@@ -330,11 +369,7 @@ class RealPlayerDedupeService:
         players_by_id: dict[str, Player],
         identity: NormalizedRealPlayerIdentity,
     ) -> RealPlayerMatchResult | None:
-        exact_name_candidates = [
-            candidate
-            for candidate in ranked
-            if "exact_normalized_name" in candidate.reasons
-        ]
+        exact_name_candidates = [candidate for candidate in ranked if "exact_normalized_name" in candidate.reasons]
         if not exact_name_candidates:
             return None
 
@@ -351,11 +386,7 @@ class RealPlayerDedupeService:
             return None
 
         best_vector = max(vector for vector, _candidate in candidate_vectors)
-        best_candidates = [
-            candidate
-            for vector, candidate in candidate_vectors
-            if vector == best_vector
-        ]
+        best_candidates = [candidate for vector, candidate in candidate_vectors if vector == best_vector]
         if len(best_candidates) != 1:
             return None
 
@@ -364,6 +395,65 @@ class RealPlayerDedupeService:
             action="matched_existing",
             player_id=winner.player_id,
             confidence_score=winner.score,
+            candidates=ranked,
+        )
+
+    def _resolve_conflicting_name_only_candidates(
+        self,
+        *,
+        ranked: tuple[RealPlayerMatchCandidate, ...],
+        players_by_id: dict[str, Player],
+        identity: NormalizedRealPlayerIdentity,
+    ) -> RealPlayerMatchResult | None:
+        if identity.date_of_birth is None or not identity.club_reference_key or not ranked:
+            return None
+
+        create_score = self._create_score(identity)
+        if create_score <= ranked[0].score:
+            return None
+
+        name_reason_keys = {"exact_normalized_name", "display_name", "alias_name", "token_signature"}
+        supporting_reason_keys = {
+            "date_of_birth",
+            "birth_year",
+            "club",
+            "exact_identity_key",
+            "name_birthyear_club_key",
+            "name_birthyear_nationality_key",
+            "exact_name_dob",
+            "name_birthyear_club_anchor",
+            "name_birthyear_nationality_anchor",
+            "historical_source_key",
+        }
+
+        name_candidates: list[tuple[RealPlayerMatchCandidate, Player]] = []
+        for candidate in ranked:
+            if not any(reason in name_reason_keys for reason in candidate.reasons):
+                continue
+            player = players_by_id.get(candidate.player_id)
+            if player is None:
+                continue
+            name_candidates.append((candidate, player))
+
+        if not name_candidates:
+            return None
+        if any(
+            any(reason in supporting_reason_keys for reason in candidate.reasons) for candidate, _ in name_candidates
+        ):
+            return None
+
+        dated_name_candidates = [
+            (candidate, player) for candidate, player in name_candidates if player.date_of_birth is not None
+        ]
+        if not dated_name_candidates:
+            return None
+        if any(player.date_of_birth == identity.date_of_birth for _candidate, player in dated_name_candidates):
+            return None
+
+        return RealPlayerMatchResult(
+            action="create_new",
+            player_id=None,
+            confidence_score=create_score,
             candidates=ranked,
         )
 
@@ -383,13 +473,7 @@ class RealPlayerDedupeService:
 
     def _supports_exact_name_resolution(self, vector: tuple[int, int, int, int, int, int]) -> bool:
         _, birth_rank, country_rank, club_rank, league_rank, position_rank = vector
-        return (
-            birth_rank >= 0
-            and country_rank > 0
-            and club_rank >= 0
-            and league_rank >= 0
-            and position_rank > 0
-        )
+        return birth_rank >= 0 and country_rank > 0 and club_rank >= 0 and league_rank >= 0 and position_rank > 0
 
     def _birth_match_rank(self, player: Player, identity: NormalizedRealPlayerIdentity) -> int:
         if player.date_of_birth is None:
@@ -471,14 +555,13 @@ class RealPlayerDedupeService:
             if normalized.tokens
         )
         candidate_aliases = tuple(
-            normalized
-            for normalized in (
-                normalize_identity_name(player.short_name),
-            )
-            if normalized.tokens
+            normalized for normalized in (normalize_identity_name(player.short_name),) if normalized.tokens
         )
 
-        if any(names_equivalent(identity.normalized_full_name, candidate_name.normalized) for candidate_name in candidate_primary_names):
+        if any(
+            names_equivalent(identity.normalized_full_name, candidate_name.normalized)
+            for candidate_name in candidate_primary_names
+        ):
             score += 0.54
             reasons.append("exact_normalized_name")
         elif identity.normalized_display_name and any(
@@ -506,7 +589,11 @@ class RealPlayerDedupeService:
         if identity.date_of_birth is not None and player.date_of_birth == identity.date_of_birth:
             score += 0.24
             reasons.append("date_of_birth")
-        elif identity.birth_year is not None and player.date_of_birth is not None and player.date_of_birth.year == identity.birth_year:
+        elif (
+            identity.birth_year is not None
+            and player.date_of_birth is not None
+            and player.date_of_birth.year == identity.birth_year
+        ):
             score += 0.14
             reasons.append("birth_year")
 
@@ -557,11 +644,7 @@ class RealPlayerDedupeService:
         base_reason: str,
         base_score: float,
     ) -> tuple[RealPlayerMatchCandidate, ...]:
-        players = list(
-            session.scalars(
-                self._candidate_statement().where(Player.id.in_(player_ids))
-            )
-        )
+        players = list(session.scalars(self._candidate_statement().where(Player.id.in_(player_ids))))
         return tuple(
             sorted(
                 (
@@ -585,7 +668,11 @@ class RealPlayerDedupeService:
             normalize_identity_name(player.canonical_display_name),
             normalize_identity_name(player.short_name),
         )
-        if any(names_equivalent(identity.normalized_full_name, candidate.normalized) for candidate in candidate_names if candidate.tokens):
+        if any(
+            names_equivalent(identity.normalized_full_name, candidate.normalized)
+            for candidate in candidate_names
+            if candidate.tokens
+        ):
             return True
         if identity.normalized_display_name and any(
             names_equivalent(identity.normalized_display_name, candidate.normalized)

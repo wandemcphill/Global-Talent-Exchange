@@ -76,21 +76,25 @@ namespace MatchEngine.MatchScenes.Implementations {
 
             MM.Current.SetGoalColliders(true);
 
-            if (cameraSwitch) {
-                CameraSystem.Current.SetTarget(celebrator.PlayerController.UnityObject.transform);
-            }
+            celebrator = scorer.GameTeam == scorerTeam ? scorer : null;
 
-            celebrator = scorer;
-
-            if (scorer.GameTeam != scorerTeam) {
+            if (celebrator == null) {
                 // Own Goal.
                 // find the closest player for celebration.
-                celebrator = null;
+                var ballPosition = Ball.Current != null ? Ball.Current.transform.position : scorer.Position;
+                celebrator = scorerTeam.GamePlayers.OrderBy(x => Vector3.Distance(x.Position, ballPosition)).FirstOrDefault();
             }
 
             if (celebrator == null) {
-                // pick the closest player to ball.
-                celebrator = scorerTeam.GamePlayers.OrderBy(x => Vector3.Distance(x.Position, Ball.Current.transform.position)).FirstOrDefault();
+                Debug.LogError("[GoalCelebration] No celebrator.");
+                return;
+            }
+
+            if (cameraSwitch &&
+                CameraSystem.Current != null &&
+                celebrator.PlayerController != null &&
+                celebrator.PlayerController.UnityObject != null) {
+                CameraSystem.Current.SetTarget(celebrator.PlayerController.UnityObject.transform);
             }
 
             // freeze match.

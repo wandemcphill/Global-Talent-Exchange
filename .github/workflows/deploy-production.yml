@@ -34,6 +34,7 @@ jobs:
 
   backend-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,15 +42,19 @@ jobs:
           python-version: "3.14"
           cache: pip
           cache-dependency-path: backend/requirements.txt
-      - run: python -m pip install --upgrade pip
+      - name: Install backend test dependencies
+        run: python -m pip install --upgrade pip
       - run: python -m pip install -r backend/requirements.txt pytest
-      - run: python -m pytest --collect-only -q
-      - run: >
+      - name: Verify backend pytest collection
+        run: python -m pytest --collect-only -q
+      - name: Verify backend config smoke
+        run: >
           python -m pytest
           backend/tests/app/test_config.py
           -k "runtime_secrets or placeholder_runtime_secrets or incomplete_bootstrap_admin_config or run_startup_seeding or cors_env_overrides or default_cors_origins_and_regex"
           -q
-      - run: >
+      - name: Verify backend core smoke slice
+        run: >
           python -m pytest
           backend/tests/test_health_diagnostics.py
           backend/tests/app/test_email_config.py
@@ -57,6 +62,14 @@ jobs:
           backend/tests/backbone/test_outbox_relay.py
           backend/tests/leaderboards/test_ranking_service.py
           backend/tests/wallets/test_wallet_event_backbone.py
+          -q
+      - name: Verify backend app contract harness
+        run: >
+          python -m pytest
+          backend/tests/app/test_main.py
+          backend/tests/app/test_module_registration_openapi.py
+          backend/tests/app/test_module_registration_routes.py
+          backend/tests/app/test_module_registration_hydration.py
           -q
 
   backend-live-playback-tests:
@@ -94,6 +107,11 @@ jobs:
       GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
       GTEX_UNITY_BUILD_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_windows_build.log
       GTEX_FORCE_CLEAN_LIBRARY: "false"
+      GTEX_UNITY_RUNNER_PROFILE_ROOT: ${{ runner.temp }}\gtex-unity-runner-profile
+      LOCALAPPDATA: ${{ runner.temp }}\gtex-unity-runner-profile\LocalAppData
+      APPDATA: ${{ runner.temp }}\gtex-unity-runner-profile\RoamingAppData
+      TEMP: ${{ runner.temp }}\gtex-unity-runner-profile\Temp
+      TMP: ${{ runner.temp }}\gtex-unity-runner-profile\Temp
     steps:
       - uses: actions/checkout@v4
       - name: Verify Unity CI configuration
@@ -111,6 +129,25 @@ jobs:
           if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
             "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
             throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
+          }
+
+          foreach ($path in @(
+            $env:GTEX_UNITY_RUNNER_PROFILE_ROOT,
+            $env:LOCALAPPDATA,
+            $env:APPDATA,
+            $env:TEMP
+          )) {
+            New-Item -ItemType Directory -Force -Path $path | Out-Null
+          }
+
+          $runnerIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+          Write-Host "Unity runner identity: $runnerIdentity"
+          Write-Host "LOCALAPPDATA: $env:LOCALAPPDATA"
+          Write-Host "APPDATA: $env:APPDATA"
+          Write-Host "TEMP: $env:TEMP"
+
+          if ($runnerIdentity -match 'NETWORK SERVICE') {
+            Write-Warning "The GitHub Actions runner is executing as NETWORK SERVICE. Unity batchmode builds on this account usually fail unless that service identity has its own Unity license."
           }
       - name: Clean Unity transient folders
         run: |
@@ -137,13 +174,32 @@ jobs:
             -batchmode -quit -nographics `
             -buildTarget StandaloneWindows64 `
             -projectPath $env:GTEX_UNITY_PROJECT_PATH `
-            -executeMethod FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64FromCommandLine `
+            -executeMethod FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64ProductionFromCommandLine `
             -logFile $env:GTEX_UNITY_BUILD_LOG
 
           $exitCode = $LASTEXITCODE
           if ($exitCode -ne 0) {
             if (Test-Path $env:GTEX_UNITY_BUILD_LOG) {
               Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
+
+              $licenseFailurePatterns = @(
+                'No valid Unity Editor license found',
+                'Found 0 entitlement groups and 0 free entitlements matching requested entitlement ids',
+                "'com.unity.editor.headless' was not found"
+              )
+
+              foreach ($pattern in $licenseFailurePatterns) {
+                if (Select-String -Path $env:GTEX_UNITY_BUILD_LOG -Pattern $pattern -Quiet) {
+                  $runnerIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+                  throw (
+                    "Unity Windows batch build failed before project compilation because the runner account does not have a usable Unity Editor license. " +
+                    "Runner account: $runnerIdentity. " +
+                    "Activate Unity for that account or run the self-hosted runner service as the Windows user that already owns the Unity activation. " +
+                    "The job now redirects LOCALAPPDATA/APPDATA/TEMP to workspace-owned folders, so cache-path errors are not the remaining blocker. " +
+                    "See $env:GTEX_UNITY_BUILD_LOG for the full Unity licensing log."
+                  )
+                }
+              }
             }
             throw "Unity Windows batch build failed with exit code $exitCode."
           }
@@ -209,6 +265,7 @@ jobs:
         id: render-config
         shell: bash
         env:
+          RENDER_DEPLOY_MODE: hook-only
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_API: ${{ secrets.RENDER_SERVICE_API }}
           RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}

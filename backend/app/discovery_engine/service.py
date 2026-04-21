@@ -164,7 +164,11 @@ class DiscoveryEngineService:
                             "channel_type": channel.channel_type,
                             "viewer_count": channel.viewer_count,
                             "featured_match_id": channel.featured_match_id,
-                            "watch_route": f"/broadcast/{channel.channel_id}",
+                            "watch_route": (
+                                f"/matches/broadcast/{channel.featured_match_id}"
+                                if channel.featured_match_id
+                                else None
+                            ),
                         },
                     }
                 )
@@ -266,7 +270,7 @@ class DiscoveryEngineService:
                     "featured": bool(is_final or goal_activity > 0 or viewer_count >= 10),
                     "is_final": is_final,
                     "status": snapshot.get("status") or "live",
-                    "watch_route": f"/matches/{match_id}/watch",
+                    "watch_route": f"/matches/viewer/{match_id}",
                     "replay_route": f"/api/matches/{match_id}/replay",
                 },
             }

@@ -13,12 +13,14 @@ class NationalTeamApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
+    final GteTransport resolvedTransport = transport ?? GteHttpTransport();
     return NationalTeamApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: resolvedTransport,
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -44,7 +46,7 @@ class NationalTeamApi {
   Future<List<NationalTeamCompetition>> listCompetitions() {
     return client.withFallback<List<NationalTeamCompetition>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/national-team-engine/competitions',
+        '/api/national-team-engine/competitions',
         auth: false,
       );
       return payload
@@ -56,7 +58,7 @@ class NationalTeamApi {
   Future<NationalTeamEntryDetail> fetchEntryDetail(String entryId) {
     return client.withFallback<NationalTeamEntryDetail>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/national-team-engine/entries/$entryId',
+        '/api/national-team-engine/entries/$entryId',
         auth: false,
       );
       return NationalTeamEntryDetail.fromJson(payload);
@@ -66,7 +68,7 @@ class NationalTeamApi {
   Future<NationalTeamUserHistory> fetchUserHistory() {
     return client.withFallback<NationalTeamUserHistory>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/national-team-engine/me/history',
+        '/api/national-team-engine/me/history',
       );
       return NationalTeamUserHistory.fromJson(payload);
     }, fixtures.userHistory);

@@ -484,6 +484,89 @@ def test_identity_matcher_does_not_merge_distinct_players_without_exact_name_or_
         assert result.player_id is None
 
 
+def test_identity_matcher_creates_new_for_exact_name_collision_with_conflicting_dob(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="EN",
+            name="England",
+            alpha2_code="EN",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="ben-davies-main",
+            full_name="Ben Davies",
+            country=country,
+            position="Centre-Back",
+            normalized_position="defender",
+            date_of_birth=date(1993, 4, 24),
+            is_real_player=True,
+        )
+        session.add_all([country, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "sportmonks",
+                "source_player_key": "6285",
+                "canonical_name": "Ben Davies",
+                "nationality": "England",
+                "date_of_birth": "1995-08-11",
+                "primary_position": "Centre-Back",
+                "current_real_world_club": "Oxford United",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "create_new"
+        assert result.player_id is None
+
+
+def test_identity_matcher_creates_new_for_alias_collision_with_conflicting_dob(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="GB",
+            name="Scotland",
+            alpha2_code="GB",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="liam-smith-main",
+            full_name="Liam Smith",
+            short_name="Lewis Smith",
+            country=country,
+            position="Central Midfielder",
+            normalized_position="midfielder",
+            date_of_birth=date(1996, 4, 10),
+            height_cm=175,
+            is_real_player=True,
+        )
+        session.add_all([country, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "sportmonks",
+                "source_player_key": "378693",
+                "canonical_name": "Lewis Smith",
+                "nationality": "Scotland",
+                "date_of_birth": "2000-03-16",
+                "primary_position": "Central Midfielder",
+                "current_real_world_club": "Livingston",
+                "height_cm": 176,
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "create_new"
+        assert result.player_id is None
+
+
 def test_identity_matcher_prefers_resolved_import_row_exact_identity_key(session_factory) -> None:
     matcher = RealPlayerIdentityMatcher()
     with session_factory() as session:

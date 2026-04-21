@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
 import 'package:gte_frontend/services/match_3d_bridge.dart';
+import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
 
@@ -16,7 +18,9 @@ class GtexMatch3dScreen extends StatelessWidget {
     this.viewStateLoader,
     this.continuationLoader,
     this.entitlement = const Match3dUserEntitlement(),
+    this.giftClient,
     this.engineBridge,
+    this.androidLiveBootstrapProvisioner,
   });
 
   final CompetitionSummary competition;
@@ -26,7 +30,10 @@ class GtexMatch3dScreen extends StatelessWidget {
   final MatchViewStateLoader? viewStateLoader;
   final MatchViewContinuationLoader? continuationLoader;
   final Match3dUserEntitlement entitlement;
+  final MatchGiftClient? giftClient;
   final Match3DBridge? engineBridge;
+  final Match3dAndroidLiveBootstrapProvisioner?
+  androidLiveBootstrapProvisioner;
 
   @override
   Widget build(BuildContext context) {
@@ -40,8 +47,10 @@ class GtexMatch3dScreen extends StatelessWidget {
       viewStateLoader: viewStateLoader,
       continuationLoader: continuationLoader,
       entitlement: entitlement,
+      giftClient: giftClient,
       titleOverride: '3D Match Viewer',
       engineBridge: engineBridge,
+      androidLiveBootstrapProvisioner: androidLiveBootstrapProvisioner,
     );
   }
 }

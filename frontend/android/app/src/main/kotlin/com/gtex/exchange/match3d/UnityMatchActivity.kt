@@ -6,48 +6,37 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.widget.FrameLayout
 
 internal class UnityMatchActivity : Activity() {
-    private var unityPlayer: Any? = null
+    private lateinit var container: FrameLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val player = UnityPlayerProxy.create(this)
-        val unityView = UnityPlayerProxy.asView(player)
-        if (player == null || unityView == null) {
-            UnityMatch3dRuntime.onUnityLaunchFailed()
-            finish()
-            return
-        }
-
-        unityPlayer = player
-        unityView.layoutParams =
-            android.view.ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
-        unityView.setBackgroundColor(Color.BLACK)
-        setContentView(unityView)
-        UnityPlayerProxy.requestFocus(player)
-        UnityMatch3dRuntime.registerUnityActivity(this)
+        UnityMatch3dRuntime.attachHostActivity(this)
+        container =
+            FrameLayout(this).apply {
+                layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+                setBackgroundColor(Color.BLACK)
+            }
+        setContentView(container)
     }
 
     override fun onResume() {
         super.onResume()
-        UnityPlayerProxy.resume(unityPlayer)
-        UnityPlayerProxy.windowFocusChanged(unityPlayer, true)
-        UnityMatch3dRuntime.onUnityActivityResumed(this)
+        UnityMatch3dRuntime.attachHostActivity(this)
+        UnityMatch3dRuntime.attachPlatformView(container)
+        UnityMatch3dRuntime.onHostResumed()
     }
 
     override fun onPause() {
-        UnityMatch3dRuntime.onUnityActivityPaused(this)
-        UnityPlayerProxy.windowFocusChanged(unityPlayer, false)
-        UnityPlayerProxy.pause(unityPlayer)
+        UnityMatch3dRuntime.detachPlatformView(container)
+        UnityMatch3dRuntime.onHostPaused()
         super.onPause()
     }
 
     override fun onDestroy() {
-        UnityMatch3dRuntime.onUnityActivityDestroyed(this)
-        UnityPlayerProxy.destroy(unityPlayer)
-        unityPlayer = null
+        UnityMatch3dRuntime.onHostDestroyed(this)
         super.onDestroy()
     }
 
@@ -59,7 +48,11 @@ internal class UnityMatchActivity : Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        UnityPlayerProxy.windowFocusChanged(unityPlayer, hasFocus)
+        if (hasFocus) {
+            UnityMatch3dRuntime.onHostResumed()
+        } else {
+            UnityMatch3dRuntime.onHostPaused()
+        }
     }
 
     companion object {

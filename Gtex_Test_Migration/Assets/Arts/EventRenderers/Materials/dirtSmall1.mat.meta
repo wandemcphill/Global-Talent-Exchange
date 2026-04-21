@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 167a810cf8c0e304ea2b837998a56e6a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/EventRenderers/Materials/dirtSmall1.mat
+  uploadId: 597280

@@ -18,7 +18,6 @@ from app.players.real_player_schemas import RealPlayerMatchRequest
 from app.players.real_player_read_models import (
     RealPlayerUniverseDetail,
     RealPlayerUniverseListItem,
-    RealPlayerUniverseListResult,
     RealPlayerUniversePageResult,
 )
 
@@ -43,7 +42,9 @@ REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
     "AM": frozenset({"am", "cam", "attacking midfielder", "attacking midfield", "midfielder"}),
     "LW": frozenset({"lw", "left winger", "left wing", "winger", "forward"}),
     "RW": frozenset({"rw", "right winger", "right wing", "winger", "forward"}),
-    "ST": frozenset({"st", "striker", "centre-forward", "center-forward", "centre forward", "center forward", "cf", "forward"}),
+    "ST": frozenset(
+        {"st", "striker", "centre-forward", "center-forward", "centre forward", "center forward", "cf", "forward"}
+    ),
 }
 
 
@@ -199,7 +200,9 @@ class RealPlayerUniverseQueryService:
         query_signature = self._match_query_signature(payload)
         candidate_limit = min(max(payload.pagination.limit * 25, 100), REAL_PLAYER_MATCH_MAX_CANDIDATES)
         prefiltered_statement = self._apply_match_prefilters(payload=payload)
-        total_candidates = int(self.session.scalar(select(func.count()).select_from(prefiltered_statement.subquery())) or 0)
+        total_candidates = int(
+            self.session.scalar(select(func.count()).select_from(prefiltered_statement.subquery())) or 0
+        )
         rows = self.session.execute(
             prefiltered_statement.order_by(*self._match_candidate_order_by(payload=payload)).limit(candidate_limit)
         ).all()
@@ -216,11 +219,7 @@ class RealPlayerUniverseQueryService:
             for row in rows
         ]
 
-        eligible_matches = [
-            match
-            for match in scored_matches
-            if match.score >= payload.constraints.min_match_score
-        ]
+        eligible_matches = [match for match in scored_matches if match.score >= payload.constraints.min_match_score]
         eligible_matches.sort(key=self._match_sort_key)
 
         page_start = self._resolve_match_page_start(
@@ -238,10 +237,7 @@ class RealPlayerUniverseQueryService:
         )
 
         summary = self._build_match_summary(scored_matches)
-        applied_weights = {
-            key: round(value, 4)
-            for key, value in normalized_weights.items()
-        }
+        applied_weights = {key: round(value, 4) for key, value in normalized_weights.items()}
         response = {
             "matches": [match.payload for match in page_matches],
             "meta": {
@@ -295,24 +291,21 @@ class RealPlayerUniverseQueryService:
         )
 
     def _selected_profiles_subquery(self):
-        ranked_profiles = (
-            select(
-                RealPlayerProfile.id.label("profile_id"),
-                RealPlayerProfile.gtex_player_id.label("gtex_player_id"),
-                func.row_number()
-                .over(
-                    partition_by=RealPlayerProfile.gtex_player_id,
-                    order_by=(
-                        RealPlayerProfile.source_last_refreshed_at.is_(None),
-                        RealPlayerProfile.source_last_refreshed_at.desc(),
-                        RealPlayerProfile.updated_at.desc(),
-                        RealPlayerProfile.id.desc(),
-                    ),
-                )
-                .label("profile_rank"),
+        ranked_profiles = select(
+            RealPlayerProfile.id.label("profile_id"),
+            RealPlayerProfile.gtex_player_id.label("gtex_player_id"),
+            func.row_number()
+            .over(
+                partition_by=RealPlayerProfile.gtex_player_id,
+                order_by=(
+                    RealPlayerProfile.source_last_refreshed_at.is_(None),
+                    RealPlayerProfile.source_last_refreshed_at.desc(),
+                    RealPlayerProfile.updated_at.desc(),
+                    RealPlayerProfile.id.desc(),
+                ),
             )
-            .subquery()
-        )
+            .label("profile_rank"),
+        ).subquery()
         return (
             select(ranked_profiles.c.profile_id, ranked_profiles.c.gtex_player_id)
             .where(ranked_profiles.c.profile_rank == 1)
@@ -456,8 +449,10 @@ class RealPlayerUniverseQueryService:
             movement_pct=summary.movement_pct if summary is not None else None,
             market_interest_score=summary.market_interest_score if summary is not None else None,
             average_rating=summary.average_rating if summary is not None else None,
-            current_market_reference_value=profile.current_market_reference_value or player.current_market_reference_value,
+            current_market_reference_value=profile.current_market_reference_value
+            or player.current_market_reference_value,
             market_reference_currency=profile.market_reference_currency or player.market_reference_currency,
+            image_url=self._profile_image_url(profile),
             source_name=profile.source_name,
             source_last_refreshed_at=profile.source_last_refreshed_at or player.source_last_refreshed_at,
             is_verified_real_player=bool(source_link.is_verified_real_player),
@@ -499,7 +494,8 @@ class RealPlayerUniverseQueryService:
             movement_pct=summary.movement_pct if summary is not None else None,
             market_interest_score=summary.market_interest_score if summary is not None else None,
             average_rating=summary.average_rating if summary is not None else None,
-            current_market_reference_value=profile.current_market_reference_value or player.current_market_reference_value,
+            current_market_reference_value=profile.current_market_reference_value
+            or player.current_market_reference_value,
             market_reference_currency=profile.market_reference_currency or player.market_reference_currency,
             appearances=profile.appearances,
             minutes_played=profile.minutes_played,
@@ -509,6 +505,7 @@ class RealPlayerUniverseQueryService:
             injury_status=profile.injury_status,
             real_player_tier=player.real_player_tier,
             identity_confidence_score=player.identity_confidence_score,
+            image_url=self._profile_image_url(profile),
             source_name=profile.source_name,
             source_player_key=profile.source_player_key,
             source_last_refreshed_at=profile.source_last_refreshed_at or player.source_last_refreshed_at,
@@ -557,7 +554,8 @@ class RealPlayerUniverseQueryService:
             current_league_name=profile.current_league_name or player.real_world_league_name,
             competition_level=profile.competition_level,
             current_value_credits=summary.current_value_credits if summary is not None else None,
-            current_market_reference_value=profile.current_market_reference_value or player.current_market_reference_value,
+            current_market_reference_value=profile.current_market_reference_value
+            or player.current_market_reference_value,
             market_reference_currency=profile.market_reference_currency or player.market_reference_currency,
             source_name=profile.source_name,
             source_last_refreshed_at=profile.source_last_refreshed_at or player.source_last_refreshed_at,
@@ -674,9 +672,7 @@ class RealPlayerUniverseQueryService:
             if not raw_cursor:
                 raise ValueError("empty cursor")
             padding = "=" * (-len(raw_cursor) % 4)
-            payload = json.loads(
-                base64.urlsafe_b64decode(f"{raw_cursor}{padding}".encode("ascii")).decode("utf-8")
-            )
+            payload = json.loads(base64.urlsafe_b64decode(f"{raw_cursor}{padding}".encode("ascii")).decode("utf-8"))
         except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error) as exc:
             raise RealPlayerUniverseValidationError("cursor is invalid") from exc
 
@@ -694,10 +690,7 @@ class RealPlayerUniverseQueryService:
         self,
         payload: RealPlayerMatchRequest,
     ) -> dict[str, object | None]:
-        normalized_weights = {
-            key: round(value, 6)
-            for key, value in self._normalized_match_weights(payload).items()
-        }
+        normalized_weights = {key: round(value, 6) for key, value in self._normalized_match_weights(payload).items()}
         return {
             "positions": sorted(self._requested_position_codes(payload)),
             "age": {
@@ -770,9 +763,7 @@ class RealPlayerUniverseQueryService:
             if not raw_cursor:
                 raise ValueError("empty cursor")
             padding = "=" * (-len(raw_cursor) % 4)
-            payload = json.loads(
-                base64.urlsafe_b64decode(f"{raw_cursor}{padding}".encode("ascii")).decode("utf-8")
-            )
+            payload = json.loads(base64.urlsafe_b64decode(f"{raw_cursor}{padding}".encode("ascii")).decode("utf-8"))
         except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error) as exc:
             raise RealPlayerUniverseValidationError("cursor is invalid") from exc
 
@@ -974,7 +965,11 @@ class RealPlayerUniverseQueryService:
 
         if payload.brief.positions:
             add_reason("position", position_label)
-        if payload.brief.age.min is not None or payload.brief.age.max is not None or payload.brief.age.target is not None:
+        if (
+            payload.brief.age.min is not None
+            or payload.brief.age.max is not None
+            or payload.brief.age.target is not None
+        ):
             if candidate.age is not None and breakdown["age"] > 0:
                 age_label = (
                     f"Age {candidate.age} (target {payload.brief.age.target})"
@@ -985,10 +980,14 @@ class RealPlayerUniverseQueryService:
         if payload.brief.countries and breakdown["country"] > 0:
             add_reason("country", f"Country match ({candidate.country_code or candidate.country})")
         if (
-            payload.brief.height_cm.min is not None
-            or payload.brief.height_cm.max is not None
-            or payload.brief.height_cm.target is not None
-        ) and candidate.height_cm is not None and breakdown["height"] > 0:
+            (
+                payload.brief.height_cm.min is not None
+                or payload.brief.height_cm.max is not None
+                or payload.brief.height_cm.target is not None
+            )
+            and candidate.height_cm is not None
+            and breakdown["height"] > 0
+        ):
             add_reason("height", f"Height {candidate.height_cm}cm")
         if payload.brief.preferred_foot and candidate.preferred_foot is not None and breakdown["foot"] > 0:
             add_reason("foot", f"Preferred foot: {candidate.preferred_foot}")
@@ -1024,7 +1023,12 @@ class RealPlayerUniverseQueryService:
             return 1.0, True, primary_matches[0], "Primary position match"
         secondary_matches = sorted(requested_positions & set(candidate.secondary_position_codes))
         if secondary_matches:
-            return REAL_PLAYER_MATCH_SECONDARY_POSITION_SCORE, False, secondary_matches[0], "Secondary position coverage"
+            return (
+                REAL_PLAYER_MATCH_SECONDARY_POSITION_SCORE,
+                False,
+                secondary_matches[0],
+                "Secondary position coverage",
+            )
         return 0.0, False, None, None
 
     def _range_metric(
@@ -1193,6 +1197,19 @@ class RealPlayerUniverseQueryService:
         values.discard(None)
         return values
 
+    @staticmethod
+    def _profile_image_url(profile: RealPlayerProfile) -> str | None:
+        metadata = dict(profile.metadata_json or {})
+        photo_url = metadata.get("photo_url")
+        if isinstance(photo_url, str) and photo_url.strip():
+            return photo_url.strip()
+        image_payload = metadata.get("image")
+        if isinstance(image_payload, dict):
+            source_url = image_payload.get("source_url")
+            if isinstance(source_url, str) and source_url.strip():
+                return source_url.strip()
+        return None
+
     def _position_codes_for_values(self, *values: str | None) -> set[str]:
         codes: set[str] = set()
         for value in values:
@@ -1204,9 +1221,7 @@ class RealPlayerUniverseQueryService:
         if normalized_value is None:
             return set()
         codes = {
-            code
-            for code, search_terms in REAL_PLAYER_POSITION_SEARCH_TERMS.items()
-            if normalized_value in search_terms
+            code for code, search_terms in REAL_PLAYER_POSITION_SEARCH_TERMS.items() if normalized_value in search_terms
         }
         if codes:
             return codes
@@ -1218,7 +1233,9 @@ class RealPlayerUniverseQueryService:
         search_terms: set[str] = set()
         for position in positions:
             normalized_position = position.upper()
-            search_terms.update(REAL_PLAYER_POSITION_SEARCH_TERMS.get(normalized_position, frozenset({position.lower()})))
+            search_terms.update(
+                REAL_PLAYER_POSITION_SEARCH_TERMS.get(normalized_position, frozenset({position.lower()}))
+            )
         return search_terms
 
     def _lower_trimmed_expr(self, expression):

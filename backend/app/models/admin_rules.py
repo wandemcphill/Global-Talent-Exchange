@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class AdminFeatureFlag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "admin_feature_flags"
 
-    feature_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    feature_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
@@ -27,7 +27,7 @@ class AdminFeatureFlag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class AdminCalendarRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "admin_calendar_rules"
 
-    rule_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    rule_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     world_cup_exclusive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
@@ -42,7 +42,7 @@ class AdminCalendarRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class AdminRewardRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "admin_reward_rules"
 
-    rule_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    rule_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     trading_fee_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=2000, server_default="2000")

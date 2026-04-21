@@ -44,7 +44,7 @@ class NotificationSubscription(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 class PlatformAnnouncement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "platform_announcements"
 
-    announcement_key: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)
+    announcement_key: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     audience: Mapped[str] = mapped_column(String(32), nullable=False, default="all")

@@ -13,12 +13,13 @@ class DisputeEngineApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return DisputeEngineApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -43,7 +44,9 @@ class DisputeEngineApi {
 
   Future<List<DisputeEngineCase>> listMyDisputes() {
     return client.withFallback<List<DisputeEngineCase>>(() async {
-      final Map<String, dynamic> payload = await client.getMap('/disputes/me');
+      final Map<String, dynamic> payload = await client.getMap(
+        '/disputes/me',
+      );
       final List<dynamic> disputes =
           payload['disputes'] as List<dynamic>? ?? <dynamic>[];
       return disputes.map(DisputeEngineCase.fromJson).toList(growable: false);

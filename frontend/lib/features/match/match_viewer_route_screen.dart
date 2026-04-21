@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/match_gift_api.dart';
 import '../../models/match_view_state.dart';
 import '../../screens/match/gtex_match_viewer_screen.dart';
 import '../../shared/models/data_source_status.dart';
+import '../../shared/providers/auth_provider.dart';
 import 'live_match_viewer_route_support.dart';
 import 'match_viewer_capability.dart';
 
@@ -37,6 +39,10 @@ class MatchViewerRouteScreen extends ConsumerWidget {
         final LiveMatchViewerRepository repository = ref.read(
           liveMatchViewerRepositoryProvider,
         );
+        final MatchGiftClient? giftClient =
+            ref.watch(isAuthenticatedProvider)
+                ? MatchGiftApi(client: ref.watch(authedApiProvider))
+                : null;
         return MatchRouteCapabilityOverlay(
           capability: MatchViewerCapability.twoD,
           child: _QualifiedMatchViewerRouteView(
@@ -45,6 +51,7 @@ class MatchViewerRouteScreen extends ConsumerWidget {
             bootstrap: value.bootstrap,
             initialViewState: value.initialViewState,
             repository: repository,
+            giftClient: giftClient,
           ),
         );
       },
@@ -72,12 +79,14 @@ class _QualifiedMatchViewerRouteView extends StatefulWidget {
     required this.bootstrap,
     required this.initialViewState,
     required this.repository,
+    required this.giftClient,
   });
 
   final String matchKey;
   final LiveMatchViewerBootstrap bootstrap;
   final MatchViewState initialViewState;
   final LiveMatchViewerRepository repository;
+  final MatchGiftClient? giftClient;
 
   @override
   State<_QualifiedMatchViewerRouteView> createState() =>
@@ -105,6 +114,7 @@ class _QualifiedMatchViewerRouteViewState
       titleOverride: '2D Match Viewer',
       viewStateLoader: _loadInitialViewState,
       continuationLoader: _loadContinuation,
+      giftClient: widget.giftClient,
     );
   }
 

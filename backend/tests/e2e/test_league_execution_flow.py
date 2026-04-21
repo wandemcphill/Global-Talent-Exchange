@@ -192,7 +192,7 @@ def test_league_fixture_dispatch_execution_replay_and_notifications_flow(tmp_pat
             playoff_club = next(row for row in completed_state.standings if row.champions_league_playoff)
 
             champion_notifications_response = client.get(
-                "/notifications/me?limit=100",
+                "/api/notifications/me?limit=100",
                 headers=participants[champion.club_id].headers,
             )
             assert champion_notifications_response.status_code == 200
@@ -208,7 +208,7 @@ def test_league_fixture_dispatch_execution_replay_and_notifications_flow(tmp_pat
             assert "qualified_world_super_cup" in champion_template_keys
 
             playoff_notifications_response = client.get(
-                "/notifications/me?limit=100",
+                "/api/notifications/me?limit=100",
                 headers=participants[playoff_club.club_id].headers,
             )
             assert playoff_notifications_response.status_code == 200

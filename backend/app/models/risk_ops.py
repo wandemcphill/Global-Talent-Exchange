@@ -58,7 +58,7 @@ class AmlCase(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "aml_cases"
 
     user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    case_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True, index=True)
+    case_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
     trigger_source: Mapped[str] = mapped_column(String(48), nullable=False, default="manual", server_default="manual")
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -80,7 +80,7 @@ class FraudCase(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "fraud_cases"
 
     user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    case_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True, index=True)
+    case_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
     fraud_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)

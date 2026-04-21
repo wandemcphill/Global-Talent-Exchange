@@ -2,34 +2,200 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import datetime, timezone
+from pathlib import Path
+import shutil
 
-from alembic.script import ScriptDirectory
-from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine, text
 
-from app.auth.dependencies import get_session
-from app.auth.router import register_user
-from app.auth.schemas import RegisterRequest
-from app.cache.redis_helpers import NullCacheBackend
-from app.core.database import DatabaseRuntime, build_alembic_config
-from app.ingestion.service import IngestionService
-from app.main import create_app
-from app.market.router import create_listing
-from app.market.schemas import ListingCreate
-from app.models.user import User
-from app.wallets.router import list_wallet_accounts
+from backend.tests.app._module_registration_contract_data import (
+    CREATOR_MEDIA_OPENAPI_ABSENT_PATHS,
+    CREATOR_MEDIA_OPENAPI_PRESENT_PATHS,
+    MATCH_ENGINE_OPENAPI_PRESENT_PATHS,
+)
+
+APP_MAIN_SYSTEM_OPENAPI_PATHS = [
+    "/health",
+    "/ready",
+    "/version",
+    "/auth/register",
+    "/auth/login",
+    "/api/v1/auth/register",
+    "/api/v1/auth/login",
+    "/api/auth/me",
+    "/admin/config/supply-tiers",
+    "/admin/config/liquidity-bands",
+    "/admin/config/suspicion-thresholds",
+    "/admin/config/player-card-market-integrity",
+    "/admin/config/value-controls",
+]
+
+APP_MAIN_WALLET_AND_MARKET_OPENAPI_PATHS = [
+    "/wallets/accounts",
+    "/wallets/payment-events",
+    "/api/wallets/accounts",
+    "/api/v1/wallets/accounts",
+    "/api/wallets/summary",
+    "/api/v1/wallets/summary",
+    "/api/wallets/ledger",
+    "/api/v1/wallets/ledger",
+    "/api/wallets/payment-events",
+    "/api/v1/wallets/payment-events",
+    "/players/summaries/recent",
+    "/clubs/{club_id}",
+    "/api/competitions",
+    "/api/competitions/{competition_id}",
+    "/api/competitions/{competition_id}/publish",
+    "/api/competitions/{competition_id}/join",
+    "/api/competitions/{competition_id}/financials",
+    "/market/listings",
+    "/market/summary/{asset_id}",
+    "/market/offers",
+    "/api/market/players",
+    "/api/market/players/{player_id}",
+    "/api/market/players/{player_id}/candles",
+    "/api/market/ticker/{player_id}",
+    "/value-engine/snapshots/rebuild",
+    "/surveillance/suspicious-players",
+    "/surveillance/suspicious-clusters",
+    "/surveillance/thin-market-alerts",
+    "/surveillance/holder-concentration-alerts",
+    "/surveillance/circular-trade-alerts",
+    "/api/orders",
+    "/api/v1/orders",
+    "/api/orders/{order_id}",
+    "/api/v1/orders/{order_id}",
+    "/api/orders/{order_id}/cancel",
+    "/api/v1/orders/{order_id}/cancel",
+    "/api/orders/book/{player_id}",
+    "/api/v1/orders/book/{player_id}",
+    "/api/portfolio",
+    "/api/portfolio/snapshot",
+    "/api/portfolio/summary",
+    "/portfolios/me",
+]
+
+APP_MAIN_COMPETITION_ALIAS_OPENAPI_PATHS = [
+    "/leagues/register",
+    "/api/leagues/register",
+    "/champions-league/qualification-map",
+    "/api/champions-league/qualification-map",
+    "/academy/registration",
+    "/api/academy/registration",
+    "/world-super-cup/qualification/explanation",
+    "/api/world-super-cup/qualification/explanation",
+    "/fast-cups/upcoming",
+    "/api/fast-cups/upcoming",
+]
+
+APP_MAIN_CLUB_SURFACE_OPENAPI_PATHS = [
+    "/api/clubs/{club_id}/reputation",
+    "/api/v1/clubs/{club_id}/reputation",
+    "/api/clubs/{club_id}/reputation/history",
+    "/api/clubs/{club_id}/prestige",
+    "/api/leaderboards/prestige",
+    "/api/clubs/{club_id}/dynasty",
+    "/api/clubs/{club_id}/dynasty/history",
+    "/api/clubs/{club_id}/eras",
+    "/api/leaderboards/dynasties",
+    "/api/clubs/{club_id}/trophy-cabinet",
+    "/api/clubs/{club_id}/identity",
+    "/api/clubs/{club_id}/valuation",
+    "/api/clubs/sale-market/listings",
+    "/api/clubs/{club_id}/sale-market",
+    "/api/clubs/{club_id}/sale-market/listing",
+    "/api/clubs/{club_id}/sale-market/inquiries",
+    "/api/clubs/{club_id}/sale-market/offers",
+    "/api/clubs/{club_id}/sale-market/transfer",
+    "/api/clubs/{club_id}/jerseys",
+    "/api/clubs/{club_id}/badge",
+]
+
+APP_MAIN_REFERRAL_AND_PLAYER_SURFACE_OPENAPI_PATHS = [
+    "/api/referrals/share-codes",
+    "/api/referrals/me/summary",
+    "/api/admin/referrals/dashboard",
+    "/api/admin/referrals/analytics/summary",
+    "/replays/public/featured",
+    "/api/replays/public/featured",
+    "/api/players/{player_id}/career",
+    "/api/players/{player_id}/agency",
+    "/api/players/{player_id}/agency/contract-decision",
+    "/api/players/{player_id}/agency/transfer-decision",
+    "/api/players/{player_id}/contracts",
+    "/api/players/{player_id}/injuries",
+    "/api/transfers/windows",
+    "/api/transfers/windows/{window_id}/bids",
+    "/realtime/status",
+]
+
+
+def _create_app(*, engine, run_migration_check: bool):
+    from app.main import create_app
+
+    return create_app(engine=engine, run_migration_check=run_migration_check)
+
+
+def _create_engine(database_url: str):
+    from sqlalchemy import create_engine
+
+    return create_engine(database_url, connect_args={"check_same_thread": False})
+
+
+def _database_runtime_class():
+    from app.core.database import DatabaseRuntime
+
+    return DatabaseRuntime
+
+
+def _auth_get_session_dependency():
+    from app.auth.dependencies import get_session
+
+    return get_session
+
+
+def _build_alembic_head(engine_url: str) -> str | None:
+    from app.core.database import build_alembic_config
+    from alembic.script import ScriptDirectory
+
+    return ScriptDirectory.from_config(build_alembic_config(engine_url)).get_current_head()
+
+
+def _sql_text(statement: str):
+    from sqlalchemy import text
+
+    return text(statement)
+
+
+def _test_client(app):
+    from fastapi.testclient import TestClient
+
+    return TestClient(app)
+
+
+def _copy_sqlite_template(template_path: Path, destination_path: Path) -> str:
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(template_path, destination_path)
+    return f"sqlite+pysqlite:///{destination_path.as_posix()}"
 
 
 @pytest.fixture()
-def app_and_engine(tmp_path):
-    database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_app_test.db').as_posix()}"
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    return create_app(engine=engine, run_migration_check=True), engine
+def migrated_database_url(tmp_path, migrated_sqlite_template):
+    return _copy_sqlite_template(migrated_sqlite_template, tmp_path / "gte_app_test.db")
+
+
+@pytest.fixture()
+def app_and_engine(migrated_database_url):
+    database_url = migrated_database_url
+    engine = _create_engine(database_url)
+    app = _create_app(engine=engine, run_migration_check=False)
+    try:
+        yield app, engine
+    finally:
+        engine.dispose()
 
 
 def _resolve_session(app):
-    session_dependency = app.dependency_overrides[get_session]
+    session_dependency = app.dependency_overrides[_auth_get_session_dependency()]
     generator = session_dependency()
     session = next(generator)
     return session, generator
@@ -40,10 +206,10 @@ def _close_session(generator) -> None:
         next(generator)
 
 
-def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -> None:
+def test_app_startup_registers_core_routes_and_health_endpoints(app_and_engine) -> None:
     app, engine = app_and_engine
 
-    with TestClient(app) as client:
+    with _test_client(app) as client:
         assert hasattr(app.state, "settings")
         assert hasattr(app.state, "db_engine")
         assert hasattr(app.state, "session_factory")
@@ -77,7 +243,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         version_response = client.get("/version")
         docs_response = client.get("/docs")
 
-    assert get_session in app.dependency_overrides
+    assert _auth_get_session_dependency() in app.dependency_overrides
     assert health_response.status_code == 200
     health_payload = health_response.json()
     assert health_payload["status"] == "ok"
@@ -119,166 +285,89 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert docs_response.status_code == 200
     assert "Swagger UI" in docs_response.text
     paths = app.openapi()["paths"]
-    assert "/health" in paths
-    assert "/ready" in paths
-    assert "/version" in paths
-    assert "/auth/register" in paths
-    assert "/auth/login" in paths
-    assert "/api/v1/auth/register" in paths
-    assert "/api/v1/auth/login" in paths
-    assert "/api/auth/me" in paths
-    assert "/admin/config/supply-tiers" in paths
-    assert "/admin/config/liquidity-bands" in paths
-    assert "/admin/config/suspicion-thresholds" in paths
-    assert "/admin/config/player-card-market-integrity" in paths
-    assert "/admin/config/value-controls" in paths
-    assert "/wallets/accounts" in paths
-    assert "/wallets/payment-events" in paths
-    assert "/api/wallets/accounts" in paths
-    assert "/api/v1/wallets/accounts" in paths
-    assert "/api/wallets/summary" in paths
-    assert "/api/v1/wallets/summary" in paths
-    assert "/api/wallets/ledger" in paths
-    assert "/api/v1/wallets/ledger" in paths
-    assert "/api/wallets/payment-events" in paths
-    assert "/api/v1/wallets/payment-events" in paths
-    assert "/players/summaries/recent" in paths
-    assert "/clubs/{club_id}" in paths
-    assert "/api/competitions" in paths
-    assert "/api/competitions/{competition_id}" in paths
-    assert "/api/competitions/{competition_id}/publish" in paths
-    assert "/api/competitions/{competition_id}/join" in paths
-    assert "/api/competitions/{competition_id}/financials" in paths
-    assert "/market/listings" in paths
-    assert "/market/summary/{asset_id}" in paths
-    assert "/market/offers" in paths
-    assert "/api/market/players" in paths
-    assert "/api/market/players/{player_id}" in paths
-    assert "/api/market/players/{player_id}/candles" in paths
-    assert "/api/market/ticker/{player_id}" in paths
-    assert "/value-engine/snapshots/rebuild" in paths
-    assert "/surveillance/suspicious-players" in paths
-    assert "/surveillance/suspicious-clusters" in paths
-    assert "/surveillance/thin-market-alerts" in paths
-    assert "/surveillance/holder-concentration-alerts" in paths
-    assert "/surveillance/circular-trade-alerts" in paths
-    assert "/api/orders" in paths
-    assert "/api/v1/orders" in paths
-    assert "/api/orders/{order_id}" in paths
-    assert "/api/v1/orders/{order_id}" in paths
-    assert "/api/orders/{order_id}/cancel" in paths
-    assert "/api/v1/orders/{order_id}/cancel" in paths
-    assert "/api/orders/book/{player_id}" in paths
-    assert "/api/v1/orders/book/{player_id}" in paths
-    assert "/api/portfolio" in paths
-    assert "/api/portfolio/snapshot" in paths
-    assert "/api/portfolio/summary" in paths
-    assert "/portfolios/me" in paths
-    assert "/leagues/register" in paths
-    assert "/api/leagues/register" in paths
-    assert "/champions-league/qualification-map" in paths
-    assert "/api/champions-league/qualification-map" in paths
-    assert "/academy/registration" in paths
-    assert "/api/academy/registration" in paths
-    assert "/world-super-cup/qualification/explanation" in paths
-    assert "/api/world-super-cup/qualification/explanation" in paths
-    assert "/fast-cups/upcoming" in paths
-    assert "/api/fast-cups/upcoming" in paths
-    assert "/match-engine/replay" in paths
-    assert "/api/match-engine/replay" in paths
-    assert "/api/clubs/{club_id}/reputation" in paths
-    assert "/api/v1/clubs/{club_id}/reputation" in paths
-    assert "/api/clubs/{club_id}/reputation/history" in paths
-    assert "/api/clubs/{club_id}/prestige" in paths
-    assert "/api/leaderboards/prestige" in paths
-    assert "/api/clubs/{club_id}/dynasty" in paths
-    assert "/api/clubs/{club_id}/dynasty/history" in paths
-    assert "/api/clubs/{club_id}/eras" in paths
-    assert "/api/leaderboards/dynasties" in paths
-    assert "/api/clubs/{club_id}/trophy-cabinet" in paths
-    assert "/api/clubs/{club_id}/identity" in paths
-    assert "/api/clubs/{club_id}/valuation" in paths
-    assert "/api/clubs/sale-market/listings" in paths
-    assert "/api/clubs/{club_id}/sale-market" in paths
-    assert "/api/clubs/{club_id}/sale-market/listing" in paths
-    assert "/api/clubs/{club_id}/sale-market/inquiries" in paths
-    assert "/api/clubs/{club_id}/sale-market/offers" in paths
-    assert "/api/clubs/{club_id}/sale-market/transfer" in paths
-    assert "/api/clubs/{club_id}/jerseys" in paths
-    assert "/api/clubs/{club_id}/badge" in paths
-    assert "/api/creators/profile" in paths
-    assert "/api/creators/profile/me" in paths
-    assert "/api/creators/me/summary" in paths
-    assert "/api/referrals/share-codes" in paths
-    assert "/api/referrals/me/summary" in paths
-    assert "/api/admin/referrals/dashboard" in paths
-    assert "/api/admin/referrals/analytics/summary" in paths
-    assert "/notifications/me" in paths
+    for path in APP_MAIN_SYSTEM_OPENAPI_PATHS:
+        assert path in paths
+    for path in APP_MAIN_WALLET_AND_MARKET_OPENAPI_PATHS:
+        assert path in paths
+    for path in APP_MAIN_COMPETITION_ALIAS_OPENAPI_PATHS:
+        assert path in paths
+    for path in MATCH_ENGINE_OPENAPI_PRESENT_PATHS:
+        assert path in paths
+    for path in (
+        "/api/match-engine/replay",
+        "/api/match-engine/summary",
+    ):
+        assert path in paths
+    for path in APP_MAIN_CLUB_SURFACE_OPENAPI_PATHS:
+        assert path in paths
+    for path in CREATOR_MEDIA_OPENAPI_PRESENT_PATHS:
+        assert path in paths
+    for path in CREATOR_MEDIA_OPENAPI_ABSENT_PATHS:
+        assert path not in paths
+    for path in APP_MAIN_REFERRAL_AND_PLAYER_SURFACE_OPENAPI_PATHS:
+        assert path in paths
     assert "/api/notifications/me" in paths
-    assert "/replays/public/featured" in paths
-    assert "/api/replays/public/featured" in paths
-    assert "/api/players/{player_id}/career" in paths
-    assert "/api/players/{player_id}/agency" in paths
-    assert "/api/players/{player_id}/agency/contract-decision" in paths
-    assert "/api/players/{player_id}/agency/transfer-decision" in paths
-    assert "/api/players/{player_id}/contracts" in paths
-    assert "/api/players/{player_id}/injuries" in paths
-    assert "/api/transfers/windows" in paths
-    assert "/api/transfers/windows/{window_id}/bids" in paths
-    assert "/realtime/status" in paths
+    assert "/notifications/me" not in paths
 
     with engine.connect() as connection:
-        revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+        revision = connection.execute(_sql_text("SELECT version_num FROM alembic_version")).scalar_one()
 
-    target_head = ScriptDirectory.from_config(build_alembic_config(str(engine.url))).get_current_head()
+    target_head = _build_alembic_head(str(engine.url))
     assert revision == target_head
 
 
 def test_app_startup_repairs_schema_when_smoke_detects_stale_database(tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_schema_repair.db').as_posix()}"
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    app = create_app(engine=engine, run_migration_check=False)
+    engine = _create_engine(database_url)
+    app = _create_app(engine=engine, run_migration_check=False)
 
-    with TestClient(app) as client:
-        ready_response = client.get("/ready")
+    try:
+        with _test_client(app) as client:
+            ready_response = client.get("/ready")
 
-    assert ready_response.status_code == 200
-    assert ready_response.json()["status"] == "ready"
+        assert ready_response.status_code == 200
+        assert ready_response.json()["status"] == "ready"
 
-    with engine.connect() as connection:
-        revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+        with engine.connect() as connection:
+            revision = connection.execute(_sql_text("SELECT version_num FROM alembic_version")).scalar_one()
 
-    target_head = ScriptDirectory.from_config(build_alembic_config(str(engine.url))).get_current_head()
-    assert revision == target_head
+        target_head = _build_alembic_head(str(engine.url))
+        assert revision == target_head
+    finally:
+        engine.dispose()
 
 
 def test_app_startup_fails_stamped_head_database_with_missing_tables(tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_stamped_head_schema_repair.db').as_posix()}"
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    target_head = ScriptDirectory.from_config(build_alembic_config(str(engine.url))).get_current_head()
+    engine = _create_engine(database_url)
+    target_head = _build_alembic_head(str(engine.url))
     assert target_head is not None
 
     with engine.begin() as connection:
-        connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL PRIMARY KEY)"))
+        connection.execute(_sql_text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL PRIMARY KEY)"))
         connection.execute(
-            text("INSERT INTO alembic_version (version_num) VALUES (:version_num)"), {"version_num": target_head}
+            _sql_text("INSERT INTO alembic_version (version_num) VALUES (:version_num)"), {"version_num": target_head}
         )
 
-    app = create_app(engine=engine, run_migration_check=False)
+    app = _create_app(engine=engine, run_migration_check=False)
 
-    with pytest.raises(RuntimeError, match="Database schema smoke check failed."):
-        with TestClient(app):
-            pass
+    try:
+        with pytest.raises(RuntimeError, match="Database schema smoke check failed."):
+            with _test_client(app):
+                pass
+    finally:
+        engine.dispose()
 
 
 def test_ready_returns_service_unavailable_when_database_check_fails(app_and_engine, monkeypatch) -> None:
     app, _engine = app_and_engine
+    database_runtime = _database_runtime_class()
 
     def _raise_db_error(_self) -> bool:
         raise RuntimeError("db offline")
 
-    with TestClient(app) as client:
-        monkeypatch.setattr(DatabaseRuntime, "ping", _raise_db_error)
+    with _test_client(app) as client:
+        monkeypatch.setattr(database_runtime, "ping", _raise_db_error)
         response = client.get("/ready")
 
     assert response.status_code == 503
@@ -298,31 +387,34 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
 
 def test_app_startup_fails_when_schema_smoke_fails_even_without_migration_upgrade(monkeypatch, tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_schema_smoke_failure.db').as_posix()}"
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    app = create_app(engine=engine, run_migration_check=False)
+    engine = _create_engine(database_url)
+    app = _create_app(engine=engine, run_migration_check=False)
+    database_runtime = _database_runtime_class()
 
     def _raise_schema_error(_self):
         raise RuntimeError("schema drift")
 
-    monkeypatch.setattr(DatabaseRuntime, "check_schema_smoke", _raise_schema_error)
+    monkeypatch.setattr(database_runtime, "check_schema_smoke", _raise_schema_error)
 
-    with pytest.raises(RuntimeError, match="schema drift"):
-        with TestClient(app):
-            pass
+    try:
+        with pytest.raises(RuntimeError, match="schema drift"):
+            with _test_client(app):
+                pass
+    finally:
+        engine.dispose()
 
 
-def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(monkeypatch, tmp_path) -> None:
-    database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_skip_schema_check.db').as_posix()}"
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    app = create_app(engine=engine, run_migration_check=True)
+def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(app_and_engine, monkeypatch) -> None:
+    app, _engine = app_and_engine
+    database_runtime = _database_runtime_class()
 
     def _raise_schema_error(_self, **_kwargs):
         raise RuntimeError("schema drift")
 
     monkeypatch.setenv("SKIP_SCHEMA_CHECK", "true")
-    monkeypatch.setattr(DatabaseRuntime, "check_schema_smoke", _raise_schema_error)
+    monkeypatch.setattr(database_runtime, "check_schema_smoke", _raise_schema_error)
 
-    with TestClient(app) as client:
+    with _test_client(app) as client:
         ready_response = client.get("/ready")
 
     assert ready_response.status_code == 200
@@ -344,6 +436,14 @@ def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(monkeypatch, t
 @pytest.mark.anyio
 async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and_engine) -> None:
     app, _engine = app_and_engine
+    from app.auth.router import register_user
+    from app.auth.schemas import RegisterRequest
+    from app.cache.redis_helpers import NullCacheBackend
+    from app.ingestion.service import IngestionService
+    from app.market.router import create_listing
+    from app.market.schemas import ListingCreate
+    from app.models.user import User
+    from app.wallets.router import list_wallet_accounts
 
     async with app.router.lifespan_context(app):
         session, session_generator = _resolve_session(app)

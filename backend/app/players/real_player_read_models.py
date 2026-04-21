@@ -27,6 +27,7 @@ class RealPlayerUniverseListItem:
     average_rating: float | None
     current_market_reference_value: float | None
     market_reference_currency: str | None
+    image_url: str | None
     source_name: str
     source_last_refreshed_at: datetime | None
     is_verified_real_player: bool
@@ -89,6 +90,7 @@ class RealPlayerUniverseDetail:
     injury_status: str | None
     real_player_tier: str | None
     identity_confidence_score: float | None
+    image_url: str | None
     source_name: str
     source_player_key: str
     source_last_refreshed_at: datetime | None

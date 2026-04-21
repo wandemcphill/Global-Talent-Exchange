@@ -14,8 +14,8 @@ namespace FStudio.MatchEngine.Graphics.GraphicsModes {
             await stadiums.Load(stadiumType);
         }
 
-        public void Unload () {
-            stadiums.Unload();
+        public async Task Unload () {
+            await stadiums.Unload();
         }
     }
 }

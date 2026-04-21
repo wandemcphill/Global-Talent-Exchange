@@ -235,7 +235,7 @@ class _TasksBody extends ConsumerWidget {
     try {
       final Object? claimResponse = await ref
           .read(authedApiProvider)
-          .post('/daily-challenges/$challengeKey/claim');
+          .post('/api/daily-challenges/$challengeKey/claim');
       final LiveTasksData refreshedTasks = await ref.refresh(
         liveTasksProvider.future,
       );

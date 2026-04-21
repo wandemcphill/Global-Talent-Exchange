@@ -14,6 +14,7 @@ namespace FStudio.Utilities {
     [Serializable]
     public class SerializableSceneCollection <Key> {
         public SceneEntry<Key>[] Entries;
+        private bool hasLoadedScene;
 
         public void Resize(Key[] keys) {
             var itemCount = keys.Length;
@@ -39,11 +40,18 @@ namespace FStudio.Utilities {
             //
         }
 
-        public async void Unload() {
+        public async Task Unload() {
             await SceneLoader.LoadDefaultScene();
+            hasLoadedScene = false;
         }
 
         public async Task Load(Key key) {
+            if (Entries == null || Entries.Length == 0)
+            {
+                Debug.LogError("[SerializableSceneCollection] No scene entries are configured.");
+                return;
+            }
+
             var scene = Find(key);
 
             if (scene == null) {
@@ -51,7 +59,14 @@ namespace FStudio.Utilities {
                 scene = Entries[0].Val;
             }
 
+            if (scene == null)
+            {
+                Debug.LogError($"[SerializableSceneCollection] Scene reference for {key} is missing.");
+                return;
+            }
+
             var sceneInstance = await SceneLoader.LoadScene(scene);
+            hasLoadedScene = sceneInstance.Scene.IsValid();
             Debug.Log($"[AssetCollectionBase] Scene loaded {sceneInstance.Scene.name}");
         }
 

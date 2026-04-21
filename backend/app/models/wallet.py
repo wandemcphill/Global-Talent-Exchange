@@ -120,7 +120,7 @@ class LedgerAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
-    code: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
     label: Mapped[str] = mapped_column(String(120), nullable=False)
     unit: Mapped[LedgerUnit] = mapped_column(
         Enum(LedgerUnit, name="ledger_unit", native_enum=False),
@@ -166,7 +166,7 @@ class LedgerTransaction(UUIDPrimaryKeyMixin, Base):
     reference: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     external_reference: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_by_user_id: Mapped[str | None] = mapped_column(
         String(36),
@@ -290,7 +290,7 @@ class PaymentEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum(PaymentProvider, name="payment_provider", native_enum=False),
         nullable=False,
     )
-    provider_reference: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    provider_reference: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     provider_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     pack_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)

@@ -11,7 +11,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class CompetitionProgressProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "competition_progress_profiles"
 
-    subject_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    subject_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     resolved_user_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),

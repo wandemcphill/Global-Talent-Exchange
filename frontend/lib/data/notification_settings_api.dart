@@ -13,12 +13,13 @@ class NotificationSettingsApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return NotificationSettingsApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -44,7 +45,7 @@ class NotificationSettingsApi {
   Future<NotificationPreference> fetchPreferences() {
     return client.withFallback<NotificationPreference>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/notifications/preferences',
+        '/api/notifications/preferences',
       );
       return NotificationPreference.fromJson(payload);
     }, fixtures.preferences);
@@ -57,7 +58,7 @@ class NotificationSettingsApi {
       () async {
         final Object? payload = await client.request(
           'PUT',
-          '/notifications/preferences',
+          '/api/notifications/preferences',
           body: <String, Object?>{
             'allow_wallet': preference.allowWallet,
             'allow_market': preference.allowMarket,
@@ -83,7 +84,7 @@ class NotificationSettingsApi {
   Future<List<NotificationSubscription>> listSubscriptions() {
     return client.withFallback<List<NotificationSubscription>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/notifications/subscriptions',
+        '/api/notifications/subscriptions',
       );
       return payload
           .map(NotificationSubscription.fromJson)
@@ -101,7 +102,7 @@ class NotificationSettingsApi {
       () async {
         final Object? payload = await client.request(
           'POST',
-          '/notifications/subscriptions',
+          '/api/notifications/subscriptions',
           body: <String, Object?>{
             'subscription_key': subscriptionKey,
             'label': label,
@@ -125,7 +126,7 @@ class NotificationSettingsApi {
     return client.withFallback<void>(() async {
       await client.request(
         'DELETE',
-        '/notifications/subscriptions/$subscriptionId',
+        '/api/notifications/subscriptions/$subscriptionId',
       );
     }, () async => fixtures.removeSubscription(subscriptionId));
   }
@@ -133,7 +134,7 @@ class NotificationSettingsApi {
   Future<List<PlatformAnnouncement>> listAnnouncements() {
     return client.withFallback<List<PlatformAnnouncement>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/notifications/announcements',
+        '/api/notifications/announcements',
         auth: false,
       );
       return payload.map(PlatformAnnouncement.fromJson).toList(growable: false);
@@ -143,7 +144,7 @@ class NotificationSettingsApi {
   Future<List<PlatformAnnouncement>> adminListAnnouncements() {
     return client.withFallback<List<PlatformAnnouncement>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/admin/notifications/announcements',
+        '/api/admin/notifications/announcements',
       );
       return payload.map(PlatformAnnouncement.fromJson).toList(growable: false);
     }, fixtures.announcements);
@@ -162,7 +163,7 @@ class NotificationSettingsApi {
       () async {
         final Object? payload = await client.request(
           'POST',
-          '/admin/notifications/announcements',
+          '/api/admin/notifications/announcements',
           body: <String, Object?>{
             'announcement_key': announcementKey,
             'title': title,

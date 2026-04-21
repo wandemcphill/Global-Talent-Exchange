@@ -48,7 +48,7 @@ class HostedCompetitionApi {
   Future<List<HostedCompetitionTemplate>> listTemplates() {
     return client.withFallback<List<HostedCompetitionTemplate>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/hosted-competitions/templates',
+        '/api/hosted-competitions/templates',
         auth: false,
       );
       return payload
@@ -60,7 +60,7 @@ class HostedCompetitionApi {
   Future<List<HostedCompetition>> listCompetitions() {
     return client.withFallback<List<HostedCompetition>>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/hosted-competitions',
+        '/api/hosted-competitions',
         auth: false,
       );
       final List<dynamic> competitions =
@@ -74,7 +74,7 @@ class HostedCompetitionApi {
   Future<List<HostedCompetition>> listMyCompetitions() {
     return client.withFallback<List<HostedCompetition>>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/hosted-competitions/mine',
+        '/api/hosted-competitions/mine',
       );
       final List<dynamic> competitions =
           payload['competitions'] as List<dynamic>? ?? <dynamic>[];
@@ -87,7 +87,7 @@ class HostedCompetitionApi {
   Future<HostedCompetitionDetail> fetchDetail(String competitionId) {
     return client.withFallback<HostedCompetitionDetail>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/hosted-competitions/$competitionId',
+        '/api/hosted-competitions/$competitionId',
         auth: false,
       );
       return HostedCompetitionDetail.fromJson(payload);
@@ -107,7 +107,7 @@ class HostedCompetitionApi {
       () async {
         final Object? payload = await client.request(
           'POST',
-          '/hosted-competitions',
+          '/api/hosted-competitions',
           body: <String, Object?>{
             'template_key': templateKey,
             'title': title,
@@ -133,7 +133,7 @@ class HostedCompetitionApi {
     return client.withFallback<HostedCompetition>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/hosted-competitions/$competitionId/join',
+        '/api/hosted-competitions/$competitionId/join',
       );
       final Map<String, dynamic> map =
           payload as Map<String, dynamic>? ?? <String, dynamic>{};
@@ -144,7 +144,7 @@ class HostedCompetitionApi {
   Future<List<HostedCompetitionStanding>> listStandings(String competitionId) {
     return client.withFallback<List<HostedCompetitionStanding>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/hosted-competitions/$competitionId/standings',
+        '/api/hosted-competitions/$competitionId/standings',
         auth: false,
       );
       return payload
@@ -156,7 +156,7 @@ class HostedCompetitionApi {
   Future<HostedCompetitionFinance> fetchFinance(String competitionId) {
     return client.withFallback<HostedCompetitionFinance>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/hosted-competitions/$competitionId/finance',
+        '/api/hosted-competitions/$competitionId/finance',
         auth: false,
       );
       return HostedCompetitionFinance.fromJson(payload);
@@ -167,7 +167,7 @@ class HostedCompetitionApi {
     return client.withFallback<HostedCompetition>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/hosted-competitions/$competitionId/launch',
+        '/api/hosted-competitions/$competitionId/launch',
       );
       final Map<String, dynamic> map =
           payload as Map<String, dynamic>? ?? <String, dynamic>{};
@@ -178,7 +178,7 @@ class HostedCompetitionApi {
   Future<List<HostedCompetitionTemplate>> seedTemplates() {
     return client.withFallback<List<HostedCompetitionTemplate>>(() async {
       final Object? payload = await client.post(
-        '/admin/hosted-competitions/seed',
+        '/api/admin/hosted-competitions/seed',
       );
       final List<dynamic> items =
           payload is List<dynamic> ? payload : <dynamic>[];
@@ -196,7 +196,7 @@ class HostedCompetitionApi {
     return client.withFallback<HostedCompetition>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/admin/hosted-competitions/$competitionId/finalize',
+        '/api/admin/hosted-competitions/$competitionId/finalize',
         body: <String, Object?>{'placements': placements, 'note': note},
       );
       final Map<String, dynamic> map =

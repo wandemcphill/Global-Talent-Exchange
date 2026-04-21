@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/governance_models.dart';
 
 class GovernanceApi {
-  GovernanceApi({
-    required this.client,
-    required this.fixtures,
-  });
+  GovernanceApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _GovernanceFixtures fixtures;
@@ -16,6 +13,7 @@ class GovernanceApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode =
         mode == GteBackendMode.fixture
@@ -24,7 +22,7 @@ class GovernanceApi {
     return GovernanceApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -48,43 +46,35 @@ class GovernanceApi {
   }
 
   Future<List<GovernanceProposal>> listProposals({String? clubId}) {
-    return client.withFallback<List<GovernanceProposal>>(
-      () async {
-        final Map<String, dynamic> payload = await client.getMap(
-          '/governance/proposals',
-          query: <String, Object?>{
-            if (clubId != null && clubId.isNotEmpty) 'club_id': clubId,
-          },
-        );
-        final List<dynamic> proposals = payload['proposals'] as List<dynamic>? ?? <dynamic>[];
-        return proposals
-            .map(GovernanceProposal.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.listProposals,
-    );
+    return client.withFallback<List<GovernanceProposal>>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/api/governance/proposals',
+        query: <String, Object?>{
+          if (clubId != null && clubId.isNotEmpty) 'club_id': clubId,
+        },
+      );
+      final List<dynamic> proposals =
+          payload['proposals'] as List<dynamic>? ?? <dynamic>[];
+      return proposals.map(GovernanceProposal.fromJson).toList(growable: false);
+    }, fixtures.listProposals);
   }
 
   Future<GovernanceProposalDetail> fetchProposal(String proposalId) {
-    return client.withFallback<GovernanceProposalDetail>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/governance/proposals/$proposalId');
-        return GovernanceProposalDetail.fromJson(payload);
-      },
-      () async => fixtures.detail(proposalId),
-    );
+    return client.withFallback<GovernanceProposalDetail>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/api/governance/proposals/$proposalId',
+      );
+      return GovernanceProposalDetail.fromJson(payload);
+    }, () async => fixtures.detail(proposalId));
   }
 
   Future<GovernanceOverview> fetchOverview() {
-    return client.withFallback<GovernanceOverview>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/governance/me/overview');
-        return GovernanceOverview.fromJson(payload);
-      },
-      fixtures.overview,
-    );
+    return client.withFallback<GovernanceOverview>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/api/governance/me/overview',
+      );
+      return GovernanceOverview.fromJson(payload);
+    }, fixtures.overview);
   }
 
   Future<GovernanceProposalDetail> vote({
@@ -92,26 +82,25 @@ class GovernanceApi {
     required String choice,
     String? comment,
   }) {
-    return client.withFallback<GovernanceProposalDetail>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/governance/proposals/$proposalId/vote',
-          body: <String, Object?>{
-            'choice': choice,
-            if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
-          },
-        );
-        final Map<String, dynamic> map = payload as Map<String, dynamic>? ?? <String, dynamic>{};
-        return GovernanceProposalDetail.fromJson(<String, Object?>{
-          'proposal': map['proposal'],
-          'votes': <Object?>[map['vote']],
-          'my_vote': map['vote'],
-          'user_eligible': true,
-        });
-      },
-      () async => fixtures.vote(proposalId, choice),
-    );
+    return client.withFallback<GovernanceProposalDetail>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/governance/proposals/$proposalId/vote',
+        body: <String, Object?>{
+          'choice': choice,
+          if (comment != null && comment.trim().isNotEmpty)
+            'comment': comment.trim(),
+        },
+      );
+      final Map<String, dynamic> map =
+          payload as Map<String, dynamic>? ?? <String, dynamic>{};
+      return GovernanceProposalDetail.fromJson(<String, Object?>{
+        'proposal': map['proposal'],
+        'votes': <Object?>[map['vote']],
+        'my_vote': map['vote'],
+        'user_eligible': true,
+      });
+    }, () async => fixtures.vote(proposalId, choice));
   }
 
   Future<GovernanceProposal> updateProposalStatus({
@@ -119,20 +108,17 @@ class GovernanceApi {
     required String status,
     String? resultSummary,
   }) {
-    return client.withFallback<GovernanceProposal>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/admin/governance/proposals/$proposalId/status',
-          body: <String, Object?>{
-            'status': status,
-            if (resultSummary != null) 'result_summary': resultSummary,
-          },
-        );
-        return GovernanceProposal.fromJson(payload);
-      },
-      () async => fixtures.updateStatus(proposalId, status),
-    );
+    return client.withFallback<GovernanceProposal>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/admin/governance/proposals/$proposalId/status',
+        body: <String, Object?>{
+          'status': status,
+          if (resultSummary != null) 'result_summary': resultSummary,
+        },
+      );
+      return GovernanceProposal.fromJson(payload);
+    }, () async => fixtures.updateStatus(proposalId, status));
   }
 }
 
@@ -150,7 +136,8 @@ class _GovernanceFixtures {
         scope: 'club',
         status: 'open',
         title: 'Raise academy scouting budget',
-        summary: 'Increase academy scouting allocation by 12% for next quarter.',
+        summary:
+            'Increase academy scouting allocation by 12% for next quarter.',
         category: 'budget',
         votingStartsAtIso: '2026-03-12T10:00:00Z',
         votingEndsAtIso: '2026-03-19T10:00:00Z',
@@ -173,8 +160,9 @@ class _GovernanceFixtures {
       List<GovernanceProposal>.of(_proposals, growable: false);
 
   Future<GovernanceProposalDetail> detail(String proposalId) async {
-    final GovernanceProposal proposal =
-        _proposals.firstWhere((GovernanceProposal item) => item.id == proposalId);
+    final GovernanceProposal proposal = _proposals.firstWhere(
+      (GovernanceProposal item) => item.id == proposalId,
+    );
     return GovernanceProposalDetail(
       proposal: proposal,
       votes: const <GovernanceVote>[],
@@ -193,9 +181,13 @@ class _GovernanceFixtures {
     );
   }
 
-  Future<GovernanceProposalDetail> vote(String proposalId, String choice) async {
-    final GovernanceProposal proposal =
-        _proposals.firstWhere((GovernanceProposal item) => item.id == proposalId);
+  Future<GovernanceProposalDetail> vote(
+    String proposalId,
+    String choice,
+  ) async {
+    final GovernanceProposal proposal = _proposals.firstWhere(
+      (GovernanceProposal item) => item.id == proposalId,
+    );
     return GovernanceProposalDetail(
       proposal: proposal,
       votes: const <GovernanceVote>[],
@@ -218,9 +210,13 @@ class _GovernanceFixtures {
     );
   }
 
-  Future<GovernanceProposal> updateStatus(String proposalId, String status) async {
-    final int index =
-        _proposals.indexWhere((GovernanceProposal item) => item.id == proposalId);
+  Future<GovernanceProposal> updateStatus(
+    String proposalId,
+    String status,
+  ) async {
+    final int index = _proposals.indexWhere(
+      (GovernanceProposal item) => item.id == proposalId,
+    );
     if (index == -1) {
       return _proposals.first;
     }

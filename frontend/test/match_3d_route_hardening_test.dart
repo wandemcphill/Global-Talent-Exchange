@@ -54,7 +54,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('FLUTTER_3D'));
 
       expect(find.text('3D Match Viewer'), findsWidgets);
       expect(find.text('Route blocked'), findsNothing);

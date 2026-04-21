@@ -368,6 +368,74 @@ def test_real_player_ingestion_attaches_to_existing_canonical_entities() -> None
         engine.dispose()
 
 
+def test_real_player_ingestion_persists_provider_photo_metadata() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            _seed_curated_canonical_entities(session)
+
+        request = RealPlayerIngestionRequest.model_validate(
+            {
+                "mode": "curated_seed",
+                "as_of": "2026-03-22T12:00:00+00:00",
+                "players": [
+                    {
+                        "source_name": "sportmonks",
+                        "source_player_key": "osimhen-001",
+                        "canonical_name": "Victor Osimhen",
+                        "nationality": "Nigeria",
+                        "nationality_code": "NG",
+                        "date_of_birth": "1998-12-29",
+                        "dominant_foot": "right",
+                        "primary_position": "Striker",
+                        "current_real_world_club": "Launch Club A",
+                        "current_real_world_league": "Launch League Elite",
+                        "competition_level": "elite",
+                        "appearances": 31,
+                        "minutes_played": 2410,
+                        "goals": 19,
+                        "assists": 4,
+                        "current_market_reference_value": 60000000,
+                        "market_reference_currency": "EUR",
+                        "photo_url": "https://cdn.sportmonks.com/images/soccer/players/1/osimhen-001.png",
+                    }
+                ],
+            }
+        )
+
+        service = RealPlayerIngestionService(session_factory=session_factory, settings=_settings())
+        report = service.write_batch(request)
+        assert report.players_processed == 1
+
+        with session_factory() as session:
+            player = session.scalar(select(Player).where(Player.full_name == "Victor Osimhen"))
+            assert player is not None
+
+            profile = session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id == player.id))
+            assert profile is not None
+            assert profile.metadata_json["no_real_photos"] is False
+            assert (
+                profile.metadata_json["photo_url"]
+                == "https://cdn.sportmonks.com/images/soccer/players/1/osimhen-001.png"
+            )
+
+            image = session.scalar(select(PlayerImageMetadata).where(PlayerImageMetadata.player_id == player.id))
+            assert image is not None
+            assert image.source_provider == "sportmonks"
+            assert image.provider_external_id == "osimhen-001"
+            assert image.source_url == "https://cdn.sportmonks.com/images/soccer/players/1/osimhen-001.png"
+            assert image.moderation_status == "approved"
+            assert image.rights_cleared is True
+
+            summary = session.get(PlayerSummaryReadModel, player.id)
+            assert summary is not None
+            assert summary.summary_json["real_player_profile"]["photo_url"] == (
+                "https://cdn.sportmonks.com/images/soccer/players/1/osimhen-001.png"
+            )
+    finally:
+        engine.dispose()
+
+
 def test_real_player_ingestion_resolves_seeded_country_alias_when_club_exists() -> None:
     engine, session_factory = _session_factory()
     try:
@@ -832,12 +900,12 @@ def test_real_player_ingestion_resolves_cyrillic_club_names_via_provider_id_fall
 
         with session_factory() as session:
             player = session.scalar(select(Player).where(Player.source_provider == SECOND_ZIP_SOURCE_NAME))
-            profile = session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.source_name == SECOND_ZIP_SOURCE_NAME))
+            profile = session.scalar(
+                select(RealPlayerProfile).where(RealPlayerProfile.source_name == SECOND_ZIP_SOURCE_NAME)
+            )
             unresolved_clubs = list(
                 session.scalars(
-                    select(RealPlayerUnresolvedReference).where(
-                        RealPlayerUnresolvedReference.entity_type == "club"
-                    )
+                    select(RealPlayerUnresolvedReference).where(RealPlayerUnresolvedReference.entity_type == "club")
                 )
             )
 

@@ -4,6 +4,9 @@ plugins {
     id 'dev.flutter.flutter-gradle-plugin'
 }
 
+def unityLibraryPresent = findProject(':unityLibrary') != null
+def unityMinSdk = unityLibraryPresent ? 25 : 0
+
 android {
     namespace = 'com.gtex.exchange'
     compileSdk = flutter.compileSdkVersion
@@ -20,7 +23,7 @@ android {
 
     defaultConfig {
         applicationId = 'com.gtex.exchange'
-        minSdk = flutter.minSdkVersion
+        minSdk = Math.max((flutter.minSdkVersion as int), unityMinSdk)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -36,7 +39,7 @@ android {
 }
 
 dependencies {
-    if (findProject(':unityLibrary') != null) {
+    if (unityLibraryPresent) {
         implementation project(':unityLibrary')
     }
 }

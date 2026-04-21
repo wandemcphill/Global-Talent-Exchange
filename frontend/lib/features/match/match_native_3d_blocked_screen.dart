@@ -40,7 +40,7 @@ class MatchNative3dBlockedScreen extends StatelessWidget {
               'The active Flutter shell keeps this route disclosed until a verified native runtime is mounted end to end.',
           metrics: <Widget>[
             GtexPill(label: 'BLOCKED', tone: GtexSurfaceTone.danger),
-            GtexPill(label: 'NO NATIVE BRIDGE', tone: GtexSurfaceTone.warning),
+            GtexPill(label: 'UNPROVEN RUNTIME', tone: GtexSurfaceTone.warning),
           ],
         ),
         GtexSectionPanel(
@@ -60,7 +60,7 @@ class MatchNative3dBlockedScreen extends StatelessWidget {
               ),
               const SizedBox(height: spacingMD),
               const Text(
-                'The Android host now mounts a verified native match_3d bridge and native renderer behind the routed 3D lane when available. This preview route stays blocked until a native-only route is wired to a specific live match session instead of a placeholder surface.',
+                'The Android host contains a native match_3d bridge scaffold, but this preview route stays blocked until a native-only route is wired to a verified live match session and backed by a shipped Android runtime instead of placeholder plumbing.',
               ),
             ],
           ),

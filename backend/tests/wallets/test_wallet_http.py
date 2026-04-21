@@ -480,6 +480,8 @@ def test_purchase_order_quote_rejects_stub_provider(api_context) -> None:
 
     assert response.status_code == 404
     assert "not currently available" in response.json()["detail"]
+
+
 def test_wallet_overview_handles_missing_country_policy_rows(api_context) -> None:
     client, session, current_user = api_context
     policy_service = PolicyService(session)

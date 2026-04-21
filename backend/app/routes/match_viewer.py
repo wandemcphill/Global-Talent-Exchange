@@ -9,6 +9,7 @@ from app.db import get_session
 from app.fairness.match_integrity_service import MatchIntegrityService, MatchIntegrityViolation
 from app.infinite_league.service import ensure_infinite_league_runtime
 from app.live_matches.service import ensure_live_match_hub
+from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.replay_archive.service import ensure_replay_archive
 from app.schemas.match_viewer import MatchMode, MatchViewerSessionView, MatchViewStateView
@@ -72,8 +73,10 @@ def _attach_monetization(
     view_state: MatchViewStateView,
     *,
     match_key: str,
+    session: Session,
     ad_engine: AdDecisionEngine,
     metadata_json: dict[str, object] | None = None,
+    match: CompetitionMatch | None = None,
 ) -> MatchViewStateView:
     ad_profile = metadata_json.get("ad_profile") if isinstance(metadata_json, dict) else None
     match_context = {
@@ -86,16 +89,95 @@ def _attach_monetization(
             value = metadata_json.get(key)
             if isinstance(value, str) and value.strip():
                 match_context[key] = value
-    return view_state.model_copy(
-        update={
-            "monetization": ad_engine.build_viewer_monetization(
-                match_id=match_key,
-                view_state=view_state,
-                ad_profile=ad_profile if isinstance(ad_profile, dict) else None,
-                match_context=match_context,
-            )
-        }
+    monetization = ad_engine.build_viewer_monetization(
+        match_id=match_key,
+        view_state=view_state,
+        ad_profile=ad_profile if isinstance(ad_profile, dict) else None,
+        match_context=match_context,
     )
+    gift_metadata = _match_gift_metadata(
+        session=session,
+        match=match,
+        metadata_json=metadata_json if isinstance(metadata_json, dict) else None,
+    )
+    if gift_metadata:
+        monetization = monetization.model_copy(
+            update={
+                "metadata": {
+                    **dict(monetization.metadata or {}),
+                    **gift_metadata,
+                }
+            }
+        )
+    return view_state.model_copy(update={"monetization": monetization})
+
+
+def _match_gift_metadata(
+    *,
+    session: Session,
+    match: CompetitionMatch | None,
+    metadata_json: dict[str, object] | None,
+) -> dict[str, object]:
+    if match is None:
+        return {}
+    competition = session.get(UserCompetition, match.competition_id)
+    if competition is None:
+        return {}
+    recipient_user_id = competition.host_user_id.strip()
+    if not recipient_user_id:
+        return {}
+    return {
+        "gift_recipient_user_id": recipient_user_id,
+        "gift_recipient_label": _match_gift_recipient_label(
+            competition=competition,
+            metadata_json=metadata_json,
+        ),
+        "gift_source_scope": _match_gift_source_scope(
+            competition=competition,
+            metadata_json=metadata_json,
+        ),
+    }
+
+
+def _match_gift_recipient_label(
+    *,
+    competition: UserCompetition,
+    metadata_json: dict[str, object] | None,
+) -> str:
+    if isinstance(metadata_json, dict):
+        for key in ("creator_name", "creator_label", "host_name", "host_label"):
+            value = metadata_json.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    if competition.name.strip():
+        return competition.name.strip()
+    return "Match host"
+
+
+def _match_gift_source_scope(
+    *,
+    competition: UserCompetition,
+    metadata_json: dict[str, object] | None,
+) -> str:
+    if isinstance(metadata_json, dict):
+        explicit = metadata_json.get("gift_source_scope")
+        if isinstance(explicit, str) and explicit.strip():
+            normalized = explicit.strip().lower()
+            if normalized in {"user_hosted", "gtex_competition"}:
+                return normalized
+    normalized_source_type = (competition.source_type or "").strip().lower()
+    normalized_host_user = competition.host_user_id.strip().lower()
+    if normalized_source_type in {
+        "gtex",
+        "gtex_official",
+        "gtex_platform",
+        "official",
+        "platform",
+    }:
+        return "gtex_competition"
+    if normalized_host_user.startswith("gtex") or normalized_host_user == "platform":
+        return "gtex_competition"
+    return "user_hosted"
 
 
 def _metadata_team_name(metadata_json: dict[str, object], *, side: str) -> str | None:
@@ -255,8 +337,10 @@ def read_match_viewer_timeline(
             return _attach_monetization(
                 secured,
                 match_key=match_key,
+                session=session,
                 ad_engine=ad_engine,
                 metadata_json=resolved.metadata_json,
+                match=resolved.match,
             )
         except MatchIntegrityViolation as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
@@ -271,8 +355,10 @@ def read_match_viewer_timeline(
     return _attach_monetization(
         transformed,
         match_key=match_key,
+        session=session,
         ad_engine=ad_engine,
         metadata_json=resolved.metadata_json,
+        match=resolved.match,
     )
 
 
@@ -322,8 +408,10 @@ def read_match_viewer_session(
             _attach_monetization(
                 secured,
                 match_key=match_key,
+                session=session,
                 ad_engine=ad_engine,
                 metadata_json=resolved.metadata_json,
+                match=resolved.match,
             ).model_dump(mode="json")
         )
     except MatchIntegrityViolation as exc:

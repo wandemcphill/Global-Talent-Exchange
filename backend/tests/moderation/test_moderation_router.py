@@ -12,7 +12,7 @@ def test_user_can_create_report_and_admin_can_action_it(client, demo_seed, demo_
     subject = demo_seed.demo_users[1]
 
     create_response = client.post(
-        '/moderation/reports',
+        '/api/moderation/reports',
         headers=demo_auth_headers,
         json={
             'target_type': 'user',
@@ -29,21 +29,21 @@ def test_user_can_create_report_and_admin_can_action_it(client, demo_seed, demo_
     assert report['status'] == 'open'
     assert report['priority'] in {'high', 'critical'}
 
-    my_reports = client.get('/moderation/me/reports', headers=demo_auth_headers)
+    my_reports = client.get('/api/moderation/me/reports', headers=demo_auth_headers)
     assert my_reports.status_code == 200
     assert any(item['id'] == report['id'] for item in my_reports.json())
 
     admin_headers = _login(client, 'vidvimedialtd@gmail.com', 'NewPass1234!')
-    summary = client.get('/admin/moderation/reports/summary', headers=admin_headers)
+    summary = client.get('/api/admin/moderation/reports/summary', headers=admin_headers)
     assert summary.status_code == 200
     assert summary.json()['open_count'] >= 1
 
-    queue = client.get('/admin/moderation/reports?status=open', headers=admin_headers)
+    queue = client.get('/api/admin/moderation/reports?status=open', headers=admin_headers)
     assert queue.status_code == 200
     assert any(item['id'] == report['id'] for item in queue.json())
 
     assign_response = client.post(
-        f"/admin/moderation/reports/{report['id']}/assign",
+        f"/api/admin/moderation/reports/{report['id']}/assign",
         headers=admin_headers,
         json={'priority': 'critical'},
     )
@@ -54,7 +54,7 @@ def test_user_can_create_report_and_admin_can_action_it(client, demo_seed, demo_
     assert assigned['assigned_admin_user_id']
 
     resolve_response = client.post(
-        f"/admin/moderation/reports/{report['id']}/resolve",
+        f"/api/admin/moderation/reports/{report['id']}/resolve",
         headers=admin_headers,
         json={
             'resolution_action': 'wallet_review',
@@ -77,9 +77,9 @@ def test_duplicate_open_report_is_rejected(client, demo_seed, demo_auth_headers)
         'reason_code': 'spam',
         'description': 'This competition keeps reposting spam invites into the same room.',
     }
-    first = client.post('/moderation/reports', headers=demo_auth_headers, json=payload)
+    first = client.post('/api/moderation/reports', headers=demo_auth_headers, json=payload)
     assert first.status_code == 201, first.text
 
-    duplicate = client.post('/moderation/reports', headers=demo_auth_headers, json=payload)
+    duplicate = client.post('/api/moderation/reports', headers=demo_auth_headers, json=payload)
     assert duplicate.status_code == 400
     assert 'already exists' in duplicate.json()['detail']

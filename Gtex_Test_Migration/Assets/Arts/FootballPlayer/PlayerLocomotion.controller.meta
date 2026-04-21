@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7b8d859de70bc9a4ea4827ea95f491e7
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/FootballPlayer/PlayerLocomotion.controller
+  uploadId: 597280

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_feedback.dart';
+import '../../data/match_gift_api.dart';
+import '../../shared/providers/auth_provider.dart';
 import 'live_match_viewer_route_support.dart';
 import 'match_viewer_capability.dart';
 import 'presentation/broadcast_package_screen.dart';
@@ -21,6 +23,10 @@ class MatchBroadcastScreen extends ConsumerWidget {
         final LiveMatchViewerRepository repository = ref.read(
           liveMatchViewerRepositoryProvider,
         );
+        final MatchGiftClient? giftClient =
+            ref.watch(isAuthenticatedProvider)
+                ? MatchGiftApi(client: ref.watch(authedApiProvider))
+                : null;
         return MatchRouteCapabilityOverlay(
           capability: MatchViewerCapability.pseudo3d,
           child: BroadcastPackageScreen(
@@ -28,6 +34,7 @@ class MatchBroadcastScreen extends ConsumerWidget {
             competition: value.competition,
             initialViewState: value.initialViewState,
             viewStateLoader: () => repository.loadViewState(matchKey),
+            giftClient: giftClient,
           ),
         );
       },

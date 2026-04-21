@@ -102,12 +102,13 @@ namespace FStudio.GTEX.Editor
                 return;
             }
 
-            RunBuild(
-                "Android APK (Menu)",
-                outputPath,
-                BuildTargetGroup.Android,
-                BuildTarget.Android,
-                EnsureAndroidSdkConfigured);
+            BuildAndroidApk("Android APK (Menu)", outputPath);
+        }
+
+        [MenuItem("Tools/GTEX/Build/Android Export Library")]
+        public static void ExportAndroidLibraryMenu()
+        {
+            ExportAndroidLibrary("Android Export Library (Menu)", ResolveAndroidLibraryExportPath());
         }
 
         public static void BuildWindows64FromCommandLine()
@@ -145,12 +146,70 @@ namespace FStudio.GTEX.Editor
         public static void BuildAndroidApkFromCommandLine()
         {
             WriteCommandLineInvocationMarker("BuildAndroidApkFromCommandLine");
-            RunBuild(
-                "Android APK (Command Line)",
-                ResolveDefaultBuildPath(BuildTarget.Android),
-                BuildTargetGroup.Android,
-                BuildTarget.Android,
-                EnsureAndroidSdkConfigured);
+            var outputPath = ResolveAndroidApkOutputPath();
+            LogBatchCheckpoint(
+                "ENTER BuildAndroidApkFromCommandLine",
+                outputPath);
+
+            try
+            {
+                LogBatchCheckpoint(
+                    "BEFORE BUILD APK",
+                    outputPath);
+                BuildAndroidApk("Android APK (Command Line)", outputPath);
+                LogBatchCheckpoint(
+                    "AFTER BUILD APK",
+                    outputPath);
+
+                if (!File.Exists(outputPath))
+                {
+                    throw new FileNotFoundException(
+                        "[GTEX Build] Expected APK missing at: " + outputPath);
+                }
+
+                Debug.Log("[GTEX Build] APK verified at: " + outputPath);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[GTEX Build] FAIL BuildAndroidApkFromCommandLine\n" + ex);
+                throw;
+            }
+        }
+
+        public static void ExportAndroidLibraryFromCommandLine()
+        {
+            WriteCommandLineInvocationMarker("ExportAndroidLibraryFromCommandLine");
+            var outputPath = ResolveAndroidExportOutputPath();
+            LogBatchCheckpoint(
+                "ENTER ExportAndroidLibraryFromCommandLine",
+                outputPath);
+
+            try
+            {
+                LogBatchCheckpoint(
+                    "BEFORE EXPORT ANDROID LIBRARY",
+                    outputPath);
+                ExportAndroidLibrary(
+                    "Android Export Library (Command Line)",
+                    outputPath);
+                LogBatchCheckpoint(
+                    "AFTER EXPORT ANDROID LIBRARY",
+                    outputPath);
+
+                var unityLibraryPath = Path.Combine(outputPath, "unityLibrary");
+                if (!Directory.Exists(unityLibraryPath))
+                {
+                    throw new DirectoryNotFoundException(
+                        "[GTEX Build] Expected unityLibrary missing at: " + unityLibraryPath);
+                }
+
+                Debug.Log("[GTEX Build] unityLibrary verified at: " + unityLibraryPath);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[GTEX Build] FAIL ExportAndroidLibraryFromCommandLine\n" + ex);
+                throw;
+            }
         }
 
         private static void WriteCommandLineInvocationMarker(string methodName)
@@ -174,7 +233,9 @@ namespace FStudio.GTEX.Editor
             BuildTargetGroup targetGroup,
             BuildTarget target,
             Action preBuildValidation = null,
-            GtexMode? buildModeOverride = null)
+            GtexMode? buildModeOverride = null,
+            BuildOptions buildOptions = BuildOptions.None,
+            Action<string, BuildTarget, BuildTraceSession> postBuildValidation = null)
         {
             BuildTraceSession trace = null;
             BuildModeScope buildModeScope = null;
@@ -234,7 +295,7 @@ namespace FStudio.GTEX.Editor
                     scenes = scenes,
                     target = target,
                     locationPathName = outputPath,
-                    options = BuildOptions.None
+                    options = buildOptions
                 };
 
                 trace.Stage("Invoking BuildPipeline.BuildPlayer");
@@ -247,6 +308,12 @@ namespace FStudio.GTEX.Editor
                         "Build failed with result: " + report.summary.result +
                         ", errors: " + report.summary.totalErrors +
                         ", warnings: " + report.summary.totalWarnings);
+                }
+
+                if (postBuildValidation != null)
+                {
+                    trace.Stage("Running post-build validation");
+                    postBuildValidation(outputPath, target, trace);
                 }
 
                 trace.Stage("Build completed successfully");
@@ -864,6 +931,162 @@ namespace FStudio.GTEX.Editor
             }
         }
 
+        private static void BuildAndroidApk(string buildLabel, string outputPath)
+        {
+            Debug.Log("[GTEX Build] BEFORE BUILD PLAYER " + buildLabel + " -> " + outputPath);
+            RunBuild(
+                buildLabel,
+                outputPath,
+                BuildTargetGroup.Android,
+                BuildTarget.Android,
+                EnsureAndroidSdkConfigured,
+                null,
+                BuildOptions.None,
+                ValidateAndroidApkOutput);
+            Debug.Log("[GTEX Build] AFTER BUILD PLAYER " + buildLabel + " -> " + outputPath);
+        }
+
+        private static void ExportAndroidLibrary(string buildLabel, string exportPath)
+        {
+            var previousExportAsGoogleAndroidProject = EditorUserBuildSettings.exportAsGoogleAndroidProject;
+            Debug.Log(
+                "[GTEX Build] Android exportAsGoogleAndroidProject (before): " +
+                previousExportAsGoogleAndroidProject);
+
+            try
+            {
+                EditorUserBuildSettings.exportAsGoogleAndroidProject = true;
+                Debug.Log("[GTEX Build] Android exportAsGoogleAndroidProject (set): true");
+                Debug.Log("[GTEX Build] BEFORE BUILD PLAYER " + buildLabel + " -> " + exportPath);
+                RunBuild(
+                    buildLabel,
+                    exportPath,
+                    BuildTargetGroup.Android,
+                    BuildTarget.Android,
+                    () =>
+                    {
+                        EnsureAndroidSdkConfigured();
+                        RecreateDirectory(exportPath);
+                    },
+                    null,
+                    BuildOptions.None,
+                    ValidateAndroidLibraryExport);
+                Debug.Log("[GTEX Build] AFTER BUILD PLAYER " + buildLabel + " -> " + exportPath);
+            }
+            finally
+            {
+                EditorUserBuildSettings.exportAsGoogleAndroidProject = previousExportAsGoogleAndroidProject;
+                Debug.Log(
+                    "[GTEX Build] Android exportAsGoogleAndroidProject (restored): " +
+                    previousExportAsGoogleAndroidProject);
+            }
+        }
+
+        private static void ValidateAndroidApkOutput(
+            string outputPath,
+            BuildTarget target,
+            BuildTraceSession trace)
+        {
+            if (target != BuildTarget.Android)
+            {
+                return;
+            }
+
+            if (!File.Exists(outputPath))
+            {
+                throw new InvalidOperationException(
+                    "Android build completed without producing the expected APK: " + outputPath);
+            }
+
+            trace.Info("Verified Android APK output: " + outputPath);
+        }
+
+        private static void ValidateAndroidLibraryExport(
+            string exportPath,
+            BuildTarget target,
+            BuildTraceSession trace)
+        {
+            if (target != BuildTarget.Android)
+            {
+                return;
+            }
+
+            var unityLibraryDirectory = Path.Combine(exportPath, "unityLibrary");
+            if (!Directory.Exists(unityLibraryDirectory))
+            {
+                throw new InvalidOperationException(
+                    "Unity Android export completed without producing unityLibrary: " + unityLibraryDirectory);
+            }
+
+            PatchUnityExportGradleScripts(exportPath, trace);
+            trace.Info("Verified Unity Android export: " + unityLibraryDirectory);
+        }
+
+        private static void PatchUnityExportGradleScripts(string exportPath, BuildTraceSession trace)
+        {
+            PatchUnityExportGradleScript(Path.Combine(exportPath, "unityLibrary", "build.gradle"), trace);
+            PatchUnityExportGradleScript(Path.Combine(exportPath, "launcher", "build.gradle"), trace);
+        }
+
+        private static void PatchUnityExportGradleScript(string scriptPath, BuildTraceSession trace)
+        {
+            if (!File.Exists(scriptPath))
+            {
+                return;
+            }
+
+            const string legacySnippet =
+                "['.unity3d', '.ress', '.resource', '.obb', '.bundle', '.unityexp'] + unityStreamingAssets.tokenize(', ')";
+            const string patchedSnippet =
+                "['.unity3d', '.ress', '.resource', '.obb', '.bundle', '.unityexp'] + ((project.findProperty('unityStreamingAssets') ?: '').toString().tokenize(', '))";
+            const string unityLibraryHeader =
+                "apply plugin: 'com.android.library'\n" +
+                "apply from: '../shared/keepUnitySymbols.gradle'\n" +
+                "apply from: '../shared/common.gradle'\n";
+            const string patchedUnityLibraryHeader =
+                "apply plugin: 'com.android.library'\n" +
+                "apply from: '../shared/keepUnitySymbols.gradle'\n" +
+                "apply from: '../shared/common.gradle'\n\n" +
+                "def unityExportProperties = new Properties()\n" +
+                "def unityExportPropertiesFile = new File(rootProject.projectDir, 'unityExport/gradle.properties')\n" +
+                "if (unityExportPropertiesFile.exists()) {\n" +
+                "    unityExportPropertiesFile.withInputStream { stream ->\n" +
+                "        unityExportProperties.load(stream)\n" +
+                "    }\n" +
+                "}\n" +
+                "ext.unityExportProperties = unityExportProperties\n\n" +
+                "String unityGradleProperty(String name) {\n" +
+                "    if (project.hasProperty(name)) {\n" +
+                "        return project.property(name).toString()\n" +
+                "    }\n\n" +
+                "    def value = project.ext.unityExportProperties.getProperty(name)\n" +
+                "    if (value != null) {\n" +
+                "        return value\n" +
+                "    }\n\n" +
+                "    throw new GradleException(\"Missing Unity export Gradle property: ${name}\")\n" +
+                "}\n";
+
+            var originalContents = File.ReadAllText(scriptPath);
+            var patchedContents = originalContents.Replace(legacySnippet, patchedSnippet);
+
+            if (scriptPath.EndsWith(Path.Combine("unityLibrary", "build.gradle"), StringComparison.OrdinalIgnoreCase))
+            {
+                patchedContents = patchedContents
+                    .Replace(unityLibraryHeader, patchedUnityLibraryHeader)
+                    .Replace("getProperty(\"unity.androidSdkPath\")", "unityGradleProperty(\"unity.androidSdkPath\")")
+                    .Replace("getProperty(\"unity.androidNdkPath\")", "unityGradleProperty(\"unity.androidNdkPath\")");
+            }
+
+            if (patchedContents == originalContents)
+            {
+                trace.Info("Unity export Gradle script already normalized: " + scriptPath);
+                return;
+            }
+
+            File.WriteAllText(scriptPath, patchedContents);
+            trace.Info("Patched Unity export Gradle script for AGP compatibility: " + scriptPath);
+        }
+
         private static string ResolveDefaultBuildPath(BuildTarget target, GtexMode? buildModeOverride = null)
         {
             switch (target)
@@ -883,20 +1106,75 @@ namespace FStudio.GTEX.Editor
             }
         }
 
+        private static string ResolveAndroidLibraryExportPath()
+        {
+            return Path.GetFullPath(Path.Combine(ProjectRoot(), "..", "frontend", "android", "unityExport"));
+        }
+
+        private static void LogBatchCheckpoint(string marker, string outputPath)
+        {
+            Debug.Log(
+                "[GTEX Build] " + marker + "\n" +
+                "[GTEX Build] projectPath=" + Directory.GetCurrentDirectory() + "\n" +
+                "[GTEX Build] outputPath=" + outputPath + "\n" +
+                "[GTEX Build] unityVersion=" + Application.unityVersion + "\n" +
+                "[GTEX Build] activeBuildTarget=" + EditorUserBuildSettings.activeBuildTarget + "\n" +
+#if UNITY_ANDROID
+                "[GTEX Build] UNITY_ANDROID=true\n" +
+#else
+                "[GTEX Build] UNITY_ANDROID=false\n" +
+#endif
+                "[GTEX Build] isBatchMode=" + Application.isBatchMode);
+        }
+
+        private static string ResolveAndroidApkOutputPath()
+        {
+            return Path.GetFullPath(
+                Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    "Builds",
+                    "Android",
+                    "GTEXMatch.apk"));
+        }
+
+        private static string ResolveAndroidExportOutputPath()
+        {
+            return Path.GetFullPath(
+                Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    "..",
+                    "frontend",
+                    "android",
+                    "unityExport"));
+        }
+
         private static string ResolvePlatformBuildDirectory(string platformName)
         {
-            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            var buildDirectory = Path.Combine(projectRoot, "Builds", platformName);
+            var buildDirectory = Path.Combine(ProjectRoot(), "Builds", platformName);
             Directory.CreateDirectory(buildDirectory);
             return buildDirectory;
         }
 
         private static string ResolveTraceLogDirectory()
         {
-            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            var logDirectory = Path.Combine(projectRoot, "tmp", BuildLogDirectoryName);
+            var logDirectory = Path.Combine(ProjectRoot(), "tmp", BuildLogDirectoryName);
             Directory.CreateDirectory(logDirectory);
             return logDirectory;
+        }
+
+        private static string ProjectRoot()
+        {
+            return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+        }
+
+        private static void RecreateDirectory(string path)
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, true);
+            }
+
+            Directory.CreateDirectory(path);
         }
 
         private sealed class BuildTraceSession : IDisposable

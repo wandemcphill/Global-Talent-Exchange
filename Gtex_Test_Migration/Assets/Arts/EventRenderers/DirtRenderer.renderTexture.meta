@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4bdf42241d1982e4ea3e1837181a28fd
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 8400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/EventRenderers/DirtRenderer.renderTexture
+  uploadId: 597280

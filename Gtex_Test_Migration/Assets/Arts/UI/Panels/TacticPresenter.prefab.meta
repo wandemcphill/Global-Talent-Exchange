@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 1c267f324f77485489fd086d059c82d0
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/UI/Panels/TacticPresenter.prefab
+  uploadId: 597280

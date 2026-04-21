@@ -2,6 +2,8 @@
 using FStudio.UI.Events;
 using FStudio.Events;
 using FStudio.UI.MatchThemes.MatchEvents;
+using FStudio.GTEX;
+using FStudio.GTEX.Core;
 using FStudio.MatchEngine;
 using FStudio.MatchEngine.Enums;
 using TMPro;
@@ -19,11 +21,33 @@ namespace FStudio.UI.MatchThemes {
         /// </summary>
         private bool[] kits = new bool[2];
 
+        private static bool IsExternallyDrivenMatchActive() {
+            return GtexRuntimeBootstrap.IsLivePlaybackPendingOrActive() ||
+                (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackEnabled);
+        }
+
+        protected override void Update() {
+            base.Update();
+
+            if (!IsActive || !IsExternallyDrivenMatchActive()) {
+                return;
+            }
+
+            Disappear();
+            EventManager.Trigger<LoadingEvent>(null);
+        }
+
         protected override async void OnEventCalled(UpcomingMatchEvent eventObject) {
             this.eventObject = eventObject;
 
             if (eventObject == null) {
                 Disappear();
+                return;
+            }
+
+            if (IsExternallyDrivenMatchActive()) {
+                Disappear();
+                EventManager.Trigger<LoadingEvent>(null);
                 return;
             }
 
@@ -65,6 +89,13 @@ namespace FStudio.UI.MatchThemes {
         }
 
         public async void StartMatch () {
+            if (IsExternallyDrivenMatchActive()) {
+                Debug.Log("[GTEX] Ignoring manual StartMatch because live playback already owns the match.");
+                Disappear();
+                EventManager.Trigger<LoadingEvent>(null);
+                return;
+            }
+
             Disappear();
 
             // update the details.

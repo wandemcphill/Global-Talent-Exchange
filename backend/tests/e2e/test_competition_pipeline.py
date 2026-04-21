@@ -98,13 +98,13 @@ def test_competition_pipeline_dispatches_advancement_replay_and_notifications(
     assert advancement_event.payload["stage_code"] == "Quarterfinal"
     assert advancement_event.payload["winner_club_id"] in {"cup-home", "cup-away"}
 
-    home_notifications_response = client.get("/notifications/me?limit=20", headers=home_user.headers)
+    home_notifications_response = client.get("/api/notifications/me?limit=20", headers=home_user.headers)
     assert home_notifications_response.status_code == 200
     home_templates = {item["template_key"] for item in home_notifications_response.json()}
     assert "match_live_now" in home_templates
     assert {"you_won", "you_lost"} & home_templates
 
-    away_notifications_response = client.get("/notifications/me?limit=20", headers=away_user.headers)
+    away_notifications_response = client.get("/api/notifications/me?limit=20", headers=away_user.headers)
     assert away_notifications_response.status_code == 200
     away_templates = {item["template_key"] for item in away_notifications_response.json()}
     assert "match_live_now" in away_templates

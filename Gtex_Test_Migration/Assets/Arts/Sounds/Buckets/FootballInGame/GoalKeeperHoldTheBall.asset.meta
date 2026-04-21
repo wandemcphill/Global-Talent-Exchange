@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a540305edb2ddee498a47d1034475575
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/Sounds/Buckets/FootballInGame/GoalKeeperHoldTheBall.asset
+  uploadId: 597280

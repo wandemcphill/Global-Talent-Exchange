@@ -6,6 +6,8 @@ namespace FStudio.GTEX.Simulation
 {
     public static class GtexSimDevSceneBootstrap
     {
+        private static GtexMatchConfig pendingLiveConfig;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void TryBootstrap()
         {
@@ -26,6 +28,46 @@ namespace FStudio.GTEX.Simulation
                 return;
             }
 
+            var runtimeMode = config.ResolveRuntimeMode();
+
+            if (runtimeMode == GtexRuntimeMode.LivePlayback)
+            {
+                var liveConfig = pendingLiveConfig ?? config;
+
+                if (string.Equals(activeScene.name, GtexSceneLoader.DevelopmentSceneName) ||
+                    string.Equals(activeScene.name, GtexSceneLoader.BuildSceneName))
+                {
+                    pendingLiveConfig = liveConfig;
+                    Debug.Log(
+                        "[GTEX Runtime Bootstrap] Redirecting live playback from scene '" +
+                        activeScene.name +
+                        "' to '" +
+                        GtexSceneLoader.ProductionSceneName +
+                        "'.");
+                    SceneManager.LoadScene(GtexSceneLoader.ProductionSceneName);
+                    return;
+                }
+
+                if (Object.FindFirstObjectByType<GtexMatchRuntime>() != null)
+                {
+                    pendingLiveConfig = null;
+                    return;
+                }
+
+                if (GtexRuntimeBootstrap.TryAutoStart(liveConfig))
+                {
+                    pendingLiveConfig = null;
+                    Debug.Log(
+                        "[GTEX Runtime Bootstrap] " +
+                        runtimeMode +
+                        " auto-started for scene '" +
+                        activeScene.name +
+                        "'.");
+                }
+
+                return;
+            }
+
             if (!string.Equals(activeScene.name, GtexSceneLoader.DevelopmentSceneName) &&
                 !string.Equals(activeScene.name, GtexSceneLoader.BuildSceneName))
             {
@@ -42,7 +84,7 @@ namespace FStudio.GTEX.Simulation
             {
                 Debug.Log(
                     "[GTEX Runtime Bootstrap] " +
-                    config.ResolveRuntimeMode() +
+                    runtimeMode +
                     " auto-started for scene '" +
                     activeScene.name +
                     "'.");

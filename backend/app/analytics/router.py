@@ -137,8 +137,9 @@ def get_device_fingerprint(
 
 
 @router.get("/influencer-leaderboard", response_model=CreatorLeaderboardResponse)
-def get_influencer_leaderboard(request: Request) -> CreatorLeaderboardResponse:
-    orchestrator = get_referral_orchestrator(request)
+def get_influencer_leaderboard(
+    orchestrator=Depends(get_referral_orchestrator),
+) -> CreatorLeaderboardResponse:
     return CreatorLeaderboardService(orchestrator).build()
 
 

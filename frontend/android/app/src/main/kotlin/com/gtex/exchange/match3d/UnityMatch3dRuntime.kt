@@ -2,10 +2,14 @@ package com.gtex.exchange.match3d
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
+import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import io.flutter.plugin.common.EventChannel
+import java.io.File
 import java.lang.ref.WeakReference
 import org.json.JSONArray
 import org.json.JSONObject
@@ -62,9 +66,6 @@ internal object UnityMatch3dRuntime {
     private var hostActivityRef: WeakReference<Activity>? = null
 
     @Volatile
-    private var unityActivityRef: WeakReference<UnityMatchActivity>? = null
-
-    @Volatile
     private var eventSink: EventChannel.EventSink? = null
 
     @Volatile
@@ -85,9 +86,48 @@ internal object UnityMatch3dRuntime {
     @Volatile
     private var pendingAttachmentJson: String? = null
 
+    @Volatile
+    private var unityPlayer: Any? = null
+
+    @Volatile
+    private var unityPlayerView: View? = null
+
+    @Volatile
+    private var attachedContainerRef: WeakReference<FrameLayout>? = null
+
+    @Volatile
+    private var stagedBootstrapPath: String? = null
+
     fun attachHostActivity(activity: Activity) {
         applicationContext = activity.applicationContext
         hostActivityRef = WeakReference(activity)
+    }
+
+    fun onHostResumed() {
+        val player = unityPlayer ?: return
+        if (!sessionState.platformViewAttached) {
+            return
+        }
+        UnityPlayerProxy.resume(player)
+        UnityPlayerProxy.windowFocusChanged(player, true)
+        dispatchPendingCommands()
+    }
+
+    fun onHostPaused() {
+        val player = unityPlayer ?: return
+        UnityPlayerProxy.windowFocusChanged(player, false)
+        UnityPlayerProxy.pause(player)
+    }
+
+    fun onHostDestroyed(activity: Activity) {
+        if (hostActivityRef?.get() !== activity) {
+            return
+        }
+        hostActivityRef = null
+        attachedContainerRef = null
+        destroyUnityPlayer()
+        unityReady = false
+        sessionState = sessionState.copy(platformViewAttached = false)
     }
 
     fun bindEventSink(sink: EventChannel.EventSink?) {
@@ -111,10 +151,60 @@ internal object UnityMatch3dRuntime {
             "sessionId" to activeSession.sessionId,
             "matchId" to activeSession.matchId,
             "ackCount" to activeSession.ackCount,
+            "bootstrapPath" to stagedBootstrapPath,
         )
     }
 
     fun sessionStateMap(): Map<String, Any?> = sessionState.toMap()
+
+    fun stageLiveBootstrap(request: Map<String, Any?>): Map<String, Any?> {
+        val context = applicationContext ?: hostActivityRef?.get()?.applicationContext
+        if (context == null) {
+            return bootstrapFailure(
+                request,
+                "Android context was unavailable while staging the Unity bootstrap.",
+            )
+        }
+
+        val matchId = request.stringValue("matchId")
+        val baseUrl = request.stringValue("baseUrl")
+        val accessToken = request.stringValue("liveAccessToken")
+        val refreshToken = request.stringValue("liveRefreshToken")
+        if (matchId.isBlank() || baseUrl.isBlank()) {
+            return bootstrapFailure(
+                request,
+                "Unity live bootstrap requires both matchId and baseUrl.",
+            )
+        }
+        if (accessToken.isBlank() && refreshToken.isBlank()) {
+            return bootstrapFailure(
+                request,
+                "Unity live bootstrap requires a live access token or refresh token.",
+            )
+        }
+
+        return runCatching {
+            val bootstrapFile = resolveBootstrapFile(context)
+            bootstrapFile.parentFile?.mkdirs()
+            bootstrapFile.writeText(
+                request.toJsonString(),
+                Charsets.UTF_8,
+            )
+            stagedBootstrapPath = bootstrapFile.absolutePath
+            applyBootstrapCommandLineOverride(stagedBootstrapPath)
+            mapOf(
+                "staged" to true,
+                "bootstrapPath" to bootstrapFile.absolutePath,
+                "matchId" to matchId,
+                "message" to null,
+            )
+        }.getOrElse { error ->
+            bootstrapFailure(
+                request,
+                "Unity live bootstrap could not be written on Android: ${error.message}",
+            )
+        }
+    }
 
     fun openSession(request: Map<String, Any?>): Map<String, Any?> {
         if (!UnityPlayerProxy.isAvailable()) {
@@ -128,7 +218,7 @@ internal object UnityMatch3dRuntime {
                 sessionId = sessionId,
                 matchId = matchId,
                 status = "open",
-                platformViewAttached = false,
+                platformViewAttached = sessionState.platformViewAttached,
                 ackCount = 0,
                 entityCount = 0,
                 playerCount = request.intValue("expectedPlayerCount"),
@@ -140,19 +230,11 @@ internal object UnityMatch3dRuntime {
         pendingOpenSessionJson = request.toJsonString()
         closingSessionFromHost = false
 
-        val launched = launchUnityActivity(sessionId, matchId)
-        if (!launched) {
-            sessionState =
-                sessionState.copy(
-                    status = "closed",
-                    implicit = false,
-                )
-            emitEvent("SESSION_CLOSED")
-            return sessionState.toMap()
-        }
-
+        ensureUnityPlayerView()
         emitEvent("SESSION_OPENED")
-        dispatchPendingCommands()
+        if (sessionState.platformViewAttached) {
+            dispatchPendingCommands()
+        }
         return sessionState.toMap()
     }
 
@@ -185,7 +267,6 @@ internal object UnityMatch3dRuntime {
             emitEvent("SESSION_CLOSED")
         }
 
-        unityActivityRef?.get()?.finish()
         return sessionState.toMap()
     }
 
@@ -202,11 +283,10 @@ internal object UnityMatch3dRuntime {
                 platformViewAttached = activeSession.platformViewAttached,
                 entityCount = entities.size,
                 playerCount =
-                    entities
-                        .count { entity ->
-                            (entity as? Map<*, *>)?.get("type")?.toString()
-                                ?.equals("player", ignoreCase = true) == true
-                        },
+                    entities.count { entity ->
+                        (entity as? Map<*, *>)?.get("type")?.toString()
+                            ?.equals("player", ignoreCase = true) == true
+                    },
                 lastFrameId = payload.nullableString("frameId") ?: activeSession.lastFrameId,
                 phase = payload.nullableString("phase") ?: activeSession.phase,
                 clockMinute = payload.nullableDouble("clockMinute") ?: activeSession.clockMinute,
@@ -226,66 +306,86 @@ internal object UnityMatch3dRuntime {
         )
     }
 
-    fun registerUnityActivity(activity: UnityMatchActivity) {
-        applicationContext = activity.applicationContext
-        unityActivityRef = WeakReference(activity)
-    }
+    fun attachPlatformView(container: FrameLayout) {
+        attachedContainerRef = WeakReference(container)
 
-    fun onUnityActivityResumed(activity: UnityMatchActivity) {
-        if (unityActivityRef?.get() !== activity) {
-            unityActivityRef = WeakReference(activity)
-        }
-        queuePlatformAttachment(true)
-        dispatchPendingCommands()
-    }
-
-    fun onUnityActivityPaused(activity: UnityMatchActivity) {
-        if (unityActivityRef?.get() !== activity) {
+        val player = ensureUnityPlayerView()
+        val unityView = unityPlayerView
+        if (player == null || unityView == null) {
+            queuePlatformAttachment(false)
+            emitEvent("PLATFORM_VIEW_DETACHED")
             return
         }
+
+        reparentUnityView(unityView, container)
+        UnityPlayerProxy.requestFocus(player)
+        UnityPlayerProxy.resume(player)
+        UnityPlayerProxy.windowFocusChanged(player, true)
+
+        val attachmentChanged = !sessionState.platformViewAttached
+        queuePlatformAttachment(true)
+        if (unityReady) {
+            dispatchPendingCommands()
+        } else if (attachmentChanged) {
+            emitEvent("PLATFORM_VIEW_ATTACHED")
+        }
+    }
+
+    fun detachPlatformView(container: FrameLayout) {
+        val attachedContainer = attachedContainerRef?.get()
+        if (attachedContainer !== container) {
+            return
+        }
+
+        attachedContainerRef = null
+        unityPlayerView?.let { view ->
+            (view.parent as? ViewGroup)?.removeView(view)
+        }
+
+        val player = unityPlayer
+        if (player != null) {
+            UnityPlayerProxy.windowFocusChanged(player, false)
+            UnityPlayerProxy.pause(player)
+        }
+
+        val attachmentChanged = sessionState.platformViewAttached
         queuePlatformAttachment(false)
         if (unityReady) {
             dispatchPendingCommands()
-        } else {
-            sessionState = sessionState.copy(platformViewAttached = false)
+        } else if (attachmentChanged) {
+            emitEvent("PLATFORM_VIEW_DETACHED")
         }
     }
 
-    fun onUnityActivityDestroyed(activity: UnityMatchActivity) {
-        if (unityActivityRef?.get() !== activity) {
-            return
-        }
-        unityActivityRef = null
-        unityReady = false
-        pendingAttachmentJson = null
-
-        val activeSession = sessionState
-        val hostClosedSession = closingSessionFromHost
-        closingSessionFromHost = false
-
-        if (!hostClosedSession && activeSession.isOpen()) {
-            sessionState =
-                activeSession.copy(
-                    status = "closed",
-                    platformViewAttached = false,
-                    implicit = false,
-                )
-            emitEvent("SESSION_CLOSED")
-            return
+    fun onUnityRuntimeEventJson(json: String) {
+        val payload = json.toMap() ?: return
+        val type = payload.stringValue("type")
+        if (type == "RUNTIME_READY") {
+            unityReady = true
         }
 
-        sessionState = activeSession.copy(platformViewAttached = false)
+        sessionState = payload.toSessionState(sessionState)
+        if (type == "SESSION_CLOSED") {
+            pendingSceneSyncJson = null
+            if (closingSessionFromHost) {
+                closingSessionFromHost = false
+            }
+        }
+
+        emitEvent(payload)
+
+        if (type == "RUNTIME_READY") {
+            dispatchPendingCommands()
+        }
     }
 
-    fun onUnityLaunchFailed() {
-        unityReady = false
-        sessionState =
-            sessionState.copy(
-                status = "closed",
-                platformViewAttached = false,
-                implicit = false,
-            )
-        emitEvent("SESSION_CLOSED")
+    fun destroyUnityPlayer() {
+        unityPlayerView?.let { view ->
+            (view.parent as? ViewGroup)?.removeView(view)
+        }
+        unityPlayerView = null
+        unityPlayer?.let(UnityPlayerProxy::destroy)
+        unityPlayer = null
     }
 
     fun dispatchPendingCommands() {
@@ -321,25 +421,6 @@ internal object UnityMatch3dRuntime {
             ) {
                 pendingSceneSyncJson = null
             }
-        }
-    }
-
-    fun onUnityRuntimeEventJson(json: String) {
-        val payload = json.toMap() ?: return
-        val type = payload.stringValue("type")
-        if (type == "RUNTIME_READY") {
-            unityReady = true
-        }
-
-        sessionState = payload.toSessionState(sessionState)
-        if (type == "SESSION_CLOSED") {
-            pendingSceneSyncJson = null
-        }
-
-        emitEvent(payload)
-
-        if (type == "RUNTIME_READY") {
-            dispatchPendingCommands()
         }
     }
 
@@ -380,25 +461,41 @@ internal object UnityMatch3dRuntime {
         )
     }
 
-    private fun launchUnityActivity(sessionId: String, matchId: String): Boolean {
-        val hostActivity = hostActivityRef?.get()
-        val appContext = applicationContext
-        val intent =
-            when {
-                hostActivity != null && !hostActivity.isFinishing -> {
-                    UnityMatchActivity.createIntent(hostActivity, sessionId, matchId)
-                }
-                appContext != null -> {
-                    UnityMatchActivity
-                        .createIntent(appContext, sessionId, matchId)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                else -> null
-            } ?: return false
+    private fun ensureUnityPlayerView(): Any? {
+        unityPlayer?.let { existingPlayer ->
+            if (unityPlayerView != null) {
+                return existingPlayer
+            }
+        }
 
-        return runCatching {
-            (hostActivity ?: appContext)?.startActivity(intent)
-        }.isSuccess
+        val hostActivity = hostActivityRef?.get() ?: return null
+        applyBootstrapCommandLineOverride(stagedBootstrapPath)
+        val player = UnityPlayerProxy.create(hostActivity) ?: return null
+        val view = UnityPlayerProxy.asView(player) ?: return null
+
+        unityPlayer = player
+        unityPlayerView = view
+        view.setBackgroundColor(Color.BLACK)
+        view.layoutParams =
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+        return player
+    }
+
+    private fun reparentUnityView(
+        view: View,
+        container: FrameLayout,
+    ) {
+        val existingParent = view.parent as? ViewGroup
+        if (existingParent === container) {
+            return
+        }
+
+        existingParent?.removeView(view)
+        container.removeAllViews()
+        container.addView(view)
     }
 
     private fun queuePlatformAttachment(attached: Boolean) {
@@ -408,6 +505,40 @@ internal object UnityMatch3dRuntime {
 
     private fun fallbackSessionId(matchId: String): String {
         return if (matchId.isBlank()) "" else "unity_match_3d:$matchId"
+    }
+
+    private fun bootstrapFailure(
+        request: Map<String, Any?>,
+        message: String,
+    ): Map<String, Any?> {
+        return mapOf(
+            "staged" to false,
+            "bootstrapPath" to (stagedBootstrapPath ?: ""),
+            "matchId" to request.stringValue("matchId"),
+            "message" to message,
+        )
+    }
+
+    private fun resolveBootstrapFile(context: Context): File {
+        val externalRoot = context.getExternalFilesDir(null)
+        val primaryRoot = externalRoot ?: context.filesDir
+        return File(File(primaryRoot, "tmp"), "gtex-live-bootstrap.json")
+    }
+
+    private fun applyBootstrapCommandLineOverride(bootstrapPath: String?) {
+        val resolvedPath = bootstrapPath?.takeIf { it.isNotBlank() } ?: return
+        val hostActivity = hostActivityRef?.get() ?: return
+        val current = hostActivity.intent?.getStringExtra("unity").orEmpty()
+        val flag = "--gtex-bootstrap-path=$resolvedPath"
+        val normalized =
+            current
+                .split(' ')
+                .filter { token -> token.isNotBlank() && !token.startsWith("--gtex-bootstrap-path=") }
+                .toMutableList()
+                .apply { add(flag) }
+                .joinToString(separator = " ")
+                .trim()
+        hostActivity.intent?.putExtra("unity", normalized)
     }
 
     private fun emitEvent(type: String, extra: Map<String, Any?> = emptyMap()) {
@@ -423,7 +554,7 @@ internal object UnityMatch3dRuntime {
 }
 
 private const val UNITY_MATCH_3D_RUNTIME = "unity_match_3d"
-private const val UNITY_MATCH_3D_VIEW_TYPE = "match_3d/unity_activity"
+private const val UNITY_MATCH_3D_VIEW_TYPE = "match_3d/native_view"
 private const val UNITY_BRIDGE_GAME_OBJECT = "GTEXUnityBridge"
 
 private fun Map<String, Any?>.toSessionState(
@@ -442,7 +573,8 @@ private fun Map<String, Any?>.toSessionState(
         lastFrameId = nullableString("lastFrameId") ?: nullableString("frameId") ?: fallback.lastFrameId,
         phase = nullableString("phase") ?: fallback.phase,
         clockMinute = nullableDouble("clockMinute") ?: fallback.clockMinute,
-        implicit = booleanValue("implicit", status == "implicit"),
+        implicit =
+            booleanValue("implicit", booleanValue("implicitSession", status == "implicit")),
     )
 }
 

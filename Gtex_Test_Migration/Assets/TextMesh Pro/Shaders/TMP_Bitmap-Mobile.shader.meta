@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 1e3b057af24249748ff873be7fafee47
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/TextMesh Pro/Shaders/TMP_Bitmap-Mobile.shader
+  uploadId: 597280

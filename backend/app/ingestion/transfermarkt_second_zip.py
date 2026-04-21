@@ -13,7 +13,6 @@ from app.ingestion.normalizers import normalize_country_name
 from app.providers.import_models import RealPlayerSourceItem
 from app.schemas.real_player_ingestion import RealPlayerSeedInput
 
-
 SECOND_ZIP_SOURCE_NAME = "transfermarkt_2nd_zip"
 SECOND_ZIP_REQUIRED_FILES = (
     "players.csv",
@@ -273,10 +272,7 @@ class TransfermarktSecondZipReferenceCatalog:
             clubs_by_id=clubs_by_id,
             competitions_by_id=competitions_by_id,
             countries_by_id=countries_by_id,
-            countries_by_normalized_name={
-                key: tuple(value)
-                for key, value in countries_by_normalized_name.items()
-            },
+            countries_by_normalized_name={key: tuple(value) for key, value in countries_by_normalized_name.items()},
         )
 
 
@@ -351,9 +347,7 @@ def normalize_position_fields(position: Any, sub_position: Any) -> tuple[str | N
 
 def map_player_row_to_contract(row: Mapping[str, Any]) -> TransfermarktSecondZipPlayerContract:
     raw_payload = {
-        normalize_column_name(str(key)): normalize_optional_text(value)
-        for key, value in row.items()
-        if key is not None
+        normalize_column_name(str(key)): normalize_optional_text(value) for key, value in row.items() if key is not None
     }
     primary_position_group, primary_position = normalize_position_fields(
         raw_payload.get("position"),
@@ -422,6 +416,7 @@ def map_player_contract_to_source_item(
             "height_cm": contract.height_cm,
             "current_market_reference_value": contract.current_market_value_eur,
             "market_reference_currency": "EUR",
+            "photo_url": contract.image_url,
             "is_verified_real_player": True,
         }
     )
@@ -430,10 +425,7 @@ def map_player_contract_to_source_item(
         "country": country_match.to_dict(),
         "competition": competition_match.to_dict(),
         "club": club_match.to_dict(),
-        "fallback_used": any(
-            match.fallback_used
-            for match in (country_match, competition_match, club_match)
-        ),
+        "fallback_used": any(match.fallback_used for match in (country_match, competition_match, club_match)),
     }
     metadata_json = {
         "source_file": contract.source_file,
@@ -504,9 +496,7 @@ def _normalized_key(value: str) -> str:
 
 def _normalize_row(row: Mapping[str, Any]) -> SecondZipRow:
     return {
-        normalize_column_name(str(key)): normalize_optional_text(value)
-        for key, value in row.items()
-        if key is not None
+        normalize_column_name(str(key)): normalize_optional_text(value) for key, value in row.items() if key is not None
     }
 
 
@@ -532,9 +522,7 @@ def _resolve_country_reference(
         )
     normalized_name = _normalized_country_lookup_key(contract.nationality)
     candidates = (
-        reference_catalog.countries_by_normalized_name.get(normalized_name, ())
-        if normalized_name is not None
-        else ()
+        reference_catalog.countries_by_normalized_name.get(normalized_name, ()) if normalized_name is not None else ()
     )
     if len(candidates) == 1:
         country_row = candidates[0]
@@ -597,16 +585,8 @@ def _resolve_competition_reference(
             entity_type="competition",
             status="mapped",
             provider_external_id=competition_id,
-            label=(
-                competition_row.get("name")
-                or competition_row.get("competition_code")
-                or competition_id
-            ),
-            matched_field=(
-                "competition_id"
-                if contract.domestic_competition_id
-                else "clubs.domestic_competition_id"
-            ),
+            label=(competition_row.get("name") or competition_row.get("competition_code") or competition_id),
+            matched_field=("competition_id" if contract.domestic_competition_id else "clubs.domestic_competition_id"),
             source_file="competitions.csv",
             metadata_json={
                 "country_id": competition_row.get("country_id"),
@@ -620,11 +600,7 @@ def _resolve_competition_reference(
         status="unresolved",
         provider_external_id=competition_id,
         label=competition_id,
-        matched_field=(
-            "competition_id"
-            if contract.domestic_competition_id
-            else "clubs.domestic_competition_id"
-        ),
+        matched_field=("competition_id" if contract.domestic_competition_id else "clubs.domestic_competition_id"),
         source_file="competitions.csv",
         notes="competitions.csv did not contain the domestic competition id.",
     )

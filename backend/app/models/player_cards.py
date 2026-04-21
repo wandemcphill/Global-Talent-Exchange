@@ -189,7 +189,7 @@ class PlayerCardListing(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_player_card_listings_status_negotiable", "status", "is_negotiable"),
     )
 
-    listing_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    listing_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
     player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
     seller_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -208,7 +208,7 @@ class PlayerCardSale(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         Index("ix_player_card_sales_player_card_id", "player_card_id"),
     )
 
-    sale_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    sale_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
     listing_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
     seller_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)

@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: d930090c0cd643c7b55f19a38538c162
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/TextMesh Pro/Shaders/TMPro_Surface.cginc
+  uploadId: 597280

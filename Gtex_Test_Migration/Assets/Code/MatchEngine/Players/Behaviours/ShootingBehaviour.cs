@@ -86,6 +86,13 @@ namespace FStudio.MatchEngine.Players.Behaviours {
 
                 // calculate by shooting.
                 var shooting = Player.MatchPlayer.ActualShooting * 0.75f + Player.MatchPlayer.ActualShootPower * 0.25f;
+                var tol = shootingSkillToleranceMultiplierCurve.Evaluate(shooting / 100f) * toleranceMulti;
+                var byBallHeight = ballHeightToToleranceCurve.Evaluate(ballHeight);
+                var byBallProgressByHeight = ballHeightToToleranceByBallProgressCurve.Evaluate(Player.GameTeam.BallProgress);
+
+                if (opponentGK == null || opponentGK.MatchPlayer == null) {
+                    return Mathf.Max(1, 1 + tol + (byBallHeight * byBallProgressByHeight));
+                }
 
                 var keeping = opponentGK.MatchPlayer.ActualPositioning * 0.25f +
                     opponentGK.MatchPlayer.ActualAcceleration * 0.125f +
@@ -95,11 +102,6 @@ namespace FStudio.MatchEngine.Players.Behaviours {
 
                 var gkTol = keepingToleranceCurve.Evaluate(keeping / 100);
 
-                var tol = shootingSkillToleranceMultiplierCurve.Evaluate(shooting / 100f) * toleranceMulti;
-
-				var byBallHeight = ballHeightToToleranceCurve.Evaluate (ballHeight);
-				var byBallProgressByHeight = ballHeightToToleranceByBallProgressCurve.Evaluate (Player.GameTeam.BallProgress);
-				
                 return Mathf.Max (1, 1 + tol - gkTol + (ballHeightToToleranceCurve.Evaluate (ballHeight) * byBallProgressByHeight));
             }
         }

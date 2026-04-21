@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d3305822ac259e24fb1f6c42c2706b56
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/EventRenderers/Prefabs/Statics/StaticDirtSmall
+    1.prefab
+  uploadId: 597280

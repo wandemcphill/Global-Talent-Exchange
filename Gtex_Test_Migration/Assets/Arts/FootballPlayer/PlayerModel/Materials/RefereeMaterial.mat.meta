@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3095dfa259b43cc40831296367dcdaa6
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/FootballPlayer/PlayerModel/Materials/RefereeMaterial.mat
+  uploadId: 597280

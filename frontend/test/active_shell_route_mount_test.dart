@@ -59,7 +59,8 @@ void main() {
       expect(find.text('Broadcast Package'), findsWidgets);
 
       router.go(AppRoutes.matchesThreeDLocation('live-match-001'));
-      await tester.pumpAndSettle();
+      await _pumpViewerRoute(tester);
+      await _pumpUntilVisible(tester, find.text('FLUTTER_3D'));
       expect(find.text('3D Match Viewer'), findsWidgets);
       expect(find.text('Route blocked'), findsNothing);
       expect(find.text('FLUTTER_3D'), findsOneWidget);
@@ -131,6 +132,22 @@ Future<void> _pumpViewerRoute(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 64));
   await tester.pump(const Duration(milliseconds: 64));
+}
+
+Future<void> _pumpUntilVisible(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 100),
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final int attempts = timeout.inMilliseconds ~/ step.inMilliseconds;
+  for (int index = 0; index < attempts; index += 1) {
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.pump(step);
+  }
+  expect(finder, findsOneWidget);
 }
 
 ProviderContainer _buildContainer({AuthSession? session}) {

@@ -68,7 +68,7 @@ class ManagerDuel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class ManagerDuelProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "manager_duel_profiles"
 
-    manager_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True, index=True)
+    manager_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
     manager_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(160), nullable=False)
     source_type: Mapped[str] = mapped_column(String(24), nullable=False)

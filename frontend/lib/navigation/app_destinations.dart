@@ -289,7 +289,7 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.matchesNativeThreeD,
     state: AppRouteSurfaceState.placeholder,
     summary:
-        'Visible truth route only. Android now has a verified native bridge behind the routed 3D lane, but the dedicated native-only route still needs a live match contract.',
+        'Visible truth route only. A native Android match_3d bridge scaffold exists, but the dedicated native-only route stays blocked until a verified live match contract and shippable runtime are proven.',
   ),
   AppRouteSurface(
     label: '2D Spectate Probe',

@@ -18,14 +18,22 @@ LAZY_HYDRATION_BYPASS_PREFIXES = (
     "/api/session",
     "/api/broadcast",
     "/api/competitions",
+    "/api/hosted-competitions",
+    "/api/admin/hosted-competitions",
     "/api/match",
     "/api/match-viewer",
     "/api/matches",
+    "/api/streamer-tournaments",
+    "/api/admin/streamer-tournaments",
+    "/api/v1/hosted-competitions",
+    "/api/v1/admin/hosted-competitions",
+    "/api/v1/streamer-tournaments",
+    "/api/v1/admin/streamer-tournaments",
     "/hosted-competitions",
     "/match",
-    "/match-viewer",
     "/matches",
     "/streamer-tournaments",
+    "/admin/streamer-tournaments",
 )
 EAGER_MODULE_NAMES = frozenset(
     {
@@ -59,18 +67,33 @@ def _with_api_alias(router: APIRouter) -> APIRouter:
     return wrapped_router
 
 
+def _with_api_only(router: APIRouter) -> APIRouter:
+    wrapped_router = APIRouter()
+    wrapped_router.include_router(router, prefix="/api")
+    return wrapped_router
+
+
 def _module(
     name: str,
     *,
     router_path: str | None = None,
     with_api_alias: bool = False,
+    api_only: bool = False,
     on_startup: tuple[object, ...] = (),
     on_shutdown: tuple[object, ...] = (),
 ) -> DomainModule:
+    if with_api_alias and api_only:
+        raise ValueError(f"Module '{name}' cannot be both with_api_alias and api_only.")
     return DomainModule(
         name=name,
         router_path=router_path,
-        router_transform=_with_api_alias if with_api_alias else None,
+        router_transform=(
+            _with_api_alias
+            if with_api_alias
+            else _with_api_only
+            if api_only
+            else None
+        ),
         on_startup=on_startup,
         on_shutdown=on_shutdown,
     )
@@ -442,34 +465,57 @@ DOMAIN_MODULES = (
         on_startup=(_seed_economy_defaults,),
     ),
     _module("economy_admin", router_path="app.economy.router:admin_router"),
-    _module("gift_engine", router_path="app.gift_engine.router:router"),
-    _module("reward_engine", router_path="app.reward_engine.router:router"),
-    _module("reward_engine_admin", router_path="app.reward_engine.router:admin_router"),
+    _module("gift_engine", router_path="app.gift_engine.router:router", api_only=True),
+    _module("reward_engine", router_path="app.reward_engine.router:router", api_only=True),
+    _module(
+        "reward_engine_admin",
+        router_path="app.reward_engine.router:admin_router",
+        api_only=True,
+    ),
     _module("fan_predictions", router_path="app.fan_predictions.router:router"),
     _module("fan_predictions_admin", router_path="app.fan_predictions.router:admin_router"),
     _module("predictions", router_path="app.predictions.router:router", with_api_alias=True),
-    _module("fan_wars", router_path="app.fan_wars.router:router"),
-    _module("fan_wars_admin", router_path="app.fan_wars.router:admin_router"),
+    _module("fan_wars", router_path="app.fan_wars.router:router", api_only=True),
+    _module("fan_wars_admin", router_path="app.fan_wars.router:admin_router", api_only=True),
     _module(
         "daily_challenge_engine",
         router_path="app.daily_challenge_engine.router:router",
+        api_only=True,
         on_startup=(_seed_daily_challenges,),
     ),
     _module(
         "hosted_competition_engine",
         router_path="app.hosted_competition_engine.router:router",
+        api_only=True,
         on_startup=(_seed_hosted_competitions,),
     ),
     _module(
         "hosted_competition_engine_admin",
         router_path="app.hosted_competition_engine.router:admin_router",
+        api_only=True,
     ),
-    _module("moderation", router_path="app.moderation.router:router"),
-    _module("moderation_admin", router_path="app.moderation.router:admin_router"),
-    _module("national_team_engine", router_path="app.national_team_engine.router:router"),
-    _module("national_team_engine_admin", router_path="app.national_team_engine.router:admin_router"),
-    _module("story_feed_engine", router_path="app.story_feed_engine.router:router"),
-    _module("story_feed_engine_admin", router_path="app.story_feed_engine.router:admin_router"),
+    _module("moderation", router_path="app.moderation.router:router", api_only=True),
+    _module("moderation_admin", router_path="app.moderation.router:admin_router", api_only=True),
+    _module(
+        "national_team_engine",
+        router_path="app.national_team_engine.router:router",
+        api_only=True,
+    ),
+    _module(
+        "national_team_engine_admin",
+        router_path="app.national_team_engine.router:admin_router",
+        api_only=True,
+    ),
+    _module(
+        "story_feed_engine",
+        router_path="app.story_feed_engine.router:router",
+        api_only=True,
+    ),
+    _module(
+        "story_feed_engine_admin",
+        router_path="app.story_feed_engine.router:admin_router",
+        api_only=True,
+    ),
     _module("legend_layer", router_path="app.legend_layer.router:router"),
     _module(
         "viral",
@@ -486,8 +532,12 @@ DOMAIN_MODULES = (
     ),
     _module("pundits", router_path="app.pundits.router:router"),
     _module("betting", router_path="app.betting.router:router"),
-    _module("integrity_engine", router_path="app.integrity_engine.router:router"),
-    _module("integrity_engine_admin", router_path="app.integrity_engine.router:admin_router"),
+    _module("integrity_engine", router_path="app.integrity_engine.router:router", api_only=True),
+    _module(
+        "integrity_engine_admin",
+        router_path="app.integrity_engine.router:admin_router",
+        api_only=True,
+    ),
     _module("auth", router_path="app.auth.router:router"),
     _module(
         "api_v1",
@@ -507,7 +557,7 @@ DOMAIN_MODULES = (
     _module("club_infra_admin", router_path="app.club_infra_engine.router:admin_router"),
     _module("club_ownership", router_path="app.club_ownership.router:router"),
     _module("player_import", router_path="app.player_import_engine.router:router"),
-    _module("community_engine", router_path="app.community_engine.router:router"),
+    _module("community_engine", router_path="app.community_engine.router:router", api_only=True),
     _module(
         "history_engagement",
         router_path="app.history_engagement.router:router",
@@ -531,22 +581,36 @@ DOMAIN_MODULES = (
         router_path="app.world_simulation.router:router",
         on_startup=(_seed_world_simulation_defaults,),
     ),
-    _module("world_simulation_admin", router_path="app.world_simulation.router:admin_router"),
+    _module(
+        "world_simulation_admin",
+        router_path="app.world_simulation.router:admin_router",
+        api_only=True,
+    ),
     _module(
         "discovery_engine",
         router_path="app.discovery_engine.router:router",
+        api_only=True,
         on_startup=(_seed_discovery_defaults,),
     ),
-    _module("discovery_engine_admin", router_path="app.discovery_engine.router:admin_router"),
+    _module(
+        "discovery_engine_admin",
+        router_path="app.discovery_engine.router:admin_router",
+        api_only=True,
+    ),
     _module("player_import_admin", router_path="app.player_import_engine.router:admin_router"),
     _module("risk_ops_engine", router_path="app.risk_ops_engine.router:router"),
     _module("risk_ops_engine_admin", router_path="app.risk_ops_engine.router:admin_router"),
     _module(
         "sponsorship_engine",
         router_path="app.sponsorship_engine.router:router",
+        api_only=True,
         on_startup=(_seed_sponsorship_defaults,),
     ),
-    _module("sponsorship_engine_admin", router_path="app.sponsorship_engine.router:admin_router"),
+    _module(
+        "sponsorship_engine_admin",
+        router_path="app.sponsorship_engine.router:admin_router",
+        api_only=True,
+    ),
     _module("ads_engine", router_path="app.ads_engine.router:router"),
     _module(
         "club_finance",
@@ -560,8 +624,8 @@ DOMAIN_MODULES = (
     _module("creator_campaign_engine", router_path="app.creator_campaign_engine.router:router"),
     _module("creator_campaign_engine_admin", router_path="app.creator_campaign_engine.router:admin_router"),
     _module("creator_marketplace", router_path="app.creator_marketplace.router:router", with_api_alias=True),
-    _module("governance_engine", router_path="app.governance_engine.router:router"),
-    _module("governance_engine_admin", router_path="app.governance_engine.router:admin_router"),
+    _module("governance_engine", router_path="app.governance_engine.router:router", api_only=True),
+    _module("governance_engine_admin", router_path="app.governance_engine.router:admin_router", api_only=True),
     _module(
         "real_world_hub",
         router_path="app.real_world_hub.router:router",
@@ -572,23 +636,41 @@ DOMAIN_MODULES = (
     _module(
         "federations",
         router_path="app.federations.router:router",
+        api_only=True,
         on_startup=("app.federations.worker:bind_federation_scheduler",),
         on_shutdown=("app.federations.worker:shutdown_federation_scheduler",),
     ),
-    _module("federations_admin", router_path="app.federations.router:admin_router"),
+    _module(
+        "federations_admin",
+        router_path="app.federations.router:admin_router",
+        api_only=True,
+    ),
     _module("dispute_engine", router_path="app.dispute_engine.router:router"),
     _module("dispute_engine_admin", router_path="app.dispute_engine.router:admin_router"),
-    _module("streamer_tournament_engine", router_path="app.streamer_tournament_engine.router:router"),
-    _module("streamer_tournament_engine_admin", router_path="app.streamer_tournament_engine.router:admin_router"),
+    _module(
+        "streamer_tournament_engine",
+        router_path="app.streamer_tournament_engine.router:router",
+        api_only=True,
+    ),
+    _module(
+        "streamer_tournament_engine_admin",
+        router_path="app.streamer_tournament_engine.router:admin_router",
+        api_only=True,
+    ),
     _module("policies", router_path="app.policies.router:router", on_startup=(_seed_policy_documents,)),
     _module("admin_policies", router_path="app.policies.router:admin_router"),
     _module("treasury", router_path="app.treasury.router:router"),
     _module(
         "calendar_engine",
         router_path="app.calendar_engine.router:router",
+        api_only=True,
         on_startup=(_seed_calendar_engine_defaults,),
     ),
-    _module("calendar_engine_admin", router_path="app.calendar_engine.router:admin_router"),
+    _module(
+        "calendar_engine_admin",
+        router_path="app.calendar_engine.router:admin_router",
+        api_only=True,
+    ),
     _module("attachments", router_path="app.attachments.router:router"),
     _module("analytics", router_path="app.analytics.router:router"),
     _module("admin_analytics", router_path="app.analytics.router:admin_router"),
@@ -693,7 +775,7 @@ DOMAIN_MODULES = (
         on_startup=("app.competitive_integrity.worker:bind_competitive_integrity_scheduler",),
         on_shutdown=("app.competitive_integrity.worker:shutdown_competitive_integrity_scheduler",),
     ),
-    _module("match_viewer", router_path="app.routes.match_viewer:router", with_api_alias=True),
+    _module("match_viewer", router_path="app.routes.match_viewer:router", api_only=True),
     _module("club_identity", router_path="app.club_identity.jerseys.router:router"),
     _module("club_ops_admin", router_path="app.routes.admin_club_ops:router"),
     _module(
@@ -702,7 +784,12 @@ DOMAIN_MODULES = (
         with_api_alias=True,
         on_startup=(_initialize_replay_archive,),
     ),
-    _module("notifications", router_path="app.notifications.router:notifications_router", with_api_alias=True),
+    _module("notifications", router_path="app.notifications.router:notifications_router", api_only=True),
+    _module(
+        "notifications_admin",
+        router_path="app.notifications.router:admin_router",
+        api_only=True,
+    ),
     _module(
         "broadcast",
         router_path="app.broadcast.spectator_gateway:router",

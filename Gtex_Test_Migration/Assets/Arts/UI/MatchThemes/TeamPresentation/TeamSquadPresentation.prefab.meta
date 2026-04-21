@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 54b2daf15bb19d6478d65c10fbb56027
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 252671
+  packageName: Football (Soccer) Simulator
+  packageVersion: 1.1a
+  assetPath: Assets/FootballSimulator/Arts/UI/MatchThemes/TeamPresentation/TeamSquadPresentation.prefab
+  uploadId: 597280

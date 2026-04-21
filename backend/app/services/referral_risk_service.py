@@ -192,8 +192,7 @@ class ReferralRiskService:
         return sorted(flags.values(), key=lambda item: (item.severity, item.flagged_at, item.flag_id), reverse=True)
 
     def _attributions(self) -> tuple[AttributionRecord, ...]:
-        with self.orchestrator.store.lock:
-            return tuple(self.orchestrator.store.attributions_by_id.values())
+        return self.orchestrator.attributions.list_all()
 
     def _blocked_actions(self):
         with self.orchestrator.store.lock:

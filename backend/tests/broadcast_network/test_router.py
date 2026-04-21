@@ -34,7 +34,10 @@ def test_broadcast_network_join_and_stream_channel(client, app, demo_auth_header
     payload = join_response.json()
     assert payload["channel"]["channel_id"] == "live"
     assert payload["current_program"]["match_id"] == live_match_id
+    assert payload["current_program"]["watch_route"] == f"/matches/broadcast/{live_match_id}"
+    assert payload["current_program"]["replay_route"] == f"/api/matches/{live_match_id}/replay"
     assert payload["match_session"]["audio_stem_websocket_path"].endswith("/audio/stems/stream?session_id=" + payload["match_session"]["id"])
+    assert payload["match_session"]["replay_route"] == f"/api/matches/{live_match_id}/replay"
     assert payload["watch_reward"]["rewarded"] is False
 
     session_id = payload["session_id"]
@@ -53,13 +56,15 @@ def test_broadcast_network_join_and_stream_channel(client, app, demo_auth_header
 def test_discovery_home_includes_broadcast_network(client, app, demo_auth_headers) -> None:
     _ensure_live_match(app, seed=29)
 
-    response = client.get("/discovery/home", headers=demo_auth_headers)
+    response = client.get("/api/discovery/home", headers=demo_auth_headers)
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["broadcast_items"]
     assert payload["match_of_the_moment"] is not None
     assert payload["match_of_the_moment"]["item_type"] == "broadcast_match"
+    assert payload["match_of_the_moment"]["metadata"]["watch_route"].startswith("/matches/broadcast/")
+    assert payload["match_of_the_moment"]["metadata"]["replay_route"].startswith("/api/matches/")
 
 
 def test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoints(client, app, demo_auth_headers) -> None:
@@ -73,6 +78,8 @@ def test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoi
     assert current_program is not None
     match_key = current_program["match_id"]
     assert match_key
+    assert current_program["watch_route"] == f"/matches/broadcast/{match_key}"
+    assert current_program["replay_route"] == f"/api/matches/{match_key}/replay"
 
     timeline_response = client.get(f"/api/match-viewer/{match_key}")
     session_response = client.get(f"/api/match-viewer/{match_key}/session")
@@ -110,6 +117,8 @@ def test_broadcast_network_refreshes_cached_fallback_slots_when_live_match_start
     warm_payload = warm_response.json()
     live_channel_before = next(item for item in warm_payload["channels"] if item["channel_id"] == "live")
     assert live_channel_before["current_program"]["match_id"] is None
+    assert live_channel_before["current_program"]["watch_route"] is None
+    assert live_channel_before["current_program"]["replay_route"] is None
 
     live_match_id = _ensure_live_match(app, seed=37)
 

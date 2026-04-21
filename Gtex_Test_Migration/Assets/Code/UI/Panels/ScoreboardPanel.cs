@@ -1,5 +1,6 @@
 using FStudio.Events;
 using FStudio.GTEX;
+using FStudio.GTEX.Engine;
 using FStudio.MatchEngine.Events;
 using FStudio.UI.MatchThemes.MatchEvents;
 using TMPro;
@@ -22,12 +23,16 @@ namespace FStudio.UI {
             EventManager.Subscribe<GameTimeEvent>(GameTimeUpdate);
             EventManager.Subscribe<GoalScoredEvent>(GoalScored);
             EventManager.Subscribe<FirstWhistleEvent>(FirstWhistle);
-            EventManager.Subscribe<GtexLiveStateEvent>(GtexLiveStateUpdated);
+            GtexMatchController.LiveStateObserved += GtexLiveStateUpdated;
         }
 
         private void FirstWhistle(FirstWhistleEvent kickOffEvent) {
             if (MatchEngine.MatchManager.Current != null &&
                 MatchEngine.MatchManager.Current.ExternalPlaybackEnabled) {
+                return;
+            }
+
+            if (homeScoreText == null || awayScoreText == null) {
                 return;
             }
 
@@ -41,12 +46,16 @@ namespace FStudio.UI {
             EventManager.UnSubscribe<GameTimeEvent>(GameTimeUpdate);
             EventManager.UnSubscribe<GoalScoredEvent>(GoalScored);
             EventManager.UnSubscribe<FirstWhistleEvent>(FirstWhistle);
-            EventManager.UnSubscribe<GtexLiveStateEvent>(GtexLiveStateUpdated);
+            GtexMatchController.LiveStateObserved -= GtexLiveStateUpdated;
         }
 
         private void GoalScored(GoalScoredEvent goalScoredEvent) {
             if (MatchEngine.MatchManager.Current != null &&
                 MatchEngine.MatchManager.Current.ExternalPlaybackEnabled) {
+                return;
+            }
+
+            if (homeScoreText == null || awayScoreText == null) {
                 return;
             }
 
@@ -67,13 +76,13 @@ namespace FStudio.UI {
             SetClock(gameTimeUpdate.GameTime);
         }
 
-        private void GtexLiveStateUpdated(GtexLiveStateEvent liveStateEvent) {
-            if (liveStateEvent.State == null) {
+        private void GtexLiveStateUpdated(GtexLiveStateSignal liveStateSignal) {
+            if (liveStateSignal.State == null) {
                 return;
             }
 
-            homeScore = Mathf.Max(0, liveStateEvent.State.homeScore);
-            awayScore = Mathf.Max(0, liveStateEvent.State.awayScore);
+            homeScore = Mathf.Max(0, liveStateSignal.State.homeScore);
+            awayScore = Mathf.Max(0, liveStateSignal.State.awayScore);
 
             if (homeScoreText != null) {
                 homeScoreText.text = homeScore.ToString();
@@ -83,7 +92,7 @@ namespace FStudio.UI {
                 awayScoreText.text = awayScore.ToString();
             }
 
-            SetClock(liveStateEvent.State.clockMinute);
+            SetClock(liveStateSignal.State.clockMinute);
         }
 
         private void SetClock(float matchMinute) {
@@ -100,14 +109,21 @@ namespace FStudio.UI {
         }
 
         protected override void OnEventCalled(UpcomingMatchEvent eventObject) {
-            timeCounter.text = string.Empty;
+            if (timeCounter != null) {
+                timeCounter.text = string.Empty;
+            }
 
             if (eventObject == null) {
                 return;
             }
 
-            homeTeamName.text = eventObject.details.homeTeam.TeamName.ToUpper();
-            awayTeamName.text = eventObject.details.awayTeam.TeamName.ToUpper();
+            if (homeTeamName != null) {
+                homeTeamName.text = eventObject.details.homeTeam.TeamName.ToUpper();
+            }
+
+            if (awayTeamName != null) {
+                awayTeamName.text = eventObject.details.awayTeam.TeamName.ToUpper();
+            }
 
             if (homeScoreText == null || awayScoreText == null) {
                 return;

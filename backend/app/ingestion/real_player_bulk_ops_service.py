@@ -45,7 +45,6 @@ from app.schemas.real_player_ingestion import (
     RealPlayerSeedInput,
 )
 
-
 _UNRESOLVED_PROCESSING_STATES = {
     RealPlayerImportProcessingState.PENDING.value,
     RealPlayerImportProcessingState.NORMALIZED.value,
@@ -144,11 +143,7 @@ class RealPlayerBulkImportOpsService:
                     "file_sha256": file_hash,
                     "source_row_count": len(rows),
                     "priority_buckets_seen": sorted(
-                        {
-                            _priority_bucket_for_payload(item)
-                            for item in rows
-                            if isinstance(item, dict)
-                        }
+                        {_priority_bucket_for_payload(item) for item in rows if isinstance(item, dict)}
                     ),
                 },
             )
@@ -210,9 +205,7 @@ class RealPlayerBulkImportOpsService:
         state: str | None = None,
     ) -> RealPlayerBulkImportCommandResult:
         if run_id is None and _normalized_state_filter(state) != "unresolved":
-            raise RealPlayerBulkImportOpsError(
-                "repair_mappings requires --run-id or --state unresolved."
-            )
+            raise RealPlayerBulkImportOpsError("repair_mappings requires --run-id or --state unresolved.")
 
         with self.session_factory() as session:
             records = self._target_records_for_repair(session, run_id=run_id, state=state)
@@ -220,11 +213,7 @@ class RealPlayerBulkImportOpsService:
                 raise RealPlayerBulkImportOpsError("No staged real-player rows matched the repair target.")
 
             backfill_report = self.backfill_service.run(session)
-            affected_run_ids = {
-                record.import_run_id
-                for record in records
-                if record.import_run_id
-            }
+            affected_run_ids = {record.import_run_id for record in records if record.import_run_id}
             reclassified_rows = 0
             transitioned_ready_rows = 0
             remaining_unresolved_rows = 0
@@ -238,7 +227,10 @@ class RealPlayerBulkImportOpsService:
                 )
                 if after_state != before_state:
                     reclassified_rows += 1
-                if before_state != RealPlayerImportProcessingState.MAPPED_READY.value and after_state == RealPlayerImportProcessingState.MAPPED_READY.value:
+                if (
+                    before_state != RealPlayerImportProcessingState.MAPPED_READY.value
+                    and after_state == RealPlayerImportProcessingState.MAPPED_READY.value
+                ):
                     transitioned_ready_rows += 1
                 if after_state in _UNRESOLVED_PROCESSING_STATES:
                     remaining_unresolved_rows += 1
@@ -326,10 +318,7 @@ class RealPlayerBulkImportOpsService:
                 session_factory=self.session_factory,
                 settings=self.settings,
             ).validate(validation_request)
-            validation_issue_keys = {
-                (issue.source_name, issue.source_player_key)
-                for issue in validation_report.issues
-            }
+            validation_issue_keys = {(issue.source_name, issue.source_player_key) for issue in validation_report.issues}
             validation_issue_payloads = {
                 (issue.source_name, issue.source_player_key): issue.model_dump(mode="json")
                 for issue in validation_report.issues
@@ -347,8 +336,7 @@ class RealPlayerBulkImportOpsService:
             "dry_run": dry_run,
             "selected_rows": len(selected_records),
             "selected_source_keys": [
-                f"{record.provider_name}:{record.provider_player_id}"
-                for record in selected_records
+                f"{record.provider_name}:{record.provider_player_id}" for record in selected_records
             ],
             "payload_build_errors": {
                 f"{source_name}:{source_player_key}": message
@@ -384,10 +372,7 @@ class RealPlayerBulkImportOpsService:
                     settings=self.settings,
                 ).write_batch(publish_request)
             except RealPlayerBatchBlockedError as exc:
-                validation_issue_keys |= {
-                    (issue.source_name, issue.source_player_key)
-                    for issue in exc.report.issues
-                }
+                validation_issue_keys |= {(issue.source_name, issue.source_player_key) for issue in exc.report.issues}
                 validation_issue_payloads.update(
                     {
                         (issue.source_name, issue.source_player_key): issue.model_dump(mode="json")
@@ -405,10 +390,7 @@ class RealPlayerBulkImportOpsService:
             records = self._records_by_source_key(
                 session,
                 run_id=run_id,
-                source_keys={
-                    (record.provider_name, record.provider_player_id)
-                    for record in selected_records
-                },
+                source_keys={(record.provider_name, record.provider_player_id) for record in selected_records},
             )
             for source_key, message in payload_build_errors.items():
                 record = records.get(source_key)
@@ -432,7 +414,9 @@ class RealPlayerBulkImportOpsService:
                 self._set_processing_state(
                     record,
                     processing_state=processing_state,
-                    error_message=str(issue_payload.get("message") or issue_payload.get("issue_type") or "validation_error"),
+                    error_message=str(
+                        issue_payload.get("message") or issue_payload.get("issue_type") or "validation_error"
+                    ),
                 )
                 metadata = dict(record.metadata_json or {})
                 metadata["last_publish_issue"] = issue_payload
@@ -441,8 +425,7 @@ class RealPlayerBulkImportOpsService:
             if write_report is not None:
                 published_batch_id = write_report.ingestion_batch_id
                 results_by_source_key = {
-                    (result.source_name, result.source_player_key): result
-                    for result in write_report.results
+                    (result.source_name, result.source_player_key): result for result in write_report.results
                 }
                 for payload in clean_payloads:
                     source_key = (payload.source_name, payload.source_player_key)
@@ -668,15 +651,10 @@ class RealPlayerBulkImportOpsService:
         repository.refresh_run_state_counts(run)
         rows = list(
             session.scalars(
-                select(RealPlayerImportStagingRecord).where(
-                    RealPlayerImportStagingRecord.import_run_id == run.id
-                )
+                select(RealPlayerImportStagingRecord).where(RealPlayerImportStagingRecord.import_run_id == run.id)
             )
         )
-        distribution = Counter(
-            row.processing_state or RealPlayerImportProcessingState.PENDING.value
-            for row in rows
-        )
+        distribution = Counter(row.processing_state or RealPlayerImportProcessingState.PENDING.value for row in rows)
         snapshot = {
             "generated_at": utcnow().isoformat(),
             "processing_state_distribution": dict(sorted(distribution.items())),
@@ -684,16 +662,10 @@ class RealPlayerBulkImportOpsService:
             + distribution.get(RealPlayerImportProcessingState.PUBLISHED.value, 0),
             "mapped_ready_rows": distribution.get(RealPlayerImportProcessingState.MAPPED_READY.value, 0),
             "mapped_partial_rows": distribution.get(RealPlayerImportProcessingState.MAPPED_PARTIAL.value, 0),
-            "unresolved_rows": sum(
-                distribution.get(state, 0)
-                for state in _UNRESOLVED_PROCESSING_STATES
-            ),
+            "unresolved_rows": sum(distribution.get(state, 0) for state in _UNRESOLVED_PROCESSING_STATES),
             "publish_ready_rows": distribution.get(RealPlayerImportProcessingState.MAPPED_READY.value, 0),
             "published_rows": distribution.get(RealPlayerImportProcessingState.PUBLISHED.value, 0),
-            "failed_rows": sum(
-                distribution.get(state, 0)
-                for state in _FAILED_PROCESSING_STATES
-            ),
+            "failed_rows": sum(distribution.get(state, 0) for state in _FAILED_PROCESSING_STATES),
         }
         metadata = dict(run.metadata_json or {})
         metadata["report_snapshot"] = snapshot
@@ -735,9 +707,7 @@ class RealPlayerBulkImportOpsService:
         normalized_state = _normalized_state_filter(state)
         if normalized_state == "unresolved" or run_id is not None:
             statement = statement.where(
-                RealPlayerImportStagingRecord.processing_state.in_(
-                    tuple(sorted(_UNRESOLVED_PROCESSING_STATES))
-                )
+                RealPlayerImportStagingRecord.processing_state.in_(tuple(sorted(_UNRESOLVED_PROCESSING_STATES)))
             )
         return list(session.scalars(statement))
 
@@ -754,7 +724,8 @@ class RealPlayerBulkImportOpsService:
                 select(RealPlayerImportStagingRecord)
                 .where(
                     RealPlayerImportStagingRecord.import_run_id == run_id,
-                    RealPlayerImportStagingRecord.processing_state == RealPlayerImportProcessingState.MAPPED_READY.value,
+                    RealPlayerImportStagingRecord.processing_state
+                    == RealPlayerImportProcessingState.MAPPED_READY.value,
                 )
                 .order_by(
                     RealPlayerImportStagingRecord.last_processed_at.asc().nullsfirst(),
@@ -764,9 +735,7 @@ class RealPlayerBulkImportOpsService:
             )
         )
         filtered = [
-            record
-            for record in candidates
-            if _matches_priority_selector(record.metadata_json, priority_bucket)
+            record for record in candidates if _matches_priority_selector(record.metadata_json, priority_bucket)
         ]
         filtered.sort(
             key=lambda record: (
@@ -1061,7 +1030,16 @@ class RealPlayerBulkImportOpsService:
             max(0.82 + max(float(normalized.profile_completeness_score or 0.0) - 0.55, 0.0) * 1.2, 0.82),
             1.08,
         )
-        value = age_base * competition_factor * club_factor * position_factor * player_tier_factor * prospect_factor * africa_boost * completeness_factor
+        value = (
+            age_base
+            * competition_factor
+            * club_factor
+            * position_factor
+            * player_tier_factor
+            * prospect_factor
+            * africa_boost
+            * completeness_factor
+        )
         return max(value, 250_000.0)
 
     def _publish_priority_summary(
@@ -1076,7 +1054,9 @@ class RealPlayerBulkImportOpsService:
     ) -> dict[str, object]:
         score = 0.0
         reasons: list[str] = []
-        competition_key = _entity_key(competition.name if competition is not None else normalized.current_real_world_league)
+        competition_key = _entity_key(
+            competition.name if competition is not None else normalized.current_real_world_league
+        )
         club_key = _entity_key(club.name if club is not None else normalized.current_real_world_club)
         is_top_five_league = competition_key in _TOP_FIVE_LEAGUE_KEYS
         is_top_club = club_key in _TOP_CLUB_KEYS or bool(
@@ -1130,7 +1110,10 @@ class RealPlayerBulkImportOpsService:
 
     @staticmethod
     def _derived_priority_bucket(*, score: float, reasons: list[str]) -> str:
-        if reasons and (score >= 65.0 or any(reason in {"top_5_league", "top_club", "top_player", "wonderkid"} for reason in reasons)):
+        if reasons and (
+            score >= 65.0
+            or any(reason in {"top_5_league", "top_club", "top_player", "wonderkid"} for reason in reasons)
+        ):
             return "high"
         if score >= 35.0:
             return "default"
@@ -1221,7 +1204,9 @@ class RealPlayerBulkImportOpsService:
             "current_real_world_club": _first_value(raw_row, "current_real_world_club", "current_club_name"),
             "current_real_world_club_key": _first_value(raw_row, "current_real_world_club_key", "current_club_id"),
             "current_real_world_league": _first_value(raw_row, "current_real_world_league", "current_competition_name"),
-            "current_real_world_league_key": _first_value(raw_row, "current_real_world_league_key", "current_competition_id"),
+            "current_real_world_league_key": _first_value(
+                raw_row, "current_real_world_league_key", "current_competition_id"
+            ),
             "competition_level": _first_value(raw_row, "competition_level"),
             "appearances": raw_row.get("appearances"),
             "minutes_played": raw_row.get("minutes_played"),
@@ -1242,6 +1227,7 @@ class RealPlayerBulkImportOpsService:
                 "rough_market_value_currency",
             )
             or "EUR",
+            "photo_url": _first_value(raw_row, "photo_url", "image_url", "image_path", "photo"),
             "source_last_refreshed_at": _first_value(
                 raw_row,
                 "source_last_refreshed_at",
@@ -1328,11 +1314,12 @@ class RealPlayerBulkImportOpsService:
         raw_payload: dict[str, object],
     ) -> dict[str, object]:
         canonical_name = _required_text(source_item.full_name, label="canonical_name")
-        display_name = str(
-            source_item.short_name
-            or _first_value(raw_payload, "display_name", "displayName", "commonName")
-            or ""
-        ).strip() or None
+        display_name = (
+            str(
+                source_item.short_name or _first_value(raw_payload, "display_name", "displayName", "commonName") or ""
+            ).strip()
+            or None
+        )
         known_aliases = _unique_text_values(
             [
                 *_list_value(raw_payload.get("known_aliases")),
@@ -1385,6 +1372,7 @@ class RealPlayerBulkImportOpsService:
             ),
             "current_market_reference_value": source_item.rough_market_value,
             "market_reference_currency": source_item.rough_market_value_currency or "EUR",
+            "photo_url": _first_value(raw_payload, "photo_url", "image_url", "image_path", "photo"),
             "source_last_refreshed_at": source_item.provider_last_updated_at,
             "real_player_tier": _first_value(raw_payload, "real_player_tier", "realPlayerTier"),
         }
@@ -1419,9 +1407,7 @@ class RealPlayerBulkImportOpsService:
         try:
             payload_text = resolved_path.read_text(encoding="utf-8")
         except UnicodeDecodeError as exc:
-            raise RealPlayerBulkImportOpsError(
-                f"Bulk import file '{resolved_path}' is not valid UTF-8: {exc}"
-            ) from exc
+            raise RealPlayerBulkImportOpsError(f"Bulk import file '{resolved_path}' is not valid UTF-8: {exc}") from exc
 
         file_hash = hashlib.sha256(payload_text.encode("utf-8")).hexdigest()
         suffix = resolved_path.suffix.lower()
@@ -1536,9 +1522,7 @@ class RealPlayerBulkImportOpsService:
         record.import_state = "processed"
         record.last_processed_at = utcnow()
         record.error_message = (
-            error_message
-            if processing_state == RealPlayerImportProcessingState.ERROR.value
-            else None
+            error_message if processing_state == RealPlayerImportProcessingState.ERROR.value else None
         )
         if processing_state != RealPlayerImportProcessingState.REJECTED.value:
             record.rejection_reason = None
@@ -1610,11 +1594,7 @@ def _unique_text_values(
     *,
     excluded: set[str | None] | None = None,
 ) -> list[str]:
-    excluded_keys = {
-        str(value).strip().casefold()
-        for value in (excluded or set())
-        if str(value or "").strip()
-    }
+    excluded_keys = {str(value).strip().casefold() for value in (excluded or set()) if str(value or "").strip()}
     seen: set[str] = set()
     normalized: list[str] = []
     for value in values:
@@ -1659,11 +1639,7 @@ def _matches_priority_selector(metadata_json: object, selector: str) -> bool:
     raw_bucket = _priority_bucket_for_metadata(metadata_json).lower()
     publish_priority = _publish_priority_for_metadata(metadata_json)
     computed_bucket = str(publish_priority.get("bucket") or "").strip().lower()
-    reasons = {
-        str(item).strip().lower()
-        for item in _list_value(publish_priority.get("reasons"))
-        if str(item).strip()
-    }
+    reasons = {str(item).strip().lower() for item in _list_value(publish_priority.get("reasons")) if str(item).strip()}
     if requested in {"high", "default", "watchlist"}:
         return raw_bucket == requested
     return requested == computed_bucket or requested in reasons

@@ -13,12 +13,14 @@ class StoryFeedApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
+    final GteTransport resolvedTransport = transport ?? GteHttpTransport();
     return StoryFeedApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: resolvedTransport,
         accessToken: accessToken,
         mode: resolvedMode,
       ),
@@ -44,7 +46,7 @@ class StoryFeedApi {
   Future<List<StoryFeedItem>> listFeed({int limit = 50}) {
     return client.withFallback<List<StoryFeedItem>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/story-feed',
+        '/api/story-feed',
         query: <String, Object?>{'limit': limit},
         auth: false,
       );
@@ -55,7 +57,7 @@ class StoryFeedApi {
   Future<StoryDigest> fetchDigest() {
     return client.withFallback<StoryDigest>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/story-feed/digest',
+        '/api/story-feed/digest',
         auth: false,
       );
       return StoryDigest.fromJson(payload);
@@ -75,7 +77,7 @@ class StoryFeedApi {
     return client.withFallback<StoryFeedItem>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/admin/story-feed',
+        '/api/admin/story-feed',
         body: <String, Object?>{
           'story_type': storyType,
           'title': title,

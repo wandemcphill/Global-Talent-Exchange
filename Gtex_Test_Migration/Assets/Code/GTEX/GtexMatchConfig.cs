@@ -548,6 +548,13 @@ namespace FStudio.GTEX
 
             try
             {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                var persistentDataPath = Application.persistentDataPath;
+                if (!string.IsNullOrWhiteSpace(persistentDataPath))
+                {
+                    return Path.Combine(persistentDataPath, "tmp", "gtex-live-bootstrap.json");
+                }
+#endif
                 var dataPath = Application.dataPath;
                 if (string.IsNullOrWhiteSpace(dataPath))
                 {

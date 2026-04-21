@@ -3,7 +3,7 @@ from __future__ import annotations
 
 def test_sponsorship_placements_fallback(client):
     response = client.post(
-        "/sponsorship/placements",
+        "/api/sponsorship/placements",
         json={
             "competition_id": "friendly-cup",
             "stage_name": "Group Stage",

@@ -725,7 +725,7 @@ Widget _buildNationalTeamCompetitionsScreen(
             _withApi(
               dependencies,
               (dynamic api) => api.getList(
-                '/national-team-engine/competitions',
+                '/api/national-team-engine/competitions',
                 auth: false,
               ),
               () async => <Map<String, Object?>>[
@@ -887,7 +887,7 @@ Widget _buildNationalTeamEntryScreen(
         final Map<String, dynamic> entry = await _withApi(
           dependencies,
           (dynamic api) => api.getMap(
-            '/national-team-engine/entries/${route.entryId}',
+            '/api/national-team-engine/entries/${route.entryId}',
             auth: false,
           ),
           () async => <String, dynamic>{
@@ -967,7 +967,7 @@ Widget _buildNationalTeamHistoryScreen(
       try {
         final Map<String, dynamic> history = await _withApi(
           dependencies,
-          (dynamic api) => api.getMap('/national-team-engine/me/history'),
+          (dynamic api) => api.getMap('/api/national-team-engine/me/history'),
           () async => <String, dynamic>{
             'entries': <Map<String, Object?>>[
               <String, Object?>{
@@ -1054,7 +1054,7 @@ Widget _buildFootballTransferCenterScreen(
             final List<dynamic> live = await Future.wait<dynamic>(
               <Future<dynamic>>[
                 api.getList('/api/transfers/windows', auth: false),
-                api.getMap('/calendar-engine/dashboard', auth: false),
+                api.getMap('/api/calendar-engine/dashboard', auth: false),
                 api.getList(
                   '/api/world/narratives',
                   auth: false,
@@ -1220,8 +1220,8 @@ Widget _buildBroadcastDeskScreen(
                   'match_id': 'fixture-final',
                   'title': 'GTEX Final',
                   'subtitle': 'Rivalry night with title implications',
-                  'watch_route': '/match-viewer/fixture-final',
-                  'replay_route': '/replay/fixture-final',
+                  'watch_route': '/matches/broadcast/fixture-final',
+                  'replay_route': '/api/matches/fixture-final/replay',
                 },
               },
             },

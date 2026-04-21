@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from hashlib import md5
 import logging
 import os
 
@@ -455,6 +456,15 @@ def _lerp(start: float, end: float, factor: float) -> float:
     return start + ((end - start) * factor)
 
 
+def _player_state_threshold(player_id: str | None) -> float:
+    token = str(player_id or "").strip()
+    if not token:
+        return 0.5
+
+    digest = md5(token.encode("utf-8")).digest()
+    return 0.35 + ((int.from_bytes(digest[:2], "big") / 65535.0) * 0.3)
+
+
 def _interpolate_frame(
     start_frame: MatchTimelineFrameView,
     end_frame: MatchTimelineFrameView,
@@ -480,21 +490,48 @@ def _interpolate_frame(
 
     end_players_by_id = {player.player_id: player for player in end_frame.players}
     players = []
+    span_seconds = max(end_frame.time_seconds - start_frame.time_seconds, 0.05)
     for start_player in start_frame.players:
         end_player = end_players_by_id.get(start_player.player_id, start_player)
+        state_threshold = _player_state_threshold(start_player.player_id)
+        sampled_position = start_player.position.model_copy(
+            update={
+                "x": round(_lerp(start_player.position.x, end_player.position.x, factor), 3),
+                "y": round(_lerp(start_player.position.y, end_player.position.y, factor), 3),
+            }
+        )
+        sampled_velocity = start_player.velocity.model_copy(
+            update={
+                "x": round((float(end_player.position.x) - float(start_player.position.x)) / span_seconds, 3),
+                "y": round((float(end_player.position.y) - float(start_player.position.y)) / span_seconds, 3),
+            }
+        )
+        sampled_velocity_x = float(sampled_velocity.x)
+        sampled_velocity_y = float(sampled_velocity.y)
+        sampled_velocity_magnitude = ((sampled_velocity_x**2) + (sampled_velocity_y**2)) ** 0.5
+        sampled_facing = (
+            start_player.facing.model_copy(
+                update={
+                    "x": round(sampled_velocity_x / sampled_velocity_magnitude, 3),
+                    "y": round(sampled_velocity_y / sampled_velocity_magnitude, 3),
+                }
+            )
+            if sampled_velocity_magnitude > 0.0001
+            else start_player.facing.model_copy(
+                update={
+                    "x": round(_lerp(start_player.facing.x, end_player.facing.x, factor), 3),
+                    "y": round(_lerp(start_player.facing.y, end_player.facing.y, factor), 3),
+                }
+            )
+        )
         players.append(
             start_player.model_copy(
                 update={
-                    "highlighted": end_player.highlighted if factor >= 0.5 else start_player.highlighted,
+                    "highlighted": end_player.highlighted if factor >= state_threshold else start_player.highlighted,
                     "has_possession": end_player.has_possession if factor >= 0.5 else start_player.has_possession,
-                    "state": end_player.state if factor >= 0.5 else start_player.state,
-                    "animation_state": end_player.animation_state if factor >= 0.5 else start_player.animation_state,
-                    "position": start_player.position.model_copy(
-                        update={
-                            "x": round(_lerp(start_player.position.x, end_player.position.x, factor), 3),
-                            "y": round(_lerp(start_player.position.y, end_player.position.y, factor), 3),
-                        }
-                    ),
+                    "state": end_player.state if factor >= state_threshold else start_player.state,
+                    "animation_state": end_player.animation_state if factor >= state_threshold else start_player.animation_state,
+                    "position": sampled_position,
                     "anchor_position": start_player.anchor_position.model_copy(
                         update={
                             "x": round(_lerp(start_player.anchor_position.x, end_player.anchor_position.x, factor), 3),
@@ -504,18 +541,8 @@ def _interpolate_frame(
                     "speed_ratio": round(_lerp(start_player.speed_ratio, end_player.speed_ratio, factor), 3),
                     "blend_factor": round(_lerp(start_player.blend_factor, end_player.blend_factor, factor), 3),
                     "stamina_pct": round(_lerp(start_player.stamina_pct, end_player.stamina_pct, factor), 3),
-                    "facing": start_player.facing.model_copy(
-                        update={
-                            "x": round(_lerp(start_player.facing.x, end_player.facing.x, factor), 3),
-                            "y": round(_lerp(start_player.facing.y, end_player.facing.y, factor), 3),
-                        }
-                    ),
-                    "velocity": start_player.velocity.model_copy(
-                        update={
-                            "x": round(_lerp(start_player.velocity.x, end_player.velocity.x, factor), 3),
-                            "y": round(_lerp(start_player.velocity.y, end_player.velocity.y, factor), 3),
-                        }
-                    ),
+                    "facing": sampled_facing,
+                    "velocity": sampled_velocity,
                 }
             )
         )
@@ -549,9 +576,9 @@ def _interpolate_frame(
                 if start_ball.velocity is None or end_ball.velocity is None
                 else start_ball.velocity.model_copy(
                     update={
-                        "x": round(_lerp(start_ball.velocity.x, end_ball.velocity.x, factor), 3),
-                        "y": round(_lerp(start_ball.velocity.y, end_ball.velocity.y, factor), 3),
-                        "z": round(_lerp(start_ball.velocity.z, end_ball.velocity.z, factor), 3),
+                        "x": round((float(end_ball.position.x) - float(start_ball.position.x)) / span_seconds, 3),
+                        "y": round((float(end_ball.height) - float(start_ball.height)) / span_seconds, 3),
+                        "z": round((float(end_ball.position.y) - float(start_ball.position.y)) / span_seconds, 3),
                     }
                 )
             ),

@@ -91,7 +91,8 @@ namespace FStudio.GTEX.Core
 
         private static bool ShouldRenderInCurrentBuild()
         {
-            return Application.isEditor || Debug.isDebugBuild || GtexConfig.IsDev;
+            // Production players must never mount the diagnostic startup overlay.
+            return Application.isEditor || GtexConfig.IsDev;
         }
 
         private GtexMatchRuntime ResolveRuntime()

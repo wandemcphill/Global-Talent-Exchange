@@ -197,7 +197,7 @@ class FederationsApi {
 
   Future<List<FederationRecord>> listFederations() async {
     final List<dynamic> payload = await client.getList(
-      '/federations',
+      '/api/federations',
       auth: false,
     );
     return payload.map(FederationRecord.fromJson).toList(growable: false);
@@ -205,7 +205,7 @@ class FederationsApi {
 
   Future<List<FederationRankingRecord>> listRankings() async {
     final List<dynamic> payload = await client.getList(
-      '/federations/rankings',
+      '/api/federations/rankings',
       auth: false,
     );
     return payload
@@ -215,7 +215,7 @@ class FederationsApi {
 
   Future<List<RegionalTournamentRecord>> listRegionalTournaments() async {
     final List<dynamic> payload = await client.getList(
-      '/federations/regional-tournaments',
+      '/api/federations/regional-tournaments',
       auth: false,
     );
     return payload
@@ -224,16 +224,19 @@ class FederationsApi {
   }
 
   Future<JsonMap> fetchDashboard(String federationId) {
-    return client.getMap('/federations/$federationId', auth: false);
+    return client.getMap('/api/federations/$federationId', auth: false);
   }
 
   Future<JsonMap> fetchGovernance(String federationId) {
-    return client.getMap('/federations/$federationId/governance', auth: false);
+    return client.getMap(
+      '/api/federations/$federationId/governance',
+      auth: false,
+    );
   }
 
   Future<List<JsonMap>> fetchNarratives(String federationId) async {
     final List<dynamic> payload = await client.getList(
-      '/federations/$federationId/narratives',
+      '/api/federations/$federationId/narratives',
       auth: false,
     );
     return payload
@@ -247,7 +250,7 @@ class FederationsApi {
     String? userId,
   }) async {
     final Object? payload = await client.post(
-      '/federations/$federationId/memberships',
+      '/api/federations/$federationId/memberships',
       body: <String, Object?>{
         'club_id': clubId,
         'user_id': userId,
@@ -268,7 +271,7 @@ class FederationsApi {
     DateTime? votingEndsAt,
   }) async {
     final Object? payload = await client.post(
-      '/federations/$federationId/proposals',
+      '/api/federations/$federationId/proposals',
       body: <String, Object?>{
         'league_id': leagueId,
         'proposal_type': proposalType,
@@ -289,7 +292,7 @@ class FederationsApi {
     String? comment,
   }) async {
     final Object? payload = await client.post(
-      '/federations/proposals/$proposalId/votes',
+      '/api/federations/proposals/$proposalId/votes',
       body: <String, Object?>{
         'vote_type': voteType,
         if (comment != null && comment.trim().isNotEmpty)

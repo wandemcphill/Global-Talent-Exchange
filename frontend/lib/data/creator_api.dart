@@ -114,6 +114,7 @@ class CreatorApi {
       final Object? response = await _postWithLegacyFallback(
         '/api/creators/me/copilot/analyze',
         body: draft.toJson(),
+        legacyPath: '/creators/me/copilot/analyze',
       );
       if (response is Map) {
         return _creatorCopilotAnalysisFromJson(
@@ -138,7 +139,10 @@ class CreatorApi {
       financePayload,
     );
     final Map<String, dynamic>? clipEarningsPayload =
-        await _tryGetMapWithLegacyFallback('/api/media/me/clip-earnings');
+        await _tryGetMapWithLegacyFallback(
+          '/api/media-engine/me/clip-earnings',
+          legacyPath: '/media-engine/me/clip-earnings',
+        );
     if (clipEarningsPayload == null) {
       return finance;
     }
@@ -166,19 +170,26 @@ class CreatorApi {
   Future<Map<String, dynamic>> _getMapWithLegacyFallback(
     String path, {
     bool auth = true,
+    String? legacyPath,
   }) async {
     return _withLegacyNotFoundFallback<Map<String, dynamic>>(
       path,
       (String resolvedPath) => client.getMap(resolvedPath, auth: auth),
+      legacyPath: legacyPath,
     );
   }
 
   Future<Map<String, dynamic>?> _tryGetMapWithLegacyFallback(
     String path, {
     bool auth = true,
+    String? legacyPath,
   }) async {
     try {
-      return await _getMapWithLegacyFallback(path, auth: auth);
+      return await _getMapWithLegacyFallback(
+        path,
+        auth: auth,
+        legacyPath: legacyPath,
+      );
     } on GteApiException catch (error) {
       if (error.type == GteApiErrorType.notFound) {
         return null;
@@ -190,10 +201,12 @@ class CreatorApi {
   Future<List<dynamic>> _getListWithLegacyFallback(
     String path, {
     bool auth = true,
+    String? legacyPath,
   }) async {
     return _withLegacyNotFoundFallback<List<dynamic>>(
       path,
       (String resolvedPath) => client.getList(resolvedPath, auth: auth),
+      legacyPath: legacyPath,
     );
   }
 
@@ -201,25 +214,28 @@ class CreatorApi {
     String path, {
     required Object? body,
     bool auth = true,
+    String? legacyPath,
   }) async {
     return _withLegacyNotFoundFallback<Object?>(
       path,
       (String resolvedPath) =>
           client.post(resolvedPath, body: body, auth: auth),
+      legacyPath: legacyPath,
     );
   }
 
   Future<T> _withLegacyNotFoundFallback<T>(
     String path,
-    Future<T> Function(String path) action,
-  ) async {
+    Future<T> Function(String path) action, {
+    String? legacyPath,
+  }) async {
     try {
       return await action(path);
     } on GteApiException catch (error) {
       if (error.type != GteApiErrorType.notFound || _isAbsoluteUrl(path)) {
         rethrow;
       }
-      return action(_legacyAbsolutePath(path));
+      return action(_legacyAbsolutePath(legacyPath ?? path));
     }
   }
 

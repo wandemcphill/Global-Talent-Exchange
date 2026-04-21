@@ -1,0 +1,283 @@
+diff --git a/backend/app/broadcast_network/router.py b/backend/app/broadcast_network/router.py
+index d2bf444..ab555a5 100644
+--- a/backend/app/broadcast_network/router.py
++++ b/backend/app/broadcast_network/router.py
+@@ -34,7 +34,7 @@ def join_channel(channel_id: str, request: Request, current_user: User = Depends
+ 
+ 
+ @router.get("/home", response_model=BroadcastHomeView)
+-def read_broadcast_home(request: Request, _: User = Depends(get_current_user)) -> BroadcastHomeView:
++def read_broadcast_home(request: Request) -> BroadcastHomeView:
+     return ensure_broadcast_network_runtime(request.app).home()
+ 
+ 
+diff --git a/backend/app/players/router.py b/backend/app/players/router.py
+index 8546d9c..6f7f219 100644
+--- a/backend/app/players/router.py
++++ b/backend/app/players/router.py
+@@ -159,7 +159,7 @@ def get_player_share_market(
+     session: Session = Depends(get_session),
+ ) -> PlayerShareMarketView:
+     try:
+-        market = PlayerTokenMarketService(session).get_market(player_id=player_id)
++        market = PlayerTokenMarketService(session).get_market_view(player_id=player_id)
+     except PlayerTokenMarketError as exc:
+         raise_player_token_market_http_exception(exc)
+     return PlayerShareMarketView.model_validate(market)
+diff --git a/backend/app/players/token_schemas.py b/backend/app/players/token_schemas.py
+index 2632f97..1d12b7d 100644
+--- a/backend/app/players/token_schemas.py
++++ b/backend/app/players/token_schemas.py
+@@ -15,6 +15,7 @@ class PlayerShareMarketView(BaseModel):
+     circulating_shares: int
+     share_price_coin: Decimal
+     status: str
++    market_issued: bool = True
+     revenue_distributed_coin: Decimal
+     metadata_json: dict[str, object]
+     created_at: datetime
+diff --git a/backend/app/players/token_service.py b/backend/app/players/token_service.py
+index 0e56c25..c076975 100644
+--- a/backend/app/players/token_service.py
++++ b/backend/app/players/token_service.py
+@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
+ 
+ from app.economy.governor_service import EconomyGovernorService
+ from app.ingestion.models import Player
+-from app.models.base import generate_uuid
++from app.models.base import generate_uuid, utcnow
+ from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
+ from app.models.user import User, UserRole
+ from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+@@ -90,6 +90,14 @@ class PlayerTokenMarketService:
+             raise PlayerTokenMarketError("Player share market was not found.", reason="market_not_found")
+         return market
+ 
++    def get_market_view(self, *, player_id: str) -> PlayerShareMarket | dict[str, Any]:
++        try:
++            return self.get_market(player_id=player_id)
++        except PlayerTokenMarketError as exc:
++            if exc.reason != "market_not_found":
++                raise
++        return self._build_unissued_market_view(player_id=player_id)
++
+     def list_events(self, *, player_id: str, limit: int = 50) -> list[PlayerShareEvent]:
+         return list(
+             self.session.scalars(
+@@ -353,6 +361,27 @@ class PlayerTokenMarketService:
+             raise PlayerTokenMarketError("Player was not found.", reason="player_not_found")
+         return player
+ 
++    def _build_unissued_market_view(self, *, player_id: str) -> dict[str, Any]:
++        player = self._get_player(player_id)
++        now = utcnow()
++        return {
++            "id": f"unissued:{player.id}",
++            "player_id": player.id,
++            "total_shares": 0,
++            "circulating_shares": 0,
++            "share_price_coin": Decimal("0.0000"),
++            "status": "unissued",
++            "market_issued": False,
++            "revenue_distributed_coin": Decimal("0.0000"),
++            "metadata_json": {
++                "player_name": player.canonical_display_name or player.full_name,
++                "is_real_player": bool(player.is_real_player),
++                "market_issued": False,
++            },
++            "created_at": now,
++            "updated_at": now,
++        }
++
+     def _normalize_market_status(self, status: str | None) -> str:
+         normalized_status = str(status or "active").strip().lower() or "active"
+         if normalized_status not in VALID_PLAYER_SHARE_MARKET_STATUSES:
+diff --git a/backend/tests/app/test_module_registration.py b/backend/tests/app/test_module_registration.py
+index 23c785a..eace4a0 100644
+--- a/backend/tests/app/test_module_registration.py
++++ b/backend/tests/app/test_module_registration.py
+@@ -263,7 +263,7 @@ def test_streamer_tournaments_route_does_not_force_global_lazy_hydration(mounted
+ @pytest.mark.parametrize(
+     ("path", "expected_status"),
+     (
+-        ("/api/broadcast/home", 401),
++        ("/api/broadcast/home", 200),
+         ("/api/match-viewer/nonexistent", 404),
+     ),
+ )
+diff --git a/backend/tests/broadcast_network/test_router.py b/backend/tests/broadcast_network/test_router.py
+index 0f6234f..d7a6426 100644
+--- a/backend/tests/broadcast_network/test_router.py
++++ b/backend/tests/broadcast_network/test_router.py
+@@ -83,6 +83,17 @@ def test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoi
+     assert session_response.json()["match_id"] == match_key
+ 
+ 
++def test_public_broadcast_home_works_without_auth(client, app) -> None:
++    _ensure_live_match(app, seed=33)
++
++    response = client.get("/api/broadcast/home")
++
++    assert response.status_code == 200
++    payload = response.json()
++    assert payload["channels"]
++    assert payload["featured_channel"] is not None
++
++
+ def test_broadcast_network_refreshes_cached_fallback_slots_when_live_match_starts(client, app, demo_auth_headers) -> None:
+     hub = ensure_live_match_hub(app)
+     with hub._lock:
+diff --git a/backend/tests/players/test_player_share_market_routes.py b/backend/tests/players/test_player_share_market_routes.py
+index ce7e325..2c913b1 100644
+--- a/backend/tests/players/test_player_share_market_routes.py
++++ b/backend/tests/players/test_player_share_market_routes.py
+@@ -242,6 +242,31 @@ def test_read_player_share_market_and_events_after_issue(monkeypatch) -> None:
+         engine.dispose()
+ 
+ 
++def test_read_player_share_market_returns_unissued_payload_before_issue(monkeypatch) -> None:
++    engine, session = _build_session()
++    try:
++        admin = _create_user(session, user_id="share-unissued-admin", role=UserRole.ADMIN)
++        fan = _create_user(session, user_id="share-unissued-fan")
++        player = _seed_imported_real_player(session, player_id="real-player-unissued")
++        client, _auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
++
++        with client:
++            market_response = client.get(f"/players/{player.id}/shares/market")
++
++        assert market_response.status_code == 200, market_response.text
++        payload = market_response.json()
++        assert payload["player_id"] == player.id
++        assert payload["status"] == "unissued"
++        assert payload["market_issued"] is False
++        assert payload["total_shares"] == 0
++        assert payload["circulating_shares"] == 0
++        assert payload["share_price_coin"] == "0.0000"
++        assert payload["metadata_json"]["market_issued"] is False
++    finally:
++        session.close()
++        engine.dispose()
++
++
+ def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> None:
+     engine, session = _build_session()
+     try:
+diff --git a/frontend/lib/features/match/live_match_overview_provider.dart b/frontend/lib/features/match/live_match_overview_provider.dart
+index 2b0549a..09e20a3 100644
+--- a/frontend/lib/features/match/live_match_overview_provider.dart
++++ b/frontend/lib/features/match/live_match_overview_provider.dart
+@@ -1,8 +1,6 @@
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ 
+-import '../../data/gte_api_repository.dart';
+ import '../../data/gte_authed_api.dart';
+-import '../../shared/providers/auth_provider.dart';
+ import '../shared/data/gte_feature_support.dart';
+ 
+ class LiveMatchOverviewEntry {
+@@ -148,23 +146,13 @@ abstract class LiveMatchOverviewRepository {
+ }
+ 
+ class ApiLiveMatchOverviewRepository implements LiveMatchOverviewRepository {
+-  const ApiLiveMatchOverviewRepository({
+-    required this.api,
+-    required this.isAuthenticated,
+-  });
++  const ApiLiveMatchOverviewRepository({required this.api});
+ 
+   final GteAuthedApi api;
+-  final bool isAuthenticated;
+ 
+   @override
+   Future<LiveMatchOverview> loadOverview() async {
+-    if (!isAuthenticated) {
+-      throw const GteApiException(
+-        type: GteApiErrorType.unauthorized,
+-        message: 'Authentication required for /api/broadcast/home.',
+-      );
+-    }
+-    final JsonMap payload = await api.getMap('/api/broadcast/home');
++    final JsonMap payload = await api.getMap('/api/broadcast/home', auth: false);
+     return LiveMatchOverview.fromJson(payload);
+   }
+ }
+@@ -173,10 +161,7 @@ final Provider<LiveMatchOverviewRepository>
+ liveMatchOverviewRepositoryProvider = Provider<LiveMatchOverviewRepository>((
+   Ref ref,
+ ) {
+-  return ApiLiveMatchOverviewRepository(
+-    api: ref.watch(authedApiProvider),
+-    isAuthenticated: ref.watch(isAuthenticatedProvider),
+-  );
++  return ApiLiveMatchOverviewRepository(api: ref.watch(authedApiProvider));
+ });
+ 
+ final liveMatchOverviewProvider =
+diff --git a/frontend/lib/features/transfer_market/live_market_provider.dart b/frontend/lib/features/transfer_market/live_market_provider.dart
+index f65c626..c43f659 100644
+--- a/frontend/lib/features/transfer_market/live_market_provider.dart
++++ b/frontend/lib/features/transfer_market/live_market_provider.dart
+@@ -176,17 +176,15 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
+       await Future.wait<PlayerShareSummary>(
+         playerItems.map((JsonMap item) async {
+           final String playerId = stringValue(item['player_id']);
+-          JsonMap? market;
+-          try {
+-            market = await api.getMap(
+-              '/players/$playerId/shares/market',
+-              auth: false,
+-            );
+-          } on GteApiException catch (error) {
+-            if (error.type != GteApiErrorType.notFound) {
+-              rethrow;
+-            }
+-          }
++          final JsonMap market = await api.getMap(
++            '/players/$playerId/shares/market',
++            auth: false,
++          );
++          final bool marketIssued = boolValue(market['market_issued']);
++          final String marketStatus = stringValue(
++            market['status'],
++            fallback: marketIssued ? 'blocked' : 'unissued',
++          );
+           return PlayerShareSummary(
+             playerId: playerId,
+             playerName: stringValue(item['player_name']),
+@@ -202,17 +200,17 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
+                 item['market_interest_score'] == null
+                     ? null
+                     : intValue(item['market_interest_score']),
+-            marketStatus: stringValue(market?['status'], fallback: 'blocked'),
++            marketStatus: marketStatus,
+             marketMessage:
+-                market == null
++                !marketIssued
+                     ? 'Not tradable yet: no issued share market.'
+                     : 'Share market is live.',
+             sharePriceCoin:
+-                market == null ? null : numberValue(market['share_price_coin']),
++                !marketIssued ? null : numberValue(market['share_price_coin']),
+             totalShares:
+-                market == null ? null : intValue(market['total_shares']),
++                !marketIssued ? null : intValue(market['total_shares']),
+             circulatingShares:
+-                market == null ? null : intValue(market['circulating_shares']),
++                !marketIssued ? null : intValue(market['circulating_shares']),
+           );
+         }),
+       );
+diff --git a/frontend/lib/features/transfer_market/transfer_market_screen.dart b/frontend/lib/features/transfer_market/transfer_market_screen.dart
+index a49a352..2c48219 100644
+--- a/frontend/lib/features/transfer_market/transfer_market_screen.dart
++++ b/frontend/lib/features/transfer_market/transfer_market_screen.dart
+@@ -194,7 +194,7 @@ class _MarketBody extends ConsumerWidget {
+           eyebrow: 'SHARES',
+           title: 'Player Shares',
+           subtitle:
+-              'Discovery is fed by /players/real-universe and tradability only appears when /players/{player_id}/shares/market exists.',
++              'Discovery is fed by /players/real-universe and tradability only appears when /players/{player_id}/shares/market is issued.',
+           child: Column(
+             children: data.playerShares
+                 .map(
