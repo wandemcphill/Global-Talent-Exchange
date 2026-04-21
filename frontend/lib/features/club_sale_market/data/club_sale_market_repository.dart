@@ -387,15 +387,6 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
     if (_client.mode == GteBackendMode.fixture) {
       return fixture();
     }
-    try {
-      return await live();
-    } catch (error) {
-      if (_client.mode == GteBackendMode.liveThenFixture &&
-          ((error is GteApiException && error.supportsFixtureFallback) ||
-              error is! GteApiException)) {
-        return fixture();
-      }
-      rethrow;
-    }
+    return live();
   }
 }

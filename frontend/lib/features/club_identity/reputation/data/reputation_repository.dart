@@ -97,15 +97,7 @@ class ReputationApiRepository implements ReputationRepository {
     if (config.mode == GteBackendMode.fixture) {
       return fixtureCall();
     }
-    try {
-      return await liveCall();
-    } on GteApiException catch (error) {
-      if (config.mode == GteBackendMode.liveThenFixture &&
-          error.supportsFixtureFallback) {
-        return fixtureCall();
-      }
-      rethrow;
-    }
+    return liveCall();
   }
 
   Future<Object?> _request(
