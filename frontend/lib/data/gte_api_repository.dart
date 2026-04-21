@@ -854,7 +854,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
   Future<GteUserWallet> fetchWallet() {
     return _withFallback<GteUserWallet>(
       () async => GteUserWallet.fromJson(
-        await _request('GET', '/api/wallet', requiresAuth: true),
+        await _request('GET', '/api/wallets', requiresAuth: true),
       ),
       fixtures.fetchWallet,
     );
@@ -896,7 +896,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
       final List<Object?> payload = GteJson.list(
         await _request(
           'GET',
-          '/api/wallet/transactions',
+          '/api/wallets/transactions',
           query: <String, Object?>{'limit': limit},
           requiresAuth: true,
         ),
@@ -916,7 +916,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
       () async => GteWalletTopUpSession.fromJson(
         await _request(
           'POST',
-          '/api/wallet/top-up/initiate',
+          '/api/wallets/top-up/initiate',
           body: request.toJson(),
           requiresAuth: true,
         ),
@@ -931,7 +931,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
       () async => GteWalletTopUpVerificationResult.fromJson(
         await _request(
           'POST',
-          '/api/wallet/top-up/verify',
+          '/api/wallets/top-up/verify',
           body: <String, Object?>{'reference': reference},
           requiresAuth: true,
         ),
@@ -1226,7 +1226,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
       final List<Object?> payload = GteJson.list(
         await _request(
           'GET',
-          '/notifications/me',
+          '/api/notifications/me',
           query: <String, Object?>{'limit': limit},
           requiresAuth: true,
         ),
@@ -1241,7 +1241,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
     return _withFallback<void>(() async {
       await _request(
         'POST',
-        '/notifications/$notificationId/read',
+        '/api/notifications/$notificationId/read',
         requiresAuth: true,
       );
     }, () => fixtures.markNotificationRead(notificationId));
@@ -1250,7 +1250,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
   @override
   Future<void> markAllNotificationsRead() {
     return _withFallback<void>(() async {
-      await _request('POST', '/notifications/read-all', requiresAuth: true);
+      await _request('POST', '/api/notifications/read-all', requiresAuth: true);
     }, fixtures.markAllNotificationsRead);
   }
 

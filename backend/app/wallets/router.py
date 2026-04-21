@@ -452,6 +452,7 @@ def _require_gateway_deposit(
 
 
 @public_wallet_router.get("", response_model=WalletProfileView)
+@wallet_router.get("", response_model=WalletProfileView)
 def get_wallet_profile(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_wallet_user),
@@ -462,6 +463,7 @@ def get_wallet_profile(
 
 
 @public_wallet_router.get("/transactions", response_model=list[WalletTransactionRecordView])
+@wallet_router.get("/transactions", response_model=list[WalletTransactionRecordView])
 def list_wallet_transactions(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     session: Session = Depends(get_session),
@@ -473,6 +475,9 @@ def list_wallet_transactions(
 
 
 @public_wallet_router.post(
+    "/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED
+)
+@wallet_router.post(
     "/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED
 )
 def initiate_wallet_top_up(
@@ -507,6 +512,10 @@ def initiate_wallet_top_up(
 
 
 @public_wallet_router.post(
+    "/top-up/verify",
+    response_model=WalletTopUpVerifyView,
+)
+@wallet_router.post(
     "/top-up/verify",
     response_model=WalletTopUpVerifyView,
 )
@@ -1461,5 +1470,6 @@ router.include_router(admin_router)
 router.include_router(orders_legacy_router)
 router.include_router(orders_api_router, generate_unique_id_function=_api_operation_id)
 api_router.include_router(wallet_router, generate_unique_id_function=_api_operation_id)
+api_router.include_router(public_wallet_router, generate_unique_id_function=_api_operation_id)
 api_router.include_router(portfolio_router, generate_unique_id_function=_api_operation_id)
 router.include_router(api_router)

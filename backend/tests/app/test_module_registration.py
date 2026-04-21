@@ -100,6 +100,10 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/fans/{club_id}" in openapi_paths
     assert "/club/identity" in openapi_paths
     assert "/media" in openapi_paths
+    assert "/api/wallets" in openapi_paths
+    assert "/api/wallets/transactions" in openapi_paths
+    assert "/api/wallets/top-up/initiate" in openapi_paths
+    assert "/api/wallets/top-up/verify" in openapi_paths
     assert "/ownership-groups" in openapi_paths
     assert "/ownership-groups/transfers/validate" in openapi_paths
     assert "/admin/ownership-groups/reputation-cycle" in openapi_paths
@@ -172,6 +176,10 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
         fans_response = client.get("/fans/nonexistent")
         club_identity_response = client.get("/club/identity", params={"club_id": "nonexistent"})
         media_response = client.get("/media")
+        wallet_profile_response = client.get("/api/wallets")
+        wallet_transactions_response = client.get("/api/wallets/transactions")
+        wallet_top_up_initiate_response = client.post("/api/wallets/top-up/initiate", json={})
+        wallet_top_up_verify_response = client.post("/api/wallets/top-up/verify", json={})
         ownership_groups_response = client.get("/ownership-groups")
         ownership_group_validation_response = client.get(
             "/ownership-groups/transfers/validate",
@@ -206,7 +214,7 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert leagues_response.status_code == 422
     assert champions_league_response.status_code == 422
     assert academy_response.status_code == 422
-    assert ai_manager_response.status_code == 422
+    assert ai_manager_response.status_code == 401
     assert match_engine_response.status_code == 422
     assert match_start_response.status_code == 422
     assert match_complete_response.status_code == 422
@@ -230,6 +238,10 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert fans_response.status_code == 404
     assert club_identity_response.status_code == 404
     assert media_response.status_code == 200
+    assert wallet_profile_response.status_code == 401
+    assert wallet_transactions_response.status_code == 401
+    assert wallet_top_up_initiate_response.status_code == 401
+    assert wallet_top_up_verify_response.status_code == 401
     assert ownership_groups_response.status_code == 401
     assert ownership_group_validation_response.status_code == 401
     assert ownership_group_reputation_response.status_code == 401
