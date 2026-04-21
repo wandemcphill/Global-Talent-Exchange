@@ -126,7 +126,11 @@ class ReferralRiskService:
                 )
                 flags[flag.flag_id] = flag
 
-            if metric.attributed_signups >= 3 and metric.reward_cost >= Decimal("5") and quality_rate < Decimal("0.3500"):
+            if (
+                metric.attributed_signups >= 3
+                and metric.reward_cost >= Decimal("5")
+                and quality_rate < Decimal("0.3500")
+            ):
                 flag = self._build_flag(
                     flag_type="high_reward_cost_low_quality",
                     severity="high",

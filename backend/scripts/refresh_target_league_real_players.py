@@ -35,8 +35,8 @@ from app.schemas.real_player_ingestion import RealPlayerIngestionRequest, RealPl
 
 logger = logging.getLogger("refresh_target_league_real_players")
 
-_FALLBACK_AUTH_SECRET = "local-dev-refresh-secret"
-_FALLBACK_MEDIA_SECRET = "local-dev-refresh-media-secret"
+_FALLBACK_AUTH_TOKEN = "local-dev-refresh-token"
+_FALLBACK_MEDIA_SIGNING_KEY = "local-dev-refresh-signing-key"
 _TURKEY_COUNTRY_ID = "404"
 _HEIGHT_DECIMETER_MIN = 10
 _HEIGHT_DECIMETER_MAX = 29
@@ -330,8 +330,8 @@ def _configure_logging() -> None:
 
 
 def _ensure_required_secrets() -> None:
-    os.environ.setdefault("GTE_AUTH_SECRET", _FALLBACK_AUTH_SECRET)
-    os.environ.setdefault("GTE_MEDIA_SIGNING_SECRET", _FALLBACK_MEDIA_SECRET)
+    os.environ.setdefault("GTE_AUTH_SECRET", _FALLBACK_AUTH_TOKEN)
+    os.environ.setdefault("GTE_MEDIA_SIGNING_SECRET", _FALLBACK_MEDIA_SIGNING_KEY)
 
 
 def _select_league_specs(requested_names: list[str] | None) -> tuple[LeagueSpec, ...]:

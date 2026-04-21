@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
-
-if TYPE_CHECKING:
-    from app.models.user import User
 
 
 class GtexJackpotRoundStatus(StrEnum):
@@ -91,9 +88,7 @@ class GtexRiskFlagStatus(StrEnum):
 
 class GtexJackpotRound(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "gtex_jackpot_rounds"
-    __table_args__ = (
-        UniqueConstraint("pool_key", "round_number", name="uq_gtex_jackpot_rounds_pool_round"),
-    )
+    __table_args__ = (UniqueConstraint("pool_key", "round_number", name="uq_gtex_jackpot_rounds_pool_round"),)
 
     pool_key: Mapped[str] = mapped_column(String(64), nullable=False, default="global", index=True)
     round_number: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -232,9 +227,7 @@ class GtexCreatorAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class GtexCreatorHolding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "gtex_creator_holdings"
-    __table_args__ = (
-        UniqueConstraint("user_id", "player_id", name="uq_gtex_creator_holdings_user_player"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "player_id", name="uq_gtex_creator_holdings_user_player"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),
@@ -463,7 +456,9 @@ class GtexMatch(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
-    queued_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+    queued_at: Mapped[Any] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
     started_at: Mapped[Any | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Any | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     risk_score: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False, default=Decimal("0.0000"))
@@ -474,9 +469,7 @@ class GtexMatch(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class GtexMatchEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "gtex_match_events"
-    __table_args__ = (
-        UniqueConstraint("match_id", "event_index", name="uq_gtex_match_events_match_event_index"),
-    )
+    __table_args__ = (UniqueConstraint("match_id", "event_index", name="uq_gtex_match_events_match_event_index"),)
 
     match_id: Mapped[str] = mapped_column(
         String(36),
@@ -495,9 +488,7 @@ class GtexMatchEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class GtexLeagueStanding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "gtex_league_standings"
-    __table_args__ = (
-        UniqueConstraint("league_id", "subject_key", name="uq_gtex_league_standings_league_subject"),
-    )
+    __table_args__ = (UniqueConstraint("league_id", "subject_key", name="uq_gtex_league_standings_league_subject"),)
 
     league_id: Mapped[str] = mapped_column(
         String(36),

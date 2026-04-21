@@ -5,7 +5,19 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, JSON, Numeric, String, UniqueConstraint, event, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    JSON,
+    Numeric,
+    String,
+    UniqueConstraint,
+    event,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -110,9 +122,7 @@ class LedgerTransactionStatus(StrEnum):
 
 class LedgerAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "wallets"
-    __table_args__ = (
-        UniqueConstraint("owner_user_id", "unit", "kind", name="uq_wallets_owner_unit_kind"),
-    )
+    __table_args__ = (UniqueConstraint("owner_user_id", "unit", "kind", name="uq_wallets_owner_unit_kind"),)
 
     owner_user_id: Mapped[str | None] = mapped_column(
         String(36),
@@ -187,9 +197,7 @@ class LedgerTransaction(UUIDPrimaryKeyMixin, Base):
 
 class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "ledger_entries"
-    __table_args__ = (
-        CheckConstraint("amount <> 0", name="ck_ledger_entries_amount_non_zero"),
-    )
+    __table_args__ = (CheckConstraint("amount <> 0", name="ck_ledger_entries_amount_non_zero"),)
 
     transaction_id: Mapped[str] = mapped_column(
         String(36),
@@ -243,9 +251,7 @@ class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class LedgerBalanceProjection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ledger_balance_projections"
-    __table_args__ = (
-        UniqueConstraint("account_id", name="uq_ledger_balance_projections_account"),
-    )
+    __table_args__ = (UniqueConstraint("account_id", name="uq_ledger_balance_projections_account"),)
 
     account_id: Mapped[str] = mapped_column(
         String(36),

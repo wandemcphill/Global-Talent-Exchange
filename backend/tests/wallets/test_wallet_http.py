@@ -47,7 +47,7 @@ def api_context():
         email="wallet-http@example.com",
         region_code="NG",
         username="wallethttp",
-        password="SuperSecret1",
+        password="SuperSecret1",  # pragma: allowlist secret
     )
     session.commit()
     _seed_policy_defaults(session, current_user)

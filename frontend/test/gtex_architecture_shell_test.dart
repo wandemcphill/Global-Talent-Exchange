@@ -56,7 +56,7 @@ void main() {
     expect(find.text('Player market'), findsOneWidget);
     expect(find.text('PLAYER MARKET'), findsOneWidget);
     expect(
-      find.text('Search player, club, nationality, or position'),
+      find.text('Search player, club, league, nationality, or team'),
       findsOneWidget,
     );
   });
