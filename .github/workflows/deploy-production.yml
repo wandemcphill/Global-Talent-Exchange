@@ -107,11 +107,11 @@ jobs:
       GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
       GTEX_UNITY_BUILD_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_windows_build.log
       GTEX_FORCE_CLEAN_LIBRARY: "false"
-      GTEX_UNITY_RUNNER_PROFILE_ROOT: ${{ runner.temp }}\gtex-unity-runner-profile
-      LOCALAPPDATA: ${{ runner.temp }}\gtex-unity-runner-profile\LocalAppData
-      APPDATA: ${{ runner.temp }}\gtex-unity-runner-profile\RoamingAppData
-      TEMP: ${{ runner.temp }}\gtex-unity-runner-profile\Temp
-      TMP: ${{ runner.temp }}\gtex-unity-runner-profile\Temp
+      GTEX_UNITY_RUNNER_PROFILE_ROOT: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}
+      LOCALAPPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\LocalAppData
+      APPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\RoamingAppData
+      TEMP: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\Temp
+      TMP: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\Temp
     steps:
       - uses: actions/checkout@v4
       - name: Verify Unity CI configuration

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
+
 @pytest.fixture()
 def mounted_app():
     temp_root = Path(__file__).resolve().parents[2] / ".tmp_testdbs"

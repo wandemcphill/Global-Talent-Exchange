@@ -530,7 +530,9 @@ def _interpolate_frame(
                     "highlighted": end_player.highlighted if factor >= state_threshold else start_player.highlighted,
                     "has_possession": end_player.has_possession if factor >= 0.5 else start_player.has_possession,
                     "state": end_player.state if factor >= state_threshold else start_player.state,
-                    "animation_state": end_player.animation_state if factor >= state_threshold else start_player.animation_state,
+                    "animation_state": (
+                        end_player.animation_state if factor >= state_threshold else start_player.animation_state
+                    ),
                     "position": sampled_position,
                     "anchor_position": start_player.anchor_position.model_copy(
                         update={

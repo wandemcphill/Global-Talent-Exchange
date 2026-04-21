@@ -87,13 +87,7 @@ def _module(
     return DomainModule(
         name=name,
         router_path=router_path,
-        router_transform=(
-            _with_api_alias
-            if with_api_alias
-            else _with_api_only
-            if api_only
-            else None
-        ),
+        router_transform=(_with_api_alias if with_api_alias else _with_api_only if api_only else None),
         on_startup=on_startup,
         on_shutdown=on_shutdown,
     )

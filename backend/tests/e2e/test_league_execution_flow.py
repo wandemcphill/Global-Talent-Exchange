@@ -196,10 +196,7 @@ def test_league_fixture_dispatch_execution_replay_and_notifications_flow(tmp_pat
                 headers=participants[champion.club_id].headers,
             )
             assert champion_notifications_response.status_code == 200
-            champion_template_keys = {
-                item["template_key"]
-                for item in champion_notifications_response.json()
-            }
+            champion_template_keys = {item["template_key"] for item in champion_notifications_response.json()}
             assert "match_starts_10m" in champion_template_keys
             assert "match_live_now" in champion_template_keys
             assert {"you_won", "you_lost"} & champion_template_keys
@@ -212,10 +209,7 @@ def test_league_fixture_dispatch_execution_replay_and_notifications_flow(tmp_pat
                 headers=participants[playoff_club.club_id].headers,
             )
             assert playoff_notifications_response.status_code == 200
-            playoff_template_keys = {
-                item["template_key"]
-                for item in playoff_notifications_response.json()
-            }
+            playoff_template_keys = {item["template_key"] for item in playoff_notifications_response.json()}
             assert "qualified" in playoff_template_keys
             assert "reached_playoff" in playoff_template_keys
     finally:

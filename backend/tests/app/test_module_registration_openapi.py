@@ -102,4 +102,3 @@ def test_real_app_openapi_hides_legacy_public_and_mixed_surface_paths(
     path: str,
 ) -> None:
     assert path not in mounted_app_contract_snapshot["openapi_paths"]
-

@@ -10,9 +10,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 class NotificationPreference(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "notification_preferences"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_notification_preferences_user"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_notification_preferences_user"),)
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     allow_wallet: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -29,9 +27,7 @@ class NotificationPreference(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 class NotificationSubscription(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "notification_subscriptions"
-    __table_args__ = (
-        UniqueConstraint("user_id", "subscription_key", name="uq_notification_subscriptions_user_key"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "subscription_key", name="uq_notification_subscriptions_user_key"),)
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     subscription_key: Mapped[str] = mapped_column(String(140), nullable=False, index=True)
@@ -52,4 +48,6 @@ class PlatformAnnouncement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     deliver_as_notification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    published_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    published_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )

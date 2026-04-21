@@ -42,9 +42,7 @@ def _check_workflows(errors: list[str]) -> None:
             errors.append(f"{relative_path} does not declare any python-version entries.")
             continue
         if any(version != SUPPORTED_PYTHON for version in versions):
-            errors.append(
-                f"{relative_path} must use python-version {SUPPORTED_PYTHON} everywhere, found {versions!r}."
-            )
+            errors.append(f"{relative_path} must use python-version {SUPPORTED_PYTHON} everywhere, found {versions!r}.")
 
 
 def _check_dockerfiles(errors: list[str]) -> None:

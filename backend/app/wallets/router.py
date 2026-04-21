@@ -477,9 +477,7 @@ def list_wallet_transactions(
 @public_wallet_router.post(
     "/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED
 )
-@wallet_router.post(
-    "/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED
-)
+@wallet_router.post("/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED)
 def initiate_wallet_top_up(
     payload: WalletTopUpInitiateRequest,
     session: Session = Depends(get_session),

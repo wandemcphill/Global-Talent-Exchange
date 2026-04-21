@@ -90,11 +90,7 @@ def test_competition_pipeline_dispatches_advancement_replay_and_notifications(
     assert "competition.match.notifications.dispatched" in event_names
     assert "competition.match.standings.updated" not in event_names
 
-    advancement_event = next(
-        event
-        for event in new_events
-        if event.name == "competition.match.advancement.requested"
-    )
+    advancement_event = next(event for event in new_events if event.name == "competition.match.advancement.requested")
     assert advancement_event.payload["stage_code"] == "Quarterfinal"
     assert advancement_event.payload["winner_club_id"] in {"cup-home", "cup-away"}
 
