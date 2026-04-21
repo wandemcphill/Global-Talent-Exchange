@@ -587,7 +587,7 @@ void main() {
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Open 3D'));
-      await tester.pumpAndSettle();
+      await _pumpViewerRoute(tester);
       expect(find.text('3D Match Viewer'), findsWidgets);
       expect(find.text('Route blocked'), findsNothing);
       expect(find.text('FLUTTER_3D'), findsOneWidget);
