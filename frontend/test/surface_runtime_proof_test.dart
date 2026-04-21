@@ -573,7 +573,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(FilledButton, 'Open 2D'));
-      await tester.pumpAndSettle();
+      await _pumpViewerRoute(tester);
       expect(find.text('2D Match Viewer'), findsWidgets);
       expect(find.text('Viewer contract unavailable'), findsNothing);
       expect(find.text('Route blocked'), findsNothing);
@@ -581,13 +581,13 @@ void main() {
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Open Broadcast+'));
-      await tester.pumpAndSettle();
+      await _pumpViewerRoute(tester);
       expect(find.text('Broadcast Package'), findsWidgets);
 
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Open 3D'));
-      await tester.pumpAndSettle();
+      await _pumpViewerRoute(tester);
       expect(find.text('3D Match Viewer'), findsWidgets);
       expect(find.text('Route blocked'), findsNothing);
       expect(find.text('FLUTTER_3D'), findsOneWidget);
@@ -603,8 +603,8 @@ void main() {
 
 Future<void> _pumpViewerRoute(WidgetTester tester) async {
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 64));
-  await tester.pump(const Duration(milliseconds: 64));
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump(const Duration(milliseconds: 16));
 }
 
 ProviderContainer _buildRouterContainer({

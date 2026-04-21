@@ -14,10 +14,11 @@ void main() {
           body: <Object?>[
             <String, Object?>{
               'notification_id': 'notif-1',
-              'title': 'Kickoff',
-              'body': 'Your match starts now.',
-              'sent_at': '2026-04-18T12:00:00Z',
-              'read': false,
+              'user_id': 'user-1',
+              'topic': 'match_kickoff',
+              'message': 'Your match starts now.',
+              'created_at': '2026-04-18T12:00:00Z',
+              'is_read': false,
             },
           ],
         ),
