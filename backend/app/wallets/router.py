@@ -90,8 +90,6 @@ from app.treasury.schemas import (
 )
 from app.treasury.service import TreasuryConflictError, TreasuryService
 
-# app.orders.router is intentionally mounted through the wallets owner router so
-# the orders surface keeps a single module-registration boundary.
 router = APIRouter()
 wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])
 public_wallet_router = APIRouter(prefix="/wallet", tags=["wallet"])
@@ -479,7 +477,9 @@ def list_wallet_transactions(
 @public_wallet_router.post(
     "/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED
 )
-@wallet_router.post("/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED)
+@wallet_router.post(
+    "/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED
+)
 def initiate_wallet_top_up(
     payload: WalletTopUpInitiateRequest,
     session: Session = Depends(get_session),

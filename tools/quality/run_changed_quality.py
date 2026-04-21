@@ -119,8 +119,6 @@ def is_secret_scan_file(path: str) -> bool:
     name = file_path.name.lower()
     if name in SECRET_SCAN_FILENAMES or name.startswith(".env"):
         return True
-    if file_path.suffix.lower() == ".meta":
-        return False
     return any(suffix.lower() in SECRET_SCAN_EXTENSIONS for suffix in file_path.suffixes)
 
 

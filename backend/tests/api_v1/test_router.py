@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
+from starlette.datastructures import Headers, QueryParams
 from starlette.websockets import WebSocketDisconnect
 
+from app.api_v1.router import stream_match_commentary
 from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
 from app.main import create_app
@@ -46,8 +50,8 @@ def test_api_v1_requires_auth_and_wraps_success_envelopes(app_client) -> None:
 
     assert unauthorized.status_code == 401
     assert unauthorized.json() == {
-        "success": False,
-        "error": "Authentication credentials were not provided.",
+        "error": True,
+        "message": "Authentication credentials were not provided.",
         "code": "unauthorized",
     }
 
@@ -283,8 +287,49 @@ def test_api_v1_match_websocket_rejects_unity_live_bridge_without_access_token(a
     assert tick_response.status_code == 200, tick_response.text
     match_id = tick_response.json()["matches"][0]["match_id"]
 
-    with client.websocket_connect(f"/api/v1/ws/match/{match_id}?format=unity") as websocket:
-        with pytest.raises(WebSocketDisconnect) as exc_info:
-            websocket.receive_json()
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(f"/api/v1/ws/match/{match_id}?format=unity"):
+            pass
 
     assert exc_info.value.code == 4401
+
+
+def test_api_v1_match_websocket_rejects_non_unity_requests_pre_accept(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+    unauthorized_socket = _RecordingWebSocket(app=app)
+    asyncio.run(stream_match_commentary(unauthorized_socket, "m1"))
+
+    assert unauthorized_socket.close_code == 4401
+    assert unauthorized_socket.close_reason == "unauthorized"
+    assert unauthorized_socket.accepted is False
+
+    missing_socket = _RecordingWebSocket(app=app, token=token)
+    asyncio.run(stream_match_commentary(missing_socket, "missing-match"))
+
+    assert missing_socket.close_code == 4404
+    assert missing_socket.close_reason == "not_found"
+    assert missing_socket.accepted is False
+
+
+class _RecordingWebSocket:
+    def __init__(self, *, app, token: str | None = None) -> None:
+        self.scope = {"app": app}
+        self.query_params = QueryParams("" if token is None else {"token": token})
+        self.headers = Headers({})
+        self.accepted = False
+        self.close_code: int | None = None
+        self.close_reason: str | None = None
+
+    async def close(self, code: int = 1000, reason: str | None = None) -> None:
+        self.close_code = code
+        self.close_reason = reason
+
+    async def accept(self) -> None:
+        self.accepted = True
+
+    async def send_json(self, _payload) -> None:
+        return None
+
+    async def receive_text(self) -> str:
+        raise WebSocketDisconnect(code=1000)

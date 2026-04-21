@@ -42,20 +42,12 @@ class ManagerDuel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     away_manager_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     home_manager_name: Mapped[str] = mapped_column(String(160), nullable=False)
     away_manager_name: Mapped[str] = mapped_column(String(160), nullable=False)
-    home_manager_source: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="hired", server_default="hired"
-    )
-    away_manager_source: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="hired", server_default="hired"
-    )
+    home_manager_source: Mapped[str] = mapped_column(String(24), nullable=False, default="hired", server_default="hired")
+    away_manager_source: Mapped[str] = mapped_column(String(24), nullable=False, default="hired", server_default="hired")
     home_manager_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     away_manager_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    controller_home: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="manager", server_default="manager"
-    )
-    controller_away: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="manager", server_default="manager"
-    )
+    controller_home: Mapped[str] = mapped_column(String(24), nullable=False, default="manager", server_default="manager")
+    controller_away: Mapped[str] = mapped_column(String(24), nullable=False, default="manager", server_default="manager")
     user_control_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

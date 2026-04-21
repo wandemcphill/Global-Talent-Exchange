@@ -5,6 +5,10 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app.auth.dependencies import get_current_user
 from app.auth.security import TokenError, decode_access_token
@@ -36,11 +40,41 @@ logger = logging.getLogger(__name__)
 
 
 def install_exception_handlers(app, _context: ApplicationContext) -> None:
-    # app.core.api_contract owns the canonical /api/v1 HTTP error envelope.
-    # This startup hook remains so api_v1 keeps an explicit module-level contract owner.
     if getattr(app.state, "api_v1_exception_handlers_installed", False):
         return
     app.state.api_v1_exception_handlers_installed = True
+
+
+async def _handle_http_exception(request: Request, exc: HTTPException):
+    if not request.url.path.startswith("/api/v1"):
+        return await http_exception_handler(request, exc)
+    detail = exc.detail
+    message = detail if isinstance(detail, str) else "Request failed."
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=jsonable_encoder(
+            {
+                "success": False,
+                "error": message,
+                "code": _error_code_for_status(exc.status_code),
+            }
+        ),
+    )
+
+
+async def _handle_validation_error(request: Request, exc: RequestValidationError):
+    if not request.url.path.startswith("/api/v1"):
+        return await request_validation_exception_handler(request, exc)
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=jsonable_encoder(
+            {
+                "success": False,
+                "error": "Request validation failed.",
+                "code": "validation_error",
+            }
+        ),
+    )
 
 
 def get_service(request: Request) -> GlobalApiV1Service:
@@ -48,7 +82,7 @@ def get_service(request: Request) -> GlobalApiV1Service:
 
 
 def ok(data: dict[str, Any]) -> ApiEnvelope[dict[str, Any]]:
-    return ApiEnvelope[dict[str, Any]](data=data)
+    return ApiEnvelope[dict[str, Any]](success=True, data=data, error=None)
 
 
 def _raise_global_api_http_error(exc: GlobalApiV1Error) -> None:
@@ -57,6 +91,18 @@ def _raise_global_api_http_error(exc: GlobalApiV1Error) -> None:
     if isinstance(exc, GlobalApiV1ValidationError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+def _error_code_for_status(status_code: int) -> str:
+    mapping = {
+        400: "bad_request",
+        401: "unauthorized",
+        403: "forbidden",
+        404: "not_found",
+        409: "conflict",
+        422: "validation_error",
+    }
+    return mapping.get(status_code, f"http_{status_code}")
 
 
 @router.get("/home/dashboard", response_model=ApiEnvelope[dict[str, Any]])
@@ -422,13 +468,13 @@ async def stream_match_commentary(websocket: WebSocket, match_id: str) -> None:
 
     user = _resolve_websocket_user(websocket)
     if user is None:
-        await websocket.close(code=4401, reason="unauthorized")
+        await websocket.close(code=4401)
         return
     service = GlobalApiV1Service(websocket.scope["app"])
     try:
         payload = service.build_match_commentary_event(match_id)
     except GlobalApiV1Error:
-        await websocket.close(code=4404, reason="not_found")
+        await websocket.close(code=4404)
         return
     await websocket.accept()
     await websocket.send_json(payload)
@@ -535,13 +581,13 @@ def _unity_payload_signature(payload: dict[str, Any]) -> tuple[object, ...]:
 async def stream_market_bids(websocket: WebSocket, listing_id: str) -> None:
     user = _resolve_websocket_user(websocket)
     if user is None:
-        await websocket.close(code=4401, reason="unauthorized")
+        await websocket.close(code=4401)
         return
     service = GlobalApiV1Service(websocket.scope["app"])
     try:
         payload = service.get_market_bid_event(listing_id)
     except GlobalApiV1Error:
-        await websocket.close(code=4404, reason="not_found")
+        await websocket.close(code=4404)
         return
     await websocket.accept()
     await websocket.send_json(payload)
@@ -556,7 +602,7 @@ async def stream_market_bids(websocket: WebSocket, listing_id: str) -> None:
 async def stream_notifications(websocket: WebSocket) -> None:
     user = _resolve_websocket_user(websocket)
     if user is None:
-        await websocket.close(code=4401, reason="unauthorized")
+        await websocket.close(code=4401)
         return
     service = GlobalApiV1Service(websocket.scope["app"])
     await websocket.accept()

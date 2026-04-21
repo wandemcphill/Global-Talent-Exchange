@@ -106,22 +106,7 @@ class TrophyCabinetApiRepository implements TrophyCabinetRepository {
     if (config.mode == GteBackendMode.fixture) {
       return fixtureCall();
     }
-    try {
-      return await liveCall();
-    } on GteApiException catch (error) {
-      if (config.mode == GteBackendMode.liveThenFixture &&
-          (error.supportsFixtureFallback ||
-              error.type == GteApiErrorType.notFound ||
-              error.type == GteApiErrorType.unknown)) {
-        return fixtureCall();
-      }
-      rethrow;
-    } on GteParsingException {
-      if (config.mode == GteBackendMode.liveThenFixture) {
-        return fixtureCall();
-      }
-      rethrow;
-    }
+    return liveCall();
   }
 
   Future<Object?> _request(

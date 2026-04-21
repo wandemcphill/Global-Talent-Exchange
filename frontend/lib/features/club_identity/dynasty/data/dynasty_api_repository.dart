@@ -136,15 +136,7 @@ class DynastyApiRepository implements DynastyRepository {
     if (config.mode == GteBackendMode.fixture) {
       return loadFixture();
     }
-
-    try {
-      return await loadLive();
-    } catch (error) {
-      if (_shouldFallback(error)) {
-        return loadFixture();
-      }
-      rethrow;
-    }
+    return loadLive();
   }
 
   Future<Object?> _request(
@@ -181,14 +173,6 @@ class DynastyApiRepository implements DynastyRepository {
         cause: error,
       );
     }
-  }
-
-  bool _shouldFallback(Object error) {
-    if (config.mode != GteBackendMode.liveThenFixture) {
-      return false;
-    }
-    return (error is GteApiException && error.supportsFixtureFallback) ||
-        error is GteParsingException;
   }
 
   GteApiErrorType _errorTypeFromStatus(int statusCode) {

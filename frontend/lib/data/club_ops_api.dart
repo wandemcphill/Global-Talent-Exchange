@@ -248,24 +248,7 @@ class ClubOpsApi {
     if (config.mode == GteBackendMode.fixture) {
       return fixtureCall();
     }
-    try {
-      return await liveCall();
-    } on GteApiException catch (error) {
-      if (config.mode == GteBackendMode.liveThenFixture &&
-          _shouldFallback(error)) {
-        return fixtureCall();
-      }
-      rethrow;
-    } on GteParsingException {
-      if (config.mode == GteBackendMode.liveThenFixture) {
-        return fixtureCall();
-      }
-      rethrow;
-    }
-  }
-
-  bool _shouldFallback(GteApiException error) {
-    return error.supportsFixtureFallback;
+    return liveCall();
   }
 
   Future<Object?> _request(

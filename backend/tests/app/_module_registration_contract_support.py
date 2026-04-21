@@ -73,7 +73,7 @@ def mounted_app_runtime(tmp_path_factory, migrated_sqlite_template):
         for key, value in managed_env.items():
             os.environ[key] = value
         config = _load_config_module()
-        _load_database_module()
+        database = _load_database_module()
         # app.main can resolve settings during import, so the test env must be
         # installed before importing the real application module. Reload only
         # when another test imported app.main earlier in the same session.

@@ -93,19 +93,9 @@ class CountryFeaturePolicy(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     bucket_type: Mapped[str] = mapped_column(String(32), nullable=False, default="default", server_default="default")
     deposits_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     market_trading_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    platform_reward_withdrawals_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
-    )
-    user_hosted_gift_withdrawals_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    gtex_competition_gift_withdrawals_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    national_reward_withdrawals_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    one_time_region_change_after_days: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=180, server_default="180"
-    )
+    platform_reward_withdrawals_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    user_hosted_gift_withdrawals_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    gtex_competition_gift_withdrawals_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    national_reward_withdrawals_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    one_time_region_change_after_days: Mapped[int] = mapped_column(Integer, nullable=False, default=180, server_default="180")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")

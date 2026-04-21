@@ -26,9 +26,12 @@ import 'package:gte_frontend/data/risk_ops_api.dart';
 import 'package:gte_frontend/data/sponsorship_admin_api.dart';
 import 'package:gte_frontend/data/story_feed_api.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_api_repository.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_fixture_repository.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_repository.dart';
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart';
+import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
+import 'package:gte_frontend/features/club_sale_market/data/club_sale_market_repository.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 
 void main() {
@@ -295,11 +298,82 @@ void main() {
       );
     },
   );
+
+  test(
+    'raw club surface repositories fail closed in liveThenFixture mode',
+    () async {
+      const GteRepositoryConfig config = GteRepositoryConfig(
+        baseUrl: 'https://example.test',
+        mode: GteBackendMode.liveThenFixture,
+      );
+      const _StatusTransport transport = _StatusTransport(
+        statusCode: 503,
+        body: <String, Object?>{'detail': 'backend offline'},
+      );
+
+      final ClubIdentityApiRepository clubIdentityRepository =
+          ClubIdentityApiRepository(
+            config: config,
+            transport: transport,
+            fixtures: MockClubIdentityRepository(),
+          );
+      await _expectUnavailable(clubIdentityRepository.fetchIdentity('club-1'));
+
+      final ReputationApiRepository reputationRepository =
+          ReputationApiRepository(
+            config: config,
+            transport: transport,
+            fixtures: FixtureReputationRepository(),
+          );
+      await _expectUnavailable(reputationRepository.fetchOverview('club-1'));
+
+      final DynastyApiRepository dynastyRepository = DynastyApiRepository(
+        config: config,
+        transport: transport,
+        fixtures: DynastyFixtureRepository(),
+      );
+      await _expectUnavailable(dynastyRepository.fetchDynastyProfile('club-1'));
+
+      final TrophyCabinetApiRepository trophyRepository =
+          TrophyCabinetApiRepository(
+            config: config,
+            transport: transport,
+            fixtures: StubTrophyCabinetRepository(),
+          );
+      await _expectUnavailable(
+        trophyRepository.fetchTrophyCabinet(clubId: 'club-1'),
+      );
+
+      final ClubSaleMarketApiRepository saleMarketRepository =
+          ClubSaleMarketApiRepository(
+            client: GteAuthedApi(
+              config: config,
+              transport: transport,
+              accessToken: 'token',
+              mode: GteBackendMode.liveThenFixture,
+            ),
+          );
+      await _expectUnavailable(saleMarketRepository.fetchValuation('club-1'));
+    },
+  );
 }
 
 void _expectAuthedApiLive(GteAuthedApi client) {
   expect(client.mode, GteBackendMode.live);
   expect(client.config.mode, GteBackendMode.live);
+}
+
+Future<void> _expectUnavailable(Future<dynamic> operation) async {
+  await expectLater(
+    operation,
+    throwsA(
+      isA<GteApiException>().having(
+        (GteApiException error) => error.type,
+        'type',
+        GteApiErrorType.unavailable,
+      ),
+    ),
+  );
 }
 
 class _NoopTransport implements GteTransport {

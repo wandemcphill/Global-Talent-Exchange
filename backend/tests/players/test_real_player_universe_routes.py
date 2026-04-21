@@ -60,7 +60,7 @@ def _create_user(
         session,
         email=email,
         username=username,
-        password="SuperSecret1",  # pragma: allowlist secret
+        password="SuperSecret1",
         role=role,
     )
     session.commit()

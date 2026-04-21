@@ -465,16 +465,6 @@ def _player_state_threshold(player_id: str | None) -> float:
     return 0.35 + ((int.from_bytes(digest[:2], "big") / 65535.0) * 0.3)
 
 
-def _transition_threshold(seed: str | None, *, base: float = 0.5, spread: float = 0.12) -> float:
-    token = str(seed or "").strip()
-    if not token:
-        return max(0.05, min(0.95, base))
-
-    digest = md5(token.encode("utf-8")).digest()
-    bias = ((int.from_bytes(digest[:2], "big") / 65535.0) - 0.5) * 2.0
-    return max(0.05, min(0.95, base + (bias * spread)))
-
-
 def _interpolate_frame(
     start_frame: MatchTimelineFrameView,
     end_frame: MatchTimelineFrameView,
@@ -501,39 +491,9 @@ def _interpolate_frame(
     end_players_by_id = {player.player_id: player for player in end_frame.players}
     players = []
     span_seconds = max(end_frame.time_seconds - start_frame.time_seconds, 0.05)
-    event_transition_threshold = _transition_threshold(
-        f"{start_frame.active_event_id}:{end_frame.active_event_id}:event",
-        base=0.72,
-        spread=0.08,
-    )
-    phase_transition_threshold = _transition_threshold(
-        f"{start_frame.frame_id}:{end_frame.frame_id}:phase",
-        base=0.74,
-        spread=0.06,
-    )
-    possession_transition_threshold = _transition_threshold(
-        f"{start_frame.frame_id}:{end_frame.frame_id}:possession",
-        base=0.68,
-        spread=0.07,
-    )
-    camera_transition_threshold = _transition_threshold(
-        f"{start_frame.camera_preset}:{end_frame.camera_preset}:camera",
-        base=0.78,
-        spread=0.05,
-    )
-    stage_transition_threshold = _transition_threshold(
-        f"{start_frame.stage}:{end_frame.stage}:stage",
-        base=0.76,
-        spread=0.05,
-    )
     for start_player in start_frame.players:
         end_player = end_players_by_id.get(start_player.player_id, start_player)
         state_threshold = _player_state_threshold(start_player.player_id)
-        possession_threshold = _transition_threshold(
-            f"{start_player.player_id}:possession:{start_frame.frame_id}:{end_frame.frame_id}",
-            base=0.67,
-            spread=0.06,
-        )
         sampled_position = start_player.position.model_copy(
             update={
                 "x": round(_lerp(start_player.position.x, end_player.position.x, factor), 3),
@@ -568,13 +528,9 @@ def _interpolate_frame(
             start_player.model_copy(
                 update={
                     "highlighted": end_player.highlighted if factor >= state_threshold else start_player.highlighted,
-                    "has_possession": (
-                        end_player.has_possession if factor >= possession_threshold else start_player.has_possession
-                    ),
+                    "has_possession": end_player.has_possession if factor >= 0.5 else start_player.has_possession,
                     "state": end_player.state if factor >= state_threshold else start_player.state,
-                    "animation_state": (
-                        end_player.animation_state if factor >= state_threshold else start_player.animation_state
-                    ),
+                    "animation_state": end_player.animation_state if factor >= state_threshold else start_player.animation_state,
                     "position": sampled_position,
                     "anchor_position": start_player.anchor_position.model_copy(
                         update={
@@ -593,16 +549,6 @@ def _interpolate_frame(
 
     start_ball = start_frame.ball
     end_ball = end_frame.ball
-    ball_owner_transition_threshold = _transition_threshold(
-        f"{start_ball.owner_player_id}:{end_ball.owner_player_id}:owner",
-        base=0.69,
-        spread=0.05,
-    )
-    ball_state_transition_threshold = _transition_threshold(
-        f"{start_ball.state}:{end_ball.state}:ball_state",
-        base=0.67,
-        spread=0.05,
-    )
     sampled_ball = start_ball.model_copy(
         update={
             "position": start_ball.position.model_copy(
@@ -612,10 +558,8 @@ def _interpolate_frame(
                 }
             ),
             "height": round(_lerp(start_ball.height, end_ball.height, factor), 3),
-            "owner_player_id": (
-                end_ball.owner_player_id if factor >= ball_owner_transition_threshold else start_ball.owner_player_id
-            ),
-            "state": end_ball.state if factor >= ball_state_transition_threshold else start_ball.state,
+            "owner_player_id": end_ball.owner_player_id if factor >= 0.5 else start_ball.owner_player_id,
+            "state": end_ball.state if factor >= 0.5 else start_ball.state,
             "spin": (
                 None
                 if start_ball.spin is None or end_ball.spin is None
@@ -646,59 +590,27 @@ def _interpolate_frame(
             "frame_id": f"{start_frame.frame_id}:sample:{sampled_suffix}",
             "time_seconds": round(sample_time_seconds, 2),
             "clock_minute": round(_lerp(start_frame.clock_minute, end_frame.clock_minute, factor), 2),
-            "phase": end_frame.phase if factor >= phase_transition_threshold else start_frame.phase,
+            "phase": end_frame.phase if factor >= 0.5 else start_frame.phase,
             "home_score": end_frame.home_score if factor >= 0.95 else start_frame.home_score,
             "away_score": end_frame.away_score if factor >= 0.95 else start_frame.away_score,
-            "home_attacks_right": (
-                end_frame.home_attacks_right if factor >= phase_transition_threshold else start_frame.home_attacks_right
-            ),
-            "possession_side": (
-                end_frame.possession_side if factor >= possession_transition_threshold else start_frame.possession_side
-            ),
-            "active_event_id": (
-                end_frame.active_event_id if factor >= event_transition_threshold else start_frame.active_event_id
-            ),
-            "event_banner": (
-                end_frame.event_banner if factor >= event_transition_threshold else start_frame.event_banner
-            ),
-            "stage": end_frame.stage if factor >= stage_transition_threshold else start_frame.stage,
-            "camera_preset": (
-                end_frame.camera_preset if factor >= camera_transition_threshold else start_frame.camera_preset
-            ),
-            "overlay_text": (
-                end_frame.overlay_text if factor >= event_transition_threshold else start_frame.overlay_text
-            ),
-            "pause_playback": (
-                end_frame.pause_playback if factor >= stage_transition_threshold else start_frame.pause_playback
-            ),
+            "home_attacks_right": end_frame.home_attacks_right if factor >= 0.5 else start_frame.home_attacks_right,
+            "possession_side": end_frame.possession_side if factor >= 0.5 else start_frame.possession_side,
+            "active_event_id": end_frame.active_event_id if factor >= 0.5 else start_frame.active_event_id,
+            "event_banner": end_frame.event_banner if factor >= 0.5 else start_frame.event_banner,
+            "stage": end_frame.stage if factor >= 0.5 else start_frame.stage,
+            "camera_preset": end_frame.camera_preset if factor >= 0.5 else start_frame.camera_preset,
+            "overlay_text": end_frame.overlay_text if factor >= 0.5 else start_frame.overlay_text,
+            "pause_playback": end_frame.pause_playback if factor >= 0.5 else start_frame.pause_playback,
             "playback_rate": round(_lerp(start_frame.playback_rate, end_frame.playback_rate, factor), 3),
-            "flag_animation": (
-                end_frame.flag_animation if factor >= event_transition_threshold else start_frame.flag_animation
-            ),
-            "celebration_team_id": (
-                end_frame.celebration_team_id
-                if factor >= event_transition_threshold
-                else start_frame.celebration_team_id
-            ),
-            "possession_phase": (
-                end_frame.possession_phase
-                if factor >= possession_transition_threshold
-                else start_frame.possession_phase
-            ),
-            "transition_state": (
-                end_frame.transition_state
-                if factor >= possession_transition_threshold
-                else start_frame.transition_state
-            ),
-            "danger_zone": (
-                end_frame.danger_zone if factor >= possession_transition_threshold else start_frame.danger_zone
-            ),
+            "flag_animation": end_frame.flag_animation if factor >= 0.5 else start_frame.flag_animation,
+            "celebration_team_id": end_frame.celebration_team_id if factor >= 0.5 else start_frame.celebration_team_id,
+            "possession_phase": end_frame.possession_phase if factor >= 0.5 else start_frame.possession_phase,
+            "transition_state": end_frame.transition_state if factor >= 0.5 else start_frame.transition_state,
+            "danger_zone": end_frame.danger_zone if factor >= 0.5 else start_frame.danger_zone,
             "pressure_index": round(_lerp(start_frame.pressure_index, end_frame.pressure_index, factor), 3),
             "compactness_home": round(_lerp(start_frame.compactness_home, end_frame.compactness_home, factor), 3),
             "compactness_away": round(_lerp(start_frame.compactness_away, end_frame.compactness_away, factor), 3),
-            "frame_tags": list(
-                end_frame.frame_tags if factor >= event_transition_threshold else start_frame.frame_tags
-            ),
+            "frame_tags": list(end_frame.frame_tags if factor >= 0.5 else start_frame.frame_tags),
             "players": players,
             "ball": sampled_ball,
         }

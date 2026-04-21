@@ -11,16 +11,16 @@ from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKey
 
 class CompetitionQueueRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "competition_queue_records"
-    __table_args__ = (UniqueConstraint("queue_name", "idempotency_key", name="uq_competition_queue_records_queue_key"),)
+    __table_args__ = (
+        UniqueConstraint("queue_name", "idempotency_key", name="uq_competition_queue_records_queue_key"),
+    )
 
     queue_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     job_name: Mapped[str] = mapped_column(String(64), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     aggregate_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     partition_key: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="queued", server_default="queued", index=True
-    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="queued", server_default="queued", index=True)
     published_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -51,9 +51,7 @@ class EventOutbox(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     headers_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    status: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="pending", server_default="pending", index=True
-    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", server_default="pending", index=True)
     claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
@@ -74,9 +72,7 @@ class EventConsumerState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     event_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     aggregate_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="processing", server_default="processing", index=True
-    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="processing", server_default="processing", index=True)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

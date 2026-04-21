@@ -11,7 +11,9 @@ def _prepare_gift_catalog(client) -> None:
     if startup_thread is not None and startup_thread.is_alive():
         startup_thread.join(timeout=5)
     with client.app.state.session_factory() as session:
-        existing = {item.key for item in session.scalars(select(GiftCatalogItem)).all()}
+        existing = {
+            item.key for item in session.scalars(select(GiftCatalogItem)).all()
+        }
         for payload in DEFAULT_GIFTS:
             if payload["key"] in existing:
                 continue

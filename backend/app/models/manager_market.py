@@ -10,7 +10,9 @@ from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKey
 
 class ManagerCatalogEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "manager_catalog_entries"
-    __table_args__ = (UniqueConstraint("manager_id", name="uq_manager_catalog_entries_manager_id"),)
+    __table_args__ = (
+        UniqueConstraint("manager_id", name="uq_manager_catalog_entries_manager_id"),
+    )
 
     manager_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
@@ -47,7 +49,9 @@ class ManagerHolding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class ManagerTradeListing(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "manager_trade_listings"
-    __table_args__ = (UniqueConstraint("asset_id", "status", name="uq_manager_trade_listings_asset_status"),)
+    __table_args__ = (
+        UniqueConstraint("asset_id", "status", name="uq_manager_trade_listings_asset_status"),
+    )
 
     listing_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
     asset_id: Mapped[str] = mapped_column(
@@ -80,14 +84,14 @@ class ManagerTradeRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     seller_net_credits: Mapped[str] = mapped_column(String(64), nullable=False)
     settlement_reference: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     settlement_status: Mapped[str] = mapped_column(String(24), nullable=False, default="settled", index=True)
-    immediate_withdrawal_eligible: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
-    )
+    immediate_withdrawal_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
 
 
 class ManagerSettlementRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "manager_settlement_records"
-    __table_args__ = (UniqueConstraint("reference", name="uq_manager_settlement_records_reference"),)
+    __table_args__ = (
+        UniqueConstraint("reference", name="uq_manager_settlement_records_reference"),
+    )
 
     reference: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     trade_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
@@ -98,29 +102,25 @@ class ManagerSettlementRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     fee_credits: Mapped[str] = mapped_column(String(64), nullable=False)
     seller_net_credits: Mapped[str] = mapped_column(String(64), nullable=False)
     eligible_immediately: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    settled_by_user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    settled_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
 
 class ManagerTeamAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "manager_team_assignments"
-    __table_args__ = (UniqueConstraint("user_id", name="uq_manager_team_assignments_user_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_manager_team_assignments_user_id"),
+    )
 
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    main_manager_asset_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("manager_holdings.asset_id", ondelete="SET NULL"), nullable=True
-    )
-    academy_manager_asset_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("manager_holdings.asset_id", ondelete="SET NULL"), nullable=True
-    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    main_manager_asset_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("manager_holdings.asset_id", ondelete="SET NULL"), nullable=True)
+    academy_manager_asset_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("manager_holdings.asset_id", ondelete="SET NULL"), nullable=True)
 
 
 class ManagerCompetitionSetting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "manager_competition_settings"
-    __table_args__ = (UniqueConstraint("code", name="uq_manager_competition_settings_code"),)
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_manager_competition_settings_code"),
+    )
 
     code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     label: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -136,8 +136,6 @@ class ManagerAuditLog(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     event_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
     event_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    actor_user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    actor_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     actor_email: Mapped[str] = mapped_column(String(320), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

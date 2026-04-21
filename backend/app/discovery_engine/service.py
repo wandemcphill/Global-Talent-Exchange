@@ -34,46 +34,10 @@ class DiscoveryEngineService:
 
     def seed_defaults(self) -> None:
         defaults = (
-            {
-                "rail_key": "featured_stories",
-                "title": "Featured Stories",
-                "rail_type": "story",
-                "audience": "public",
-                "query_hint": "world",
-                "subtitle": "Big matches, giant killers, and rivalry sparks.",
-                "display_order": 10,
-                "metadata_json": {"icon": "newspaper"},
-            },
-            {
-                "rail_key": "live_community",
-                "title": "Live Community",
-                "rail_type": "community",
-                "audience": "public",
-                "query_hint": "cup",
-                "subtitle": "Threads buzzing around live and upcoming competitions.",
-                "display_order": 20,
-                "metadata_json": {"icon": "messages"},
-            },
-            {
-                "rail_key": "prospect_radar",
-                "title": "Prospect Radar",
-                "rail_type": "prospect",
-                "audience": "public",
-                "query_hint": "academy",
-                "subtitle": "Youth prospects and pipeline standouts worth watching.",
-                "display_order": 30,
-                "metadata_json": {"icon": "star"},
-            },
-            {
-                "rail_key": "broadcast_now",
-                "title": "Broadcast Now",
-                "rail_type": "broadcast",
-                "audience": "public",
-                "query_hint": "live",
-                "subtitle": "Network channels, auto-switched fixtures, and the Match of the Moment.",
-                "display_order": 15,
-                "metadata_json": {"icon": "tv"},
-            },
+            {"rail_key": "featured_stories", "title": "Featured Stories", "rail_type": "story", "audience": "public", "query_hint": "world", "subtitle": "Big matches, giant killers, and rivalry sparks.", "display_order": 10, "metadata_json": {"icon": "newspaper"}},
+            {"rail_key": "live_community", "title": "Live Community", "rail_type": "community", "audience": "public", "query_hint": "cup", "subtitle": "Threads buzzing around live and upcoming competitions.", "display_order": 20, "metadata_json": {"icon": "messages"}},
+            {"rail_key": "prospect_radar", "title": "Prospect Radar", "rail_type": "prospect", "audience": "public", "query_hint": "academy", "subtitle": "Youth prospects and pipeline standouts worth watching.", "display_order": 30, "metadata_json": {"icon": "star"}},
+            {"rail_key": "broadcast_now", "title": "Broadcast Now", "rail_type": "broadcast", "audience": "public", "query_hint": "live", "subtitle": "Network channels, auto-switched fixtures, and the Match of the Moment.", "display_order": 15, "metadata_json": {"icon": "tv"}},
         )
         for item in defaults:
             existing = self.session.scalar(select(FeaturedRail).where(FeaturedRail.rail_key == item["rail_key"]))
@@ -104,25 +68,15 @@ class DiscoveryEngineService:
         self.session.flush()
         return rail
 
-    def save_search(
-        self, *, actor: User, query: str, entity_scope: str, alerts_enabled: bool, metadata_json: dict[str, Any]
-    ) -> SavedSearch:
-        existing = self.session.scalar(
-            select(SavedSearch).where(SavedSearch.user_id == actor.id, SavedSearch.query == query)
-        )
+    def save_search(self, *, actor: User, query: str, entity_scope: str, alerts_enabled: bool, metadata_json: dict[str, Any]) -> SavedSearch:
+        existing = self.session.scalar(select(SavedSearch).where(SavedSearch.user_id == actor.id, SavedSearch.query == query))
         if existing is not None:
             existing.entity_scope = entity_scope
             existing.alerts_enabled = alerts_enabled
             existing.metadata_json = metadata_json
             self.session.flush()
             return existing
-        item = SavedSearch(
-            user_id=actor.id,
-            query=query,
-            entity_scope=entity_scope,
-            alerts_enabled=alerts_enabled,
-            metadata_json=metadata_json,
-        )
+        item = SavedSearch(user_id=actor.id, query=query, entity_scope=entity_scope, alerts_enabled=alerts_enabled, metadata_json=metadata_json)
         self.session.add(item)
         try:
             self.session.flush()
@@ -141,133 +95,30 @@ class DiscoveryEngineService:
         self.session.delete(item)
         self.session.flush()
 
-    def search(
-        self, *, actor: User | None, query: str, entity_scope: str = "all", limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def search(self, *, actor: User | None, query: str, entity_scope: str = "all", limit: int = 20) -> list[dict[str, Any]]:
         term = query.strip()
         if len(term) < 2:
             return []
         query_lower = term.lower()
         output: list[dict[str, Any]] = []
-        scopes = (
-            {entity_scope}
-            if entity_scope != "all"
-            else {"stories", "competitions", "threads", "prospects", "challenges"}
-        )
+        scopes = {entity_scope} if entity_scope != "all" else {"stories", "competitions", "threads", "prospects", "challenges"}
         if "stories" in scopes:
-            for item in self.session.scalars(
-                select(StoryFeedItem)
-                .where(or_(StoryFeedItem.title.ilike(f"%{term}%"), StoryFeedItem.body.ilike(f"%{term}%")))
-                .order_by(StoryFeedItem.featured.desc(), StoryFeedItem.created_at.desc())
-                .limit(limit)
-            ).all():
-                output.append(
-                    {
-                        "item_type": "story",
-                        "item_id": item.id,
-                        "title": item.title,
-                        "subtitle": item.body[:140],
-                        "score": self._score(query_lower, item.title, item.body),
-                        "metadata": item.metadata_json,
-                    }
-                )
+            for item in self.session.scalars(select(StoryFeedItem).where(or_(StoryFeedItem.title.ilike(f"%{term}%"), StoryFeedItem.body.ilike(f"%{term}%"))).order_by(StoryFeedItem.featured.desc(), StoryFeedItem.created_at.desc()).limit(limit)).all():
+                output.append({"item_type": "story", "item_id": item.id, "title": item.title, "subtitle": item.body[:140], "score": self._score(query_lower, item.title, item.body), "metadata": item.metadata_json})
         if "competitions" in scopes:
-            for item in self.session.scalars(
-                select(UserHostedCompetition)
-                .where(
-                    or_(
-                        UserHostedCompetition.title.ilike(f"%{term}%"),
-                        UserHostedCompetition.description.ilike(f"%{term}%"),
-                    )
-                )
-                .order_by(UserHostedCompetition.created_at.desc())
-                .limit(limit)
-            ).all():
-                output.append(
-                    {
-                        "item_type": "hosted_competition",
-                        "item_id": item.id,
-                        "title": item.title,
-                        "subtitle": item.description[:140],
-                        "score": self._score(query_lower, item.title, item.description),
-                        "metadata": {"status": str(item.status), "slug": item.slug},
-                    }
-                )
-            for item in self.session.scalars(
-                select(NationalTeamCompetition)
-                .where(
-                    or_(
-                        NationalTeamCompetition.title.ilike(f"%{term}%"),
-                        NationalTeamCompetition.season_label.ilike(f"%{term}%"),
-                    )
-                )
-                .order_by(NationalTeamCompetition.created_at.desc())
-                .limit(limit)
-            ).all():
-                output.append(
-                    {
-                        "item_type": "national_team_competition",
-                        "item_id": item.id,
-                        "title": item.title,
-                        "subtitle": item.season_label,
-                        "score": self._score(query_lower, item.title, item.season_label),
-                        "metadata": {"status": item.status, "key": item.key},
-                    }
-                )
+            for item in self.session.scalars(select(UserHostedCompetition).where(or_(UserHostedCompetition.title.ilike(f"%{term}%"), UserHostedCompetition.description.ilike(f"%{term}%"))).order_by(UserHostedCompetition.created_at.desc()).limit(limit)).all():
+                output.append({"item_type": "hosted_competition", "item_id": item.id, "title": item.title, "subtitle": item.description[:140], "score": self._score(query_lower, item.title, item.description), "metadata": {"status": str(item.status), "slug": item.slug}})
+            for item in self.session.scalars(select(NationalTeamCompetition).where(or_(NationalTeamCompetition.title.ilike(f"%{term}%"), NationalTeamCompetition.season_label.ilike(f"%{term}%"))).order_by(NationalTeamCompetition.created_at.desc()).limit(limit)).all():
+                output.append({"item_type": "national_team_competition", "item_id": item.id, "title": item.title, "subtitle": item.season_label, "score": self._score(query_lower, item.title, item.season_label), "metadata": {"status": item.status, "key": item.key}})
         if "threads" in scopes:
-            for item in self.session.scalars(
-                select(LiveThread)
-                .where(LiveThread.title.ilike(f"%{term}%"))
-                .order_by(LiveThread.last_message_at.desc().nullslast(), LiveThread.created_at.desc())
-                .limit(limit)
-            ).all():
-                output.append(
-                    {
-                        "item_type": "live_thread",
-                        "item_id": item.id,
-                        "title": item.title,
-                        "subtitle": item.competition_key or "community",
-                        "score": self._score(query_lower, item.title, item.competition_key or ""),
-                        "metadata": item.metadata_json,
-                    }
-                )
+            for item in self.session.scalars(select(LiveThread).where(LiveThread.title.ilike(f"%{term}%")).order_by(LiveThread.last_message_at.desc().nullslast(), LiveThread.created_at.desc()).limit(limit)).all():
+                output.append({"item_type": "live_thread", "item_id": item.id, "title": item.title, "subtitle": item.competition_key or "community", "score": self._score(query_lower, item.title, item.competition_key or ""), "metadata": item.metadata_json})
         if "prospects" in scopes:
-            for item in self.session.scalars(
-                select(YouthProspect)
-                .where(or_(YouthProspect.player_name.ilike(f"%{term}%"), YouthProspect.country_code.ilike(f"%{term}%")))
-                .order_by(YouthProspect.created_at.desc())
-                .limit(limit)
-            ).all():
-                output.append(
-                    {
-                        "item_type": "prospect",
-                        "item_id": item.id,
-                        "title": item.player_name,
-                        "subtitle": f"{item.position_group} â€¢ {item.country_code}",
-                        "score": self._score(query_lower, item.player_name, item.country_code),
-                        "metadata": {"position_group": item.position_group, "potential_band": item.potential_band},
-                    }
-                )
+            for item in self.session.scalars(select(YouthProspect).where(or_(YouthProspect.player_name.ilike(f"%{term}%"), YouthProspect.country_code.ilike(f"%{term}%"))).order_by(YouthProspect.created_at.desc()).limit(limit)).all():
+                output.append({"item_type": "prospect", "item_id": item.id, "title": item.player_name, "subtitle": f"{item.position_group} â€¢ {item.country_code}", "score": self._score(query_lower, item.player_name, item.country_code), "metadata": {"position_group": item.position_group, "potential_band": item.potential_band}})
         if "challenges" in scopes:
-            for item in self.session.scalars(
-                select(DailyChallenge)
-                .where(
-                    DailyChallenge.status == DailyChallengeStatus.ACTIVE,
-                    or_(DailyChallenge.challenge_key.ilike(f"%{term}%"), DailyChallenge.title.ilike(f"%{term}%")),
-                )
-                .order_by(DailyChallenge.updated_at.desc())
-                .limit(limit)
-            ).all():
-                output.append(
-                    {
-                        "item_type": "challenge",
-                        "item_id": item.id,
-                        "title": item.title,
-                        "subtitle": item.description[:140],
-                        "score": self._score(query_lower, item.title, item.description),
-                        "metadata": {"challenge_key": item.challenge_key},
-                    }
-                )
+            for item in self.session.scalars(select(DailyChallenge).where(DailyChallenge.status == DailyChallengeStatus.ACTIVE, or_(DailyChallenge.challenge_key.ilike(f"%{term}%"), DailyChallenge.title.ilike(f"%{term}%"))).order_by(DailyChallenge.updated_at.desc()).limit(limit)).all():
+                output.append({"item_type": "challenge", "item_id": item.id, "title": item.title, "subtitle": item.description[:140], "score": self._score(query_lower, item.title, item.description), "metadata": {"challenge_key": item.challenge_key}})
         output.sort(key=lambda item: (item["score"], item["title"]), reverse=True)
         return output[:limit]
 
@@ -279,33 +130,14 @@ class DiscoveryEngineService:
         match_of_the_moment: dict[str, Any] | None = None
         if not live_now_items:
             live_now_items = [
-                {
-                    "item_type": "live_thread",
-                    "item_id": item.id,
-                    "title": item.title,
-                    "subtitle": item.competition_key or "community",
-                    "score": 1.0,
-                    "metadata": item.metadata_json,
-                }
-                for item in self.session.scalars(
-                    select(LiveThread)
-                    .order_by(LiveThread.last_message_at.desc().nullslast(), LiveThread.created_at.desc())
-                    .limit(8)
-                ).all()
+                {"item_type": "live_thread", "item_id": item.id, "title": item.title, "subtitle": item.competition_key or "community", "score": 1.0, "metadata": item.metadata_json}
+                for item in self.session.scalars(select(LiveThread).order_by(LiveThread.last_message_at.desc().nullslast(), LiveThread.created_at.desc()).limit(8)).all()
             ]
         recommended_items: list[dict[str, Any]] = []
-        watchlist = list(
-            self.session.scalars(
-                select(CompetitionWatchlist).where(CompetitionWatchlist.user_id == actor.id).limit(6)
-            ).all()
-        )
+        watchlist = list(self.session.scalars(select(CompetitionWatchlist).where(CompetitionWatchlist.user_id == actor.id).limit(6)).all())
         for item in watchlist:
-            recommended_items.extend(
-                self.search(actor=actor, query=item.competition_title, entity_scope="competitions", limit=3)
-            )
-            recommended_items.extend(
-                self.search(actor=actor, query=item.competition_title, entity_scope="stories", limit=2)
-            )
+            recommended_items.extend(self.search(actor=actor, query=item.competition_title, entity_scope="competitions", limit=3))
+            recommended_items.extend(self.search(actor=actor, query=item.competition_title, entity_scope="stories", limit=2))
         deduped: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
         for item in recommended_items:
@@ -324,8 +156,7 @@ class DiscoveryEngineService:
                         "item_type": "broadcast_channel",
                         "item_id": channel.channel_id,
                         "title": channel.name,
-                        "subtitle": channel.description
-                        or (channel.current_program.subtitle if channel.current_program is not None else ""),
+                        "subtitle": channel.description or (channel.current_program.subtitle if channel.current_program is not None else ""),
                         "rail_key": "broadcast_now",
                         "score": float(channel.current_program.score if channel.current_program is not None else 0.0),
                         "metadata": {
@@ -334,7 +165,9 @@ class DiscoveryEngineService:
                             "viewer_count": channel.viewer_count,
                             "featured_match_id": channel.featured_match_id,
                             "watch_route": (
-                                f"/matches/broadcast/{channel.featured_match_id}" if channel.featured_match_id else None
+                                f"/matches/broadcast/{channel.featured_match_id}"
+                                if channel.featured_match_id
+                                else None
                             ),
                         },
                     }
@@ -342,9 +175,7 @@ class DiscoveryEngineService:
             if broadcast_home.match_of_the_moment is not None:
                 match_of_the_moment = {
                     "item_type": "broadcast_match",
-                    "item_id": str(
-                        broadcast_home.match_of_the_moment.match_id or broadcast_home.match_of_the_moment.slot_id
-                    ),
+                    "item_id": str(broadcast_home.match_of_the_moment.match_id or broadcast_home.match_of_the_moment.slot_id),
                     "title": broadcast_home.match_of_the_moment.title,
                     "subtitle": broadcast_home.match_of_the_moment.subtitle,
                     "rail_key": "broadcast_now",
@@ -414,11 +245,7 @@ class DiscoveryEngineService:
             score = snapshot.get("score") if isinstance(snapshot.get("score"), dict) else {}
             viewer_count = viewer_counts.get(match_id, int(state.get("spectator_count") or 0))
             goal_activity = goal_counts.get(match_id, 0)
-            is_final = (
-                bool(metadata_json.get("competition_context", {}).get("is_final"))
-                if isinstance(metadata_json.get("competition_context"), dict)
-                else False
-            )
+            is_final = bool(metadata_json.get("competition_context", {}).get("is_final")) if isinstance(metadata_json.get("competition_context"), dict) else False
             if not is_final and match is not None:
                 stage_label = str(match.stage or "").strip().lower()
                 is_final = "final" in stage_label

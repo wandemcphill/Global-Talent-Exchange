@@ -36,9 +36,7 @@ def test_broadcast_network_join_and_stream_channel(client, app, demo_auth_header
     assert payload["current_program"]["match_id"] == live_match_id
     assert payload["current_program"]["watch_route"] == f"/matches/broadcast/{live_match_id}"
     assert payload["current_program"]["replay_route"] == f"/api/matches/{live_match_id}/replay"
-    assert payload["match_session"]["audio_stem_websocket_path"].endswith(
-        "/audio/stems/stream?session_id=" + payload["match_session"]["id"]
-    )
+    assert payload["match_session"]["audio_stem_websocket_path"].endswith("/audio/stems/stream?session_id=" + payload["match_session"]["id"])
     assert payload["match_session"]["replay_route"] == f"/api/matches/{live_match_id}/replay"
     assert payload["watch_reward"]["rewarded"] is False
 
@@ -49,9 +47,7 @@ def test_broadcast_network_join_and_stream_channel(client, app, demo_auth_header
         assert snapshot["payload"]["current_program"]["match_id"] == live_match_id
         assert snapshot["payload"]["match_session"]["channel_context"]["channel_id"] == "live"
 
-    with client.websocket_connect(
-        f"/api/broadcast/channels/live/audio/stems/stream?session_id={session_id}"
-    ) as websocket:
+    with client.websocket_connect(f"/api/broadcast/channels/live/audio/stems/stream?session_id={session_id}") as websocket:
         manifest = websocket.receive_json()
         assert manifest["kind"] == "audio_manifest_update"
         assert manifest["payload"]["match_id"] == live_match_id
@@ -71,9 +67,7 @@ def test_discovery_home_includes_broadcast_network(client, app, demo_auth_header
     assert payload["match_of_the_moment"]["metadata"]["replay_route"].startswith("/api/matches/")
 
 
-def test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoints(
-    client, app, demo_auth_headers
-) -> None:
+def test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoints(client, app, demo_auth_headers) -> None:
     _ensure_live_match(app, seed=31)
 
     home_response = client.get("/api/broadcast/home", headers=demo_auth_headers)
@@ -107,9 +101,7 @@ def test_public_broadcast_home_works_without_auth(client, app) -> None:
     assert payload["featured_channel"] is not None
 
 
-def test_broadcast_network_refreshes_cached_fallback_slots_when_live_match_starts(
-    client, app, demo_auth_headers
-) -> None:
+def test_broadcast_network_refreshes_cached_fallback_slots_when_live_match_starts(client, app, demo_auth_headers) -> None:
     hub = ensure_live_match_hub(app)
     with hub._lock:
         known_match_ids = list(hub._matches.keys())

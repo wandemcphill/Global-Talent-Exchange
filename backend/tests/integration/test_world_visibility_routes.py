@@ -72,7 +72,6 @@ def test_rebuild_demo_market_restores_seeded_live_visibility_routes(tmp_path: Pa
         settings = load_settings()
         engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
         import app.main as app_main
-
         with patch.object(app_main, "_start_deferred_startup", autospec=True):
             app = create_app(settings=settings, engine=engine, run_migration_check=False)
             app.state.metrics.refresh_from_database = lambda: None
