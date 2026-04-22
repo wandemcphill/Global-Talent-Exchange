@@ -13,7 +13,7 @@ class ClubSponsorshipAnalyticsScreen extends StatelessWidget {
   const ClubSponsorshipAnalyticsScreen({
     super.key,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -50,14 +50,18 @@ class ClubSponsorshipAnalyticsScreen extends StatelessWidget {
           children: <Widget>[
             SponsorshipRevenueSummaryCard(analytics: analytics),
             const SizedBox(height: 16),
-            for (final SponsorshipContract contract in analytics.topContracts) ...<Widget>[
+            for (final SponsorshipContract contract
+                in analytics.topContracts) ...<Widget>[
               SponsorshipContractCard(contract: contract),
-              if (contract != analytics.topContracts.last) const SizedBox(height: 12),
+              if (contract != analytics.topContracts.last)
+                const SizedBox(height: 12),
             ],
             const SizedBox(height: 16),
-            for (final SponsorAssetSlot slot in analytics.reviewQueue) ...<Widget>[
+            for (final SponsorAssetSlot slot
+                in analytics.reviewQueue) ...<Widget>[
               SponsorAssetSlotCard(slot: slot),
-              if (slot != analytics.reviewQueue.last) const SizedBox(height: 12),
+              if (slot != analytics.reviewQueue.last)
+                const SizedBox(height: 12),
             ],
           ],
         );

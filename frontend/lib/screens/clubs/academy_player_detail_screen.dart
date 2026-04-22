@@ -14,7 +14,7 @@ class AcademyPlayerDetailScreen extends StatelessWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -45,16 +45,15 @@ class AcademyPlayerDetailScreen extends StatelessWidget {
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
               title: 'Academy player not found',
-              message: 'This player is not available in the current academy roster.',
+              message:
+                  'This player is not available in the current academy roster.',
               icon: Icons.person_off_outlined,
             ),
           );
         }
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: <Widget>[
-            PlayerProgressCard(player: player),
-          ],
+          children: <Widget>[PlayerProgressCard(player: player)],
         );
       },
     );

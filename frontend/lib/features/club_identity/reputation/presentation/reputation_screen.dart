@@ -20,7 +20,7 @@ class ClubReputationOverviewScreen extends StatefulWidget {
     required this.clubId,
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.repository,
     this.controller,
   });
@@ -46,9 +46,11 @@ class _ClubReputationOverviewScreenState
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         ReputationController(
-          repository: widget.repository ??
+          repository:
+              widget.repository ??
               ReputationApiRepository.standard(
                 baseUrl: widget.baseUrl,
                 mode: widget.mode,
@@ -73,9 +75,7 @@ class _ClubReputationOverviewScreenState
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Club reputation'),
-        ),
+        appBar: AppBar(title: const Text('Club reputation')),
         body: AnimatedBuilder(
           animation: _controller,
           builder: (BuildContext context, Widget? child) {
@@ -149,9 +149,7 @@ class _ClubReputationOverviewScreenState
 }
 
 class _RecentChangesPanel extends StatelessWidget {
-  const _RecentChangesPanel({
-    required this.controller,
-  });
+  const _RecentChangesPanel({required this.controller});
 
   final ReputationController controller;
 
@@ -167,8 +165,10 @@ class _RecentChangesPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text('Recent reputation changes',
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      'Recent reputation changes',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 6),
                     Text(
                       'See the stories driving how your club is perceived season after season.',
@@ -182,10 +182,9 @@ class _RecentChangesPanel extends StatelessWidget {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (BuildContext context) =>
-                          ReputationHistoryScreen(
-                        controller: controller,
-                      ),
+                      builder:
+                          (BuildContext context) =>
+                              ReputationHistoryScreen(controller: controller),
                     ),
                   );
                 },
@@ -207,15 +206,14 @@ class _RecentChangesPanel extends StatelessWidget {
 }
 
 class _MilestonePanel extends StatelessWidget {
-  const _MilestonePanel({
-    required this.controller,
-  });
+  const _MilestonePanel({required this.controller});
 
   final ReputationController controller;
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> milestoneChips = controller.overview?.biggestMilestones
+    final List<Widget> milestoneChips =
+        controller.overview?.biggestMilestones
             .map((milestone) => MilestoneChip(milestone: milestone))
             .toList(growable: false) ??
         const <Widget>[];
@@ -233,11 +231,7 @@ class _MilestonePanel extends StatelessWidget {
           if (milestoneChips.isEmpty)
             const Text('No milestones unlocked yet.')
           else
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: milestoneChips,
-            ),
+            Wrap(spacing: 10, runSpacing: 10, children: milestoneChips),
         ],
       ),
     );
@@ -245,9 +239,7 @@ class _MilestonePanel extends StatelessWidget {
 }
 
 class _LeaderboardPreviewPanel extends StatelessWidget {
-  const _LeaderboardPreviewPanel({
-    required this.controller,
-  });
+  const _LeaderboardPreviewPanel({required this.controller});
 
   final ReputationController controller;
 
@@ -267,9 +259,9 @@ class _LeaderboardPreviewPanel extends StatelessWidget {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (BuildContext context) => PrestigeLeaderboardScreen(
-                    controller: controller,
-                  ),
+                  builder:
+                      (BuildContext context) =>
+                          PrestigeLeaderboardScreen(controller: controller),
                 ),
               );
             },

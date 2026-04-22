@@ -15,7 +15,7 @@ class ScoutingProspectDetailScreen extends StatelessWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -47,7 +47,8 @@ class ScoutingProspectDetailScreen extends StatelessWidget {
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
               title: 'Prospect not found',
-              message: 'This prospect is not available in the current scouting board.',
+              message:
+                  'This prospect is not available in the current scouting board.',
               icon: Icons.person_off_outlined,
             ),
           );
@@ -60,19 +61,25 @@ class ScoutingProspectDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(prospect.name,
-                      style: Theme.of(context).textTheme.headlineSmall),
+                  Text(
+                    prospect.name,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '${prospect.position} · ${prospect.age} · ${prospect.region} · ${prospect.currentClub}',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 12),
-                  Text(prospect.developmentProjection,
-                      style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    prospect.developmentProjection,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   const SizedBox(height: 12),
-                  Text(prospect.nextAction,
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    prospect.nextAction,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ],
               ),
             ),

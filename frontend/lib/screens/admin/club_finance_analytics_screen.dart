@@ -13,7 +13,7 @@ class ClubFinanceAnalyticsScreen extends StatelessWidget {
   const ClubFinanceAnalyticsScreen({
     super.key,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -39,7 +39,8 @@ class ClubFinanceAnalyticsScreen extends StatelessWidget {
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
               title: 'Loading finance analytics',
-              message: 'Preparing margin, category mix, and quarterly cashflow.',
+              message:
+                  'Preparing margin, category mix, and quarterly cashflow.',
               icon: Icons.insights_outlined,
             ),
           );
@@ -53,8 +54,10 @@ class ClubFinanceAnalyticsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(clubOpsFormatCurrency(analytics.averageMonthlyBalance),
-                      style: Theme.of(context).textTheme.headlineSmall),
+                  Text(
+                    clubOpsFormatCurrency(analytics.averageMonthlyBalance),
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '${analytics.operatingMarginPercent.toStringAsFixed(1)}% margin · ${analytics.revenueReliabilityLabel}',

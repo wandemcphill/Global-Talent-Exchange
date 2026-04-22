@@ -449,7 +449,7 @@ String _runtimeModeLabel(GteBackendMode backendMode) {
     case GteBackendMode.fixture:
       return 'Fixture';
     case GteBackendMode.liveThenFixture:
-      return 'Hybrid';
+      return 'Live';
   }
 }
 

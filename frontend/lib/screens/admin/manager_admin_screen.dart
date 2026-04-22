@@ -720,7 +720,7 @@ class ManagerAdminRepository {
   factory ManagerAdminRepository.standard({
     required String baseUrl,
     required String accessToken,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
     return ManagerAdminRepository(
       config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),

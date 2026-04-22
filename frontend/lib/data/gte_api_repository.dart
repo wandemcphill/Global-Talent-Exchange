@@ -105,7 +105,7 @@ abstract class GteTransport {
 class GteRepositoryConfig {
   const GteRepositoryConfig({
     required this.baseUrl,
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
   });
 
   final String baseUrl;

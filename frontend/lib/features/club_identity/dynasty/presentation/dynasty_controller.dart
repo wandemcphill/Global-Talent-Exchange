@@ -11,13 +11,12 @@ import '../data/dynasty_repository.dart';
 import '../data/dynasty_types.dart';
 
 class DynastyController extends ChangeNotifier {
-  DynastyController({
-    required DynastyRepository repository,
-  }) : _repository = repository;
+  DynastyController({required DynastyRepository repository})
+    : _repository = repository;
 
   factory DynastyController.standard({
     required String baseUrl,
-    GteBackendMode backendMode = GteBackendMode.liveThenFixture,
+    GteBackendMode backendMode = GteBackendMode.live,
   }) {
     return DynastyController(
       repository: DynastyApiRepository.standard(
@@ -66,8 +65,9 @@ class DynastyController extends ChangeNotifier {
           const <DynastySnapshotDto>[],
     );
     timeline.sort((DynastySnapshotDto left, DynastySnapshotDto right) {
-      return left.metrics.endSeasonIndex
-          .compareTo(right.metrics.endSeasonIndex);
+      return left.metrics.endSeasonIndex.compareTo(
+        right.metrics.endSeasonIndex,
+      );
     });
     return timeline;
   }
@@ -91,12 +91,11 @@ class DynastyController extends ChangeNotifier {
       seasonsById[season.seasonId] = season;
     }
 
-    final List<DynastySeasonSummaryDto> orderedSeasons =
-        seasonsById.values.toList(growable: true)
-          ..sort(
-            (DynastySeasonSummaryDto left, DynastySeasonSummaryDto right) =>
-                left.seasonIndex.compareTo(right.seasonIndex),
-          );
+    final List<DynastySeasonSummaryDto> orderedSeasons = seasonsById.values
+      .toList(growable: true)..sort(
+      (DynastySeasonSummaryDto left, DynastySeasonSummaryDto right) =>
+          left.seasonIndex.compareTo(right.seasonIndex),
+    );
     final Map<String, int> seasonIndexById = <String, int>{
       for (final DynastySeasonSummaryDto season in orderedSeasons)
         season.seasonId: season.seasonIndex,
@@ -104,51 +103,56 @@ class DynastyController extends ChangeNotifier {
     final List<DynastyEventDto> events =
         history?.events ?? profile?.events ?? const <DynastyEventDto>[];
 
-    final List<DynastyEraDetail> details = eras.map((DynastyEraDto era) {
-      final int startIndex = seasonIndexById[era.startSeasonId] ??
-          orderedSeasons.firstOrNull?.seasonIndex ??
-          0;
-      final int endIndex = seasonIndexById[era.endSeasonId] ??
-          orderedSeasons.lastOrNull?.seasonIndex ??
-          startIndex;
-      final List<DynastySeasonSummaryDto> eraSeasons = orderedSeasons
-          .where(
-            (DynastySeasonSummaryDto season) =>
-                season.seasonIndex >= startIndex &&
-                season.seasonIndex <= endIndex,
-          )
-          .toList(growable: false);
-      final int trophiesWon = eraSeasons.fold<int>(
-        0,
-        (int sum, DynastySeasonSummaryDto season) => sum + season.trophyCount,
-      );
-      final int reputationGrowth = eraSeasons.fold<int>(
-        0,
-        (int sum, DynastySeasonSummaryDto season) =>
-            sum + season.reputationGain,
-      );
-      final List<String> achievements = <String>[
-        ...era.reasons,
-        ...events.where((DynastyEventDto event) {
-          final int? eventIndex = seasonIndexById[event.seasonId];
-          return eventIndex != null &&
-              eventIndex >= startIndex &&
-              eventIndex <= endIndex;
-        }).map((DynastyEventDto event) => event.title),
-      ];
-      return DynastyEraDetail(
-        era: era,
-        startSeasonIndex: startIndex,
-        endSeasonIndex: endIndex,
-        trophiesWon: trophiesWon,
-        reputationGrowth: reputationGrowth,
-        definingAchievements: achievements.toSet().toList(growable: false),
-      );
-    }).toList(growable: true)
-      ..sort(
-        (DynastyEraDetail left, DynastyEraDetail right) =>
-            left.startSeasonIndex.compareTo(right.startSeasonIndex),
-      );
+    final List<DynastyEraDetail> details = eras
+      .map((DynastyEraDto era) {
+        final int startIndex =
+            seasonIndexById[era.startSeasonId] ??
+            orderedSeasons.firstOrNull?.seasonIndex ??
+            0;
+        final int endIndex =
+            seasonIndexById[era.endSeasonId] ??
+            orderedSeasons.lastOrNull?.seasonIndex ??
+            startIndex;
+        final List<DynastySeasonSummaryDto> eraSeasons = orderedSeasons
+            .where(
+              (DynastySeasonSummaryDto season) =>
+                  season.seasonIndex >= startIndex &&
+                  season.seasonIndex <= endIndex,
+            )
+            .toList(growable: false);
+        final int trophiesWon = eraSeasons.fold<int>(
+          0,
+          (int sum, DynastySeasonSummaryDto season) => sum + season.trophyCount,
+        );
+        final int reputationGrowth = eraSeasons.fold<int>(
+          0,
+          (int sum, DynastySeasonSummaryDto season) =>
+              sum + season.reputationGain,
+        );
+        final List<String> achievements = <String>[
+          ...era.reasons,
+          ...events
+              .where((DynastyEventDto event) {
+                final int? eventIndex = seasonIndexById[event.seasonId];
+                return eventIndex != null &&
+                    eventIndex >= startIndex &&
+                    eventIndex <= endIndex;
+              })
+              .map((DynastyEventDto event) => event.title),
+        ];
+        return DynastyEraDetail(
+          era: era,
+          startSeasonIndex: startIndex,
+          endSeasonIndex: endIndex,
+          trophiesWon: trophiesWon,
+          reputationGrowth: reputationGrowth,
+          definingAchievements: achievements.toSet().toList(growable: false),
+        );
+      })
+      .toList(growable: true)..sort(
+      (DynastyEraDetail left, DynastyEraDetail right) =>
+          left.startSeasonIndex.compareTo(right.startSeasonIndex),
+    );
 
     return details;
   }
@@ -161,8 +165,9 @@ class DynastyController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final DynastyProfileDto response =
-          await _repository.fetchDynastyProfile(clubId);
+      final DynastyProfileDto response = await _repository.fetchDynastyProfile(
+        clubId,
+      );
       if (!_overviewGate.isActive(requestId)) {
         return;
       }
@@ -187,13 +192,14 @@ class DynastyController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final DynastyHistoryDto historyResponse =
-          await _repository.fetchDynastyHistory(clubId);
-      DynastyHistoryDto resolvedHistory =
-          dynastyResponseMapper.applyEraOverride(historyResponse);
+      final DynastyHistoryDto historyResponse = await _repository
+          .fetchDynastyHistory(clubId);
+      DynastyHistoryDto resolvedHistory = dynastyResponseMapper
+          .applyEraOverride(historyResponse);
       try {
-        final List<DynastyEraDto> explicitEras =
-            await _repository.fetchEras(clubId);
+        final List<DynastyEraDto> explicitEras = await _repository.fetchEras(
+          clubId,
+        );
         resolvedHistory = dynastyResponseMapper.applyEraOverride(
           historyResponse,
           explicitEras: explicitEras,
@@ -225,8 +231,8 @@ class DynastyController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<DynastyLeaderboardEntryDto> response =
-          await _repository.fetchDynastyLeaderboard(limit: limit);
+      final List<DynastyLeaderboardEntryDto> response = await _repository
+          .fetchDynastyLeaderboard(limit: limit);
       if (!_leaderboardGate.isActive(requestId)) {
         return;
       }

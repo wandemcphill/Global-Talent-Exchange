@@ -167,7 +167,7 @@ String _runtimePillLabel(GteAppConfig appConfig) {
   final String mode = switch (appConfig.backendMode) {
     GteBackendMode.live => 'LIVE',
     GteBackendMode.fixture => 'FIXTURE',
-    GteBackendMode.liveThenFixture => 'HYBRID',
+    GteBackendMode.liveThenFixture => 'LIVE',
   };
   final Uri? uri = Uri.tryParse(appConfig.apiBaseUrl.trim());
   final String host =

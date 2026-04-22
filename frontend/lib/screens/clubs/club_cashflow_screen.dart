@@ -15,7 +15,7 @@ class ClubCashflowScreen extends StatelessWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -65,7 +65,8 @@ class ClubCashflowScreen extends StatelessWidget {
                 children: <Widget>[
                   Text('Ledger', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 16),
-                  for (final LedgerEntry entry in finance.ledgerEntries) ...<Widget>[
+                  for (final LedgerEntry entry
+                      in finance.ledgerEntries) ...<Widget>[
                     _LedgerRow(entry: entry),
                     if (entry != finance.ledgerEntries.last)
                       const Divider(height: 22),
@@ -81,9 +82,7 @@ class ClubCashflowScreen extends StatelessWidget {
 }
 
 class _LedgerRow extends StatelessWidget {
-  const _LedgerRow({
-    required this.entry,
-  });
+  const _LedgerRow({required this.entry});
 
   final LedgerEntry entry;
 
@@ -113,7 +112,9 @@ class _LedgerRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: <Widget>[
             Text(
-              clubOpsFormatSignedCurrency(income ? entry.amount : -entry.amount),
+              clubOpsFormatSignedCurrency(
+                income ? entry.amount : -entry.amount,
+              ),
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 4),

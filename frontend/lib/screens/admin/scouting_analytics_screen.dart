@@ -13,7 +13,7 @@ class ScoutingAnalyticsScreen extends StatelessWidget {
   const ScoutingAnalyticsScreen({
     super.key,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -27,7 +27,8 @@ class ScoutingAnalyticsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClubOpsScreenHost(
       title: 'Scouting analytics',
-      subtitle: 'Assignment completion, regional coverage, and funnel conversion.',
+      subtitle:
+          'Assignment completion, regional coverage, and funnel conversion.',
       baseUrl: baseUrl,
       mode: mode,
       api: api,
@@ -44,7 +45,8 @@ class ScoutingAnalyticsScreen extends StatelessWidget {
             ),
           );
         }
-        final ScoutingAnalyticsSnapshot analytics = controller.scoutingAnalytics!;
+        final ScoutingAnalyticsSnapshot analytics =
+            controller.scoutingAnalytics!;
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: <Widget>[
@@ -71,7 +73,8 @@ class ScoutingAnalyticsScreen extends StatelessWidget {
               stages: analytics.funnel,
             ),
             const SizedBox(height: 16),
-            for (final ScoutAssignment assignment in analytics.assignmentLoad) ...<Widget>[
+            for (final ScoutAssignment assignment
+                in analytics.assignmentLoad) ...<Widget>[
               ScoutAssignmentCard(assignment: assignment),
               if (assignment != analytics.assignmentLoad.last)
                 const SizedBox(height: 12),

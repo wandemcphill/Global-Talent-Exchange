@@ -14,7 +14,7 @@ class YouthPipelineScreen extends StatelessWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -63,8 +63,10 @@ class YouthPipelineScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Pipeline notes',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Pipeline notes',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 12),
                   for (final String note in pipeline.notes) ...<Widget>[
                     Text(note, style: Theme.of(context).textTheme.bodyMedium),

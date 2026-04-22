@@ -15,7 +15,7 @@ void main() {
         themeController: controller,
         failure: GteBootstrapFailure.fromError(
           StateError(
-            'GTE_API_BASE_URL must be set when GTE_BACKEND_MODE is live or liveThenFixture.',
+            'GTE_API_BASE_URL must be set when GTE_BACKEND_MODE is live.',
           ),
         ),
       ),

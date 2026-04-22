@@ -19,7 +19,7 @@ class EraHistoryScreen extends StatefulWidget {
     this.controller,
     this.repository,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.backendMode = GteBackendMode.liveThenFixture,
+    this.backendMode = GteBackendMode.live,
   });
 
   final String clubId;
@@ -40,9 +40,11 @@ class _EraHistoryScreenState extends State<EraHistoryScreen> {
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         DynastyController(
-          repository: widget.repository ??
+          repository:
+              widget.repository ??
               DynastyApiRepository.standard(
                 baseUrl: widget.baseUrl,
                 mode: widget.backendMode,
@@ -73,9 +75,7 @@ class _EraHistoryScreenState extends State<EraHistoryScreen> {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Era History'),
-        ),
+        appBar: AppBar(title: const Text('Era History')),
         body: AnimatedBuilder(
           animation: _controller,
           builder: (BuildContext context, Widget? child) {
@@ -176,9 +176,7 @@ class _EraHistoryScreenState extends State<EraHistoryScreen> {
 }
 
 class _TimelineSection extends StatelessWidget {
-  const _TimelineSection({
-    required this.controller,
-  });
+  const _TimelineSection({required this.controller});
 
   final DynastyController controller;
 
@@ -210,9 +208,10 @@ class _TimelineSection extends StatelessWidget {
                     margin: const EdgeInsets.only(top: 4),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: snapshot.activeDynasty
-                          ? GteShellTheme.accentWarm
-                          : GteShellTheme.stroke,
+                      color:
+                          snapshot.activeDynasty
+                              ? GteShellTheme.accentWarm
+                              : GteShellTheme.stroke,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -231,9 +230,7 @@ class _TimelineSection extends StatelessWidget {
                             ),
                             Text(
                               '${snapshot.dynastyScore}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(color: GteShellTheme.accentWarm),
                             ),
                           ],

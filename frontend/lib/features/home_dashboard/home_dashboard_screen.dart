@@ -790,7 +790,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       case GteBackendMode.fixture:
         return 'Fixture preview';
       case GteBackendMode.liveThenFixture:
-        return 'Hybrid fallback';
+        return 'Live stack';
     }
   }
 
@@ -1298,7 +1298,7 @@ class _HomeRuntimeSignalPanel extends StatelessWidget {
       case GteBackendMode.fixture:
         return 'Fixture';
       case GteBackendMode.liveThenFixture:
-        return 'Hybrid';
+        return 'Live';
     }
   }
 }

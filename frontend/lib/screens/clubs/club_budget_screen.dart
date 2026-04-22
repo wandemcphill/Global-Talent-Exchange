@@ -13,7 +13,7 @@ class ClubBudgetScreen extends StatelessWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -29,7 +29,8 @@ class ClubBudgetScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClubOpsScreenHost(
       title: 'Operating budget',
-      subtitle: 'Category breakdowns across spend, income, and development support.',
+      subtitle:
+          'Category breakdowns across spend, income, and development support.',
       clubId: clubId,
       clubName: clubName,
       baseUrl: baseUrl,
@@ -65,7 +66,8 @@ class ClubBudgetScreen extends StatelessWidget {
             const SizedBox(height: 16),
             BudgetBreakdownCard(
               title: 'Expense mix',
-              subtitle: 'Monthly outgoings across football and commercial delivery.',
+              subtitle:
+                  'Monthly outgoings across football and commercial delivery.',
               items: finance.expenseBreakdown,
             ),
           ],

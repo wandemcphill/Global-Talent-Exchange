@@ -14,7 +14,7 @@ void main() {
     );
 
     expect(client.mode, GteBackendMode.live);
-    expect(client.config.mode, GteBackendMode.liveThenFixture);
+    expect(client.config.mode, GteBackendMode.live);
   });
 
   test('authenticated requests include bearer and identity headers', () async {

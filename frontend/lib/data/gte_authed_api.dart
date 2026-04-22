@@ -138,18 +138,10 @@ class GteAuthedApi {
     FutureOr<T> Function() liveCall,
     FutureOr<T> Function() fixtureCall,
   ) async {
-    if (mode == GteBackendMode.fixture) {
-      return await fixtureCall();
-    }
-    try {
+    if (mode != GteBackendMode.fixture) {
       return await liveCall();
-    } on GteApiException catch (error) {
-      if (mode == GteBackendMode.liveThenFixture &&
-          error.supportsFixtureFallback) {
-        return await fixtureCall();
-      }
-      rethrow;
     }
+    return await fixtureCall();
   }
 
   GteApiException _toException(GteTransportResponse response) {

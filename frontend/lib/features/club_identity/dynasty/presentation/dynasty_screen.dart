@@ -21,7 +21,7 @@ class DynastyScreen extends StatefulWidget {
     this.controller,
     this.repository,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.backendMode = GteBackendMode.liveThenFixture,
+    this.backendMode = GteBackendMode.live,
     this.onOpenTimeline,
     this.onOpenLeaderboard,
   });
@@ -46,9 +46,11 @@ class _DynastyScreenState extends State<DynastyScreen> {
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         DynastyController(
-          repository: widget.repository ??
+          repository:
+              widget.repository ??
               DynastyApiRepository.standard(
                 baseUrl: widget.baseUrl,
                 mode: widget.backendMode,
@@ -79,9 +81,7 @@ class _DynastyScreenState extends State<DynastyScreen> {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Dynasty Overview'),
-        ),
+        appBar: AppBar(title: const Text('Dynasty Overview')),
         body: AnimatedBuilder(
           animation: _controller,
           builder: (BuildContext context, Widget? child) {
@@ -128,12 +128,15 @@ class _DynastyScreenState extends State<DynastyScreen> {
                   ],
                   const SizedBox(height: 20),
                   LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
+                    builder: (
+                      BuildContext context,
+                      BoxConstraints constraints,
+                    ) {
                       final bool stacked = constraints.maxWidth < 720;
-                      final double cardWidth = stacked
-                          ? constraints.maxWidth
-                          : (constraints.maxWidth - 16) / 2;
+                      final double cardWidth =
+                          stacked
+                              ? constraints.maxWidth
+                              : (constraints.maxWidth - 16) / 2;
                       return Wrap(
                         spacing: 16,
                         runSpacing: 16,
@@ -164,16 +167,19 @@ class _DynastyScreenState extends State<DynastyScreen> {
                   StreakIndicatorRow(streaks: profile.activeStreaks),
                   const SizedBox(height: 20),
                   DynastyReasonList(
-                    title: profile.hasRecognizedDynasty
-                        ? 'Dynasty trigger reasons'
-                        : 'What still separates them',
+                    title:
+                        profile.hasRecognizedDynasty
+                            ? 'Dynasty trigger reasons'
+                            : 'What still separates them',
                     reasons: profile.reasons,
-                    emptyTitle: profile.isRisingClub
-                        ? 'No dynasty case yet'
-                        : 'Still building a case file',
-                    emptyMessage: profile.isRisingClub
-                        ? 'The club is rising, but the detector is still waiting for a decisive cycle.'
-                        : 'This club has not yet produced the repeated elite finishes needed for an era label.',
+                    emptyTitle:
+                        profile.isRisingClub
+                            ? 'No dynasty case yet'
+                            : 'Still building a case file',
+                    emptyMessage:
+                        profile.isRisingClub
+                            ? 'The club is rising, but the detector is still waiting for a decisive cycle.'
+                            : 'This club has not yet produced the repeated elite finishes needed for an era label.',
                   ),
                 ],
               ),
@@ -186,9 +192,7 @@ class _DynastyScreenState extends State<DynastyScreen> {
 }
 
 class _LastFourSummaryCard extends StatelessWidget {
-  const _LastFourSummaryCard({
-    required this.profile,
-  });
+  const _LastFourSummaryCard({required this.profile});
 
   final DynastyProfileDto profile;
 
@@ -231,9 +235,10 @@ class _LastFourSummaryCard extends StatelessWidget {
                             margin: const EdgeInsets.only(top: 5),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: _isHotSeason(season)
-                                  ? GteShellTheme.accentWarm
-                                  : GteShellTheme.stroke,
+                              color:
+                                  _isHotSeason(season)
+                                      ? GteShellTheme.accentWarm
+                                      : GteShellTheme.stroke,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -305,9 +310,7 @@ class _DynastyOverviewLoadingState extends StatelessWidget {
 }
 
 class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({
-    required this.message,
-  });
+  const _InlineNotice({required this.message});
 
   final String message;
 

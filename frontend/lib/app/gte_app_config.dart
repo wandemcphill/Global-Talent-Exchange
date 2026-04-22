@@ -62,8 +62,7 @@ String resolveGteApiBaseUrl({
     return gteFixtureApiBaseUrl;
   }
   throw StateError(
-    'GTE_API_BASE_URL must be set when GTE_BACKEND_MODE is live or '
-    'liveThenFixture.',
+    'GTE_API_BASE_URL must be set when GTE_BACKEND_MODE is live.',
   );
 }
 
@@ -110,9 +109,8 @@ GteBackendMode _parseBackendMode(String rawMode) {
     case 'live':
       return GteBackendMode.live;
     case 'livethenfixture':
+      return GteBackendMode.live;
     default:
-      // Preserved for legacy/dev/test wiring. Shipped active-shell providers
-      // clamp this back to live before building critical clients.
-      return GteBackendMode.liveThenFixture;
+      return GteBackendMode.live;
   }
 }

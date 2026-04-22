@@ -18,7 +18,7 @@ class DynastyLeaderboardScreen extends StatefulWidget {
     this.controller,
     this.repository,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.backendMode = GteBackendMode.liveThenFixture,
+    this.backendMode = GteBackendMode.live,
     this.onOpenClub,
   });
 
@@ -41,9 +41,11 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         DynastyController(
-          repository: widget.repository ??
+          repository:
+              widget.repository ??
               DynastyApiRepository.standard(
                 baseUrl: widget.baseUrl,
                 mode: widget.backendMode,
@@ -66,9 +68,7 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Dynasty Leaderboard'),
-        ),
+        appBar: AppBar(title: const Text('Dynasty Leaderboard')),
         body: AnimatedBuilder(
           animation: _controller,
           builder: (BuildContext context, Widget? child) {
@@ -117,10 +117,12 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
                       children: <Widget>[
                         Text(
                           'Dynasty leaderboard',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: GteShellTheme.accentWarm,
-                                letterSpacing: -0.4,
-                              ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.headlineSmall?.copyWith(
+                            color: GteShellTheme.accentWarm,
+                            letterSpacing: -0.4,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -134,16 +136,17 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
                               .map(
                                 (DynastyLeaderboardFilter filter) =>
                                     ButtonSegment<DynastyLeaderboardFilter>(
-                                  value: filter,
-                                  label: Text(filter.label),
-                                ),
+                                      value: filter,
+                                      label: Text(filter.label),
+                                    ),
                               )
                               .toList(growable: false),
                           selected: <DynastyLeaderboardFilter>{
-                            _controller.leaderboardFilter
+                            _controller.leaderboardFilter,
                           },
-                          onSelectionChanged:
-                              (Set<DynastyLeaderboardFilter> selection) {
+                          onSelectionChanged: (
+                            Set<DynastyLeaderboardFilter> selection,
+                          ) {
                             final DynastyLeaderboardFilter? filter =
                                 selection.isEmpty ? null : selection.first;
                             if (filter != null) {
@@ -172,20 +175,21 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
                     )
                   else
                     ...filtered.asMap().entries.map(
-                          (MapEntry<int, DynastyLeaderboardEntryDto> entry) =>
-                              Padding(
+                      (MapEntry<int, DynastyLeaderboardEntryDto> entry) =>
+                          Padding(
                             padding: const EdgeInsets.only(bottom: 14),
                             child: DynastyLeaderboardTile(
                               rank: entry.key + 1,
                               entry: entry.value,
-                              onTap: widget.onOpenClub == null
-                                  ? null
-                                  : () {
-                                      widget.onOpenClub!(entry.value.clubId);
-                                    },
+                              onTap:
+                                  widget.onOpenClub == null
+                                      ? null
+                                      : () {
+                                        widget.onOpenClub!(entry.value.clubId);
+                                      },
                             ),
                           ),
-                        ),
+                    ),
                 ],
               ),
             );

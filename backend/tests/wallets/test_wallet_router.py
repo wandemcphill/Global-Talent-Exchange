@@ -218,6 +218,24 @@ def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> 
     assert stored_transaction.status == "verified"
 
 
+def test_wallet_top_up_rejects_missing_paystack_secret_in_production(session, monkeypatch) -> None:
+    current_user = _register_and_load_user(session)
+    _seed_global_policy(session)
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        initiate_wallet_top_up(
+            WalletTopUpInitiateRequest(amount=Decimal("250")),
+            session=session,
+            current_user=current_user,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "Paystack is not configured" in str(exc_info.value.detail)
+
+
 def test_purchase_order_quote_rejects_stub_provider(session) -> None:
     current_user = _register_and_load_user(session)
     _seed_global_policy(session)

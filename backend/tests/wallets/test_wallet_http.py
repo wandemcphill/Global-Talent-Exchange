@@ -455,6 +455,31 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     assert payload["payment_provider_status"]["korapay"] == "unavailable"
 
 
+def test_wallet_overview_marks_missing_paystack_secret_unavailable_in_production(api_context, monkeypatch) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
+    _enable_automatic_deposits(session)
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/wallets/overview")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["payment_provider_status"]["paystack"] == "unavailable"
+    assert payload["payment_provider_status"]["korapay"] == "unavailable"
+
+
 def test_provider_webhook_rejects_stub_provider(api_context) -> None:
     client, _, _ = api_context
 

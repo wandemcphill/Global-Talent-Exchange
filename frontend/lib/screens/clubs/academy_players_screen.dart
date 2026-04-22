@@ -14,7 +14,7 @@ class AcademyPlayersScreen extends StatelessWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -56,16 +56,18 @@ class AcademyPlayersScreen extends StatelessWidget {
             final AcademyPlayer player = players[index];
             return AcademyPlayerRow(
               player: player,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (BuildContext context) => AcademyPlayerDetailScreen(
-                    playerId: player.id,
-                    controller: controller,
-                    clubId: clubId,
-                    clubName: clubName,
+              onTap:
+                  () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder:
+                          (BuildContext context) => AcademyPlayerDetailScreen(
+                            playerId: player.id,
+                            controller: controller,
+                            clubId: clubId,
+                            clubName: clubName,
+                          ),
+                    ),
                   ),
-                ),
-              ),
             );
           },
           separatorBuilder: (_, __) => const SizedBox(height: 12),

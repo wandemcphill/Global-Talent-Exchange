@@ -10,7 +10,7 @@ class ClubDynastyOverviewScreen extends StatelessWidget {
     super.key,
     required this.clubId,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.backendMode = GteBackendMode.liveThenFixture,
+    this.backendMode = GteBackendMode.live,
   });
 
   final String clubId;
@@ -26,21 +26,23 @@ class ClubDynastyOverviewScreen extends StatelessWidget {
       onOpenTimeline: () {
         Navigator.of(context).push<void>(
           MaterialPageRoute<void>(
-            builder: (BuildContext context) => EraHistoryScreen(
-              clubId: clubId,
-              baseUrl: baseUrl,
-              backendMode: backendMode,
-            ),
+            builder:
+                (BuildContext context) => EraHistoryScreen(
+                  clubId: clubId,
+                  baseUrl: baseUrl,
+                  backendMode: backendMode,
+                ),
           ),
         );
       },
       onOpenLeaderboard: () {
         Navigator.of(context).push<void>(
           MaterialPageRoute<void>(
-            builder: (BuildContext context) => DynastyLeaderboardScreen(
-              baseUrl: baseUrl,
-              backendMode: backendMode,
-            ),
+            builder:
+                (BuildContext context) => DynastyLeaderboardScreen(
+                  baseUrl: baseUrl,
+                  backendMode: backendMode,
+                ),
           ),
         );
       },

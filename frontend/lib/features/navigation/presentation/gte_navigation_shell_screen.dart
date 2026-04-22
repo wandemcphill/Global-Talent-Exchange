@@ -1135,7 +1135,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       case GteBackendMode.fixture:
         return 'fixture';
       case GteBackendMode.liveThenFixture:
-        return 'hybrid';
+        return 'live';
     }
   }
 

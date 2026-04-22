@@ -266,8 +266,11 @@ class WalletFundingService:
                 "paystack": "blocked",
                 "korapay": "blocked",
             }
+        paystack_secret = self._paystack_secret()
         return {
-            "paystack": "ready" if self._paystack_secret() else "mock",
+            "paystack": (
+                "ready" if paystack_secret else ("unavailable" if self._is_production_environment() else "mock")
+            ),
             "korapay": "ready" if self._korapay_secret() else "unavailable",
         }
 
@@ -281,6 +284,10 @@ class WalletFundingService:
     ) -> dict[str, Any]:
         secret = self._paystack_secret()
         if not secret:
+            if self._is_production_environment():
+                raise WalletFundingError(
+                    "Paystack is not configured. Set GTE_PAYSTACK_SECRET_KEY before accepting real payments."
+                )
             return {
                 "authorization_url": f"https://mock.paystack.local/{order.reference}",
                 "access_code": f"mock-{order.reference}",
@@ -378,6 +385,10 @@ class WalletFundingService:
     ) -> dict[str, Any]:
         secret = self._paystack_secret()
         if not secret:
+            if self._is_production_environment():
+                raise WalletTopUpVerificationError(
+                    "Paystack is not configured. Set GTE_PAYSTACK_SECRET_KEY before verifying real payments."
+                )
             return {
                 "data": {
                     "id": f"mock-{reference}",
@@ -653,3 +664,8 @@ class WalletFundingService:
         if raw_value and raw_value.strip():
             return raw_value.strip().rstrip("/")
         return KORAPAY_BASE_URL
+
+    @staticmethod
+    def _is_production_environment() -> bool:
+        environment = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
+        return environment in {"production", "prod", "release"}

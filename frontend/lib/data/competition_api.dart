@@ -205,27 +205,10 @@ class CompetitionApi {
     Future<T> Function() liveCall,
     Future<T> Function() fixtureCall,
   ) async {
-    if (config.mode == GteBackendMode.fixture) {
-      return fixtureCall();
-    }
-    try {
+    if (config.mode != GteBackendMode.fixture) {
       return await liveCall();
-    } on GteApiException catch (error) {
-      if (_supportsFixtureFallback(error)) {
-        return fixtureCall();
-      }
-      rethrow;
     }
-  }
-
-  bool _supportsFixtureFallback(GteApiException error) {
-    if (config.mode != GteBackendMode.liveThenFixture) {
-      return false;
-    }
-    return error.type == GteApiErrorType.network ||
-        error.type == GteApiErrorType.unavailable ||
-        error.type == GteApiErrorType.parsing ||
-        error.type == GteApiErrorType.notFound;
+    return fixtureCall();
   }
 
   Future<Object?> _sendBest(

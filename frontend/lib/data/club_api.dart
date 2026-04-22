@@ -560,23 +560,10 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
     Future<T> Function() liveCall,
     Future<T> Function() fixtureCall,
   ) async {
-    if (config.mode == GteBackendMode.fixture) {
-      return fixtureCall();
+    if (config.mode != GteBackendMode.fixture) {
+      return liveCall();
     }
-    try {
-      return await liveCall();
-    } on GteApiException catch (error) {
-      if (config.mode == GteBackendMode.liveThenFixture &&
-          error.supportsFixtureFallback) {
-        return fixtureCall();
-      }
-      rethrow;
-    } on GteParsingException {
-      if (config.mode == GteBackendMode.liveThenFixture) {
-        return fixtureCall();
-      }
-      rethrow;
-    }
+    return fixtureCall();
   }
 
   Future<Object?> _request(String method, String path, {Object? body}) async {
@@ -703,23 +690,10 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
     Future<T> Function() liveCall,
     Future<T> Function() fixtureCall,
   ) async {
-    if (config.mode == GteBackendMode.fixture) {
-      return fixtureCall();
+    if (config.mode != GteBackendMode.fixture) {
+      return liveCall();
     }
-    try {
-      return await liveCall();
-    } on GteApiException catch (error) {
-      if (config.mode == GteBackendMode.liveThenFixture &&
-          error.supportsFixtureFallback) {
-        return fixtureCall();
-      }
-      rethrow;
-    } on GteParsingException {
-      if (config.mode == GteBackendMode.liveThenFixture) {
-        return fixtureCall();
-      }
-      rethrow;
-    }
+    return fixtureCall();
   }
 
   Future<Object?> _request(

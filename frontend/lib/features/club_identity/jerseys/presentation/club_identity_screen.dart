@@ -46,7 +46,7 @@ class _ClubIdentityScreenState extends State<ClubIdentityScreen> {
               widget.repository ??
               ClubIdentityApiRepository.standard(
                 baseUrl: widget.apiBaseUrl ?? 'http://127.0.0.1:8000',
-                mode: widget.backendMode ?? GteBackendMode.liveThenFixture,
+                mode: widget.backendMode ?? GteBackendMode.live,
               ),
         );
     if (!_controller.isLoading && !_controller.hasIdentity) {

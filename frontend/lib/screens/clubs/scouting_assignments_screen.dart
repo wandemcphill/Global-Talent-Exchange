@@ -13,7 +13,7 @@ class ScoutingAssignmentsScreen extends StatelessWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -51,8 +51,9 @@ class ScoutingAssignmentsScreen extends StatelessWidget {
             controller.scouting?.assignments ?? const <ScoutAssignment>[];
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          itemBuilder: (BuildContext context, int index) =>
-              ScoutAssignmentCard(assignment: assignments[index]),
+          itemBuilder:
+              (BuildContext context, int index) =>
+                  ScoutAssignmentCard(assignment: assignments[index]),
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemCount: assignments.length,
         );

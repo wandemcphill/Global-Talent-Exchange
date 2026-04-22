@@ -16,7 +16,7 @@ class ClubOpsAdminScreen extends StatelessWidget {
   const ClubOpsAdminScreen({
     super.key,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -42,7 +42,8 @@ class ClubOpsAdminScreen extends StatelessWidget {
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
               title: 'Loading club operations admin',
-              message: 'Preparing finance, sponsorship, academy, and scouting oversight metrics.',
+              message:
+                  'Preparing finance, sponsorship, academy, and scouting oversight metrics.',
               icon: Icons.admin_panel_settings_outlined,
             ),
           );
@@ -52,7 +53,9 @@ class ClubOpsAdminScreen extends StatelessWidget {
           children: <Widget>[
             ClubOpsSummaryCard(summary: controller.adminSummary!),
             const SizedBox(height: 16),
-            SponsorshipRevenueSummaryCard(analytics: controller.sponsorshipAnalytics!),
+            SponsorshipRevenueSummaryCard(
+              analytics: controller.sponsorshipAnalytics!,
+            ),
             const SizedBox(height: 16),
             AcademyConversionCard(analytics: controller.academyAnalytics!),
             const SizedBox(height: 16),
@@ -61,51 +64,61 @@ class ClubOpsAdminScreen extends StatelessWidget {
               runSpacing: 8,
               children: <Widget>[
                 FilledButton.tonal(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (BuildContext context) => ClubFinanceAnalyticsScreen(
-                        controller: controller,
-                        baseUrl: baseUrl,
-                        mode: mode,
+                  onPressed:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder:
+                              (BuildContext context) =>
+                                  ClubFinanceAnalyticsScreen(
+                                    controller: controller,
+                                    baseUrl: baseUrl,
+                                    mode: mode,
+                                  ),
+                        ),
                       ),
-                    ),
-                  ),
                   child: const Text('Finance analytics'),
                 ),
                 FilledButton.tonal(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (BuildContext context) => ClubSponsorshipAnalyticsScreen(
-                        controller: controller,
-                        baseUrl: baseUrl,
-                        mode: mode,
+                  onPressed:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder:
+                              (BuildContext context) =>
+                                  ClubSponsorshipAnalyticsScreen(
+                                    controller: controller,
+                                    baseUrl: baseUrl,
+                                    mode: mode,
+                                  ),
+                        ),
                       ),
-                    ),
-                  ),
                   child: const Text('Sponsorship analytics'),
                 ),
                 FilledButton.tonal(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (BuildContext context) => AcademyAnalyticsScreen(
-                        controller: controller,
-                        baseUrl: baseUrl,
-                        mode: mode,
+                  onPressed:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder:
+                              (BuildContext context) => AcademyAnalyticsScreen(
+                                controller: controller,
+                                baseUrl: baseUrl,
+                                mode: mode,
+                              ),
+                        ),
                       ),
-                    ),
-                  ),
                   child: const Text('Academy analytics'),
                 ),
                 FilledButton.tonal(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (BuildContext context) => ScoutingAnalyticsScreen(
-                        controller: controller,
-                        baseUrl: baseUrl,
-                        mode: mode,
+                  onPressed:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder:
+                              (BuildContext context) => ScoutingAnalyticsScreen(
+                                controller: controller,
+                                baseUrl: baseUrl,
+                                mode: mode,
+                              ),
+                        ),
                       ),
-                    ),
-                  ),
                   child: const Text('Scouting analytics'),
                 ),
               ],

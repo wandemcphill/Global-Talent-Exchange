@@ -12,7 +12,7 @@ class AcademyAnalyticsScreen extends StatelessWidget {
   const AcademyAnalyticsScreen({
     super.key,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -38,7 +38,8 @@ class AcademyAnalyticsScreen extends StatelessWidget {
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
               title: 'Loading academy analytics',
-              message: 'Preparing pathway conversion and program coverage metrics.',
+              message:
+                  'Preparing pathway conversion and program coverage metrics.',
               icon: Icons.analytics_outlined,
             ),
           );
@@ -49,9 +50,11 @@ class AcademyAnalyticsScreen extends StatelessWidget {
           children: <Widget>[
             AcademyConversionCard(analytics: analytics),
             const SizedBox(height: 16),
-            for (final AcademyProgram program in analytics.programMix) ...<Widget>[
+            for (final AcademyProgram program
+                in analytics.programMix) ...<Widget>[
               AcademyProgramCard(program: program),
-              if (program != analytics.programMix.last) const SizedBox(height: 12),
+              if (program != analytics.programMix.last)
+                const SizedBox(height: 12),
             ],
           ],
         );

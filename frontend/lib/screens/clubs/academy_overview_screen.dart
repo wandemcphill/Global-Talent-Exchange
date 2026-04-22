@@ -19,7 +19,7 @@ class AcademyOverviewScreen extends StatelessWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
   });
@@ -48,7 +48,8 @@ class AcademyOverviewScreen extends StatelessWidget {
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
               title: 'Loading academy overview',
-              message: 'Preparing pathway summary, programs, and player progression.',
+              message:
+                  'Preparing pathway summary, programs, and player progression.',
               icon: Icons.school_outlined,
             ),
           );
@@ -63,69 +64,84 @@ class AcademyOverviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(academy.clubName,
-                      style: Theme.of(context).textTheme.headlineSmall),
+                  Text(
+                    academy.clubName,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '${academy.players.length} players in pathway · ${summary.promotionsThisSeason} promotions this season · budget ${clubOpsFormatCurrency(summary.developmentBudget)}',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 12),
-                  Text(summary.staffCoverageLabel,
-                      style: Theme.of(context).textTheme.bodyMedium),
-                  Text(summary.facilityLabel,
-                      style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    summary.staffCoverageLabel,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  Text(
+                    summary.facilityLabel,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
             ClubOpsSectionHeader(
               title: 'Academy surfaces',
-              subtitle: 'Open the programs list, player roster, or training cycles.',
+              subtitle:
+                  'Open the programs list, player roster, or training cycles.',
               action: Wrap(
                 spacing: 8,
                 children: <Widget>[
                   FilledButton.tonal(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (BuildContext context) => AcademyProgramsScreen(
-                          controller: controller,
-                          clubId: clubId,
-                          clubName: clubName,
+                    onPressed:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (BuildContext context) => AcademyProgramsScreen(
+                                  controller: controller,
+                                  clubId: clubId,
+                                  clubName: clubName,
+                                ),
+                          ),
                         ),
-                      ),
-                    ),
                     child: const Text('Programs'),
                   ),
                   FilledButton.tonal(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (BuildContext context) => AcademyPlayersScreen(
-                          controller: controller,
-                          clubId: clubId,
-                          clubName: clubName,
+                    onPressed:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (BuildContext context) => AcademyPlayersScreen(
+                                  controller: controller,
+                                  clubId: clubId,
+                                  clubName: clubName,
+                                ),
+                          ),
                         ),
-                      ),
-                    ),
                     child: const Text('Players'),
                   ),
                   FilledButton.tonal(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (BuildContext context) => AcademyTrainingScreen(
-                          controller: controller,
-                          clubId: clubId,
-                          clubName: clubName,
+                    onPressed:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (BuildContext context) => AcademyTrainingScreen(
+                                  controller: controller,
+                                  clubId: clubId,
+                                  clubName: clubName,
+                                ),
+                          ),
                         ),
-                      ),
-                    ),
                     child: const Text('Training'),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            for (final AcademyProgram program in academy.programs.take(2)) ...<Widget>[
+            for (final AcademyProgram program in academy.programs.take(
+              2,
+            )) ...<Widget>[
               AcademyProgramCard(program: program),
               if (program != academy.programs.take(2).last)
                 const SizedBox(height: 12),
@@ -135,10 +151,13 @@ class AcademyOverviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Recent promotions',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Recent promotions',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 12),
-                  for (final AcademyPromotion promotion in academy.promotions) ...<Widget>[
+                  for (final AcademyPromotion promotion
+                      in academy.promotions) ...<Widget>[
                     Text(
                       '${promotion.playerName} · ${promotion.destination}',
                       style: Theme.of(context).textTheme.titleMedium,
