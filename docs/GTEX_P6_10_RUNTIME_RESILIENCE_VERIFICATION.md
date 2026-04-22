@@ -89,16 +89,59 @@ Artifacts written by the runner:
 - player log: [tmp/gtex_live_resilience_player.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_live_resilience_player.log>)
 - runtime trace: [Gtex_Test_Migration/Builds/WindowsProduction/tmp/gtex_live_runtime_trace.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/Gtex_Test_Migration/Builds/WindowsProduction/tmp/gtex_live_runtime_trace.log>)
 
+## Executed Evidence
+
+Execution date:
+- `2026-04-22`
+
+Runner command:
+
+```powershell
+& 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tools\run_gtex_live_resilience_smoke.ps1' -Scenario all
+```
+
+Result:
+- overall harness summary returned `passed: true`
+- resilience scenario returned `passed: true`
+- terminal scenario returned `passed: true`
+
+Observed resilience proof:
+- bootstrap completed on the shipped Windows player
+- first websocket was intentionally closed with `4401`
+- runtime requested a live-token refresh
+- runtime logged successful live-token refresh
+- stale transport detection fired after the injected stall
+- runtime reconnected and resumed websocket-backed ticks
+
+Observed terminal proof:
+- bootstrap completed on the shipped Windows player
+- runtime loaded the terminal match payload at `90'`
+- terminal websocket final-frame path executed successfully
+
+Saved artifacts:
+- summary: [tmp/gtex_live_resilience_summary.json](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_live_resilience_summary.json>)
+- server logs:
+  - [tmp/gtex_live_resilience_server.out.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_live_resilience_server.out.log>)
+  - [tmp/gtex_live_resilience_server.err.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_live_resilience_server.err.log>)
+- player log: [tmp/gtex_live_resilience_player.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_live_resilience_player.log>)
+- runtime trace: [Gtex_Test_Migration/Builds/WindowsProduction/tmp/gtex_live_runtime_trace.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/Gtex_Test_Migration/Builds/WindowsProduction/tmp/gtex_live_runtime_trace.log>)
+
+Backend assertions exercised alongside the harness:
+- invalid Unity websocket access token rejection:
+  [backend/tests/api_v1/test_router.py](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/backend/tests/api_v1/test_router.py>)
+- invalid Unity refresh token rejection:
+  [backend/tests/live_matches/test_live_match_router.py](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/backend/tests/live_matches/test_live_match_router.py>)
+
 ## Current Status
 
-Current status: `IN PROGRESS`
+Current status: `PASSED`
 
 What this closes:
-- a committed, repeatable resilience harness now exists
-- auth failure expectations are now explicit in backend tests
-- runtime recovery proof has a standard log/summary artifact path
+- a committed, repeatable resilience harness exists
+- the harness has been executed successfully against the current shipped Windows player
+- stale transport, reconnect, token refresh, and terminal-match behaviors are explicitly verified and documented
+- backend auth-failure expectations are pinned by targeted tests
 
-What still remains before `P6-10` can be marked `PASSED`:
-- run the harness and save a clean evidence pack from the current shipped player
-- attach the resulting summary/logs to the `P6` evidence pack
-- confirm the same scenarios against a real deployed backend path where appropriate, not only the controlled mock lane
+Follow-up that is still useful but not required to keep `P6-10` passed:
+- repeat the same scenarios against a deployed backend lane when operationally convenient
+- fold the saved summary/log set into the broader `P6` evidence bundle
