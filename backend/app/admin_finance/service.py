@@ -6,6 +6,7 @@ from decimal import Decimal
 import hmac
 from hashlib import sha256, sha512
 import json
+import logging
 import os
 
 from sqlalchemy import func, select
@@ -18,9 +19,24 @@ from app.models.economy_daily_stat import EconomyDailyStat
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.player_cards import PlayerCardMomentum
 from app.models.risk_ops import SystemEvent, SystemEventSeverity
-from app.models.treasury import DepositRequest, DepositStatus, KycProfile, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
+from app.models.treasury import (
+    DepositRequest,
+    DepositStatus,
+    KycProfile,
+    TreasuryWithdrawalRequest,
+    TreasuryWithdrawalStatus,
+)
 from app.models.user import KycStatus, User
-from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentEvent, PaymentStatus
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerAccountKind,
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerUnit,
+    PaymentEvent,
+    PaymentStatus,
+)
 from app.services.payment_gateway_service import PaymentGatewayService
 from app.treasury.service import TreasuryService
 from app.wallets.providers.base import ProviderEventType
@@ -29,8 +45,8 @@ from app.wallets.providers.paystack import PaystackProviderAdapter
 from app.wallets.rail_service import WalletRailService
 from app.wallets.service import WalletService
 
-
 AMOUNT_QUANTUM = Decimal("0.0001")
+logger = logging.getLogger(__name__)
 
 
 def _zero() -> Decimal:
@@ -57,7 +73,9 @@ class AdminFinanceService:
         transaction_limit: int = 12,
     ) -> dict[str, object]:
         today = datetime.now(timezone.utc).date()
-        history = [self.refresh_daily_stat(today - timedelta(days=offset)) for offset in range(history_days - 1, -1, -1)]
+        history = [
+            self.refresh_daily_stat(today - timedelta(days=offset)) for offset in range(history_days - 1, -1, -1)
+        ]
         today_stat = history[-1]
         gtex_ratio = self._ratio(today_stat.gtex_burned, today_stat.gtex_minted)
         fan_ratio = self._ratio(today_stat.fan_burned, today_stat.fan_minted)
@@ -143,7 +161,11 @@ class AdminFinanceService:
         for day in range(1, max(1, int(days)) + 1):
             matches = Decimal(config_values["daily_active_users"]) * config_values["avg_matches_per_user"]
             participants = Decimal(config_values["daily_active_users"]) * config_values["tournament_participation_rate"]
-            gtex_minted = Decimal(config_values["daily_active_users"]) * config_values["gtex_purchase_rate"] * config_values["gtex_purchase_amount"]
+            gtex_minted = (
+                Decimal(config_values["daily_active_users"])
+                * config_values["gtex_purchase_rate"]
+                * config_values["gtex_purchase_amount"]
+            )
             gtex_burned = participants * config_values["tournament_entry_gtex"]
             fan_minted = matches * config_values["fan_mint_per_match"]
             fan_burned = matches * config_values["fan_spend_per_match"]
@@ -166,7 +188,9 @@ class AdminFinanceService:
                     "gtex_burned": self._amount(gtex_burned),
                     "fan_minted": self._amount(fan_minted),
                     "fan_burned": self._amount(fan_burned),
-                    "gtex_burn_mint_ratio": self._ratio(self._amount(gtex_burned), self._amount(gtex_minted + gtex_reward)),
+                    "gtex_burn_mint_ratio": self._ratio(
+                        self._amount(gtex_burned), self._amount(gtex_minted + gtex_reward)
+                    ),
                     "fan_burn_mint_ratio": self._ratio(self._amount(fan_burned), self._amount(fan_minted)),
                     "inflation_risk": risk,
                 }
@@ -299,8 +323,7 @@ class AdminFinanceService:
             "pending_withdrawals": self._count_pending_withdrawals(),
             "active_wallet_transaction_lock_count": len(active_wallet_transaction_locks or []),
             "payment_signature_verification_enabled": any(
-                bool(self._provider_secret(provider))
-                for provider in ("paystack", "korapay")
+                bool(self._provider_secret(provider)) for provider in ("paystack", "korapay")
             ),
             "active_wallet_transaction_locks": list(active_wallet_transaction_locks or []),
             "duplicate_deposit_candidates": duplicate_candidates,
@@ -396,31 +419,41 @@ class AdminFinanceService:
             "pending_payment_events": int(
                 self.session.scalar(
                     select(func.count()).select_from(PaymentEvent).where(PaymentEvent.status == PaymentStatus.PENDING)
-                ) or 0
+                )
+                or 0
             ),
             "settled_purchase_orders_missing_ledger": int(
                 self.session.scalar(
-                    select(func.count()).select_from(FancoinPurchaseOrder).where(
+                    select(func.count())
+                    .select_from(FancoinPurchaseOrder)
+                    .where(
                         FancoinPurchaseOrder.status == PurchaseOrderStatus.SETTLED,
                         FancoinPurchaseOrder.ledger_transaction_id.is_(None),
                     )
-                ) or 0
+                )
+                or 0
             ),
             "settled_payment_events_missing_ledger": int(
                 self.session.scalar(
-                    select(func.count()).select_from(PaymentEvent).where(
+                    select(func.count())
+                    .select_from(PaymentEvent)
+                    .where(
                         PaymentEvent.status == PaymentStatus.VERIFIED,
                         PaymentEvent.ledger_transaction_id.is_(None),
                     )
-                ) or 0
+                )
+                or 0
             ),
             "confirmed_deposits_missing_ledger": int(
                 self.session.scalar(
-                    select(func.count()).select_from(DepositRequest).where(
+                    select(func.count())
+                    .select_from(DepositRequest)
+                    .where(
                         DepositRequest.status == DepositStatus.CONFIRMED,
                         DepositRequest.ledger_transaction_id.is_(None),
                     )
-                ) or 0
+                )
+                or 0
             ),
             "duplicate_provider_references": len(duplicate_reference_groups),
             "issues": issues[:issue_limit],
@@ -470,10 +503,19 @@ class AdminFinanceService:
     def _verify_paystack_webhook(self, *, raw_body: bytes | None, headers: dict[str, str]) -> bool:
         secret = self._provider_secret("paystack")
         if not secret:
-            return False
+            if self._signature_optional("paystack"):
+                logger.warning(
+                    "Paystack webhook received without GTE_PAYSTACK_WEBHOOK_SECRET. "
+                    "Continuing without signature verification because "
+                    "GTE_PAYSTACK_WEBHOOK_SIGNATURE_OPTIONAL=true."
+                )
+                return False
+            raise ValueError("Paystack webhook cannot be verified: GTE_PAYSTACK_WEBHOOK_SECRET is not configured.")
         signature = headers.get("x-paystack-signature")
-        if not signature or raw_body is None:
-            raise ValueError("Paystack webhook signature is missing.")
+        if not signature:
+            raise ValueError("Paystack webhook signature header (x-paystack-signature) is missing.")
+        if raw_body is None:
+            raise ValueError("Paystack webhook raw body is missing.")
         expected = hmac.new(secret.encode("utf-8"), raw_body, sha512).hexdigest()
         if not hmac.compare_digest(expected, signature):
             raise ValueError("Paystack webhook signature is invalid.")
@@ -482,11 +524,20 @@ class AdminFinanceService:
     def _verify_korapay_webhook(self, *, payload: dict[str, object], headers: dict[str, str]) -> bool:
         secret = self._provider_secret("korapay")
         if not secret:
-            return False
+            if self._signature_optional("korapay"):
+                logger.warning(
+                    "KoraPay webhook received without GTE_KORAPAY_WEBHOOK_SECRET. "
+                    "Continuing without signature verification because "
+                    "GTE_KORAPAY_WEBHOOK_SIGNATURE_OPTIONAL=true."
+                )
+                return False
+            raise ValueError("KoraPay webhook cannot be verified: GTE_KORAPAY_WEBHOOK_SECRET is not configured.")
         signature = headers.get("x-korapay-signature")
         data = payload.get("data")
-        if not signature or not isinstance(data, dict):
-            raise ValueError("KoraPay webhook signature is missing.")
+        if not signature:
+            raise ValueError("KoraPay webhook signature header (x-korapay-signature) is missing.")
+        if not isinstance(data, dict):
+            raise ValueError("KoraPay webhook payload.data is missing or invalid.")
         canonical_payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         expected = hmac.new(secret.encode("utf-8"), canonical_payload, sha256).hexdigest()
         if not hmac.compare_digest(expected, signature):
@@ -499,6 +550,11 @@ class AdminFinanceService:
         if secret:
             return secret.strip()
         return None
+
+    @staticmethod
+    def _signature_optional(provider_key: str) -> bool:
+        raw_value = os.getenv(f"GTE_{provider_key.strip().upper()}_WEBHOOK_SIGNATURE_OPTIONAL", "")
+        return raw_value.strip().lower() in {"true", "1", "yes"}
 
     def _sum_user_credits(self, *, unit: LedgerUnit, start: datetime, end: datetime) -> Decimal:
         amount = self.session.scalar(
@@ -681,7 +737,9 @@ class AdminFinanceService:
         system_events = self.session.scalars(
             select(SystemEvent)
             .where(
-                SystemEvent.severity.in_([SystemEventSeverity.WARNING, SystemEventSeverity.ERROR, SystemEventSeverity.CRITICAL]),
+                SystemEvent.severity.in_(
+                    [SystemEventSeverity.WARNING, SystemEventSeverity.ERROR, SystemEventSeverity.CRITICAL]
+                ),
                 SystemEvent.subject_type.in_(["purchase_order", "treasury_withdrawal"]),
             )
             .order_by(SystemEvent.created_at.desc())
@@ -711,7 +769,9 @@ class AdminFinanceService:
                 "trend_direction": row.trend_direction,
                 "momentum_7d_pct": self._amount(row.momentum_7d_pct),
                 "momentum_30d_pct": self._amount(row.momentum_30d_pct),
-                "last_trade_price_credits": None if row.last_trade_price_credits is None else self._amount(row.last_trade_price_credits),
+                "last_trade_price_credits": (
+                    None if row.last_trade_price_credits is None else self._amount(row.last_trade_price_credits)
+                ),
             }
             for row in rows
         ]
@@ -737,25 +797,38 @@ class AdminFinanceService:
         settings = self.treasury_service.ensure_settings(self.session)
         methods: list[str] = []
         if self.settings is not None:
-            methods = [method.display_name for method in PaymentGatewayService(session=self.session, settings=self.settings).list_methods()]
+            methods = [
+                method.display_name
+                for method in PaymentGatewayService(session=self.session, settings=self.settings).list_methods()
+            ]
         return {
             "payment_methods": methods,
-            "deposit_mode": settings.deposit_mode.value if hasattr(settings.deposit_mode, "value") else str(settings.deposit_mode),
-            "withdrawal_mode": settings.withdrawal_mode.value if hasattr(settings.withdrawal_mode, "value") else str(settings.withdrawal_mode),
+            "deposit_mode": (
+                settings.deposit_mode.value if hasattr(settings.deposit_mode, "value") else str(settings.deposit_mode)
+            ),
+            "withdrawal_mode": (
+                settings.withdrawal_mode.value
+                if hasattr(settings.withdrawal_mode, "value")
+                else str(settings.withdrawal_mode)
+            ),
             "currency_code": settings.currency_code,
             "min_withdrawal": self._amount(settings.min_withdrawal),
             "max_withdrawal": self._amount(settings.max_withdrawal),
             "pending_purchase_orders": self._count_pending_purchase_orders(),
             "pending_withdrawals": self._count_pending_withdrawals(),
             "pending_kyc": self._count_pending_kyc(),
-            "automatic_deposits_enabled": getattr(settings.deposit_mode, "value", str(settings.deposit_mode)) in {"automatic", "hybrid"},
-            "automatic_withdrawals_enabled": getattr(settings.withdrawal_mode, "value", str(settings.withdrawal_mode)) in {"automatic", "hybrid"},
+            "automatic_deposits_enabled": getattr(settings.deposit_mode, "value", str(settings.deposit_mode))
+            in {"automatic", "hybrid"},
+            "automatic_withdrawals_enabled": getattr(settings.withdrawal_mode, "value", str(settings.withdrawal_mode))
+            in {"automatic", "hybrid"},
         }
 
     def _count_pending_purchase_orders(self) -> int:
         count = self.session.scalar(
             select(func.count(FancoinPurchaseOrder.id)).where(
-                FancoinPurchaseOrder.status.in_([PurchaseOrderStatus.REQUESTED, PurchaseOrderStatus.REVIEWING, PurchaseOrderStatus.PROCESSING])
+                FancoinPurchaseOrder.status.in_(
+                    [PurchaseOrderStatus.REQUESTED, PurchaseOrderStatus.REVIEWING, PurchaseOrderStatus.PROCESSING]
+                )
             )
         )
         return int(count or 0)

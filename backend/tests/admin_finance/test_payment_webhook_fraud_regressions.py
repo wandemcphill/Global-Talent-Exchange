@@ -68,6 +68,54 @@ def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
     assert "signature is invalid" in response.json()["detail"].lower()
 
 
+def test_paystack_webhook_rejects_missing_secret_by_default(
+    webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
+    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SIGNATURE_OPTIONAL", raising=False)
+
+    response = webhook_client.post(
+        "/integrations/payments/paystack/webhook",
+        json={
+            "event": "charge.success",
+            "data": {
+                "id": 9002,
+                "reference": "ps_live_ref_webhook",
+                "amount": 900000,
+                "currency": "NGN",
+                "status": "success",
+            },
+        },
+    )
+
+    assert response.status_code == 401, response.text
+    assert "not configured" in response.json()["detail"].lower()
+
+
+def test_paystack_webhook_allows_missing_secret_only_with_explicit_optional_flag(
+    webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
+    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SIGNATURE_OPTIONAL", "true")
+
+    response = webhook_client.post(
+        "/integrations/payments/paystack/webhook",
+        json={
+            "event": "charge.success",
+            "data": {
+                "id": 9002,
+                "reference": "ps_live_ref_webhook",
+                "amount": 900000,
+                "currency": "NGN",
+                "status": "success",
+            },
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["signature_verified"] is False
+
+
 def test_korapay_webhook_rejects_invalid_signature_when_secret_is_configured(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -90,3 +138,27 @@ def test_korapay_webhook_rejects_invalid_signature_when_secret_is_configured(
 
     assert response.status_code == 401, response.text
     assert "signature is invalid" in response.json()["detail"].lower()
+
+
+def test_korapay_webhook_rejects_missing_secret_by_default(
+    webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GTE_KORAPAY_WEBHOOK_SECRET", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_WEBHOOK_SIGNATURE_OPTIONAL", raising=False)
+
+    response = webhook_client.post(
+        "/integrations/payments/korapay/webhook",
+        json={
+            "event": "charge.success",
+            "data": {
+                "id": "kp-event-invalid",
+                "reference": "kp_live_ref_invalid_sig",
+                "amount": "9000.0000",
+                "currency": "NGN",
+                "status": "success",
+            },
+        },
+    )
+
+    assert response.status_code == 401, response.text
+    assert "not configured" in response.json()["detail"].lower()

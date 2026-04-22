@@ -11,6 +11,7 @@ namespace FStudio.GTEX
     [Serializable]
     public sealed class GtexMatchConfig
     {
+        private const string ProductionApiBaseUrl = "https://gtex-api.onrender.com";
         private const string RuntimeModeEnvVar = "GTEX_RUNTIME_MODE";
         private const string MatchIdEnvVar = "GTEX_MATCH_ID";
         private const string EnvironmentEnvVar = "GTEX_ENVIRONMENT";
@@ -24,7 +25,7 @@ namespace FStudio.GTEX
         public string matchId = string.Empty;
         public string environment = "local";
         public string localBaseUrl = "http://127.0.0.1:8000";
-        public string productionBaseUrl = "https://api.gtex.example";
+        public string productionBaseUrl = ProductionApiBaseUrl;
         public string customBaseUrl = string.Empty;
         public string liveAccessToken = string.Empty;
         public string liveRefreshToken = string.Empty;
@@ -135,10 +136,31 @@ namespace FStudio.GTEX
                 Debug.LogWarning("[GTEX] environment missing. Defaulting to LOCAL.");
             }
 
+            var normalizedEnvironment = (environment ?? string.Empty).Trim().ToLowerInvariant();
+            var blockedProductionBaseUrl = false;
+            if (runtimeModeValue == GtexRuntimeMode.LivePlayback &&
+                normalizedEnvironment == "production" &&
+                IsBlockedProductionBaseUrl(productionBaseUrl))
+            {
+                blockedProductionBaseUrl = true;
+                productionBaseUrl = string.Empty;
+                Debug.LogError(
+                    "[GTEX] productionBaseUrl is invalid for production live playback. " +
+                    "Set GTEX_BASE_URL or match-config.json to a real hosted API URL before shipping.");
+            }
+
             if (string.IsNullOrWhiteSpace(ResolveBaseUrl()))
             {
                 if (runtimeModeValue == GtexRuntimeMode.LivePlayback &&
-                    !string.Equals((environment ?? string.Empty).Trim(), "local", StringComparison.OrdinalIgnoreCase))
+                    normalizedEnvironment == "production")
+                {
+                    if (!blockedProductionBaseUrl)
+                    {
+                        Debug.LogError("[GTEX] productionBaseUrl is missing for production live playback.");
+                    }
+                }
+                else if (runtimeModeValue == GtexRuntimeMode.LivePlayback &&
+                    normalizedEnvironment != "local")
                 {
                     Debug.LogError("[GTEX] Base URL is missing for live environment '" + environment + "'.");
                 }
@@ -210,6 +232,29 @@ namespace FStudio.GTEX
             return NormalizeRuntimeModeToken(runtimeMode) == "simulation"
                 ? GtexRuntimeMode.LocalSimulation
                 : GtexRuntimeMode.LivePlayback;
+        }
+
+        private static bool IsBlockedProductionBaseUrl(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return true;
+            }
+
+            var normalized = value.Trim();
+            if (string.Equals(normalized, "https://api.gtex.example", StringComparison.OrdinalIgnoreCase) ||
+                normalized.IndexOf("REPLACE_WITH_REAL_API_URL", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            if (!Uri.TryCreate(normalized, UriKind.Absolute, out var parsed))
+            {
+                return true;
+            }
+
+            var host = (parsed.Host ?? string.Empty).Trim().ToLowerInvariant();
+            return host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" || host == "::1";
         }
 
         public DayTimes ResolveDayTime()
