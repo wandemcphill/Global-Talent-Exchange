@@ -174,6 +174,21 @@ def test_unity_live_refresh_route_issues_new_live_credentials() -> None:
     assert body["refresh_token"]
 
 
+def test_unity_live_refresh_route_rejects_invalid_refresh_token() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=35))
+    _insert_match(session_factory, replay_payload)
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/match/{replay_payload.match_id}/unity-access/refresh",
+            json={"refresh_token": "not-a-real-unity-refresh-token"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]
+
+
 def test_unity_live_access_requires_session_backed_rights_for_non_generated_matches() -> None:
     os.environ["GTE_AUTH_SECRET"] = TEST_AUTH_SECRET
     os.environ["GTE_MEDIA_SIGNING_SECRET"] = MEDIA_SIGNING_TEST_SECRET

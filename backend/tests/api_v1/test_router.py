@@ -294,6 +294,22 @@ def test_api_v1_match_websocket_rejects_unity_live_bridge_without_access_token(a
     assert exc_info.value.code == 4401
 
 
+def test_api_v1_match_websocket_rejects_unity_live_bridge_with_invalid_access_token(app_client) -> None:
+    _app, client = app_client
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            f"/api/v1/ws/match/{match_id}?format=unity&access_token=not-a-real-unity-access-token"
+        ):
+            pass
+
+    assert exc_info.value.code == 4401
+
+
 def test_api_v1_match_websocket_rejects_non_unity_requests_pre_accept(app_client) -> None:
     app, client = app_client
     _user_id, token = _create_authenticated_user(app)
