@@ -50,8 +50,26 @@ Use `9102` for the projection worker and `9103` for the outbox relay.
 - Withdrawal failure rate above 5%
 - Match queue delay above 10 seconds
 - Treasury balance below the red-alert threshold
+- Unity live refresh failures
+- Unity live payload bridge failures
+- Unity live stale-state detection
+- Unity live websocket reject / churn detection
+- Unity live generated-match bootstrap failures
 
-## 5. Kubernetes starter integration
+## 5. GTEX live playback dashboard
+
+The Grafana dashboards folder now includes a dedicated GTEX live playback board:
+
+- [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\ops\observability\grafana\dashboards\gtex-live-playback.json](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/ops/observability/grafana/dashboards/gtex-live-playback.json>)
+
+This board is intended for the main `P6` operator failure modes:
+- Unity access and refresh failures
+- live payload bridge failures
+- websocket rejects and reconnect churn
+- stale-state detection
+- generated-match bootstrap failures
+
+## 6. Kubernetes starter integration
 
 The existing manifests in `ops/k8s/base` now expose `/metrics` on the API and dedicated metrics ports on the workers. To enable tracing in-cluster, set:
 

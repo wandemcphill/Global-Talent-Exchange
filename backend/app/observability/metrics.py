@@ -9,6 +9,7 @@ from threading import RLock
 from typing import Any
 
 from fastapi import Response
+
 try:
     from prometheus_client import (
         CONTENT_TYPE_LATEST,
@@ -216,6 +217,30 @@ class GTexMetrics:
             buckets=WORKER_DURATION_BUCKETS,
             registry=self.registry,
         )
+        self.unity_live_access_total = Counter(
+            "gtex_unity_live_access_total",
+            "Unity live access issue and refresh outcomes.",
+            ("action", "result"),
+            registry=self.registry,
+        )
+        self.unity_live_payload_total = Counter(
+            "gtex_unity_live_payload_total",
+            "Unity live payload bridge outcomes by transport.",
+            ("transport", "result"),
+            registry=self.registry,
+        )
+        self.unity_live_websocket_events_total = Counter(
+            "gtex_unity_live_websocket_events_total",
+            "Unity live websocket lifecycle signals.",
+            ("event", "result"),
+            registry=self.registry,
+        )
+        self.unity_live_generated_match_total = Counter(
+            "gtex_unity_live_generated_match_total",
+            "Generated live match bootstrap outcomes.",
+            ("result",),
+            registry=self.registry,
+        )
         self.creator_earnings_events_total = Counter(
             "gtex_creator_earnings_events_total",
             "Committed creator earnings events by type and outcome.",
@@ -351,9 +376,8 @@ class GTexMetrics:
         self.total_withdrawals_amount.labels("coin", "paid").set(
             float(status_totals.get(TreasuryWithdrawalStatus.PAID.value, Decimal("0")))
         )
-        failed_total = (
-            status_totals.get(TreasuryWithdrawalStatus.REJECTED.value, Decimal("0"))
-            + status_totals.get(TreasuryWithdrawalStatus.CANCELLED.value, Decimal("0"))
+        failed_total = status_totals.get(TreasuryWithdrawalStatus.REJECTED.value, Decimal("0")) + status_totals.get(
+            TreasuryWithdrawalStatus.CANCELLED.value, Decimal("0")
         )
         self.total_withdrawals_amount.labels("coin", "failed").set(float(failed_total))
 
@@ -372,6 +396,18 @@ class GTexMetrics:
     def record_feed_refresh(self, *, feed_name: str, result: str, duration_seconds: float) -> None:
         self.feed_refresh_total.labels(feed_name, result).inc()
         self.feed_refresh_duration_seconds.labels(feed_name, result).observe(max(float(duration_seconds), 0.0))
+
+    def record_unity_live_access(self, *, action: str, result: str) -> None:
+        self.unity_live_access_total.labels(action, result).inc()
+
+    def record_unity_live_payload(self, *, transport: str, result: str) -> None:
+        self.unity_live_payload_total.labels(transport, result).inc()
+
+    def record_unity_live_websocket_event(self, *, event: str, result: str) -> None:
+        self.unity_live_websocket_events_total.labels(event, result).inc()
+
+    def record_unity_live_generated_match(self, *, result: str) -> None:
+        self.unity_live_generated_match_total.labels(result).inc()
 
     def record_creator_earnings(
         self,

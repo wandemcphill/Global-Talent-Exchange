@@ -64,6 +64,63 @@ _UNITY_PITCH_WIDTH_METERS = 68.0
 _UNITY_PLAYER_HEIGHT_METERS = 0.9
 
 
+def _metrics_for_app(app):
+    return getattr(getattr(app, "state", None), "metrics", None)
+
+
+def _record_unity_live_access_metric(app, *, action: str, result: str) -> None:
+    metrics = _metrics_for_app(app)
+    if metrics is None:
+        return
+    try:
+        metrics.record_unity_live_access(action=action, result=result)
+    except Exception:
+        logger.exception(
+            "live_matches.metrics.unity_live_access_failed action=%s result=%s",
+            action,
+            result,
+        )
+
+
+def _record_unity_live_payload_metric(app, *, transport: str, result: str) -> None:
+    metrics = _metrics_for_app(app)
+    if metrics is None:
+        return
+    try:
+        metrics.record_unity_live_payload(transport=transport, result=result)
+    except Exception:
+        logger.exception(
+            "live_matches.metrics.unity_live_payload_failed transport=%s result=%s",
+            transport,
+            result,
+        )
+
+
+def _record_unity_live_generated_match_metric(app, *, result: str) -> None:
+    metrics = _metrics_for_app(app)
+    if metrics is None:
+        return
+    try:
+        metrics.record_unity_live_generated_match(result=result)
+    except Exception:
+        logger.exception(
+            "live_matches.metrics.unity_live_generated_match_failed result=%s",
+            result,
+        )
+
+
+def _unity_live_metric_result_for_status(status_code: int) -> str:
+    mapping = {
+        status.HTTP_400_BAD_REQUEST: "bad_request",
+        status.HTTP_401_UNAUTHORIZED: "unauthorized",
+        status.HTTP_403_FORBIDDEN: "denied",
+        status.HTTP_404_NOT_FOUND: "not_found",
+        status.HTTP_409_CONFLICT: "conflict",
+        status.HTTP_503_SERVICE_UNAVAILABLE: "unavailable",
+    }
+    return mapping.get(int(status_code), f"http_{int(status_code)}")
+
+
 def _generated_match_access_payload() -> dict[str, object]:
     return {
         "has_access": True,
@@ -79,12 +136,15 @@ def _generated_match_access_payload() -> dict[str, object]:
 def _bootstrap_infinite_league_stream(app, hub, match_id: str, *, restart_if_completed: bool = False) -> bool:
     existing_state = hub.get_state(match_id)
     if existing_state is not None and existing_state.is_live:
+        _record_unity_live_generated_match_metric(app, result="already_live")
         return True
     if existing_state is not None and not restart_if_completed:
+        _record_unity_live_generated_match_metric(app, result="completed_not_restarted")
         return False
 
     stream = ensure_infinite_league_runtime(app).live_stream(match_id)
     if stream is None:
+        _record_unity_live_generated_match_metric(app, result="missing_stream")
         return False
     hub.start_synthetic_stream(
         match_id=stream.match_id,
@@ -102,6 +162,7 @@ def _bootstrap_infinite_league_stream(app, hub, match_id: str, *, restart_if_com
         read_only=True,
         target_runtime_seconds=_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS,
     )
+    _record_unity_live_generated_match_metric(app, result="started")
     return True
 
 
@@ -1075,18 +1136,32 @@ def issue_unity_live_access(
     pay_to_view: bool = Query(default=False),
     current_user: User = Depends(get_current_match_user),
 ) -> UnityLiveAccessView:
-    spectator_session, _access_payload = _join_spectate_session(
-        match_id=match_id,
-        request=request,
-        current_user=current_user,
-        pay_to_view=pay_to_view,
-        require_resolved_access=True,
-    )
-    return _issue_unity_live_access_view(
-        match_id=match_id,
-        spectator_session_id=spectator_session.id,
-        viewer_user_id=current_user.id,
-    )
+    try:
+        spectator_session, _access_payload = _join_spectate_session(
+            match_id=match_id,
+            request=request,
+            current_user=current_user,
+            pay_to_view=pay_to_view,
+            require_resolved_access=True,
+        )
+        response = _issue_unity_live_access_view(
+            match_id=match_id,
+            spectator_session_id=spectator_session.id,
+            viewer_user_id=current_user.id,
+        )
+    except HTTPException as exc:
+        _record_unity_live_access_metric(
+            request.app,
+            action="issue",
+            result=_unity_live_metric_result_for_status(exc.status_code),
+        )
+        raise
+    except Exception:
+        _record_unity_live_access_metric(request.app, action="issue", result="error")
+        raise
+
+    _record_unity_live_access_metric(request.app, action="issue", result="success")
+    return response
 
 
 @legacy_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
@@ -1101,6 +1176,7 @@ def refresh_unity_live_access(
     try:
         claims = validate_unity_live_refresh_token(payload.refresh_token, match_id=match_id)
     except TokenError as exc:
+        _record_unity_live_access_metric(request.app, action="refresh", result="invalid_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -1111,6 +1187,7 @@ def refresh_unity_live_access(
     try:
         spectator_session = hub.validate_session(match_id, claims["spectator_session_id"])
     except LiveMatchError as exc:
+        _record_unity_live_access_metric(request.app, action="refresh", result="invalid_session")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -1118,23 +1195,37 @@ def refresh_unity_live_access(
         ) from exc
 
     if spectator_session.user_id != claims["viewer_user_id"]:
+        _record_unity_live_access_metric(request.app, action="refresh", result="unauthorized")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unity live refresh token does not match the spectator session.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    _revalidate_unity_refresh_access(
-        match_id=match_id,
-        request=request,
-        viewer_user_id=spectator_session.user_id,
-    )
+    try:
+        _revalidate_unity_refresh_access(
+            match_id=match_id,
+            request=request,
+            viewer_user_id=spectator_session.user_id,
+        )
+        response = _issue_unity_live_access_view(
+            match_id=match_id,
+            spectator_session_id=spectator_session.id,
+            viewer_user_id=spectator_session.user_id,
+        )
+    except HTTPException as exc:
+        _record_unity_live_access_metric(
+            request.app,
+            action="refresh",
+            result=_unity_live_metric_result_for_status(exc.status_code),
+        )
+        raise
+    except Exception:
+        _record_unity_live_access_metric(request.app, action="refresh", result="error")
+        raise
 
-    return _issue_unity_live_access_view(
-        match_id=match_id,
-        spectator_session_id=spectator_session.id,
-        viewer_user_id=spectator_session.user_id,
-    )
+    _record_unity_live_access_metric(request.app, action="refresh", result="success")
+    return response
 
 
 @legacy_router.get("/{match_id}/live")
@@ -1142,17 +1233,26 @@ def refresh_unity_live_access(
 @match_router.get("/{match_id}/live")
 @api_match_router.get("/{match_id}/live")
 def read_match_live_bridge(match_id: str, request: Request) -> dict[str, object]:
-    _require_unity_live_access_for_request(request, match_id=match_id)
     try:
-        return _build_unity_live_payload(match_id, request)
-    except HTTPException:
+        _require_unity_live_access_for_request(request, match_id=match_id)
+        payload = _build_unity_live_payload(match_id, request)
+    except HTTPException as exc:
+        _record_unity_live_payload_metric(
+            request.app,
+            transport="http",
+            result=_unity_live_metric_result_for_status(exc.status_code),
+        )
         raise
     except Exception as exc:
+        _record_unity_live_payload_metric(request.app, transport="http", result="error")
         logger.exception("Failed to build live match bridge payload for %s", match_id)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Live match payload is temporarily unavailable.",
         ) from exc
+
+    _record_unity_live_payload_metric(request.app, transport="http", result="success")
+    return payload
 
 
 @legacy_router.get("/{match_id}/highlights", response_model=MatchHighlightResponseView)

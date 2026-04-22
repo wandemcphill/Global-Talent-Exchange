@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -24,13 +26,30 @@ from app.realtime.service import RealtimeHub
 from app.risk.fraud_service import FraudDetectionService
 from app.wallets.service import LedgerPosting, WalletService
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 
 class _HealthyCacheBackend:
     enabled = True
+    _store: dict[str, object] = {}
 
     @staticmethod
     def ping() -> bool:
         return True
+
+    @classmethod
+    def get(cls, key: str):
+        return cls._store.get(key)
+
+    @classmethod
+    def set(cls, key: str, value, ttl_seconds: int | None = None) -> None:
+        del ttl_seconds
+        cls._store[key] = value
+
+    @classmethod
+    def delete_many(cls, keys) -> None:
+        for key in keys:
+            cls._store.pop(key, None)
 
 
 def test_monitoring_dashboard_reports_transaction_and_fraud_signals(tmp_path) -> None:
@@ -232,9 +251,43 @@ def test_platform_infra_dashboard_reports_runtime_contracts(tmp_path) -> None:
         kafka_enabled=True,
         outbox_relay_enabled=True,
         kafka_topic_prefix="gtex",
+        live_commentary_llm_enabled=False,
+        live_commentary_llm_endpoint_url="",
+        live_commentary_llm_model="",
+        live_commentary_llm_api_key="",
+        live_commentary_llm_timeout_seconds=5.0,
+        live_commentary_memory_ttl_seconds=300,
+        live_commentary_max_llm_calls_per_match=0,
     )
     app.state.cache_backend = _HealthyCacheBackend()
     app.state.api_queue_consumer = object()
+    app.state.api_rate_limiter = SimpleNamespace(
+        snapshot=lambda: {
+            "enabled": True,
+            "rules": [
+                {
+                    "scope": "auth",
+                    "limit": 10,
+                    "window_seconds": 60,
+                },
+                {
+                    "scope": "default",
+                    "limit": 120,
+                    "window_seconds": 60,
+                },
+            ],
+            "throttled_events": 1,
+            "active_bucket_count": 0,
+            "active_buckets_by_scope": {
+                "auth": 0,
+                "default": 0,
+            },
+            "store": {
+                "backend": "memory",
+                "bucket_count": 0,
+            },
+        }
+    )
 
     live_hub = ensure_live_match_hub(app)
     live_hub._matches["live-match-1"] = object()
@@ -279,3 +332,27 @@ def test_platform_infra_dashboard_reports_runtime_contracts(tmp_path) -> None:
     assert body["audit"]["top_actions"]["api.rate_limited"] == 1
 
     engine.dispose()
+
+
+def test_live_playback_dashboard_and_alert_rules_cover_p6_failure_modes() -> None:
+    dashboard_path = PROJECT_ROOT / "ops" / "observability" / "grafana" / "dashboards" / "gtex-live-playback.json"
+    alert_rules_path = PROJECT_ROOT / "ops" / "observability" / "prometheus" / "rules" / "gtex-alerts.yml"
+
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    panel_queries = "\n".join(
+        str(target.get("expr") or "") for panel in dashboard.get("panels", []) for target in panel.get("targets", [])
+    )
+    alert_rules = alert_rules_path.read_text(encoding="utf-8")
+
+    assert dashboard.get("title") == "GTEX Live Playback"
+    assert "gtex_unity_live_access_total" in panel_queries
+    assert "gtex_unity_live_payload_total" in panel_queries
+    assert "gtex_unity_live_websocket_events_total" in panel_queries
+    assert "gtex_unity_live_generated_match_total" in panel_queries
+
+    assert "GTexUnityLiveRefreshFailuresHigh" in alert_rules
+    assert "GTexUnityLivePayloadFailuresHigh" in alert_rules
+    assert "GTexUnityLiveStaleStateDetected" in alert_rules
+    assert "GTexUnityLiveWebsocketRejectsHigh" in alert_rules
+    assert "GTexUnityLiveReconnectChurnHigh" in alert_rules
+    assert "GTexUnityLiveMatchGenerationFailuresHigh" in alert_rules

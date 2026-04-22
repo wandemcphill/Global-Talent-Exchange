@@ -39,6 +39,51 @@ router = APIRouter(prefix="/api/v1", tags=["api-v1"])
 logger = logging.getLogger(__name__)
 
 
+def _metrics_for_app(app):
+    return getattr(getattr(app, "state", None), "metrics", None)
+
+
+def _record_unity_live_websocket_metric(app, *, event: str, result: str) -> None:
+    metrics = _metrics_for_app(app)
+    if metrics is None:
+        return
+    try:
+        metrics.record_unity_live_websocket_event(event=event, result=result)
+    except Exception:
+        logger.exception(
+            "api_v1.metrics.unity_live_websocket_failed event=%s result=%s",
+            event,
+            result,
+        )
+
+
+def _record_unity_live_payload_metric(app, *, transport: str, result: str) -> None:
+    metrics = _metrics_for_app(app)
+    if metrics is None:
+        return
+    try:
+        metrics.record_unity_live_payload(transport=transport, result=result)
+    except Exception:
+        logger.exception(
+            "api_v1.metrics.unity_live_payload_failed transport=%s result=%s",
+            transport,
+            result,
+        )
+
+
+def _unity_live_metric_result_for_status(status_code: int) -> str:
+    mapping = {
+        400: "bad_request",
+        401: "unauthorized",
+        403: "denied",
+        404: "not_found",
+        409: "conflict",
+        422: "validation_error",
+        503: "unavailable",
+    }
+    return mapping.get(int(status_code), f"http_{int(status_code)}")
+
+
 def install_exception_handlers(app, _context: ApplicationContext) -> None:
     if getattr(app.state, "api_v1_exception_handlers_installed", False):
         return
@@ -487,6 +532,9 @@ async def stream_match_commentary(websocket: WebSocket, match_id: str) -> None:
 
 async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
     app = websocket.scope["app"]
+    websocket_accepted = False
+    stale_iterations = 0
+    stale_state_recorded = False
 
     try:
         _require_unity_live_access_for_websocket(websocket, match_id=match_id)
@@ -502,14 +550,24 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
             if exc.status_code == status.HTTP_404_NOT_FOUND
             else "unauthorized" if exc.status_code == status.HTTP_401_UNAUTHORIZED else "bootstrap_failed"
         )
+        _record_unity_live_websocket_metric(app, event="reject", result=close_reason)
+        _record_unity_live_payload_metric(
+            app,
+            transport="websocket",
+            result=_unity_live_metric_result_for_status(exc.status_code),
+        )
         await websocket.close(code=close_code, reason=close_reason)
         return
     except Exception:
         logger.exception("api_v1.unity_match_stream.bootstrap_failed match_id=%s", match_id)
+        _record_unity_live_websocket_metric(app, event="reject", result="bootstrap_failed")
+        _record_unity_live_payload_metric(app, transport="websocket", result="error")
         await websocket.close(code=1011)
         return
 
     await websocket.accept()
+    websocket_accepted = True
+    _record_unity_live_websocket_metric(app, event="accepted", result="success")
     last_signature = _unity_payload_signature(payload)
     await websocket.send_json(payload)
 
@@ -521,24 +579,54 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
             if signature != last_signature:
                 await websocket.send_json(payload)
                 last_signature = signature
+                stale_iterations = 0
+                stale_state_recorded = False
+            elif bool(payload.get("isLive", False)) and str(payload.get("status") or "").strip().lower() in {
+                "live",
+                "in_progress",
+            }:
+                stale_iterations += 1
+                if stale_iterations >= 50 and not stale_state_recorded:
+                    stale_state_recorded = True
+                    _record_unity_live_websocket_metric(app, event="stale_state", result="detected")
+                    logger.warning(
+                        "api_v1.unity_match_stream.stale_state_detected match_id=%s frame_id=%s",
+                        match_id,
+                        payload.get("frameId"),
+                    )
             if not bool(payload.get("isLive", False)) and str(payload.get("status") or "").strip().lower() not in {
                 "live",
                 "in_progress",
             }:
+                _record_unity_live_websocket_metric(app, event="closed", result="terminal")
                 break
     except WebSocketDisconnect:
+        _record_unity_live_websocket_metric(app, event="closed", result="client_disconnect")
         return
     except HTTPException as exc:
+        _record_unity_live_websocket_metric(
+            app,
+            event="closed",
+            result=_unity_live_metric_result_for_status(exc.status_code),
+        )
+        _record_unity_live_payload_metric(
+            app,
+            transport="websocket",
+            result=_unity_live_metric_result_for_status(exc.status_code),
+        )
         logger.warning(
             "api_v1.unity_match_stream.terminated match_id=%s status_code=%s",
             match_id,
             exc.status_code,
         )
     except Exception:
+        _record_unity_live_websocket_metric(app, event="closed", result="error")
+        _record_unity_live_payload_metric(app, transport="websocket", result="error")
         logger.exception("api_v1.unity_match_stream.failed match_id=%s", match_id)
     finally:
         try:
-            await websocket.close()
+            if websocket_accepted:
+                await websocket.close()
         except Exception:
             pass
 

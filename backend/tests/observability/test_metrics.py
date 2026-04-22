@@ -105,18 +105,114 @@ def test_metrics_capture_economy_and_gameplay_events() -> None:
             samples_by_name.setdefault(sample.name, []).append(sample)
 
     assert _sample_value(samples_by_name, "gtex_circulating_supply", unit="coin") == 15.0
-    assert _sample_value(
-        samples_by_name,
-        "gtex_treasury_balance",
-        unit="coin",
-        account_code="platform:coin:treasury",
-    ) == 40.0
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_treasury_balance",
+            unit="coin",
+            account_code="platform:coin:treasury",
+        )
+        == 40.0
+    )
     assert _sample_value(samples_by_name, "gtex_total_deposits_amount", unit="coin") == 20.0
-    assert _sample_value(
-        samples_by_name,
-        "gtex_total_withdrawals_amount",
-        unit="coin",
-        status="requested",
-    ) == 15.0
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_total_withdrawals_amount",
+            unit="coin",
+            status="requested",
+        )
+        == 15.0
+    )
     assert _sample_value(samples_by_name, "gtex_match_queue_delay_seconds", competition_type="league") == 12.0
     assert _sample_value(samples_by_name, "gtex_matches_total", competition_type="league", result="home_win") == 1.0
+
+
+def test_metrics_capture_unity_live_observability_signals() -> None:
+    metrics = GTexMetrics(runtime_name="test")
+
+    metrics.record_unity_live_access(action="issue", result="success")
+    metrics.record_unity_live_access(action="refresh", result="invalid_token")
+    metrics.record_unity_live_payload(transport="http", result="success")
+    metrics.record_unity_live_payload(transport="websocket", result="error")
+    metrics.record_unity_live_websocket_event(event="accepted", result="success")
+    metrics.record_unity_live_websocket_event(event="stale_state", result="detected")
+    metrics.record_unity_live_generated_match(result="started")
+    metrics.record_unity_live_generated_match(result="missing_stream")
+
+    rendered = metrics.render_latest().decode("utf-8")
+    samples_by_name: dict[str, list[object]] = {}
+    for family in text_string_to_metric_families(rendered):
+        for sample in family.samples:
+            samples_by_name.setdefault(sample.name, []).append(sample)
+
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_unity_live_access_total",
+            action="issue",
+            result="success",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_unity_live_access_total",
+            action="refresh",
+            result="invalid_token",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_unity_live_payload_total",
+            transport="http",
+            result="success",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_unity_live_payload_total",
+            transport="websocket",
+            result="error",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_unity_live_websocket_events_total",
+            event="accepted",
+            result="success",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_unity_live_websocket_events_total",
+            event="stale_state",
+            result="detected",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_unity_live_generated_match_total",
+            result="started",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_unity_live_generated_match_total",
+            result="missing_stream",
+        )
+        == 1.0
+    )
