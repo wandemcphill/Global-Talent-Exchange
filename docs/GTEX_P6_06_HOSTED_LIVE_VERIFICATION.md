@@ -79,15 +79,49 @@ This item passes only when a deployed environment shows:
 - successful websocket frame advancement
 - a saved summary artifact tied to the deployed environment and execution date
 
+## Executed Evidence
+
+Execution date:
+- `2026-04-22`
+
+Executed target:
+- production API at `https://gtex-api.onrender.com`
+
+Runner command:
+
+```powershell
+& 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tools\run_gtex_hosted_live_verification.ps1' `
+  -Profile production `
+  -BaseUrl 'https://gtex-api.onrender.com' `
+  -UserEmail '<provided verification account>' `
+  -UserPassword '<provided verification password>' `
+  -AllowMatchGeneration
+```
+
+Observed result:
+- hosted verification returned `verification_passed: true`
+- a generated live match was provisioned successfully
+- Unity live access and refresh tokens were issued
+- `/match/{match_id}/live` returned a live payload for the same match
+- `/api/v1/ws/match/{match_id}?format=unity` advanced from one frame to a later frame over websocket
+
+Saved artifact:
+- [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_hosted_live_verification_summary.json](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_hosted_live_verification_summary.json>)
+
+Supporting runtime proof on the same deployed lane:
+- the shipped Windows player stayed connected against the same production API long enough to capture 15-minute checkpoints at `15s`, `300s`, `600s`, and `900s` in [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture>)
+
 ## Current Status
 
-Current status: `IN PROGRESS`
+Current status: `PASSED`
 
 Repo-side completion:
 - committed hosted verification wrapper exists
 - provisioning tool already verifies the required live route and websocket seams
 
-What is still required to pass:
-- run the wrapper against a deployed staging environment
-- retain the resulting summary artifact
-- repeat against production when the release process requires it
+What this closes:
+- a deployed environment has now been exercised successfully
+- Unity live access issuance, refresh issuance, live route hydration, and websocket advancement are all proven on the hosted lane
+
+Still useful follow-up:
+- repeat the same verification against staging when a staging endpoint is available

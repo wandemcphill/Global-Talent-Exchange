@@ -78,6 +78,17 @@ Repo-side completion:
 - committed capture/provision helpers exist
 - summary/log artifact format is now defined
 
+Additional executed evidence on the production lane:
+- the same soak runner was exercised against `https://gtex-api.onrender.com` with a production profile
+- the shipped Windows player remained alive through the full `900s` capture window and produced saved checkpoints at:
+  - [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak_t0015s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak_t0015s.png>)
+  - [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak_t0300s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak_t0300s.png>)
+  - [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak_t0600s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak_t0600s.png>)
+  - [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak_t0900s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak_t0900s.png>)
+- the runtime trace for that production-path run is saved at [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak.runtime.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak.runtime.log>)
+- a salvaged structured summary for that run is saved at [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\soak_summary.json](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/soak_summary.json>)
+- this is strong pre-staging evidence, but it does not close `P6-05` because the checklist explicitly requires a staging soak
+
 What is still required to pass:
 - execute the soak against staging
 - retain the produced summary/log/screenshot set
