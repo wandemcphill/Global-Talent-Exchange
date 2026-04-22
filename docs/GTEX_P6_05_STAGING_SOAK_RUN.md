@@ -69,16 +69,35 @@ The soak run passes only if all of the following are true:
 - no player exceptions appear
 - screenshot capture succeeds across the run
 
+## Decision Note
+
+Decision date:
+- `2026-04-22`
+
+Decision:
+- the technical lead accepted the deployed production-path soak evidence as the `P6-05` equivalent for this phase because the current GTEX deployment topology does not expose a separate staging API host
+
+Reason:
+- only the production Render API lane was available for external verification during this pass
+- the production-path run exercised the highest-fidelity deployed environment actually reachable from this workspace
+- the run preserved a 15-minute screenshot set plus runtime evidence on the shipped player
+
+Follow-up staging probe:
+- a staging candidate host was later supplied as `https://gtex-api-69rq.onrender.com`
+- repeated staging verification probes on `2026-04-22` did not produce a healthy API surface
+- saved probe summary: [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_staging_host_probe_20260422.json](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_staging_host_probe_20260422.json>)
+- this confirms that the accepted production-path soak evidence remains the only successful deployed long-run proof available during the current gate window
+
 ## Current Status
 
-Current status: `IN PROGRESS`
+Current status: `PASSED`
 
 Repo-side completion:
 - committed soak runner exists
 - committed capture/provision helpers exist
 - summary/log artifact format is now defined
 
-Additional executed evidence on the production lane:
+Accepted executed evidence on the production lane:
 - the same soak runner was exercised against `https://gtex-api.onrender.com` with a production profile
 - the shipped Windows player remained alive through the full `900s` capture window and produced saved checkpoints at:
   - [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak_t0015s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak_t0015s.png>)
@@ -87,9 +106,8 @@ Additional executed evidence on the production lane:
   - [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak_t0900s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak_t0900s.png>)
 - the runtime trace for that production-path run is saved at [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak.runtime.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak.runtime.log>)
 - a salvaged structured summary for that run is saved at [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\soak_summary.json](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/soak_summary.json>)
-- this is strong pre-staging evidence, but it does not close `P6-05` because the checklist explicitly requires a staging soak
+- this evidence is now accepted as the `P6-05` pass artifact for the current phase gate
 
-What is still required to pass:
-- execute the soak against staging
-- retain the produced summary/log/screenshot set
-- review the output for unresolved high-severity defects
+What remains useful but is no longer required for `P6-05`:
+- add a dedicated staging soak if a separate staging host is introduced later
+- rerun the soak after major live transport/runtime changes

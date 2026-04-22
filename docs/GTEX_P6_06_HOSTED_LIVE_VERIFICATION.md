@@ -125,3 +125,10 @@ What this closes:
 
 Still useful follow-up:
 - repeat the same verification against staging when a staging endpoint is available
+
+Staging follow-up note:
+- a staging candidate host was later supplied as `https://gtex-api-69rq.onrender.com`
+- direct probes and a retry of the hosted verification wrapper on `2026-04-22` failed before auth completed
+- observed failures were `502 Bad Gateway` on `/api/auth/login` and repeated connection-closed responses on `/openapi.json`
+- saved probe summary: [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_staging_host_probe_20260422.json](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_staging_host_probe_20260422.json>)
+- this does not reopen `P6-06`, because the deployed production lane is already proven and the staging host was unhealthy during this verification window
