@@ -323,11 +323,6 @@ namespace FStudio.MatchEngine.Balls {
                 rigidbody.isKinematic = true;
                 Collider.enabled = false;
 
-                if (targetPosition.y > 0.35f) {
-                    transform.position = targetPosition;
-                    rigidbody.position = targetPosition;
-                }
-
                 return;
             }
 
@@ -714,10 +709,10 @@ namespace FStudio.MatchEngine.Balls {
         {
             if (MatchManager.Current != null)
             {
-                return Mathf.Max(0.5f, MatchManager.Current.ExternalPlaybackTeleportDistance);
+                return Mathf.Max(4f, MatchManager.Current.ExternalPlaybackTeleportDistance * 1.85f);
             }
 
-            return Mathf.Max(0.5f, externalPlaybackTeleportDistance);
+            return Mathf.Max(4f, externalPlaybackTeleportDistance);
         }
 
         private bool CanWritePhysicsVelocity()
