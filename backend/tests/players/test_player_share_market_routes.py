@@ -21,6 +21,9 @@ from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.players import router as players_router_module
 from app.players.router import router as players_router
+from app.risk_ops_engine.service import RiskOpsService
+from app.models.risk_ops import RiskActionType
+from app.wallets.funding_service import WalletFundingService
 from app.wallets.service import LedgerPosting, WalletService
 
 
@@ -148,6 +151,22 @@ def _seed_coin_balance(session: Session, *, user: User, amount: Decimal) -> None
         reference=f"seed:{user.id}",
         actor=user,
     )
+
+
+def _set_wallet_compliance_status(session: Session, *, user: User, status: str) -> None:
+    wallet = WalletFundingService().ensure_wallet(session, user)
+    wallet.compliance_status = status
+    session.flush()
+
+
+def _block_trading(session: Session, *, user: User) -> None:
+    RiskOpsService(session).create_action(
+        actor_user_id=None,
+        user_id=user.id,
+        action_type=RiskActionType.BLOCK_TRADING,
+        reason="Test trading restriction.",
+    )
+    session.flush()
 
 
 def _build_client(
@@ -339,6 +358,64 @@ def test_list_player_share_markets_returns_only_tradable_active_markets(monkeypa
         assert tradable.id in item_ids
         assert blocked.id not in item_ids
         assert all(item["status"] == "active" for item in payload["items"])
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_buy_player_shares_requires_verified_wallet_compliance(monkeypatch) -> None:
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="share-kyc-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="share-kyc-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-kyc-buy")
+        _seed_coin_balance(session, user=fan, amount=Decimal("50.0000"))
+        _set_wallet_compliance_status(session, user=fan, status="pending")
+        client, auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            issue_response = client.post(
+                f"/players/{player.id}/shares/market",
+                json={"total_shares": 1000, "share_price_coin": "0.5000", "liquidity_coin": "20.0000"},
+            )
+            auth["user"] = fan
+            buy_response = client.post(
+                f"/players/{player.id}/shares/buy",
+                json={"share_count": 10},
+            )
+
+        assert issue_response.status_code == 200, issue_response.text
+        assert buy_response.status_code == 409, buy_response.text
+        assert "wallet compliance is verified" in buy_response.json()["detail"].lower()
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_sell_player_shares_rejects_active_trading_risk_block(monkeypatch) -> None:
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="share-risk-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="share-risk-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-risk-sell")
+        _seed_coin_balance(session, user=fan, amount=Decimal("50.0000"))
+        _block_trading(session, user=fan)
+        client, auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            issue_response = client.post(
+                f"/players/{player.id}/shares/market",
+                json={"total_shares": 1000, "share_price_coin": "0.5000", "liquidity_coin": "20.0000"},
+            )
+            auth["user"] = fan
+            sell_response = client.post(
+                f"/players/{player.id}/shares/sell",
+                json={"share_count": 1},
+            )
+
+        assert issue_response.status_code == 200, issue_response.text
+        assert sell_response.status_code == 423, sell_response.text
+        assert "trading is temporarily blocked" in sell_response.json()["detail"].lower()
     finally:
         session.close()
         engine.dispose()

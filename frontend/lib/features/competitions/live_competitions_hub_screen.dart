@@ -478,6 +478,13 @@ class _HostedDetail extends ConsumerWidget {
     return detail.when(
       data: (HostedCompetitionDetailBundle value) {
         final HostedCompetition item = value.detail.competition;
+        HostedCompetitionInvite? pendingInvite;
+        for (final HostedCompetitionInvite invite in value.invites) {
+          if (invite.isPending && invite.recipientUserId == userId) {
+            pendingInvite = invite;
+            break;
+          }
+        }
         return _DetailCard(
           title: item.title,
           description:
@@ -489,8 +496,30 @@ class _HostedDetail extends ConsumerWidget {
             'Participants ${value.detail.currentParticipants}/${item.maxParticipants}',
             'Reward ${value.finance.projectedRewardPool.toStringAsFixed(0)} ${value.finance.currency}',
             'Standings ${value.standings.length}',
+            if (value.invites.isNotEmpty) 'Invites ${value.invites.length}',
           ],
           actions: <Widget>[
+            if (pendingInvite != null)
+              FilledButton(
+                onPressed: () async {
+                  try {
+                    await api.acceptInvite(
+                      competitionId: item.id,
+                      inviteId: pendingInvite!.inviteId,
+                    );
+                    ref.invalidate(competitionHubProvider);
+                    ref.invalidate(hostedCompetitionDetailProvider(item.id));
+                    if (context.mounted) {
+                      AppFeedback.showSuccess(context, 'Invite accepted.');
+                    }
+                  } catch (error) {
+                    if (context.mounted) {
+                      AppFeedback.showError(context, error);
+                    }
+                  }
+                },
+                child: const Text('Accept invite'),
+              ),
             FilledButton(
               onPressed:
                   userId == null || !value.detail.joinOpen
@@ -515,6 +544,14 @@ class _HostedDetail extends ConsumerWidget {
                         }
                       },
               child: const Text('Join'),
+            ),
+            OutlinedButton(
+              onPressed:
+                  userId == item.hostUserId || isAdmin
+                      ? () =>
+                          _inviteToHostedCompetition(context, ref, api, item)
+                      : null,
+              child: const Text('Invite'),
             ),
             OutlinedButton(
               onPressed:
@@ -553,6 +590,88 @@ class _HostedDetail extends ConsumerWidget {
             accentColor: Theme.of(context).colorScheme.error,
           ),
     );
+  }
+
+  Future<void> _inviteToHostedCompetition(
+    BuildContext context,
+    WidgetRef ref,
+    HostedCompetitionApi api,
+    HostedCompetition competition,
+  ) async {
+    final TextEditingController recipientsController = TextEditingController();
+    final TextEditingController messageController = TextEditingController();
+    final bool? submitted = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Invite to ${competition.title}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: recipientsController,
+                decoration: const InputDecoration(
+                  labelText: 'User IDs or emails',
+                  helperText: 'Separate multiple recipients with commas.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: messageController,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Message'),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Send invites'),
+            ),
+          ],
+        );
+      },
+    );
+    if (submitted != true) {
+      return;
+    }
+    final List<String> tokens = recipientsController.text
+        .split(',')
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toList(growable: false);
+    final List<String> userIds = tokens
+        .where((String value) => !value.contains('@'))
+        .toList(growable: false);
+    final List<String> emails = tokens
+        .where((String value) => value.contains('@'))
+        .toList(growable: false);
+    if (tokens.isEmpty) {
+      if (context.mounted) {
+        AppFeedback.showError(context, 'Add at least one invite recipient.');
+      }
+      return;
+    }
+    try {
+      await api.createInvites(
+        competitionId: competition.id,
+        recipientUserIds: userIds,
+        recipientEmails: emails,
+        message: messageController.text.trim(),
+      );
+      ref.invalidate(hostedCompetitionDetailProvider(competition.id));
+      if (context.mounted) {
+        AppFeedback.showSuccess(context, 'Hosted competition invite sent.');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        AppFeedback.showError(context, error);
+      }
+    }
   }
 }
 

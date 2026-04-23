@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import (
+    AdminGodModeService,
     DEFAULT_ROLE_PERMISSIONS,
+    GodModeError,
     GOD_MODE_ROLE_NAME,
     SCOPED_ADMIN_ROLE_NAME,
 )
-from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.auth.dependencies import get_current_super_admin, get_session
 from app.auth.service import AuthService, AuthError, DuplicateUserError
 from app.models.user import User, UserRole
+from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/api/admin/access", tags=["admin-access"])
 
@@ -26,10 +24,12 @@ class AdminCreateRequest(BaseModel):
     username: str
     password: str = Field(min_length=8)
     display_name: str | None = None
+    role_name: str | None = Field(default=None, max_length=64)
     permissions: list[str] = Field(default_factory=list)
 
 
 class AdminPermissionUpdateRequest(BaseModel):
+    role_name: str | None = Field(default=None, max_length=64)
     permissions: list[str] = Field(default_factory=list)
     is_enabled: bool = True
 
@@ -40,7 +40,9 @@ class AdminAccountView(BaseModel):
     username: str
     display_name: str | None
     role: str
+    admin_role_name: str
     permissions: list[str]
+    assigned_permissions: list[str]
     is_active: bool
 
 
@@ -72,29 +74,10 @@ def list_permission_catalog() -> AdminPermissionCatalogView:
 def list_admins(
     request: Request, session: Session = Depends(get_session), _: User = Depends(get_current_super_admin)
 ) -> list[AdminAccountView]:
-    state = _load_state(request)
-    assignments = {str(item.get("subject_key", "")).lower(): item for item in state["roles"].get("assignments", [])}
+    service = _godmode_service(request)
+    state = service._load_state(request.app)
     admins = session.query(User).filter(User.role.in_([UserRole.ADMIN, UserRole.SUPER_ADMIN])).all()
-    items = []
-    for admin in admins:
-        assignment = (
-            assignments.get(admin.email.lower())
-            or assignments.get(admin.id.lower())
-            or assignments.get(admin.username.lower())
-            or {}
-        )
-        items.append(
-            AdminAccountView(
-                id=admin.id,
-                email=admin.email,
-                username=admin.username,
-                display_name=admin.display_name,
-                role=admin.role.value,
-                permissions=list(assignment.get("permissions") or []),
-                is_active=admin.is_active,
-            )
-        )
-    return items
+    return [_admin_account_view(service, state, admin) for admin in admins]
 
 
 @router.post("", response_model=AdminAccountView, status_code=status.HTTP_201_CREATED)
@@ -105,6 +88,7 @@ def create_admin(
     _: User = Depends(get_current_super_admin),
 ) -> AdminAccountView:
     service = AuthService()
+    godmode_service = _godmode_service(request)
     try:
         user = service.ensure_admin_user(
             session,
@@ -114,21 +98,18 @@ def create_admin(
             display_name=payload.display_name or payload.username,
             role=UserRole.ADMIN,
         )
-        state = _load_state(request)
-        _upsert_assignment(state, user, payload.permissions, True)
-        _save_state(request, state)
+        state = godmode_service.upsert_admin_assignment(
+            request.app,
+            session,
+            admin=user,
+            role_name=payload.role_name,
+            permissions=payload.permissions,
+            is_enabled=True,
+        )
         session.commit()
         session.refresh(user)
-        return AdminAccountView(
-            id=user.id,
-            email=user.email,
-            username=user.username,
-            display_name=user.display_name,
-            role=user.role.value,
-            permissions=payload.permissions,
-            is_active=user.is_active,
-        )
-    except (DuplicateUserError, AuthError) as exc:
+        return _admin_account_view(godmode_service, state, user)
+    except (DuplicateUserError, AuthError, GodModeError) as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -148,74 +129,43 @@ def update_admin_permissions(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Super admin accounts cannot be disabled from this screen."
         )
-    state = _load_state(request)
-    _upsert_assignment(state, admin, payload.permissions, payload.is_enabled)
+    godmode_service = _godmode_service(request)
+    state = godmode_service.upsert_admin_assignment(
+        request.app,
+        session,
+        admin=admin,
+        role_name=payload.role_name,
+        permissions=payload.permissions,
+        is_enabled=payload.is_enabled,
+    )
     admin.is_active = payload.is_enabled
-    _save_state(request, state)
     session.add(admin)
     session.commit()
     session.refresh(admin)
+    return _admin_account_view(godmode_service, state, admin)
+
+
+def _godmode_service(request: Request) -> AdminGodModeService:
+    return AdminGodModeService(
+        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
+    )
+
+
+def _admin_account_view(
+    service: AdminGodModeService,
+    state: dict[str, object],
+    admin: User,
+) -> AdminAccountView:
+    profile = service.resolve_profile(admin, state)
+    assignment = service.assignment_snapshot(admin, state)
     return AdminAccountView(
         id=admin.id,
         email=admin.email,
         username=admin.username,
         display_name=admin.display_name,
         role=admin.role.value,
-        permissions=payload.permissions,
+        admin_role_name=str(assignment["role_name"] or (GOD_MODE_ROLE_NAME if admin.role == UserRole.SUPER_ADMIN else SCOPED_ADMIN_ROLE_NAME)),
+        permissions=list(profile.permissions),
+        assigned_permissions=list(assignment["permissions"] or []),
         is_active=admin.is_active,
-    )
-
-
-def _state_path(request: Request) -> Path:
-    return admin_godmode_state_path(request.app.state.settings.config_root)
-
-
-def _load_state(request: Request) -> dict[str, Any]:
-    path = _state_path(request)
-    if not path.exists():
-        state = {
-            "roles": {
-                "default_admin_role": SCOPED_ADMIN_ROLE_NAME,
-                "available_roles": DEFAULT_ROLE_PERMISSIONS,
-                "assignments": [],
-            }
-        }
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        return state
-    state = json.loads(path.read_text(encoding="utf-8"))
-    roles = state.setdefault("roles", {})
-    roles.setdefault("default_admin_role", SCOPED_ADMIN_ROLE_NAME)
-    roles.setdefault("available_roles", DEFAULT_ROLE_PERMISSIONS)
-    roles.setdefault("assignments", [])
-    if roles.get("default_admin_role") == GOD_MODE_ROLE_NAME:
-        roles["default_admin_role"] = SCOPED_ADMIN_ROLE_NAME
-    available_roles = dict(roles.get("available_roles") or {})
-    if SCOPED_ADMIN_ROLE_NAME not in available_roles:
-        available_roles[SCOPED_ADMIN_ROLE_NAME] = []
-        roles["available_roles"] = available_roles
-    return state
-
-
-def _save_state(request: Request, state: dict[str, Any]) -> None:
-    path = _state_path(request)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-
-
-def _upsert_assignment(state: dict[str, Any], admin: User, permissions: list[str], is_enabled: bool) -> None:
-    assignments = state.setdefault("roles", {}).setdefault("assignments", [])
-    assignments[:] = [
-        item
-        for item in assignments
-        if str(item.get("subject_key", "")).lower()
-        not in {admin.email.lower(), admin.id.lower(), admin.username.lower()}
-    ]
-    assignments.append(
-        {
-            "subject_key": admin.email.lower(),
-            "role_name": GOD_MODE_ROLE_NAME if admin.role == UserRole.SUPER_ADMIN else SCOPED_ADMIN_ROLE_NAME,
-            "permissions": permissions,
-            "is_enabled": is_enabled,
-        }
     )

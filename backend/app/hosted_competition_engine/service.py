@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterable
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -18,7 +20,7 @@ from app.models.hosted_competition import (
     UserHostedCompetition,
     UserHostedCompetitionParticipant,
 )
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.story_feed_engine.service import StoryFeedService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
@@ -101,6 +103,104 @@ class HostedCompetitionService:
 
     def _normalize_amount(self, amount: Decimal | int | float | str) -> Decimal:
         return Decimal(str(amount)).quantize(AMOUNT_QUANTUM)
+
+    def _now_iso(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def _is_admin_user(self, user: User) -> bool:
+        return user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}
+
+    def _require_host_or_admin(self, *, competition: UserHostedCompetition, actor: User) -> None:
+        if competition.host_user_id == actor.id or self._is_admin_user(actor):
+            return
+        raise HostedCompetitionError('Only the host or an admin can manage hosted competition invites.')
+
+    def _invite_rows(self, competition: UserHostedCompetition) -> list[dict[str, object]]:
+        rows = (competition.metadata_json or {}).get('invites')
+        if not isinstance(rows, list):
+            return []
+        normalized: list[dict[str, object]] = []
+        for row in rows:
+            if isinstance(row, dict):
+                normalized.append(dict(row))
+        return normalized
+
+    def _set_invite_rows(self, competition: UserHostedCompetition, rows: list[dict[str, object]]) -> None:
+        competition.metadata_json = {**(competition.metadata_json or {}), 'invites': rows}
+        self.session.flush()
+
+    def _invite_matches_user(self, invite: dict[str, object], user: User) -> bool:
+        recipient_user_id = str(invite.get('recipient_user_id') or '').strip()
+        if recipient_user_id and recipient_user_id == user.id:
+            return True
+        recipient_email = str(invite.get('recipient_email') or '').strip().lower()
+        return bool(recipient_email and recipient_email == user.email.strip().lower())
+
+    def _participant_for_user(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        user: User,
+    ) -> UserHostedCompetitionParticipant | None:
+        return self.session.scalar(
+            select(UserHostedCompetitionParticipant).where(
+                UserHostedCompetitionParticipant.competition_id == competition.id,
+                UserHostedCompetitionParticipant.user_id == user.id,
+            )
+        )
+
+    def _find_join_invite(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        user: User,
+        invite_id: str | None = None,
+    ) -> dict[str, object] | None:
+        for invite in self._invite_rows(competition):
+            if invite_id and str(invite.get('invite_id') or '') != invite_id:
+                continue
+            if not self._invite_matches_user(invite, user):
+                continue
+            if str(invite.get('status') or '').lower() in {'pending', 'accepted'}:
+                return invite
+        return None
+
+    def _mark_invite_status(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        invite_id: str,
+        status: str,
+    ) -> dict[str, object]:
+        rows = self._invite_rows(competition)
+        for index, invite in enumerate(rows):
+            if str(invite.get('invite_id') or '') != invite_id:
+                continue
+            updated = {
+                **invite,
+                'status': status,
+                'responded_at': self._now_iso(),
+            }
+            rows[index] = updated
+            self._set_invite_rows(competition, rows)
+            return updated
+        raise HostedCompetitionError('Hosted competition invite was not found.')
+
+    def _invite_visible_to_actor(self, invite: dict[str, object], actor: User) -> bool:
+        return self._invite_matches_user(invite, actor)
+
+    def _invite_payload(self, competition: UserHostedCompetition, invite: dict[str, object]) -> dict[str, object]:
+        return {
+            'competition_id': competition.id,
+            'invite_id': str(invite.get('invite_id') or ''),
+            'invited_by_user_id': str(invite.get('invited_by_user_id') or ''),
+            'recipient_user_id': invite.get('recipient_user_id'),
+            'recipient_email': invite.get('recipient_email'),
+            'status': str(invite.get('status') or 'pending'),
+            'message': str(invite.get('message') or ''),
+            'created_at': invite.get('created_at') or self._now_iso(),
+            'responded_at': invite.get('responded_at'),
+        }
 
     def seed_defaults(self) -> None:
         existing = {item.template_key for item in self.session.scalars(select(CompetitionTemplate)).all()}
@@ -236,6 +336,122 @@ class HostedCompetitionService:
         stmt = select(UserHostedCompetitionParticipant).where(UserHostedCompetitionParticipant.competition_id == competition_id).order_by(UserHostedCompetitionParticipant.joined_at.asc())
         return list(self.session.scalars(stmt).all())
 
+    def invites_for_competition(self, *, actor: User, competition_id: str) -> list[dict[str, object]]:
+        competition = self.get_competition(competition_id)
+        if competition is None:
+            raise HostedCompetitionError('Hosted competition was not found.')
+        rows = self._invite_rows(competition)
+        if competition.host_user_id == actor.id or self._is_admin_user(actor):
+            return [self._invite_payload(competition, row) for row in rows]
+        return [
+            self._invite_payload(competition, row)
+            for row in rows
+            if self._invite_visible_to_actor(row, actor)
+        ]
+
+    def invites_for_user(self, *, user: User) -> list[dict[str, object]]:
+        stmt = select(UserHostedCompetition).order_by(UserHostedCompetition.created_at.desc())
+        invites: list[dict[str, object]] = []
+        for competition in self.session.scalars(stmt).all():
+            for invite in self._invite_rows(competition):
+                if self._invite_visible_to_actor(invite, user):
+                    invites.append(self._invite_payload(competition, invite))
+        return invites
+
+    def create_invites(
+        self,
+        *,
+        actor: User,
+        competition_id: str,
+        recipient_user_ids: Iterable[str],
+        recipient_emails: Iterable[str],
+        message: str = '',
+    ) -> tuple[UserHostedCompetition, list[dict[str, object]]]:
+        competition = self.get_competition(competition_id)
+        if competition is None:
+            raise HostedCompetitionError('Hosted competition was not found.')
+        self._require_host_or_admin(competition=competition, actor=actor)
+        if competition.status in {HostedCompetitionStatus.COMPLETED, HostedCompetitionStatus.CANCELLED}:
+            raise HostedCompetitionError('Hosted competition is not accepting invites.')
+
+        rows = self._invite_rows(competition)
+        active_keys = {
+            (
+                str(row.get('recipient_user_id') or '').strip(),
+                str(row.get('recipient_email') or '').strip().lower(),
+            )
+            for row in rows
+            if str(row.get('status') or '').lower() in {'pending', 'accepted'}
+        }
+        created: list[dict[str, object]] = []
+        normalized_user_ids = [item.strip() for item in recipient_user_ids if item and item.strip()]
+        normalized_emails = [item.strip().lower() for item in recipient_emails if item and item.strip()]
+        if not normalized_user_ids and not normalized_emails:
+            raise HostedCompetitionError('At least one invite recipient is required.')
+        for recipient_user_id in dict.fromkeys(normalized_user_ids):
+            key = (recipient_user_id, '')
+            if key in active_keys:
+                continue
+            invite = {
+                'invite_id': str(uuid4()),
+                'invited_by_user_id': actor.id,
+                'recipient_user_id': recipient_user_id,
+                'recipient_email': None,
+                'status': 'pending',
+                'message': message,
+                'created_at': self._now_iso(),
+                'responded_at': None,
+            }
+            rows.append(invite)
+            created.append(invite)
+            active_keys.add(key)
+        for recipient_email in dict.fromkeys(normalized_emails):
+            key = ('', recipient_email)
+            if key in active_keys:
+                continue
+            invite = {
+                'invite_id': str(uuid4()),
+                'invited_by_user_id': actor.id,
+                'recipient_user_id': None,
+                'recipient_email': recipient_email,
+                'status': 'pending',
+                'message': message,
+                'created_at': self._now_iso(),
+                'responded_at': None,
+            }
+            rows.append(invite)
+            created.append(invite)
+            active_keys.add(key)
+        self._set_invite_rows(competition, rows)
+        return competition, [self._invite_payload(competition, row) for row in created]
+
+    def accept_invite(
+        self,
+        *,
+        user: User,
+        competition_id: str,
+        invite_id: str | None = None,
+    ) -> tuple[UserHostedCompetition, UserHostedCompetitionParticipant, dict[str, object]]:
+        competition = self.get_competition(competition_id)
+        if competition is None:
+            raise HostedCompetitionError('Hosted competition was not found.')
+        invite = self._find_join_invite(competition=competition, user=user, invite_id=invite_id)
+        if invite is None:
+            raise HostedCompetitionError('No pending hosted competition invite was found for this user.')
+        participant = self._participant_for_user(competition=competition, user=user)
+        if participant is None:
+            competition, participant = self.join_competition(
+                user=user,
+                competition_id=competition_id,
+                invite_required_bypass=True,
+            )
+        accepted = self._mark_invite_status(
+            competition=competition,
+            invite_id=str(invite.get('invite_id') or ''),
+            status='accepted',
+        )
+        return competition, participant, self._invite_payload(competition, accepted)
+
     def standings_for_competition(self, competition_id: str) -> list[HostedCompetitionStanding]:
         stmt = select(HostedCompetitionStanding).where(HostedCompetitionStanding.competition_id == competition_id).order_by(HostedCompetitionStanding.final_rank.asc().nullslast(), HostedCompetitionStanding.created_at.asc())
         return list(self.session.scalars(stmt).all())
@@ -265,12 +481,26 @@ class HostedCompetitionService:
             'status': competition.status.value if hasattr(competition.status, 'value') else str(competition.status),
         }
 
-    def join_competition(self, *, user: User, competition_id: str) -> tuple[UserHostedCompetition, UserHostedCompetitionParticipant]:
+    def join_competition(
+        self,
+        *,
+        user: User,
+        competition_id: str,
+        invite_required_bypass: bool = False,
+    ) -> tuple[UserHostedCompetition, UserHostedCompetitionParticipant]:
         competition = self.get_competition(competition_id)
         if competition is None:
             raise HostedCompetitionError('Hosted competition was not found.')
         if competition.status not in {HostedCompetitionStatus.OPEN, HostedCompetitionStatus.DRAFT}:
             raise HostedCompetitionError('Hosted competition is not open for joining.')
+        invite = self._find_join_invite(competition=competition, user=user)
+        if (
+            competition.visibility in {'private', 'invite_only'}
+            and competition.host_user_id != user.id
+            and invite is None
+            and not invite_required_bypass
+        ):
+            raise HostedCompetitionError('An invite is required to join this hosted competition.')
         current_participants = self.session.scalar(select(func.count(UserHostedCompetitionParticipant.id)).where(UserHostedCompetitionParticipant.competition_id == competition.id)) or 0
         if int(current_participants) >= int(competition.max_participants):
             raise HostedCompetitionError('Hosted competition is already full.')
@@ -285,6 +515,12 @@ class HostedCompetitionService:
         if updated_count >= int(competition.max_participants):
             competition.status = HostedCompetitionStatus.LOCKED
             self.session.flush()
+        if invite is not None:
+            self._mark_invite_status(
+                competition=competition,
+                invite_id=str(invite.get('invite_id') or ''),
+                status='accepted',
+            )
         return competition, participant
 
     def launch_competition(self, *, actor: User, competition_id: str) -> UserHostedCompetition:

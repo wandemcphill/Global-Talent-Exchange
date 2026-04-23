@@ -16,11 +16,14 @@ from app.models.competition_match import CompetitionMatch
 from app.models.player_token_market import PlayerShareHolding
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
+from app.models.risk_ops import RiskActionType
 from app.models.user import User
 from app.models.wallet import LedgerUnit, PaymentEvent
 from app.models.treasury import PaymentMode
 from app.policies.service import PolicyService
+from app.risk_ops_engine.service import RiskOpsService
 from app.treasury.service import TreasuryService
+from app.wallets.funding_service import WalletFundingService
 from app.wallets.service import LedgerError, WalletService
 
 
@@ -121,6 +124,26 @@ def _seed_wallet_balance(
             description=f"Seeded {unit.value} balance for reliability testing",
             external_reference=f"seed:{unit.value}:{user_id}:{uuid4().hex[:6]}",
             unit=unit,
+        )
+        session.commit()
+
+
+def _set_wallet_compliance_status(app_session_factory, *, user_id: str, status: str) -> None:
+    with app_session_factory() as session:
+        user = session.get(User, user_id)
+        assert user is not None
+        wallet = WalletFundingService().ensure_wallet(session, user)
+        wallet.compliance_status = status
+        session.commit()
+
+
+def _block_trading(app_session_factory, *, user_id: str) -> None:
+    with app_session_factory() as session:
+        RiskOpsService(session).create_action(
+            actor_user_id=None,
+            user_id=user_id,
+            action_type=RiskActionType.BLOCK_TRADING,
+            reason="Critical reliability trading block.",
         )
         session.commit()
 
@@ -490,6 +513,54 @@ def test_market_buy_sell_flow_updates_holdings_wallet_and_price(
         )
         assert holding is not None
         assert holding.share_count == 6
+
+
+def test_player_share_trade_routes_require_trading_compliance(
+    client,
+    app_session_factory,
+    bootstrap_admin_headers,
+) -> None:
+    registered = _register_user(client, prefix="market-trading-guard")
+    login = _login_user(client, email=registered["email"], password=registered["password"])
+    user_id = login["user"]["id"]
+    player_id = _seed_real_player(app_session_factory, prefix="market-guard-player")
+    _seed_wallet_balance(
+        app_session_factory,
+        user_id=user_id,
+        amount=Decimal("10.0000"),
+        unit=LedgerUnit.COIN,
+    )
+
+    issue_response = client.post(
+        f"/players/{player_id}/shares/market",
+        headers=bootstrap_admin_headers,
+        json={
+            "total_shares": 1000,
+            "share_price_coin": "0.5000",
+            "liquidity_coin": "20.0000",
+            "status": "active",
+        },
+    )
+    assert issue_response.status_code == 200, issue_response.text
+
+    _set_wallet_compliance_status(app_session_factory, user_id=user_id, status="pending")
+    blocked_buy = client.post(
+        f"/players/{player_id}/shares/buy",
+        headers=login["headers"],
+        json={"share_count": 1},
+    )
+    assert blocked_buy.status_code == 409, blocked_buy.text
+    assert "wallet compliance is verified" in _error_message(blocked_buy).lower()
+
+    _set_wallet_compliance_status(app_session_factory, user_id=user_id, status="verified")
+    _block_trading(app_session_factory, user_id=user_id)
+    blocked_sell = client.post(
+        f"/players/{player_id}/shares/sell",
+        headers=login["headers"],
+        json={"share_count": 1},
+    )
+    assert blocked_sell.status_code == 423, blocked_sell.text
+    assert "trading is temporarily blocked" in _error_message(blocked_sell).lower()
 
 
 def test_competition_join_records_entry_and_match_simulation_saves_result(

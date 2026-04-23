@@ -106,7 +106,7 @@ void main() {
       expect(find.text('Wallet & Compliance'), findsOneWidget);
       await _scrollTo(tester, find.text('Player Shares'));
       expect(find.text('Player Shares'), findsOneWidget);
-      expect(find.text('Upcoming share markets'), findsOneWidget);
+      expect(find.text('Search-only real players'), findsOneWidget);
       await _scrollTo(tester, find.text('Transfer Listings'));
       expect(find.text('Transfer Listings'), findsOneWidget);
       await _scrollTo(tester, find.text('Share Holdings'));

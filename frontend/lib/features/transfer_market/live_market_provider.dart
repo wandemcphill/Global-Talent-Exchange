@@ -5,9 +5,14 @@ import '../../data/gte_api_repository.dart';
 import '../../data/gte_authed_api.dart';
 import '../../data/gte_exchange_api_client.dart';
 import '../../data/gte_models.dart';
+import '../../data/player_service.dart';
 import '../../features/shared/data/gte_feature_support.dart';
+import '../../models/player.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/live_clients_provider.dart';
+
+const int _initialMarketResultWindow = 24;
+const int _marketResultWindowStep = 24;
 
 class MarketSearchQueryController extends Notifier<String> {
   @override
@@ -15,6 +20,21 @@ class MarketSearchQueryController extends Notifier<String> {
 
   void setQuery(String value) {
     state = value;
+  }
+}
+
+class MarketResultWindowController extends Notifier<int> {
+  @override
+  int build() => _initialMarketResultWindow;
+
+  void reset() {
+    if (state != _initialMarketResultWindow) {
+      state = _initialMarketResultWindow;
+    }
+  }
+
+  void loadMore() {
+    state += _marketResultWindowStep;
   }
 }
 
@@ -124,6 +144,9 @@ class MarketDashboardData {
     required this.wallet,
     required this.authenticated,
     required this.warnings,
+    this.searchQuery = '',
+    this.totalTradablePlayerShares,
+    this.hasMorePlayerShareResults = false,
   });
 
   final List<PlayerShareSummary> playerShares;
@@ -132,6 +155,9 @@ class MarketDashboardData {
   final MarketWalletSnapshot? wallet;
   final bool authenticated;
   final List<String> warnings;
+  final String searchQuery;
+  final int? totalTradablePlayerShares;
+  final bool hasMorePlayerShareResults;
 
   List<PlayerShareSummary> get tradablePlayerShares => playerShares
       .where((PlayerShareSummary item) => item.isTradable)
@@ -140,6 +166,9 @@ class MarketDashboardData {
   List<PlayerShareSummary> get upcomingPlayerShares => playerShares
       .where((PlayerShareSummary item) => !item.isTradable)
       .toList(growable: false);
+
+  List<PlayerShareSummary> get discoveryOnlyPlayerShares =>
+      upcomingPlayerShares;
 }
 
 class PlayerShareDetailData {
@@ -162,66 +191,58 @@ marketSearchQueryProvider =
       MarketSearchQueryController.new,
     );
 
+final NotifierProvider<MarketResultWindowController, int>
+marketResultWindowProvider =
+    NotifierProvider<MarketResultWindowController, int>(
+      MarketResultWindowController.new,
+    );
+
 final FutureProvider<MarketDashboardData>
 marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
   final GteAuthedApi api = ref.watch(authedApiProvider);
+  final PlayerService playerService = ref.watch(livePlayerServiceProvider);
   bool authenticated = ref.watch(isAuthenticatedProvider);
   final String query = ref.watch(marketSearchQueryProvider).trim();
-  final JsonMap playerPayload = await api.getMap(
-    '/players',
-    auth: false,
-    query: <String, Object?>{
-      'limit': 12,
-      if (query.isNotEmpty) 'search': query,
-    },
+  final int resultWindow = ref.watch(marketResultWindowProvider);
+  final List<dynamic> marketPayloads = await Future.wait<dynamic>(
+    <Future<dynamic>>[
+      api.getMap(
+        '/players/markets',
+        auth: false,
+        query: <String, Object?>{
+          'page': 1,
+          'per_page': resultWindow,
+          if (query.isNotEmpty) 'search': query,
+        },
+      ),
+      api.getList('/api/transfer-market/listings', auth: false),
+      query.isEmpty
+          ? Future<PaginatedPlayers?>.value(null)
+          : playerService.getPlayers(search: query, limit: resultWindow),
+    ],
   );
-  final List<JsonMap> playerItems = jsonMapList(
-    playerPayload['items'] ?? playerPayload['players'],
-    label: 'real player universe items',
+  final JsonMap playerMarketPayload = jsonMap(
+    marketPayloads[0],
+    label: 'player share markets',
   );
+  final List<PlayerShareSummary> tradablePlayers = jsonMapList(
+    playerMarketPayload['items'],
+    label: 'player share market items',
+  ).map(_playerShareSummaryFromMarketListItem).toList(growable: false);
+  final Set<String> tradablePlayerIds =
+      tradablePlayers.map((PlayerShareSummary item) => item.playerId).toSet();
+  final PaginatedPlayers? discoveryPage =
+      marketPayloads[2] as PaginatedPlayers?;
+  final List<PlayerShareSummary> discoveryOnlyPlayers =
+      (discoveryPage?.players ?? const <Player>[])
+          .where((Player player) => !tradablePlayerIds.contains(player.id))
+          .map(_playerShareSummaryFromDiscoveryPlayer)
+          .toList(growable: false);
   final List<String> warnings = <String>[];
-  final List<PlayerShareSummary> players =
-      await Future.wait<PlayerShareSummary>(
-        playerItems.map((JsonMap item) async {
-          final String playerId = stringValue(item['player_id']);
-          final JsonMap market = await api.getMap(
-            '/players/$playerId/shares/market',
-            auth: false,
-          );
-          final bool marketIssued = boolValue(market['market_issued']);
-          final String marketStatus = stringValue(
-            market['status'],
-            fallback: marketIssued ? 'blocked' : 'unissued',
-          );
-          return PlayerShareSummary(
-            playerId: playerId,
-            playerName: stringValue(item['player_name']),
-            position: stringOrNullValue(item['position']),
-            nationality: stringOrNullValue(item['nationality']),
-            currentClubName: stringOrNullValue(item['current_club_name']),
-            age: item['age'] == null ? null : intValue(item['age']),
-            currentValueCredits:
-                item['current_value_credits'] == null
-                    ? null
-                    : numberValue(item['current_value_credits']),
-            marketInterestScore:
-                item['market_interest_score'] == null
-                    ? null
-                    : intValue(item['market_interest_score']),
-            marketStatus: marketStatus,
-            marketMessage:
-                !marketIssued
-                    ? 'Market initializing.'
-                    : 'Share market is live.',
-            sharePriceCoin:
-                !marketIssued ? null : numberValue(market['share_price_coin']),
-            totalShares:
-                !marketIssued ? null : intValue(market['total_shares']),
-            circulatingShares:
-                !marketIssued ? null : intValue(market['circulating_shares']),
-          );
-        }),
-      );
+  final int totalTradablePlayerShares =
+      playerMarketPayload['total'] == null
+          ? tradablePlayers.length
+          : intValue(playerMarketPayload['total']);
 
   List<PlayerShareHoldingSummary> holdings =
       const <PlayerShareHoldingSummary>[];
@@ -258,14 +279,13 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
         final GteExchangeApiClient exchangeApi = ref.read(
           exchangeApiClientProvider,
         );
-        final List<dynamic> walletPayload = await Future.wait<dynamic>(<
-          Future<dynamic>
-        >[
-          exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.coin),
-          exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.credit),
-          exchangeApi.fetchWalletOverview(),
-          exchangeApi.fetchComplianceStatus(),
-        ]);
+        final List<dynamic> walletPayload =
+            await Future.wait<dynamic>(<Future<dynamic>>[
+              exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.coin),
+              exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.credit),
+              exchangeApi.fetchWalletOverview(),
+              exchangeApi.fetchComplianceStatus(),
+            ]);
         final GteWalletSummary coinSummary =
             walletPayload[0] as GteWalletSummary;
         final GteWalletSummary creditSummary =
@@ -303,24 +323,67 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
     }
   }
 
-  final List<dynamic> listingsPayload = await api.getList(
-    '/api/transfer-market/listings',
-    auth: false,
-  );
-  final List<TransferListingSummary> transferListings = listingsPayload
+  final List<TransferListingSummary> transferListings = (marketPayloads[1]
+          as List<dynamic>)
       .map((dynamic item) => jsonMap(item, label: 'transfer listing'))
       .map(_transferListingFromJson)
       .toList(growable: false);
 
   return MarketDashboardData(
-    playerShares: players,
+    playerShares: <PlayerShareSummary>[
+      ...tradablePlayers,
+      ...discoveryOnlyPlayers,
+    ],
     holdings: holdings,
     transferListings: transferListings,
     wallet: wallet,
     authenticated: authenticated,
     warnings: warnings,
+    searchQuery: query,
+    totalTradablePlayerShares: totalTradablePlayerShares,
+    hasMorePlayerShareResults:
+        tradablePlayers.length < totalTradablePlayerShares ||
+        (discoveryPage?.hasMore ?? false),
   );
 });
+
+PlayerShareSummary _playerShareSummaryFromMarketListItem(JsonMap item) {
+  final String marketStatus = stringValue(item['status'], fallback: 'active');
+  return PlayerShareSummary(
+    playerId: stringValue(item['player_id']),
+    playerName: stringValue(item['player_name']),
+    position: stringOrNullValue(item['position']),
+    nationality: stringOrNullValue(item['nationality']),
+    currentClubName: stringOrNullValue(item['current_club_name']),
+    age: item['age'] == null ? null : intValue(item['age']),
+    currentValueCredits: null,
+    marketInterestScore: null,
+    marketStatus: marketStatus,
+    marketMessage:
+        marketStatus.toLowerCase() == 'active'
+            ? 'Share market is live.'
+            : 'Share market is ${marketStatus.toLowerCase()}.',
+    sharePriceCoin: numberValue(item['share_price_coin']),
+    totalShares: intValue(item['total_shares']),
+    circulatingShares: intValue(item['circulating_shares']),
+  );
+}
+
+PlayerShareSummary _playerShareSummaryFromDiscoveryPlayer(Player player) {
+  return PlayerShareSummary(
+    playerId: player.id,
+    playerName: player.name,
+    position: player.position,
+    nationality: player.country,
+    currentClubName: player.club,
+    age: player.age,
+    currentValueCredits: player.currentValueCredits,
+    marketInterestScore: player.marketInterestScore,
+    marketStatus: 'inactive',
+    marketMessage:
+        'No live buyable share market was returned for this player on the current search.',
+  );
+}
 
 Future<bool> _expireProtectedMarketSession(Ref ref, Object error) async {
   if (error is! GteApiException || error.type != GteApiErrorType.unauthorized) {

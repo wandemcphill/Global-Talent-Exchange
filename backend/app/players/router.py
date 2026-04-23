@@ -6,7 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
-from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
+from app.auth.dependencies import (
+    get_current_admin,
+    get_current_trading_user,
+    get_current_user,
+    get_optional_current_user,
+    get_session,
+)
 from app.core.app_state import get_optional_app_settings
 from app.core.cache_namespaces import PLAYER_MARKETS_CACHE_NAMESPACE
 from app.core.pagination import build_pagination_meta, resolve_pagination
@@ -295,7 +301,7 @@ def buy_player_shares(
     payload: PlayerSharePurchaseRequest,
     request: Request,
     session: Session = Depends(get_session),
-    actor: User = Depends(get_current_user),
+    actor: User = Depends(get_current_trading_user),
 ) -> PlayerSharePurchaseView:
     service = PlayerTokenMarketService(session)
     try:
@@ -321,7 +327,7 @@ def sell_player_shares(
     payload: PlayerShareSaleRequest,
     request: Request,
     session: Session = Depends(get_session),
-    actor: User = Depends(get_current_user),
+    actor: User = Depends(get_current_trading_user),
 ) -> PlayerShareSaleView:
     service = PlayerTokenMarketService(session)
     try:

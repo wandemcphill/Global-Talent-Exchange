@@ -36,6 +36,21 @@ void main() {
         ),
         GteTransportResponse(
           statusCode: 200,
+          body: <Object?>[_inviteJson('invite-1', 'comp-1')],
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{
+            'competition': _competitionJson('comp-1'),
+            'invites': <Object?>[_inviteJson('invite-1', 'comp-1')],
+          },
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{'competition': _competitionJson('comp-1')},
+        ),
+        GteTransportResponse(
+          statusCode: 200,
           body: <Object?>[_standingJson('standing-1', 'comp-1')],
         ),
         GteTransportResponse(
@@ -80,6 +95,12 @@ void main() {
       title: 'Creator Cup',
     );
     await api.joinCompetition('comp-1');
+    await api.listInvites('comp-1');
+    await api.createInvites(
+      competitionId: 'comp-1',
+      recipientUserIds: const <String>['user-2'],
+    );
+    await api.acceptInvite(competitionId: 'comp-1', inviteId: 'invite-1');
     await api.listStandings('comp-1');
     await api.fetchFinance('comp-1');
     await api.launchCompetition('comp-1');
@@ -98,6 +119,9 @@ void main() {
         '/api/v1/hosted-competitions/comp-1',
         '/api/v1/hosted-competitions',
         '/api/v1/hosted-competitions/comp-1/join',
+        '/api/v1/hosted-competitions/comp-1/invites',
+        '/api/v1/hosted-competitions/comp-1/invites',
+        '/api/v1/hosted-competitions/comp-1/invites/accept',
         '/api/v1/hosted-competitions/comp-1/standings',
         '/api/v1/hosted-competitions/comp-1/finance',
         '/api/v1/hosted-competitions/comp-1/launch',
@@ -182,6 +206,17 @@ Map<String, Object?> _competitionJson(String id) => <String, Object?>{
   'created_at': '2026-03-10T12:00:00Z',
   'updated_at': '2026-03-10T12:00:00Z',
 };
+
+Map<String, Object?> _inviteJson(String id, String competitionId) =>
+    <String, Object?>{
+      'competition_id': competitionId,
+      'invite_id': id,
+      'invited_by_user_id': 'user-1',
+      'recipient_user_id': 'user-2',
+      'status': 'pending',
+      'message': 'Join the cup.',
+      'created_at': '2026-03-12T12:00:00Z',
+    };
 
 Map<String, Object?> _standingJson(String id, String competitionId) =>
     <String, Object?>{

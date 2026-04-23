@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,11 +20,12 @@ from app.admin_access.router import router as admin_access_router
 from app.admin_godmode.service import (
     ADMIN_GODMODE_FILE,
     ADMIN_GODMODE_STATE_KEY,
+    ALL_ADMIN_PERMISSIONS,
     AdminGodModeService,
+    COMPETITION_OPS_ADMIN_ROLE_NAME,
     DEFAULT_ROLE_PERMISSIONS,
     GOD_MODE_ROLE_NAME,
     SCOPED_ADMIN_ROLE_NAME,
-    SUPER_ADMIN_EXTRA_PERMISSIONS,
 )
 from app.models.admin_runtime_state import AdminRuntimeState
 from app.auth.dependencies import get_current_super_admin, get_session
@@ -59,6 +59,7 @@ def admin_access_context(tmp_path: Path):
     app = FastAPI()
     app.include_router(admin_access_router)
     app.state.settings = SimpleNamespace(config_root=tmp_path)
+    app.state.session_factory = SessionLocal
 
     def override_session():
         yield session
@@ -67,20 +68,22 @@ def admin_access_context(tmp_path: Path):
     app.dependency_overrides[get_current_super_admin] = lambda: super_admin
 
     with TestClient(app) as client:
-        yield client, session, tmp_path
+        yield client, session, tmp_path, app, SessionLocal
 
     session.close()
 
 
-def _read_state(config_root: Path) -> dict[str, object]:
-    path = config_root / ADMIN_GODMODE_FILE
-    return json.loads(path.read_text(encoding="utf-8"))
+def _read_db_state(SessionLocal: sessionmaker) -> dict[str, object]:
+    with SessionLocal() as session:
+        row = session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY))
+        assert row is not None
+        return dict(row.payload_json or {})
 
 
 def test_create_admin_assigns_scoped_role_without_god_mode_baseline(
     admin_access_context,
 ) -> None:
-    client, session, config_root = admin_access_context
+    client, session, config_root, _app, SessionLocal = admin_access_context
 
     response = client.post(
         "/api/admin/access",
@@ -94,11 +97,16 @@ def test_create_admin_assigns_scoped_role_without_god_mode_baseline(
     )
 
     assert response.status_code == 201, response.text
-    state = _read_state(config_root)
+    payload = response.json()
+    state = _read_db_state(SessionLocal)
     assignments = state["roles"]["assignments"]
     assert state["roles"]["default_admin_role"] == SCOPED_ADMIN_ROLE_NAME
     assert assignments[0]["role_name"] == SCOPED_ADMIN_ROLE_NAME
     assert assignments[0]["permissions"] == ["manage_commissions"]
+    assert payload["admin_role_name"] == SCOPED_ADMIN_ROLE_NAME
+    assert payload["assigned_permissions"] == ["manage_commissions"]
+    assert payload["permissions"] == ["manage_commissions"]
+    assert not (config_root / ADMIN_GODMODE_FILE).exists()
 
     admin = AuthService().authenticate_user(
         session,
@@ -142,7 +150,7 @@ def test_god_mode_state_prefers_database_when_session_factory_exists(tmp_path: P
 def test_resolve_profile_keeps_super_admin_full_and_plain_admin_scoped(
     admin_access_context,
 ) -> None:
-    _client, session, _config_root = admin_access_context
+    _client, session, _config_root, _app, _SessionLocal = admin_access_context
     auth = AuthService()
     plain_admin = auth.ensure_admin_user(
         session,
@@ -177,18 +185,41 @@ def test_resolve_profile_keeps_super_admin_full_and_plain_admin_scoped(
     assert plain_profile.role_name == SCOPED_ADMIN_ROLE_NAME
     assert plain_profile.permissions == []
     assert super_profile.role_name == GOD_MODE_ROLE_NAME
-    assert sorted(super_profile.permissions) == sorted(
-        [
-            *DEFAULT_ROLE_PERMISSIONS[GOD_MODE_ROLE_NAME],
-            *SUPER_ADMIN_EXTRA_PERMISSIONS,
-        ]
+    assert sorted(super_profile.permissions) == sorted(ALL_ADMIN_PERMISSIONS)
+
+
+def test_resolve_profile_short_circuits_runtime_state_for_super_admin(
+    admin_access_context,
+) -> None:
+    _client, session, _config_root, _app, _SessionLocal = admin_access_context
+    auth = AuthService()
+    super_admin = auth.ensure_admin_user(
+        session,
+        email="short-circuit-root@example.com",
+        password=TEST_PASSWORD,
+        username="short_circuit_root",
+        display_name="Short Circuit Root",
+        role=UserRole.SUPER_ADMIN,
     )
+    session.commit()
+
+    class ExplodingState(dict):
+        def get(self, *args, **kwargs):  # type: ignore[override]
+            raise AssertionError("SUPER_ADMIN resolution should not consult runtime state.")
+
+    profile = AdminGodModeService(wallet_service=WalletService()).resolve_profile(
+        super_admin,
+        ExplodingState(),
+    )
+
+    assert profile.role_name == GOD_MODE_ROLE_NAME
+    assert sorted(profile.permissions) == sorted(ALL_ADMIN_PERMISSIONS)
 
 
 def test_disabled_assignment_resolves_to_no_delegated_permissions(
     admin_access_context,
 ) -> None:
-    _client, session, _config_root = admin_access_context
+    _client, session, _config_root, _app, _SessionLocal = admin_access_context
     auth = AuthService()
     scoped_admin = auth.ensure_admin_user(
         session,
@@ -221,3 +252,78 @@ def test_disabled_assignment_resolves_to_no_delegated_permissions(
 
     assert profile.role_name == "support_admin"
     assert profile.permissions == []
+
+
+def test_create_admin_can_assign_competition_ops_role_and_publish_immediately(
+    admin_access_context,
+) -> None:
+    client, _session, config_root, app, SessionLocal = admin_access_context
+
+    response = client.post(
+        "/api/admin/access",
+        json={
+            "email": "competition-ops@example.com",
+            "username": "competition_ops_admin",
+            "password": TEST_PASSWORD,
+            "display_name": "Competition Ops Admin",
+            "role_name": COMPETITION_OPS_ADMIN_ROLE_NAME,
+            "permissions": [],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["admin_role_name"] == COMPETITION_OPS_ADMIN_ROLE_NAME
+    assert payload["assigned_permissions"] == []
+    assert sorted(payload["permissions"]) == ["manage_competitions", "view_audit_log"]
+    assert not (config_root / ADMIN_GODMODE_FILE).exists()
+
+    state = _read_db_state(SessionLocal)
+    assignments = state["roles"]["assignments"]
+    assert assignments[0]["role_name"] == COMPETITION_OPS_ADMIN_ROLE_NAME
+
+    with SessionLocal() as session:
+        admin = AuthService().authenticate_user(
+            session,
+            email="competition-ops@example.com",
+            password=TEST_PASSWORD,
+        )
+        profile = AdminGodModeService(wallet_service=WalletService()).resolve_profile(admin, state)
+
+    assert sorted(profile.permissions) == ["manage_competitions", "view_audit_log"]
+
+
+def test_competition_ops_assignment_persists_across_runtime_reload(
+    admin_access_context,
+) -> None:
+    client, _session, config_root, _app, SessionLocal = admin_access_context
+
+    create_response = client.post(
+        "/api/admin/access",
+        json={
+            "email": "competition-restart@example.com",
+            "username": "competition_restart",
+            "password": TEST_PASSWORD,
+            "display_name": "Competition Restart Admin",
+            "role_name": COMPETITION_OPS_ADMIN_ROLE_NAME,
+            "permissions": [],
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    assert not (config_root / ADMIN_GODMODE_FILE).exists()
+
+    reloaded_app = FastAPI()
+    reloaded_app.state.settings = SimpleNamespace(config_root=config_root)
+    reloaded_app.state.session_factory = SessionLocal
+    service = AdminGodModeService(wallet_service=WalletService())
+    state = service._load_state(reloaded_app)
+
+    with SessionLocal() as session:
+        admin = AuthService().authenticate_user(
+            session,
+            email="competition-restart@example.com",
+            password=TEST_PASSWORD,
+        )
+        profile = service.resolve_profile(admin, state)
+
+    assert sorted(profile.permissions) == ["manage_competitions", "view_audit_log"]

@@ -63,6 +63,18 @@ class HostedCompetitionParticipantView(BaseModel):
     metadata_json: dict[str, object] = Field(default_factory=dict)
 
 
+class HostedCompetitionInviteView(BaseModel):
+    competition_id: str
+    invite_id: str
+    invited_by_user_id: str
+    recipient_user_id: str | None = None
+    recipient_email: str | None = None
+    status: str
+    message: str = ""
+    created_at: datetime
+    responded_at: datetime | None = None
+
+
 class HostedCompetitionStandingView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -137,6 +149,16 @@ class HostedCompetitionFinalizeRequest(BaseModel):
     note: str = ''
 
 
+class HostedCompetitionInviteCreateRequest(BaseModel):
+    recipient_user_ids: list[str] = Field(default_factory=list)
+    recipient_emails: list[str] = Field(default_factory=list)
+    message: str = Field(default='', max_length=500)
+
+
+class HostedCompetitionInviteAcceptRequest(BaseModel):
+    invite_id: str | None = None
+
+
 class HostedCompetitionCreateResponse(BaseModel):
     competition: HostedCompetitionView
     template: CompetitionTemplateView
@@ -165,12 +187,27 @@ class HostedCompetitionFinalizeResponse(BaseModel):
     dashboard_summary: str
 
 
+class HostedCompetitionInviteCreateResponse(BaseModel):
+    competition: HostedCompetitionView
+    invites: list[HostedCompetitionInviteView]
+    dashboard_summary: str
+
+
+class HostedCompetitionInviteAcceptResponse(BaseModel):
+    competition: HostedCompetitionView
+    participant: HostedCompetitionParticipantView
+    invite: HostedCompetitionInviteView
+    current_participants: int
+    dashboard_summary: str
+
+
 class HostedCompetitionDetailResponse(BaseModel):
     competition: HostedCompetitionView
     template: CompetitionTemplateView
     participants: list[HostedCompetitionParticipantView]
     current_participants: int
     join_open: bool
+    invites: list[HostedCompetitionInviteView] = Field(default_factory=list)
 
 
 class HostedCompetitionListResponse(BaseModel):

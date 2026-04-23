@@ -74,13 +74,13 @@ class TransferMarketScreen extends ConsumerWidget {
               value:
                   snapshot == null
                       ? '...'
-                      : '${snapshot.tradablePlayerShares.length}',
+                      : '${snapshot.tradablePlayerShares.length}/${snapshot.totalTradablePlayerShares ?? snapshot.tradablePlayerShares.length}',
               support:
                   snapshot == null
                       ? 'Tradable inventory loading'
-                      : snapshot.upcomingPlayerShares.isEmpty
-                      ? 'Issued player-share markets'
-                      : '${snapshot.upcomingPlayerShares.length} upcoming markets parked separately',
+                      : snapshot.discoveryOnlyPlayerShares.isEmpty
+                      ? 'Buyable share markets from /players/markets'
+                      : '${snapshot.discoveryOnlyPlayerShares.length} search-only real players separated',
               tone: GtexSurfaceTone.live,
             ),
             GtexStatTile(
@@ -111,15 +111,16 @@ class TransferMarketScreen extends ConsumerWidget {
           eyebrow: 'SEARCH',
           title: 'Search real players',
           subtitle:
-              'Discovery is backed by the real-player universe and does not invent tradable assets.',
+              'Buyable results come from issued share markets; non-buyable discovery stays clearly separated.',
           child: TextField(
-            onChanged:
-                (String value) => ref
-                    .read(marketSearchQueryProvider.notifier)
-                    .setQuery(value),
+            onChanged: (String value) {
+              ref.read(marketSearchQueryProvider.notifier).setQuery(value);
+              ref.read(marketResultWindowProvider.notifier).reset();
+            },
             decoration: const InputDecoration(
               labelText: 'Search real players',
-              hintText: 'Search /players/real-universe',
+              hintText:
+                  'Search buyable /players/markets and real-player discovery',
               prefixIcon: Icon(Icons.search_rounded),
             ),
           ),
@@ -156,7 +157,8 @@ class _MarketBody extends ConsumerWidget {
     final ClubContext? clubContext = ref.watch(clubContextProvider);
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     final List<PlayerShareSummary> tradableShares = data.tradablePlayerShares;
-    final List<PlayerShareSummary> upcomingShares = data.upcomingPlayerShares;
+    final List<PlayerShareSummary> discoveryOnlyShares =
+        data.discoveryOnlyPlayerShares;
     final bool walletUnavailable = authenticated && data.wallet == null;
     final bool canTradeMarket = data.wallet?.canTradeMarket == true;
     final bool showAccessPanel =
@@ -291,47 +293,59 @@ class _MarketBody extends ConsumerWidget {
           eyebrow: 'SHARES',
           title: 'Player Shares',
           subtitle:
-              'Tradable share markets appear first. Real players without an issued share market are separated below as upcoming inventory.',
+              'Buyable share markets are loaded from /players/markets. Search-only real-player matches are separated below and never get a Buy CTA.',
           child: Column(
-            children:
-                tradableShares.isEmpty
-                    ? const <Widget>[
-                      _MarketEmptyState(
-                        title: 'No tradable share markets are live yet',
-                        message:
-                            'The market desk is connected, but none of the surfaced players currently have an issued share market.',
-                        icon: Icons.candlestick_chart_rounded,
-                      ),
-                    ]
-                    : tradableShares
-                        .map(
-                          (PlayerShareSummary item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _buildTradableShareTile(
-                              context,
-                              ref,
-                              item,
-                              authenticated: authenticated,
-                              canTradeMarket: canTradeMarket,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
+            children: <Widget>[
+              if (tradableShares.isEmpty)
+                const _MarketEmptyState(
+                  title: 'No tradable share markets are live yet',
+                  message:
+                      'The market desk is connected, but no active buyable markets matched the current search.',
+                  icon: Icons.candlestick_chart_rounded,
+                )
+              else
+                ...tradableShares.map(
+                  (PlayerShareSummary item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildTradableShareTile(
+                      context,
+                      ref,
+                      item,
+                      authenticated: authenticated,
+                      canTradeMarket: canTradeMarket,
+                    ),
+                  ),
+                ),
+              if (data.hasMorePlayerShareResults) ...<Widget>[
+                const SizedBox(height: 4),
+                Center(
+                  child: FilledButton.tonalIcon(
+                    onPressed:
+                        () =>
+                            ref
+                                .read(marketResultWindowProvider.notifier)
+                                .loadMore(),
+                    icon: const Icon(Icons.expand_more_rounded),
+                    label: const Text('Load more players'),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        if (upcomingShares.isNotEmpty) ...<Widget>[
+        if (discoveryOnlyShares.isNotEmpty) ...<Widget>[
           const SizedBox(height: 24),
           GtexSectionPanel(
-            eyebrow: 'UPCOMING',
-            title: 'Upcoming share markets',
+            eyebrow: 'DISCOVERY',
+            title: 'Search-only real players',
             subtitle:
-                'Real players discovered from the live universe before a share market has been issued.',
+                'These players matched the real-player universe search, but the current market query did not return an active buyable share market for them.',
             child: Column(
-              children: upcomingShares
+              children: discoveryOnlyShares
                   .map(
                     (PlayerShareSummary item) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildUpcomingShareTile(context, ref, item),
+                      child: _buildDiscoveryOnlyShareTile(context, ref, item),
                     ),
                   )
                   .toList(growable: false),
@@ -488,7 +502,7 @@ class _MarketBody extends ConsumerWidget {
     );
   }
 
-  Widget _buildUpcomingShareTile(
+  Widget _buildDiscoveryOnlyShareTile(
     BuildContext context,
     WidgetRef ref,
     PlayerShareSummary item,
@@ -503,10 +517,7 @@ class _MarketBody extends ConsumerWidget {
         spacing: 8,
         runSpacing: 8,
         children: <Widget>[
-          const GtexPill(
-            label: 'Awaiting issuance',
-            tone: GtexSurfaceTone.warning,
-          ),
+          const GtexPill(label: 'No buy CTA', tone: GtexSurfaceTone.warning),
           TextButton(
             onPressed: () => _openPlayerDetail(context, ref, item),
             child: const Text('Detail'),

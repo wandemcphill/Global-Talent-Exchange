@@ -10,6 +10,7 @@ This audit covers the first executable part of `P6-04`:
 Audit dates:
 - `2026-04-17`
 - `2026-04-18`
+- `2026-04-22`
 
 ## Findings
 
@@ -170,6 +171,48 @@ That came from the external-playback ball path writing rigidbody velocities whil
 
 However, the immediate follow-up production export to validate that warning cleanup hung on the Bee player step, so that specific log cleanup remains unproven in a fresh shipped executable.
 
+### 12. The release-path motion pack and ball-warning cleanup are now revalidated in a fresh shipped build
+
+The earlier `P6-04` gap is now closed with a corrected full-session release harness and a fresh production export.
+
+Release harness corrections:
+- [capture_gtex_player_session.ps1](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tools/capture_gtex_player_session.ps1:1>) now supports leaving the player running after screenshots so the release proof can reach full time instead of terminating at the last capture offset
+- [run_gtex_full_session_validation.ps1](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tools/run_gtex_full_session_validation.ps1:1>) now waits for full-time completion, refreshes the runtime trace after shutdown, and records kinematic-ball warning checks in the summary
+
+Fresh production build proof:
+- [gtex_test_migration_windows_build_p6_releasepath_20260422b.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_test_migration_windows_build_p6_releasepath_20260422b.log:10054>)
+- [gtex-build-StandaloneWindows64-20260422-201953.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/Gtex_Test_Migration/tmp/builds/gtex-build-StandaloneWindows64-20260422-201953.log:1>)
+
+The fresh release capture now proves all of the following in the shipped player:
+- bootstrap completed
+- moving players were visible
+- moving ball was visible
+- camera presets advanced through `broadcast`, `attack_push`, and `box_zoom`
+- the session reached full time with monotonic clock and score
+- the old kinematic rigidbody warnings were absent
+- post-fulltime websocket churn dropped to a single websocket connection for the full session
+
+Release capture proof:
+- [gtex_full_session_summary.json](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_full_session_summary.json>)
+- [gtex_full_session_validation.runtime.log](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_full_session_capture/gtex_full_session_validation.runtime.log>)
+- [gtex_full_session_validation.metadata.txt](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_full_session_capture/gtex_full_session_validation.metadata.txt>)
+- [gtex_full_session_validation_t0010s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_full_session_capture/gtex_full_session_validation_t0010s.png>)
+- [gtex_full_session_validation_t0018s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_full_session_capture/gtex_full_session_validation_t0018s.png>)
+- [gtex_full_session_validation_t0026s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_full_session_capture/gtex_full_session_validation_t0026s.png>)
+- [gtex_full_session_validation_t0034s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_full_session_capture/gtex_full_session_validation_t0034s.png>)
+- [gtex_full_session_validation_t0042s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_full_session_capture/gtex_full_session_validation_t0042s.png>)
+
+Key values from the summary:
+- `bootstrap_seen: true`
+- `motion_seen: true`
+- `ball_motion_seen: true`
+- `camera_stable: true`
+- `linear_kinematic_warning_seen: false`
+- `angular_kinematic_warning_seen: false`
+- `server_summary.websocket_connections: 1`
+- `server_summary.final_frame_sent: true`
+- `passed: true`
+
 ## Verdict
 
 Current status:
@@ -179,13 +222,13 @@ Current status:
 - clean production batch termination is now proven locally
 - a local release-player capture set now shows no visible startup diagnostics overlay
 - authenticated live playback is now proven in the shipped player
-- the remaining gaps are a stronger motion capture pack and a fresh release-player rerun for the latest ball warning cleanup
+- the stronger motion capture pack now exists in the shipped player
+- the post-ball-cleanup release rerun is now proven in a fresh production export
+- the shipped validation path reaches full time without post-fulltime websocket churn
 
-`P6-04` should remain `IN PROGRESS` until QA expands the authenticated release evidence from a point-in-time proof to a stronger motion pack and the latest ball warning cleanup is revalidated in a fresh production export.
+`P6-04` is now `PASSED`.
 
 ## Remaining Work
 
-- capture a stronger authenticated motion pack showing moving players, moving ball, and stable camera over time instead of a single-frame proof
-- rerun the shipped player after the `Ball.ApplyExternalState` warning cleanup once the production export is healthy again
-- confirm no startup/debug overlays appear during the stronger authenticated release validation pack
-- isolate why the latest production batch build hung on the Bee player step after the ball cleanup
+- no remaining `P6-04` blockers
+- preserve the corrected release harness for future regression checks

@@ -9,6 +9,8 @@ class Player {
     required this.country,
     required this.imageUrl,
     this.club,
+    this.currentValueCredits,
+    this.marketInterestScore,
   });
 
   final String id;
@@ -18,6 +20,8 @@ class Player {
   final String country;
   final String? club;
   final String imageUrl;
+  final double? currentValueCredits;
+  final int? marketInterestScore;
 
   factory Player.fromJson(Object? value) => Player.fromBackend(value);
 
@@ -44,71 +48,64 @@ class _PlayerBackendMapper {
 
     return Player(
       id: GteJson.string(json, <String>['id', 'player_id', 'playerId']),
-      name: GteJson.string(
-        json,
-        <String>[
-          'name',
-          'player_name',
-          'playerName',
-          'canonical_display_name',
-          'canonicalDisplayName',
-        ],
-      ),
-      position: GteJson.string(
-        json,
-        <String>[
-          'position',
-          'primary_position',
-          'primaryPosition',
-          'normalized_position',
-          'normalizedPosition',
-        ],
-        fallback: 'Unknown',
-      ),
+      name: GteJson.string(json, <String>[
+        'name',
+        'player_name',
+        'playerName',
+        'canonical_display_name',
+        'canonicalDisplayName',
+      ]),
+      position: GteJson.string(json, <String>[
+        'position',
+        'primary_position',
+        'primaryPosition',
+        'normalized_position',
+        'normalizedPosition',
+      ], fallback: 'Unknown'),
       age: GteJson.integer(json, <String>['age']),
-      country: GteJson.string(
-        json,
-        <String>['country', 'nationality'],
-        fallback: 'Unknown',
-      ),
-      club: GteJson.stringOrNull(
-        json,
-        <String>['club', 'current_club_name', 'currentClubName'],
-      ),
-      imageUrl: _firstNonEmpty(<String?>[
-            GteJson.stringOrNull(
-              json,
-              <String>[
-                'image_url',
-                'imageUrl',
-                'portrait_url',
-                'portraitUrl',
-                'profile_image_url',
-                'profileImageUrl',
-              ],
-            ),
-            GteJson.stringOrNull(
-              summaryJson,
-              <String>[
-                'image_url',
-                'imageUrl',
-                'portrait_url',
-                'portraitUrl',
-                'profile_image_url',
-                'profileImageUrl',
-              ],
-            ),
-            GteJson.stringOrNull(
-              metadataJson,
-              <String>[
-                'image_url',
-                'imageUrl',
-                'portrait_url',
-                'portraitUrl',
-                'profile_image_url',
-                'profileImageUrl',
-              ],
-            ),
+      country: GteJson.string(json, <String>[
+        'country',
+        'nationality',
+      ], fallback: 'Unknown'),
+      club: GteJson.stringOrNull(json, <String>[
+        'club',
+        'current_club_name',
+        'currentClubName',
+      ]),
+      currentValueCredits: _numberOrNull(json, <String>[
+        'current_value_credits',
+        'currentValueCredits',
+      ]),
+      marketInterestScore: GteJson.integerOrNull(json, <String>[
+        'market_interest_score',
+        'marketInterestScore',
+      ]),
+      imageUrl:
+          _firstNonEmpty(<String?>[
+            GteJson.stringOrNull(json, <String>[
+              'image_url',
+              'imageUrl',
+              'portrait_url',
+              'portraitUrl',
+              'profile_image_url',
+              'profileImageUrl',
+            ]),
+            GteJson.stringOrNull(summaryJson, <String>[
+              'image_url',
+              'imageUrl',
+              'portrait_url',
+              'portraitUrl',
+              'profile_image_url',
+              'profileImageUrl',
+            ]),
+            GteJson.stringOrNull(metadataJson, <String>[
+              'image_url',
+              'imageUrl',
+              'portrait_url',
+              'portraitUrl',
+              'profile_image_url',
+              'profileImageUrl',
+            ]),
           ]) ??
           '',
     );
@@ -122,4 +119,15 @@ String? _firstNonEmpty(Iterable<String?> values) {
     }
   }
   return null;
+}
+
+double? _numberOrNull(Map<String, Object?> json, List<String> keys) {
+  final Object? rawValue = GteJson.value(json, keys);
+  if (rawValue == null) {
+    return null;
+  }
+  if (rawValue is num) {
+    return rawValue.toDouble();
+  }
+  return double.tryParse(rawValue.toString());
 }

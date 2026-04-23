@@ -842,6 +842,18 @@ class _FakeHostedCompetitionApi implements HostedCompetitionApi {
 
   HostedCompetition get currentCompetition => _competition;
 
+  HostedCompetitionInvite get _invite => HostedCompetitionInvite(
+    competitionId: id,
+    inviteId: 'invite-1',
+    invitedByUserId: 'host-user-1',
+    recipientUserId: 'user-1',
+    recipientEmail: null,
+    status: 'pending',
+    message: 'Join the hosted cup.',
+    createdAt: DateTime.utc(2026, 3, 29),
+    respondedAt: null,
+  );
+
   HostedCompetitionTemplate get _template => const HostedCompetitionTemplate(
     id: templateId,
     templateKey: 'creator-cup',
@@ -918,6 +930,7 @@ class _FakeHostedCompetitionApi implements HostedCompetitionApi {
       ],
       currentParticipants: 3,
       joinOpen: true,
+      invites: <HostedCompetitionInvite>[_invite],
     );
   }
 
@@ -936,6 +949,32 @@ class _FakeHostedCompetitionApi implements HostedCompetitionApi {
 
   @override
   Future<HostedCompetition> joinCompetition(String competitionId) async {
+    joinCalls += 1;
+    return _competition;
+  }
+
+  @override
+  Future<List<HostedCompetitionInvite>> listInvites(
+    String competitionId,
+  ) async {
+    return <HostedCompetitionInvite>[_invite];
+  }
+
+  @override
+  Future<List<HostedCompetitionInvite>> createInvites({
+    required String competitionId,
+    List<String> recipientUserIds = const <String>[],
+    List<String> recipientEmails = const <String>[],
+    String message = '',
+  }) async {
+    return <HostedCompetitionInvite>[_invite];
+  }
+
+  @override
+  Future<HostedCompetition> acceptInvite({
+    required String competitionId,
+    String? inviteId,
+  }) async {
     joinCalls += 1;
     return _competition;
   }

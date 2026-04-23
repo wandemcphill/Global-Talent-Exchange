@@ -12,6 +12,11 @@ from app.hosted_competition_engine.schemas import (
     HostedCompetitionFinanceView,
     HostedCompetitionFinalizeRequest,
     HostedCompetitionFinalizeResponse,
+    HostedCompetitionInviteAcceptRequest,
+    HostedCompetitionInviteAcceptResponse,
+    HostedCompetitionInviteCreateRequest,
+    HostedCompetitionInviteCreateResponse,
+    HostedCompetitionInviteView,
     HostedCompetitionJoinResponse,
     HostedCompetitionLaunchResponse,
     HostedCompetitionListResponse,
@@ -44,6 +49,10 @@ def _participant_view(item) -> HostedCompetitionParticipantView:
     return HostedCompetitionParticipantView.model_validate(item, from_attributes=True)
 
 
+def _invite_view(item) -> HostedCompetitionInviteView:
+    return HostedCompetitionInviteView.model_validate(item)
+
+
 def _standing_view(item) -> HostedCompetitionStandingView:
     return HostedCompetitionStandingView.model_validate(item, from_attributes=True)
 
@@ -72,6 +81,12 @@ def list_public_competitions(session: Session = Depends(get_session)) -> HostedC
 def list_my_competitions(user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> HostedCompetitionListResponse:
     service = HostedCompetitionService(session)
     return HostedCompetitionListResponse(competitions=[_competition_view(item) for item in service.list_for_host(user=user)])
+
+
+@router.get('/mine/invites', response_model=list[HostedCompetitionInviteView])
+def list_my_invites(user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> list[HostedCompetitionInviteView]:
+    service = HostedCompetitionService(session)
+    return [_invite_view(item) for item in service.invites_for_user(user=user)]
 
 
 @router.post('', response_model=HostedCompetitionCreateResponse)
@@ -109,6 +124,37 @@ def get_competition_detail(competition_id: str, session: Session = Depends(get_s
     )
 
 
+@router.get('/{competition_id}/invites', response_model=list[HostedCompetitionInviteView])
+def list_competition_invites(competition_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> list[HostedCompetitionInviteView]:
+    service = HostedCompetitionService(session)
+    try:
+        return [_invite_view(item) for item in service.invites_for_competition(actor=user, competition_id=competition_id)]
+    except HostedCompetitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post('/{competition_id}/invites', response_model=HostedCompetitionInviteCreateResponse)
+def create_competition_invites(competition_id: str, payload: HostedCompetitionInviteCreateRequest, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> HostedCompetitionInviteCreateResponse:
+    service = HostedCompetitionService(session)
+    try:
+        competition, invites = service.create_invites(
+            actor=user,
+            competition_id=competition_id,
+            recipient_user_ids=payload.recipient_user_ids,
+            recipient_emails=payload.recipient_emails,
+            message=payload.message,
+        )
+        session.commit()
+    except HostedCompetitionError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return HostedCompetitionInviteCreateResponse(
+        competition=_competition_view(competition),
+        invites=[_invite_view(item) for item in invites],
+        dashboard_summary=f'{len(invites)} invite(s) queued for {competition.title}.',
+    )
+
+
 @router.post('/{competition_id}/join', response_model=HostedCompetitionJoinResponse)
 def join_competition(competition_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> HostedCompetitionJoinResponse:
     service = HostedCompetitionService(session)
@@ -125,6 +171,29 @@ def join_competition(competition_id: str, user: User = Depends(get_current_user)
         participant=_participant_view(participant),
         current_participants=current_participants,
         dashboard_summary=f"Joined {competition.title}. Participants: {current_participants}/{competition.max_participants}.",
+    )
+
+
+@router.post('/{competition_id}/invites/accept', response_model=HostedCompetitionInviteAcceptResponse)
+def accept_competition_invite(competition_id: str, payload: HostedCompetitionInviteAcceptRequest, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> HostedCompetitionInviteAcceptResponse:
+    service = HostedCompetitionService(session)
+    try:
+        competition, participant, invite = service.accept_invite(
+            user=user,
+            competition_id=competition_id,
+            invite_id=payload.invite_id,
+        )
+        session.commit()
+        current_participants = len(service.participants_for_competition(competition.id))
+    except HostedCompetitionError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return HostedCompetitionInviteAcceptResponse(
+        competition=_competition_view(competition),
+        participant=_participant_view(participant),
+        invite=_invite_view(invite),
+        current_participants=current_participants,
+        dashboard_summary=f'Invite accepted for {competition.title}. Participants: {current_participants}/{competition.max_participants}.',
     )
 
 

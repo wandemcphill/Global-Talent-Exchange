@@ -141,6 +141,62 @@ class HostedCompetitionApi {
     }, () async => fixtures.joinCompetition(competitionId));
   }
 
+  Future<List<HostedCompetitionInvite>> listInvites(String competitionId) {
+    return client.withFallback<List<HostedCompetitionInvite>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/api/hosted-competitions/$competitionId/invites',
+      );
+      return payload
+          .map(HostedCompetitionInvite.fromJson)
+          .toList(growable: false);
+    }, () async => fixtures.invites(competitionId));
+  }
+
+  Future<List<HostedCompetitionInvite>> createInvites({
+    required String competitionId,
+    List<String> recipientUserIds = const <String>[],
+    List<String> recipientEmails = const <String>[],
+    String message = '',
+  }) {
+    return client.withFallback<List<HostedCompetitionInvite>>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/hosted-competitions/$competitionId/invites',
+        body: <String, Object?>{
+          'recipient_user_ids': recipientUserIds,
+          'recipient_emails': recipientEmails,
+          'message': message,
+        },
+      );
+      final Map<String, dynamic> map =
+          payload as Map<String, dynamic>? ?? <String, dynamic>{};
+      final List<dynamic> invites =
+          map['invites'] as List<dynamic>? ?? <dynamic>[];
+      return invites
+          .map(HostedCompetitionInvite.fromJson)
+          .toList(growable: false);
+    }, () async => fixtures.createInvites(competitionId));
+  }
+
+  Future<HostedCompetition> acceptInvite({
+    required String competitionId,
+    String? inviteId,
+  }) {
+    return client.withFallback<HostedCompetition>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/hosted-competitions/$competitionId/invites/accept',
+        body: <String, Object?>{
+          if (inviteId != null && inviteId.trim().isNotEmpty)
+            'invite_id': inviteId.trim(),
+        },
+      );
+      final Map<String, dynamic> map =
+          payload as Map<String, dynamic>? ?? <String, dynamic>{};
+      return HostedCompetition.fromJson(map['competition'] ?? map);
+    }, () async => fixtures.joinCompetition(competitionId));
+  }
+
   Future<List<HostedCompetitionStanding>> listStandings(String competitionId) {
     return client.withFallback<List<HostedCompetitionStanding>>(() async {
       final List<dynamic> payload = await client.getList(
@@ -291,7 +347,30 @@ class _HostedCompetitionFixtures {
       participants: participants,
       currentParticipants: participants.length,
       joinOpen: true,
+      invites: invites(competitionId),
     );
+  }
+
+  List<HostedCompetitionInvite> invites(String competitionId) {
+    return <HostedCompetitionInvite>[
+      HostedCompetitionInvite(
+        competitionId: competitionId,
+        inviteId: 'invite-1',
+        invitedByUserId: 'user-1',
+        recipientUserId: 'user-2',
+        recipientEmail: null,
+        status: 'pending',
+        message: 'Join this hosted competition.',
+        createdAt: DateTime.now().toUtc(),
+        respondedAt: null,
+      ),
+    ];
+  }
+
+  Future<List<HostedCompetitionInvite>> createInvites(
+    String competitionId,
+  ) async {
+    return invites(competitionId);
   }
 
   Future<HostedCompetition> createCompetition({

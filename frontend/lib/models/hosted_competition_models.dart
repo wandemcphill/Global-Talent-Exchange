@@ -42,41 +42,71 @@ class HostedCompetitionTemplate {
   final bool active;
 
   factory HostedCompetitionTemplate.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'hosted template');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'hosted template',
+    );
     return HostedCompetitionTemplate(
       id: GteJson.string(json, <String>['id']),
-      templateKey:
-          GteJson.string(json, <String>['template_key', 'templateKey']),
+      templateKey: GteJson.string(json, <String>[
+        'template_key',
+        'templateKey',
+      ]),
       title: GteJson.string(json, <String>['title']),
       description: GteJson.string(json, <String>['description'], fallback: ''),
-      competitionType:
-          GteJson.string(json, <String>['competition_type', 'competitionType'], fallback: 'general'),
-      teamType: GteJson.string(json, <String>['team_type', 'teamType'], fallback: 'club'),
-      ageGrade: GteJson.string(json, <String>['age_grade', 'ageGrade'], fallback: 'senior'),
-      cupOrLeague: GteJson.string(json, <String>['cup_or_league', 'cupOrLeague'], fallback: 'cup'),
-      participants: GteJson.integer(json, <String>['participants'], fallback: 0),
-      viewingMode: GteJson.string(json, <String>['viewing_mode', 'viewingMode'], fallback: 'standard'),
+      competitionType: GteJson.string(json, <String>[
+        'competition_type',
+        'competitionType',
+      ], fallback: 'general'),
+      teamType: GteJson.string(json, <String>[
+        'team_type',
+        'teamType',
+      ], fallback: 'club'),
+      ageGrade: GteJson.string(json, <String>[
+        'age_grade',
+        'ageGrade',
+      ], fallback: 'senior'),
+      cupOrLeague: GteJson.string(json, <String>[
+        'cup_or_league',
+        'cupOrLeague',
+      ], fallback: 'cup'),
+      participants: GteJson.integer(json, <String>[
+        'participants',
+      ], fallback: 0),
+      viewingMode: GteJson.string(json, <String>[
+        'viewing_mode',
+        'viewingMode',
+      ], fallback: 'standard'),
       giftRules: GteJson.map(
-          json, keys: <String>['gift_rules', 'giftRules'],
-          fallback: const <String, Object?>{}),
-      seedingMethod:
-          GteJson.string(json, <String>['seeding_method', 'seedingMethod'], fallback: 'balanced'),
-      isUserHostable: GteJson.boolean(
-          json, <String>['is_user_hostable', 'isUserHostable'],
-          fallback: false),
-      entryFeeFancoin: GteJson.number(
-          json, <String>['entry_fee_fancoin', 'entryFeeFancoin'],
-          fallback: 0),
-      rewardPoolFancoin: GteJson.number(
-          json, <String>['reward_pool_fancoin', 'rewardPoolFancoin'],
-          fallback: 0),
-      platformFeeBps: GteJson.integer(
-          json, <String>['platform_fee_bps', 'platformFeeBps'],
-          fallback: 0),
+        json,
+        keys: <String>['gift_rules', 'giftRules'],
+        fallback: const <String, Object?>{},
+      ),
+      seedingMethod: GteJson.string(json, <String>[
+        'seeding_method',
+        'seedingMethod',
+      ], fallback: 'balanced'),
+      isUserHostable: GteJson.boolean(json, <String>[
+        'is_user_hostable',
+        'isUserHostable',
+      ], fallback: false),
+      entryFeeFancoin: GteJson.number(json, <String>[
+        'entry_fee_fancoin',
+        'entryFeeFancoin',
+      ], fallback: 0),
+      rewardPoolFancoin: GteJson.number(json, <String>[
+        'reward_pool_fancoin',
+        'rewardPoolFancoin',
+      ], fallback: 0),
+      platformFeeBps: GteJson.integer(json, <String>[
+        'platform_fee_bps',
+        'platformFeeBps',
+      ], fallback: 0),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
       active: GteJson.boolean(json, <String>['active'], fallback: true),
     );
   }
@@ -122,38 +152,44 @@ class HostedCompetition {
   final DateTime updatedAt;
 
   factory HostedCompetition.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'hosted competition');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'hosted competition',
+    );
     return HostedCompetition(
       id: GteJson.string(json, <String>['id']),
-      templateId:
-          GteJson.string(json, <String>['template_id', 'templateId']),
-      hostUserId:
-          GteJson.string(json, <String>['host_user_id', 'hostUserId']),
+      templateId: GteJson.string(json, <String>['template_id', 'templateId']),
+      hostUserId: GteJson.string(json, <String>['host_user_id', 'hostUserId']),
       title: GteJson.string(json, <String>['title']),
       slug: GteJson.string(json, <String>['slug'], fallback: ''),
       description: GteJson.string(json, <String>['description'], fallback: ''),
       status: GteJson.string(json, <String>['status'], fallback: 'draft'),
-      visibility: GteJson.string(
-          json, <String>['visibility'], fallback: 'public'),
-      startsAt:
-          GteJson.dateTimeOrNull(json, <String>['starts_at', 'startsAt']),
+      visibility: GteJson.string(json, <String>[
+        'visibility',
+      ], fallback: 'public'),
+      startsAt: GteJson.dateTimeOrNull(json, <String>['starts_at', 'startsAt']),
       lockAt: GteJson.dateTimeOrNull(json, <String>['lock_at', 'lockAt']),
-      maxParticipants: GteJson.integer(
-          json, <String>['max_participants', 'maxParticipants'],
-          fallback: 0),
-      entryFeeFancoin: GteJson.number(
-          json, <String>['entry_fee_fancoin', 'entryFeeFancoin'],
-          fallback: 0),
-      rewardPoolFancoin: GteJson.number(
-          json, <String>['reward_pool_fancoin', 'rewardPoolFancoin'],
-          fallback: 0),
-      platformFeeAmount: GteJson.number(
-          json, <String>['platform_fee_amount', 'platformFeeAmount'],
-          fallback: 0),
+      maxParticipants: GteJson.integer(json, <String>[
+        'max_participants',
+        'maxParticipants',
+      ], fallback: 0),
+      entryFeeFancoin: GteJson.number(json, <String>[
+        'entry_fee_fancoin',
+        'entryFeeFancoin',
+      ], fallback: 0),
+      rewardPoolFancoin: GteJson.number(json, <String>[
+        'reward_pool_fancoin',
+        'rewardPoolFancoin',
+      ], fallback: 0),
+      platformFeeAmount: GteJson.number(json, <String>[
+        'platform_fee_amount',
+        'platformFeeAmount',
+      ], fallback: 0),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
     );
@@ -180,23 +216,90 @@ class HostedCompetitionParticipant {
   final Map<String, Object?> metadata;
 
   factory HostedCompetitionParticipant.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'hosted participant');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'hosted participant',
+    );
     return HostedCompetitionParticipant(
       id: GteJson.string(json, <String>['id']),
-      competitionId:
-          GteJson.string(json, <String>['competition_id', 'competitionId']),
+      competitionId: GteJson.string(json, <String>[
+        'competition_id',
+        'competitionId',
+      ]),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
       joinedAt: GteJson.dateTime(json, <String>['joined_at', 'joinedAt']),
-      entryFeeFancoin: GteJson.number(
-          json, <String>['entry_fee_fancoin', 'entryFeeFancoin'],
-          fallback: 0),
-      payoutEligible: GteJson.boolean(
-          json, <String>['payout_eligible', 'payoutEligible'],
-          fallback: false),
+      entryFeeFancoin: GteJson.number(json, <String>[
+        'entry_fee_fancoin',
+        'entryFeeFancoin',
+      ], fallback: 0),
+      payoutEligible: GteJson.boolean(json, <String>[
+        'payout_eligible',
+        'payoutEligible',
+      ], fallback: false),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
+    );
+  }
+}
+
+class HostedCompetitionInvite {
+  const HostedCompetitionInvite({
+    required this.competitionId,
+    required this.inviteId,
+    required this.invitedByUserId,
+    required this.recipientUserId,
+    required this.recipientEmail,
+    required this.status,
+    required this.message,
+    required this.createdAt,
+    required this.respondedAt,
+  });
+
+  final String competitionId;
+  final String inviteId;
+  final String invitedByUserId;
+  final String? recipientUserId;
+  final String? recipientEmail;
+  final String status;
+  final String message;
+  final DateTime createdAt;
+  final DateTime? respondedAt;
+
+  bool get isPending => status.toLowerCase() == 'pending';
+
+  factory HostedCompetitionInvite.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'hosted invite',
+    );
+    return HostedCompetitionInvite(
+      competitionId: GteJson.string(json, <String>[
+        'competition_id',
+        'competitionId',
+      ]),
+      inviteId: GteJson.string(json, <String>['invite_id', 'inviteId']),
+      invitedByUserId: GteJson.string(json, <String>[
+        'invited_by_user_id',
+        'invitedByUserId',
+      ]),
+      recipientUserId: GteJson.stringOrNull(json, <String>[
+        'recipient_user_id',
+        'recipientUserId',
+      ]),
+      recipientEmail: GteJson.stringOrNull(json, <String>[
+        'recipient_email',
+        'recipientEmail',
+      ]),
+      status: GteJson.string(json, <String>['status'], fallback: 'pending'),
+      message: GteJson.string(json, <String>['message'], fallback: ''),
+      createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
+      respondedAt: GteJson.dateTimeOrNull(json, <String>[
+        'responded_at',
+        'respondedAt',
+      ]),
     );
   }
 }
@@ -235,30 +338,42 @@ class HostedCompetitionStanding {
   final DateTime updatedAt;
 
   factory HostedCompetitionStanding.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'hosted standing');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'hosted standing',
+    );
     return HostedCompetitionStanding(
       id: GteJson.string(json, <String>['id']),
-      competitionId:
-          GteJson.string(json, <String>['competition_id', 'competitionId']),
+      competitionId: GteJson.string(json, <String>[
+        'competition_id',
+        'competitionId',
+      ]),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
-      finalRank:
-          GteJson.integerOrNull(json, <String>['final_rank', 'finalRank']),
+      finalRank: GteJson.integerOrNull(json, <String>[
+        'final_rank',
+        'finalRank',
+      ]),
       points: GteJson.integer(json, <String>['points'], fallback: 0),
       wins: GteJson.integer(json, <String>['wins'], fallback: 0),
       draws: GteJson.integer(json, <String>['draws'], fallback: 0),
       losses: GteJson.integer(json, <String>['losses'], fallback: 0),
-      goalsFor:
-          GteJson.integer(json, <String>['goals_for', 'goalsFor'], fallback: 0),
-      goalsAgainst: GteJson.integer(
-          json, <String>['goals_against', 'goalsAgainst'],
-          fallback: 0),
-      payoutAmount: GteJson.number(
-          json, <String>['payout_amount', 'payoutAmount'],
-          fallback: 0),
+      goalsFor: GteJson.integer(json, <String>[
+        'goals_for',
+        'goalsFor',
+      ], fallback: 0),
+      goalsAgainst: GteJson.integer(json, <String>[
+        'goals_against',
+        'goalsAgainst',
+      ], fallback: 0),
+      payoutAmount: GteJson.number(json, <String>[
+        'payout_amount',
+        'payoutAmount',
+      ], fallback: 0),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
     );
@@ -291,32 +406,44 @@ class HostedCompetitionFinance {
   final String status;
 
   factory HostedCompetitionFinance.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'hosted finance');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'hosted finance',
+    );
     return HostedCompetitionFinance(
       currency: GteJson.string(json, <String>['currency'], fallback: 'FAN'),
-      participantCount: GteJson.integer(
-          json, <String>['participant_count', 'participantCount'],
-          fallback: 0),
-      entryFeeFancoin: GteJson.number(
-          json, <String>['entry_fee_fancoin', 'entryFeeFancoin'],
-          fallback: 0),
-      grossCollected:
-          GteJson.number(json, <String>['gross_collected', 'grossCollected'], fallback: 0),
-      projectedRewardPool: GteJson.number(
-          json, <String>['projected_reward_pool', 'projectedRewardPool'],
-          fallback: 0),
-      projectedPlatformFee: GteJson.number(
-          json, <String>['projected_platform_fee', 'projectedPlatformFee'],
-          fallback: 0),
-      escrowBalance:
-          GteJson.number(json, <String>['escrow_balance', 'escrowBalance'], fallback: 0),
-      settledPrizes: GteJson.number(
-          json, <String>['settled_prizes', 'settledPrizes'],
-          fallback: 0),
-      settledPlatformFee: GteJson.number(
-          json, <String>['settled_platform_fee', 'settledPlatformFee'],
-          fallback: 0),
+      participantCount: GteJson.integer(json, <String>[
+        'participant_count',
+        'participantCount',
+      ], fallback: 0),
+      entryFeeFancoin: GteJson.number(json, <String>[
+        'entry_fee_fancoin',
+        'entryFeeFancoin',
+      ], fallback: 0),
+      grossCollected: GteJson.number(json, <String>[
+        'gross_collected',
+        'grossCollected',
+      ], fallback: 0),
+      projectedRewardPool: GteJson.number(json, <String>[
+        'projected_reward_pool',
+        'projectedRewardPool',
+      ], fallback: 0),
+      projectedPlatformFee: GteJson.number(json, <String>[
+        'projected_platform_fee',
+        'projectedPlatformFee',
+      ], fallback: 0),
+      escrowBalance: GteJson.number(json, <String>[
+        'escrow_balance',
+        'escrowBalance',
+      ], fallback: 0),
+      settledPrizes: GteJson.number(json, <String>[
+        'settled_prizes',
+        'settledPrizes',
+      ], fallback: 0),
+      settledPlatformFee: GteJson.number(json, <String>[
+        'settled_platform_fee',
+        'settledPlatformFee',
+      ], fallback: 0),
       status: GteJson.string(json, <String>['status'], fallback: 'draft'),
     );
   }
@@ -329,6 +456,7 @@ class HostedCompetitionDetail {
     required this.participants,
     required this.currentParticipants,
     required this.joinOpen,
+    this.invites = const <HostedCompetitionInvite>[],
   });
 
   final HostedCompetition competition;
@@ -336,10 +464,13 @@ class HostedCompetitionDetail {
   final List<HostedCompetitionParticipant> participants;
   final int currentParticipants;
   final bool joinOpen;
+  final List<HostedCompetitionInvite> invites;
 
   factory HostedCompetitionDetail.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'hosted competition detail');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'hosted competition detail',
+    );
     return HostedCompetitionDetail(
       competition: HostedCompetition.fromJson(
         GteJson.value(json, <String>['competition']),
@@ -347,17 +478,20 @@ class HostedCompetitionDetail {
       template: HostedCompetitionTemplate.fromJson(
         GteJson.value(json, <String>['template']),
       ),
-      participants: GteJson.typedList(
-        json,
-        <String>['participants'],
-        HostedCompetitionParticipant.fromJson,
-      ),
-      currentParticipants: GteJson.integer(
-          json, <String>['current_participants', 'currentParticipants'],
-          fallback: 0),
-      joinOpen: GteJson.boolean(
-          json, <String>['join_open', 'joinOpen'],
-          fallback: false),
+      participants: GteJson.typedList(json, <String>[
+        'participants',
+      ], HostedCompetitionParticipant.fromJson),
+      currentParticipants: GteJson.integer(json, <String>[
+        'current_participants',
+        'currentParticipants',
+      ], fallback: 0),
+      joinOpen: GteJson.boolean(json, <String>[
+        'join_open',
+        'joinOpen',
+      ], fallback: false),
+      invites: GteJson.typedList(json, <String>[
+        'invites',
+      ], HostedCompetitionInvite.fromJson),
     );
   }
 }

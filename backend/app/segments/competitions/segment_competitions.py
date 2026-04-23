@@ -56,7 +56,9 @@ router.include_router(creator_league_router)
 
 
 def _require_manage_competitions_permission(request: Request, actor: User) -> None:
-    if actor.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+    if actor.role == UserRole.SUPER_ADMIN:
+        return
+    if actor.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access is required for this action.",
@@ -75,7 +77,7 @@ def _require_manage_competitions_permission(request: Request, actor: User) -> No
         ) from exc
 
 
-def _is_platform_competition(source_type: str | None) -> bool:
+def _is_admin_managed_platform_competition(source_type: str | None) -> bool:
     if source_type is None:
         return False
     normalized = source_type.strip().lower()
@@ -84,7 +86,6 @@ def _is_platform_competition(source_type: str | None) -> bool:
         "platform",
         "gtex_platform",
         "gtex_competition",
-        "gtex_hosted",
     }
 
 
@@ -93,7 +94,12 @@ def _require_manage_competitions_or_creator(
     actor: User,
     competition: Competition,
 ) -> None:
-    if competition.host_user_id == actor.id and not _is_platform_competition(competition.source_type):
+    # Allow the actual host/creator to publish and launch their own hosted
+    # competitions. Keep only true platform-curated competitions admin-gated.
+    #
+    # Important: this is intentionally scoped to the auth layer in this router.
+    # Do not change the broader gtex_hosted finance/economy classification here.
+    if competition.host_user_id == actor.id and not _is_admin_managed_platform_competition(competition.source_type):
         return
     _require_manage_competitions_permission(request, actor)
 

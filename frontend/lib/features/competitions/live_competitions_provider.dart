@@ -84,11 +84,13 @@ class HostedCompetitionDetailBundle {
     required this.detail,
     required this.finance,
     required this.standings,
+    required this.invites,
   });
 
   final HostedCompetitionDetail detail;
   final HostedCompetitionFinance finance;
   final List<HostedCompetitionStanding> standings;
+  final List<HostedCompetitionInvite> invites;
 }
 
 class StreamerTournamentDetailBundle {
@@ -114,14 +116,16 @@ final FutureProvider<CompetitionHubData> competitionHubProvider =
       final String? userId = ref.watch(currentUserIdProvider);
       final CompetitionListResponse gtexList =
           isAuthenticated
-              ? await competitionApi.fetchCompetitions(userId: userId).then(
-                (CompetitionListResponse value) => CompetitionListResponse(
-                  total: value.total,
-                  items: value.items
-                      .where((CompetitionSummary item) => item.isGtexHosted)
-                      .toList(growable: false),
-                ),
-              )
+              ? await competitionApi
+                  .fetchCompetitions(userId: userId)
+                  .then(
+                    (CompetitionListResponse value) => CompetitionListResponse(
+                      total: value.total,
+                      items: value.items
+                          .where((CompetitionSummary item) => item.isGtexHosted)
+                          .toList(growable: false),
+                    ),
+                  )
               : const CompetitionListResponse(
                 total: 0,
                 items: <CompetitionSummary>[],
@@ -191,10 +195,16 @@ final hostedCompetitionDetailProvider =
       );
       final List<HostedCompetitionStanding> standings = await hostedApi
           .listStandings(competitionId);
+      final bool isAuthenticated = ref.watch(isAuthenticatedProvider);
+      final List<HostedCompetitionInvite> invites =
+          isAuthenticated
+              ? await hostedApi.listInvites(competitionId)
+              : const <HostedCompetitionInvite>[];
       return HostedCompetitionDetailBundle(
         detail: detail,
         finance: finance,
         standings: standings,
+        invites: invites,
       );
     });
 

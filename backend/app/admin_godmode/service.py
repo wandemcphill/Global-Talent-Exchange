@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.base import generate_uuid, utcnow
 from app.models.admin_runtime_state import AdminRuntimeState
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.wallet import (
     LedgerAccount,
     LedgerSourceTag,
@@ -71,6 +71,9 @@ AUDIT_LOG_FILE = str(Path(ADMIN_RUNTIME_DIR) / AUDIT_LOG_FILENAME)
 ADMIN_GODMODE_STATE_KEY = "admin_god_mode"
 GOD_MODE_ROLE_NAME = "god_mode"
 SCOPED_ADMIN_ROLE_NAME = "scoped_admin"
+COMPETITION_OPS_ADMIN_ROLE_NAME = "competition_ops_admin"
+RUNTIME_METADATA_KEY = "runtime_metadata"
+LEGACY_FILE_RECONCILED_AT_KEY = "legacy_file_reconciled_at"
 SUPER_ADMIN_EXTRA_PERMISSIONS: tuple[str, ...] = (
     "manage_manager_catalog",
     "manage_manager_supply",
@@ -101,12 +104,27 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "view_audit_log",
         "view_integrity_controls",
     ],
+    COMPETITION_OPS_ADMIN_ROLE_NAME: [
+        "manage_competitions",
+        "view_audit_log",
+    ],
     "support_admin": [
         "manage_withdrawals",
         "view_audit_log",
     ],
     SCOPED_ADMIN_ROLE_NAME: [],
 }
+
+ALL_ADMIN_PERMISSIONS: tuple[str, ...] = tuple(
+    sorted(
+        {
+            permission
+            for permissions in DEFAULT_ROLE_PERMISSIONS.values()
+            for permission in permissions
+        }
+        | set(SUPER_ADMIN_EXTRA_PERMISSIONS)
+    )
+)
 
 SUPPORTED_ADMIN_PAYMENT_RAILS: tuple[str, ...] = ("bank_transfer_manual", *SUPPORTED_TOP_UP_PROVIDER_KEYS)
 
@@ -180,6 +198,47 @@ class IntegrityBoundError(GodModeError):
 @dataclass(slots=True)
 class AdminGodModeService:
     wallet_service: WalletService
+
+    def upsert_admin_assignment(
+        self,
+        app: FastAPI,
+        session: Session,
+        *,
+        admin: User,
+        role_name: str | None,
+        permissions: list[str],
+        is_enabled: bool,
+    ) -> dict[str, Any]:
+        state, _ = self._load_state_in_session(app, session)
+        normalized = self._normalize_state(state)
+        roles = dict(normalized.get("roles") or {})
+        available_roles = dict(roles.get("available_roles") or DEFAULT_ROLE_PERMISSIONS)
+        resolved_role_name = self._resolve_assignment_role_name(
+            admin=admin,
+            available_roles=available_roles,
+            role_name=role_name,
+        )
+        assignments = list(roles.get("assignments") or [])
+        subject_keys = self._assignment_subject_keys(admin)
+        assignments[:] = [
+            item
+            for item in assignments
+            if str(item.get("subject_key", "")).strip().lower() not in subject_keys
+        ]
+        assignments.append(
+            {
+                "subject_key": admin.email.lower(),
+                "role_name": resolved_role_name,
+                "permissions": sorted({str(item).strip() for item in permissions if str(item).strip()}),
+                "is_enabled": bool(is_enabled),
+            }
+        )
+        roles["available_roles"] = available_roles
+        roles["assignments"] = assignments
+        normalized["roles"] = self._normalize_roles_block(roles)
+        self._save_state_record(session, normalized)
+        session.flush()
+        return normalized
 
     def load_bootstrap(self, app: FastAPI, session: Session, actor: User) -> GodModeBootstrapView:
         state = self._load_state(app)
@@ -856,22 +915,16 @@ class AdminGodModeService:
         return items
 
     def resolve_profile(self, actor: User, state: dict[str, Any]) -> GodModeProfileView:
-        roles_block = self._normalize_roles_block(state.get("roles") or {})
-        available_roles = dict(roles_block.get("available_roles") or DEFAULT_ROLE_PERMISSIONS)
-        if actor.role.value == "super_admin":
-            permissions = sorted(
-                {
-                    *available_roles.get(GOD_MODE_ROLE_NAME, []),
-                    *SUPER_ADMIN_EXTRA_PERMISSIONS,
-                }
-            )
+        if actor.role == UserRole.SUPER_ADMIN:
             return GodModeProfileView(
                 subject_key=actor.id,
                 role_name=GOD_MODE_ROLE_NAME,
-                permissions=permissions,
+                permissions=list(ALL_ADMIN_PERMISSIONS),
                 can_directly_set_price=False,
                 can_edit_results=False,
             )
+        roles_block = self._normalize_roles_block(state.get("roles") or {})
+        available_roles = dict(roles_block.get("available_roles") or DEFAULT_ROLE_PERMISSIONS)
 
         assignments = roles_block.get("assignments") or []
         subject_keys = {
@@ -947,21 +1000,10 @@ class AdminGodModeService:
         session_factory = self._session_factory(app)
         if session_factory is not None:
             with session_factory() as session:
-                row = session.scalar(
-                    select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY)
-                )
-                if row is None:
-                    seeded = self._load_file_state(app) or self._default_state()
-                    normalized = self._normalize_state(seeded)
-                    self._save_state_record(session, normalized)
+                state, changed = self._load_state_in_session(app, session)
+                if changed:
                     session.commit()
-                    return normalized
-                state = dict(row.payload_json or {})
-                normalized = self._normalize_state(state)
-                if normalized != state:
-                    self._save_state_record(session, normalized)
-                    session.commit()
-                return normalized
+                return state
         seeded = self._load_file_state(app)
         if seeded is None:
             state = self._default_state()
@@ -1009,6 +1051,9 @@ class AdminGodModeService:
                 "available_roles": DEFAULT_ROLE_PERMISSIONS,
                 "assignments": [],
             },
+            RUNTIME_METADATA_KEY: {
+                LEGACY_FILE_RECONCILED_AT_KEY: None,
+            },
             "commissions": DEFAULT_COMMISSION_SETTINGS,
             "payment_rails": _default_payment_rails(),
             "withdrawal_controls": DEFAULT_WITHDRAWAL_CONTROLS,
@@ -1021,6 +1066,16 @@ class AdminGodModeService:
         normalized = dict(state)
         normalized["roles"] = self._normalize_roles_block(state.get("roles") or {})
         normalized["payment_rails"] = self._normalize_payment_rails(state.get("payment_rails") or [])
+        metadata = state.get(RUNTIME_METADATA_KEY)
+        if not isinstance(metadata, dict):
+            metadata = {}
+        normalized[RUNTIME_METADATA_KEY] = {
+            LEGACY_FILE_RECONCILED_AT_KEY: (
+                None
+                if metadata.get(LEGACY_FILE_RECONCILED_AT_KEY) is None
+                else str(metadata.get(LEGACY_FILE_RECONCILED_AT_KEY))
+            )
+        }
         return normalized
 
     def _normalize_payment_rails(self, rails_block: Any) -> list[dict[str, Any]]:
@@ -1097,6 +1152,103 @@ class AdminGodModeService:
             "default_admin_role": default_admin_role,
             "available_roles": available_roles,
             "assignments": assignments,
+        }
+
+    def _load_state_in_session(self, app: FastAPI, session: Session) -> tuple[dict[str, Any], bool]:
+        row = session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY))
+        if row is None:
+            seeded = self._load_file_state(app) or self._default_state()
+            normalized = self._normalize_state(seeded)
+            reconciled, changed = self._reconcile_legacy_file_state(app, normalized)
+            self._save_state_record(session, reconciled)
+            return reconciled, True or changed
+        state = dict(row.payload_json or {})
+        normalized = self._normalize_state(state)
+        reconciled, changed = self._reconcile_legacy_file_state(app, normalized)
+        if changed or reconciled != state:
+            self._save_state_record(session, reconciled)
+            return reconciled, True
+        return reconciled, False
+
+    def _reconcile_legacy_file_state(self, app: FastAPI, state: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        normalized = self._normalize_state(state)
+        metadata = dict(normalized.get(RUNTIME_METADATA_KEY) or {})
+        if metadata.get(LEGACY_FILE_RECONCILED_AT_KEY):
+            normalized[RUNTIME_METADATA_KEY] = metadata
+            return normalized, False
+
+        changed = False
+        legacy_state = self._load_file_state(app)
+        if legacy_state is not None:
+            legacy_roles = self._normalize_roles_block((legacy_state.get("roles") or {}))
+            current_roles = dict(normalized.get("roles") or {})
+            available_roles = dict(current_roles.get("available_roles") or {})
+            assignments = list(current_roles.get("assignments") or [])
+            for role_name, permissions in legacy_roles.get("available_roles", {}).items():
+                if role_name not in available_roles:
+                    available_roles[role_name] = list(permissions)
+                    changed = True
+            existing_subject_keys = {
+                str(item.get("subject_key") or "").strip().lower()
+                for item in assignments
+                if str(item.get("subject_key") or "").strip()
+            }
+            for assignment in legacy_roles.get("assignments", []):
+                subject_key = str(assignment.get("subject_key") or "").strip().lower()
+                if not subject_key or subject_key in existing_subject_keys:
+                    continue
+                assignments.append(dict(assignment))
+                existing_subject_keys.add(subject_key)
+                changed = True
+            current_roles["available_roles"] = available_roles
+            current_roles["assignments"] = assignments
+            normalized["roles"] = self._normalize_roles_block(current_roles)
+
+        metadata[LEGACY_FILE_RECONCILED_AT_KEY] = utcnow().isoformat()
+        normalized[RUNTIME_METADATA_KEY] = metadata
+        return normalized, True
+
+    def _resolve_assignment_role_name(
+        self,
+        *,
+        admin: User,
+        available_roles: dict[str, list[str]],
+        role_name: str | None,
+    ) -> str:
+        if admin.role == UserRole.SUPER_ADMIN:
+            return GOD_MODE_ROLE_NAME
+        normalized_role_name = str(role_name or SCOPED_ADMIN_ROLE_NAME).strip() or SCOPED_ADMIN_ROLE_NAME
+        if normalized_role_name not in available_roles:
+            raise GodModeError(f"Unknown admin role '{normalized_role_name}'.")
+        return normalized_role_name
+
+    def assignment_snapshot(self, actor: User, state: dict[str, Any]) -> dict[str, Any]:
+        if actor.role == UserRole.SUPER_ADMIN:
+            return {
+                "role_name": GOD_MODE_ROLE_NAME,
+                "permissions": [],
+                "is_enabled": actor.is_active,
+            }
+        subject_keys = self._assignment_subject_keys(actor)
+        for assignment in (self._normalize_roles_block(state.get("roles") or {}).get("assignments") or []):
+            subject_key = str(assignment.get("subject_key") or "").strip().lower()
+            if subject_key and subject_key in subject_keys:
+                return {
+                    "role_name": str(assignment.get("role_name") or SCOPED_ADMIN_ROLE_NAME),
+                    "permissions": [str(item) for item in assignment.get("permissions") or []],
+                    "is_enabled": bool(assignment.get("is_enabled", True)),
+                }
+        return {
+            "role_name": SCOPED_ADMIN_ROLE_NAME,
+            "permissions": [],
+            "is_enabled": actor.is_active,
+        }
+
+    def _assignment_subject_keys(self, actor: User) -> set[str]:
+        return {
+            value.strip().lower()
+            for value in (actor.id, actor.email, actor.username)
+            if isinstance(value, str) and value.strip()
         }
 
     def _append_audit(
