@@ -91,6 +91,51 @@ function Test-BitmapHasVisibleContent {
     return $uniqueColors.Count -ge 10 -or ($maxLuma - $minLuma) -ge 14
 }
 
+function Test-ImageFileHasVisibleContent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return $false
+    }
+
+    $bitmap = $null
+    try {
+        $bitmap = [System.Drawing.Bitmap]::FromFile($Path)
+        return Test-BitmapHasVisibleContent -Bitmap $bitmap
+    }
+    catch {
+        return $false
+    }
+    finally {
+        if ($null -ne $bitmap) {
+            $bitmap.Dispose()
+        }
+    }
+}
+
+function Wait-ForInternalCapture {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [int]$TimeoutSeconds = 8
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-ImageFileHasVisibleContent -Path $Path) {
+            return $true
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    return (Test-ImageFileHasVisibleContent -Path $Path)
+}
+
 function Copy-WindowFromScreen {
     param(
         [Parameter(Mandatory = $true)]
@@ -134,9 +179,9 @@ function Capture-WindowImage {
 
     $bitmap = New-Object System.Drawing.Bitmap $width, $height
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $captured = $false
     try {
         $printed = $false
-        $captured = $false
         $hdc = [IntPtr]::Zero
         try {
             $hdc = $graphics.GetHdc()
@@ -164,16 +209,23 @@ function Capture-WindowImage {
             [Win32Capture]::SetForegroundWindow($Process.MainWindowHandle) | Out-Null
             Start-Sleep -Milliseconds 350
             Copy-WindowFromScreen -Graphics $graphics -Rect $rect -BitmapSize $bitmap.Size
+            $captured = Test-BitmapHasVisibleContent -Bitmap $bitmap
         }
 
-        $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+        if ($captured) {
+            $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+        }
     }
     finally {
         $graphics.Dispose()
         $bitmap.Dispose()
     }
 
-    return $true
+    if (-not $captured -and (Test-Path $Path)) {
+        Remove-Item $Path -Force -ErrorAction SilentlyContinue
+    }
+
+    return $captured
 }
 
 function Resolve-FallbackPlayerLog {
@@ -264,93 +316,133 @@ $args = @(
     '-logFile', $PlayerLogPath
 )
 
-$process = Start-Process -FilePath $ExePath -ArgumentList $args -PassThru
-$launchTime = Get-Date
+$previousCaptureOutputDirectory = $env:GTEX_CAPTURE_OUTPUT_DIR
+$previousCaptureSessionName = $env:GTEX_CAPTURE_SESSION_NAME
+$previousCaptureOffsets = $env:GTEX_CAPTURE_OFFSETS_SECONDS
+$env:GTEX_CAPTURE_OUTPUT_DIR = $OutputDir
+$env:GTEX_CAPTURE_SESSION_NAME = $resolvedSessionName
+$env:GTEX_CAPTURE_OFFSETS_SECONDS = ($captureOffsets -join ',')
 
-Start-Sleep -Seconds $InitialWaitSeconds
+$process = $null
+try {
+    $process = Start-Process -FilePath $ExePath -ArgumentList $args -PassThru
+    $launchTime = Get-Date
 
-$windowDeadline = (Get-Date).AddSeconds($WindowWaitSeconds)
-do {
-    Start-Sleep -Milliseconds 500
-    $process.Refresh()
-} while ((Get-Date) -lt $windowDeadline -and -not $process.HasExited -and $process.MainWindowHandle -eq 0)
+    Start-Sleep -Seconds $InitialWaitSeconds
 
-$captureResults = New-Object System.Collections.Generic.List[string]
-
-foreach ($offset in $captureOffsets) {
-    $targetTime = $launchTime.AddSeconds($offset)
-    while ((Get-Date) -lt $targetTime -and -not $process.HasExited) {
+    $windowDeadline = (Get-Date).AddSeconds($WindowWaitSeconds)
+    do {
         Start-Sleep -Milliseconds 500
         $process.Refresh()
+    } while ((Get-Date) -lt $windowDeadline -and -not $process.HasExited -and $process.MainWindowHandle -eq 0)
+
+    $captureResults = New-Object System.Collections.Generic.List[string]
+
+    foreach ($offset in $captureOffsets) {
+        $targetTime = $launchTime.AddSeconds($offset)
+        while ((Get-Date) -lt $targetTime -and -not $process.HasExited) {
+            Start-Sleep -Milliseconds 500
+            $process.Refresh()
+        }
+
+        $capturePath = Join-Path $OutputDir ("{0}_t{1:D4}s.png" -f $resolvedSessionName, $offset)
+        $captured = Wait-ForInternalCapture -Path $capturePath
+        $captureMethod = 'internal'
+
+        if (-not $captured) {
+            $captured = Capture-WindowImage -Process $process -Path $capturePath
+            $captureMethod = if ($captured) { 'window' } else { 'none' }
+        }
+
+        $captureResults.Add(
+            ("offset={0}; captured={1}; method={2}; path={3}" -f $offset, $captured, $captureMethod, $capturePath))
     }
 
-    $capturePath = Join-Path $OutputDir ("{0}_t{1:D4}s.png" -f $resolvedSessionName, $offset)
-    $captured = Capture-WindowImage -Process $process -Path $capturePath
-    $captureResults.Add(
-        ("offset={0}; captured={1}; path={2}" -f $offset, $captured, $capturePath))
+    $process.Refresh()
+    $playerLogSource = 'redirected'
+
+    if (-not $LeaveRunning) {
+        if (-not $process.HasExited) {
+            $null = $process.CloseMainWindow()
+            Start-Sleep -Seconds 3
+            $process.Refresh()
+        }
+
+        if (-not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force
+            Start-Sleep -Seconds 2
+            $process.Refresh()
+        }
+    }
+
+    if (-not (Test-Path $PlayerLogPath)) {
+        $fallbackPlayerLog = Resolve-FallbackPlayerLog -LaunchTime $launchTime
+        if (-not [string]::IsNullOrWhiteSpace($fallbackPlayerLog) -and (Test-Path $fallbackPlayerLog)) {
+            Copy-Item -Path $fallbackPlayerLog -Destination $PlayerLogPath -Force
+            $playerLogSource = "fallback:$fallbackPlayerLog"
+        }
+        else {
+            $playerLogSource = 'missing'
+        }
+    }
+
+    $runtimeTraceSource = Copy-RuntimeTraceArtifact -ExePath $ExePath -DestinationPath $runtimeTracePath
+    if ([string]::IsNullOrWhiteSpace($runtimeTraceSource)) {
+        $runtimeTraceSource = 'missing'
+    }
+
+    $metadata = @(
+        ("session={0}" -f $resolvedSessionName),
+        ("pid={0}" -f $process.Id),
+        ("title={0}" -f $process.MainWindowTitle),
+        ("handle={0}" -f $process.MainWindowHandle),
+        ("exited={0}" -f $process.HasExited),
+        ("player_log={0}" -f $PlayerLogPath),
+        ("player_log_source={0}" -f $playerLogSource),
+        ("runtime_bootstrap={0}" -f $runtimeBootstrapPath),
+        ("runtime_bootstrap_source={0}" -f $runtimeBootstrapSource),
+        ("runtime_trace={0}" -f $runtimeTracePath),
+        ("runtime_trace_source={0}" -f $runtimeTraceSource),
+        ("leave_running={0}" -f $LeaveRunning.IsPresent)
+    )
+
+    $metadata += $captureResults
+    Set-Content -Path $metadataPath -Value $metadata
+
+    Write-Output ("SESSION={0}" -f $resolvedSessionName)
+    Write-Output ("PID={0}" -f $process.Id)
+    Write-Output ("EXITED={0}" -f $process.HasExited)
+    Write-Output ("TITLE={0}" -f $process.MainWindowTitle)
+    Write-Output ("HANDLE={0}" -f $process.MainWindowHandle)
+    Write-Output ("PLAYER_LOG={0}" -f $PlayerLogPath)
+    Write-Output ("PLAYER_LOG_SOURCE={0}" -f $playerLogSource)
+    Write-Output ("RUNTIME_BOOTSTRAP={0}" -f $runtimeBootstrapPath)
+    Write-Output ("RUNTIME_BOOTSTRAP_SOURCE={0}" -f $runtimeBootstrapSource)
+    Write-Output ("RUNTIME_TRACE={0}" -f $runtimeTracePath)
+    Write-Output ("RUNTIME_TRACE_SOURCE={0}" -f $runtimeTraceSource)
+    Write-Output ("METADATA={0}" -f $metadataPath)
+    $captureResults | ForEach-Object { Write-Output $_ }
 }
-
-$process.Refresh()
-$playerLogSource = 'redirected'
-
-if (-not $LeaveRunning) {
-    if (-not $process.HasExited) {
-        $null = $process.CloseMainWindow()
-        Start-Sleep -Seconds 3
-        $process.Refresh()
-    }
-
-    if (-not $process.HasExited) {
-        Stop-Process -Id $process.Id -Force
-        Start-Sleep -Seconds 2
-        $process.Refresh()
-    }
-}
-
-if (-not (Test-Path $PlayerLogPath)) {
-    $fallbackPlayerLog = Resolve-FallbackPlayerLog -LaunchTime $launchTime
-    if (-not [string]::IsNullOrWhiteSpace($fallbackPlayerLog) -and (Test-Path $fallbackPlayerLog)) {
-        Copy-Item -Path $fallbackPlayerLog -Destination $PlayerLogPath -Force
-        $playerLogSource = "fallback:$fallbackPlayerLog"
+finally {
+    if ($null -eq $previousCaptureOutputDirectory) {
+        Remove-Item Env:GTEX_CAPTURE_OUTPUT_DIR -ErrorAction SilentlyContinue
     }
     else {
-        $playerLogSource = 'missing'
+        $env:GTEX_CAPTURE_OUTPUT_DIR = $previousCaptureOutputDirectory
     }
+
+    if ($null -eq $previousCaptureSessionName) {
+        Remove-Item Env:GTEX_CAPTURE_SESSION_NAME -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:GTEX_CAPTURE_SESSION_NAME = $previousCaptureSessionName
+    }
+
+    if ($null -eq $previousCaptureOffsets) {
+        Remove-Item Env:GTEX_CAPTURE_OFFSETS_SECONDS -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:GTEX_CAPTURE_OFFSETS_SECONDS = $previousCaptureOffsets
+    }
+
 }
-
-$runtimeTraceSource = Copy-RuntimeTraceArtifact -ExePath $ExePath -DestinationPath $runtimeTracePath
-if ([string]::IsNullOrWhiteSpace($runtimeTraceSource)) {
-    $runtimeTraceSource = 'missing'
-}
-
-$metadata = @(
-    ("session={0}" -f $resolvedSessionName),
-    ("pid={0}" -f $process.Id),
-    ("title={0}" -f $process.MainWindowTitle),
-    ("handle={0}" -f $process.MainWindowHandle),
-    ("exited={0}" -f $process.HasExited),
-    ("player_log={0}" -f $PlayerLogPath),
-    ("player_log_source={0}" -f $playerLogSource),
-    ("runtime_bootstrap={0}" -f $runtimeBootstrapPath),
-    ("runtime_bootstrap_source={0}" -f $runtimeBootstrapSource),
-    ("runtime_trace={0}" -f $runtimeTracePath),
-    ("runtime_trace_source={0}" -f $runtimeTraceSource),
-    ("leave_running={0}" -f $LeaveRunning.IsPresent)
-)
-
-$metadata += $captureResults
-Set-Content -Path $metadataPath -Value $metadata
-
-Write-Output ("SESSION={0}" -f $resolvedSessionName)
-Write-Output ("PID={0}" -f $process.Id)
-Write-Output ("EXITED={0}" -f $process.HasExited)
-Write-Output ("TITLE={0}" -f $process.MainWindowTitle)
-Write-Output ("HANDLE={0}" -f $process.MainWindowHandle)
-Write-Output ("PLAYER_LOG={0}" -f $PlayerLogPath)
-Write-Output ("PLAYER_LOG_SOURCE={0}" -f $playerLogSource)
-Write-Output ("RUNTIME_BOOTSTRAP={0}" -f $runtimeBootstrapPath)
-Write-Output ("RUNTIME_BOOTSTRAP_SOURCE={0}" -f $runtimeBootstrapSource)
-Write-Output ("RUNTIME_TRACE={0}" -f $runtimeTracePath)
-Write-Output ("RUNTIME_TRACE_SOURCE={0}" -f $runtimeTraceSource)
-Write-Output ("METADATA={0}" -f $metadataPath)
-$captureResults | ForEach-Object { Write-Output $_ }

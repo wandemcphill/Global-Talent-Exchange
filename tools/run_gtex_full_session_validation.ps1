@@ -184,6 +184,38 @@ function Get-CaptureValue {
     return $null
 }
 
+function Get-CaptureResultRecords {
+    param([string]$MetadataPath)
+
+    if (-not (Test-Path $MetadataPath)) {
+        return @()
+    }
+
+    $records = New-Object System.Collections.Generic.List[object]
+    foreach ($line in (Get-Content $MetadataPath -ErrorAction SilentlyContinue)) {
+        if ($line -notmatch '^offset=') {
+            continue
+        }
+
+        $parts = @{}
+        foreach ($segment in ($line -split '; ')) {
+            $pair = $segment -split '=', 2
+            if ($pair.Count -eq 2) {
+                $parts[$pair[0]] = $pair[1]
+            }
+        }
+
+        $records.Add([pscustomobject]@{
+            offset = if ($parts.ContainsKey('offset')) { [int]$parts['offset'] } else { 0 }
+            captured = $parts.ContainsKey('captured') -and [System.Convert]::ToBoolean($parts['captured'])
+            method = if ($parts.ContainsKey('method')) { $parts['method'] } else { 'unknown' }
+            path = if ($parts.ContainsKey('path')) { $parts['path'] } else { '' }
+        })
+    }
+
+    return $records.ToArray()
+}
+
 function Copy-RuntimeTraceArtifact {
     param(
         [string]$ExePath,
@@ -302,7 +334,9 @@ try {
     Start-Sleep -Seconds 2
     $null = Copy-RuntimeTraceArtifact -ExePath $exe -DestinationPath $runtimeTrace
 
-    $screenshots = @(Get-ChildItem $captureOutputDir -Filter ($sessionName + '_t*.png') -ErrorAction SilentlyContinue | Sort-Object Name)
+    $captureRecords = @(Get-CaptureResultRecords -MetadataPath $metadataPath)
+    $visibleCaptureRecords = @($captureRecords | Where-Object { $_.captured })
+    $screenshots = @($visibleCaptureRecords | ForEach-Object { Get-Item $_.path -ErrorAction SilentlyContinue } | Where-Object { $null -ne $_ } | Sort-Object Name)
 
     $traceText = if (Test-Path $runtimeTrace) { Get-Content $runtimeTrace -Raw -ErrorAction SilentlyContinue } else { '' }
     $playerText = if (Test-Path $playerLog) { Get-Content $playerLog -Raw -ErrorAction SilentlyContinue } else { '' }
@@ -322,7 +356,10 @@ try {
     $phaseSequence = @($serverSummary.phase_sequence)
     $scoreTimeline = @($serverSummary.score_timeline)
     $cameraPresetsSeen = @($serverSummary.camera_presets_seen)
-    $screenshotsCaptured = $screenshots.Count -ge 5
+    $visibleCaptureCount = $visibleCaptureRecords.Count
+    $internalCaptureCount = @($visibleCaptureRecords | Where-Object { $_.method -eq 'internal' }).Count
+    $windowCaptureCount = @($visibleCaptureRecords | Where-Object { $_.method -eq 'window' }).Count
+    $screenshotsCaptured = $visibleCaptureCount -ge 5
     $linearKinematicWarningSeen = $playerText -match 'Setting linear velocity of a kinematic body is not supported'
     $angularKinematicWarningSeen = $playerText -match 'Setting angular velocity of a kinematic body is not supported'
     $playerExitedBeforeFulltime = [bool]$sessionResult.player_exited -and -not $serverReachedFulltime
@@ -363,7 +400,11 @@ try {
         player_log = $playerLog
         runtime_trace = $runtimeTrace
         metadata_path = $metadataPath
+        capture_results = $captureRecords
         screenshot_paths = @($screenshots | ForEach-Object { $_.FullName })
+        visible_capture_count = $visibleCaptureCount
+        internal_capture_count = $internalCaptureCount
+        window_capture_count = $windowCaptureCount
         bootstrap_seen = $bootstrapSeen
         motion_seen = $motionSeen
         ball_motion_seen = $ballMotionSeen

@@ -123,6 +123,7 @@ namespace FStudio.GTEX
         private bool isRefreshingLiveAccess;
         private readonly List<string> runtimeTraceBuffer = new();
         private string runtimeTracePath = string.Empty;
+        private bool runtimeScreenshotCaptureArmed;
         private float runtimeTraceLastFlushAt = -1f;
         private float runtimeTraceLastHeartbeatAt = -1f;
         private float runtimeTraceLastPlaybackSampleAt = -1f;
@@ -273,6 +274,7 @@ namespace FStudio.GTEX
                 return;
             }
 
+            TryStartRuntimeScreenshotCapture();
             AppendRuntimeTrace("start", "bootstrap started.");
             StartCoroutine(Bootstrap());
         }
@@ -372,6 +374,149 @@ namespace FStudio.GTEX
                 Debug.LogWarning("[GTEX] Failed to write runtime trace file: " + exception.Message);
                 runtimeTraceBuffer.Clear();
             }
+        }
+
+        private void TryStartRuntimeScreenshotCapture()
+        {
+            if (runtimeScreenshotCaptureArmed || Application.isBatchMode)
+            {
+                return;
+            }
+
+            var request = ResolveRuntimeScreenshotCaptureRequest();
+            if (request == null)
+            {
+                return;
+            }
+
+            runtimeScreenshotCaptureArmed = true;
+            StartCoroutine(CaptureRuntimeScreenshots(request));
+        }
+
+        private RuntimeScreenshotCaptureRequest ResolveRuntimeScreenshotCaptureRequest()
+        {
+            var outputDirectory = Environment.GetEnvironmentVariable("GTEX_CAPTURE_OUTPUT_DIR");
+            if (string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                return null;
+            }
+
+            var offsetsRaw = Environment.GetEnvironmentVariable("GTEX_CAPTURE_OFFSETS_SECONDS");
+            if (string.IsNullOrWhiteSpace(offsetsRaw))
+            {
+                return null;
+            }
+
+            var offsets = new List<int>();
+            foreach (var token in offsetsRaw.Split(','))
+            {
+                if (int.TryParse(token.Trim(), out var seconds) && seconds >= 0)
+                {
+                    offsets.Add(seconds);
+                }
+            }
+
+            if (offsets.Count == 0)
+            {
+                return null;
+            }
+
+            offsets.Sort();
+            return new RuntimeScreenshotCaptureRequest
+            {
+                OutputDirectory = outputDirectory.Trim(),
+                SessionName = ResolveRuntimeScreenshotSessionName(),
+                OffsetsSeconds = offsets
+            };
+        }
+
+        private static string ResolveRuntimeScreenshotSessionName()
+        {
+            var sessionName = Environment.GetEnvironmentVariable("GTEX_CAPTURE_SESSION_NAME");
+            if (!string.IsNullOrWhiteSpace(sessionName))
+            {
+                return sessionName.Trim();
+            }
+
+            return "gtex_runtime_capture";
+        }
+
+        private IEnumerator CaptureRuntimeScreenshots(RuntimeScreenshotCaptureRequest request)
+        {
+            try
+            {
+                Directory.CreateDirectory(request.OutputDirectory);
+            }
+            catch (Exception exception)
+            {
+                AppendRuntimeTrace("capture", "failed to create screenshot directory: " + exception.Message);
+                FlushRuntimeTrace(true);
+                yield break;
+            }
+
+            AppendRuntimeTrace(
+                "capture",
+                "armed session=" +
+                request.SessionName +
+                " outputDir=" +
+                request.OutputDirectory +
+                " offsets=" +
+                string.Join(",", request.OffsetsSeconds));
+            FlushRuntimeTrace(true);
+
+            var startedAt = Time.realtimeSinceStartup;
+            foreach (var offset in request.OffsetsSeconds)
+            {
+                var targetTime = startedAt + offset;
+                while (Time.realtimeSinceStartup < targetTime)
+                {
+                    yield return null;
+                }
+
+                yield return new WaitForEndOfFrame();
+
+                var capturePath = Path.Combine(
+                    request.OutputDirectory,
+                    string.Format("{0}_t{1:D4}s.png", request.SessionName, offset));
+
+                Texture2D screenshotTexture = null;
+                try
+                {
+                    screenshotTexture = ScreenCapture.CaptureScreenshotAsTexture();
+                    if (screenshotTexture == null)
+                    {
+                        AppendRuntimeTrace("capture", "null texture offset=" + offset + " path=" + capturePath);
+                        FlushRuntimeTrace(true);
+                        continue;
+                    }
+
+                    var screenshotBytes = screenshotTexture.EncodeToPNG();
+                    File.WriteAllBytes(capturePath, screenshotBytes);
+                    AppendRuntimeTrace("capture", "saved offset=" + offset + " path=" + capturePath);
+                    FlushRuntimeTrace(true);
+                }
+                catch (Exception exception)
+                {
+                    AppendRuntimeTrace(
+                        "capture",
+                        "failed offset=" + offset + " path=" + capturePath + " error=" + exception.Message);
+                    FlushRuntimeTrace(true);
+                }
+                finally
+                {
+                    if (screenshotTexture != null)
+                    {
+                        Destroy(screenshotTexture);
+                    }
+                }
+            }
+        }
+
+        private sealed class RuntimeScreenshotCaptureRequest
+        {
+            public string OutputDirectory;
+            public string SessionName;
+            public List<int> OffsetsSeconds;
         }
 
         private string BuildRuntimeTraceSummary()
