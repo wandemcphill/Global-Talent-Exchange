@@ -128,9 +128,9 @@ class HostedCompetitionFinanceView(BaseModel):
 class HostedCompetitionCreateRequest(BaseModel):
     template_key: str
     title: str
-    description: str = ''
+    description: str = ""
     slug: str | None = None
-    visibility: str = 'public'
+    visibility: str = "public"
     starts_at: datetime | None = None
     lock_at: datetime | None = None
     max_participants: int | None = None
@@ -141,18 +141,18 @@ class HostedCompetitionCreateRequest(BaseModel):
 class HostedCompetitionPlacementRequest(BaseModel):
     user_id: str
     rank: int = Field(ge=1)
-    payout_percent: Decimal = Field(default=Decimal('0.0000'), ge=Decimal('0.0000'), le=Decimal('100.0000'))
+    payout_percent: Decimal = Field(default=Decimal("0.0000"), ge=Decimal("0.0000"), le=Decimal("100.0000"))
 
 
 class HostedCompetitionFinalizeRequest(BaseModel):
     placements: list[HostedCompetitionPlacementRequest]
-    note: str = ''
+    note: str = ""
 
 
 class HostedCompetitionInviteCreateRequest(BaseModel):
     recipient_user_ids: list[str] = Field(default_factory=list)
     recipient_emails: list[str] = Field(default_factory=list)
-    message: str = Field(default='', max_length=500)
+    message: str = Field(default="", max_length=500)
 
 
 class HostedCompetitionInviteAcceptRequest(BaseModel):

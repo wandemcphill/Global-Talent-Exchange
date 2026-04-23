@@ -117,11 +117,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
 
 ALL_ADMIN_PERMISSIONS: tuple[str, ...] = tuple(
     sorted(
-        {
-            permission
-            for permissions in DEFAULT_ROLE_PERMISSIONS.values()
-            for permission in permissions
-        }
+        {permission for permissions in DEFAULT_ROLE_PERMISSIONS.values() for permission in permissions}
         | set(SUPER_ADMIN_EXTRA_PERMISSIONS)
     )
 )
@@ -221,9 +217,7 @@ class AdminGodModeService:
         assignments = list(roles.get("assignments") or [])
         subject_keys = self._assignment_subject_keys(admin)
         assignments[:] = [
-            item
-            for item in assignments
-            if str(item.get("subject_key", "")).strip().lower() not in subject_keys
+            item for item in assignments if str(item.get("subject_key", "")).strip().lower() not in subject_keys
         ]
         assignments.append(
             {
@@ -1159,9 +1153,9 @@ class AdminGodModeService:
         if row is None:
             seeded = self._load_file_state(app) or self._default_state()
             normalized = self._normalize_state(seeded)
-            reconciled, changed = self._reconcile_legacy_file_state(app, normalized)
+            reconciled, _ = self._reconcile_legacy_file_state(app, normalized)
             self._save_state_record(session, reconciled)
-            return reconciled, True or changed
+            return reconciled, True
         state = dict(row.payload_json or {})
         normalized = self._normalize_state(state)
         reconciled, changed = self._reconcile_legacy_file_state(app, normalized)
@@ -1177,7 +1171,6 @@ class AdminGodModeService:
             normalized[RUNTIME_METADATA_KEY] = metadata
             return normalized, False
 
-        changed = False
         legacy_state = self._load_file_state(app)
         if legacy_state is not None:
             legacy_roles = self._normalize_roles_block((legacy_state.get("roles") or {}))
@@ -1187,7 +1180,6 @@ class AdminGodModeService:
             for role_name, permissions in legacy_roles.get("available_roles", {}).items():
                 if role_name not in available_roles:
                     available_roles[role_name] = list(permissions)
-                    changed = True
             existing_subject_keys = {
                 str(item.get("subject_key") or "").strip().lower()
                 for item in assignments
@@ -1199,7 +1191,6 @@ class AdminGodModeService:
                     continue
                 assignments.append(dict(assignment))
                 existing_subject_keys.add(subject_key)
-                changed = True
             current_roles["available_roles"] = available_roles
             current_roles["assignments"] = assignments
             normalized["roles"] = self._normalize_roles_block(current_roles)
@@ -1230,7 +1221,7 @@ class AdminGodModeService:
                 "is_enabled": actor.is_active,
             }
         subject_keys = self._assignment_subject_keys(actor)
-        for assignment in (self._normalize_roles_block(state.get("roles") or {}).get("assignments") or []):
+        for assignment in self._normalize_roles_block(state.get("roles") or {}).get("assignments") or []:
             subject_key = str(assignment.get("subject_key") or "").strip().lower()
             if subject_key and subject_key in subject_keys:
                 return {

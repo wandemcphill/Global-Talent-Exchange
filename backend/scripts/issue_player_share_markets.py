@@ -299,10 +299,18 @@ def issue_markets(args: argparse.Namespace) -> dict[str, Any]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Bulk issue GTEX player-share markets by safe cohorts.")
-    parser.add_argument("--cohort-type", default="all", choices=["all", "import_batch", "league", "country", "supply_tier", "liquidity_band"])
+    parser.add_argument(
+        "--cohort-type",
+        default="all",
+        choices=["all", "import_batch", "league", "country", "supply_tier", "liquidity_band"],
+    )
     parser.add_argument("--cohort-value", default=None)
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--dry-run", action="store_true", help="Plan and report only. This is also the default unless --activate is passed.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Plan and report only. This is also the default unless --activate is passed.",
+    )
     parser.add_argument("--activate", action="store_true", help="Persist eligible market creations/updates.")
     parser.add_argument("--report-path", default=None)
     parser.add_argument("--policy-path", default=str(DEFAULT_POLICY_PATH))

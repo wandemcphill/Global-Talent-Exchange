@@ -27,65 +27,65 @@ from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletS
 
 DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
     {
-        'template_key': 'user-hosted-cup-8',
-        'title': 'User Hosted Cup',
-        'description': 'An 8-team knockout cup for creator leagues and community rivalries.',
-        'competition_type': 'user_hosted_cup',
-        'team_type': 'club',
-        'age_grade': 'senior',
-        'cup_or_league': 'cup',
-        'participants': 8,
-        'viewing_mode': 'broadcast',
-        'gift_rules': {'enabled': True},
-        'seeding_method': 'random',
-        'is_user_hostable': True,
-        'entry_fee_fancoin': Decimal('250.0000'),
-        'reward_pool_fancoin': Decimal('1600.0000'),
-        'platform_fee_bps': 1000,
-        'metadata_json': {'family': 'creator'},
-        'active': True,
+        "template_key": "user-hosted-cup-8",
+        "title": "User Hosted Cup",
+        "description": "An 8-team knockout cup for creator leagues and community rivalries.",
+        "competition_type": "user_hosted_cup",
+        "team_type": "club",
+        "age_grade": "senior",
+        "cup_or_league": "cup",
+        "participants": 8,
+        "viewing_mode": "broadcast",
+        "gift_rules": {"enabled": True},
+        "seeding_method": "random",
+        "is_user_hostable": True,
+        "entry_fee_fancoin": Decimal("250.0000"),
+        "reward_pool_fancoin": Decimal("1600.0000"),
+        "platform_fee_bps": 1000,
+        "metadata_json": {"family": "creator"},
+        "active": True,
     },
     {
-        'template_key': 'user-hosted-league-10',
-        'title': 'User Hosted League',
-        'description': 'A 10-team league format for creator communities and fan-organized ladders.',
-        'competition_type': 'user_hosted_league',
-        'team_type': 'club',
-        'age_grade': 'senior',
-        'cup_or_league': 'league',
-        'participants': 10,
-        'viewing_mode': 'broadcast',
-        'gift_rules': {'enabled': True},
-        'seeding_method': 'snake',
-        'is_user_hostable': True,
-        'entry_fee_fancoin': Decimal('300.0000'),
-        'reward_pool_fancoin': Decimal('2400.0000'),
-        'platform_fee_bps': 1000,
-        'metadata_json': {'family': 'creator'},
-        'active': True,
+        "template_key": "user-hosted-league-10",
+        "title": "User Hosted League",
+        "description": "A 10-team league format for creator communities and fan-organized ladders.",
+        "competition_type": "user_hosted_league",
+        "team_type": "club",
+        "age_grade": "senior",
+        "cup_or_league": "league",
+        "participants": 10,
+        "viewing_mode": "broadcast",
+        "gift_rules": {"enabled": True},
+        "seeding_method": "snake",
+        "is_user_hostable": True,
+        "entry_fee_fancoin": Decimal("300.0000"),
+        "reward_pool_fancoin": Decimal("2400.0000"),
+        "platform_fee_bps": 1000,
+        "metadata_json": {"family": "creator"},
+        "active": True,
     },
     {
-        'template_key': 'queue-cup',
-        'title': 'Queue Cup',
-        'description': 'Quick-fill queue cup with smaller entry and fast lock window.',
-        'competition_type': 'queue_cup',
-        'team_type': 'club',
-        'age_grade': 'senior',
-        'cup_or_league': 'cup',
-        'participants': 4,
-        'viewing_mode': 'quick',
-        'gift_rules': {'enabled': True},
-        'seeding_method': 'random',
-        'is_user_hostable': True,
-        'entry_fee_fancoin': Decimal('100.0000'),
-        'reward_pool_fancoin': Decimal('320.0000'),
-        'platform_fee_bps': 2000,
-        'metadata_json': {'family': 'queue'},
-        'active': True,
+        "template_key": "queue-cup",
+        "title": "Queue Cup",
+        "description": "Quick-fill queue cup with smaller entry and fast lock window.",
+        "competition_type": "queue_cup",
+        "team_type": "club",
+        "age_grade": "senior",
+        "cup_or_league": "cup",
+        "participants": 4,
+        "viewing_mode": "quick",
+        "gift_rules": {"enabled": True},
+        "seeding_method": "random",
+        "is_user_hostable": True,
+        "entry_fee_fancoin": Decimal("100.0000"),
+        "reward_pool_fancoin": Decimal("320.0000"),
+        "platform_fee_bps": 2000,
+        "metadata_json": {"family": "queue"},
+        "active": True,
     },
 )
 
-AMOUNT_QUANTUM = Decimal('0.0001')
+AMOUNT_QUANTUM = Decimal("0.0001")
 
 
 class HostedCompetitionError(ValueError):
@@ -113,10 +113,10 @@ class HostedCompetitionService:
     def _require_host_or_admin(self, *, competition: UserHostedCompetition, actor: User) -> None:
         if competition.host_user_id == actor.id or self._is_admin_user(actor):
             return
-        raise HostedCompetitionError('Only the host or an admin can manage hosted competition invites.')
+        raise HostedCompetitionError("Only the host or an admin can manage hosted competition invites.")
 
     def _invite_rows(self, competition: UserHostedCompetition) -> list[dict[str, object]]:
-        rows = (competition.metadata_json or {}).get('invites')
+        rows = (competition.metadata_json or {}).get("invites")
         if not isinstance(rows, list):
             return []
         normalized: list[dict[str, object]] = []
@@ -126,14 +126,14 @@ class HostedCompetitionService:
         return normalized
 
     def _set_invite_rows(self, competition: UserHostedCompetition, rows: list[dict[str, object]]) -> None:
-        competition.metadata_json = {**(competition.metadata_json or {}), 'invites': rows}
+        competition.metadata_json = {**(competition.metadata_json or {}), "invites": rows}
         self.session.flush()
 
     def _invite_matches_user(self, invite: dict[str, object], user: User) -> bool:
-        recipient_user_id = str(invite.get('recipient_user_id') or '').strip()
+        recipient_user_id = str(invite.get("recipient_user_id") or "").strip()
         if recipient_user_id and recipient_user_id == user.id:
             return True
-        recipient_email = str(invite.get('recipient_email') or '').strip().lower()
+        recipient_email = str(invite.get("recipient_email") or "").strip().lower()
         return bool(recipient_email and recipient_email == user.email.strip().lower())
 
     def _participant_for_user(
@@ -157,11 +157,11 @@ class HostedCompetitionService:
         invite_id: str | None = None,
     ) -> dict[str, object] | None:
         for invite in self._invite_rows(competition):
-            if invite_id and str(invite.get('invite_id') or '') != invite_id:
+            if invite_id and str(invite.get("invite_id") or "") != invite_id:
                 continue
             if not self._invite_matches_user(invite, user):
                 continue
-            if str(invite.get('status') or '').lower() in {'pending', 'accepted'}:
+            if str(invite.get("status") or "").lower() in {"pending", "accepted"}:
                 return invite
         return None
 
@@ -174,60 +174,68 @@ class HostedCompetitionService:
     ) -> dict[str, object]:
         rows = self._invite_rows(competition)
         for index, invite in enumerate(rows):
-            if str(invite.get('invite_id') or '') != invite_id:
+            if str(invite.get("invite_id") or "") != invite_id:
                 continue
             updated = {
                 **invite,
-                'status': status,
-                'responded_at': self._now_iso(),
+                "status": status,
+                "responded_at": self._now_iso(),
             }
             rows[index] = updated
             self._set_invite_rows(competition, rows)
             return updated
-        raise HostedCompetitionError('Hosted competition invite was not found.')
+        raise HostedCompetitionError("Hosted competition invite was not found.")
 
     def _invite_visible_to_actor(self, invite: dict[str, object], actor: User) -> bool:
         return self._invite_matches_user(invite, actor)
 
     def _invite_payload(self, competition: UserHostedCompetition, invite: dict[str, object]) -> dict[str, object]:
         return {
-            'competition_id': competition.id,
-            'invite_id': str(invite.get('invite_id') or ''),
-            'invited_by_user_id': str(invite.get('invited_by_user_id') or ''),
-            'recipient_user_id': invite.get('recipient_user_id'),
-            'recipient_email': invite.get('recipient_email'),
-            'status': str(invite.get('status') or 'pending'),
-            'message': str(invite.get('message') or ''),
-            'created_at': invite.get('created_at') or self._now_iso(),
-            'responded_at': invite.get('responded_at'),
+            "competition_id": competition.id,
+            "invite_id": str(invite.get("invite_id") or ""),
+            "invited_by_user_id": str(invite.get("invited_by_user_id") or ""),
+            "recipient_user_id": invite.get("recipient_user_id"),
+            "recipient_email": invite.get("recipient_email"),
+            "status": str(invite.get("status") or "pending"),
+            "message": str(invite.get("message") or ""),
+            "created_at": invite.get("created_at") or self._now_iso(),
+            "responded_at": invite.get("responded_at"),
         }
 
     def seed_defaults(self) -> None:
         existing = {item.template_key for item in self.session.scalars(select(CompetitionTemplate)).all()}
         for payload in DEFAULT_TEMPLATES:
-            if payload['template_key'] in existing:
+            if payload["template_key"] in existing:
                 continue
             self.session.add(CompetitionTemplate(**payload))
         self.session.flush()
 
     def list_templates(self) -> list[CompetitionTemplate]:
-        stmt = select(CompetitionTemplate).where(CompetitionTemplate.active.is_(True)).order_by(CompetitionTemplate.title.asc())
+        stmt = (
+            select(CompetitionTemplate)
+            .where(CompetitionTemplate.active.is_(True))
+            .order_by(CompetitionTemplate.title.asc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def get_template_by_key(self, template_key: str) -> CompetitionTemplate | None:
-        return self.session.scalar(select(CompetitionTemplate).where(CompetitionTemplate.template_key == template_key, CompetitionTemplate.active.is_(True)))
+        return self.session.scalar(
+            select(CompetitionTemplate).where(
+                CompetitionTemplate.template_key == template_key, CompetitionTemplate.active.is_(True)
+            )
+        )
 
     def _active_platform_fee_bps(self) -> int:
         rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
         return int(rule.competition_platform_fee_bps if rule is not None else 1000)
 
     def _competition_escrow_account(self, competition: UserHostedCompetition) -> LedgerAccount:
-        code = f'competition:{competition.id}:credit:escrow'
+        code = f"competition:{competition.id}:credit:escrow"
         account = self.session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
         if account is None:
             account = LedgerAccount(
                 code=code,
-                label=f'{competition.title} Competition Escrow',
+                label=f"{competition.title} Competition Escrow",
                 unit=LedgerUnit.CREDIT,
                 kind=LedgerAccountKind.ESCROW,
             )
@@ -238,64 +246,76 @@ class HostedCompetitionService:
     def _available_escrow_balance(self, competition: UserHostedCompetition) -> Decimal:
         return self.wallet_service.get_balance(self.session, self._competition_escrow_account(competition))
 
-    def _create_entry_participant(self, *, competition: UserHostedCompetition, user: User, role: str) -> UserHostedCompetitionParticipant:
+    def _create_entry_participant(
+        self, *, competition: UserHostedCompetition, user: User, role: str
+    ) -> UserHostedCompetitionParticipant:
         participant = UserHostedCompetitionParticipant(
             competition_id=competition.id,
             user_id=user.id,
             entry_fee_fancoin=competition.entry_fee_fancoin,
-            metadata_json={'role': role},
+            metadata_json={"role": role},
         )
         self.session.add(participant)
         try:
             self.session.flush()
         except IntegrityError as exc:
-            raise HostedCompetitionError('User has already joined this competition.') from exc
+            raise HostedCompetitionError("User has already joined this competition.") from exc
         return participant
 
-    def _collect_entry_fee(self, *, competition: UserHostedCompetition, participant: UserHostedCompetitionParticipant, user: User) -> None:
+    def _collect_entry_fee(
+        self, *, competition: UserHostedCompetition, participant: UserHostedCompetitionParticipant, user: User
+    ) -> None:
         amount = self._normalize_amount(competition.entry_fee_fancoin)
-        if amount <= Decimal('0.0000'):
-            participant.metadata_json = {**participant.metadata_json, 'payment_status': 'free'}
+        if amount <= Decimal("0.0000"):
+            participant.metadata_json = {**participant.metadata_json, "payment_status": "free"}
             self.session.flush()
             return
         user_account = self.wallet_service.get_user_account(self.session, user, LedgerUnit.CREDIT)
         escrow_account = self._competition_escrow_account(competition)
         if self.wallet_service.get_balance(self.session, user_account) < amount:
-            raise InsufficientBalanceError('Available FanCoin balance is lower than the hosted competition entry fee.')
+            raise InsufficientBalanceError("Available FanCoin balance is lower than the hosted competition entry fee.")
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=user_account, amount=-amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND),
-                LedgerPosting(account=escrow_account, amount=amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND),
+                LedgerPosting(
+                    account=user_account, amount=-amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND
+                ),
+                LedgerPosting(
+                    account=escrow_account, amount=amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND
+                ),
             ],
             reason=LedgerEntryReason.COMPETITION_ENTRY,
-            reference=f'hosted-entry:{competition.id}:{user.id}',
-            description=f'Hosted competition entry for {competition.title}',
-            external_reference=f'hosted-entry:{competition.id}:{user.id}',
+            reference=f"hosted-entry:{competition.id}:{user.id}",
+            description=f"Hosted competition entry for {competition.title}",
+            external_reference=f"hosted-entry:{competition.id}:{user.id}",
             actor=user,
         )
         participant.metadata_json = {
             **participant.metadata_json,
-            'payment_status': 'settled',
-            'entry_transaction_id': entries[0].transaction_id if entries else None,
+            "payment_status": "settled",
+            "entry_transaction_id": entries[0].transaction_id if entries else None,
         }
         self.session.flush()
 
     def create_competition(self, *, host: User, payload) -> tuple[UserHostedCompetition, CompetitionTemplate, bool]:
         template = self.get_template_by_key(payload.template_key)
         if template is None or not template.is_user_hostable:
-            raise HostedCompetitionError('Competition template was not found or is not hostable.')
-        slug = (payload.slug or payload.title).strip().lower().replace(' ', '-')
+            raise HostedCompetitionError("Competition template was not found or is not hostable.")
+        slug = (payload.slug or payload.title).strip().lower().replace(" ", "-")
         if not slug:
-            raise HostedCompetitionError('Competition slug cannot be empty.')
-        entry_fee = Decimal(str(payload.entry_fee_fancoin if payload.entry_fee_fancoin is not None else template.entry_fee_fancoin)).quantize(Decimal('0.0001'))
-        if entry_fee < Decimal('0.0000'):
-            raise HostedCompetitionError('Entry fee cannot be negative.')
+            raise HostedCompetitionError("Competition slug cannot be empty.")
+        entry_fee = Decimal(
+            str(payload.entry_fee_fancoin if payload.entry_fee_fancoin is not None else template.entry_fee_fancoin)
+        ).quantize(Decimal("0.0001"))
+        if entry_fee < Decimal("0.0000"):
+            raise HostedCompetitionError("Entry fee cannot be negative.")
         max_participants = int(payload.max_participants or template.participants)
         platform_fee_bps = self._active_platform_fee_bps()
         capacity_revenue = entry_fee * Decimal(max_participants)
-        platform_fee_amount = (capacity_revenue * Decimal(platform_fee_bps) / Decimal(10_000)).quantize(Decimal('0.0001'))
-        reward_pool = max(Decimal('0.0000'), (capacity_revenue - platform_fee_amount).quantize(Decimal('0.0001')))
+        platform_fee_amount = (capacity_revenue * Decimal(platform_fee_bps) / Decimal(10_000)).quantize(
+            Decimal("0.0001")
+        )
+        reward_pool = max(Decimal("0.0000"), (capacity_revenue - platform_fee_amount).quantize(Decimal("0.0001")))
         competition = UserHostedCompetition(
             template_id=template.id,
             host_user_id=host.id,
@@ -314,7 +334,7 @@ class HostedCompetitionService:
         )
         self.session.add(competition)
         self.session.flush()
-        participant = self._create_entry_participant(competition=competition, user=host, role='host')
+        participant = self._create_entry_participant(competition=competition, user=host, role="host")
         try:
             self._collect_entry_fee(competition=competition, participant=participant, user=host)
         except InsufficientBalanceError as exc:
@@ -322,32 +342,40 @@ class HostedCompetitionService:
         return competition, template, True
 
     def list_public_competitions(self) -> list[UserHostedCompetition]:
-        stmt = select(UserHostedCompetition).where(UserHostedCompetition.visibility == 'public').order_by(UserHostedCompetition.created_at.desc())
+        stmt = (
+            select(UserHostedCompetition)
+            .where(UserHostedCompetition.visibility == "public")
+            .order_by(UserHostedCompetition.created_at.desc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def list_for_host(self, *, user: User) -> list[UserHostedCompetition]:
-        stmt = select(UserHostedCompetition).where(UserHostedCompetition.host_user_id == user.id).order_by(UserHostedCompetition.created_at.desc())
+        stmt = (
+            select(UserHostedCompetition)
+            .where(UserHostedCompetition.host_user_id == user.id)
+            .order_by(UserHostedCompetition.created_at.desc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def get_competition(self, competition_id: str) -> UserHostedCompetition | None:
         return self.session.get(UserHostedCompetition, competition_id)
 
     def participants_for_competition(self, competition_id: str) -> list[UserHostedCompetitionParticipant]:
-        stmt = select(UserHostedCompetitionParticipant).where(UserHostedCompetitionParticipant.competition_id == competition_id).order_by(UserHostedCompetitionParticipant.joined_at.asc())
+        stmt = (
+            select(UserHostedCompetitionParticipant)
+            .where(UserHostedCompetitionParticipant.competition_id == competition_id)
+            .order_by(UserHostedCompetitionParticipant.joined_at.asc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def invites_for_competition(self, *, actor: User, competition_id: str) -> list[dict[str, object]]:
         competition = self.get_competition(competition_id)
         if competition is None:
-            raise HostedCompetitionError('Hosted competition was not found.')
+            raise HostedCompetitionError("Hosted competition was not found.")
         rows = self._invite_rows(competition)
         if competition.host_user_id == actor.id or self._is_admin_user(actor):
             return [self._invite_payload(competition, row) for row in rows]
-        return [
-            self._invite_payload(competition, row)
-            for row in rows
-            if self._invite_visible_to_actor(row, actor)
-        ]
+        return [self._invite_payload(competition, row) for row in rows if self._invite_visible_to_actor(row, actor)]
 
     def invites_for_user(self, *, user: User) -> list[dict[str, object]]:
         stmt = select(UserHostedCompetition).order_by(UserHostedCompetition.created_at.desc())
@@ -365,59 +393,59 @@ class HostedCompetitionService:
         competition_id: str,
         recipient_user_ids: Iterable[str],
         recipient_emails: Iterable[str],
-        message: str = '',
+        message: str = "",
     ) -> tuple[UserHostedCompetition, list[dict[str, object]]]:
         competition = self.get_competition(competition_id)
         if competition is None:
-            raise HostedCompetitionError('Hosted competition was not found.')
+            raise HostedCompetitionError("Hosted competition was not found.")
         self._require_host_or_admin(competition=competition, actor=actor)
         if competition.status in {HostedCompetitionStatus.COMPLETED, HostedCompetitionStatus.CANCELLED}:
-            raise HostedCompetitionError('Hosted competition is not accepting invites.')
+            raise HostedCompetitionError("Hosted competition is not accepting invites.")
 
         rows = self._invite_rows(competition)
         active_keys = {
             (
-                str(row.get('recipient_user_id') or '').strip(),
-                str(row.get('recipient_email') or '').strip().lower(),
+                str(row.get("recipient_user_id") or "").strip(),
+                str(row.get("recipient_email") or "").strip().lower(),
             )
             for row in rows
-            if str(row.get('status') or '').lower() in {'pending', 'accepted'}
+            if str(row.get("status") or "").lower() in {"pending", "accepted"}
         }
         created: list[dict[str, object]] = []
         normalized_user_ids = [item.strip() for item in recipient_user_ids if item and item.strip()]
         normalized_emails = [item.strip().lower() for item in recipient_emails if item and item.strip()]
         if not normalized_user_ids and not normalized_emails:
-            raise HostedCompetitionError('At least one invite recipient is required.')
+            raise HostedCompetitionError("At least one invite recipient is required.")
         for recipient_user_id in dict.fromkeys(normalized_user_ids):
-            key = (recipient_user_id, '')
+            key = (recipient_user_id, "")
             if key in active_keys:
                 continue
             invite = {
-                'invite_id': str(uuid4()),
-                'invited_by_user_id': actor.id,
-                'recipient_user_id': recipient_user_id,
-                'recipient_email': None,
-                'status': 'pending',
-                'message': message,
-                'created_at': self._now_iso(),
-                'responded_at': None,
+                "invite_id": str(uuid4()),
+                "invited_by_user_id": actor.id,
+                "recipient_user_id": recipient_user_id,
+                "recipient_email": None,
+                "status": "pending",
+                "message": message,
+                "created_at": self._now_iso(),
+                "responded_at": None,
             }
             rows.append(invite)
             created.append(invite)
             active_keys.add(key)
         for recipient_email in dict.fromkeys(normalized_emails):
-            key = ('', recipient_email)
+            key = ("", recipient_email)
             if key in active_keys:
                 continue
             invite = {
-                'invite_id': str(uuid4()),
-                'invited_by_user_id': actor.id,
-                'recipient_user_id': None,
-                'recipient_email': recipient_email,
-                'status': 'pending',
-                'message': message,
-                'created_at': self._now_iso(),
-                'responded_at': None,
+                "invite_id": str(uuid4()),
+                "invited_by_user_id": actor.id,
+                "recipient_user_id": None,
+                "recipient_email": recipient_email,
+                "status": "pending",
+                "message": message,
+                "created_at": self._now_iso(),
+                "responded_at": None,
             }
             rows.append(invite)
             created.append(invite)
@@ -434,10 +462,10 @@ class HostedCompetitionService:
     ) -> tuple[UserHostedCompetition, UserHostedCompetitionParticipant, dict[str, object]]:
         competition = self.get_competition(competition_id)
         if competition is None:
-            raise HostedCompetitionError('Hosted competition was not found.')
+            raise HostedCompetitionError("Hosted competition was not found.")
         invite = self._find_join_invite(competition=competition, user=user, invite_id=invite_id)
         if invite is None:
-            raise HostedCompetitionError('No pending hosted competition invite was found for this user.')
+            raise HostedCompetitionError("No pending hosted competition invite was found for this user.")
         participant = self._participant_for_user(competition=competition, user=user)
         if participant is None:
             competition, participant = self.join_competition(
@@ -447,38 +475,64 @@ class HostedCompetitionService:
             )
         accepted = self._mark_invite_status(
             competition=competition,
-            invite_id=str(invite.get('invite_id') or ''),
-            status='accepted',
+            invite_id=str(invite.get("invite_id") or ""),
+            status="accepted",
         )
         return competition, participant, self._invite_payload(competition, accepted)
 
     def standings_for_competition(self, competition_id: str) -> list[HostedCompetitionStanding]:
-        stmt = select(HostedCompetitionStanding).where(HostedCompetitionStanding.competition_id == competition_id).order_by(HostedCompetitionStanding.final_rank.asc().nullslast(), HostedCompetitionStanding.created_at.asc())
+        stmt = (
+            select(HostedCompetitionStanding)
+            .where(HostedCompetitionStanding.competition_id == competition_id)
+            .order_by(
+                HostedCompetitionStanding.final_rank.asc().nullslast(), HostedCompetitionStanding.created_at.asc()
+            )
+        )
         return list(self.session.scalars(stmt).all())
 
     def settlements_for_competition(self, competition_id: str) -> list[HostedCompetitionSettlement]:
-        stmt = select(HostedCompetitionSettlement).where(HostedCompetitionSettlement.competition_id == competition_id).order_by(HostedCompetitionSettlement.created_at.asc())
+        stmt = (
+            select(HostedCompetitionSettlement)
+            .where(HostedCompetitionSettlement.competition_id == competition_id)
+            .order_by(HostedCompetitionSettlement.created_at.asc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def finance_snapshot(self, competition_id: str) -> dict[str, Decimal | int | str]:
         competition = self.get_competition(competition_id)
         if competition is None:
-            raise HostedCompetitionError('Hosted competition was not found.')
+            raise HostedCompetitionError("Hosted competition was not found.")
         participants = self.participants_for_competition(competition_id)
         escrow_balance = self._available_escrow_balance(competition)
-        settled_prizes = self._normalize_amount(self.session.scalar(select(func.coalesce(func.sum(HostedCompetitionSettlement.net_amount), 0)).where(HostedCompetitionSettlement.competition_id == competition_id, HostedCompetitionSettlement.settlement_type == 'prize')) or 0)
-        platform_fee_settled = self._normalize_amount(self.session.scalar(select(func.coalesce(func.sum(HostedCompetitionSettlement.net_amount), 0)).where(HostedCompetitionSettlement.competition_id == competition_id, HostedCompetitionSettlement.settlement_type == 'platform_fee')) or 0)
+        settled_prizes = self._normalize_amount(
+            self.session.scalar(
+                select(func.coalesce(func.sum(HostedCompetitionSettlement.net_amount), 0)).where(
+                    HostedCompetitionSettlement.competition_id == competition_id,
+                    HostedCompetitionSettlement.settlement_type == "prize",
+                )
+            )
+            or 0
+        )
+        platform_fee_settled = self._normalize_amount(
+            self.session.scalar(
+                select(func.coalesce(func.sum(HostedCompetitionSettlement.net_amount), 0)).where(
+                    HostedCompetitionSettlement.competition_id == competition_id,
+                    HostedCompetitionSettlement.settlement_type == "platform_fee",
+                )
+            )
+            or 0
+        )
         return {
-            'currency': 'credits',
-            'participant_count': len(participants),
-            'entry_fee_fancoin': self._normalize_amount(competition.entry_fee_fancoin),
-            'gross_collected': self._normalize_amount(competition.entry_fee_fancoin * Decimal(len(participants))),
-            'projected_reward_pool': self._normalize_amount(competition.reward_pool_fancoin),
-            'projected_platform_fee': self._normalize_amount(competition.platform_fee_amount),
-            'escrow_balance': escrow_balance,
-            'settled_prizes': settled_prizes,
-            'settled_platform_fee': platform_fee_settled,
-            'status': competition.status.value if hasattr(competition.status, 'value') else str(competition.status),
+            "currency": "credits",
+            "participant_count": len(participants),
+            "entry_fee_fancoin": self._normalize_amount(competition.entry_fee_fancoin),
+            "gross_collected": self._normalize_amount(competition.entry_fee_fancoin * Decimal(len(participants))),
+            "projected_reward_pool": self._normalize_amount(competition.reward_pool_fancoin),
+            "projected_platform_fee": self._normalize_amount(competition.platform_fee_amount),
+            "escrow_balance": escrow_balance,
+            "settled_prizes": settled_prizes,
+            "settled_platform_fee": platform_fee_settled,
+            "status": competition.status.value if hasattr(competition.status, "value") else str(competition.status),
         }
 
     def join_competition(
@@ -490,21 +544,28 @@ class HostedCompetitionService:
     ) -> tuple[UserHostedCompetition, UserHostedCompetitionParticipant]:
         competition = self.get_competition(competition_id)
         if competition is None:
-            raise HostedCompetitionError('Hosted competition was not found.')
+            raise HostedCompetitionError("Hosted competition was not found.")
         if competition.status not in {HostedCompetitionStatus.OPEN, HostedCompetitionStatus.DRAFT}:
-            raise HostedCompetitionError('Hosted competition is not open for joining.')
+            raise HostedCompetitionError("Hosted competition is not open for joining.")
         invite = self._find_join_invite(competition=competition, user=user)
         if (
-            competition.visibility in {'private', 'invite_only'}
+            competition.visibility in {"private", "invite_only"}
             and competition.host_user_id != user.id
             and invite is None
             and not invite_required_bypass
         ):
-            raise HostedCompetitionError('An invite is required to join this hosted competition.')
-        current_participants = self.session.scalar(select(func.count(UserHostedCompetitionParticipant.id)).where(UserHostedCompetitionParticipant.competition_id == competition.id)) or 0
+            raise HostedCompetitionError("An invite is required to join this hosted competition.")
+        current_participants = (
+            self.session.scalar(
+                select(func.count(UserHostedCompetitionParticipant.id)).where(
+                    UserHostedCompetitionParticipant.competition_id == competition.id
+                )
+            )
+            or 0
+        )
         if int(current_participants) >= int(competition.max_participants):
-            raise HostedCompetitionError('Hosted competition is already full.')
-        participant = self._create_entry_participant(competition=competition, user=user, role='participant')
+            raise HostedCompetitionError("Hosted competition is already full.")
+        participant = self._create_entry_participant(competition=competition, user=user, role="participant")
         try:
             self._collect_entry_fee(competition=competition, participant=participant, user=user)
         except InsufficientBalanceError as exc:
@@ -518,61 +579,65 @@ class HostedCompetitionService:
         if invite is not None:
             self._mark_invite_status(
                 competition=competition,
-                invite_id=str(invite.get('invite_id') or ''),
-                status='accepted',
+                invite_id=str(invite.get("invite_id") or ""),
+                status="accepted",
             )
         return competition, participant
 
     def launch_competition(self, *, actor: User, competition_id: str) -> UserHostedCompetition:
         competition = self.get_competition(competition_id)
         if competition is None:
-            raise HostedCompetitionError('Hosted competition was not found.')
+            raise HostedCompetitionError("Hosted competition was not found.")
         participants = self.participants_for_competition(competition_id)
         if len(participants) < 2:
-            raise HostedCompetitionError('At least two participants are required before launch.')
+            raise HostedCompetitionError("At least two participants are required before launch.")
         competition.status = HostedCompetitionStatus.LIVE
         existing = {row.user_id for row in self.standings_for_competition(competition_id)}
         for index, item in enumerate(participants, start=1):
             if item.user_id in existing:
                 continue
-            self.session.add(HostedCompetitionStanding(
-                competition_id=competition.id,
-                user_id=item.user_id,
-                final_rank=index,
-                metadata_json={'seed_order': index},
-            ))
+            self.session.add(
+                HostedCompetitionStanding(
+                    competition_id=competition.id,
+                    user_id=item.user_id,
+                    final_rank=index,
+                    metadata_json={"seed_order": index},
+                )
+            )
         StoryFeedService(self.session).publish(
-            story_type='competition_launch',
-            title=f'{competition.title} is live',
-            body='Hosted competition moved into live mode and standings have been initialized.',
-            audience='public',
-            subject_type='hosted_competition',
+            story_type="competition_launch",
+            title=f"{competition.title} is live",
+            body="Hosted competition moved into live mode and standings have been initialized.",
+            audience="public",
+            subject_type="hosted_competition",
             subject_id=competition.id,
-            metadata_json={'competition_id': competition.id, 'slug': competition.slug},
+            metadata_json={"competition_id": competition.id, "slug": competition.slug},
             published_by_user_id=actor.id,
         )
         self.session.flush()
         return competition
 
-    def finalize_competition(self, *, actor: User, competition_id: str, placements: Iterable[dict[str, object]], note: str | None = None) -> tuple[UserHostedCompetition, list[HostedCompetitionStanding], list[HostedCompetitionSettlement]]:
+    def finalize_competition(
+        self, *, actor: User, competition_id: str, placements: Iterable[dict[str, object]], note: str | None = None
+    ) -> tuple[UserHostedCompetition, list[HostedCompetitionStanding], list[HostedCompetitionSettlement]]:
         competition = self.get_competition(competition_id)
         if competition is None:
-            raise HostedCompetitionError('Hosted competition was not found.')
+            raise HostedCompetitionError("Hosted competition was not found.")
         if competition.status == HostedCompetitionStatus.COMPLETED:
-            raise HostedCompetitionError('Hosted competition has already been completed.')
+            raise HostedCompetitionError("Hosted competition has already been completed.")
         participants = {item.user_id for item in self.participants_for_competition(competition_id)}
         if not participants:
-            raise HostedCompetitionError('Hosted competition has no participants.')
+            raise HostedCompetitionError("Hosted competition has no participants.")
         escrow_account = self._competition_escrow_account(competition)
         escrow_balance = self.wallet_service.get_balance(self.session, escrow_account)
-        if escrow_balance <= Decimal('0.0000'):
-            raise HostedCompetitionError('Hosted competition escrow balance is empty.')
+        if escrow_balance <= Decimal("0.0000"):
+            raise HostedCompetitionError("Hosted competition escrow balance is empty.")
         platform_fee = min(self._normalize_amount(competition.platform_fee_amount), escrow_balance)
         prize_pool = self._normalize_amount(escrow_balance - platform_fee)
         placements = list(placements)
-        total_percent = sum(Decimal(str(item.get('payout_percent', 0))) for item in placements)
-        if total_percent > Decimal('100.0000'):
-            raise HostedCompetitionError('Total payout percent cannot exceed 100.')
+        total_percent = sum(Decimal(str(item.get("payout_percent", 0))) for item in placements)
+        if total_percent > Decimal("100.0000"):
+            raise HostedCompetitionError("Total payout percent cannot exceed 100.")
         standings_by_user = {row.user_id: row for row in self.standings_for_competition(competition_id)}
         if not standings_by_user:
             for item in self.participants_for_competition(competition_id):
@@ -582,19 +647,19 @@ class HostedCompetitionService:
                 standings_by_user[item.user_id] = row
         postings: list[LedgerPosting] = []
         settlements: list[HostedCompetitionSettlement] = []
-        total_prize_paid = Decimal('0.0000')
+        total_prize_paid = Decimal("0.0000")
         for item in placements:
-            user_id = str(item['user_id'])
+            user_id = str(item["user_id"])
             if user_id not in participants:
-                raise HostedCompetitionError('A placement referenced a user that is not part of this competition.')
-            payout_percent = Decimal(str(item.get('payout_percent', 0)))
-            rank = int(item.get('rank', 0) or 0)
-            if payout_percent < Decimal('0.0000'):
-                raise HostedCompetitionError('Payout percent cannot be negative.')
-            payout_amount = self._normalize_amount(prize_pool * payout_percent / Decimal('100'))
+                raise HostedCompetitionError("A placement referenced a user that is not part of this competition.")
+            payout_percent = Decimal(str(item.get("payout_percent", 0)))
+            rank = int(item.get("rank", 0) or 0)
+            if payout_percent < Decimal("0.0000"):
+                raise HostedCompetitionError("Payout percent cannot be negative.")
+            payout_amount = self._normalize_amount(prize_pool * payout_percent / Decimal("100"))
             user = self.session.get(User, user_id)
             if user is None:
-                raise HostedCompetitionError('A placement referenced a missing user.')
+                raise HostedCompetitionError("A placement referenced a missing user.")
             recipient_account = self.wallet_service.get_user_account(self.session, user, LedgerUnit.CREDIT)
             postings.append(
                 LedgerPosting(
@@ -607,20 +672,22 @@ class HostedCompetitionService:
             standing = standings_by_user[user_id]
             standing.final_rank = rank
             standing.payout_amount = payout_amount
-            standing.metadata_json = {**(standing.metadata_json or {}), 'payout_percent': str(payout_percent)}
-            settlements.append(HostedCompetitionSettlement(
-                competition_id=competition.id,
-                recipient_user_id=user.id,
-                settlement_type='prize',
-                status=HostedCompetitionSettlementStatus.PENDING,
-                gross_amount=payout_amount,
-                platform_fee_amount=Decimal('0.0000'),
-                net_amount=payout_amount,
-                note=note or '',
-                settled_by_user_id=actor.id,
-            ))
+            standing.metadata_json = {**(standing.metadata_json or {}), "payout_percent": str(payout_percent)}
+            settlements.append(
+                HostedCompetitionSettlement(
+                    competition_id=competition.id,
+                    recipient_user_id=user.id,
+                    settlement_type="prize",
+                    status=HostedCompetitionSettlementStatus.PENDING,
+                    gross_amount=payout_amount,
+                    platform_fee_amount=Decimal("0.0000"),
+                    net_amount=payout_amount,
+                    note=note or "",
+                    settled_by_user_id=actor.id,
+                )
+            )
         platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
-        if platform_fee > Decimal('0.0000'):
+        if platform_fee > Decimal("0.0000"):
             postings.append(
                 LedgerPosting(
                     account=platform_account,
@@ -630,8 +697,8 @@ class HostedCompetitionService:
             )
         total_outgoing = self._normalize_amount(total_prize_paid + platform_fee)
         if total_outgoing > escrow_balance:
-            raise HostedCompetitionError('Settlement exceeds available escrow balance.')
-        if total_prize_paid > Decimal('0.0000'):
+            raise HostedCompetitionError("Settlement exceeds available escrow balance.")
+        if total_prize_paid > Decimal("0.0000"):
             postings.append(
                 LedgerPosting(
                     account=escrow_account,
@@ -639,7 +706,7 @@ class HostedCompetitionService:
                     source_tag=LedgerSourceTag.USER_HOSTED_GIFT_INCOME_FANCOIN,
                 )
             )
-        if platform_fee > Decimal('0.0000'):
+        if platform_fee > Decimal("0.0000"):
             postings.append(
                 LedgerPosting(
                     account=escrow_account,
@@ -651,9 +718,9 @@ class HostedCompetitionService:
             self.session,
             postings=postings,
             reason=LedgerEntryReason.COMPETITION_REWARD,
-            reference=f'hosted-settlement:{competition.id}',
-            description=f'Hosted competition settlement for {competition.title}',
-            external_reference=f'hosted-settlement:{competition.id}',
+            reference=f"hosted-settlement:{competition.id}",
+            description=f"Hosted competition settlement for {competition.title}",
+            external_reference=f"hosted-settlement:{competition.id}",
             actor=actor,
         )
         transaction_id = entries[0].transaction_id if entries else None
@@ -664,26 +731,30 @@ class HostedCompetitionService:
         fee_settlement = HostedCompetitionSettlement(
             competition_id=competition.id,
             recipient_user_id=None,
-            settlement_type='platform_fee',
+            settlement_type="platform_fee",
             status=HostedCompetitionSettlementStatus.SETTLED,
             gross_amount=platform_fee,
             platform_fee_amount=platform_fee,
             net_amount=platform_fee,
             ledger_transaction_id=transaction_id,
-            note=note or '',
+            note=note or "",
             settled_by_user_id=actor.id,
         )
         self.session.add(fee_settlement)
         settlements.append(fee_settlement)
         competition.status = HostedCompetitionStatus.COMPLETED
         StoryFeedService(self.session).publish(
-            story_type='competition_result',
-            title=f'{competition.title} completed',
-            body='Hosted competition settlements have been posted and final standings are available.',
-            audience='public',
-            subject_type='hosted_competition',
+            story_type="competition_result",
+            title=f"{competition.title} completed",
+            body="Hosted competition settlements have been posted and final standings are available.",
+            audience="public",
+            subject_type="hosted_competition",
             subject_id=competition.id,
-            metadata_json={'competition_id': competition.id, 'slug': competition.slug, 'transaction_id': transaction_id},
+            metadata_json={
+                "competition_id": competition.id,
+                "slug": competition.slug,
+                "transaction_id": transaction_id,
+            },
             published_by_user_id=actor.id,
         )
         self.session.flush()

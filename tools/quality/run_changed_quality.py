@@ -167,7 +167,7 @@ def main() -> int:
     )
     secret_scan_command = [sys.executable, "-m", "detect_secrets.pre_commit_hook", "--no-verify"]
     if SECRET_BASELINE_PATH.is_file():
-        secret_scan_command.extend(["--baseline", str(SECRET_BASELINE_PATH)])
+        secret_scan_command.extend(["--baseline", str(SECRET_BASELINE_PATH.relative_to(REPO_ROOT))])
     run_check(
         "Secret scan",
         secret_scan_command,

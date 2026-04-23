@@ -164,7 +164,10 @@ def _admin_account_view(
         username=admin.username,
         display_name=admin.display_name,
         role=admin.role.value,
-        admin_role_name=str(assignment["role_name"] or (GOD_MODE_ROLE_NAME if admin.role == UserRole.SUPER_ADMIN else SCOPED_ADMIN_ROLE_NAME)),
+        admin_role_name=str(
+            assignment["role_name"]
+            or (GOD_MODE_ROLE_NAME if admin.role == UserRole.SUPER_ADMIN else SCOPED_ADMIN_ROLE_NAME)
+        ),
         permissions=list(profile.permissions),
         assigned_permissions=list(assignment["permissions"] or []),
         is_active=admin.is_active,

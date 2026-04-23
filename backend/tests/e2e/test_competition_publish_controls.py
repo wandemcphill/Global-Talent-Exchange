@@ -62,6 +62,7 @@ def test_creator_owned_gtex_hosted_competition_can_publish_without_admin_permiss
     assert publish_response.status_code == 200, publish_response.text
     assert publish_response.json()["status"] == "open"
 
+
 def test_creator_owned_gtex_hosted_launch_is_not_blocked_by_admin_permission_gate(client) -> None:
     host = _register_user(client, prefix="gtex-hosted-launch-owner")
 
