@@ -220,6 +220,7 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
           ? Future<PaginatedPlayers?>.value(null)
           : playerService.getPlayers(search: query, limit: resultWindow),
     ],
+    eagerError: true,
   );
   final JsonMap playerMarketPayload = jsonMap(
     marketPayloads[0],
@@ -285,7 +286,7 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
               exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.credit),
               exchangeApi.fetchWalletOverview(),
               exchangeApi.fetchComplianceStatus(),
-            ]);
+            ], eagerError: true);
         final GteWalletSummary coinSummary =
             walletPayload[0] as GteWalletSummary;
         final GteWalletSummary creditSummary =

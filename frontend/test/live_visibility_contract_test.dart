@@ -568,37 +568,29 @@ void main() {
   );
 
   test(
-    'market dashboard provider reads real-player shares from the unified players list payload',
+    'market dashboard provider reads buyable player shares from /players/markets payload',
     () async {
       final ProviderContainer container = _buildContainer(
         transport: _PathTransport(<String, GteTransportResponse>{
-          '/api/v1/players': const GteTransportResponse(
+          '/api/v1/players/markets': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
-              'players': <Object?>[
+              'items': <Object?>[
                 <String, Object?>{
                   'player_id': 'player-1',
                   'player_name': 'Harry Kane',
                   'position': 'ST',
                   'nationality': 'England',
                   'current_club_name': 'Bayern Munich',
-                  'current_value_credits': 706.0,
-                  'market_interest_score': 250,
+                  'status': 'active',
+                  'share_price_coin': 18.5,
+                  'total_shares': 1000,
+                  'circulating_shares': 620,
                 },
               ],
-              'limit': 12,
-              'has_more': false,
               'total': 1,
-            },
-          ),
-          '/api/v1/players/player-1/shares/market': const GteTransportResponse(
-            statusCode: 200,
-            body: <String, Object?>{
-              'market_issued': true,
-              'status': 'active',
-              'share_price_coin': 18.5,
-              'total_shares': 1000,
-              'circulating_shares': 620,
+              'page': 1,
+              'per_page': 24,
             },
           ),
           '/api/v1/transfer-market/listings': const GteTransportResponse(
@@ -635,6 +627,84 @@ void main() {
       expect(dashboard.playerShares.single.marketStatus, 'active');
       expect(dashboard.transferListings, hasLength(1));
       expect(dashboard.transferListings.single.playerName, 'Harry Kane');
+    },
+  );
+
+  test(
+    'market dashboard provider reads search-only discovery players from the unified players list payload',
+    () async {
+      final _PathTransport transport = _PathTransport(
+        <String, GteTransportResponse>{
+          '/api/v1/players/markets': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'items': <Object?>[],
+              'total': 0,
+              'page': 1,
+              'per_page': 24,
+            },
+          ),
+          '/api/v1/players': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'players': <Object?>[
+                <String, Object?>{
+                  'player_id': 'player-2',
+                  'player_name': 'Jamal Musiala',
+                  'position': 'AM',
+                  'nationality': 'Germany',
+                  'current_club_name': 'Bayern Munich',
+                  'current_value_credits': 660.0,
+                  'market_interest_score': 198,
+                },
+              ],
+              'limit': 24,
+              'has_more': false,
+              'total': 1,
+            },
+          ),
+          '/api/v1/transfer-market/listings': const GteTransportResponse(
+            statusCode: 200,
+            body: <Object?>[],
+          ),
+        },
+      );
+      final ProviderContainer container = _buildContainer(transport: transport);
+      addTearDown(container.dispose);
+
+      container.read(marketSearchQueryProvider.notifier).setQuery('musiala');
+
+      final MarketDashboardData dashboard = await container.read(
+        marketDashboardProvider.future,
+      );
+
+      expect(dashboard.playerShares, hasLength(1));
+      expect(dashboard.discoveryOnlyPlayerShares, hasLength(1));
+      expect(
+        dashboard.discoveryOnlyPlayerShares.single.playerName,
+        'Jamal Musiala',
+      );
+      expect(
+        dashboard.discoveryOnlyPlayerShares.single.marketStatus,
+        'inactive',
+      );
+      expect(
+        transport.requests.map(
+          (GteTransportRequest request) => request.uri.path,
+        ),
+        containsAll(<String>['/api/v1/players/markets', '/api/v1/players']),
+      );
+      expect(
+        transport.requests
+            .where(
+              (GteTransportRequest request) =>
+                  request.uri.path == '/api/v1/players',
+            )
+            .single
+            .uri
+            .queryParameters['search'],
+        'musiala',
+      );
     },
   );
 }
