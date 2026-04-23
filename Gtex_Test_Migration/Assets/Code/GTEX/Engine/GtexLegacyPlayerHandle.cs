@@ -55,6 +55,26 @@ namespace FStudio.GTEX.Engine
             player.PlayerController.SetInstantRotation(rotation);
         }
 
+        public void SetExternalPlayback(bool value)
+        {
+            if (!IsValid)
+            {
+                return;
+            }
+
+            player.PlayerController.SetExternalPlayback(value);
+        }
+
+        public void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false)
+        {
+            if (!IsValid)
+            {
+                return;
+            }
+
+            player.PlayerController.SetExternalPlaybackPose(position, rotation, snap);
+        }
+
         public Vector3 InverseTransformDirection(Vector3 worldDirection)
         {
             if (!IsValid)

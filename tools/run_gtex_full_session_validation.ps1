@@ -168,6 +168,93 @@ function Test-TraceTimeline {
     }
 }
 
+function Get-CaptureValue {
+    param(
+        [string[]]$Lines,
+        [string]$Key
+    )
+
+    $prefix = $Key + '='
+    foreach ($line in $Lines) {
+        if ($line.StartsWith($prefix)) {
+            return $line.Substring($prefix.Length)
+        }
+    }
+
+    return $null
+}
+
+function Copy-RuntimeTraceArtifact {
+    param(
+        [string]$ExePath,
+        [string]$DestinationPath
+    )
+
+    $runtimeDirectory = Split-Path $ExePath -Parent
+    $runtimeTracePath = Join-Path (Join-Path $runtimeDirectory 'tmp') 'gtex_live_runtime_trace.log'
+    if (-not (Test-Path $runtimeTracePath)) {
+        return $null
+    }
+
+    Copy-Item -Path $runtimeTracePath -Destination $DestinationPath -Force
+    return $runtimeTracePath
+}
+
+function Wait-ForSessionCompletion {
+    param(
+        [System.Diagnostics.Process]$PlayerProcess,
+        [int]$TimeoutSeconds = 120
+    )
+
+    $lastSummary = $null
+
+    for ($elapsed = 0; $elapsed -lt $TimeoutSeconds; $elapsed++) {
+        Start-Sleep -Seconds 1
+
+        if ($null -ne $PlayerProcess) {
+            try {
+                $PlayerProcess.Refresh()
+            } catch {
+            }
+        }
+
+        try {
+            $response = Invoke-WebRequest -Uri "$baseUrl/admin/session-summary" -UseBasicParsing -TimeoutSec 5
+            $lastSummary = $response.Content | ConvertFrom-Json
+            if ($lastSummary -and [bool]$lastSummary.final_frame_sent) {
+                return [pscustomobject]@{
+                    summary = $lastSummary
+                    player_exited = ($null -ne $PlayerProcess -and $PlayerProcess.HasExited)
+                    timed_out = $false
+                }
+            }
+        } catch {
+        }
+
+        if ($null -ne $PlayerProcess -and $PlayerProcess.HasExited) {
+            return [pscustomobject]@{
+                summary = $lastSummary
+                player_exited = $true
+                timed_out = $false
+            }
+        }
+    }
+
+    if ($null -eq $lastSummary) {
+        try {
+            $response = Invoke-WebRequest -Uri "$baseUrl/admin/session-summary" -UseBasicParsing -TimeoutSec 5
+            $lastSummary = $response.Content | ConvertFrom-Json
+        } catch {
+        }
+    }
+
+    return [pscustomobject]@{
+        summary = $lastSummary
+        player_exited = ($null -ne $PlayerProcess -and $PlayerProcess.HasExited)
+        timed_out = $true
+    }
+}
+
 foreach ($path in @($serverOut, $serverErr, $summaryFile, $projectBootstrapPath, $captureOutputDir)) {
     Remove-FileIfExists -Path $path
 }
@@ -179,24 +266,52 @@ try {
     Wait-ForServerReady -ServerProcess $server
     Write-BootstrapFile
 
-    & $captureScript `
+    $captureOutput = & $captureScript `
         -ExePath $exe `
         -OutputDir $captureOutputDir `
         -SessionName $sessionName `
         -InitialWaitSeconds 8 `
-        -CaptureOffsetsSeconds @(12, 24, 42) `
-        -WindowWaitSeconds 60 | Out-Null
+        -CaptureOffsetsSeconds @(10, 18, 26, 34, 42) `
+        -WindowWaitSeconds 60 `
+        -LeaveRunning
 
-    $playerLog = Join-Path $captureOutputDir ($sessionName + '.player.log')
-    $runtimeTrace = Join-Path $captureOutputDir ($sessionName + '.runtime.log')
-    $metadataPath = Join-Path $captureOutputDir ($sessionName + '.metadata.txt')
+    $captureLines = @($captureOutput)
+    $playerPidValue = Get-CaptureValue -Lines $captureLines -Key 'PID'
+    $playerPid = if ([string]::IsNullOrWhiteSpace($playerPidValue)) { $null } else { [int]$playerPidValue }
+    $playerLog = Get-CaptureValue -Lines $captureLines -Key 'PLAYER_LOG'
+    $runtimeTrace = Get-CaptureValue -Lines $captureLines -Key 'RUNTIME_TRACE'
+    $metadataPath = Get-CaptureValue -Lines $captureLines -Key 'METADATA'
+
+    if ([string]::IsNullOrWhiteSpace($playerLog)) {
+        $playerLog = Join-Path $captureOutputDir ($sessionName + '.player.log')
+    }
+    if ([string]::IsNullOrWhiteSpace($runtimeTrace)) {
+        $runtimeTrace = Join-Path $captureOutputDir ($sessionName + '.runtime.log')
+    }
+    if ([string]::IsNullOrWhiteSpace($metadataPath)) {
+        $metadataPath = Join-Path $captureOutputDir ($sessionName + '.metadata.txt')
+    }
+
+    $player = if ($null -ne $playerPid) { Get-Process -Id $playerPid -ErrorAction SilentlyContinue } else { $null }
+    $sessionResult = Wait-ForSessionCompletion -PlayerProcess $player -TimeoutSeconds 120
+
+    if ($null -ne $player) {
+        Stop-IfRunning -Process $player
+    }
+
+    Start-Sleep -Seconds 2
+    $null = Copy-RuntimeTraceArtifact -ExePath $exe -DestinationPath $runtimeTrace
+
     $screenshots = @(Get-ChildItem $captureOutputDir -Filter ($sessionName + '_t*.png') -ErrorAction SilentlyContinue | Sort-Object Name)
 
     $traceText = if (Test-Path $runtimeTrace) { Get-Content $runtimeTrace -Raw -ErrorAction SilentlyContinue } else { '' }
     $playerText = if (Test-Path $playerLog) { Get-Content $playerLog -Raw -ErrorAction SilentlyContinue } else { '' }
     $serverText = if (Test-Path $serverErr) { Get-Content $serverErr -Raw -ErrorAction SilentlyContinue } else { '' }
-    $serverSummaryResponse = Invoke-WebRequest -Uri "$baseUrl/admin/session-summary" -UseBasicParsing -TimeoutSec 5
-    $serverSummary = $serverSummaryResponse.Content | ConvertFrom-Json
+    $serverSummary = $sessionResult.summary
+    if ($null -eq $serverSummary) {
+        $serverSummaryResponse = Invoke-WebRequest -Uri "$baseUrl/admin/session-summary" -UseBasicParsing -TimeoutSec 5
+        $serverSummary = $serverSummaryResponse.Content | ConvertFrom-Json
+    }
     $traceTimeline = Test-TraceTimeline -TraceText $traceText
 
     $bootstrapSeen = $traceText -match 'scene bootstrap finished'
@@ -207,7 +322,10 @@ try {
     $phaseSequence = @($serverSummary.phase_sequence)
     $scoreTimeline = @($serverSummary.score_timeline)
     $cameraPresetsSeen = @($serverSummary.camera_presets_seen)
-    $screenshotsCaptured = $screenshots.Count -ge 3
+    $screenshotsCaptured = $screenshots.Count -ge 5
+    $linearKinematicWarningSeen = $playerText -match 'Setting linear velocity of a kinematic body is not supported'
+    $angularKinematicWarningSeen = $playerText -match 'Setting angular velocity of a kinematic body is not supported'
+    $playerExitedBeforeFulltime = [bool]$sessionResult.player_exited -and -not $serverReachedFulltime
     $cameraStable = ($cameraPresetsSeen -contains 'broadcast') -and
         ($cameraPresetsSeen -contains 'attack_push') -and
         ($cameraPresetsSeen -contains 'box_zoom') -and
@@ -230,7 +348,11 @@ try {
         ($phaseSequence -contains 'second_half') -and
         ($phaseSequence -contains 'fulltime') -and
         (($scoreTimeline -join ',') -eq '0-0,1-0,1-1,2-1') -and
-        $screenshotsCaptured
+        $screenshotsCaptured -and
+        -not $linearKinematicWarningSeen -and
+        -not $angularKinematicWarningSeen -and
+        -not $playerExitedBeforeFulltime -and
+        -not [bool]$sessionResult.timed_out
 
     $summary = [ordered]@{
         base_url = $baseUrl
@@ -248,6 +370,10 @@ try {
         camera_switch_count = $cameraSwitchCount
         camera_presets_seen = $cameraPresetsSeen
         camera_stable = $cameraStable
+        linear_kinematic_warning_seen = $linearKinematicWarningSeen
+        angular_kinematic_warning_seen = $angularKinematicWarningSeen
+        player_exited_before_fulltime = $playerExitedBeforeFulltime
+        wait_timed_out = [bool]$sessionResult.timed_out
         trace_timeline = $traceTimeline
         server_summary = $serverSummary
         screenshots_captured = $screenshotsCaptured

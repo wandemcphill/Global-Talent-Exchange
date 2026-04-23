@@ -92,7 +92,7 @@ namespace FStudio.GTEX {
             BuildPerimeterBoards();
             BuildCornerFloodlights(matchData.dayTime);
 
-            if (config == null || config.enableStadiumUpgrade) {
+            if (config != null && config.enableStadiumUpgrade && config.showBroadcastScaffolding) {
                 BuildBroadcastScaffolding(matchData);
             }
 

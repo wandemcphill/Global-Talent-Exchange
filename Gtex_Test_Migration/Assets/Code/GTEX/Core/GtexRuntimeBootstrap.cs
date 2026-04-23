@@ -1,8 +1,10 @@
+using System;
 using FStudio.GTEX;
 using FStudio.GTEX.Engine;
 using FStudio.GTEX.Simulation;
 using FStudio.MatchEngine;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FStudio.GTEX.Core
 {
@@ -12,7 +14,7 @@ namespace FStudio.GTEX.Core
 
         public static bool IsLivePlaybackPendingOrActive()
         {
-            if (Object.FindFirstObjectByType<GtexMatchRuntime>() != null)
+            if (UnityEngine.Object.FindFirstObjectByType<GtexMatchRuntime>() != null)
             {
                 return true;
             }
@@ -46,8 +48,8 @@ namespace FStudio.GTEX.Core
 
         public static bool TryAutoStart(GtexMatchConfig config, bool allowLocalSimulationInBatchMode = false)
         {
-            if (Object.FindFirstObjectByType<GtexMatchRuntime>() != null ||
-                Object.FindFirstObjectByType<GtexSimRuntimeHost>() != null)
+            if (UnityEngine.Object.FindFirstObjectByType<GtexMatchRuntime>() != null ||
+                UnityEngine.Object.FindFirstObjectByType<GtexSimRuntimeHost>() != null)
             {
                 return true;
             }
@@ -60,8 +62,31 @@ namespace FStudio.GTEX.Core
 
             var runtimeMode = resolvedConfig.ResolveRuntimeMode();
             livePlaybackRequested = runtimeMode == GtexRuntimeMode.LivePlayback;
-            Debug.Log("[GTEX] Runtime bootstrap requested -> " + runtimeMode + ".");
+            var activeSceneName = SceneManager.GetActiveScene().name;
+            Debug.Log(
+                "[GTEX] Runtime bootstrap requested -> " +
+                runtimeMode +
+                " in scene '" +
+                activeSceneName +
+                "' (matchId='" +
+                resolvedConfig.matchId +
+                "', baseUrl='" +
+                resolvedConfig.ResolveBaseUrl() +
+                "', localSim3DPlaybackRequested=" +
+                resolvedConfig.use3DPlaybackForLocalSimulation +
+                ").");
+            if (runtimeMode == GtexRuntimeMode.LocalSimulation &&
+                string.Equals(activeSceneName, "Gtex_MainScene", StringComparison.Ordinal) &&
+                !resolvedConfig.allowLocalSimulationInProductionScene)
+            {
+                Debug.LogError(
+                    "[GTEX] Refusing to auto-start LocalSimulation in Gtex_MainScene. " +
+                    "Set allowLocalSimulationInProductionScene=true to override.");
+                return false;
+            }
+
             var started = GtexMatchController.TryAutoStart(resolvedConfig, allowLocalSimulationInBatchMode);
+            Debug.Log("[GTEX] Runtime bootstrap result -> " + runtimeMode + " started=" + started + ".");
             if (!started)
             {
                 livePlaybackRequested = false;

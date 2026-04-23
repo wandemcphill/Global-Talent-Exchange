@@ -13,7 +13,9 @@ param(
 
     [int[]]$CaptureOffsetsSeconds = @(30, 60, 90),
 
-    [int]$WindowWaitSeconds = 45
+    [int]$WindowWaitSeconds = 45,
+
+    [switch]$LeaveRunning
 )
 
 Add-Type -AssemblyName System.Drawing
@@ -229,16 +231,18 @@ foreach ($offset in $captureOffsets) {
 $process.Refresh()
 $playerLogSource = 'redirected'
 
-if (-not $process.HasExited) {
-    $null = $process.CloseMainWindow()
-    Start-Sleep -Seconds 3
-    $process.Refresh()
-}
+if (-not $LeaveRunning) {
+    if (-not $process.HasExited) {
+        $null = $process.CloseMainWindow()
+        Start-Sleep -Seconds 3
+        $process.Refresh()
+    }
 
-if (-not $process.HasExited) {
-    Stop-Process -Id $process.Id -Force
-    Start-Sleep -Seconds 2
-    $process.Refresh()
+    if (-not $process.HasExited) {
+        Stop-Process -Id $process.Id -Force
+        Start-Sleep -Seconds 2
+        $process.Refresh()
+    }
 }
 
 if (-not (Test-Path $PlayerLogPath)) {
@@ -268,7 +272,8 @@ $metadata = @(
     ("runtime_bootstrap={0}" -f $runtimeBootstrapPath),
     ("runtime_bootstrap_source={0}" -f $runtimeBootstrapSource),
     ("runtime_trace={0}" -f $runtimeTracePath),
-    ("runtime_trace_source={0}" -f $runtimeTraceSource)
+    ("runtime_trace_source={0}" -f $runtimeTraceSource),
+    ("leave_running={0}" -f $LeaveRunning.IsPresent)
 )
 
 $metadata += $captureResults

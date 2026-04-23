@@ -60,6 +60,8 @@ namespace FStudio.MatchEngine.Players.PlayerController {
 
         void SetInstantPosition(Vector3 position);
         void SetInstantRotation(Quaternion rotation);
+        void SetExternalPlayback(bool value);
+        void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false);
 
         /// <summary>
         /// Look to a direction vector

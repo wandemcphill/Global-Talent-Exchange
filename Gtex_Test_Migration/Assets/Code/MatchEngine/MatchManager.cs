@@ -33,6 +33,7 @@ using FStudio.Database;
 using FStudio.UI.MatchThemes.MatchEvents;
 using FStudio.MatchEngine.Input;
 using FStudio.GTEX;
+using FStudio.GTEX.Playback;
 
 namespace FStudio.MatchEngine {
     public class MatchManager : SceneObjectSingleton<MatchManager> {
@@ -130,8 +131,12 @@ namespace FStudio.MatchEngine {
 
         public MatchStatus MatchFlags = default;
         public bool ExternalPlaybackEnabled { get; private set; }
+        public GtexPitchSpace ExternalPlaybackPitchSpace { get; private set; }
+        public GtexPlaybackSanitizer ExternalPlaybackSanitizer => externalPlaybackSanitizer;
+        public float ExternalPlaybackTeleportDistance { get; private set; } = 6f;
 
         private GeneralUserInput generalInput;
+        private GtexPlaybackSanitizer externalPlaybackSanitizer;
 
         /// <summary>
         /// Which team started, team1 or team2?
@@ -667,19 +672,8 @@ namespace FStudio.MatchEngine {
                 SetGoalColliders(false);
                 SetOutColliders(false);
 
-                if (AllPlayers != null) {
-                    foreach (var player in AllPlayers) {
-                        player.ResetBehaviours();
-                        player.PlayerController.IsPhysicsEnabled = true;
-                    }
-                }
-
-                if (Referees != null) {
-                    foreach (var referee in Referees) {
-                        referee.InstantStop();
-                        referee.PlayerController.IsPhysicsEnabled = false;
-                    }
-                }
+                SetPlayerExternalPlayback(true);
+                SetRefereeExternalPlayback(true);
 
                 ApplyExternalPlaybackCamera();
 
@@ -687,11 +681,11 @@ namespace FStudio.MatchEngine {
                 return;
             }
 
-            if (Referees != null) {
-                foreach (var referee in Referees) {
-                    referee.PlayerController.IsPhysicsEnabled = true;
-                }
-            }
+            ExternalPlaybackPitchSpace = null;
+            externalPlaybackSanitizer = null;
+            ExternalPlaybackTeleportDistance = 6f;
+            SetPlayerExternalPlayback(false);
+            SetRefereeExternalPlayback(false);
         }
 
         private async void ApplyExternalPlaybackCamera() {
@@ -717,11 +711,84 @@ namespace FStudio.MatchEngine {
             MatchFlags = matchStatus;
         }
 
+        public void ConfigureExternalPlaybackSettings(GtexMatchConfig matchConfig) {
+            ExternalPlaybackTeleportDistance = matchConfig != null
+                ? Mathf.Max(0.5f, matchConfig.teleportDistance)
+                : 6f;
+        }
+
+        public void ConfigureExternalPlaybackPitchSpace(GtexPitchSpace pitchSpace) {
+            ExternalPlaybackPitchSpace = pitchSpace;
+            externalPlaybackSanitizer = pitchSpace != null ? new GtexPlaybackSanitizer(pitchSpace) : null;
+            if (pitchSpace == null) {
+                return;
+            }
+
+            fieldEndX = Mathf.Max(1, Mathf.RoundToInt(pitchSpace.Length));
+            fieldEndY = Mathf.Max(1, Mathf.RoundToInt(pitchSpace.Width));
+
+            AlignGoalToPitch(goalNet1, pitchSpace.GetHomeGoalCenter(), true, goal1SpotCollider, "GoalRaycastAreaHome");
+            AlignGoalToPitch(goalNet2, pitchSpace.GetAwayGoalCenter(), false, goal2SpotCollider, "GoalRaycastAreaAway");
+        }
+
+        private void AlignGoalToPitch(
+            GoalNet goalNet,
+            Vector3 goalLineCenter,
+            bool homeGoal,
+            BoxCollider goalSpotCollider,
+            string goalRaycastAreaName) {
+            if (goalNet == null || ExternalPlaybackPitchSpace == null) {
+                return;
+            }
+
+            var previousPosition = goalNet.transform.position;
+            goalNet.AlignToPitch(
+                goalLineCenter,
+                ExternalPlaybackPitchSpace.GrassY,
+                Quaternion.Euler(0f, homeGoal ? 90f : -90f, 0f));
+
+            var positionDelta = goalNet.transform.position - previousPosition;
+            if (positionDelta.sqrMagnitude <= 0.0001f) {
+                return;
+            }
+
+            if (goalSpotCollider != null) {
+                goalSpotCollider.transform.position += positionDelta;
+            }
+
+            var goalRaycastArea = FindGoalSceneTransform(goalRaycastAreaName);
+            if (goalRaycastArea != null) {
+                goalRaycastArea.position += positionDelta;
+            }
+        }
+
+        private Transform FindGoalSceneTransform(string objectName) {
+            if (string.IsNullOrWhiteSpace(objectName)) {
+                return null;
+            }
+
+            var transforms = GetComponentsInChildren<Transform>(true);
+            for (int index = 0; index < transforms.Length; index++) {
+                var candidate = transforms[index];
+                if (candidate != null &&
+                    string.Equals(candidate.name, objectName, StringComparison.Ordinal)) {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
         public void ClearMatch () {
             CancelKickoffCounter();
             DisposeMatchScopedManagers();
             MatchFlags = MatchStatus.NotPlaying;
             ExternalPlaybackEnabled = false;
+            ExternalPlaybackPitchSpace = null;
+            externalPlaybackSanitizer = null;
+            ExternalPlaybackTeleportDistance = 6f;
+            SetPlayerExternalPlayback(false);
+            SetRefereeExternalPlayback(false);
 
             if (ball != null) {
                 ball.SetExternalPlayback(false);
@@ -746,6 +813,11 @@ namespace FStudio.MatchEngine {
             GameTeam1?.Clear();
             GameTeam2?.Clear();
             ExternalPlaybackEnabled = false;
+            ExternalPlaybackPitchSpace = null;
+            externalPlaybackSanitizer = null;
+            ExternalPlaybackTeleportDistance = 6f;
+            SetPlayerExternalPlayback(false);
+            SetRefereeExternalPlayback(false);
 
             if (UserTeam != null) {
                 UserTeam.ClearAllInputListeners();
@@ -1362,6 +1434,54 @@ namespace FStudio.MatchEngine {
             EventManager.Trigger(new ShootWentOutEvent(ball.Velocity.magnitude));
 
             Foul(FoulType.GoalKick, goalKickSpots[goalKickIndex].position, goalKickIndex < 2 ? GameTeam1 : GameTeam2, FStudio.Data.Positions.ParametersCount);
+        }
+
+        private void SetPlayerExternalPlayback(bool value)
+        {
+            if (AllPlayers == null)
+            {
+                return;
+            }
+
+            foreach (var player in AllPlayers)
+            {
+                if (player == null || player.PlayerController == null)
+                {
+                    continue;
+                }
+
+                if (value)
+                {
+                    player.ResetBehaviours();
+                }
+
+                player.PlayerController.SetUI(false);
+                player.PlayerController.SetOffside(false);
+                player.PlayerController.SetExternalPlayback(value);
+            }
+        }
+
+        private void SetRefereeExternalPlayback(bool value)
+        {
+            if (Referees == null)
+            {
+                return;
+            }
+
+            foreach (var referee in Referees)
+            {
+                if (referee == null || referee.PlayerController == null)
+                {
+                    continue;
+                }
+
+                if (value)
+                {
+                    referee.InstantStop();
+                }
+
+                referee.PlayerController.SetExternalPlayback(value);
+            }
         }
     }
 }

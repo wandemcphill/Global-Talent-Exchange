@@ -1,5 +1,6 @@
 using FStudio.MatchEngine.Balls;
 using FStudio.MatchEngine.Enums;
+using FStudio.MatchEngine;
 using UnityEngine;
 
 using FStudio.MatchEngine.Players.Behaviours;
@@ -36,10 +37,10 @@ namespace FStudio.MatchEngine.Players.PlayerController
             {
                 m_IsPhysicsEnabled = value;
 
-                if (rigidbody != null)
+                if (rigidbody != null && !externalPlaybackEnabled)
                     rigidbody.isKinematic = !value;
 
-                if (collider != null)
+                if (collider != null && !externalPlaybackEnabled)
                     collider.enabled = value;
             }
         }
@@ -67,6 +68,14 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
         private Vector3 targetAnimatorDirection;
         private Vector3 targetPosition;
+        private bool externalPlaybackEnabled;
+        private bool hasExternalPlaybackPose;
+        private Vector3 externalPlaybackTargetPosition;
+        private Quaternion externalPlaybackTargetRotation = Quaternion.identity;
+
+        [SerializeField] private float externalPlaybackMoveSpeed = 24f;
+        [SerializeField] private float externalPlaybackTurnSpeed = 16f;
+        [SerializeField] private float externalPlaybackTeleportDistance = 4f;
 
         private void Awake()
         {
@@ -76,10 +85,29 @@ namespace FStudio.MatchEngine.Players.PlayerController
             if (rigidbody != null)
             {
                 rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-                rigidbody.interpolation = RigidbodyInterpolation.Extrapolate;
+                rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
                 rigidbody.linearDamping = 1;
                 rigidbody.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionY;
             }
+        }
+
+        private void FixedUpdate()
+        {
+            if (!externalPlaybackEnabled || !hasExternalPlaybackPose || rigidbody == null)
+            {
+                return;
+            }
+
+            var nextPosition = Vector3.MoveTowards(
+                rigidbody.position,
+                externalPlaybackTargetPosition,
+                externalPlaybackMoveSpeed * Time.fixedDeltaTime);
+
+            var turnT = 1f - Mathf.Exp(-externalPlaybackTurnSpeed * Time.fixedDeltaTime);
+            var nextRotation = Quaternion.Slerp(rigidbody.rotation, externalPlaybackTargetRotation, turnT);
+
+            rigidbody.MovePosition(nextPosition);
+            rigidbody.MoveRotation(nextRotation);
         }
 
         private void Start()
@@ -127,7 +155,7 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
         public void SetInstantPosition(Vector3 position)
         {
-            position.y = 0;
+            position.y = ResolveGroundedY();
             transform.position = position;
 
             if (rigidbody != null)
@@ -142,14 +170,76 @@ namespace FStudio.MatchEngine.Players.PlayerController
             transform.rotation = rotation;
         }
 
+        public void SetExternalPlayback(bool value)
+        {
+            externalPlaybackEnabled = value;
+            if (value)
+            {
+                m_IsPhysicsEnabled = true;
+            }
+
+            if (rigidbody != null)
+            {
+                rigidbody.linearVelocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+                rigidbody.isKinematic = value || !m_IsPhysicsEnabled;
+            }
+
+            if (collider != null)
+            {
+                collider.enabled = value ? false : m_IsPhysicsEnabled;
+            }
+
+            hasExternalPlaybackPose = false;
+        }
+
+        public void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false)
+        {
+            rotation = Quaternion.Euler(0f, rotation.eulerAngles.y, 0f);
+
+            externalPlaybackTargetPosition = position;
+            externalPlaybackTargetRotation = rotation;
+            hasExternalPlaybackPose = true;
+
+            if (!externalPlaybackEnabled || rigidbody == null)
+            {
+                SetInstantPosition(position);
+                SetInstantRotation(rotation);
+                return;
+            }
+
+            if (snap || Vector3.Distance(rigidbody.position, position) >= ResolveExternalPlaybackTeleportDistance())
+            {
+                rigidbody.position = position;
+                rigidbody.rotation = rotation;
+                transform.SetPositionAndRotation(position, rotation);
+            }
+        }
+
         public void SetPosition(Vector3 position)
         {
-            position.y = 0;
+            position.y = ResolveGroundedY();
 
             if (rigidbody != null)
                 rigidbody.position = position;
 
             transform.position = position;
+        }
+
+        private static float ResolveGroundedY()
+        {
+            var pitchSpace = MatchManager.Current != null ? MatchManager.Current.ExternalPlaybackPitchSpace : null;
+            return pitchSpace != null ? pitchSpace.GrassY : 0f;
+        }
+
+        private float ResolveExternalPlaybackTeleportDistance()
+        {
+            if (MatchManager.Current != null)
+            {
+                return Mathf.Max(0.5f, MatchManager.Current.ExternalPlaybackTeleportDistance);
+            }
+
+            return Mathf.Max(0.5f, externalPlaybackTeleportDistance);
         }
 
         public void SetRotation(Quaternion rotation)

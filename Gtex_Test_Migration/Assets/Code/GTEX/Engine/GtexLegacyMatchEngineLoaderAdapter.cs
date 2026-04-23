@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using FStudio.GTEX;
 using FStudio.MatchEngine;
 using FStudio.UI;
 using FStudio.UI.MatchThemes.MatchEvents;
@@ -25,14 +26,14 @@ namespace FStudio.GTEX.Engine
             return MatchEngineLoader.CreateMatch(matchData);
         }
 
-        public Task StartMatchEngine(UpcomingMatchEvent matchEvent, bool homeKit, bool awayKit)
+        public Task StartMatchEngine(UpcomingMatchEvent matchEvent, bool homeKit, bool awayKit, GtexMatchConfig config = null)
         {
             if (MatchEngineLoader.Current == null)
             {
                 return Task.CompletedTask;
             }
 
-            return MatchEngineLoader.Current.StartMatchEngine(matchEvent, homeKit, awayKit);
+            return MatchEngineLoader.Current.StartMatchEngine(matchEvent, homeKit, awayKit, config);
         }
 
         public Task UnloadMatch()

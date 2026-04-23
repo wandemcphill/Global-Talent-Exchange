@@ -8,6 +8,7 @@ using System.Linq;
 using FStudio.Database;
 using FStudio.GTEX.Core;
 using FStudio.GTEX.Engine;
+using FStudio.GTEX.Playback;
 using FStudio.MatchEngine;
 using FStudio.MatchEngine.Balls;
 using FStudio.Data;
@@ -33,13 +34,14 @@ namespace FStudio.GTEX
             private const float LivePlayerMaxSpeedUnitsPerSecond = 8f;
             private const float LivePlayerRotationLerpSpeed = 10f;
             private const float LiveAnimatorMoveSpeedScale = 6f;
-        private const float LiveStatePredictionMaxSeconds = 0.35f;
+            private const float LiveStatePredictionMaxSeconds = 0.35f;
         private const float LiveBallPassSpeedUnitsPerSecond = 0.5f;
         private const float LiveBallShotSpeedUnitsPerSecond = 1.25f;
+            private const float PlaybackTraceSampleIntervalSeconds = 2f;
             private const float LiveBehaviorMinRoamDistance = 1f;
             private const float LiveBehaviorMaxRoamDistance = 4.75f;
             private const float LiveBehaviorMinSpeedRatio = 0.2f;
-            private const float LiveBehaviorTeammateRepulsionRadius = 2.4f;
+            private const float LiveBehaviorTeammateRepulsionRadius = 4.2f;
             private const float LiveBehaviorBlendOutSpeedUnitsPerSecond = 2.75f;
             private const float LiveBehaviorEventStaleSeconds = 7.5f;
             private const float LiveBehaviorEventStaleClockMinutes = 1.25f;
@@ -48,8 +50,28 @@ namespace FStudio.GTEX
             private const float LiveBallIntentFallbackTravelDistance = 4.25f;
             private const float RuntimeTraceFlushIntervalSeconds = 0.75f;
             private const float RuntimeTraceHeartbeatIntervalSeconds = 5f;
-        private const float RuntimeTraceStationaryClockDeltaThresholdMinutes = 0.35f;
+            private const float RuntimeTraceStationaryClockDeltaThresholdMinutes = 0.35f;
         private const int RuntimeTraceMaxBufferedLines = 64;
+
+        private struct SyntheticBallTransit
+        {
+            public bool Active;
+            public Vector3 Start;
+            public Vector3 End;
+            public float StartedAt;
+            public float Duration;
+            public float ArcHeight;
+            public bool IsShot;
+            public string TargetPlayerId;
+        }
+
+        private struct PlaybackConversion
+        {
+            public Vector3 RawIncoming;
+            public Vector3 ConvertedWorld;
+            public Vector3 ClampedWorld;
+            public bool WasFinite;
+        }
 
         private GtexMatchConfig config;
         private MatchAPI api;
@@ -63,9 +85,15 @@ namespace FStudio.GTEX
         private bool matchLoaded;
         private bool bootstrapTaskFailed;
         private bool usingWebSocket;
+        private GtexPitchSpace pitchSpace;
+        private GtexPlaybackSanitizer playbackSanitizer;
+        private GtexPlaybackApplier playbackApplier;
+        private string pitchSpaceSource = string.Empty;
 
         private readonly Dictionary<string, GtexLegacyPlayerHandle> playerBindings = new();
         private readonly Dictionary<string, string> lastAnimationStates = new();
+        private readonly HashSet<string> duplicateBindingKeys = new();
+        private readonly HashSet<string> loggedBindingDiagnostics = new();
         private string lastAppliedCameraPreset = string.Empty;
 
         private float stateReceivedAt;
@@ -84,6 +112,8 @@ namespace FStudio.GTEX
         private string runtimeTracePath = string.Empty;
         private float runtimeTraceLastFlushAt = -1f;
         private float runtimeTraceLastHeartbeatAt = -1f;
+        private float runtimeTraceLastPlaybackSampleAt = -1f;
+        private float runtimeTraceLastBallSampleAt = -1f;
         private float runtimeTraceLastMotionClockMinute = -1f;
         private string runtimeTraceLastLoggedPhase = string.Empty;
         private string runtimeTraceLastLoggedEventId = string.Empty;
@@ -108,6 +138,7 @@ namespace FStudio.GTEX
         private Vector3 liveBallIntentTarget = Vector3.zero;
         private Vector3 liveBallIntentDirection = Vector3.zero;
         private bool liveBallIntentContested;
+        private SyntheticBallTransit syntheticBallTransit;
 
         public bool HasConfig => config != null;
 
@@ -124,6 +155,8 @@ namespace FStudio.GTEX
         public bool IsConnectingWebSocket => isConnectingWebSocket;
 
         public bool IsMatchLoaded => matchLoaded;
+
+        public GtexPitchSpace CurrentPitchSpace => pitchSpace;
 
         public string LastTransportError => lastTransportError;
 
@@ -173,6 +206,8 @@ namespace FStudio.GTEX
         private void Initialize(GtexMatchConfig cfg)
         {
             config = cfg;
+            EnsurePlaybackApplier();
+            playbackApplier.Initialize(config);
             api = new MatchAPI(
                 () => config.ResolveBaseUrl(),
                 () => config != null ? config.liveAccessToken : string.Empty,
@@ -340,6 +375,7 @@ namespace FStudio.GTEX
                 " transport=" + lastTransportSource +
                 " ws=" + usingWebSocket +
                 " loaded=" + matchLoaded +
+                " pitch=" + pitchSpaceSource +
                 " intent=" + ResolveRuntimeIntentToken() +
                 " event=" + (activeEvent != null ? ((activeEvent.type ?? string.Empty).Trim()) : string.Empty);
         }
@@ -352,6 +388,177 @@ namespace FStudio.GTEX
             }
 
             return (state.ballPosition.playerId ?? string.Empty).Trim();
+        }
+
+        private void ResolvePitchSpace()
+        {
+            pitchSpace = GtexPitchLocator.Resolve(out pitchSpaceSource);
+            playbackSanitizer = new GtexPlaybackSanitizer(pitchSpace);
+
+            if (MatchManager.Current != null)
+            {
+                MatchManager.Current.ConfigureExternalPlaybackPitchSpace(pitchSpace);
+            }
+
+            var summary = pitchSpace != null
+                ? pitchSpace.ToString()
+                : "pitch-space unavailable";
+            AppendRuntimeTrace("pitch", "source=" + pitchSpaceSource + " " + summary);
+            Debug.Log("[GTEX] Pitch space resolved from " + pitchSpaceSource + " " + summary);
+            TraceGoalAnchors();
+        }
+
+        private void EnsurePitchSpaceResolved()
+        {
+            if (pitchSpace != null && playbackSanitizer != null)
+            {
+                return;
+            }
+
+            ResolvePitchSpace();
+        }
+
+        private PlaybackConversion ConvertIncomingPlaybackPosition(PlayerPosition livePosition, MatchResponse state)
+        {
+            EnsurePitchSpaceResolved();
+
+            var conversion = new PlaybackConversion
+            {
+                RawIncoming = livePosition != null
+                    ? new Vector3(livePosition.x, livePosition.y, livePosition.z)
+                    : Vector3.zero,
+                ConvertedWorld = pitchSpace != null ? pitchSpace.Center : Vector3.zero,
+                ClampedWorld = pitchSpace != null ? pitchSpace.Center : Vector3.zero,
+                WasFinite = livePosition != null
+            };
+
+            if (livePosition == null || pitchSpace == null || playbackSanitizer == null)
+            {
+                return conversion;
+            }
+
+            conversion.WasFinite = GtexPlaybackSanitizer.IsFinite(conversion.RawIncoming);
+
+            if (conversion.WasFinite)
+            {
+                var normalizedPosition = new Vector3(
+                    Mathf.InverseLerp(
+                        -ResolvePitchLengthMeters(state) * 0.5f,
+                        ResolvePitchLengthMeters(state) * 0.5f,
+                        conversion.RawIncoming.x),
+                    conversion.RawIncoming.y,
+                    Mathf.InverseLerp(
+                        -ResolvePitchWidthMeters(state) * 0.5f,
+                        ResolvePitchWidthMeters(state) * 0.5f,
+                        conversion.RawIncoming.z));
+                conversion.ConvertedWorld = pitchSpace.NormalizedToWorld(normalizedPosition);
+            }
+
+            conversion.ClampedWorld = livePosition.isBall
+                ? playbackSanitizer.SanitizeBallPosition(conversion.ConvertedWorld)
+                : playbackSanitizer.SanitizePlayerPosition(conversion.ConvertedWorld);
+            return conversion;
+        }
+
+        private Vector3 ConvertIncomingPlaybackVelocity(PlayerPosition livePosition, MatchResponse state)
+        {
+            if (livePosition == null)
+            {
+                return Vector3.zero;
+            }
+
+            EnsurePitchSpaceResolved();
+
+            var rawVelocity = new Vector3(livePosition.velocityX, livePosition.velocityY, livePosition.velocityZ);
+            if (pitchSpace == null || !GtexPlaybackSanitizer.IsFinite(rawVelocity))
+            {
+                return Vector3.zero;
+            }
+
+            var convertedVelocity = new Vector3(
+                (rawVelocity.x / ResolvePitchLengthMeters(state)) * pitchSpace.Length,
+                rawVelocity.y,
+                (rawVelocity.z / ResolvePitchWidthMeters(state)) * pitchSpace.Width);
+
+            if (!GtexPlaybackSanitizer.IsFinite(convertedVelocity))
+            {
+                return Vector3.zero;
+            }
+
+            if (!livePosition.isBall)
+            {
+                convertedVelocity.y = 0f;
+            }
+
+            return convertedVelocity;
+        }
+
+        private static float ResolvePitchLengthMeters(MatchResponse state)
+        {
+            return state != null ? Mathf.Max(1f, state.pitchLengthMeters) : GtexPitchSpace.DefaultLength;
+        }
+
+        private static float ResolvePitchWidthMeters(MatchResponse state)
+        {
+            return state != null ? Mathf.Max(1f, state.pitchWidthMeters) : GtexPitchSpace.DefaultWidth;
+        }
+
+        private static string FormatPlaybackVector(Vector3 value)
+        {
+            return
+                "(" +
+                value.x.ToString("0.##") +
+                "," +
+                value.y.ToString("0.##") +
+                "," +
+                value.z.ToString("0.##") +
+                ")";
+        }
+
+        private void TraceGoalAnchors()
+        {
+            if (pitchSpace == null || MatchManager.Current == null)
+            {
+                return;
+            }
+
+            TraceGoalAnchor(MatchManager.Current.goalNet1, pitchSpace.GetHomeGoalCenter(), "home");
+            TraceGoalAnchor(MatchManager.Current.goalNet2, pitchSpace.GetAwayGoalCenter(), "away");
+        }
+
+        private void TraceGoalAnchor(GoalNet goal, Vector3 expectedGroundCenter, string side)
+        {
+            if (goal == null)
+            {
+                return;
+            }
+
+            AppendRuntimeTrace(
+                "goal-anchor",
+                "side=" +
+                side +
+                " expected=" +
+                FormatPlaybackVector(expectedGroundCenter) +
+                " actual=" +
+                FormatPlaybackVector(goal.GroundAnchorPosition));
+        }
+
+        private void TraceBallPitchSample(PlaybackConversion conversion, Vector3 appliedPosition, GtexLegacyPlayerHandle holder)
+        {
+            AppendRuntimeTrace(
+                "ball-pitch-sample",
+                "holder=" +
+                (holder != null && holder.IsValid
+                    ? holder.DatabasePlayerId.HasValue
+                        ? holder.DatabasePlayerId.Value.ToString()
+                        : holder.ShirtNumber.ToString()
+                    : string.Empty) +
+                " raw=" +
+                FormatPlaybackVector(conversion.RawIncoming) +
+                " converted=" +
+                FormatPlaybackVector(conversion.ConvertedWorld) +
+                " clamped=" +
+                FormatPlaybackVector(appliedPosition));
         }
 
         private string ResolveRuntimeIntentToken()
@@ -511,7 +718,8 @@ namespace FStudio.GTEX
                 GtexMatchController.MatchEngineLoaderAdapter.StartMatchEngine(
                     new UpcomingMatchEvent(matchRequest),
                     false,
-                    false
+                    false,
+                    config
                 ),
                 "StartMatchEngine"
             );
@@ -523,6 +731,11 @@ namespace FStudio.GTEX
             if (GtexMatchController.MatchManagerAdapter.IsAvailable)
             {
                 GtexMatchController.MatchManagerAdapter.SetExternalPlayback(true);
+                if (MatchManager.Current != null)
+                {
+                    MatchManager.Current.ConfigureExternalPlaybackSettings(config);
+                }
+                ResolvePitchSpace();
             }
             else if (config != null && config.verboseLogging)
             {
@@ -645,6 +858,11 @@ namespace FStudio.GTEX
         private async void StartWebSocket()
         {
             if (isDestroyed || skipBootstrap || config == null || !matchLoaded)
+            {
+                return;
+            }
+
+            if (ShouldStopTransportAfterTerminal())
             {
                 return;
             }
@@ -797,6 +1015,12 @@ namespace FStudio.GTEX
         {
             while (!isDestroyed)
             {
+                if (ShouldStopTransportAfterTerminal())
+                {
+                    yield return new WaitForSecondsRealtime(Mathf.Max(0.25f, config.pollIntervalSeconds));
+                    continue;
+                }
+
                 if (!usingWebSocket && !isConnectingWebSocket)
                 {
                     MatchResponse response = null;
@@ -911,16 +1135,13 @@ namespace FStudio.GTEX
         {
             MaintainLiveTransport();
 
-            if (!matchLoaded || currentState == null)
+            if (!matchLoaded || playbackApplier == null || playbackApplier.CurrentState == null)
             {
                 FlushRuntimeTrace(false);
                 return;
             }
 
-            if (NeedsPlayerBindingRefresh()) BindPlayers();
-
-            DrivePlayers(Time.deltaTime);
-            DriveBall();
+            playbackApplier.Tick(Time.deltaTime);
             TrackRuntimeTrace();
         }
 
@@ -972,6 +1193,7 @@ namespace FStudio.GTEX
 
             staleFrameWarningLogged = false;
             lastKnownState = state;
+            EnsurePlaybackApplier();
             ApplyState(state, forceSnap);
             return true;
         }
@@ -1134,6 +1356,13 @@ namespace FStudio.GTEX
                    activeEventType.Contains("final");
         }
 
+        private bool ShouldStopTransportAfterTerminal()
+        {
+            return config != null &&
+                   config.stopReconnectAfterTerminal &&
+                   (IsTerminalLiveState(lastKnownState) || IsTerminalLiveState(currentState));
+        }
+
         private static GtexMatchPhase ResolveControllerPhase(MatchResponse state)
         {
             if (state == null)
@@ -1178,42 +1407,12 @@ namespace FStudio.GTEX
 
         private void ApplyState(MatchResponse state, bool forceSnap)
         {
-
-            if (state == null) return;
-
-            var previousState = currentState;
-            currentState = state;
-            stateReceivedAt = Time.unscaledTime;
-            staleStateWarningLogged = false;
-            consecutiveTransportFailures = 0;
-            lastTransportError = string.Empty;
-            UpdateActiveEventLiveness(state);
-
-            if (GtexMatchController.MatchManagerAdapter.IsAvailable)
+            if (state == null || playbackApplier == null)
             {
-                GtexMatchController.MatchManagerAdapter.ApplyExternalLiveState(
-                    state.clockMinute,
-                    state.homeScore,
-                    state.awayScore,
-                    ResolveMatchStatus(state)
-                );
-            }
-            else if (config != null && config.verboseLogging)
-            {
-                Debug.LogWarning("[GTEX] MatchManager is not ready. Live state cached without scene application.");
+                return;
             }
 
-            if (NeedsPlayerBindingRefresh())
-            {
-                BindPlayers();
-            }
-
-            ApplyLiveCameraPreset(state, forceSnap);
-            UpdateLiveBallIntent(previousState, state);
-            TryTriggerLiveBallAction(previousState, state);
-            TryTriggerLiveEventAction(previousState, state);
-
-            if (forceSnap) Snap();
+            playbackApplier.ApplyFrame(state, forceSnap);
 
             var controllerPhase = ResolveControllerPhase(state);
             GtexMatchController.ReportMatchSnapshot(
@@ -1230,6 +1429,68 @@ namespace FStudio.GTEX
             GtexMatchController.PublishLiveState(state, !usingWebSocket);
 
             Debug.Log($"[GTEX] Live: {state.clockMinute}' {state.homeScore}-{state.awayScore}");
+        }
+
+        private void EnsurePlaybackApplier()
+        {
+            if (playbackApplier != null)
+            {
+                return;
+            }
+
+            playbackApplier = new GtexPlaybackApplier(
+                () => matchLoaded,
+                NeedsPlayerBindingRefresh,
+                BindPlayers,
+                DrivePlayers,
+                DriveBall,
+                BeforeApplyPlaybackFrame,
+                ApplyScenePlaybackState,
+                ApplyLiveCameraPreset,
+                UpdateLiveBallIntent,
+                TryStartSyntheticBallTransit,
+                TryTriggerLiveBallAction,
+                TryTriggerLiveEventAction,
+                Snap);
+        }
+
+        private void BeforeApplyPlaybackFrame(MatchResponse state, bool forceSnap)
+        {
+            currentState = state;
+            stateReceivedAt = Time.unscaledTime;
+            staleStateWarningLogged = false;
+            consecutiveTransportFailures = 0;
+            lastTransportError = string.Empty;
+
+            if (config != null && config.stopReconnectAfterTerminal && IsTerminalLiveState(state))
+            {
+                nextWebSocketReconnectAt = float.PositiveInfinity;
+            }
+
+            if (forceSnap || IsTerminalLiveState(state))
+            {
+                ClearSyntheticBallTransit();
+            }
+
+            UpdateActiveEventLiveness(state);
+        }
+
+        private void ApplyScenePlaybackState(MatchResponse state)
+        {
+            if (GtexMatchController.MatchManagerAdapter.IsAvailable)
+            {
+                GtexMatchController.MatchManagerAdapter.ApplyExternalLiveState(
+                    state.clockMinute,
+                    state.homeScore,
+                    state.awayScore,
+                    ResolveMatchStatus(state));
+                return;
+            }
+
+            if (config != null && config.verboseLogging)
+            {
+                Debug.LogWarning("[GTEX] MatchManager is not ready. Live state cached without scene application.");
+            }
         }
 
         private void UpdateLiveBallIntent(MatchResponse previousState, MatchResponse nextState)
@@ -1614,7 +1875,7 @@ namespace FStudio.GTEX
                 return ResolveRuntimeFieldPosition(livePlayer, state, fallbackPosition);
             }
 
-            fallbackPosition.y = 0f;
+            fallbackPosition.y = pitchSpace != null ? pitchSpace.GrassY : 0f;
             return fallbackPosition;
         }
 
@@ -1622,20 +1883,23 @@ namespace FStudio.GTEX
         {
             if (TryGetBoundPlayer(livePlayer, out var boundPlayer) && boundPlayer != null && boundPlayer.IsValid)
             {
-                var boundPosition = boundPlayer.Position;
-                boundPosition.y = 0f;
-                return boundPosition;
+                return ClampToFieldBounds(boundPlayer.Position, livePlayer != null && livePlayer.isBall);
             }
 
             if (livePlayer != null && state != null && GtexMatchController.MatchManagerAdapter.IsAvailable)
             {
-                var statePosition = GtexMatchController.MatchManagerAdapter.ResolveFieldPosition(livePlayer, state);
-                statePosition.y = 0f;
-                return ClampToFieldBounds(statePosition, livePlayer.isBall);
+                return ClampToFieldBounds(ConvertIncomingPlaybackPosition(livePlayer, state).ClampedWorld, livePlayer.isBall);
             }
 
-            fallbackPosition.y = 0f;
-            return fallbackPosition;
+            if (playbackSanitizer != null &&
+                (fallbackPosition.sqrMagnitude <= 0.0001f || !GtexPlaybackSanitizer.IsFinite(fallbackPosition)))
+            {
+                return livePlayer != null && livePlayer.isBall
+                    ? playbackSanitizer.SanitizeBallPosition(pitchSpace != null ? pitchSpace.Center : Vector3.zero)
+                    : playbackSanitizer.SanitizePlayerPosition(pitchSpace != null ? pitchSpace.Center : Vector3.zero);
+            }
+
+            return ClampToFieldBounds(fallbackPosition, livePlayer != null && livePlayer.isBall);
         }
 
         private static bool TryResolveLivePlayerByPlayerId(MatchResponse state, string playerId, out PlayerPosition livePlayer)
@@ -1677,6 +1941,11 @@ namespace FStudio.GTEX
                 return;
             }
 
+            if (ShouldStopTransportAfterTerminal())
+            {
+                return;
+            }
+
             if (!usingWebSocket &&
                 !isConnectingWebSocket &&
                 Time.unscaledTime >= nextWebSocketReconnectAt)
@@ -1685,11 +1954,6 @@ namespace FStudio.GTEX
             }
 
             if (lastKnownState == null)
-            {
-                return;
-            }
-
-            if (IsTerminalLiveState(lastKnownState))
             {
                 return;
             }
@@ -1735,6 +1999,14 @@ namespace FStudio.GTEX
             usingWebSocket = false;
             isConnectingWebSocket = false;
             DisposeSocket();
+            if (ShouldStopTransportAfterTerminal())
+            {
+                nextWebSocketReconnectAt = float.PositiveInfinity;
+                AppendRuntimeTrace("ws", "terminal state reached. reconnect suppressed. reason=" + reason);
+                FlushRuntimeTrace(false);
+                return;
+            }
+
             if (ShouldAttemptLiveAccessRefresh(0, reason))
             {
                 StartCoroutine(RefreshLiveAccessToken("websocket disconnect", true));
@@ -1821,7 +2093,7 @@ namespace FStudio.GTEX
                 lastTransportError = string.Empty;
                 lastTransportSource = "auth";
                 webSocketReconnectAttempts = 0;
-                if (scheduleReconnect)
+                if (scheduleReconnect && !ShouldStopTransportAfterTerminal())
                 {
                     nextWebSocketReconnectAt = Time.unscaledTime;
                 }
@@ -1863,6 +2135,12 @@ namespace FStudio.GTEX
                 return;
             }
 
+            if (ShouldStopTransportAfterTerminal())
+            {
+                nextWebSocketReconnectAt = float.PositiveInfinity;
+                return;
+            }
+
             webSocketReconnectAttempts += 1;
             var delay = Mathf.Min(
                 Mathf.Pow(2f, Mathf.Max(0, webSocketReconnectAttempts - 1)) * Mathf.Max(config.pollIntervalSeconds, 0.5f),
@@ -1879,6 +2157,8 @@ namespace FStudio.GTEX
         {
             playerBindings.Clear();
             lastAnimationStates.Clear();
+            duplicateBindingKeys.Clear();
+            loggedBindingDiagnostics.Clear();
 
             if (currentState == null || !GtexMatchController.MatchManagerAdapter.HasTeams)
             {
@@ -1929,6 +2209,8 @@ namespace FStudio.GTEX
 
             var predictionSeconds = ResolveLivePredictionSeconds();
             var livePlayers = currentState.players;
+            var traceSamples = Time.unscaledTime - runtimeTraceLastPlaybackSampleAt >= PlaybackTraceSampleIntervalSeconds;
+            var tracedPlayerSamples = 0;
             var drivenPlayers = 0;
             var movingPlayers = 0;
             var accumulatedSpeed = 0f;
@@ -1946,7 +2228,12 @@ namespace FStudio.GTEX
                     continue;
                 }
 
-                var appliedSpeed = ApplyLivePlayerState(livePlayer, player, dt, predictionSeconds, false);
+                var tracePlayerSample = traceSamples && tracedPlayerSamples < 3;
+                var appliedSpeed = ApplyLivePlayerState(livePlayer, player, dt, predictionSeconds, false, tracePlayerSample);
+                if (tracePlayerSample)
+                {
+                    tracedPlayerSamples += 1;
+                }
                 drivenPlayers += 1;
                 accumulatedSpeed += appliedSpeed;
                 maxSpeed = Mathf.Max(maxSpeed, appliedSpeed);
@@ -1954,6 +2241,11 @@ namespace FStudio.GTEX
                 {
                     movingPlayers += 1;
                 }
+            }
+
+            if (tracedPlayerSamples > 0)
+            {
+                runtimeTraceLastPlaybackSampleAt = Time.unscaledTime;
             }
 
             runtimeTraceDrivenPlayerCount = drivenPlayers;
@@ -1966,19 +2258,33 @@ namespace FStudio.GTEX
         {
             if (currentState == null || currentState.ballPosition == null || !GtexMatchController.BallAdapter.IsAvailable)
             {
+                ClearSyntheticBallTransit();
                 runtimeTraceBallSpeed = 0f;
                 return;
             }
 
+            if (TryDriveSyntheticBallTransit())
+            {
+                return;
+            }
+
             var ballHolder = ResolveBallHolder(currentState.ballPosition);
+            var ballConversion = ConvertIncomingPlaybackPosition(currentState.ballPosition, currentState);
             var targetPosition = ballHolder != null
-                ? GtexMatchController.MatchManagerAdapter.ResolveFieldPosition(currentState.ballPosition, currentState)
+                ? ballConversion.ClampedWorld
                 : ResolvePredictedFieldPosition(currentState.ballPosition, ResolveLivePredictionSeconds());
             var ballVelocity = ResolveLiveFieldVelocity(currentState.ballPosition);
             runtimeTraceBallSpeed = new Vector3(ballVelocity.x, 0f, ballVelocity.z).magnitude;
+            var appliedPosition = ClampToFieldBounds(targetPosition, true);
+
+            if (Time.unscaledTime - runtimeTraceLastBallSampleAt >= PlaybackTraceSampleIntervalSeconds)
+            {
+                runtimeTraceLastBallSampleAt = Time.unscaledTime;
+                TraceBallPitchSample(ballConversion, appliedPosition, ballHolder);
+            }
 
             GtexMatchController.BallAdapter.ApplyExternalState(
-                targetPosition,
+                appliedPosition,
                 ballVelocity,
                 ballHolder);
         }
@@ -2009,7 +2315,7 @@ namespace FStudio.GTEX
                     continue;
                 }
 
-                ApplyLivePlayerState(livePlayer, player, 0f, 0f, true);
+                ApplyLivePlayerState(livePlayer, player, 0f, 0f, true, false);
             }
 
             DriveBall();
@@ -2031,7 +2337,7 @@ namespace FStudio.GTEX
                     continue;
                 }
 
-                if (!TryGetBoundPlayer(livePlayer, out _))
+                if (!TryGetBoundPlayer(livePlayer, out _) && !HasKnownBindingIssue(livePlayer))
                 {
                     return true;
                 }
@@ -2055,10 +2361,11 @@ namespace FStudio.GTEX
             {
                 if (availablePlayers.Count == 0)
                 {
-                    break;
+                    LogMissingBindingDiagnostic(livePlayer, "no-unity-candidate");
+                    continue;
                 }
 
-                var targetPosition = GtexMatchController.MatchManagerAdapter.ResolveFieldPosition(livePlayer, currentState);
+                var targetPosition = ConvertIncomingPlaybackPosition(livePlayer, currentState).ClampedWorld;
                 GtexLegacyPlayerHandle bestCandidate = null;
                 var bestScore = float.MaxValue;
 
@@ -2075,6 +2382,7 @@ namespace FStudio.GTEX
 
                 if (bestCandidate == null)
                 {
+                    LogMissingBindingDiagnostic(livePlayer, "no-unity-candidate");
                     continue;
                 }
 
@@ -2141,15 +2449,140 @@ namespace FStudio.GTEX
                 return;
             }
 
+            var storedAnyKey = false;
             if (!string.IsNullOrWhiteSpace(livePlayer.entityId))
             {
-                playerBindings[livePlayer.entityId] = player;
+                storedAnyKey |= TryStorePlayerBindingKey(livePlayer.entityId, livePlayer, player);
             }
 
             if (!string.IsNullOrWhiteSpace(livePlayer.playerId))
             {
-                playerBindings["player:" + livePlayer.playerId] = player;
+                storedAnyKey |= TryStorePlayerBindingKey("player:" + livePlayer.playerId, livePlayer, player);
             }
+
+            if (!storedAnyKey)
+            {
+                LogMissingBindingDiagnostic(livePlayer, "missing-storage-key");
+            }
+        }
+
+        private bool TryStorePlayerBindingKey(string key, PlayerPosition livePlayer, GtexLegacyPlayerHandle player)
+        {
+            if (string.IsNullOrWhiteSpace(key) || player == null || !player.IsValid)
+            {
+                return false;
+            }
+
+            if (playerBindings.TryGetValue(key, out var existing) &&
+                existing != null &&
+                existing.IsValid &&
+                existing.RawPlayer != player.RawPlayer)
+            {
+                duplicateBindingKeys.Add(key);
+                var message =
+                    "duplicate key=" +
+                    key +
+                    " existing=" +
+                    DescribeLegacyPlayer(existing) +
+                    " incoming=" +
+                    DescribeLivePlayer(livePlayer);
+                AppendRuntimeTrace("binding", message);
+                Debug.LogWarning("[GTEX] Duplicate live-player binding " + message + ". Ambiguous binding skipped.");
+                return false;
+            }
+
+            playerBindings[key] = player;
+            return true;
+        }
+
+        private bool HasKnownBindingIssue(PlayerPosition livePlayer)
+        {
+            if (livePlayer == null)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(livePlayer.entityId) && string.IsNullOrWhiteSpace(livePlayer.playerId))
+            {
+                return true;
+            }
+
+            return (!string.IsNullOrWhiteSpace(livePlayer.entityId) && duplicateBindingKeys.Contains(livePlayer.entityId)) ||
+                   (!string.IsNullOrWhiteSpace(livePlayer.playerId) && duplicateBindingKeys.Contains("player:" + livePlayer.playerId));
+        }
+
+        private void LogMissingBindingDiagnostic(PlayerPosition livePlayer, string reason)
+        {
+            var diagnosticKey = ResolveBindingDiagnosticKey(livePlayer, reason);
+            if (!loggedBindingDiagnostics.Add(diagnosticKey))
+            {
+                return;
+            }
+
+            var message = "reason=" + reason + " player=" + DescribeLivePlayer(livePlayer);
+            AppendRuntimeTrace("binding", message);
+            Debug.LogWarning("[GTEX] Unresolved live-player binding " + message + ".");
+        }
+
+        private static string ResolveBindingDiagnosticKey(PlayerPosition livePlayer, string reason)
+        {
+            if (livePlayer == null)
+            {
+                return "null:" + reason;
+            }
+
+            var storageKey = ResolveBindingStorageKey(livePlayer);
+            if (!string.IsNullOrWhiteSpace(storageKey))
+            {
+                return storageKey + ":" + reason;
+            }
+
+            return
+                (livePlayer.teamSide ?? string.Empty) +
+                ":" +
+                livePlayer.shirtNumber +
+                ":" +
+                (livePlayer.label ?? string.Empty) +
+                ":" +
+                reason;
+        }
+
+        private static string DescribeLivePlayer(PlayerPosition livePlayer)
+        {
+            if (livePlayer == null)
+            {
+                return "null";
+            }
+
+            return
+                "label=" +
+                (livePlayer.label ?? string.Empty) +
+                " entityId=" +
+                (livePlayer.entityId ?? string.Empty) +
+                " playerId=" +
+                (livePlayer.playerId ?? string.Empty) +
+                " shirt=" +
+                livePlayer.shirtNumber +
+                " side=" +
+                (livePlayer.teamSide ?? string.Empty) +
+                " role=" +
+                (livePlayer.role ?? string.Empty);
+        }
+
+        private static string DescribeLegacyPlayer(GtexLegacyPlayerHandle player)
+        {
+            if (player == null)
+            {
+                return "null";
+            }
+
+            return
+                "shirt=" +
+                player.ShirtNumber +
+                " dbId=" +
+                (player.DatabasePlayerId.HasValue ? player.DatabasePlayerId.Value.ToString() : string.Empty) +
+                " role=" +
+                player.PositionRole;
         }
 
         private bool TryGetBoundPlayer(PlayerPosition livePlayer, out GtexLegacyPlayerHandle player)
@@ -2157,6 +2590,7 @@ namespace FStudio.GTEX
             if (livePlayer != null)
             {
                 if (!string.IsNullOrWhiteSpace(livePlayer.entityId) &&
+                    !duplicateBindingKeys.Contains(livePlayer.entityId) &&
                     playerBindings.TryGetValue(livePlayer.entityId, out player) &&
                     player != null &&
                     player.IsValid)
@@ -2165,6 +2599,7 @@ namespace FStudio.GTEX
                 }
 
                 if (!string.IsNullOrWhiteSpace(livePlayer.playerId) &&
+                    !duplicateBindingKeys.Contains("player:" + livePlayer.playerId) &&
                     playerBindings.TryGetValue("player:" + livePlayer.playerId, out player) &&
                     player != null &&
                     player.IsValid)
@@ -2180,6 +2615,7 @@ namespace FStudio.GTEX
         private bool TryGetBoundPlayerByPlayerId(string playerId, out GtexLegacyPlayerHandle player)
         {
             if (!string.IsNullOrWhiteSpace(playerId) &&
+                !duplicateBindingKeys.Contains("player:" + playerId) &&
                 playerBindings.TryGetValue("player:" + playerId, out player) &&
                 player != null &&
                 player.IsValid)
@@ -2191,7 +2627,13 @@ namespace FStudio.GTEX
             return false;
         }
 
-        private float ApplyLivePlayerState(PlayerPosition livePlayer, GtexLegacyPlayerHandle player, float dt, float predictionSeconds, bool snap)
+        private float ApplyLivePlayerState(
+            PlayerPosition livePlayer,
+            GtexLegacyPlayerHandle player,
+            float dt,
+            float predictionSeconds,
+            bool snap,
+            bool traceSample)
         {
             if (livePlayer == null || player == null || !player.IsValid)
             {
@@ -2199,17 +2641,19 @@ namespace FStudio.GTEX
             }
 
             var currentPosition = player.Position;
+            var directIncomingPosition = ConvertIncomingPlaybackPosition(livePlayer, currentState);
             var liveVelocity = snap ? Vector3.zero : ResolveLiveFieldVelocity(livePlayer);
             var targetPosition = snap
-                ? GtexMatchController.MatchManagerAdapter.ResolveFieldPosition(livePlayer, currentState)
+                ? directIncomingPosition.ClampedWorld
                 : ResolvePredictedFieldPosition(livePlayer, predictionSeconds);
             if (!snap)
             {
                 targetPosition = ResolveBehaviorDrivenFieldPosition(livePlayer, targetPosition, currentPosition, liveVelocity);
+                targetPosition = ApplyStructuredTeamSpacing(livePlayer, targetPosition);
             }
 
             Vector3 appliedPosition;
-            if (snap || Vector3.Distance(currentPosition, targetPosition) >= LivePlayerSnapDistance)
+            if (snap || Vector3.Distance(currentPosition, targetPosition) >= ResolveSnapDistance())
             {
                 appliedPosition = targetPosition;
             }
@@ -2221,17 +2665,33 @@ namespace FStudio.GTEX
                     ResolveLivePlayerMoveSpeed(livePlayer, currentPosition, targetPosition, liveVelocity) * Mathf.Max(dt, 0f));
             }
 
-            player.SetInstantPosition(appliedPosition);
+            appliedPosition = ClampToFieldBounds(appliedPosition, false);
 
             var lookDirection = ResolveLookDirection(livePlayer, appliedPosition - currentPosition, player);
+            var appliedRotation = player.Rotation;
             if (lookDirection.sqrMagnitude > 0.0001f)
             {
                 var targetRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
-                var appliedRotation = snap
+                appliedRotation = snap
                     ? targetRotation
                     : Quaternion.Slerp(player.Rotation, targetRotation, Mathf.Clamp01(dt * LivePlayerRotationLerpSpeed));
-                player.SetInstantRotation(appliedRotation);
             }
+
+            if (traceSample)
+            {
+                AppendRuntimeTrace(
+                    "pitch-sample",
+                    "player=" +
+                    DescribeLivePlayer(livePlayer) +
+                    " raw=" +
+                    FormatPlaybackVector(directIncomingPosition.RawIncoming) +
+                    " converted=" +
+                    FormatPlaybackVector(directIncomingPosition.ConvertedWorld) +
+                    " clamped=" +
+                    FormatPlaybackVector(directIncomingPosition.ClampedWorld));
+            }
+
+            player.SetExternalPlaybackPose(appliedPosition, appliedRotation, snap);
 
             ApplyLiveAnimatorState(livePlayer, player, appliedPosition - currentPosition, liveVelocity, dt, snap);
             if (snap || dt <= 0f)
@@ -2395,7 +2855,7 @@ namespace FStudio.GTEX
         {
             if (ballPosition != null && !string.IsNullOrWhiteSpace(ballPosition.playerId))
             {
-                if (playerBindings.TryGetValue("player:" + ballPosition.playerId, out var holder) && holder != null)
+                if (TryGetBoundPlayerByPlayerId(ballPosition.playerId, out var holder) && holder != null)
                 {
                     return holder;
                 }
@@ -2424,16 +2884,181 @@ namespace FStudio.GTEX
             return null;
         }
 
+        private float ResolveSnapDistance()
+        {
+            return config != null ? Mathf.Max(0.5f, config.teleportDistance) : LivePlayerSnapDistance;
+        }
+
         private float ResolveLivePredictionSeconds()
         {
+            var maxPrediction = config != null
+                ? Mathf.Max(0f, config.stalePredictionSeconds)
+                : LiveStatePredictionMaxSeconds;
+
             return currentState == null
                 ? 0f
-                : Mathf.Clamp(Time.unscaledTime - stateReceivedAt, 0f, LiveStatePredictionMaxSeconds);
+                : Mathf.Clamp(Time.unscaledTime - stateReceivedAt, 0f, maxPrediction);
+        }
+
+        private void TryStartSyntheticBallTransit(MatchResponse previousState, MatchResponse nextState, bool forceSnap)
+        {
+            if (forceSnap || nextState == null || IsTerminalLiveState(nextState))
+            {
+                ClearSyntheticBallTransit();
+                return;
+            }
+
+            if (previousState == null || previousState.ballPosition == null || nextState.ballPosition == null)
+            {
+                return;
+            }
+
+            var previousHolderId = (previousState.ballPosition.playerId ?? string.Empty).Trim();
+            var nextHolderId = (nextState.ballPosition.playerId ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(previousHolderId) ||
+                string.IsNullOrWhiteSpace(nextHolderId) ||
+                string.Equals(previousHolderId, nextHolderId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var liveVelocity = ResolveLiveFieldVelocity(nextState.ballPosition);
+            liveVelocity.y = 0f;
+            var ballSpeed = liveVelocity.magnitude;
+            if (ballSpeed < LiveBallPassSpeedUnitsPerSecond)
+            {
+                return;
+            }
+
+            var start = ResolveRuntimePlayerPositionById(previousState, previousHolderId, Vector3.zero);
+            var end = start;
+            if (TryResolveLivePlayerByPlayerId(nextState, nextHolderId, out var nextHolderLive) &&
+                GtexMatchController.MatchManagerAdapter.IsAvailable)
+            {
+                end = ConvertIncomingPlaybackPosition(nextHolderLive, nextState).ClampedWorld;
+            }
+            else
+            {
+                end = ResolveRuntimePlayerPositionById(nextState, nextHolderId, start);
+            }
+
+            start = ClampToFieldBounds(new Vector3(start.x, pitchSpace != null ? pitchSpace.GrassY + GtexPlaybackSanitizer.DefaultBallHeight : 0.1f, start.z), true);
+            end = ClampToFieldBounds(new Vector3(end.x, pitchSpace != null ? pitchSpace.GrassY + GtexPlaybackSanitizer.DefaultBallHeight : 0.1f, end.z), true);
+            var distance = Vector3.Distance(start, end);
+            if (distance <= 0.01f)
+            {
+                return;
+            }
+
+            var activeEvent = nextState.ResolveActiveEvent();
+            var eventType = NormalizeActiveEventTypeToken(nextState, activeEvent);
+            var previousHolderSide = ResolvePlayerTeamSideToken(previousState, previousHolderId);
+            var nextHolderSide = ResolvePlayerTeamSideToken(nextState, nextHolderId);
+            var sameTeamTransition =
+                !string.IsNullOrWhiteSpace(previousHolderSide) &&
+                string.Equals(previousHolderSide, nextHolderSide, StringComparison.Ordinal);
+            var isShotTransit =
+                eventType.Contains("goal") ||
+                eventType.Contains("shot") ||
+                eventType.Contains("chance") ||
+                eventType.Contains("save") ||
+                eventType.Contains("miss");
+            var isCrossTransit = eventType.Contains("cross") || eventType.Contains("corner");
+            var isPassTransit =
+                eventType.Contains("pass") ||
+                eventType.Contains("assist") ||
+                eventType.Contains("through");
+            var explicitTransit = isShotTransit || isCrossTransit || isPassTransit;
+            if (!explicitTransit)
+            {
+                if (!sameTeamTransition)
+                {
+                    return;
+                }
+
+                if (distance < 2.2f || ballSpeed < LiveBallPassSpeedUnitsPerSecond * 1.8f)
+                {
+                    return;
+                }
+            }
+
+            if ((sameTeamTransition && distance < 1.35f) ||
+                (!sameTeamTransition && distance < 2.75f))
+            {
+                return;
+            }
+
+            var referenceSpeed = Mathf.Max(ballSpeed, 4f);
+
+            syntheticBallTransit = new SyntheticBallTransit
+            {
+                Active = true,
+                Start = start,
+                End = end,
+                StartedAt = Time.unscaledTime,
+                Duration = Mathf.Clamp(
+                    distance / Mathf.Max(referenceSpeed * (isShotTransit ? 0.72f : 0.58f), 0.001f),
+                    isShotTransit ? 0.24f : 0.18f,
+                    isShotTransit ? 0.72f : 0.58f),
+                ArcHeight = isShotTransit ? 1.15f : (isCrossTransit ? 0.72f : 0.28f),
+                IsShot = isShotTransit,
+                TargetPlayerId = nextHolderId,
+            };
+        }
+
+        private bool TryDriveSyntheticBallTransit()
+        {
+            if (!syntheticBallTransit.Active)
+            {
+                return false;
+            }
+
+            if (!syntheticBallTransit.IsShot &&
+                !string.IsNullOrWhiteSpace(syntheticBallTransit.TargetPlayerId))
+            {
+                var fallbackEnd = syntheticBallTransit.End;
+                var updatedEnd = ResolveRuntimePlayerPositionById(currentState, syntheticBallTransit.TargetPlayerId, fallbackEnd);
+                updatedEnd = ClampToFieldBounds(
+                    new Vector3(
+                        updatedEnd.x,
+                        pitchSpace != null ? pitchSpace.GrassY + GtexPlaybackSanitizer.DefaultBallHeight : 0.1f,
+                        updatedEnd.z),
+                    true);
+                syntheticBallTransit.End = Vector3.Lerp(syntheticBallTransit.End, updatedEnd, 0.55f);
+            }
+
+            var elapsed = Mathf.Max(0f, Time.unscaledTime - syntheticBallTransit.StartedAt);
+            var duration = Mathf.Max(0.01f, syntheticBallTransit.Duration);
+            var t = Mathf.Clamp01(elapsed / duration);
+            var position = Vector3.Lerp(syntheticBallTransit.Start, syntheticBallTransit.End, t);
+            position.y += 4f * syntheticBallTransit.ArcHeight * t * (1f - t);
+            position = ClampToFieldBounds(position, true);
+
+            var nextT = Mathf.Clamp01((elapsed + Mathf.Max(Time.deltaTime, 0.016f)) / duration);
+            var nextPosition = Vector3.Lerp(syntheticBallTransit.Start, syntheticBallTransit.End, nextT);
+            nextPosition.y += 4f * syntheticBallTransit.ArcHeight * nextT * (1f - nextT);
+            nextPosition = ClampToFieldBounds(nextPosition, true);
+            var velocity = (nextPosition - position) / Mathf.Max(Time.deltaTime, 0.016f);
+
+            runtimeTraceBallSpeed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
+            GtexMatchController.BallAdapter.ApplyExternalState(position, velocity, null);
+
+            if (t >= 1f)
+            {
+                ClearSyntheticBallTransit();
+            }
+
+            return true;
+        }
+
+        private void ClearSyntheticBallTransit()
+        {
+            syntheticBallTransit = default;
         }
 
         private Vector3 ResolvePredictedFieldPosition(PlayerPosition livePosition, float predictionSeconds)
         {
-            var targetPosition = GtexMatchController.MatchManagerAdapter.ResolveFieldPosition(livePosition, currentState);
+            var targetPosition = ConvertIncomingPlaybackPosition(livePosition, currentState).ClampedWorld;
             if (livePosition == null || predictionSeconds <= 0f || !GtexMatchController.MatchManagerAdapter.IsAvailable)
             {
                 return targetPosition;
@@ -2818,6 +3443,143 @@ namespace FStudio.GTEX
             return ClampToFieldBounds(Vector3.Lerp(clampedAnchor, clampedTarget, weight), false);
         }
 
+        private Vector3 ApplyStructuredTeamSpacing(PlayerPosition livePlayer, Vector3 desiredPosition)
+        {
+            if (livePlayer == null ||
+                livePlayer.isBall ||
+                currentState == null ||
+                currentState.players == null)
+            {
+                return ClampToFieldBounds(desiredPosition, false);
+            }
+
+            var teamSide = NormalizeTeamSideToken(livePlayer.teamSide);
+            if (string.IsNullOrWhiteSpace(teamSide))
+            {
+                return ClampToFieldBounds(desiredPosition, false);
+            }
+
+            var roleBucket = ResolveLiveRoleBucket(livePlayer);
+            var attackDirection = ResolveAttackDirection(livePlayer);
+            var lateralDirection = Vector3.Cross(Vector3.up, attackDirection).normalized;
+            var laneSign = ResolveBehaviorLaneSign(livePlayer, roleBucket);
+            var signature = ResolveBehaviorSignature01(livePlayer, roleBucket);
+            var laneMagnitude =
+                roleBucket == 0 ? 0.2f :
+                roleBucket == 1 ? 1.55f :
+                roleBucket == 2 ? 2.35f :
+                3.2f;
+
+            var spacedTarget =
+                desiredPosition +
+                lateralDirection * laneSign * laneMagnitude * Mathf.Lerp(0.82f, 1.28f, signature);
+
+            if (roleBucket == 1)
+            {
+                spacedTarget -= attackDirection * 0.3f;
+            }
+            else if (roleBucket == 3)
+            {
+                spacedTarget += attackDirection * 0.35f;
+            }
+
+            if (!livePlayer.hasPossession &&
+                currentState.ballPosition != null &&
+                !string.IsNullOrWhiteSpace(currentState.ballPosition.playerId) &&
+                TryResolveLivePlayerByPlayerId(currentState, currentState.ballPosition.playerId, out var holderLive) &&
+                string.Equals(teamSide, NormalizeTeamSideToken(holderLive.teamSide), StringComparison.Ordinal))
+            {
+                var holderPosition = ResolveRuntimeFieldPosition(holderLive, currentState, spacedTarget);
+                var separationFromHolder = spacedTarget - holderPosition;
+                separationFromHolder.y = 0f;
+                var desiredHolderSpacing = roleBucket == 3 ? 1.75f : 2.25f;
+                if (separationFromHolder.magnitude > 0.001f &&
+                    separationFromHolder.magnitude < desiredHolderSpacing)
+                {
+                    spacedTarget +=
+                        separationFromHolder.normalized * (desiredHolderSpacing - separationFromHolder.magnitude) +
+                        lateralDirection * laneSign * 0.35f;
+                }
+            }
+
+            spacedTarget += ResolveLiveSpacingRepulsion(livePlayer, spacedTarget);
+            return ClampToFieldBounds(spacedTarget, false);
+        }
+
+        private Vector3 ResolveLiveSpacingRepulsion(PlayerPosition livePlayer, Vector3 desiredPosition)
+        {
+            if (livePlayer == null ||
+                currentState == null ||
+                currentState.players == null ||
+                !GtexMatchController.MatchManagerAdapter.IsAvailable)
+            {
+                return Vector3.zero;
+            }
+
+            var teamSide = NormalizeTeamSideToken(livePlayer.teamSide);
+            if (string.IsNullOrWhiteSpace(teamSide))
+            {
+                return Vector3.zero;
+            }
+
+            var roleBucket = ResolveLiveRoleBucket(livePlayer);
+            var attackDirection = ResolveAttackDirection(livePlayer);
+            var lateralDirection = Vector3.Cross(Vector3.up, attackDirection).normalized;
+            var laneSign = ResolveBehaviorLaneSign(livePlayer, roleBucket);
+            var minimumSeparation =
+                roleBucket == 0 ? 1.1f :
+                roleBucket == 1 ? 2.8f :
+                roleBucket == 2 ? 3.15f :
+                3.55f;
+            var repulsionRadius = Mathf.Max(LiveBehaviorTeammateRepulsionRadius, minimumSeparation + 1.2f);
+
+            desiredPosition.y = 0f;
+            var repulsion = Vector3.zero;
+            var contributors = 0;
+
+            foreach (var teammate in currentState.players)
+            {
+                if (teammate == null ||
+                    teammate.isBall ||
+                    !teammate.active ||
+                    IsSameLivePlayer(teammate, livePlayer) ||
+                    !string.Equals(NormalizeTeamSideToken(teammate.teamSide), teamSide, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var teammatePosition = ResolveRuntimeFieldPosition(teammate, currentState, desiredPosition);
+                var separation = desiredPosition - teammatePosition;
+                separation.y = 0f;
+                var distance = separation.magnitude;
+                if (distance <= 0.001f)
+                {
+                    separation = lateralDirection * laneSign;
+                    distance = 0.001f;
+                }
+
+                if (distance >= repulsionRadius)
+                {
+                    continue;
+                }
+
+                var pressure =
+                    1f - Mathf.Clamp01(distance / repulsionRadius) +
+                    Mathf.Max(0f, minimumSeparation - distance) / Mathf.Max(minimumSeparation, 0.001f);
+                repulsion += separation.normalized * pressure;
+                contributors += 1;
+            }
+
+            if (contributors == 0)
+            {
+                return Vector3.zero;
+            }
+
+            repulsion /= contributors;
+            repulsion.y = 0f;
+            return Vector3.ClampMagnitude(repulsion, roleBucket == 3 ? 1.9f : 1.55f);
+        }
+
         private Vector3 ResolveLiveFieldVelocity(PlayerPosition livePosition)
         {
             if (livePosition == null || currentState == null || !GtexMatchController.MatchManagerAdapter.IsAvailable)
@@ -2825,7 +3587,7 @@ namespace FStudio.GTEX
                 return Vector3.zero;
             }
 
-            var velocity = GtexMatchController.MatchManagerAdapter.ResolveFieldVelocity(livePosition, currentState);
+            var velocity = ConvertIncomingPlaybackVelocity(livePosition, currentState);
             if (!livePosition.isBall)
             {
                 velocity.y = 0f;
@@ -2836,6 +3598,14 @@ namespace FStudio.GTEX
 
         private Vector3 ClampToFieldBounds(Vector3 position, bool isBall)
         {
+            EnsurePitchSpaceResolved();
+            if (playbackSanitizer != null)
+            {
+                return isBall
+                    ? playbackSanitizer.SanitizeBallPosition(position)
+                    : playbackSanitizer.SanitizePlayerPosition(position);
+            }
+
             var fieldSize = GtexMatchController.MatchManagerAdapter.FieldSize;
             if (fieldSize != Vector2.zero)
             {

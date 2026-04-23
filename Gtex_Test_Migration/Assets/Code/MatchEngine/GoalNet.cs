@@ -111,9 +111,34 @@ namespace FStudio.MatchEngine {
         /// </summary>
         public Vector3 Position => middlePoint.position;
 
+        public float GroundAnchorOffsetY {
+            get {
+                if (GoalColliders != null) {
+                    return Mathf.Max(0f, -GoalColliders.transform.localPosition.y);
+                }
+
+                if (OutColliders != null) {
+                    return Mathf.Max(0f, -OutColliders.transform.localPosition.y);
+                }
+
+                return Mathf.Max(0f, transform.position.y);
+            }
+        }
+
+        public Vector3 GroundAnchorPosition =>
+            new Vector3(transform.position.x, transform.position.y - GroundAnchorOffsetY, transform.position.z);
+
         /// <summary>
         /// Direction of the goal net. System will use this direction for attacking & defending.
         /// </summary>
         public Vector3 Direction => middlePoint.forward;
+
+        public void AlignToPitch(Vector3 goalLineCenter, float grassY, Quaternion rotation) {
+            var targetPosition = new Vector3(
+                goalLineCenter.x,
+                grassY + GroundAnchorOffsetY,
+                goalLineCenter.z);
+            transform.SetPositionAndRotation(targetPosition, rotation);
+        }
     }
 }

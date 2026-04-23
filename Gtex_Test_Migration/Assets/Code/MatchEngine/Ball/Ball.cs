@@ -8,6 +8,7 @@ using URandom = UnityEngine.Random;
 using FStudio.Events;
 using FStudio.MatchEngine.Events;
 using FStudio.MatchEngine.EngineOptions;
+using FStudio.GTEX.Playback;
 using System.Linq;
 using System.Threading.Tasks;
 using FStudio.MatchEngine.Players.PlayerController;
@@ -37,6 +38,12 @@ namespace FStudio.MatchEngine.Balls {
 #pragma warning restore 0109
 
         private Vector3 externalPlaybackVelocity;
+        private bool hasExternalPlaybackTarget;
+        private Vector3 externalPlaybackTargetPosition;
+        private Quaternion externalPlaybackTargetRotation = Quaternion.identity;
+
+        [SerializeField] private float externalPlaybackMoveSpeed = 30f;
+        [SerializeField] private float externalPlaybackTeleportDistance = 6f;
 
         public Vector3 Velocity => ExternalPlaybackEnabled ? externalPlaybackVelocity : rigidbody.linearVelocity;
 
@@ -124,6 +131,11 @@ namespace FStudio.MatchEngine.Balls {
             Collider = GetComponent<CapsuleCollider>();
         }
 
+        private void Awake()
+        {
+            ConfigureExternalPlaybackPhysics();
+        }
+
         protected override void OnEnable () {
             if (Application.isPlaying) {
                 EventManager.Subscribe<GoalEvent>(OnGoal);
@@ -165,7 +177,7 @@ namespace FStudio.MatchEngine.Balls {
 
             if (ExternalPlaybackEnabled) {
                 externalPlaybackVelocity = ballVel;
-            } else if (!rigidbody.isKinematic) {
+            } else if (CanWritePhysicsVelocity()) {
                 rigidbody.linearVelocity = ballVel;
             }
 
@@ -175,6 +187,25 @@ namespace FStudio.MatchEngine.Balls {
             ballPos.y = 0;
             float heightPow = Mathf.Max (0, 0.6f - height);
             shadowMaterial.SetFloat(BALL_SHADOW_POWER, heightPow);
+        }
+
+        private void FixedUpdate()
+        {
+            if (!ExternalPlaybackEnabled ||
+                !hasExternalPlaybackTarget ||
+                HolderPlayer != null ||
+                rigidbody == null)
+            {
+                return;
+            }
+
+            var nextPosition = Vector3.MoveTowards(
+                rigidbody.position,
+                externalPlaybackTargetPosition,
+                externalPlaybackMoveSpeed * Time.fixedDeltaTime);
+
+            rigidbody.MovePosition(nextPosition);
+            rigidbody.MoveRotation(externalPlaybackTargetRotation);
         }
 
         /// <summary>
@@ -246,6 +277,7 @@ namespace FStudio.MatchEngine.Balls {
 
         public void SetExternalPlayback(bool value) {
             ExternalPlaybackEnabled = value;
+            hasExternalPlaybackTarget = false;
             if (!value) {
                 externalPlaybackVelocity = Vector3.zero;
             }
@@ -265,15 +297,28 @@ namespace FStudio.MatchEngine.Balls {
                 return;
             }
 
-            targetPosition.x = Mathf.Clamp(targetPosition.x, 0, MatchManager.Current.SizeOfField.x);
-            targetPosition.z = Mathf.Clamp(targetPosition.z, 0, MatchManager.Current.SizeOfField.y);
-            targetPosition.y = Mathf.Max(0.1f, targetPosition.y);
+            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackSanitizer != null) {
+                if (!MatchManager.Current.ExternalPlaybackSanitizer.TrySanitizeBallPosition(targetPosition, out targetPosition)) {
+                    Debug.LogWarning("[Ball] Rejected invalid external playback ball position. Using sanitized fallback.");
+                }
+            } else if (MatchManager.Current != null) {
+                targetPosition.x = Mathf.Clamp(targetPosition.x, 0, MatchManager.Current.SizeOfField.x);
+                targetPosition.z = Mathf.Clamp(targetPosition.z, 0, MatchManager.Current.SizeOfField.y);
+                targetPosition.y = Mathf.Max(0.1f, targetPosition.y);
+            } else {
+                targetPosition.y = Mathf.Max(0.1f, targetPosition.y);
+            }
+
+            if (!GtexPlaybackSanitizer.IsFinite(targetVelocity)) {
+                targetVelocity = Vector3.zero;
+            }
 
             if (holder != null) {
                 if (HolderPlayer != holder) {
                     Hold(holder);
                 }
 
+                hasExternalPlaybackTarget = false;
                 externalPlaybackVelocity = Vector3.zero;
                 rigidbody.isKinematic = true;
                 Collider.enabled = false;
@@ -293,8 +338,17 @@ namespace FStudio.MatchEngine.Balls {
             rigidbody.isKinematic = true;
             Collider.enabled = false;
             externalPlaybackVelocity = targetVelocity;
-            transform.position = targetPosition;
-            rigidbody.position = targetPosition;
+            externalPlaybackTargetPosition = targetPosition;
+            externalPlaybackTargetRotation = ResolveExternalPlaybackRotation(targetVelocity);
+
+            if (!hasExternalPlaybackTarget ||
+                Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackTeleportDistance()) {
+                rigidbody.position = targetPosition;
+                rigidbody.rotation = externalPlaybackTargetRotation;
+                transform.SetPositionAndRotation(targetPosition, externalPlaybackTargetRotation);
+            }
+
+            hasExternalPlaybackTarget = true;
         }
 
         /// <summary>
@@ -321,7 +375,9 @@ namespace FStudio.MatchEngine.Balls {
                      position,
                         followSpeed);
 
-                if (MatchManager.Current.MatchFlags.HasFlag (Enums.MatchStatus.Playing)) {
+                if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackSanitizer != null) {
+                    targetPosition = MatchManager.Current.ExternalPlaybackSanitizer.SanitizeBallPosition(targetPosition, 0f);
+                } else if (MatchManager.Current.MatchFlags.HasFlag (Enums.MatchStatus.Playing)) {
                     // ball should be in the size of field when holded by someone.
                     var sizeOfField = MatchManager.Current.SizeOfField;
                     targetPosition.x = Mathf.Clamp(targetPosition.x, 0, sizeOfField.x);
@@ -537,15 +593,20 @@ namespace FStudio.MatchEngine.Balls {
             // release ball and hit.
             Release();
 
-            rigidbody.linearVelocity = Vector3.zero;
+            if (CanWritePhysicsVelocity()) {
+                rigidbody.linearVelocity = Vector3.zero;
+            }
 
             ClampVelocity(ref velocity);
 
             Debug.LogFormat("[Ball] Velocity => {0}", velocity);
 
-            rigidbody.angularVelocity = velocity;
-
-            rigidbody.AddForce(velocity, ForceMode.VelocityChange);
+            if (CanWritePhysicsVelocity()) {
+                rigidbody.angularVelocity = velocity;
+                rigidbody.AddForce(velocity, ForceMode.VelocityChange);
+            } else {
+                externalPlaybackVelocity = velocity;
+            }
 
             OnBallHit?.Invoke(hitter.GameTeam);
         }
@@ -598,7 +659,14 @@ namespace FStudio.MatchEngine.Balls {
 
         public void ResetBall (Vector3 target) {
             Debug.Log("Ball Reset ()");
-            target.y = 0.1f;
+            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackSanitizer != null) {
+                target = MatchManager.Current.ExternalPlaybackSanitizer.SanitizeBallPosition(target);
+            } else {
+                target.y = 0.1f;
+            }
+            hasExternalPlaybackTarget = false;
+            externalPlaybackTargetPosition = target;
+            externalPlaybackTargetRotation = transform.rotation;
             externalPlaybackVelocity = Vector3.zero;
             if (!rigidbody.isKinematic) {
                 rigidbody.linearVelocity = Vector3.zero;
@@ -619,6 +687,42 @@ namespace FStudio.MatchEngine.Balls {
             } else {
                 Release();
             }
+        }
+
+        private void ConfigureExternalPlaybackPhysics()
+        {
+            if (!Application.isPlaying || rigidbody == null)
+            {
+                return;
+            }
+
+            rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+        }
+
+        private Quaternion ResolveExternalPlaybackRotation(Vector3 targetVelocity)
+        {
+            var planarVelocity = new Vector3(targetVelocity.x, 0f, targetVelocity.z);
+            if (planarVelocity.sqrMagnitude <= 0.0001f)
+            {
+                return rigidbody != null ? rigidbody.rotation : transform.rotation;
+            }
+
+            return Quaternion.LookRotation(planarVelocity.normalized, Vector3.up);
+        }
+
+        private float ResolveExternalPlaybackTeleportDistance()
+        {
+            if (MatchManager.Current != null)
+            {
+                return Mathf.Max(0.5f, MatchManager.Current.ExternalPlaybackTeleportDistance);
+            }
+
+            return Mathf.Max(0.5f, externalPlaybackTeleportDistance);
+        }
+
+        private bool CanWritePhysicsVelocity()
+        {
+            return rigidbody != null && !rigidbody.isKinematic && !ExternalPlaybackEnabled;
         }
 
         private void OnCollisionEnter (Collision collision) {

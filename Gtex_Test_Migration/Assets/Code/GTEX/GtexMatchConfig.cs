@@ -38,11 +38,15 @@ namespace FStudio.GTEX
         public string awayTeamName = string.Empty;
         public string dayTime = "Night";
         public bool enableStadiumUpgrade = true;
+        public bool showBroadcastScaffolding = false;
         public bool showCrowd = true;
         public string stadiumVariant = "broadcast";
         public bool verboseLogging;
-        public float stalePredictionSeconds = 1.25f;
-        public float teleportDistance = 6f;
+        public float stalePredictionSeconds = 0.25f;
+        public float teleportDistance = 2.5f;
+        public bool allowLocalSimulationInProductionScene = false;
+        public bool use3DPlaybackForLocalSimulation = true;
+        public bool stopReconnectAfterTerminal = true;
         public float simulationTargetDurationMinutes = 15f;
         public float simulationEventCheckWindowMinutes = 1f;
         public float simulationBaseEventChancePerWindow = 0.42f;
@@ -204,6 +208,18 @@ namespace FStudio.GTEX
             {
                 simulationBaseEventChancePerWindow = Mathf.Clamp01(simulationBaseEventChancePerWindow);
                 Debug.LogWarning("[GTEX] simulationBaseEventChancePerWindow was out of range. Clamping into [0,1].");
+            }
+
+            if (stalePredictionSeconds < 0f)
+            {
+                stalePredictionSeconds = 0.25f;
+                Debug.LogWarning("[GTEX] stalePredictionSeconds was invalid. Defaulting to 0.25.");
+            }
+
+            if (teleportDistance < 0.5f)
+            {
+                teleportDistance = 2.5f;
+                Debug.LogWarning("[GTEX] teleportDistance was too low. Defaulting to 2.5.");
             }
 
             if (simulationRandomSeed == 0)

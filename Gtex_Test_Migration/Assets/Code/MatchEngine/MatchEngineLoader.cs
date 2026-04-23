@@ -16,6 +16,7 @@ using FStudio.Graphics.Cameras;
 using FStudio.GTEX;
 using FStudio.UI.MatchThemes.MatchEvents;
 using FStudio.MatchEngine.Enums;
+using FStudio.Database;
 
 namespace FStudio.MatchEngine {
     public class MatchEngineLoader : SceneObjectSingleton<MatchEngineLoader> {
@@ -45,7 +46,8 @@ namespace FStudio.MatchEngine {
         public async Task StartMatchEngine (
             UpcomingMatchEvent matchEvent,
             bool homeKit,
-            bool awayKit) {
+            bool awayKit,
+            GtexMatchConfig gtexConfig = null) {
 
             if (isLoading) {
                 return;
@@ -55,6 +57,8 @@ namespace FStudio.MatchEngine {
                 // unload.
                 await UnloadMatch();
             }
+
+            ResolveKitSelections(matchEvent, ref homeKit, ref awayKit);
 
             // match kits.
             EventManager.Trigger(
@@ -104,7 +108,7 @@ namespace FStudio.MatchEngine {
             // load random ball.
             await template.ballLoader.LoadRandomBall();
 
-            GtexStadiumAtmosphere.InstallOrRefresh(matchEvent);
+            GtexStadiumAtmosphere.InstallOrRefresh(matchEvent, gtexConfig ?? GtexMatchConfigLoader.Load());
             
             isLoaded = true;
             isLoading = false;
@@ -113,6 +117,79 @@ namespace FStudio.MatchEngine {
 
             // close loading.
             EventManager.Trigger<BigLoadingEvent>(null);
+        }
+
+        private static void ResolveKitSelections(UpcomingMatchEvent matchEvent, ref bool homeKit, ref bool awayKit)
+        {
+            if (matchEvent == null)
+            {
+                return;
+            }
+
+            var homePrimary = matchEvent.details.homeTeam != null ? matchEvent.details.homeTeam.HomeKit : null;
+            var awayPrimary = matchEvent.details.awayTeam != null ? matchEvent.details.awayTeam.HomeKit : null;
+            var awayAlternate = matchEvent.details.awayTeam != null ? matchEvent.details.awayTeam.AwayKit : null;
+            if (homePrimary == null || awayPrimary == null)
+            {
+                return;
+            }
+
+            if (homeKit || awayKit)
+            {
+                return;
+            }
+
+            if (!KitsVisuallyClash(homePrimary, awayPrimary))
+            {
+                return;
+            }
+
+            if (awayAlternate != null && ScoreKitContrast(homePrimary, awayAlternate) > ScoreKitContrast(homePrimary, awayPrimary))
+            {
+                awayKit = true;
+                Debug.Log("[GTEX] Auto-selected away alternate kit to avoid a live 3D kit clash.");
+                return;
+            }
+        }
+
+        private static bool KitsVisuallyClash(KitEntry homeKit, KitEntry awayKit)
+        {
+            if (homeKit == null || awayKit == null)
+            {
+                return false;
+            }
+
+            var textureClash =
+                ReferenceEquals(homeKit.KitMaterial, awayKit.KitMaterial) ||
+                (homeKit.KitMaterial != null &&
+                 awayKit.KitMaterial != null &&
+                 string.Equals(homeKit.KitMaterial.name, awayKit.KitMaterial.name, System.StringComparison.Ordinal));
+
+            var primaryDistance = ColorDistance(homeKit.Color1, awayKit.Color1);
+            var secondaryDistance = ColorDistance(homeKit.Color2, awayKit.Color2);
+            var severeColorClash = primaryDistance < 0.5f && secondaryDistance < 0.46f;
+            var moderateTextureClash = textureClash && primaryDistance < 0.72f;
+            return severeColorClash || moderateTextureClash;
+        }
+
+        private static float ScoreKitContrast(KitEntry homeKit, KitEntry awayKit)
+        {
+            if (homeKit == null || awayKit == null)
+            {
+                return 0f;
+            }
+
+            return ColorDistance(homeKit.Color1, awayKit.Color1) +
+                   ColorDistance(homeKit.Color2, awayKit.Color2) * 0.5f +
+                   ColorDistance(homeKit.GKColor1, awayKit.GKColor1) * 0.25f;
+        }
+
+        private static float ColorDistance(Color left, Color right)
+        {
+            var dr = left.r - right.r;
+            var dg = left.g - right.g;
+            var db = left.b - right.b;
+            return Mathf.Sqrt(dr * dr + dg * dg + db * db);
         }
 
         public async Task UnloadMatch () {
