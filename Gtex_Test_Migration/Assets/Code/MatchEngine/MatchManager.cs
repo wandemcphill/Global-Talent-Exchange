@@ -1457,6 +1457,11 @@ namespace FStudio.MatchEngine {
 
                 player.PlayerController.SetUI(false);
                 player.PlayerController.SetOffside(false);
+                if (player.PlayerController.UI != null)
+                {
+                    player.PlayerController.UI.ShowName(false);
+                    player.PlayerController.UI.ShowOffside(false);
+                }
                 player.PlayerController.SetExternalPlayback(value);
             }
         }

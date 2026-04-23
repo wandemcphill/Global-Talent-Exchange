@@ -272,6 +272,10 @@ namespace FStudio.MatchEngine.Players.PlayerController
         public void SetPlayer(int number, PlayerBase basePlayer, Material kitMaterial)
         {
             this.BasePlayer = basePlayer;
+            if (playerGraphic != null && basePlayer != null && basePlayer.MatchPlayer != null)
+            {
+                playerGraphic.SetPlayer(number, kitMaterial, basePlayer.MatchPlayer.Player);
+            }
         }
 
         public bool MoveTo(in float deltaTime, Vector3 targetPosition, bool faceTowards = true, MovementType movementType = MovementType.BestHeCanDo)

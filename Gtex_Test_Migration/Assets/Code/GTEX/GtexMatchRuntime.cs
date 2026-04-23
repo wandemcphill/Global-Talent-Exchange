@@ -29,29 +29,31 @@ namespace FStudio.GTEX
             private const float SceneDependencyWaitTimeoutSeconds = 10f;
             private const float LiveStateClockRegressionToleranceMinutes = 0.25f;
             private const float LivePlayerSnapDistance = 18f;
-            private const float LivePlayerCatchUpSeconds = 0.35f;
+            private const float LivePlayerCatchUpSeconds = 0.45f;
             private const float LivePlayerMinSpeedUnitsPerSecond = 3f;
             private const float LivePlayerMaxSpeedUnitsPerSecond = 8f;
             private const float LivePlayerRotationLerpSpeed = 10f;
             private const float LiveAnimatorMoveSpeedScale = 6f;
             private const float LiveStatePredictionMaxSeconds = 0.35f;
-        private const float LiveBallPassSpeedUnitsPerSecond = 0.5f;
-        private const float LiveBallShotSpeedUnitsPerSecond = 1.25f;
+            private const float LiveBallPassSpeedUnitsPerSecond = 0.5f;
+            private const float LiveBallShotSpeedUnitsPerSecond = 1.25f;
             private const float PlaybackTraceSampleIntervalSeconds = 2f;
             private const float LiveBehaviorMinRoamDistance = 1f;
             private const float LiveBehaviorMaxRoamDistance = 4.75f;
             private const float LiveBehaviorMinSpeedRatio = 0.2f;
-            private const float LiveBehaviorTeammateRepulsionRadius = 4.2f;
+            private const float LiveBehaviorTeammateRepulsionRadius = 4.6f;
             private const float LiveBehaviorBlendOutSpeedUnitsPerSecond = 2.75f;
             private const float LiveBehaviorEventStaleSeconds = 7.5f;
             private const float LiveBehaviorEventStaleClockMinutes = 1.25f;
             private const float LiveBallIntentMinLifetimeSeconds = 6f;
             private const float LiveBallIntentMaxLifetimeSeconds = 14f;
             private const float LiveBallIntentFallbackTravelDistance = 4.25f;
+            private const float LiveTransitReceiverLeadSeconds = 0.18f;
+            private const float LiveTransitReceiverLeadDistance = 1.45f;
             private const float RuntimeTraceFlushIntervalSeconds = 0.75f;
             private const float RuntimeTraceHeartbeatIntervalSeconds = 5f;
             private const float RuntimeTraceStationaryClockDeltaThresholdMinutes = 0.35f;
-        private const int RuntimeTraceMaxBufferedLines = 64;
+            private const int RuntimeTraceMaxBufferedLines = 64;
 
         private struct SyntheticBallTransit
         {
@@ -441,16 +443,24 @@ namespace FStudio.GTEX
 
             if (conversion.WasFinite)
             {
-                var normalizedPosition = new Vector3(
-                    Mathf.InverseLerp(
-                        -ResolvePitchLengthMeters(state) * 0.5f,
-                        ResolvePitchLengthMeters(state) * 0.5f,
-                        conversion.RawIncoming.x),
-                    conversion.RawIncoming.y,
-                    Mathf.InverseLerp(
-                        -ResolvePitchWidthMeters(state) * 0.5f,
-                        ResolvePitchWidthMeters(state) * 0.5f,
-                        conversion.RawIncoming.z));
+                var pitchLength = ResolvePitchLengthMeters(state);
+                var pitchWidth = ResolvePitchWidthMeters(state);
+                var usesPositivePitchCoordinates = UsesPositivePitchCoordinates(state);
+                var normalizedPosition = usesPositivePitchCoordinates
+                    ? new Vector3(
+                        Mathf.InverseLerp(0f, pitchLength, conversion.RawIncoming.x),
+                        conversion.RawIncoming.y,
+                        Mathf.InverseLerp(0f, pitchWidth, conversion.RawIncoming.z))
+                    : new Vector3(
+                        Mathf.InverseLerp(
+                            -pitchLength * 0.5f,
+                            pitchLength * 0.5f,
+                            conversion.RawIncoming.x),
+                        conversion.RawIncoming.y,
+                        Mathf.InverseLerp(
+                            -pitchWidth * 0.5f,
+                            pitchWidth * 0.5f,
+                            conversion.RawIncoming.z));
                 conversion.ConvertedWorld = pitchSpace.NormalizedToWorld(normalizedPosition);
             }
 
@@ -491,6 +501,76 @@ namespace FStudio.GTEX
             }
 
             return convertedVelocity;
+        }
+
+        private static bool UsesPositivePitchCoordinates(MatchResponse state)
+        {
+            if (state == null)
+            {
+                return false;
+            }
+
+            var pitchLength = ResolvePitchLengthMeters(state);
+            var pitchWidth = ResolvePitchWidthMeters(state);
+            var hasSample = false;
+            var hasNegativeSample = false;
+            var exceedsCenteredRange = false;
+
+            if (state.players != null)
+            {
+                for (var index = 0; index < state.players.Length; index += 1)
+                {
+                    TrackCoordinateOriginSample(
+                        state.players[index],
+                        pitchLength,
+                        pitchWidth,
+                        ref hasSample,
+                        ref hasNegativeSample,
+                        ref exceedsCenteredRange);
+                }
+            }
+
+            TrackCoordinateOriginSample(
+                state.ballPosition,
+                pitchLength,
+                pitchWidth,
+                ref hasSample,
+                ref hasNegativeSample,
+                ref exceedsCenteredRange);
+
+            return hasSample && !hasNegativeSample && exceedsCenteredRange;
+        }
+
+        private static void TrackCoordinateOriginSample(
+            PlayerPosition livePosition,
+            float pitchLength,
+            float pitchWidth,
+            ref bool hasSample,
+            ref bool hasNegativeSample,
+            ref bool exceedsCenteredRange)
+        {
+            if (livePosition == null)
+            {
+                return;
+            }
+
+            var sample = new Vector3(livePosition.x, livePosition.y, livePosition.z);
+            if (!GtexPlaybackSanitizer.IsFinite(sample))
+            {
+                return;
+            }
+
+            hasSample = true;
+            if (sample.x < -1f || sample.z < -1f)
+            {
+                hasNegativeSample = true;
+            }
+
+            if (sample.x > pitchLength * 0.5f + 1f ||
+                sample.z > pitchWidth * 0.5f + 1f)
+            {
+                exceedsCenteredRange = true;
+            }
         }
 
         private static float ResolvePitchLengthMeters(MatchResponse state)
@@ -2825,12 +2905,42 @@ namespace FStudio.GTEX
             }
 
             GtexMatchController.CameraAdapter.SwitchCamera(cameraType, forceSnap);
-            if (GtexMatchController.CameraAdapter.CanFocusBall)
-            {
-                GtexMatchController.CameraAdapter.FocusToBall(forceSnap);
-            }
+            GtexMatchController.CameraAdapter.FocusToPosition(ResolveLiveCameraFocusPosition(state, preset), forceSnap);
 
             lastAppliedCameraPreset = preset;
+        }
+
+        private Vector3 ResolveLiveCameraFocusPosition(MatchResponse state, string preset)
+        {
+            EnsurePitchSpaceResolved();
+            var focusPosition = pitchSpace != null ? pitchSpace.Center : Vector3.zero;
+            if (state != null && state.ballPosition != null)
+            {
+                focusPosition = ConvertIncomingPlaybackPosition(state.ballPosition, state).ClampedWorld;
+            }
+
+            if (pitchSpace == null)
+            {
+                return focusPosition;
+            }
+
+            var normalizedPreset = (preset ?? string.Empty).Trim().ToLowerInvariant();
+            var center = pitchSpace.Center;
+            if (string.Equals(normalizedPreset, "box_zoom", StringComparison.Ordinal))
+            {
+                focusPosition = Vector3.Lerp(focusPosition, center, 0.58f);
+            }
+            else if (string.Equals(normalizedPreset, "attack_push", StringComparison.Ordinal))
+            {
+                focusPosition = Vector3.Lerp(focusPosition, center, 0.32f);
+            }
+
+            var xMargin = Mathf.Max(7.5f, pitchSpace.Length * 0.09f);
+            var zMargin = Mathf.Max(13f, pitchSpace.Width * 0.22f);
+            focusPosition.x = Mathf.Clamp(focusPosition.x, center.x - xMargin, center.x + xMargin);
+            focusPosition.z = Mathf.Clamp(focusPosition.z, center.z - zMargin, center.z + zMargin);
+            focusPosition.y = 0f;
+            return focusPosition;
         }
 
         private static string ResolveCameraTypeForPreset(string preset)
@@ -2838,12 +2948,14 @@ namespace FStudio.GTEX
             switch ((preset ?? string.Empty).Trim().ToLowerInvariant())
             {
                 case "attack_push":
-                    return "StadiumHigh";
-                case "box_zoom":
                 case "goal_celebration":
                     return "Tele";
+                case "box_zoom":
+                    return "Broadcast";
                 case "assistant_flag":
                     return "Offside";
+                case "wide_reset":
+                    return "StadiumHigh";
                 case "var_replay":
                 case "broadcast":
                 default:
@@ -2935,7 +3047,11 @@ namespace FStudio.GTEX
             if (TryResolveLivePlayerByPlayerId(nextState, nextHolderId, out var nextHolderLive) &&
                 GtexMatchController.MatchManagerAdapter.IsAvailable)
             {
-                end = ConvertIncomingPlaybackPosition(nextHolderLive, nextState).ClampedWorld;
+                end = ResolveTransitTargetPosition(
+                    nextState,
+                    nextHolderId,
+                    ConvertIncomingPlaybackPosition(nextHolderLive, nextState).ClampedWorld,
+                    LiveTransitReceiverLeadSeconds);
             }
             else
             {
@@ -2988,6 +3104,13 @@ namespace FStudio.GTEX
                 return;
             }
 
+            end = ResolveTransitTargetPosition(
+                nextState,
+                nextHolderId,
+                end,
+                isShotTransit ? LiveTransitReceiverLeadSeconds * 0.45f : LiveTransitReceiverLeadSeconds);
+            distance = Vector3.Distance(start, end);
+
             var referenceSpeed = Mathf.Max(ballSpeed, 4f);
 
             syntheticBallTransit = new SyntheticBallTransit
@@ -3013,22 +3136,19 @@ namespace FStudio.GTEX
                 return false;
             }
 
+            var elapsed = Mathf.Max(0f, Time.unscaledTime - syntheticBallTransit.StartedAt);
+            var duration = Mathf.Max(0.01f, syntheticBallTransit.Duration);
             if (!syntheticBallTransit.IsShot &&
                 !string.IsNullOrWhiteSpace(syntheticBallTransit.TargetPlayerId))
             {
-                var fallbackEnd = syntheticBallTransit.End;
-                var updatedEnd = ResolveRuntimePlayerPositionById(currentState, syntheticBallTransit.TargetPlayerId, fallbackEnd);
-                updatedEnd = ClampToFieldBounds(
-                    new Vector3(
-                        updatedEnd.x,
-                        pitchSpace != null ? pitchSpace.GrassY + GtexPlaybackSanitizer.DefaultBallHeight : 0.1f,
-                        updatedEnd.z),
-                    true);
-                syntheticBallTransit.End = Vector3.Lerp(syntheticBallTransit.End, updatedEnd, 0.55f);
+                var updatedEnd = ResolveTransitTargetPosition(
+                    currentState,
+                    syntheticBallTransit.TargetPlayerId,
+                    syntheticBallTransit.End,
+                    Mathf.Min(LiveTransitReceiverLeadSeconds, Mathf.Max(duration - elapsed, 0f)));
+                syntheticBallTransit.End = Vector3.Lerp(syntheticBallTransit.End, updatedEnd, 0.72f);
             }
 
-            var elapsed = Mathf.Max(0f, Time.unscaledTime - syntheticBallTransit.StartedAt);
-            var duration = Mathf.Max(0.01f, syntheticBallTransit.Duration);
             var t = Mathf.Clamp01(elapsed / duration);
             var position = Vector3.Lerp(syntheticBallTransit.Start, syntheticBallTransit.End, t);
             position.y += 4f * syntheticBallTransit.ArcHeight * t * (1f - t);
@@ -3054,6 +3174,26 @@ namespace FStudio.GTEX
         private void ClearSyntheticBallTransit()
         {
             syntheticBallTransit = default;
+        }
+
+        private Vector3 ResolveTransitTargetPosition(MatchResponse state, string playerId, Vector3 fallbackEnd, float leadSeconds)
+        {
+            var resolvedEnd = ResolveRuntimePlayerPositionById(state, playerId, fallbackEnd);
+            if (TryResolveLivePlayerByPlayerId(state, playerId, out var livePlayer))
+            {
+                var receiverVelocity = ResolveLiveFieldVelocity(livePlayer);
+                receiverVelocity.y = 0f;
+                resolvedEnd += Vector3.ClampMagnitude(
+                    receiverVelocity * Mathf.Max(leadSeconds, 0f),
+                    LiveTransitReceiverLeadDistance);
+            }
+
+            return ClampToFieldBounds(
+                new Vector3(
+                    resolvedEnd.x,
+                    pitchSpace != null ? pitchSpace.GrassY + GtexPlaybackSanitizer.DefaultBallHeight : 0.1f,
+                    resolvedEnd.z),
+                true);
         }
 
         private Vector3 ResolvePredictedFieldPosition(PlayerPosition livePosition, float predictionSeconds)
@@ -3465,22 +3605,33 @@ namespace FStudio.GTEX
             var laneSign = ResolveBehaviorLaneSign(livePlayer, roleBucket);
             var signature = ResolveBehaviorSignature01(livePlayer, roleBucket);
             var laneMagnitude =
-                roleBucket == 0 ? 0.2f :
-                roleBucket == 1 ? 1.55f :
-                roleBucket == 2 ? 2.35f :
-                3.2f;
+                roleBucket == 0 ? 0.25f :
+                roleBucket == 1 ? 1.95f :
+                roleBucket == 2 ? 2.85f :
+                3.95f;
+            var depthSignature = Mathf.Lerp(-1f, 1f, signature);
+            var depthMagnitude =
+                roleBucket == 0 ? 0f :
+                roleBucket == 1 ? 0.5f :
+                roleBucket == 2 ? 0.75f :
+                1.05f;
 
             var spacedTarget =
                 desiredPosition +
-                lateralDirection * laneSign * laneMagnitude * Mathf.Lerp(0.82f, 1.28f, signature);
+                lateralDirection * laneSign * laneMagnitude * Mathf.Lerp(0.82f, 1.34f, signature) +
+                attackDirection * depthSignature * depthMagnitude;
 
             if (roleBucket == 1)
             {
-                spacedTarget -= attackDirection * 0.3f;
+                spacedTarget -= attackDirection * 0.55f;
+            }
+            else if (roleBucket == 2)
+            {
+                spacedTarget += attackDirection * 0.12f;
             }
             else if (roleBucket == 3)
             {
-                spacedTarget += attackDirection * 0.35f;
+                spacedTarget += attackDirection * 0.85f;
             }
 
             if (!livePlayer.hasPossession &&
@@ -3492,13 +3643,16 @@ namespace FStudio.GTEX
                 var holderPosition = ResolveRuntimeFieldPosition(holderLive, currentState, spacedTarget);
                 var separationFromHolder = spacedTarget - holderPosition;
                 separationFromHolder.y = 0f;
-                var desiredHolderSpacing = roleBucket == 3 ? 1.75f : 2.25f;
+                var desiredHolderSpacing =
+                    roleBucket == 3 ? 2.55f :
+                    roleBucket == 2 ? 3.05f :
+                    3.35f;
                 if (separationFromHolder.magnitude > 0.001f &&
                     separationFromHolder.magnitude < desiredHolderSpacing)
                 {
                     spacedTarget +=
                         separationFromHolder.normalized * (desiredHolderSpacing - separationFromHolder.magnitude) +
-                        lateralDirection * laneSign * 0.35f;
+                        lateralDirection * laneSign * 0.55f;
                 }
             }
 
@@ -3527,11 +3681,11 @@ namespace FStudio.GTEX
             var lateralDirection = Vector3.Cross(Vector3.up, attackDirection).normalized;
             var laneSign = ResolveBehaviorLaneSign(livePlayer, roleBucket);
             var minimumSeparation =
-                roleBucket == 0 ? 1.1f :
-                roleBucket == 1 ? 2.8f :
-                roleBucket == 2 ? 3.15f :
-                3.55f;
-            var repulsionRadius = Mathf.Max(LiveBehaviorTeammateRepulsionRadius, minimumSeparation + 1.2f);
+                roleBucket == 0 ? 1.25f :
+                roleBucket == 1 ? 3.15f :
+                roleBucket == 2 ? 3.6f :
+                4.15f;
+            var repulsionRadius = Mathf.Max(LiveBehaviorTeammateRepulsionRadius, minimumSeparation + 1.45f);
 
             desiredPosition.y = 0f;
             var repulsion = Vector3.zero;
@@ -3577,7 +3731,9 @@ namespace FStudio.GTEX
 
             repulsion /= contributors;
             repulsion.y = 0f;
-            return Vector3.ClampMagnitude(repulsion, roleBucket == 3 ? 1.9f : 1.55f);
+            return Vector3.ClampMagnitude(
+                repulsion,
+                roleBucket == 3 ? 2.25f : (roleBucket == 2 ? 2.05f : 1.85f));
         }
 
         private Vector3 ResolveLiveFieldVelocity(PlayerPosition livePosition)
@@ -3591,6 +3747,7 @@ namespace FStudio.GTEX
             if (!livePosition.isBall)
             {
                 velocity.y = 0f;
+                velocity = Vector3.ClampMagnitude(velocity, ResolveLiveRoleSpeedCap(livePosition));
             }
 
             return velocity;
@@ -3710,13 +3867,13 @@ namespace FStudio.GTEX
                 case 0:
                     return 0.75f;
                 case 1:
-                    return Mathf.Lerp(LiveBehaviorMinRoamDistance, 3f, speedRatio);
+                    return Mathf.Lerp(LiveBehaviorMinRoamDistance + 0.15f, 3.35f, speedRatio);
                 case 2:
-                    return Mathf.Lerp(LiveBehaviorMinRoamDistance + 0.35f, 3.85f, speedRatio);
+                    return Mathf.Lerp(LiveBehaviorMinRoamDistance + 0.45f, 4.2f, speedRatio);
                 case 3:
-                    return Mathf.Lerp(LiveBehaviorMinRoamDistance + 0.6f, LiveBehaviorMaxRoamDistance, speedRatio);
+                    return Mathf.Lerp(LiveBehaviorMinRoamDistance + 0.75f, LiveBehaviorMaxRoamDistance, speedRatio);
                 default:
-                    return Mathf.Lerp(LiveBehaviorMinRoamDistance, 3.5f, speedRatio);
+                    return Mathf.Lerp(LiveBehaviorMinRoamDistance + 0.2f, 3.85f, speedRatio);
             }
         }
 
@@ -4001,15 +4158,37 @@ namespace FStudio.GTEX
         {
             var distance = Vector3.Distance(currentPosition, targetPosition);
             var speedRatio = livePlayer != null ? Mathf.Clamp01(livePlayer.speedRatio) : 0f;
-            var speed = Mathf.Lerp(LivePlayerMinSpeedUnitsPerSecond, LivePlayerMaxSpeedUnitsPerSecond, speedRatio);
-            speed = Mathf.Max(speed, new Vector3(liveVelocity.x, 0f, liveVelocity.z).magnitude);
+            var roleSpeedCap = ResolveLiveRoleSpeedCap(livePlayer);
+            var speed = Mathf.Lerp(
+                LivePlayerMinSpeedUnitsPerSecond,
+                Mathf.Min(LivePlayerMaxSpeedUnitsPerSecond, roleSpeedCap),
+                speedRatio);
+            speed = Mathf.Max(speed, Mathf.Min(new Vector3(liveVelocity.x, 0f, liveVelocity.z).magnitude * 0.9f, roleSpeedCap));
 
             if (distance > 1f)
             {
-                speed = Mathf.Max(speed, distance / LivePlayerCatchUpSeconds);
+                speed = Mathf.Max(speed, Mathf.Min(distance / LivePlayerCatchUpSeconds, roleSpeedCap + 1.1f));
             }
 
-            return speed;
+            return Mathf.Clamp(speed, LivePlayerMinSpeedUnitsPerSecond, roleSpeedCap + 1.1f);
+        }
+
+        private static float ResolveLiveRoleSpeedCap(PlayerPosition livePlayer)
+        {
+            var speedRatio = livePlayer != null ? Mathf.Clamp01(livePlayer.speedRatio) : 0f;
+            switch (ResolveLiveRoleBucket(livePlayer))
+            {
+                case 0:
+                    return Mathf.Lerp(3.4f, 4.2f, speedRatio);
+                case 1:
+                    return Mathf.Lerp(4.6f, 5.55f, speedRatio);
+                case 2:
+                    return Mathf.Lerp(5.05f, 6.15f, speedRatio);
+                case 3:
+                    return Mathf.Lerp(5.4f, 6.45f, speedRatio);
+                default:
+                    return Mathf.Lerp(4.7f, 5.95f, speedRatio);
+            }
         }
 
         private static int ResolveLiveRoleBucket(PlayerPosition livePlayer)

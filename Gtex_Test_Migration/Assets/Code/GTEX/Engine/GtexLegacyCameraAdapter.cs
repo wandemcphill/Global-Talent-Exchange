@@ -22,6 +22,16 @@ namespace FStudio.GTEX.Engine
             CameraSystem.Current.FocusToBall(instant);
         }
 
+        public void FocusToPosition(Vector3 position, bool instant = true)
+        {
+            if (CameraSystem.Current == null)
+            {
+                return;
+            }
+
+            CameraSystem.Current.FocusToPosition(position, instant);
+        }
+
         public void SetTarget(Transform target)
         {
             if (CameraSystem.Current == null || target == null)

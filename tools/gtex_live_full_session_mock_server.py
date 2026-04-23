@@ -20,6 +20,7 @@ SECOND_HALF_START_MINUTE = 46.0
 FULLTIME_MINUTE = 90.0
 FRAME_MINUTES = (0.0, 12.0, 24.0, 36.0, 45.0, 48.0, 60.0, 72.0, 84.0, 90.0)
 FULLTIME_SEQUENCE = len(FRAME_MINUTES) - 1
+WEBSOCKET_FRAME_INTERVAL_SECONDS = 2.0
 
 
 @dataclass
@@ -508,11 +509,11 @@ async def websocket_match_stream(websocket: WebSocket, match_id: str) -> None:
                     payload["homeScore"],
                     payload["awayScore"],
                 )
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(WEBSOCKET_FRAME_INTERVAL_SECONDS)
                 await websocket.close(code=1000, reason="fulltime")
                 return
 
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(WEBSOCKET_FRAME_INTERVAL_SECONDS)
     except Exception as exc:  # pragma: no cover - harness only
         LOGGER.info("full-session websocket closed match=%s reason=%s", match_id, exc)
 

@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: TeleCamera
   m_EditorClassIdentifier: 
   cameraName: 
-  ZPositionOffset: -59.7
-  YPositionOffset: 25.7
+  ZPositionOffset: -42
+  YPositionOffset: 18.4
   MinXRotation: -5
   MaxXRotation: 46
   XRotationCurve:
@@ -94,8 +94,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  MinXPosition: -5
-  MaxXPosition: 90
+  MinXPosition: 5
+  MaxXPosition: 80
   XPositionCurve:
     serializedVersion: 2
     m_Curve:
@@ -121,7 +121,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   MinZPositionForZoom: 0
-  MaxZPositionForZoom: 20
+  MaxZPositionForZoom: 26
   ZZoomCurve:
     serializedVersion: 2
     m_Curve:
@@ -146,7 +146,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  ZZoomMultiplier: 0.02
+  ZZoomMultiplier: 0.028
   MaxZPositionForPositionOffset: 30
   PositionOffsetCurve:
     serializedVersion: 2
@@ -173,7 +173,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   PositionOffsetMultiplier: {x: 0, y: 5, z: 10}
-  ZoomMultiplier: 18
+  ZoomMultiplier: 13.5
   ZoomCurve:
     serializedVersion: 2
     m_Curve:

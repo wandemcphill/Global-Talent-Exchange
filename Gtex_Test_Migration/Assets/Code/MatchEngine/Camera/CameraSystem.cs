@@ -81,6 +81,16 @@ namespace FStudio.MatchEngine.Cameras {
             isInTransition = false;
         }
 
+        public void FocusToPosition(Vector3 position, bool instant = true) {
+            if (target == null && Ball.Current != null) {
+                SetTarget(Ball.Current.transform);
+            }
+
+            TargetPosition = position;
+            instantTransitionInNextFrame = instant;
+            isInTransition = false;
+        }
+
         private void OnValidate() {
             camera = GetComponent<Camera>();
         }

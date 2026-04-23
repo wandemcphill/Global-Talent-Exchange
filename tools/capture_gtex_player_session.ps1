@@ -59,6 +59,53 @@ function Resolve-SessionName {
     return "gtex_player_session_{0}" -f (Get-Date -Format 'yyyyMMdd_HHmmss')
 }
 
+function Test-BitmapHasVisibleContent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Drawing.Bitmap]$Bitmap
+    )
+
+    $sampleColumns = [Math]::Min(16, [Math]::Max(4, [Math]::Floor($Bitmap.Width / 64)))
+    $sampleRows = [Math]::Min(12, [Math]::Max(4, [Math]::Floor($Bitmap.Height / 64)))
+    $uniqueColors = New-Object 'System.Collections.Generic.HashSet[string]'
+    $minLuma = [double]::PositiveInfinity
+    $maxLuma = [double]::NegativeInfinity
+
+    for ($column = 0; $column -lt $sampleColumns; $column += 1) {
+        $x = [Math]::Min(
+            $Bitmap.Width - 1,
+            [Math]::Max(0, [Math]::Round(($column / [Math]::Max(1, $sampleColumns - 1)) * ($Bitmap.Width - 1))))
+
+        for ($row = 0; $row -lt $sampleRows; $row += 1) {
+            $y = [Math]::Min(
+                $Bitmap.Height - 1,
+                [Math]::Max(0, [Math]::Round(($row / [Math]::Max(1, $sampleRows - 1)) * ($Bitmap.Height - 1))))
+            $pixel = $Bitmap.GetPixel($x, $y)
+            $null = $uniqueColors.Add(("{0}-{1}-{2}" -f $pixel.R, $pixel.G, $pixel.B))
+            $luma = ($pixel.R * 0.299) + ($pixel.G * 0.587) + ($pixel.B * 0.114)
+            $minLuma = [Math]::Min($minLuma, $luma)
+            $maxLuma = [Math]::Max($maxLuma, $luma)
+        }
+    }
+
+    return $uniqueColors.Count -ge 10 -or ($maxLuma - $minLuma) -ge 14
+}
+
+function Copy-WindowFromScreen {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Drawing.Graphics]$Graphics,
+
+        [Parameter(Mandatory = $true)]
+        [Win32Capture+RECT]$Rect,
+
+        [Parameter(Mandatory = $true)]
+        [System.Drawing.Size]$BitmapSize
+    )
+
+    $Graphics.CopyFromScreen($Rect.Left, $Rect.Top, 0, 0, $BitmapSize)
+}
+
 function Capture-WindowImage {
     param(
         [Parameter(Mandatory = $true)]
@@ -89,6 +136,7 @@ function Capture-WindowImage {
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     try {
         $printed = $false
+        $captured = $false
         $hdc = [IntPtr]::Zero
         try {
             $hdc = $graphics.GetHdc()
@@ -100,8 +148,22 @@ function Capture-WindowImage {
             }
         }
 
-        if (-not $printed) {
-            $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+        if ($printed) {
+            $captured = Test-BitmapHasVisibleContent -Bitmap $bitmap
+        }
+
+        if (-not $captured) {
+            Start-Sleep -Milliseconds 150
+            Copy-WindowFromScreen -Graphics $graphics -Rect $rect -BitmapSize $bitmap.Size
+            $captured = Test-BitmapHasVisibleContent -Bitmap $bitmap
+        }
+
+        if (-not $captured -and $printed) {
+            Start-Sleep -Milliseconds 350
+            [Win32Capture]::ShowWindow($Process.MainWindowHandle, 9) | Out-Null
+            [Win32Capture]::SetForegroundWindow($Process.MainWindowHandle) | Out-Null
+            Start-Sleep -Milliseconds 350
+            Copy-WindowFromScreen -Graphics $graphics -Rect $rect -BitmapSize $bitmap.Size
         }
 
         $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
