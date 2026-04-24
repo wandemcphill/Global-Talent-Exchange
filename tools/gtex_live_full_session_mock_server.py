@@ -315,7 +315,6 @@ def _home_player(
     base_z = [34.0, 10.0, 24.0, 44.0, 58.0, 14.0, 34.0, 54.0, 16.0, 34.0, 52.0][index - 1]
     role = "GK" if index == 1 else "DF" if index <= 5 else "MF" if index <= 8 else "FW"
     line = "goalkeeper" if index == 1 else "defense" if index <= 5 else "midfield" if index <= 8 else "attack"
-    attacking = attacking_home
     has_possession = holder_id == f"home-{index}"
     next_holder_id = _next_holder_for_minute(minute)
     transition_phase = _holder_window_progress(minute)
