@@ -9,8 +9,8 @@ using FStudio.MatchEngine.Players.PlayerController;
 
 namespace FStudio.MatchEngine.Players.Referee {
     public class MiddleReferee : AbstractReferee {
-        private const float REFEREE_BALL_DISTANCE = 20;
-        private const float HORIZONTAL_DISTANCE_BY_BALL_Z_POSITION = 10;
+        private const float REFEREE_BALL_DISTANCE = 12;
+        private const float HORIZONTAL_DISTANCE_BY_BALL_Z_POSITION = 6;
 
         public MiddleReferee(MatchPlayer matchPlayer, GameTeam gameTeam, Material kitMaterial) : base(matchPlayer, gameTeam, kitMaterial)
         {
@@ -49,7 +49,7 @@ namespace FStudio.MatchEngine.Players.Referee {
             var targetPosition = horizontalAddition + ballPosition + (middlePoint - ballPosition).normalized * 
                 REFEREE_BALL_DISTANCE;
 
-            MoveTo(in deltaTime, targetPosition, false, MovementType.Normal);
+            MoveTo(in deltaTime, targetPosition, false, MovementType.BestHeCanDo);
             FocusToBall(deltaTime, ball);
         }
         // 

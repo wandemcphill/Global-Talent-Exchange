@@ -41,9 +41,19 @@ namespace FStudio.MatchEngine.Balls {
         private bool hasExternalPlaybackTarget;
         private Vector3 externalPlaybackTargetPosition;
         private Quaternion externalPlaybackTargetRotation = Quaternion.identity;
+        private float nextExternalPlaybackValidationAt;
 
         [SerializeField] private float externalPlaybackMoveSpeed = 30f;
         [SerializeField] private float externalPlaybackTeleportDistance = 6f;
+        [SerializeField] private float externalPlaybackHolderFollowSpeed = 22f;
+        [SerializeField] private float externalPlaybackHolderSnapDistance = 1.25f;
+        [SerializeField] private float externalPlaybackHolderForwardOffset = 0.22f;
+        [SerializeField] private float externalPlaybackHolderHeight = 0.06f;
+        [SerializeField] private float externalPlaybackHolderLateralOffset = 0.28f;
+        [SerializeField] private float externalPlaybackHolderIdleForwardScale = 0.34f;
+        [SerializeField] private float externalPlaybackHolderRunForwardScale = 0.84f;
+        [SerializeField] private float externalPlaybackHolderDribbleFrequency = 8.2f;
+        [SerializeField] private float externalPlaybackHolderDribbleLift = 0.035f;
 
         public Vector3 Velocity => ExternalPlaybackEnabled ? externalPlaybackVelocity : rigidbody.linearVelocity;
 
@@ -191,10 +201,18 @@ namespace FStudio.MatchEngine.Balls {
 
         private void FixedUpdate()
         {
-            if (!ExternalPlaybackEnabled ||
-                !hasExternalPlaybackTarget ||
-                HolderPlayer != null ||
-                rigidbody == null)
+            if (!ExternalPlaybackEnabled || rigidbody == null)
+            {
+                return;
+            }
+
+            if (HolderPlayer != null)
+            {
+                DriveExternalPlaybackHolderAnchor();
+                return;
+            }
+
+            if (!hasExternalPlaybackTarget)
             {
                 return;
             }
@@ -309,12 +327,18 @@ namespace FStudio.MatchEngine.Balls {
                 targetPosition.y = Mathf.Max(0.1f, targetPosition.y);
             }
 
+            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackPitchZones != null) {
+                targetPosition = MatchManager.Current.ExternalPlaybackPitchZones.ClampToPlayableGrass(targetPosition, 0.18f);
+                targetPosition.y = Mathf.Max(ResolveExternalPlaybackHolderY(), targetPosition.y);
+            }
+
             if (!GtexPlaybackSanitizer.IsFinite(targetVelocity)) {
                 targetVelocity = Vector3.zero;
             }
 
             if (holder != null) {
-                if (HolderPlayer != holder) {
+                var holderChanged = HolderPlayer != holder;
+                if (holderChanged) {
                     Hold(holder);
                 }
 
@@ -322,6 +346,12 @@ namespace FStudio.MatchEngine.Balls {
                 externalPlaybackVelocity = Vector3.zero;
                 rigidbody.isKinematic = true;
                 Collider.enabled = false;
+
+                if (holderChanged ||
+                    Vector3.Distance(rigidbody.position, ResolveExternalPlaybackHolderAnchor(holder)) >= ResolveExternalPlaybackHolderSnapDistance() * 1.75f)
+                {
+                    SnapExternalPlaybackHolderAnchor(holder);
+                }
 
                 return;
             }
@@ -703,6 +733,201 @@ namespace FStudio.MatchEngine.Balls {
             }
 
             return Quaternion.LookRotation(planarVelocity.normalized, Vector3.up);
+        }
+
+        private void DriveExternalPlaybackHolderAnchor()
+        {
+            if (HolderPlayer == null || rigidbody == null)
+            {
+                return;
+            }
+
+            var targetPosition = ResolveExternalPlaybackHolderAnchor(HolderPlayer);
+            var targetRotation = ResolveExternalPlaybackHolderRotation(HolderPlayer);
+            holdedPosition = targetPosition;
+            externalPlaybackVelocity = Vector3.zero;
+            rigidbody.isKinematic = true;
+            Collider.enabled = false;
+
+            if ((Application.isEditor || Debug.isDebugBuild) &&
+                Time.unscaledTime >= nextExternalPlaybackValidationAt &&
+                Vector3.Distance(transform.position, targetPosition) > 0.95f)
+            {
+                nextExternalPlaybackValidationAt = Time.unscaledTime + 1.25f;
+                Debug.LogWarning(
+                    "[Ball][Validate] controlled_ball_far_from_foot holder=" +
+                    HolderPlayer +
+                    " distance=" + Vector3.Distance(transform.position, targetPosition).ToString("0.##"));
+            }
+
+            if (Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackHolderSnapDistance())
+            {
+                rigidbody.position = targetPosition;
+                rigidbody.rotation = targetRotation;
+                transform.SetPositionAndRotation(targetPosition, targetRotation);
+                return;
+            }
+
+            var nextPosition = Vector3.MoveTowards(
+                rigidbody.position,
+                targetPosition,
+                externalPlaybackHolderFollowSpeed * Time.fixedDeltaTime);
+
+            var turnT = 1f - Mathf.Exp(-18f * Time.fixedDeltaTime);
+            var nextRotation = Quaternion.Slerp(rigidbody.rotation, targetRotation, turnT);
+
+            rigidbody.MovePosition(nextPosition);
+            rigidbody.MoveRotation(nextRotation);
+            holdedPosition = nextPosition;
+        }
+
+        private void SnapExternalPlaybackHolderAnchor(PlayerBase holder)
+        {
+            if (holder == null || rigidbody == null)
+            {
+                return;
+            }
+
+            var targetPosition = ResolveExternalPlaybackHolderAnchor(holder);
+            var targetRotation = ResolveExternalPlaybackHolderRotation(holder);
+            holdedPosition = targetPosition;
+            rigidbody.linearVelocity = Vector3.zero;
+            rigidbody.angularVelocity = Vector3.zero;
+            rigidbody.position = targetPosition;
+            rigidbody.rotation = targetRotation;
+            transform.SetPositionAndRotation(targetPosition, targetRotation);
+        }
+
+        private Vector3 ResolveExternalPlaybackHolderAnchor(PlayerBase holder)
+        {
+            var anchor = holder != null ? holder.Position : transform.position;
+            var forward = ResolveExternalPlaybackHolderForward(holder);
+            var lateral = Vector3.Cross(Vector3.up, forward).normalized;
+            var planarVelocity = holder != null ? holder.Velocity : Vector3.zero;
+            planarVelocity.y = 0f;
+            var speed01 = Mathf.Clamp01(planarVelocity.magnitude / 5.4f);
+            var footBias = ResolveExternalPlaybackHolderFootBias(holder);
+            var dribblePhase = ResolveExternalPlaybackHolderDribblePhase(holder, speed01);
+            var footPhase = Mathf.Lerp(footBias, dribblePhase, Mathf.Clamp01(speed01 * 1.2f));
+            var forwardOffsetScale =
+                Mathf.Lerp(
+                    externalPlaybackHolderIdleForwardScale * 0.62f,
+                    externalPlaybackHolderRunForwardScale * 0.72f,
+                    speed01);
+            var forwardOffset =
+                forward *
+                externalPlaybackHolderForwardOffset *
+                forwardOffsetScale;
+            var lateralOffset =
+                lateral *
+                Mathf.Lerp(externalPlaybackHolderLateralOffset * 0.18f, externalPlaybackHolderLateralOffset * 0.52f, speed01) *
+                footPhase;
+
+            anchor += forwardOffset + lateralOffset;
+            anchor.y = ResolveExternalPlaybackHolderY() + Mathf.Abs(footPhase) * externalPlaybackHolderDribbleLift * speed01 * 0.38f;
+
+            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackSanitizer != null)
+            {
+                anchor = MatchManager.Current.ExternalPlaybackSanitizer.SanitizeBallPosition(anchor, 0f);
+            }
+
+            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackPitchZones != null)
+            {
+                anchor = MatchManager.Current.ExternalPlaybackPitchZones.ClampToPlayableGrass(anchor, 0.12f);
+                anchor.y = Mathf.Max(ResolveExternalPlaybackHolderY(), anchor.y);
+            }
+            else if (MatchManager.Current != null)
+            {
+                anchor.x = Mathf.Clamp(anchor.x, 0, MatchManager.Current.SizeOfField.x);
+                anchor.z = Mathf.Clamp(anchor.z, 0, MatchManager.Current.SizeOfField.y);
+                anchor.y = Mathf.Max(0.1f, anchor.y);
+            }
+            else
+            {
+                anchor.y = Mathf.Max(0.1f, anchor.y);
+            }
+
+            return anchor;
+        }
+
+        private float ResolveExternalPlaybackHolderDribblePhase(PlayerBase holder, float speed01)
+        {
+            var dominantFootBias = ResolveExternalPlaybackHolderFootBias(holder);
+            if (speed01 <= 0.08f)
+            {
+                return dominantFootBias;
+            }
+
+            var phaseSeed = holder != null && holder.MatchPlayer != null
+                ? holder.MatchPlayer.Number * 0.73f
+                : 0f;
+            return Mathf.Sin(Time.unscaledTime * Mathf.Lerp(0f, externalPlaybackHolderDribbleFrequency, speed01) + phaseSeed);
+        }
+
+        private static float ResolveExternalPlaybackHolderFootBias(PlayerBase holder)
+        {
+            if (holder != null && holder.MatchPlayer != null && holder.MatchPlayer.Number > 0)
+            {
+                return (holder.MatchPlayer.Number & 1) == 0 ? -1f : 1f;
+            }
+
+            return 1f;
+        }
+
+        private Quaternion ResolveExternalPlaybackHolderRotation(PlayerBase holder)
+        {
+            var forward = ResolveExternalPlaybackHolderForward(holder);
+            if (forward.sqrMagnitude <= 0.0001f)
+            {
+                return rigidbody != null ? rigidbody.rotation : transform.rotation;
+            }
+
+            return Quaternion.LookRotation(forward, Vector3.up);
+        }
+
+        private Vector3 ResolveExternalPlaybackHolderForward(PlayerBase holder)
+        {
+            if (holder == null)
+            {
+                return Vector3.forward;
+            }
+
+            var movementDirection = holder.Direction;
+            movementDirection.y = 0f;
+            if (movementDirection.sqrMagnitude > 0.0001f)
+            {
+                return movementDirection.normalized;
+            }
+
+            if (holder.PlayerController != null)
+            {
+                var controllerForward = holder.PlayerController.Forward;
+                controllerForward.y = 0f;
+                if (controllerForward.sqrMagnitude > 0.0001f)
+                {
+                    return controllerForward.normalized;
+                }
+            }
+
+            var rotationForward = holder.Rotation * Vector3.forward;
+            rotationForward.y = 0f;
+            return rotationForward.sqrMagnitude > 0.0001f
+                ? rotationForward.normalized
+                : Vector3.forward;
+        }
+
+        private float ResolveExternalPlaybackHolderY()
+        {
+            var pitchSpace = MatchManager.Current != null ? MatchManager.Current.ExternalPlaybackPitchSpace : null;
+            var grassY = pitchSpace != null ? pitchSpace.GrassY : 0f;
+            return grassY + Mathf.Max(0.08f, externalPlaybackHolderHeight);
+        }
+
+        private float ResolveExternalPlaybackHolderSnapDistance()
+        {
+            return Mathf.Max(
+                0.75f,
+                Mathf.Min(ResolveExternalPlaybackTeleportDistance(), externalPlaybackHolderSnapDistance));
         }
 
         private float ResolveExternalPlaybackTeleportDistance()

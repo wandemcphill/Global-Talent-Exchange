@@ -4,6 +4,7 @@ using System.Collections.Generic;
 
 using FStudio.MatchEngine.Enums;
 using FStudio.MatchEngine.Balls;
+using FStudio.MatchEngine.Players.PlayerController;
 
 using UnityEngine;
 
@@ -41,7 +42,7 @@ namespace FStudio.MatchEngine.Players.Referee {
 
             float minX = 0;
             float maxX;
-            float z = -0.5f;
+            float z = 1.25f;
             float targetOffsideLine = !Side ? homeTeamOffSideLine : awayTeamOffSideLine;
 
             Vector3 lookDirection;
@@ -50,18 +51,18 @@ namespace FStudio.MatchEngine.Players.Referee {
                 // this will be second half right side referee.
                 minX = fieldEndX / 2;
                 maxX = fieldEndX;
-                z = -0.5f;
+                z = 1.25f;
                 lookDirection = Vector3.forward;
             } else {
                 maxX = fieldEndX / 2;
-                z = fieldEndY + 0.5f;
+                z = fieldEndY - 1.25f;
                 lookDirection = -Vector3.forward;
             }
 
             var targetPosition = new Vector3(Mathf.Clamp(targetOffsideLine, minX, maxX), 0, z);
 
             LookTo(in deltaTime, lookDirection);
-            MoveTo(in deltaTime, targetPosition, false);
+            MoveTo(in deltaTime, targetPosition, false, MovementType.BestHeCanDo);
         }
         // 
     }

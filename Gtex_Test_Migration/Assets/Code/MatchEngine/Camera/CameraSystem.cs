@@ -100,7 +100,7 @@ namespace FStudio.MatchEngine.Cameras {
                 return;
             }
 
-            var dT = Time.fixedDeltaTime;
+            var dT = Mathf.Max(0.001f, Time.unscaledDeltaTime);
 
             if (isInTransition) {
                 transitionValue += dT * transitionSpeed;

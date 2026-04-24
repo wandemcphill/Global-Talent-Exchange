@@ -18,6 +18,21 @@ param(
     [switch]$LeaveRunning
 )
 
+function Normalize-ProcessPathEnvironment {
+    $pathValue = [System.Environment]::GetEnvironmentVariable('Path', 'Process')
+    if ([string]::IsNullOrWhiteSpace($pathValue)) {
+        $pathValue = [System.Environment]::GetEnvironmentVariable('PATH', 'Process')
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($pathValue)) {
+        [System.Environment]::SetEnvironmentVariable('Path', $pathValue, 'Process')
+    }
+
+    [System.Environment]::SetEnvironmentVariable('PATH', $null, 'Process')
+}
+
+Normalize-ProcessPathEnvironment
+
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type @'
@@ -270,6 +285,50 @@ function Copy-RuntimeTraceArtifact {
     return $runtimeTracePath
 }
 
+function Get-RuntimeTraceArtifactPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ExePath
+    )
+
+    $runtimeDirectory = Split-Path $ExePath -Parent
+    return (Join-Path (Join-Path $runtimeDirectory 'tmp') 'gtex_live_runtime_trace.log')
+}
+
+function Remove-PathIfExists {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path $Path)) {
+        return
+    }
+
+    for ($attempt = 0; $attempt -lt 8; $attempt++) {
+        try {
+            Remove-Item -Path $Path -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+}
+
+function Sync-CaptureRecordsFromDisk {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.List[object]]$Records
+    )
+
+    foreach ($record in $Records) {
+        if (Test-ImageFileHasVisibleContent -Path $record.path) {
+            $record.captured = $true
+            if ($record.method -eq 'none') {
+                $record.method = 'internal'
+            }
+        }
+    }
+}
+
 function Copy-BootstrapArtifact {
     param(
         [Parameter(Mandatory = $true)]
@@ -305,6 +364,7 @@ if (Test-Path $PlayerLogPath) {
 $captureOffsets = @($CaptureOffsetsSeconds | Sort-Object)
 $metadataPath = Join-Path $OutputDir ($resolvedSessionName + '.metadata.txt')
 $runtimeTracePath = Join-Path $OutputDir ($resolvedSessionName + '.runtime.log')
+$runtimeTraceArtifactPath = Get-RuntimeTraceArtifactPath -ExePath $ExePath
 $runtimeBootstrapPath = Copy-BootstrapArtifact -ExePath $ExePath
 $runtimeBootstrapSource = if ([string]::IsNullOrWhiteSpace($runtimeBootstrapPath)) { 'missing' } else { 'project_tmp' }
 
@@ -325,6 +385,9 @@ $env:GTEX_CAPTURE_OFFSETS_SECONDS = ($captureOffsets -join ',')
 
 $process = $null
 try {
+    Remove-PathIfExists -Path $runtimeTraceArtifactPath
+    Remove-PathIfExists -Path $runtimeTracePath
+
     $process = Start-Process -FilePath $ExePath -ArgumentList $args -PassThru
     $launchTime = Get-Date
 
@@ -336,7 +399,7 @@ try {
         $process.Refresh()
     } while ((Get-Date) -lt $windowDeadline -and -not $process.HasExited -and $process.MainWindowHandle -eq 0)
 
-    $captureResults = New-Object System.Collections.Generic.List[string]
+    $captureRecords = New-Object System.Collections.Generic.List[object]
 
     foreach ($offset in $captureOffsets) {
         $targetTime = $launchTime.AddSeconds($offset)
@@ -354,8 +417,13 @@ try {
             $captureMethod = if ($captured) { 'window' } else { 'none' }
         }
 
-        $captureResults.Add(
-            ("offset={0}; captured={1}; method={2}; path={3}" -f $offset, $captured, $captureMethod, $capturePath))
+        $captureRecords.Add(
+            [pscustomobject]@{
+                offset = $offset
+                captured = $captured
+                method = $captureMethod
+                path = $capturePath
+            })
     }
 
     $process.Refresh()
@@ -390,6 +458,17 @@ try {
     if ([string]::IsNullOrWhiteSpace($runtimeTraceSource)) {
         $runtimeTraceSource = 'missing'
     }
+    elseif ((Get-Item $runtimeTraceSource).LastWriteTimeUtc -lt $launchTime.ToUniversalTime()) {
+        $runtimeTraceSource = "stale:$runtimeTraceSource"
+    }
+
+    Sync-CaptureRecordsFromDisk -Records $captureRecords
+
+    $captureResultLines = @(
+        $captureRecords | ForEach-Object {
+            "offset={0}; captured={1}; method={2}; path={3}" -f $_.offset, $_.captured, $_.method, $_.path
+        }
+    )
 
     $metadata = @(
         ("session={0}" -f $resolvedSessionName),
@@ -397,6 +476,8 @@ try {
         ("title={0}" -f $process.MainWindowTitle),
         ("handle={0}" -f $process.MainWindowHandle),
         ("exited={0}" -f $process.HasExited),
+        ("exit_code={0}" -f $(if ($process.HasExited) { $process.ExitCode } else { '' })),
+        ("launch_time_utc={0}" -f $launchTime.ToUniversalTime().ToString('o')),
         ("player_log={0}" -f $PlayerLogPath),
         ("player_log_source={0}" -f $playerLogSource),
         ("runtime_bootstrap={0}" -f $runtimeBootstrapPath),
@@ -406,7 +487,7 @@ try {
         ("leave_running={0}" -f $LeaveRunning.IsPresent)
     )
 
-    $metadata += $captureResults
+    $metadata += $captureResultLines
     Set-Content -Path $metadataPath -Value $metadata
 
     Write-Output ("SESSION={0}" -f $resolvedSessionName)
@@ -414,6 +495,8 @@ try {
     Write-Output ("EXITED={0}" -f $process.HasExited)
     Write-Output ("TITLE={0}" -f $process.MainWindowTitle)
     Write-Output ("HANDLE={0}" -f $process.MainWindowHandle)
+    Write-Output ("EXIT_CODE={0}" -f $(if ($process.HasExited) { $process.ExitCode } else { '' }))
+    Write-Output ("LAUNCH_TIME_UTC={0}" -f $launchTime.ToUniversalTime().ToString('o'))
     Write-Output ("PLAYER_LOG={0}" -f $PlayerLogPath)
     Write-Output ("PLAYER_LOG_SOURCE={0}" -f $playerLogSource)
     Write-Output ("RUNTIME_BOOTSTRAP={0}" -f $runtimeBootstrapPath)
@@ -421,7 +504,7 @@ try {
     Write-Output ("RUNTIME_TRACE={0}" -f $runtimeTracePath)
     Write-Output ("RUNTIME_TRACE_SOURCE={0}" -f $runtimeTraceSource)
     Write-Output ("METADATA={0}" -f $metadataPath)
-    $captureResults | ForEach-Object { Write-Output $_ }
+    $captureResultLines | ForEach-Object { Write-Output $_ }
 }
 finally {
     if ($null -eq $previousCaptureOutputDirectory) {

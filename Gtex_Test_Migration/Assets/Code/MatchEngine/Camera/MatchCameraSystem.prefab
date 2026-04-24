@@ -143,10 +143,10 @@ MonoBehaviour:
   positionDifferencePower: 1.5
   rotationDifferencePower: 1.5
   ZoomMultiplier: 0
-  transitionSpeed: 0.2
-  CameraPositionSpeed: 0.18
-  CameraRotationSpeed: 0.18
-  CameraZoomSpeed: 0.45
+  transitionSpeed: 0.42
+  CameraPositionSpeed: 1.35
+  CameraRotationSpeed: 2.6
+  CameraZoomSpeed: 1.2
 --- !u!114 &6950072687211578566
 MonoBehaviour:
   m_ObjectHideFlags: 0

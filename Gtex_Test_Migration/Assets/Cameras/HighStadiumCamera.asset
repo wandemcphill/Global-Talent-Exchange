@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: HighStadiumCamera
   m_EditorClassIdentifier: 
   cameraName: 
-  ZPositionOffset: -31.5
-  YPositionOffset: 16.8
+  ZPositionOffset: -50
+  YPositionOffset: 25
   MinXRotation: -20
   MaxXRotation: 61
   XRotationCurve:
@@ -121,8 +121,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  MinXPosition: 18
-  MaxXPosition: 72
+  MinXPosition: 1
+  MaxXPosition: 104
   XPositionCurve:
     serializedVersion: 2
     m_Curve:
@@ -200,7 +200,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   PositionOffsetMultiplier: {x: 0, y: 5, z: 10}
-  ZoomMultiplier: 19.5
+  ZoomMultiplier: 9.75
   ZoomCurve:
     serializedVersion: 2
     m_Curve:

@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: TVBroadcast
   m_EditorClassIdentifier: 
   cameraName: 
-  ZPositionOffset: -24.5
-  YPositionOffset: 13.9
+  ZPositionOffset: -42
+  YPositionOffset: 21
   MinXRotation: -5.89
   MaxXRotation: 45
   XRotationCurve:
@@ -121,8 +121,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  MinXPosition: 15
-  MaxXPosition: 70
+  MinXPosition: 3
+  MaxXPosition: 102
   XPositionCurve:
     serializedVersion: 2
     m_Curve:
@@ -200,7 +200,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   PositionOffsetMultiplier: {x: 0, y: 5, z: 10}
-  ZoomMultiplier: 23
+  ZoomMultiplier: 12.5
   ZoomCurve:
     serializedVersion: 2
     m_Curve:

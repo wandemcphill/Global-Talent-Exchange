@@ -933,17 +933,42 @@ namespace FStudio.GTEX.Editor
 
         private static void BuildAndroidApk(string buildLabel, string outputPath)
         {
-            Debug.Log("[GTEX Build] BEFORE BUILD PLAYER " + buildLabel + " -> " + outputPath);
-            RunBuild(
-                buildLabel,
-                outputPath,
-                BuildTargetGroup.Android,
-                BuildTarget.Android,
-                EnsureAndroidSdkConfigured,
-                null,
-                BuildOptions.None,
-                ValidateAndroidApkOutput);
-            Debug.Log("[GTEX Build] AFTER BUILD PLAYER " + buildLabel + " -> " + outputPath);
+            var previousExportAsGoogleAndroidProject = EditorUserBuildSettings.exportAsGoogleAndroidProject;
+            Debug.Log(
+                "[GTEX Build] Android exportAsGoogleAndroidProject (before APK build): " +
+                previousExportAsGoogleAndroidProject);
+
+            try
+            {
+                EditorUserBuildSettings.exportAsGoogleAndroidProject = false;
+                Debug.Log("[GTEX Build] Android exportAsGoogleAndroidProject (set for APK build): false");
+                Debug.Log("[GTEX Build] BEFORE BUILD PLAYER " + buildLabel + " -> " + outputPath);
+                RunBuild(
+                    buildLabel,
+                    outputPath,
+                    BuildTargetGroup.Android,
+                    BuildTarget.Android,
+                    () =>
+                    {
+                        EnsureAndroidSdkConfigured();
+                        if (Directory.Exists(outputPath))
+                        {
+                            Directory.Delete(outputPath, true);
+                            Debug.Log("[GTEX Build] Removed stale Android export directory at APK path: " + outputPath);
+                        }
+                    },
+                    null,
+                    BuildOptions.None,
+                    ValidateAndroidApkOutput);
+                Debug.Log("[GTEX Build] AFTER BUILD PLAYER " + buildLabel + " -> " + outputPath);
+            }
+            finally
+            {
+                EditorUserBuildSettings.exportAsGoogleAndroidProject = previousExportAsGoogleAndroidProject;
+                Debug.Log(
+                    "[GTEX Build] Android exportAsGoogleAndroidProject (restored after APK build): " +
+                    previousExportAsGoogleAndroidProject);
+            }
         }
 
         private static void ExportAndroidLibrary(string buildLabel, string exportPath)
@@ -994,6 +1019,14 @@ namespace FStudio.GTEX.Editor
 
             if (!File.Exists(outputPath))
             {
+                if (Directory.Exists(outputPath))
+                {
+                    throw new InvalidOperationException(
+                        "Android build produced a directory at the APK path instead of an .apk file. " +
+                        "This usually means exportAsGoogleAndroidProject was enabled or Unity exported a Gradle project unexpectedly: " +
+                        outputPath);
+                }
+
                 throw new InvalidOperationException(
                     "Android build completed without producing the expected APK: " + outputPath);
             }

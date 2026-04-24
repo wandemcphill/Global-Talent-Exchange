@@ -280,20 +280,87 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
         public bool MoveTo(in float deltaTime, Vector3 targetPosition, bool faceTowards = true, MovementType movementType = MovementType.BestHeCanDo)
         {
-            return false;
+            if (externalPlaybackEnabled)
+            {
+                return false;
+            }
+
+            targetPosition.y = ResolveGroundedY();
+            var toTarget = targetPosition - Position;
+            toTarget.y = 0f;
+            var distance = toTarget.magnitude;
+            if (distance <= 0.05f)
+            {
+                Stop(in deltaTime);
+                return true;
+            }
+
+            var targetDirection = toTarget / Mathf.Max(distance, 0.001f);
+            var targetSpeed =
+                movementType switch
+                {
+                    MovementType.Relax => 2.2f,
+                    MovementType.Normal => 3.3f,
+                    _ => 4.35f,
+                };
+            TargetMoveSpeed = targetSpeed;
+            MoveSpeed = Mathf.MoveTowards(MoveSpeed, TargetMoveSpeed, 8f * Mathf.Max(deltaTime, 0f));
+            var nextPosition = Vector3.MoveTowards(Position, targetPosition, MoveSpeed * Mathf.Max(deltaTime, 0f));
+
+            Direction = targetDirection;
+            SetPosition(nextPosition);
+            if (faceTowards)
+            {
+                LookTo(in deltaTime, targetDirection);
+            }
+
+            ApplyLegacyLocomotionAnimator(targetDirection, MoveSpeed);
+            return Vector3.Distance(nextPosition, targetPosition) <= 0.06f;
         }
 
         public bool LookTo(in float deltaTime, Vector3 lookDirection)
         {
+            if (externalPlaybackEnabled)
+            {
+                return false;
+            }
+
+            lookDirection.y = 0f;
+            if (lookDirection.sqrMagnitude <= 0.0001f)
+            {
+                return false;
+            }
+
+            var targetRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
+            SetRotation(Quaternion.Slerp(Rotation, targetRotation, Mathf.Clamp01(deltaTime * 7f)));
             return true;
         }
 
         public void Stop(in float deltaTime)
         {
+            if (externalPlaybackEnabled)
+            {
+                return;
+            }
+
+            TargetMoveSpeed = 0f;
+            MoveSpeed = Mathf.MoveTowards(MoveSpeed, 0f, 10f * Mathf.Max(deltaTime, 0f));
+            Direction = Vector3.zero;
+            ApplyLegacyLocomotionAnimator(Vector3.zero, MoveSpeed);
         }
 
         public void ProcessMovement(in float time, in float deltaTime)
         {
+            if (externalPlaybackEnabled)
+            {
+                return;
+            }
+
+            MoveSpeed = Mathf.MoveTowards(MoveSpeed, TargetMoveSpeed, 6f * Mathf.Max(deltaTime, 0f));
+            if (Direction.sqrMagnitude <= 0.0001f)
+            {
+                ApplyLegacyLocomotionAnimator(Vector3.zero, MoveSpeed);
+            }
         }
 
         public void Up(in float dT, MatchStatus matchStatus, Ball ball)
@@ -320,6 +387,27 @@ namespace FStudio.MatchEngine.Players.PlayerController
         public void BallHitEvent()
         {
             BasePlayer?.BallHitEvent();
+        }
+
+        private void ApplyLegacyLocomotionAnimator(Vector3 worldDirection, float moveSpeed)
+        {
+            if (playerAnimator == null)
+            {
+                return;
+            }
+
+            var normalizedSpeed = Mathf.Clamp01(moveSpeed / 4.5f);
+            playerAnimator.SetFloat(PlayerAnimatorVariable.MoveSpeed, normalizedSpeed);
+            if (worldDirection.sqrMagnitude <= 0.0001f)
+            {
+                playerAnimator.SetFloat(PlayerAnimatorVariable.Horizontal, 0f);
+                playerAnimator.SetFloat(PlayerAnimatorVariable.Vertical, 0f);
+                return;
+            }
+
+            var localDirection = transform.InverseTransformDirection(worldDirection.normalized);
+            playerAnimator.SetFloat(PlayerAnimatorVariable.Horizontal, Mathf.Clamp(localDirection.x, -1f, 1f));
+            playerAnimator.SetFloat(PlayerAnimatorVariable.Vertical, Mathf.Clamp(localDirection.z, -1f, 1f));
         }
     }
 }

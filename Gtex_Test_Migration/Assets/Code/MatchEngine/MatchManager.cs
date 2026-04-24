@@ -132,6 +132,7 @@ namespace FStudio.MatchEngine {
         public MatchStatus MatchFlags = default;
         public bool ExternalPlaybackEnabled { get; private set; }
         public GtexPitchSpace ExternalPlaybackPitchSpace { get; private set; }
+        public GtexPitchZoneHelper ExternalPlaybackPitchZones { get; private set; }
         public GtexPlaybackSanitizer ExternalPlaybackSanitizer => externalPlaybackSanitizer;
         public float ExternalPlaybackTeleportDistance { get; private set; } = 6f;
 
@@ -719,6 +720,7 @@ namespace FStudio.MatchEngine {
 
         public void ConfigureExternalPlaybackPitchSpace(GtexPitchSpace pitchSpace) {
             ExternalPlaybackPitchSpace = pitchSpace;
+            ExternalPlaybackPitchZones = pitchSpace != null ? new GtexPitchZoneHelper(pitchSpace) : null;
             externalPlaybackSanitizer = pitchSpace != null ? new GtexPlaybackSanitizer(pitchSpace) : null;
             if (pitchSpace == null) {
                 return;
@@ -727,31 +729,31 @@ namespace FStudio.MatchEngine {
             fieldEndX = Mathf.Max(1, Mathf.RoundToInt(pitchSpace.Length));
             fieldEndY = Mathf.Max(1, Mathf.RoundToInt(pitchSpace.Width));
 
-            AlignGoalToPitch(goalNet1, pitchSpace.GetHomeGoalCenter(), true, goal1SpotCollider, "GoalRaycastAreaHome");
-            AlignGoalToPitch(goalNet2, pitchSpace.GetAwayGoalCenter(), false, goal2SpotCollider, "GoalRaycastAreaAway");
+            AlignGoalToPitch(goalNet1, GtexPitchZoneHelper.HomeTeamSide, goal1SpotCollider, "GoalRaycastAreaHome");
+            AlignGoalToPitch(goalNet2, GtexPitchZoneHelper.AwayTeamSide, goal2SpotCollider, "GoalRaycastAreaAway");
         }
 
         private void AlignGoalToPitch(
             GoalNet goalNet,
-            Vector3 goalLineCenter,
-            bool homeGoal,
+            int teamSide,
             BoxCollider goalSpotCollider,
             string goalRaycastAreaName) {
-            if (goalNet == null || ExternalPlaybackPitchSpace == null) {
+            if (goalNet == null || ExternalPlaybackPitchSpace == null || ExternalPlaybackPitchZones == null) {
                 return;
             }
 
+            var homeGoal = teamSide == GtexPitchZoneHelper.HomeTeamSide;
+            var goalLineCenter = ExternalPlaybackPitchZones.GetGoalCenter(teamSide);
+            var infieldInset = Mathf.Clamp(ExternalPlaybackPitchSpace.Length * 0.014f, 1.1f, 1.6f);
+            var inwardDirection = homeGoal ? ExternalPlaybackPitchZones.HomeToAwayAxis : -ExternalPlaybackPitchZones.HomeToAwayAxis;
+            var visualGoalCenter = ExternalPlaybackPitchZones.ClampToPlayableGrass(goalLineCenter + inwardDirection * infieldInset, 0f);
             var previousPosition = goalNet.transform.position;
             goalNet.AlignToPitch(
-                goalLineCenter,
+                visualGoalCenter,
                 ExternalPlaybackPitchSpace.GrassY,
-                Quaternion.Euler(0f, homeGoal ? 90f : -90f, 0f));
+                Quaternion.LookRotation(inwardDirection, Vector3.up));
 
             var positionDelta = goalNet.transform.position - previousPosition;
-            if (positionDelta.sqrMagnitude <= 0.0001f) {
-                return;
-            }
-
             if (goalSpotCollider != null) {
                 goalSpotCollider.transform.position += positionDelta;
             }
@@ -759,6 +761,14 @@ namespace FStudio.MatchEngine {
             var goalRaycastArea = FindGoalSceneTransform(goalRaycastAreaName);
             if (goalRaycastArea != null) {
                 goalRaycastArea.position += positionDelta;
+            }
+
+            if ((Application.isEditor || Debug.isDebugBuild) &&
+                !ExternalPlaybackPitchZones.IsLegalGoalVisualPosition(goalNet.transform, teamSide)) {
+                Debug.LogWarning(
+                    "[GTEX] Goal visual outside legal playback zone after alignment. teamSide=" +
+                    teamSide +
+                    " position=" + goalNet.transform.position.ToString("F2"));
             }
         }
 
@@ -785,6 +795,7 @@ namespace FStudio.MatchEngine {
             MatchFlags = MatchStatus.NotPlaying;
             ExternalPlaybackEnabled = false;
             ExternalPlaybackPitchSpace = null;
+            ExternalPlaybackPitchZones = null;
             externalPlaybackSanitizer = null;
             ExternalPlaybackTeleportDistance = 6f;
             SetPlayerExternalPlayback(false);
@@ -1485,7 +1496,10 @@ namespace FStudio.MatchEngine {
                     referee.InstantStop();
                 }
 
-                referee.PlayerController.SetExternalPlayback(value);
+                // Referees are still driven by the legacy match-engine logic during live playback.
+                // Freezing them in external mode leaves the referee crew static because no external
+                // positions are ever supplied for them.
+                referee.PlayerController.SetExternalPlayback(false);
             }
         }
     }

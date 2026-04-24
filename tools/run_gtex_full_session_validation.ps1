@@ -2,6 +2,21 @@ param(
     [int]$Port = 8879
 )
 
+function Normalize-ProcessPathEnvironment {
+    $pathValue = [System.Environment]::GetEnvironmentVariable('Path', 'Process')
+    if ([string]::IsNullOrWhiteSpace($pathValue)) {
+        $pathValue = [System.Environment]::GetEnvironmentVariable('PATH', 'Process')
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($pathValue)) {
+        [System.Environment]::SetEnvironmentVariable('Path', $pathValue, 'Process')
+    }
+
+    [System.Environment]::SetEnvironmentVariable('PATH', $null, 'Process')
+}
+
+Normalize-ProcessPathEnvironment
+
 $ErrorActionPreference = 'Stop'
 
 $root = 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE'
@@ -18,6 +33,35 @@ $matchId = 'live-full-session-test'
 $accessToken = 'live-full-session-access-token' # pragma: allowlist secret
 $refreshToken = 'live-full-session-refresh-token' # pragma: allowlist secret
 $baseUrl = "http://127.0.0.1:$Port"
+
+function Resolve-PythonExecutable {
+    $candidates = @(
+        'python',
+        'C:\Python314\python.exe',
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python314\python.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe')
+    )
+
+    foreach ($candidate in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            continue
+        }
+
+        try {
+            $command = Get-Command $candidate -ErrorAction Stop
+            if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
+                return $command.Source
+            }
+        } catch {
+        }
+
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw 'Unable to resolve a Python executable for the full-session mock server.'
+}
 
 function Get-TailText {
     param(
@@ -292,9 +336,10 @@ foreach ($path in @($serverOut, $serverErr, $summaryFile, $projectBootstrapPath,
 }
 
 $server = $null
+$pythonExe = Resolve-PythonExecutable
 
 try {
-    $server = Start-Process python -ArgumentList @('tools\gtex_live_full_session_mock_server.py', '--host', '127.0.0.1', '--port', "$Port") -WorkingDirectory $root -RedirectStandardOutput $serverOut -RedirectStandardError $serverErr -PassThru
+    $server = Start-Process $pythonExe -ArgumentList @('tools\gtex_live_full_session_mock_server.py', '--host', '127.0.0.1', '--port', "$Port") -WorkingDirectory $root -RedirectStandardOutput $serverOut -RedirectStandardError $serverErr -PassThru
     Wait-ForServerReady -ServerProcess $server
     Write-BootstrapFile
 
@@ -302,8 +347,8 @@ try {
         -ExePath $exe `
         -OutputDir $captureOutputDir `
         -SessionName $sessionName `
-        -InitialWaitSeconds 8 `
-        -CaptureOffsetsSeconds @(10, 18, 26, 34, 42) `
+        -InitialWaitSeconds 12 `
+        -CaptureOffsetsSeconds @(60, 240, 420, 660, 840) `
         -WindowWaitSeconds 60 `
         -LeaveRunning
 
@@ -311,21 +356,29 @@ try {
     $playerPidValue = Get-CaptureValue -Lines $captureLines -Key 'PID'
     $playerPid = if ([string]::IsNullOrWhiteSpace($playerPidValue)) { $null } else { [int]$playerPidValue }
     $playerLog = Get-CaptureValue -Lines $captureLines -Key 'PLAYER_LOG'
+    $playerLogSource = Get-CaptureValue -Lines $captureLines -Key 'PLAYER_LOG_SOURCE'
     $runtimeTrace = Get-CaptureValue -Lines $captureLines -Key 'RUNTIME_TRACE'
+    $runtimeTraceSource = Get-CaptureValue -Lines $captureLines -Key 'RUNTIME_TRACE_SOURCE'
     $metadataPath = Get-CaptureValue -Lines $captureLines -Key 'METADATA'
 
     if ([string]::IsNullOrWhiteSpace($playerLog)) {
         $playerLog = Join-Path $captureOutputDir ($sessionName + '.player.log')
     }
+    if ([string]::IsNullOrWhiteSpace($playerLogSource)) {
+        $playerLogSource = if (Test-Path $playerLog) { 'redirected' } else { 'missing' }
+    }
     if ([string]::IsNullOrWhiteSpace($runtimeTrace)) {
         $runtimeTrace = Join-Path $captureOutputDir ($sessionName + '.runtime.log')
+    }
+    if ([string]::IsNullOrWhiteSpace($runtimeTraceSource)) {
+        $runtimeTraceSource = if (Test-Path $runtimeTrace) { 'copied' } else { 'missing' }
     }
     if ([string]::IsNullOrWhiteSpace($metadataPath)) {
         $metadataPath = Join-Path $captureOutputDir ($sessionName + '.metadata.txt')
     }
 
     $player = if ($null -ne $playerPid) { Get-Process -Id $playerPid -ErrorAction SilentlyContinue } else { $null }
-    $sessionResult = Wait-ForSessionCompletion -PlayerProcess $player -TimeoutSeconds 120
+    $sessionResult = Wait-ForSessionCompletion -PlayerProcess $player -TimeoutSeconds 1080
 
     if ($null -ne $player) {
         Stop-IfRunning -Process $player
@@ -338,7 +391,11 @@ try {
     $visibleCaptureRecords = @($captureRecords | Where-Object { $_.captured })
     $screenshots = @($visibleCaptureRecords | ForEach-Object { Get-Item $_.path -ErrorAction SilentlyContinue } | Where-Object { $null -ne $_ } | Sort-Object Name)
 
-    $traceText = if (Test-Path $runtimeTrace) { Get-Content $runtimeTrace -Raw -ErrorAction SilentlyContinue } else { '' }
+    $traceText = if ((-not $runtimeTraceSource.StartsWith('stale:')) -and (Test-Path $runtimeTrace)) {
+        Get-Content $runtimeTrace -Raw -ErrorAction SilentlyContinue
+    } else {
+        ''
+    }
     $playerText = if (Test-Path $playerLog) { Get-Content $playerLog -Raw -ErrorAction SilentlyContinue } else { '' }
     $serverText = if (Test-Path $serverErr) { Get-Content $serverErr -Raw -ErrorAction SilentlyContinue } else { '' }
     $serverSummary = $sessionResult.summary
@@ -398,7 +455,9 @@ try {
         bootstrap_path = $projectBootstrapPath
         capture_output_dir = $captureOutputDir
         player_log = $playerLog
+        player_log_source = $playerLogSource
         runtime_trace = $runtimeTrace
+        runtime_trace_source = $runtimeTraceSource
         metadata_path = $metadataPath
         capture_results = $captureRecords
         screenshot_paths = @($screenshots | ForEach-Object { $_.FullName })
