@@ -1,26 +1,12 @@
 from __future__ import annotations
 
-import os
-
 from backend.tests.support.secrets import TEST_PASSWORD
-
-
-def _bootstrap_admin_headers(client) -> dict[str, str]:
-    response = client.post(
-        "/auth/login",
-        json={
-            "email": os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"],
-            "password": os.environ["GTE_BOOTSTRAP_ADMIN_PASSWORD"],
-        },
-    )
-    assert response.status_code == 200, response.text
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
 
 
 def _create_scoped_admin_headers(
     client,
     *,
+    bootstrap_admin_headers: dict[str, str],
     suffix: str,
     permissions: list[str],
 ) -> dict[str, str]:
@@ -29,7 +15,7 @@ def _create_scoped_admin_headers(
     username = suffix.replace("-", "_")
     response = client.post(
         "/api/admin/access",
-        headers=_bootstrap_admin_headers(client),
+        headers=bootstrap_admin_headers,
         json={
             "email": email,
             "username": username,
@@ -51,9 +37,11 @@ def _create_scoped_admin_headers(
 
 def test_scoped_admin_without_catalog_permission_cannot_open_real_player_import_status(
     client,
+    bootstrap_admin_headers,
 ) -> None:
     headers = _create_scoped_admin_headers(
         client,
+        bootstrap_admin_headers=bootstrap_admin_headers,
         suffix="catalog-blocked-admin",
         permissions=[],
     )
@@ -64,14 +52,16 @@ def test_scoped_admin_without_catalog_permission_cannot_open_real_player_import_
     )
 
     assert response.status_code == 403
-    assert response.json() == {"detail": "Permission manage_manager_catalog is required for this action."}
+    assert response.json()["message"] == "Permission manage_manager_catalog is required for this action."
 
 
 def test_scoped_admin_with_catalog_permission_can_open_real_player_import_status(
     client,
+    bootstrap_admin_headers,
 ) -> None:
     headers = _create_scoped_admin_headers(
         client,
+        bootstrap_admin_headers=bootstrap_admin_headers,
         suffix="catalog-live-admin",
         permissions=["manage_manager_catalog"],
     )
@@ -86,9 +76,11 @@ def test_scoped_admin_with_catalog_permission_can_open_real_player_import_status
 
 def test_scoped_admin_without_supply_permission_cannot_issue_share_market(
     client,
+    bootstrap_admin_headers,
 ) -> None:
     headers = _create_scoped_admin_headers(
         client,
+        bootstrap_admin_headers=bootstrap_admin_headers,
         suffix="supply-blocked-admin",
         permissions=["manage_manager_catalog"],
     )
@@ -104,12 +96,13 @@ def test_scoped_admin_without_supply_permission_cannot_issue_share_market(
     )
 
     assert response.status_code == 403
-    assert response.json() == {"detail": "Permission manage_manager_supply is required for this action."}
+    assert response.json()["message"] == "Permission manage_manager_supply is required for this action."
 
 
-def test_scoped_admin_with_supply_permission_reaches_share_issue_handler(client) -> None:
+def test_scoped_admin_with_supply_permission_reaches_share_issue_handler(client, bootstrap_admin_headers) -> None:
     headers = _create_scoped_admin_headers(
         client,
+        bootstrap_admin_headers=bootstrap_admin_headers,
         suffix="supply-live-admin",
         permissions=["manage_manager_supply"],
     )
@@ -125,4 +118,4 @@ def test_scoped_admin_with_supply_permission_reaches_share_issue_handler(client)
     )
 
     assert response.status_code == 404
-    assert response.json()["detail"]
+    assert response.json()["message"]

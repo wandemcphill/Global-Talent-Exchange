@@ -21,6 +21,7 @@ import '../features/profile/profile_admin_screen.dart';
 import '../features/profile/profile_login_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/profile_signup_screen.dart';
+import '../features/regens/regens_screen.dart';
 import '../features/tasks/tasks_screen.dart';
 import '../features/transfer_center/transfer_center_screen.dart';
 import '../features/transfer_market/transfer_market_screen.dart';
@@ -144,6 +145,15 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             child: TransferCenterDetailScreen(listingId: listingId),
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutes.regens,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const RegensScreen(),
+                ),
       ),
       GoRoute(
         path: AppRoutes.federations,

@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/gte_authed_api.dart';
+import '../../data/gte_models.dart';
 import '../../models/national_team_models.dart';
+import '../../models/regen_universe_models.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../shared/data/feature_api_provider.dart';
 import '../shared/data/gte_feature_support.dart';
@@ -52,7 +54,7 @@ class NationalTeamsHubData {
 
   final List<NationalTeamCompetition> competitions;
   final List<NationalTeamCountryRankingRecord> rankings;
-  final List<JsonMap> nationalRegens;
+  final List<NationalRegenSeed> nationalRegens;
   final NationalTeamUserHistory? history;
 }
 
@@ -127,7 +129,7 @@ class NationalTeamsApi {
     return NationalTeamUserHistory.fromJson(payload);
   }
 
-  Future<List<JsonMap>> listNationalRegens({
+  Future<List<NationalRegenSeed>> listNationalRegens({
     int limit = 12,
     int? ageMin = 14,
     int? ageMax = 17,
@@ -143,7 +145,10 @@ class NationalTeamsApi {
         'preseed_batch': preseedBatch,
       }),
     );
-    return jsonMapList(payload['items'], label: 'national regen seed');
+    final List<Object?> items = GteJson.list(
+      payload['items'] ?? const <Object?>[],
+    );
+    return items.map(NationalRegenSeed.fromJson).toList(growable: false);
   }
 
   Future<JsonMap> buildAutoSquad({
@@ -178,7 +183,7 @@ final FutureProvider<NationalTeamsHubData> nationalTeamsHubProvider =
           api.listCompetitions();
       final Future<List<NationalTeamCountryRankingRecord>> rankingsFuture =
           api.listRankings();
-      final Future<List<JsonMap>> nationalRegensFuture =
+      final Future<List<NationalRegenSeed>> nationalRegensFuture =
           api.listNationalRegens();
       NationalTeamUserHistory? history;
       if (authenticated) {

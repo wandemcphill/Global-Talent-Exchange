@@ -306,7 +306,9 @@ def _live_play_event_for_sequence(
     return event
 
 
-def _home_player(index: int, *, minute: float, holder_id: str, ball_x: float, ball_z: float, attacking_home: bool) -> dict[str, Any]:
+def _home_player(
+    index: int, *, minute: float, holder_id: str, ball_x: float, ball_z: float, attacking_home: bool
+) -> dict[str, Any]:
     drift = minute / FULLTIME_MINUTE
     wave = ((int(minute) + index) % 5) - 2
     base_x = [8.0, 22.0, 24.0, 24.0, 22.0, 44.0, 48.0, 46.0, 67.0, 77.0, 85.0][index - 1]
@@ -327,8 +329,21 @@ def _home_player(index: int, *, minute: float, holder_id: str, ball_x: float, ba
     box_support = attacking_home and ball_x >= 76.0
     lane_sign = _lane_sign(index, base_z)
     ball_proximity = abs(base_x - ball_x) + (abs(base_z - ball_z) * 0.6)
-    primary_support = not has_possession and not is_receiver and attacking_home and role != "GK" and ball_proximity < (12.5 if role == "FW" else 14.0 if role == "MF" else 9.25)
-    secondary_support = not has_possession and not is_receiver and attacking_home and role != "GK" and not primary_support and ball_proximity < (18.0 if role == "FW" else 16.0 if role == "MF" else 11.5)
+    primary_support = (
+        not has_possession
+        and not is_receiver
+        and attacking_home
+        and role != "GK"
+        and ball_proximity < (12.5 if role == "FW" else 14.0 if role == "MF" else 9.25)
+    )
+    secondary_support = (
+        not has_possession
+        and not is_receiver
+        and attacking_home
+        and role != "GK"
+        and not primary_support
+        and ball_proximity < (18.0 if role == "FW" else 16.0 if role == "MF" else 11.5)
+    )
     primary_press = not attacking_home and role != "GK" and ball_proximity < (9.5 if role != "FW" else 8.0)
     secondary_press = not attacking_home and role != "GK" and not primary_press and ball_proximity < 14.0
     box_runner = box_support and role == "FW" and index == 9
@@ -393,7 +408,9 @@ def _home_player(index: int, *, minute: float, holder_id: str, ball_x: float, ba
         state = "supporting"
     elif primary_support:
         x = base_x + (ball_x - base_x) * (0.82 if role == "FW" else 0.74 if role == "MF" else 0.58)
-        z = _clamp_pitch_z(base_z + (ball_z - base_z) * 0.76 + lane_sign * (2.2 if role == "FW" else 1.7 if role == "MF" else 1.1))
+        z = _clamp_pitch_z(
+            base_z + (ball_z - base_z) * 0.76 + lane_sign * (2.2 if role == "FW" else 1.7 if role == "MF" else 1.1)
+        )
         speed_ratio = 0.46 if role == "FW" else 0.34 if role == "MF" else 0.22
         animation_state = "run"
         state = "support"
@@ -478,7 +495,9 @@ def _home_player(index: int, *, minute: float, holder_id: str, ball_x: float, ba
     }
 
 
-def _away_player(index: int, *, minute: float, holder_id: str, ball_x: float, ball_z: float, attacking_home: bool) -> dict[str, Any]:
+def _away_player(
+    index: int, *, minute: float, holder_id: str, ball_x: float, ball_z: float, attacking_home: bool
+) -> dict[str, Any]:
     drift = minute / FULLTIME_MINUTE
     wave = (((int(minute) * 2) + index) % 5) - 2
     base_x = [97.0, 83.0, 81.0, 81.0, 83.0, 60.0, 56.0, 58.0, 39.0, 28.0, 20.0][index - 1]
@@ -499,8 +518,21 @@ def _away_player(index: int, *, minute: float, holder_id: str, ball_x: float, ba
     box_support = attacking and ball_x <= 29.0
     lane_sign = _lane_sign(index, base_z)
     ball_proximity = abs(base_x - ball_x) + (abs(base_z - ball_z) * 0.6)
-    primary_support = not has_possession and not is_receiver and attacking and role != "GK" and ball_proximity < (12.5 if role == "FW" else 14.0 if role == "MF" else 9.25)
-    secondary_support = not has_possession and not is_receiver and attacking and role != "GK" and not primary_support and ball_proximity < (18.0 if role == "FW" else 16.0 if role == "MF" else 11.5)
+    primary_support = (
+        not has_possession
+        and not is_receiver
+        and attacking
+        and role != "GK"
+        and ball_proximity < (12.5 if role == "FW" else 14.0 if role == "MF" else 9.25)
+    )
+    secondary_support = (
+        not has_possession
+        and not is_receiver
+        and attacking
+        and role != "GK"
+        and not primary_support
+        and ball_proximity < (18.0 if role == "FW" else 16.0 if role == "MF" else 11.5)
+    )
     primary_press = not attacking and role != "GK" and ball_proximity < (9.5 if role != "FW" else 8.0)
     secondary_press = not attacking and role != "GK" and not primary_press and ball_proximity < 14.0
     box_runner = box_support and role == "FW" and index == 9
@@ -565,7 +597,9 @@ def _away_player(index: int, *, minute: float, holder_id: str, ball_x: float, ba
         state = "supporting"
     elif primary_support:
         x = base_x + (ball_x - base_x) * (0.82 if role == "FW" else 0.74 if role == "MF" else 0.58)
-        z = _clamp_pitch_z(base_z + (ball_z - base_z) * 0.76 + lane_sign * (2.2 if role == "FW" else 1.7 if role == "MF" else 1.1))
+        z = _clamp_pitch_z(
+            base_z + (ball_z - base_z) * 0.76 + lane_sign * (2.2 if role == "FW" else 1.7 if role == "MF" else 1.1)
+        )
         speed_ratio = 0.46 if role == "FW" else 0.34 if role == "MF" else 0.22
         animation_state = "run"
         state = "support"
@@ -650,7 +684,9 @@ def _away_player(index: int, *, minute: float, holder_id: str, ball_x: float, ba
     }
 
 
-def _events_for_minute(seq: int, minute: float, holder_id: str, home_score: int, away_score: int) -> list[dict[str, Any]]:
+def _events_for_minute(
+    seq: int, minute: float, holder_id: str, home_score: int, away_score: int
+) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = [
         {
             "id": "full-session-kickoff",
@@ -769,8 +805,18 @@ def build_payload() -> dict[str, Any]:
     ball_x, ball_z, attacking_home = _ball_state_for_minute(minute, holder_id)
     camera_preset = _camera_preset_for_state(minute, ball_x)
     players = [
-        *[_home_player(index, minute=minute, holder_id=holder_id, ball_x=ball_x, ball_z=ball_z, attacking_home=attacking_home) for index in range(1, 12)],
-        *[_away_player(index, minute=minute, holder_id=holder_id, ball_x=ball_x, ball_z=ball_z, attacking_home=attacking_home) for index in range(1, 12)],
+        *[
+            _home_player(
+                index, minute=minute, holder_id=holder_id, ball_x=ball_x, ball_z=ball_z, attacking_home=attacking_home
+            )
+            for index in range(1, 12)
+        ],
+        *[
+            _away_player(
+                index, minute=minute, holder_id=holder_id, ball_x=ball_x, ball_z=ball_z, attacking_home=attacking_home
+            )
+            for index in range(1, 12)
+        ],
     ]
     ball_owner_id = holder_id
 
@@ -804,7 +850,11 @@ def build_payload() -> dict[str, Any]:
             "z": round(max(4.0, min(64.0, ball_z)), 3),
             "velocityX": 0.0 if minute >= FULLTIME_MINUTE else (1.35 if attacking_home else -1.35),
             "velocityY": 0.0 if minute >= FULLTIME_MINUTE else (0.1 if not ball_owner_id else 0.0),
-            "velocityZ": 0.0 if minute >= FULLTIME_MINUTE else round(math.sin(_holder_window_progress(minute) * math.pi) * 0.42, 3),
+            "velocityZ": (
+                0.0
+                if minute >= FULLTIME_MINUTE
+                else round(math.sin(_holder_window_progress(minute) * math.pi) * 0.42, 3)
+            ),
             "isBall": True,
         },
         "events": events,

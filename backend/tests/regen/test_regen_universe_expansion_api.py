@@ -607,7 +607,7 @@ def test_youth_tournament_routes_and_jobs(app_client) -> None:
         app,
         email="regen-admin@example.com",
         username="regenadmin",
-        role=UserRole.ADMIN,
+        role=UserRole.SUPER_ADMIN,
     )
 
     with app.state.session_factory() as session:

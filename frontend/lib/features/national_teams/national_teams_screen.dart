@@ -11,6 +11,7 @@ import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
 import '../../widgets/gte_state_panel.dart';
+import '../../models/regen_universe_models.dart';
 import '../shared/data/feature_telemetry.dart';
 import '../shared/data/gte_feature_support.dart';
 import 'live_national_teams_provider.dart';
@@ -162,20 +163,23 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                             children: data.nationalRegens
                                 .take(12)
                                 .map(
-                                  (JsonMap item) => Padding(
+                                  (NationalRegenSeed item) => Padding(
                                     padding: const EdgeInsets.only(
                                       bottom: spacingSM,
                                     ),
                                     child: GtexListTile(
-                                      title: stringValue(
-                                        item['display_name'],
-                                        fallback: 'National regen',
-                                      ),
+                                      title: item.displayName,
                                       subtitle:
-                                          '${stringValue(item['country_name'])} | ${stringValue(item['primary_position'])} | Age ${intValue(item['age'])} | OVR ${intValue(item['current_rating'])} | POT ${intValue(item['potential_rating'])} | ${stringValue(item['rarity_tier']).toUpperCase()}',
+                                          '${item.countryName} | ${item.primaryPosition} | ${item.ageBand.toUpperCase()} | Age ${item.age ?? '--'} | OVR ${item.currentRating} | POT ${item.potentialRating} | ${item.rarityTier.toUpperCase()}',
                                       leadingIcon:
                                           Icons.workspace_premium_rounded,
                                       tone: GtexSurfaceTone.warning,
+                                      trailing: SizedBox(
+                                        width: 220,
+                                        child: _NationalRegenBadgeWrap(
+                                          labels: item.badgeLabels,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 )
@@ -863,6 +867,77 @@ class _BlockedCard extends StatelessWidget {
       title: title,
       message: message,
       icon: Icons.warning_amber_rounded,
+    );
+  }
+}
+
+class _NationalRegenBadgeWrap extends StatelessWidget {
+  const _NationalRegenBadgeWrap({required this.labels});
+
+  final List<String> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: spacingXS,
+      runSpacing: spacingXS,
+      children: labels
+          .map(
+            (String label) =>
+                _NationalRegenBadgeChip(label: label, tone: _toneFor(label)),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  GtexSurfaceTone _toneFor(String label) {
+    switch (label) {
+      case 'National Pool':
+        return GtexSurfaceTone.info;
+      case 'Rental Only':
+        return GtexSurfaceTone.warning;
+      case 'Not Tradable':
+        return GtexSurfaceTone.danger;
+      default:
+        return GtexSurfaceTone.neutral;
+    }
+  }
+}
+
+class _NationalRegenBadgeChip extends StatelessWidget {
+  const _NationalRegenBadgeChip({required this.label, required this.tone});
+
+  final String label;
+  final GtexSurfaceTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color toneColor = switch (tone) {
+      GtexSurfaceTone.info => Theme.of(context).colorScheme.secondary,
+      GtexSurfaceTone.warning => Colors.amber.shade400,
+      GtexSurfaceTone.danger => Theme.of(context).colorScheme.error,
+      _ => Colors.white70,
+    };
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 140),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: toneColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: toneColor.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: toneColor,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     );
   }
 }

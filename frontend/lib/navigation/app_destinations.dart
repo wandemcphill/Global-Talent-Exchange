@@ -11,6 +11,7 @@ class AppRoutes {
   static const String transferCenter = '/market/transfers';
   static const String transferCenterDetail = '/market/transfers/:listingId';
   static const String world = '/world';
+  static const String regens = '/world/regens';
   static const String federations = '/world/federations';
   static const String federationDetail = '/world/federations/:federationId';
   static const String nationalTeams = '/national-teams';
@@ -163,6 +164,13 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
         'Live world discovery with routed federation, national team, and competition-family entry points. Deeper world programs stay gated to explicit routes as they ship.',
     primaryNav: true,
     quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Regen Universe',
+    location: AppRoutes.regens,
+    state: AppRouteSurfaceState.hidden,
+    summary:
+        'Dedicated live regen-universe route for awards, national-pool regens, and request-son tracking.',
   ),
   AppRouteSurface(
     label: 'Transfer Center',

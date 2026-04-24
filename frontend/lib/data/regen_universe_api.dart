@@ -39,6 +39,13 @@ class RegenUniverseApi {
     );
   }
 
+  factory RegenUniverseApi.withClient({required GteAuthedApi client}) {
+    return RegenUniverseApi(
+      client: client,
+      fixtures: _RegenUniverseFixtures.seed(),
+    );
+  }
+
   Future<List<RegenRisingStar>> listRisingStars({int limit = 8}) {
     return client.withFallback<List<RegenRisingStar>>(() async {
       final Map<String, dynamic> payload = await client.getMap(
@@ -84,6 +91,20 @@ class RegenUniverseApi {
     }, () async => fixtures.nationalRegens(limit: limit));
   }
 
+  Future<List<RegenAwardResult>> listAwards({int limit = 8}) {
+    return client.withFallback<List<RegenAwardResult>>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/regen-universe/awards',
+        query: <String, Object?>{'limit': limit},
+        auth: false,
+      );
+      final List<Object?> items = GteJson.list(
+        payload['items'] ?? const <Object?>[],
+      );
+      return items.map(RegenAwardResult.fromJson).toList(growable: false);
+    }, () async => fixtures.awards(limit: limit));
+  }
+
   Future<RegenGenerationTracking> fetchTracking() {
     return client.withFallback<RegenGenerationTracking>(() async {
       final Map<String, dynamic> payload = await client.getMap(
@@ -100,18 +121,32 @@ class _RegenUniverseFixtures {
     required List<RegenRisingStar> risingStars,
     required List<RegenScoutingFeedItem> feed,
     required List<NationalRegenSeed> nationalRegens,
+    required List<RegenAwardResult> awards,
     required RegenGenerationTracking tracking,
   }) : _risingStars = risingStars,
        _feed = feed,
        _nationalRegens = nationalRegens,
+       _awards = awards,
        _tracking = tracking;
 
   final List<RegenRisingStar> _risingStars;
   final List<RegenScoutingFeedItem> _feed;
   final List<NationalRegenSeed> _nationalRegens;
+  final List<RegenAwardResult> _awards;
   final RegenGenerationTracking _tracking;
 
   static _RegenUniverseFixtures seed() {
+    const RegenMarketAccess nationalOnlyAccess = RegenMarketAccess(
+      marketEligible: false,
+      shareMarketEligible: false,
+      tradable: false,
+      buyable: false,
+      transferable: false,
+      cardMintEligible: false,
+      buyCtaAllowed: false,
+      isPreseededNationalRegen: true,
+      nationalPoolOnly: true,
+    );
     const RegenUniversePlayer starOne = RegenUniversePlayer(
       id: 'seed:br-17',
       name: 'Joao Aurora',
@@ -123,11 +158,12 @@ class _RegenUniverseFixtures {
       currentRating: 74,
       growthCurve: 0.86,
       sourceType: 'national_seed',
-      clubId: 'national-pool-br',
+      clubId: null,
+      marketAccess: nationalOnlyAccess,
     );
     const RegenUniversePlayer starTwo = RegenUniversePlayer(
       id: 'regen:ng-21',
-      name: 'Tunde Skyline',
+      name: 'Chidera Onwubiko',
       age: 18,
       nationality: 'Nigeria',
       nationalityCode: 'NG',
@@ -135,38 +171,62 @@ class _RegenUniverseFixtures {
       potential: 90,
       currentRating: 72,
       growthCurve: 0.79,
-      sourceType: 'regen',
+      sourceType: 'generated',
       clubId: 'lagos-atlas',
     );
     const NationalRegenSeed seedOne = NationalRegenSeed(
       id: 'national-seed-ng-1',
       seedKey: 'seed:ng:1',
-      displayName: 'Kelechi Meridian',
+      displayName: 'Azeez Salisu',
       age: 16,
+      ageBand: 'u17',
       countryCode: 'NG',
       countryName: 'Nigeria',
       seedType: 'national_seed',
       primaryPosition: 'RW',
       currentRating: 71,
       potentialRating: 90,
+      growthCurve: 0.82,
       rarityTier: 'elite',
-      preseedBatch: 'system_start',
+      status: 'active',
+      preseedBatch: 'u17_batch',
       metadata: <String, Object?>{'growth_curve': 0.82},
+      marketEligible: false,
+      shareMarketEligible: false,
+      tradable: false,
+      buyable: false,
+      transferable: false,
+      cardMintEligible: false,
+      buyCtaAllowed: false,
+      isPreseededNationalRegen: true,
+      nationalPoolOnly: true,
     );
     const NationalRegenSeed seedTwo = NationalRegenSeed(
       id: 'national-seed-br-1',
       seedKey: 'seed:br:1',
       displayName: 'Mateus Sol',
       age: 17,
+      ageBand: 'u17',
       countryCode: 'BR',
       countryName: 'Brazil',
-      seedType: 'legendary_seed',
+      seedType: 'national_seed',
       primaryPosition: 'ST',
       currentRating: 74,
       potentialRating: 94,
+      growthCurve: 0.89,
       rarityTier: 'legendary',
-      preseedBatch: 'system_start',
+      status: 'active',
+      preseedBatch: 'u17_batch',
       metadata: <String, Object?>{'growth_curve': 0.89},
+      marketEligible: false,
+      shareMarketEligible: false,
+      tradable: false,
+      buyable: false,
+      transferable: false,
+      cardMintEligible: false,
+      buyCtaAllowed: false,
+      isPreseededNationalRegen: true,
+      nationalPoolOnly: true,
     );
     return _RegenUniverseFixtures(
       risingStars: const <RegenRisingStar>[
@@ -176,7 +236,7 @@ class _RegenUniverseFixtures {
           momentumLabel: 'Wonderkid surge',
           storySnippet:
               'Street striker carrying elite acceleration and a ruthless final action.',
-          badges: <String>['Elite Potential', 'National Pool'],
+          badges: <String>['Elite Potential'],
           marketValueCoin: 342000,
         ),
         RegenRisingStar(
@@ -198,7 +258,7 @@ class _RegenUniverseFixtures {
               'Joao Aurora is carrying 74 to 93 upside and forcing his way onto elite watchlists.',
           occurredAt: DateTime.parse('2026-04-01T09:00:00Z'),
           importance: 0.91,
-          badges: const <String>['national_seed', 'Elite'],
+          badges: const <String>['Elite'],
           player: starOne,
         ),
         RegenScoutingFeedItem(
@@ -206,14 +266,81 @@ class _RegenUniverseFixtures {
           feedType: 'potential_spike',
           title: 'Midfielder potential spike tracked',
           summary:
-              'Tunde Skyline has widened his ceiling after another heavy-creation block in training.',
+              'Chidera Onwubiko has widened his ceiling after another heavy-creation block in training.',
           occurredAt: DateTime.parse('2026-04-01T07:20:00Z'),
           importance: 0.84,
-          badges: const <String>['potential_spike', 'surging'],
+          badges: const <String>['surging'],
           player: starTwo,
         ),
       ],
       nationalRegens: const <NationalRegenSeed>[seedOne, seedTwo],
+      awards: <RegenAwardResult>[
+        RegenAwardResult(
+          award: const RegenAwardDefinition(
+            id: 'award-world-player',
+            code: 'BALLON_DOR',
+            name: 'GTEX World Player of the Year',
+            description:
+                'Best overall regen season across club and national play.',
+            category: 'season',
+          ),
+          season: RegenAwardSeason(
+            id: 'season-2026',
+            seasonNumber: 2026,
+            startDate: DateTime.parse('2026-01-01T00:00:00Z'),
+            endDate: DateTime.parse('2026-12-31T00:00:00Z'),
+          ),
+          winners: <RegenAwardWinner>[
+            RegenAwardWinner(
+              id: 'winner-1',
+              playerId: starTwo.id,
+              playerName: starTwo.name,
+              rankingScore: 98.2,
+              rank: 1,
+              awardedAt: DateTime.parse('2026-12-30T18:00:00Z'),
+              metadata: const <String, Object?>{
+                'source_type': 'generated',
+                'club_id': 'lagos-atlas',
+                'position': 'AM',
+                'country_name': 'Nigeria',
+                'country_code': 'NG',
+              },
+            ),
+          ],
+        ),
+        RegenAwardResult(
+          award: const RegenAwardDefinition(
+            id: 'award-u17-golden-ball',
+            code: 'U17_WORLD_CUP_GOLDEN_BALL',
+            name: 'GTEX U17 World Cup Golden Ball',
+            description: 'Top U17 tournament performer.',
+            category: 'tournament',
+          ),
+          season: RegenAwardSeason(
+            id: 'season-2026',
+            seasonNumber: 2026,
+            startDate: DateTime.parse('2026-01-01T00:00:00Z'),
+            endDate: DateTime.parse('2026-12-31T00:00:00Z'),
+          ),
+          winners: <RegenAwardWinner>[
+            RegenAwardWinner(
+              id: 'winner-2',
+              playerId: seedTwo.id,
+              playerName: seedTwo.displayName,
+              rankingScore: 95.4,
+              rank: 1,
+              awardedAt: DateTime.parse('2026-08-02T18:00:00Z'),
+              metadata: const <String, Object?>{
+                'source_type': 'national_seed',
+                'national_pool_only': true,
+                'position': 'ST',
+                'country_name': 'Brazil',
+                'country_code': 'BR',
+              },
+            ),
+          ],
+        ),
+      ],
       tracking: const RegenGenerationTracking(
         totalSeededPlayers: 248,
         seedTypes: <RegenGenerationTrackingEntry>[
@@ -225,7 +352,7 @@ class _RegenUniverseFixtures {
             metadata: <String, Object?>{},
           ),
           RegenGenerationTrackingEntry(
-            bucket: 'legendary_seed',
+            bucket: 'generated',
             count: 34,
             peakRating: 96,
             achievements: <String>['elite_watchlists'],
@@ -283,6 +410,9 @@ class _RegenUniverseFixtures {
 
   Future<List<NationalRegenSeed>> nationalRegens({required int limit}) async =>
       _nationalRegens.take(limit).toList(growable: false);
+
+  Future<List<RegenAwardResult>> awards({required int limit}) async =>
+      _awards.take(limit).toList(growable: false);
 
   Future<RegenGenerationTracking> tracking() async => _tracking;
 }

@@ -500,7 +500,8 @@ void main() {
       expect(hub.competitions, hasLength(1));
       expect(hub.rankings, hasLength(1));
       expect(hub.nationalRegens, hasLength(1));
-      expect(hub.nationalRegens.single['display_name'], 'Chinonso Prospect');
+      expect(hub.nationalRegens.single.displayName, 'Chinonso Prospect');
+      expect(hub.nationalRegens.single.nationalPoolOnly, isTrue);
     },
   );
 

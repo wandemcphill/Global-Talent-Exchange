@@ -28,6 +28,7 @@ import 'package:gte_frontend/models/hosted_competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/national_team_models.dart';
+import 'package:gte_frontend/models/regen_universe_models.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/navigation/app_router.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
@@ -1660,37 +1661,67 @@ class _FakeNationalTeamsApi extends NationalTeamsApi {
   }
 
   @override
-  Future<List<JsonMap>> listNationalRegens({
+  Future<List<NationalRegenSeed>> listNationalRegens({
     int limit = 12,
     int? ageMin = 14,
     int? ageMax = 17,
     String? preseedBatch = 'u17_batch',
   }) async {
-    return <JsonMap>[
-      <String, Object?>{
-        'id': 'seed-ng-14',
-        'display_name': 'Sodiq Adebayo',
-        'age': 14,
-        'country_code': 'NG',
-        'country_name': 'Nigeria',
-        'primary_position': 'AM',
-        'current_rating': 66,
-        'potential_rating': 89,
-        'rarity_tier': 'elite',
-        'preseed_batch': 'u17_batch',
-      },
-      <String, Object?>{
-        'id': 'seed-gh-16',
-        'display_name': 'Kojo Mensah',
-        'age': 16,
-        'country_code': 'GH',
-        'country_name': 'Ghana',
-        'primary_position': 'CB',
-        'current_rating': 68,
-        'potential_rating': 87,
-        'rarity_tier': 'rare',
-        'preseed_batch': 'u17_batch',
-      },
+    return const <NationalRegenSeed>[
+      NationalRegenSeed(
+        id: 'seed-ng-14',
+        seedKey: 'seed:ng:14',
+        displayName: 'Sodiq Adebayo',
+        age: 14,
+        ageBand: 'u17',
+        countryCode: 'NG',
+        countryName: 'Nigeria',
+        seedType: 'national_seed',
+        primaryPosition: 'AM',
+        currentRating: 66,
+        potentialRating: 89,
+        growthCurve: 0.78,
+        rarityTier: 'elite',
+        status: 'active',
+        preseedBatch: 'u17_batch',
+        metadata: <String, Object?>{},
+        marketEligible: false,
+        shareMarketEligible: false,
+        tradable: false,
+        buyable: false,
+        transferable: false,
+        cardMintEligible: false,
+        buyCtaAllowed: false,
+        isPreseededNationalRegen: true,
+        nationalPoolOnly: true,
+      ),
+      NationalRegenSeed(
+        id: 'seed-gh-16',
+        seedKey: 'seed:gh:16',
+        displayName: 'Kojo Mensah',
+        age: 16,
+        ageBand: 'u17',
+        countryCode: 'GH',
+        countryName: 'Ghana',
+        seedType: 'national_seed',
+        primaryPosition: 'CB',
+        currentRating: 68,
+        potentialRating: 87,
+        growthCurve: 0.75,
+        rarityTier: 'rare',
+        status: 'active',
+        preseedBatch: 'u17_batch',
+        metadata: <String, Object?>{},
+        marketEligible: false,
+        shareMarketEligible: false,
+        tradable: false,
+        buyable: false,
+        transferable: false,
+        cardMintEligible: false,
+        buyCtaAllowed: false,
+        isPreseededNationalRegen: true,
+        nationalPoolOnly: true,
+      ),
     ];
   }
 

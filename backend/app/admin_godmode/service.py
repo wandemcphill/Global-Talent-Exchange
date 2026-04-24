@@ -72,12 +72,17 @@ ADMIN_GODMODE_STATE_KEY = "admin_god_mode"
 GOD_MODE_ROLE_NAME = "god_mode"
 SCOPED_ADMIN_ROLE_NAME = "scoped_admin"
 COMPETITION_OPS_ADMIN_ROLE_NAME = "competition_ops_admin"
+REGEN_OPS_ADMIN_ROLE_NAME = "regen_ops_admin"
 RUNTIME_METADATA_KEY = "runtime_metadata"
 LEGACY_FILE_RECONCILED_AT_KEY = "legacy_file_reconciled_at"
 SUPER_ADMIN_EXTRA_PERMISSIONS: tuple[str, ...] = (
     "manage_manager_catalog",
     "manage_manager_supply",
     "manage_competitions",
+    "manage_regen_universe",
+    "manage_national_regens",
+    "manage_regen_awards",
+    "manage_regen_generation",
 )
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
@@ -106,6 +111,13 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     COMPETITION_OPS_ADMIN_ROLE_NAME: [
         "manage_competitions",
+        "view_audit_log",
+    ],
+    REGEN_OPS_ADMIN_ROLE_NAME: [
+        "manage_regen_universe",
+        "manage_national_regens",
+        "manage_regen_awards",
+        "manage_regen_generation",
         "view_audit_log",
     ],
     "support_admin": [

@@ -86,6 +86,11 @@ class WorldScreen extends ConsumerWidget {
               label: const Text('Open federations hub'),
             ),
             OutlinedButton.icon(
+              onPressed: () => context.push(AppRoutes.regens),
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('Open regen universe'),
+            ),
+            OutlinedButton.icon(
               onPressed: () => context.push(AppRoutes.nationalTeams),
               icon: const Icon(Icons.flag_circle_rounded),
               label: const Text('Open national teams'),

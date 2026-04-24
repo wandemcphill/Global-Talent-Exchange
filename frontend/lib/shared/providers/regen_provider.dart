@@ -1,130 +1,130 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/regen_creation_api.dart';
+import '../../data/regen_universe_api.dart';
+import '../../models/regen_creation_models.dart';
+import '../../models/regen_universe_models.dart';
 import '../models/competition.dart';
 import '../models/federation.dart';
 import '../models/player.dart';
+import 'auth_provider.dart';
 
-final Provider<List<Player>> regenProvider = Provider<List<Player>>(
-  (Ref ref) => const <Player>[
-    Player(
-      id: 'regen-kamara',
-      name: 'Ibrahim Kamara',
-      position: 'RW',
-      country: 'Sierra Leone',
-      age: 17,
-      rating: 76,
-      potential: 92,
-      valueInMillions: 9.8,
-      pace: 0.91,
-      technique: 0.84,
-      mentality: 0.73,
-      image: 'assets/branding/gtex_icon.png',
-      isHot: true,
-    ),
-    Player(
-      id: 'regen-adebayo',
-      name: 'Tomi Adebayo',
-      position: 'CM',
-      country: 'Nigeria',
-      age: 18,
-      rating: 79,
-      potential: 90,
-      valueInMillions: 12.6,
-      pace: 0.74,
-      technique: 0.88,
-      mentality: 0.81,
-      image: 'assets/branding/gtex_icon.png',
-    ),
-    Player(
-      id: 'regen-mensah',
-      name: 'Kojo Mensah',
-      position: 'CB',
-      country: 'Ghana',
-      age: 18,
-      rating: 78,
-      potential: 89,
-      valueInMillions: 11.1,
-      pace: 0.68,
-      technique: 0.71,
-      mentality: 0.87,
-      image: 'assets/branding/gtex_icon.png',
-      isHot: true,
-    ),
-    Player(
-      id: 'regen-toure',
-      name: 'Yaya Toure Jr',
-      position: 'ST',
-      country: 'Ivory Coast',
-      age: 17,
-      rating: 75,
-      potential: 91,
-      valueInMillions: 10.4,
-      pace: 0.83,
-      technique: 0.79,
-      mentality: 0.78,
-      image: 'assets/branding/gtex_icon.png',
-    ),
-  ],
-);
+class RegenUniverseHubData {
+  const RegenUniverseHubData({
+    required this.risingStars,
+    required this.awards,
+    required this.nationalRegens,
+    required this.scoutingFeed,
+    required this.tracking,
+    required this.creationOrders,
+  });
+
+  final List<RegenRisingStar> risingStars;
+  final List<RegenAwardResult> awards;
+  final List<NationalRegenSeed> nationalRegens;
+  final List<RegenScoutingFeedItem> scoutingFeed;
+  final RegenGenerationTracking tracking;
+  final List<RegenCreationOrder> creationOrders;
+
+  List<RegenCreationOrder> get requestedSonOrders => creationOrders
+      .where((RegenCreationOrder order) => order.requestType == 'son')
+      .toList(growable: false);
+
+  List<RegenCreationOrder> get generatedRequestedSons => requestedSonOrders
+      .where((RegenCreationOrder order) => order.generatedPlayer != null)
+      .toList(growable: false);
+}
+
+final Provider<RegenUniverseApi> regenUniverseApiProvider =
+    Provider<RegenUniverseApi>((Ref ref) {
+      return RegenUniverseApi.standard(
+        baseUrl: ref.watch(apiBaseUrlProvider),
+        mode: ref.watch(criticalBackendModeProvider),
+      );
+    });
+
+final Provider<RegenCreationApi> regenCreationApiProvider =
+    Provider<RegenCreationApi>((Ref ref) {
+      return RegenCreationApi.standard(
+        baseUrl: ref.watch(apiBaseUrlProvider),
+        mode: ref.watch(criticalBackendModeProvider),
+      );
+    });
+
+final FutureProvider<RegenUniverseHubData> regenUniverseHubProvider =
+    FutureProvider<RegenUniverseHubData>((Ref ref) async {
+      final RegenUniverseApi universeApi = ref.watch(regenUniverseApiProvider);
+      final RegenCreationApi creationApi = ref.watch(regenCreationApiProvider);
+      final bool authenticated = ref.watch(isAuthenticatedProvider);
+      final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
+        universeApi.listRisingStars(limit: 8),
+        universeApi.listAwards(limit: 8),
+        universeApi.listNationalRegens(limit: 12, ageMax: 20),
+        universeApi.listScoutingFeed(limit: 8),
+        universeApi.fetchTracking(),
+        authenticated
+            ? creationApi.listCreationOrders(limit: 12)
+            : Future<RegenCreationOrderList>.value(
+              const RegenCreationOrderList(items: <RegenCreationOrder>[]),
+            ),
+      ]);
+      return RegenUniverseHubData(
+        risingStars: payload[0] as List<RegenRisingStar>,
+        awards: payload[1] as List<RegenAwardResult>,
+        nationalRegens: payload[2] as List<NationalRegenSeed>,
+        scoutingFeed: payload[3] as List<RegenScoutingFeedItem>,
+        tracking: payload[4] as RegenGenerationTracking,
+        creationOrders: (payload[5] as RegenCreationOrderList).items,
+      );
+    });
+
+final Provider<List<Player>> regenProvider = Provider<List<Player>>((Ref ref) {
+  final RegenUniverseHubData? hub =
+      ref.watch(regenUniverseHubProvider).asData?.value;
+  if (hub == null) {
+    return const <Player>[];
+  }
+  return hub.risingStars
+      .map(
+        (RegenRisingStar star) => Player(
+          id: star.player.id,
+          name: star.player.name,
+          position: star.player.position,
+          country: star.player.nationality,
+          age: star.player.age,
+          rating: star.player.currentRating,
+          potential: star.player.potential,
+          valueInMillions:
+              ((star.marketValueCoin ?? 0) / 1000000).clamp(0, 9999).toDouble(),
+          pace: star.player.growthCurve.clamp(0, 1),
+          technique: (star.player.currentRating / 100).clamp(0, 1),
+          mentality: (star.player.potential / 100).clamp(0, 1),
+          image: 'assets/branding/gtex_icon.png',
+          isHot: star.player.currentRating >= 72,
+        ),
+      )
+      .toList(growable: false);
+});
 
 final Provider<List<Competition>> competitionsProvider =
-    Provider<List<Competition>>(
-  (Ref ref) => const <Competition>[
-    Competition(
-      name: 'GTEX World Cup',
-      region: 'Global',
-      stage: 'Quarter Finals',
-      nextFixture: 'Lagos Atlas vs Rio Norte',
-      spotlight: 'Cinematic broadcast package unlocked',
-    ),
-    Competition(
-      name: 'Continental Challenger',
-      region: 'Africa',
-      stage: 'Group Stage',
-      nextFixture: 'Nairobi Phoenix vs Dakar Port',
-      spotlight: 'Top 8 regens are being tracked live',
-    ),
-    Competition(
-      name: 'U-19 Future Stars',
-      region: 'Global',
-      stage: 'Semi Finals',
-      nextFixture: 'Abuja Pulse vs Tokyo Sora',
-      spotlight: 'Scouts predict a record transfer window',
-    ),
-  ],
-);
+    Provider<List<Competition>>((Ref ref) => const <Competition>[]);
 
-final Provider<List<String>> historyProvider = Provider<List<String>>(
-  (Ref ref) => const <String>[
-    '2025: Lagos Atlas completed the first academy-led treble.',
-    '2024: The federation expanded cross-continent loan windows.',
-    '2023: GTEX launched live regen forecasting and dynamic scouting scores.',
-  ],
-);
+final Provider<List<String>> historyProvider = Provider<List<String>>((
+  Ref ref,
+) {
+  final RegenUniverseHubData? hub =
+      ref.watch(regenUniverseHubProvider).asData?.value;
+  if (hub == null) {
+    return const <String>[];
+  }
+  return hub.awards
+      .where((RegenAwardResult result) => result.winners.isNotEmpty)
+      .map(
+        (RegenAwardResult result) =>
+            '${result.winners.first.playerName} won ${result.award.name} in season ${result.season.seasonNumber}.',
+      )
+      .toList(growable: false);
+});
 
 final Provider<List<Federation>> federationsProvider =
-    Provider<List<Federation>>(
-  (Ref ref) => const <Federation>[
-    Federation(
-      name: 'West Africa Football Board',
-      region: 'West Africa',
-      ranking: 1,
-      focus: 'Youth pathways and transfer transparency',
-      memberClubs: 18,
-    ),
-    Federation(
-      name: 'East Africa Pro Council',
-      region: 'East Africa',
-      ranking: 2,
-      focus: 'Broadcast quality and matchday analytics',
-      memberClubs: 14,
-    ),
-    Federation(
-      name: 'Mediterranean Elite Union',
-      region: 'North Africa',
-      ranking: 3,
-      focus: 'Elite competition depth and academy exports',
-      memberClubs: 16,
-    ),
-  ],
-);
+    Provider<List<Federation>>((Ref ref) => const <Federation>[]);

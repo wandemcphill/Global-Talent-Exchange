@@ -9,13 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_session
+from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
+from app.auth.dependencies import get_current_user, get_session
 from app.core.cache_namespaces import REGEN_UNIVERSE_CACHE_NAMESPACE
 from app.core.pagination import build_pagination_meta, paginate_sequence, resolve_pagination
 from app.core.response_cache import get_response_cache
 from app.core.task_queue import NullTaskQueueBackend, get_task_queue_backend
 from app.models.regen_ecosystem import NationalRegenSeed
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.regen_universe.expansion_service import (
     RegenUniverseExpansionError,
     RegenUniverseExpansionNotFoundError,
@@ -53,6 +54,7 @@ from app.schemas.regen_universe_expansion import (
     YouthTournamentCreateRequest,
     YouthTournamentView,
 )
+from app.wallets.service import WalletService
 from app.workers.jobs import (
     regen_dna_evolution_job,
     regen_rivalry_detection_job,
@@ -232,6 +234,29 @@ def _enqueue_or_run_regen_job(
         callable_=callable_,
         kwargs=kwargs,
     )
+
+
+def _require_regen_permissions(request: Request, actor: User, *permissions: str) -> None:
+    if actor.role == UserRole.SUPER_ADMIN:
+        return
+    if actor.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access is required for this action.",
+        )
+    service = AdminGodModeService(
+        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
+    )
+    try:
+        state = service._load_state(request.app)
+        profile = service.resolve_profile(actor, state)
+        for permission in permissions:
+            service._assert_has_permission(profile, permission)
+    except PermissionDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/seasons", response_model=RegenSeasonPageView)
@@ -622,9 +647,10 @@ def get_regen_tracking(
 def create_regen_season(
     payload: RegenSeasonCreateRequest,
     request: Request,
-    _actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> RegenSeasonView:
+    _require_regen_permissions(request, actor, "manage_regen_universe")
     service = RegenUniverseService(session)
     try:
         season = service.create_season(
@@ -646,9 +672,10 @@ def close_regen_season(
     season_id: str,
     payload: RegenSeasonCloseRequest,
     request: Request,
-    _actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> RegenUniverseCloseResultView:
+    _require_regen_permissions(request, actor, "manage_regen_universe", "manage_regen_awards")
     service = RegenUniverseService(session)
     try:
         result = service.close_season(
@@ -667,9 +694,10 @@ def close_regen_season(
 def create_youth_tournament(
     payload: YouthTournamentCreateRequest,
     request: Request,
-    _actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> YouthTournamentView:
+    _require_regen_permissions(request, actor, "manage_regen_universe")
     service = RegenUniverseExpansionService(session)
     try:
         tournament = service.create_youth_tournament(
@@ -695,9 +723,10 @@ def create_youth_tournament(
 def preseed_national_regens(
     payload: NationalRegenPreseedRequest,
     request: Request,
-    _actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> NationalRegenSeedPageView:
+    _require_regen_permissions(request, actor, "manage_national_regens")
     service = RegenUniverseExpansionService(session)
     try:
         result = service.seed_preseeded_national_regens(
@@ -726,9 +755,10 @@ def preseed_national_regens(
 def apply_regen_evolution(
     season_id: str,
     request: Request,
-    _actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> RegenEvolutionResultView:
+    _require_regen_permissions(request, actor, "manage_regen_generation")
     service = RegenUniverseExpansionService(session)
     try:
         payload = service.apply_evolution_cycle(season_id=season_id)
@@ -748,8 +778,9 @@ def run_story_regeneration_job(
     request: Request,
     response: Response,
     player_id: str | None = Query(default=None),
-    actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
 ) -> RegenUniverseJobRunView:
+    _require_regen_permissions(request, actor, "manage_regen_generation")
     return _enqueue_or_run_regen_job(
         request,
         response,
@@ -770,8 +801,9 @@ def run_rivalry_detection_job(
     request: Request,
     response: Response,
     player_id: str | None = Query(default=None),
-    actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
 ) -> RegenUniverseJobRunView:
+    _require_regen_permissions(request, actor, "manage_regen_generation")
     return _enqueue_or_run_regen_job(
         request,
         response,
@@ -792,8 +824,9 @@ def run_dna_evolution_job(
     request: Request,
     response: Response,
     player_id: str | None = Query(default=None),
-    actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
 ) -> RegenUniverseJobRunView:
+    _require_regen_permissions(request, actor, "manage_regen_generation")
     return _enqueue_or_run_regen_job(
         request,
         response,
@@ -814,8 +847,9 @@ def run_tournament_scheduling_job(
     request: Request,
     response: Response,
     days_ahead: int = Query(default=21, ge=1, le=90),
-    actor: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_user),
 ) -> RegenUniverseJobRunView:
+    _require_regen_permissions(request, actor, "manage_regen_generation")
     return _enqueue_or_run_regen_job(
         request,
         response,

@@ -25,6 +25,7 @@ from app.admin_godmode.service import (
     COMPETITION_OPS_ADMIN_ROLE_NAME,
     DEFAULT_ROLE_PERMISSIONS,
     GOD_MODE_ROLE_NAME,
+    REGEN_OPS_ADMIN_ROLE_NAME,
     SCOPED_ADMIN_ROLE_NAME,
 )
 from app.models.admin_runtime_state import AdminRuntimeState
@@ -327,3 +328,54 @@ def test_competition_ops_assignment_persists_across_runtime_reload(
         profile = service.resolve_profile(admin, state)
 
     assert sorted(profile.permissions) == ["manage_competitions", "view_audit_log"]
+
+
+def test_create_admin_can_assign_regen_ops_role_and_seed_regen_permissions(
+    admin_access_context,
+) -> None:
+    client, _session, config_root, _app, SessionLocal = admin_access_context
+
+    response = client.post(
+        "/api/admin/access",
+        json={
+            "email": "regen-ops@example.com",
+            "username": "regen_ops_admin",
+            "password": TEST_PASSWORD,
+            "display_name": "Regen Ops Admin",
+            "role_name": REGEN_OPS_ADMIN_ROLE_NAME,
+            "permissions": [],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["admin_role_name"] == REGEN_OPS_ADMIN_ROLE_NAME
+    assert payload["assigned_permissions"] == []
+    assert sorted(payload["permissions"]) == [
+        "manage_national_regens",
+        "manage_regen_awards",
+        "manage_regen_generation",
+        "manage_regen_universe",
+        "view_audit_log",
+    ]
+    assert not (config_root / ADMIN_GODMODE_FILE).exists()
+
+    state = _read_db_state(SessionLocal)
+    assignments = state["roles"]["assignments"]
+    assert assignments[0]["role_name"] == REGEN_OPS_ADMIN_ROLE_NAME
+
+    with SessionLocal() as session:
+        admin = AuthService().authenticate_user(
+            session,
+            email="regen-ops@example.com",
+            password=TEST_PASSWORD,
+        )
+        profile = AdminGodModeService(wallet_service=WalletService()).resolve_profile(admin, state)
+
+    assert sorted(profile.permissions) == [
+        "manage_national_regens",
+        "manage_regen_awards",
+        "manage_regen_generation",
+        "manage_regen_universe",
+        "view_audit_log",
+    ]
