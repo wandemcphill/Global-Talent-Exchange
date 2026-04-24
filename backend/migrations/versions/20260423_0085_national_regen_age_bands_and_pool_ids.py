@@ -12,7 +12,6 @@ import json
 from alembic import op
 import sqlalchemy as sa
 
-
 revision = "20260423_0085_national_regen_age_bands_and_pool_ids"
 down_revision = "20260412_0084_runtime_index_coverage_repair"
 branch_labels = None
@@ -98,9 +97,7 @@ def _backfill_national_regen_seed_age_columns(bind) -> None:
     if "age" not in columns or "age_band" not in columns:
         return
     rows = bind.execute(
-        sa.text(
-            "SELECT id, age, age_band, preseed_batch, metadata_json FROM national_regen_seeds"
-        )
+        sa.text("SELECT id, age, age_band, preseed_batch, metadata_json FROM national_regen_seeds")
     ).mappings()
     for row in rows:
         metadata = _metadata_dict(row.get("metadata_json"))
@@ -111,9 +108,7 @@ def _backfill_national_regen_seed_age_columns(bind) -> None:
         if not age_band:
             age_band = _infer_age_band(age=int(age), metadata=metadata, preseed_batch=row.get("preseed_batch"))
         bind.execute(
-            sa.text(
-                "UPDATE national_regen_seeds SET age = :age, age_band = :age_band WHERE id = :id"
-            ),
+            sa.text("UPDATE national_regen_seeds SET age = :age, age_band = :age_band WHERE id = :id"),
             {"id": row["id"], "age": int(age), "age_band": str(age_band)},
         )
 
@@ -152,7 +147,9 @@ def upgrade() -> None:
             if "age" not in columns:
                 batch_op.add_column(sa.Column("age", sa.Integer(), nullable=False, server_default="18"))
             if "age_band" not in columns:
-                batch_op.add_column(sa.Column("age_band", sa.String(length=16), nullable=False, server_default="senior"))
+                batch_op.add_column(
+                    sa.Column("age_band", sa.String(length=16), nullable=False, server_default="senior")
+                )
         _backfill_national_regen_seed_age_columns(bind)
         _create_index_if_missing(
             bind,
@@ -172,7 +169,9 @@ def upgrade() -> None:
             "national_team_rental_contracts",
             constraint_name="fk_national_team_rental_contracts_player_id_ingestion_players",
         )
-    if inspector.has_table("national_team_rental_squad_members") and _has_player_fk(bind, "national_team_rental_squad_members"):
+    if inspector.has_table("national_team_rental_squad_members") and _has_player_fk(
+        bind, "national_team_rental_squad_members"
+    ):
         _drop_player_fk(
             "national_team_rental_squad_members",
             constraint_name="fk_national_team_rental_squad_members_player_id_ingestion_players",
@@ -183,12 +182,16 @@ def downgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
-    if inspector.has_table("national_team_rental_squad_members") and not _has_player_fk(bind, "national_team_rental_squad_members"):
+    if inspector.has_table("national_team_rental_squad_members") and not _has_player_fk(
+        bind, "national_team_rental_squad_members"
+    ):
         _restore_player_fk(
             "national_team_rental_squad_members",
             constraint_name="fk_national_team_rental_squad_members_player_id_ingestion_players",
         )
-    if inspector.has_table("national_team_rental_contracts") and not _has_player_fk(bind, "national_team_rental_contracts"):
+    if inspector.has_table("national_team_rental_contracts") and not _has_player_fk(
+        bind, "national_team_rental_contracts"
+    ):
         _restore_player_fk(
             "national_team_rental_contracts",
             constraint_name="fk_national_team_rental_contracts_player_id_ingestion_players",

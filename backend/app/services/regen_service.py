@@ -988,7 +988,9 @@ class RegenGenerationEngine:
             )
         )
         current_gsi = current_gsi_override or round((current_ability.minimum + current_ability.maximum) / 2)
-        scout_confidence = self._scout_confidence(quality_score=quality_score, generation_source=generation_source, rng=rng)
+        scout_confidence = self._scout_confidence(
+            quality_score=quality_score, generation_source=generation_source, rng=rng
+        )
         regen_identifier = f"rgn-{uuid4().hex[:12]}"
         visual_seed = visual_seed_override or sha256(f"{regen_identifier}:{display_name}".encode("utf-8")).hexdigest()
         personality = self._build_personality(rng)
@@ -1357,8 +1359,7 @@ class RegenGenerationEngine:
         )
         stat_distribution_entropy = min(
             0.24,
-            ((max(potential - current_rating, 0) / 100.0) * 0.18)
-            + (len(secondary_positions) * 0.03),
+            ((max(potential - current_rating, 0) / 100.0) * 0.18) + (len(secondary_positions) * 0.03),
         )
         narrative_seed_complexity = min(
             0.22,
@@ -1393,7 +1394,9 @@ class RegenGenerationEngine:
         adaptability = rng.randint(36, 86)
         work_rate = _clamp((professionalism * 0.6) + (ambition * 0.25) + rng.randint(-6, 6), 35, 92)
         resilience = _clamp((patience * 0.45) + (adaptability * 0.35) + rng.randint(-8, 8), 36, 90)
-        leadership = _clamp((temperament * 0.35) + (professionalism * 0.3) + (ambition * 0.25) + rng.randint(-6, 6), 30, 82)
+        leadership = _clamp(
+            (temperament * 0.35) + (professionalism * 0.3) + (ambition * 0.25) + rng.randint(-6, 6), 30, 82
+        )
         flair = rng.randint(35, 84)
         tags: list[str] = []
         if professionalism >= 72:
@@ -1448,12 +1451,14 @@ class RegenGenerationEngine:
         eligible_legends = [
             candidate
             for candidate in lineage_pool
-            if candidate.legend_type == "real_legend" and self._lineage_candidate_allowed(candidate, club_id, club_context)
+            if candidate.legend_type == "real_legend"
+            and self._lineage_candidate_allowed(candidate, club_id, club_context)
         ]
         eligible_retired = [
             candidate
             for candidate in lineage_pool
-            if candidate.legend_type == "retired_regen" and self._lineage_candidate_allowed(candidate, club_id, club_context)
+            if candidate.legend_type == "retired_regen"
+            and self._lineage_candidate_allowed(candidate, club_id, club_context)
         ]
         allow_owner = owner_context is not None and owner_context.lifetime_count < owner_context.lifetime_cap
         allow_hometown = club_context.city_name is not None or club_context.region_name is not None
@@ -1602,7 +1607,9 @@ class RegenGenerationEngine:
             relationship_type="hometown_legacy",
             related_legend_type="hometown",
             related_legend_ref_id=club_id,
-            lineage_country_code=(club_context.country_code or self.settings.regen_generation.default_country_code).upper(),
+            lineage_country_code=(
+                club_context.country_code or self.settings.regen_generation.default_country_code
+            ).upper(),
             lineage_region_name=club_context.region_name,
             lineage_city_name=club_context.city_name,
             lineage_hometown_code=hometown_code,
@@ -1674,7 +1681,9 @@ class RegenGenerationEngine:
         return candidate
 
     @staticmethod
-    def _adjust_range(base: AbilityRangeView, rng: random.Random, *, min_value: int = 30, max_value: int = 99) -> AbilityRangeView:
+    def _adjust_range(
+        base: AbilityRangeView, rng: random.Random, *, min_value: int = 30, max_value: int = 99
+    ) -> AbilityRangeView:
         delta_min = rng.randint(-2, 2)
         delta_max = rng.randint(-2, 2)
         if delta_min == 0 and delta_max == 0:
@@ -1749,7 +1758,11 @@ class RegenGenerationEngine:
         visual_profile = dict(twin_metadata.get("visual_profile") or {})
         if base_visual_seed:
             visual_profile["portrait_seed"] = base_visual_seed
-        hair_index = _HAIR_PROFILES.index(visual_profile.get("hair_profile")) if visual_profile.get("hair_profile") in _HAIR_PROFILES else 0
+        hair_index = (
+            _HAIR_PROFILES.index(visual_profile.get("hair_profile"))
+            if visual_profile.get("hair_profile") in _HAIR_PROFILES
+            else 0
+        )
         visual_profile["hair_profile"] = _HAIR_PROFILES[(hair_index + 1) % len(_HAIR_PROFILES)]
         twin_metadata["visual_profile"] = visual_profile
         twin_metadata["twins_group_key"] = group_key
@@ -1796,7 +1809,9 @@ class RegenGenerationEngine:
         lineage_region = lineage_selection.lineage_region_name if lineage_selection else None
         lineage_city = lineage_selection.lineage_city_name if lineage_selection else None
         forced_surname = lineage_selection.forced_surname if lineage_selection else None
-        country_code = (lineage_country or club_context.country_code or self.settings.regen_generation.default_country_code).upper()
+        country_code = (
+            lineage_country or club_context.country_code or self.settings.regen_generation.default_country_code
+        ).upper()
         country_profile = resolve_country_naming_profile(
             country_code,
             default_country_code=self.settings.regen_generation.default_country_code,
@@ -1804,7 +1819,9 @@ class RegenGenerationEngine:
         region_name = lineage_region or club_context.region_name or country_profile.default_region
         city_name = lineage_city or club_context.city_name or country_profile.default_city
         region_key = region_name.strip().lower()
-        profile_weights = country_profile.region_profile_weights.get(region_key) or country_profile.region_profile_weights.get("default")
+        profile_weights = country_profile.region_profile_weights.get(
+            region_key
+        ) or country_profile.region_profile_weights.get("default")
         assert profile_weights is not None
         profile_key = self._weighted_choice(profile_weights, rng)
         profile = country_profile.profiles[profile_key]
@@ -1884,7 +1901,9 @@ class RegenService:
         base_cost = config.owner_son_paid_request_base_cost
         name_cost = config.owner_son_paid_request_name_cost if payload.get("name") else 0
         customization_keys = {"position", "favorite_foot", "height_cm", "hairstyle"}
-        customization_cost = config.owner_son_paid_request_customization_cost if customization_keys & payload.keys() else 0
+        customization_cost = (
+            config.owner_son_paid_request_customization_cost if customization_keys & payload.keys() else 0
+        )
         total_cost = base_cost + name_cost + customization_cost
         with self.store.lock:
             existing_requests: list[object] = []
@@ -2025,7 +2044,9 @@ class RegenService:
             for regen in generated.regens:
                 lineage = regen.metadata.get("lineage") or {}
                 if lineage.get("is_owner_son") or regen.metadata.get("club_owner_son"):
-                    owner_user_id = lineage.get("owner_user_id") or (owner_context.owner_user_id if owner_context else None)
+                    owner_user_id = lineage.get("owner_user_id") or (
+                        owner_context.owner_user_id if owner_context else None
+                    )
                     if owner_user_id:
                         self.store.owner_son_lifetime_counts_by_user[owner_user_id] = (
                             self.store.owner_son_lifetime_counts_by_user.get(owner_user_id, 0) + 1
@@ -2083,9 +2104,9 @@ class RegenService:
                         "generation_source": regen.generation_source,
                     }
                 )
-            self.store.season_regen_generation_counts[resolved_season] = (
-                self.store.season_regen_generation_counts.get(resolved_season, 0) + len(bundle.regens)
-            )
+            self.store.season_regen_generation_counts[resolved_season] = self.store.season_regen_generation_counts.get(
+                resolved_season, 0
+            ) + len(bundle.regens)
         return bundle
 
     def list_regens(self, club_id: str) -> tuple[RegenProfileView, ...]:

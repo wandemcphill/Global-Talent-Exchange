@@ -124,9 +124,15 @@ class NationalTeamTournamentService:
     def _competition_settings(self, competition: NationalTeamCompetition) -> dict[str, Any]:
         metadata = dict(competition.metadata_json or {})
         distribution = {
-            FreePlayerTier.HIGH.value: int((metadata.get("free_player_distribution") or {}).get("high", DEFAULT_FREE_PLAYER_DISTRIBUTION["high"])),
-            FreePlayerTier.MID.value: int((metadata.get("free_player_distribution") or {}).get("mid", DEFAULT_FREE_PLAYER_DISTRIBUTION["mid"])),
-            FreePlayerTier.LOW.value: int((metadata.get("free_player_distribution") or {}).get("low", DEFAULT_FREE_PLAYER_DISTRIBUTION["low"])),
+            FreePlayerTier.HIGH.value: int(
+                (metadata.get("free_player_distribution") or {}).get("high", DEFAULT_FREE_PLAYER_DISTRIBUTION["high"])
+            ),
+            FreePlayerTier.MID.value: int(
+                (metadata.get("free_player_distribution") or {}).get("mid", DEFAULT_FREE_PLAYER_DISTRIBUTION["mid"])
+            ),
+            FreePlayerTier.LOW.value: int(
+                (metadata.get("free_player_distribution") or {}).get("low", DEFAULT_FREE_PLAYER_DISTRIBUTION["low"])
+            ),
         }
         return {
             "minimum_squad_size": int(metadata.get("minimum_squad_size", DEFAULT_MINIMUM_SQUAD_SIZE)),
@@ -226,7 +232,9 @@ class NationalTeamTournamentService:
             .options(selectinload(NationalTeamCompetition.entries))
         )
         if competition is None:
-            raise NationalTeamTournamentError("National team competition was not found.", reason="competition_not_found")
+            raise NationalTeamTournamentError(
+                "National team competition was not found.", reason="competition_not_found"
+            )
         return competition
 
     def _require_entry(self, entry_id: str) -> NationalTeamEntry:
@@ -246,7 +254,9 @@ class NationalTeamTournamentService:
     def _require_managed_entry(self, entry_id: str, actor: User) -> NationalTeamEntry:
         entry = self._require_entry(entry_id)
         if entry.manager_user_id != actor.id:
-            raise NationalTeamTournamentError("Only the assigned manager can manage this entry.", reason="entry_manager_required")
+            raise NationalTeamTournamentError(
+                "Only the assigned manager can manage this entry.", reason="entry_manager_required"
+            )
         return entry
 
     def _validate_entry_window(self, competition: NationalTeamCompetition) -> None:
@@ -254,11 +264,17 @@ class NationalTeamTournamentService:
         if competition.entry_opens_at is not None and competition.entry_opens_at > now:
             raise NationalTeamTournamentError("Entry is not open yet.", reason="competition_entry_not_open")
         if competition.entry_closes_at is not None and competition.entry_closes_at < now:
-            raise NationalTeamTournamentError("Entry has closed for this tournament.", reason="competition_entry_closed")
+            raise NationalTeamTournamentError(
+                "Entry has closed for this tournament.", reason="competition_entry_closed"
+            )
         if str(competition.status).strip().lower() == "live":
-            raise NationalTeamTournamentError("Tournament squads are locked while the tournament is live.", reason="competition_already_live")
+            raise NationalTeamTournamentError(
+                "Tournament squads are locked while the tournament is live.", reason="competition_already_live"
+            )
         if competition.kickoff_at is not None and competition.kickoff_at <= now:
-            raise NationalTeamTournamentError("Tournament squads are locked after kickoff.", reason="competition_already_live")
+            raise NationalTeamTournamentError(
+                "Tournament squads are locked after kickoff.", reason="competition_already_live"
+            )
         if competition.linked_competition_id:
             try:
                 CompetitionLockService(self.session).ensure_rentals_allowed(
@@ -353,7 +369,9 @@ class NationalTeamTournamentService:
                 continue
             if resolved > 0:
                 return resolved
-        summary_payload = dict(summary.summary_json or {}) if summary is not None and isinstance(summary.summary_json, dict) else {}
+        summary_payload = (
+            dict(summary.summary_json or {}) if summary is not None and isinstance(summary.summary_json, dict) else {}
+        )
         raw_summary_gsi = summary_payload.get("global_scouting_index")
         if raw_summary_gsi is not None:
             try:
@@ -368,10 +386,9 @@ class NationalTeamTournamentService:
         return self._normalize_amount(gsi)
 
     def _loan_price_coin(self, *, gsi: int, source_bucket: str) -> Decimal:
-        return (
-            self._normalize_amount(gsi)
-            * self._source_price_multiplier(source_bucket)
-        ).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+        return (self._normalize_amount(gsi) * self._source_price_multiplier(source_bucket)).quantize(
+            AMOUNT_QUANTUM, rounding=ROUND_HALF_UP
+        )
 
     def _demand_multiplier(self, *, player_id: str) -> Decimal:
         active_contracts = int(
@@ -599,7 +616,11 @@ class NationalTeamTournamentService:
                 }
             )
         rows.sort(
-            key=lambda item: (-int(item["overall_rating"]), -float(item["base_value_coin"]), str(item["player_name"]).lower())
+            key=lambda item: (
+                -int(item["overall_rating"]),
+                -float(item["base_value_coin"]),
+                str(item["player_name"]).lower(),
+            )
         )
         return rows
 
@@ -680,9 +701,9 @@ class NationalTeamTournamentService:
             age_limit = self._age_band_limit(competition)
             if age_limit is not None and seed_age > age_limit:
                 continue
-            country = countries_by_code.get(self._normalize_token(seed.country_code, upper=True) or "") or countries_by_name.get(
-                self._normalize_token(seed.country_name, upper=True) or ""
-            )
+            country = countries_by_code.get(
+                self._normalize_token(seed.country_code, upper=True) or ""
+            ) or countries_by_name.get(self._normalize_token(seed.country_name, upper=True) or "")
             country_tokens = self._country_tokens(
                 country_name=country.name if country is not None else seed.country_name,
                 alpha2_code=country.alpha2_code if country is not None else seed.country_code,
@@ -699,7 +720,9 @@ class NationalTeamTournamentService:
                     "current_club_name": None,
                     "current_league_name": None,
                     "nationality": seed.country_name,
-                    "country_code": country.alpha2_code if country is not None and country.alpha2_code else seed.country_code,
+                    "country_code": (
+                        country.alpha2_code if country is not None and country.alpha2_code else seed.country_code
+                    ),
                     "country_tokens": country_tokens,
                     "age": seed_age,
                     "gsi": gsi,
@@ -741,19 +764,16 @@ class NationalTeamTournamentService:
             bucket
             for bucket in (
                 self._normalize_token(value)
-                for value in (
-                    (SOURCE_BUCKET_REAL,) if real_only else ()
-                ) + (
-                    (SOURCE_BUCKET_PRESEEDED,) if preseeded_only else ()
-                ) + tuple(source_buckets)
+                for value in ((SOURCE_BUCKET_REAL,) if real_only else ())
+                + ((SOURCE_BUCKET_PRESEEDED,) if preseeded_only else ())
+                + tuple(source_buckets)
             )
             if bucket in SUPPORTED_SOURCE_BUCKETS
         }
         normalized_positions = tuple(
             position
             for position in (
-                self._normalize_position(value) or self._normalize_token(value, upper=True)
-                for value in positions
+                self._normalize_position(value) or self._normalize_token(value, upper=True) for value in positions
             )
             if position is not None
         )
@@ -772,7 +792,10 @@ class NationalTeamTournamentService:
             return False
         if filters.source_buckets and item.get("source_bucket") not in set(filters.source_buckets):
             return False
-        if filters.max_price_coin is not None and self._normalize_amount(item.get("loan_price_coin")) > filters.max_price_coin:
+        if (
+            filters.max_price_coin is not None
+            and self._normalize_amount(item.get("loan_price_coin")) > filters.max_price_coin
+        ):
             return False
         if filters.tradable_only and not bool(item.get("tradable")):
             return False
@@ -798,10 +821,7 @@ class NationalTeamTournamentService:
         filtered = [
             item
             for item in catalog
-            if (
-                age_limit is None
-                or (item.get("age") is not None and int(item["age"]) <= age_limit)
-            )
+            if (age_limit is None or (item.get("age") is not None and int(item["age"]) <= age_limit))
             and self._pool_item_matches(item, filters=filters)
         ]
         filtered.sort(
@@ -974,7 +994,9 @@ class NationalTeamTournamentService:
         slots: tuple[str, ...],
         budget_coin: Decimal,
     ) -> dict[str, Any]:
-        base_selection = self._pick_slot_players(pool=pool, slots=slots, excluded_player_ids=set(), budget_coin=budget_coin)
+        base_selection = self._pick_slot_players(
+            pool=pool, slots=slots, excluded_player_ids=set(), budget_coin=budget_coin
+        )
         base_players = list(base_selection["selected"])
         base_mix = self._source_mix_summary(base_players)
 
@@ -1000,9 +1022,9 @@ class NationalTeamTournamentService:
             return {**base_selection, "mix_applied": False}
 
         remaining_slots = self._remaining_slots(slots, seeded_players)
-        remaining_budget = (
-            budget_coin - self._normalize_amount(seeded_selection["total_cost_coin"])
-        ).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+        remaining_budget = (budget_coin - self._normalize_amount(seeded_selection["total_cost_coin"])).quantize(
+            AMOUNT_QUANTUM, rounding=ROUND_HALF_UP
+        )
         completion_selection = self._pick_slot_players(
             pool=pool,
             slots=remaining_slots,
@@ -1052,10 +1074,14 @@ class NationalTeamTournamentService:
         competition = self._require_competition(competition_id)
         normalized_country = self._normalize_token(country_code, upper=True)
         if normalized_country is None:
-            raise NationalTeamTournamentError("Country code is required for auto-build.", reason="country_code_required")
+            raise NationalTeamTournamentError(
+                "Country code is required for auto-build.", reason="country_code_required"
+            )
         requested_budget = self._normalize_amount(budget_coin)
         if requested_budget <= Decimal("0.0000"):
-            raise NationalTeamTournamentError("Auto-build budget must be greater than zero.", reason="auto_build_budget_invalid")
+            raise NationalTeamTournamentError(
+                "Auto-build budget must be greater than zero.", reason="auto_build_budget_invalid"
+            )
 
         tactic_label, formation = self._resolve_auto_build_formation(tactic)
         filters = self._normalize_pool_filters(
@@ -1088,7 +1114,8 @@ class NationalTeamTournamentService:
             "total_cost_coin": total_cost_coin,
             "remaining_budget_coin": remaining_budget_coin,
             "selected_count": len(selected_players),
-            "complete": not selection["unfilled_slots"] and len(selected_players) == len(AUTO_BUILD_FORMATIONS[formation]),
+            "complete": not selection["unfilled_slots"]
+            and len(selected_players) == len(AUTO_BUILD_FORMATIONS[formation]),
             "mix_applied": bool(selection.get("mix_applied")),
             "source_mix": source_mix,
             "unfilled_slots": list(selection["unfilled_slots"]),
@@ -1129,7 +1156,9 @@ class NationalTeamTournamentService:
     def _refresh_entry_squad_size(self, entry: NationalTeamEntry) -> None:
         rental_count = int(
             self.session.scalar(
-                select(func.count(NationalTeamRentalSquadMember.id)).where(NationalTeamRentalSquadMember.entry_id == entry.id)
+                select(func.count(NationalTeamRentalSquadMember.id)).where(
+                    NationalTeamRentalSquadMember.entry_id == entry.id
+                )
             )
             or 0
         )
@@ -1460,11 +1489,17 @@ class NationalTeamTournamentService:
         }
         total_remaining = sum(remaining_distribution.values())
         if total_remaining <= 0:
-            raise NationalTeamTournamentError("Free player quota has already been claimed.", reason="free_players_already_claimed")
+            raise NationalTeamTournamentError(
+                "Free player quota has already been claimed.", reason="free_players_already_claimed"
+            )
         if len(current_members) + len(entry.squad_members) + total_remaining > int(settings["maximum_squad_size"]):
-            raise NationalTeamTournamentError("Claiming free players would exceed the squad limit.", reason="squad_limit_reached")
+            raise NationalTeamTournamentError(
+                "Claiming free players would exceed the squad limit.", reason="squad_limit_reached"
+            )
 
-        starter_slots = STARTER_PACK_SLOTS + tuple("MIDFIELDER" for _ in range(max(0, total_remaining - len(STARTER_PACK_SLOTS))))
+        starter_slots = STARTER_PACK_SLOTS + tuple(
+            "MIDFIELDER" for _ in range(max(0, total_remaining - len(STARTER_PACK_SLOTS)))
+        )
         pool = [
             self._priced_pool_item(item)
             for item in self._national_pool(
@@ -1547,9 +1582,13 @@ class NationalTeamTournamentService:
         settings = self._competition_settings(competition)
         current_members = self._entry_rental_members(entry.id)
         if len(current_members) + len(entry.squad_members) >= int(settings["maximum_squad_size"]):
-            raise NationalTeamTournamentError("Tournament squad has reached the maximum size.", reason="squad_limit_reached")
+            raise NationalTeamTournamentError(
+                "Tournament squad has reached the maximum size.", reason="squad_limit_reached"
+            )
         if any(member.player_id == player_id for member in current_members):
-            raise NationalTeamTournamentError("This player is already part of the rental squad.", reason="rental_contract_exists")
+            raise NationalTeamTournamentError(
+                "This player is already part of the rental squad.", reason="rental_contract_exists"
+            )
 
         player_catalog = {
             item["player_id"]: self._priced_pool_item(item)
@@ -1576,8 +1615,12 @@ class NationalTeamTournamentService:
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=user_account, amount=-loan_price, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND),
-                LedgerPosting(account=platform_account, amount=loan_price, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND),
+                LedgerPosting(
+                    account=user_account, amount=-loan_price, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND
+                ),
+                LedgerPosting(
+                    account=platform_account, amount=loan_price, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND
+                ),
             ],
             reason=LedgerEntryReason.COMPETITION_ENTRY,
             reference=f"national-rental:{competition.id}:{entry.id}:{player_id}",
@@ -1725,7 +1768,9 @@ class NationalTeamTournamentService:
         )
         return [self._ad_payload(ad) for ad in ads]
 
-    def upsert_ad(self, *, competition_id: str | None, payload, actor: User, ad_id: str | None = None) -> dict[str, Any]:
+    def upsert_ad(
+        self, *, competition_id: str | None, payload, actor: User, ad_id: str | None = None
+    ) -> dict[str, Any]:
         if competition_id is not None:
             self._require_competition(competition_id)
         if payload.end_date <= payload.start_date:
@@ -1756,8 +1801,14 @@ class NationalTeamTournamentService:
 
     def rotate_ads(self, *, competition_id: str | None = None) -> dict[str, Any]:
         now = utcnow()
-        competition_ids = [competition_id] if competition_id is not None else list(
-            self.session.scalars(select(NationalTeamCompetition.id).where(NationalTeamCompetition.active.is_(True))).all()
+        competition_ids = (
+            [competition_id]
+            if competition_id is not None
+            else list(
+                self.session.scalars(
+                    select(NationalTeamCompetition.id).where(NationalTeamCompetition.active.is_(True))
+                ).all()
+            )
         )
         rotated: list[dict[str, Any]] = []
         for current_competition_id in competition_ids:
@@ -1769,7 +1820,13 @@ class NationalTeamTournamentService:
                     "last_rotated_at": now.isoformat(),
                     "rotation_slot": int(now.timestamp()) // max(5, min(int(ad.rotation_interval_seconds), 600)),
                 }
-                rotated.append({"competition_id": current_competition_id, "ad_id": ad.id, "placement": self._ad_payload(ad)["placement"]})
+                rotated.append(
+                    {
+                        "competition_id": current_competition_id,
+                        "ad_id": ad.id,
+                        "placement": self._ad_payload(ad)["placement"],
+                    }
+                )
         self.session.flush()
         return {"rotated_ads": rotated, "rotated_count": len(rotated)}
 
@@ -1823,10 +1880,14 @@ class NationalTeamTournamentService:
         return f"{winner_name} kept its underdog charge alive{streak_note}, edging past {loser_name} {scoreline} in the {stage_label}."
 
     def generate_story_events(self, *, competition_id: str | None = None, actor: User | None = None) -> dict[str, Any]:
-        competitions = [self._require_competition(competition_id)] if competition_id else list(
-            self.session.scalars(
-                select(NationalTeamCompetition).where(NationalTeamCompetition.linked_competition_id.is_not(None))
-            ).all()
+        competitions = (
+            [self._require_competition(competition_id)]
+            if competition_id
+            else list(
+                self.session.scalars(
+                    select(NationalTeamCompetition).where(NationalTeamCompetition.linked_competition_id.is_not(None))
+                ).all()
+            )
         )
         created = 0
         created_ids: list[str] = []
@@ -1879,8 +1940,10 @@ class NationalTeamTournamentService:
                         CompetitionMatch.id != match.id,
                         CompetitionMatch.completed_at.is_not(None),
                         or_(
-                            (CompetitionMatch.home_club_id == match.home_club_id) & (CompetitionMatch.away_club_id == match.away_club_id),
-                            (CompetitionMatch.home_club_id == match.away_club_id) & (CompetitionMatch.away_club_id == match.home_club_id),
+                            (CompetitionMatch.home_club_id == match.home_club_id)
+                            & (CompetitionMatch.away_club_id == match.away_club_id),
+                            (CompetitionMatch.home_club_id == match.away_club_id)
+                            & (CompetitionMatch.away_club_id == match.home_club_id),
                         ),
                     )
                     .order_by(CompetitionMatch.completed_at.desc())
@@ -1916,7 +1979,11 @@ class NationalTeamTournamentService:
                         payload
                         for payload in sorted(
                             player_totals.values(),
-                            key=lambda item: (-(item["goals"] + item["assists"]), -item["goals"], str(item["player_name"]).lower()),
+                            key=lambda item: (
+                                -(item["goals"] + item["assists"]),
+                                -item["goals"],
+                                str(item["player_name"]).lower(),
+                            ),
                         )
                         if (payload["goals"] + payload["assists"]) >= 2
                     ),
@@ -1940,13 +2007,10 @@ class NationalTeamTournamentService:
                 )
 
                 candidates: list[tuple[StoryEventType, dict[str, Any]]] = []
-                if (
-                    StoryEventType.GIANT_KILLING not in existing_types
-                    and (
-                        (loser_reputation - winner_reputation) >= 15
-                        or (loser_fans >= max(winner_fans * 2, 1) and loser_fans > 0)
-                        or (rivalry is not None and rivalry.giant_killer_flag)
-                    )
+                if StoryEventType.GIANT_KILLING not in existing_types and (
+                    (loser_reputation - winner_reputation) >= 15
+                    or (loser_fans >= max(winner_fans * 2, 1) and loser_fans > 0)
+                    or (rivalry is not None and rivalry.giant_killer_flag)
                 ):
                     candidates.append(
                         (
@@ -2000,7 +2064,11 @@ class NationalTeamTournamentService:
                             },
                         )
                     )
-                if StoryEventType.UNDERDOG_RUN not in existing_types and winner_streak >= 3 and winner_reputation <= loser_reputation:
+                if (
+                    StoryEventType.UNDERDOG_RUN not in existing_types
+                    and winner_streak >= 3
+                    and winner_reputation <= loser_reputation
+                ):
                     candidates.append(
                         (
                             StoryEventType.UNDERDOG_RUN,
@@ -2066,7 +2134,9 @@ class NationalTeamTournamentService:
         self.session.flush()
         return {"created_count": created, "story_event_ids": created_ids}
 
-    def list_story_events(self, *, competition_id: str, match_id: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    def list_story_events(
+        self, *, competition_id: str, match_id: str | None = None, limit: int = 20
+    ) -> list[dict[str, Any]]:
         self._require_competition(competition_id)
         stmt = select(StoryEvent).where(StoryEvent.competition_id == competition_id)
         if match_id is not None:
@@ -2085,7 +2155,9 @@ class NationalTeamTournamentService:
         affected_entry_ids: set[str] = set()
         for contract in contracts:
             competition = self.session.get(NationalTeamCompetition, contract.tournament_id)
-            should_release = contract.end_date <= now or (competition is not None and competition.completed_at is not None)
+            should_release = contract.end_date <= now or (
+                competition is not None and competition.completed_at is not None
+            )
             if not should_release and contract.end_date <= (now + timedelta(hours=RENTAL_EXPIRING_WARNING_HOURS)):
                 metadata = dict(contract.metadata_json or {})
                 if not metadata.get("expiring_notified_at"):
@@ -2106,11 +2178,15 @@ class NationalTeamTournamentService:
                 continue
             if not should_release:
                 continue
-            contract.status = RentalContractStatus.EXPIRED if contract.end_date <= now else RentalContractStatus.RELEASED
+            contract.status = (
+                RentalContractStatus.EXPIRED if contract.end_date <= now else RentalContractStatus.RELEASED
+            )
             if contract.entry_id:
                 affected_entry_ids.add(contract.entry_id)
                 member = self.session.scalar(
-                    select(NationalTeamRentalSquadMember).where(NationalTeamRentalSquadMember.rental_contract_id == contract.id)
+                    select(NationalTeamRentalSquadMember).where(
+                        NationalTeamRentalSquadMember.rental_contract_id == contract.id
+                    )
                 )
                 if member is not None:
                     self.session.delete(member)
@@ -2125,7 +2201,9 @@ class NationalTeamTournamentService:
             "affected_entries": sorted(affected_entry_ids),
         }
 
-    def build_competition_presentation_payload(self, *, competition_id: str, limit_story_events: int = 8) -> dict[str, Any]:
+    def build_competition_presentation_payload(
+        self, *, competition_id: str, limit_story_events: int = 8
+    ) -> dict[str, Any]:
         competition = self._require_competition(competition_id)
         theme = self.session.scalar(select(TournamentTheme).where(TournamentTheme.competition_id == competition_id))
         if theme is not None:

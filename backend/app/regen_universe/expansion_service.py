@@ -2118,7 +2118,9 @@ class RegenUniverseExpansionService:
                         )
                         seed_key = f"{batch}:{country_code}:{policy.key}:{position}:{batch_slot}"
                         if (
-                            self.session.scalar(select(NationalRegenSeed.id).where(NationalRegenSeed.seed_key == seed_key))
+                            self.session.scalar(
+                                select(NationalRegenSeed.id).where(NationalRegenSeed.seed_key == seed_key)
+                            )
                             is not None
                         ):
                             batch_counts[position] += 1

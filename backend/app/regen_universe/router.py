@@ -16,7 +16,6 @@ from app.core.response_cache import get_response_cache
 from app.core.task_queue import NullTaskQueueBackend, get_task_queue_backend
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.user import User
-from app.models.youth_tournament import YouthTournament
 from app.regen_universe.expansion_service import (
     RegenUniverseExpansionError,
     RegenUniverseExpansionNotFoundError,
@@ -50,7 +49,6 @@ from app.schemas.regen_universe_expansion import (
     RegenGenerationTrackingView,
     RegenUniverseJobRunView,
     YouthTournamentCreateRequest,
-    YouthTournamentPageView,
     YouthTournamentView,
 )
 from app.workers.jobs import (

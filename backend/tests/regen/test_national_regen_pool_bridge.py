@@ -18,7 +18,6 @@ from app.models.regen_ecosystem import NationalRegenSeed
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
 from app.regen_universe.expansion_service import RegenUniverseExpansionService
 
-
 POSITION_MINIMUMS = {
     "GK": 3,
     "CB": 5,

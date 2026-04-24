@@ -8,7 +8,6 @@ import pytest
 from app.core.config import get_settings
 from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 
-
 _NIGERIAN_SURNAMES = {
     "Adekunle",
     "Adebayo",
@@ -62,7 +61,9 @@ def test_regen_service_generates_region_aware_academy_intake(club_ops_services) 
     assert all(candidate.birth_city == "Lagos" for candidate in batch.candidates)
     assert all(candidate.birth_region == "Lagos" for candidate in batch.candidates)
     assert all(profile.origin.ethnolinguistic_profile == "yoruba" for profile in generated_regens)
-    assert all(profile.current_ability_range.minimum < profile.current_ability_range.maximum for profile in generated_regens)
+    assert all(
+        profile.current_ability_range.minimum < profile.current_ability_range.maximum for profile in generated_regens
+    )
     assert all(profile.potential_range.maximum >= profile.current_ability_range.maximum for profile in generated_regens)
 
 
@@ -188,8 +189,7 @@ def test_regen_naming_aliases_maghreb_countries_without_losing_country_identity(
     assert all(profile.origin.city_name == "Algiers" for profile in algeria_bundle.regens)
     assert all(profile.origin.ethnolinguistic_profile == "maghrebi_arabic" for profile in algeria_bundle.regens)
     assert all(
-        any(profile.display_name.endswith(surname) for surname in allowed_surnames)
-        for profile in algeria_bundle.regens
+        any(profile.display_name.endswith(surname) for surname in allowed_surnames) for profile in algeria_bundle.regens
     )
 
 

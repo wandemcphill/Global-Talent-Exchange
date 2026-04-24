@@ -5,7 +5,19 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -71,11 +83,18 @@ class RentalContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    loan_price_coin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000")
+    loan_price_coin: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
+    )
     is_free_player: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     free_player_tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
     status: Mapped[RentalContractStatus] = mapped_column(
-        Enum(RentalContractStatus, name="national_team_rental_contract_status", native_enum=False, values_callable=_enum_values),
+        Enum(
+            RentalContractStatus,
+            name="national_team_rental_contract_status",
+            native_enum=False,
+            values_callable=_enum_values,
+        ),
         nullable=False,
         default=RentalContractStatus.ACTIVE,
         server_default=RentalContractStatus.ACTIVE.value,
@@ -154,7 +173,9 @@ class TournamentTheme(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     video_asset_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     audio_theme_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    visual_style: Mapped[str] = mapped_column(String(64), nullable=False, default="gtex_default", server_default="gtex_default")
+    visual_style: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="gtex_default", server_default="gtex_default"
+    )
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 

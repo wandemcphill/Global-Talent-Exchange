@@ -5,7 +5,6 @@ from sqlalchemy import create_engine, inspect
 
 from app.core import database as database_module
 
-
 REQUIRED_REGEN_TABLES = {
     "career_events",
     "national_regen_seeds",
