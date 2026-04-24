@@ -29,7 +29,7 @@ def get_player_agency_snapshot(
     service: PlayerAgencyService = Depends(_service),
 ) -> PlayerAgencySnapshotView:
     try:
-        return service.get_snapshot(player_id, reference_on=as_of)
+        return service.get_agency_profile(player_id, reference_on=as_of)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -41,7 +41,7 @@ def evaluate_contract_decision(
     service: PlayerAgencyService = Depends(_service),
 ) -> ContractDecisionView:
     try:
-        return service.evaluate_contract_offer(player_id, payload)
+        return service.evaluate_contract_decision(player_id, payload)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -53,6 +53,6 @@ def evaluate_transfer_decision(
     service: PlayerAgencyService = Depends(_service),
 ) -> TransferDecisionView:
     try:
-        return service.evaluate_transfer_opportunity(player_id, payload)
+        return service.evaluate_transfer_decision(player_id, payload)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

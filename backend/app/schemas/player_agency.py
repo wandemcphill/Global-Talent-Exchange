@@ -55,7 +55,12 @@ class PlayerAgencyStateView(CommonSchema):
 class AgencyDecisionView(CommonSchema):
     decision_code: str
     decision_score: float
+    confidence_score: float = Field(ge=0, le=100)
     confidence_band: str
+    accepted: bool = False
+    rejected: bool = False
+    concerns: tuple[str, ...] = Field(default_factory=tuple)
+    explanation: str = ""
     primary_reasons: tuple[AgencyReasonView, ...] = Field(default_factory=tuple)
     secondary_reasons: tuple[AgencyReasonView, ...] = Field(default_factory=tuple)
     persuading_factors: tuple[str, ...] = Field(default_factory=tuple)
@@ -71,6 +76,14 @@ class ContractDecisionView(AgencyDecisionView):
 
 class TransferDecisionView(AgencyDecisionView):
     transfer_request_status: str | None = None
+    preferred_destination_rank: int | None = None
+
+
+class PreferredClubDestinationView(CommonSchema):
+    rank: int = Field(ge=1)
+    destination_club_id: str
+    destination_club_name: str | None = None
+    decision: TransferDecisionView
 
 
 class PlayerAgencySnapshotView(CommonSchema):

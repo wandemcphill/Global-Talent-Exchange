@@ -44,8 +44,10 @@ class RegenAward(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class RegenPerformanceRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "regen_universe_performance_records"
     __table_args__ = (
-        UniqueConstraint("season_id", "player_id", name="uq_regen_universe_performance_records_season_player"),
+        UniqueConstraint("season_id", "subject_key", name="uq_regen_universe_performance_records_season_subject"),
+        Index("ix_regen_universe_performance_records_subject_key", "subject_key"),
         Index("ix_regen_universe_performance_records_player_id", "player_id"),
+        Index("ix_regen_universe_performance_records_national_seed_id", "national_seed_id"),
         Index("ix_regen_universe_performance_records_position_group", "position_group"),
         Index("ix_regen_universe_performance_records_overall_score", "overall_score"),
     )
@@ -55,10 +57,16 @@ class RegenPerformanceRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("regen_universe_seasons.id", ondelete="CASCADE"),
         nullable=False,
     )
-    player_id: Mapped[str] = mapped_column(
+    subject_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    player_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("ingestion_players.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    national_seed_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("national_regen_seeds.id", ondelete="CASCADE"),
+        nullable=True,
     )
     player_name: Mapped[str] = mapped_column(String(160), nullable=False)
     age: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -90,9 +98,16 @@ class RegenPerformanceRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class RegenRankingSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "regen_universe_ranking_snapshots"
     __table_args__ = (
-        UniqueConstraint("season_id", "category", "player_id", name="uq_regen_universe_ranking_snapshots_category_player"),
+        UniqueConstraint(
+            "season_id",
+            "category",
+            "subject_key",
+            name="uq_regen_universe_ranking_snapshots_category_subject",
+        ),
         Index("ix_regen_universe_ranking_snapshots_season_category_rank", "season_id", "category", "rank"),
+        Index("ix_regen_universe_ranking_snapshots_subject_key", "subject_key"),
         Index("ix_regen_universe_ranking_snapshots_player_id", "player_id"),
+        Index("ix_regen_universe_ranking_snapshots_national_seed_id", "national_seed_id"),
     )
 
     season_id: Mapped[str] = mapped_column(
@@ -100,10 +115,16 @@ class RegenRankingSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("regen_universe_seasons.id", ondelete="CASCADE"),
         nullable=False,
     )
-    player_id: Mapped[str] = mapped_column(
+    subject_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    player_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("ingestion_players.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    national_seed_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("national_regen_seeds.id", ondelete="CASCADE"),
+        nullable=True,
     )
     player_name: Mapped[str] = mapped_column(String(160), nullable=False)
     category: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -115,9 +136,16 @@ class RegenRankingSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class RegenAwardWinner(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "regen_universe_award_winners"
     __table_args__ = (
-        UniqueConstraint("award_id", "season_id", "player_id", name="uq_regen_universe_award_winners_award_season_player"),
+        UniqueConstraint(
+            "award_id",
+            "season_id",
+            "subject_key",
+            name="uq_regen_universe_award_winners_award_season_subject",
+        ),
         Index("ix_regen_universe_award_winners_season_id", "season_id"),
+        Index("ix_regen_universe_award_winners_subject_key", "subject_key"),
         Index("ix_regen_universe_award_winners_player_id", "player_id"),
+        Index("ix_regen_universe_award_winners_national_seed_id", "national_seed_id"),
     )
 
     award_id: Mapped[str] = mapped_column(
@@ -130,10 +158,16 @@ class RegenAwardWinner(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("regen_universe_seasons.id", ondelete="CASCADE"),
         nullable=False,
     )
-    player_id: Mapped[str] = mapped_column(
+    subject_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    player_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("ingestion_players.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    national_seed_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("national_regen_seeds.id", ondelete="CASCADE"),
+        nullable=True,
     )
     player_name: Mapped[str] = mapped_column(String(160), nullable=False)
     ranking_score: Mapped[float] = mapped_column(Float, nullable=False)
@@ -160,4 +194,84 @@ class RegenHallOfFame(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     peak_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     seasons_active: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     legacy_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class RegenAchievement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "regen_achievements"
+    __table_args__ = (
+        UniqueConstraint("achievement_key", name="uq_regen_achievements_achievement_key"),
+        Index("ix_regen_achievements_subject_key", "subject_key"),
+        Index("ix_regen_achievements_player_id", "player_id"),
+        Index("ix_regen_achievements_national_seed_id", "national_seed_id"),
+        Index("ix_regen_achievements_achievement_type", "achievement_type"),
+        Index("ix_regen_achievements_earned_at", "earned_at"),
+    )
+
+    achievement_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    subject_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    player_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    regen_profile_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("regen_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    national_seed_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("national_regen_seeds.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    season_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("regen_universe_seasons.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    achievement_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    earned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class RegenStoryEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "regen_story_events"
+    __table_args__ = (
+        UniqueConstraint("event_key", name="uq_regen_story_events_event_key"),
+        Index("ix_regen_story_events_subject_key", "subject_key"),
+        Index("ix_regen_story_events_player_id", "player_id"),
+        Index("ix_regen_story_events_national_seed_id", "national_seed_id"),
+        Index("ix_regen_story_events_event_type", "event_type"),
+        Index("ix_regen_story_events_occurred_at", "occurred_at"),
+    )
+
+    event_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    subject_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    player_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    regen_profile_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("regen_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    national_seed_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("national_regen_seeds.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    season_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("regen_universe_seasons.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)

@@ -3,7 +3,20 @@ from __future__ import annotations
 from decimal import Decimal
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
@@ -54,9 +67,7 @@ class RegenProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class RegenPersonalityProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "regen_personality_profiles"
-    __table_args__ = (
-        UniqueConstraint("regen_profile_id", name="uq_regen_personality_profiles_regen_profile_id"),
-    )
+    __table_args__ = (UniqueConstraint("regen_profile_id", name="uq_regen_personality_profiles_regen_profile_id"),)
 
     regen_profile_id: Mapped[str] = mapped_column(
         String(36),
@@ -75,9 +86,7 @@ class RegenPersonalityProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class RegenOriginMetadata(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "regen_origin_metadata"
-    __table_args__ = (
-        UniqueConstraint("regen_profile_id", name="uq_regen_origin_metadata_regen_profile_id"),
-    )
+    __table_args__ = (UniqueConstraint("regen_profile_id", name="uq_regen_origin_metadata_regen_profile_id"),)
 
     regen_profile_id: Mapped[str] = mapped_column(
         String(36),
@@ -114,7 +123,9 @@ class RegenGenerationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     generation_source: Mapped[str] = mapped_column(String(32), nullable=False)
     season_label: Mapped[str] = mapped_column(String(32), nullable=False)
-    event_status: Mapped[str] = mapped_column(String(32), nullable=False, default="generated", server_default="generated")
+    event_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="generated", server_default="generated"
+    )
     probability_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     quality_roll: Mapped[float | None] = mapped_column(Float, nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
@@ -123,8 +134,13 @@ class RegenGenerationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class AcademyIntakeBatch(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "academy_intake_batches"
     __table_args__ = (
-        UniqueConstraint("club_id", "season_label", name="uq_academy_intake_batches_club_season"),
+        UniqueConstraint(
+            "club_id", "season_label", "trigger_reason", name="uq_academy_intake_batches_club_season_reason"
+        ),
         Index("ix_academy_intake_batches_club_id", "club_id"),
+        Index("ix_academy_intake_batches_season_id", "season_id"),
+        Index("ix_academy_intake_batches_trigger_reason", "trigger_reason"),
+        Index("ix_academy_intake_batches_idempotency_key", "idempotency_key"),
     )
 
     club_id: Mapped[str] = mapped_column(
@@ -132,7 +148,19 @@ class AcademyIntakeBatch(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("club_profiles.id", ondelete="CASCADE"),
         nullable=False,
     )
+    season_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("regen_universe_seasons.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     season_label: Mapped[str] = mapped_column(String(32), nullable=False)
+    trigger_reason: Mapped[str] = mapped_column(
+        String(48),
+        nullable=False,
+        default="academy_manual",
+        server_default="academy_manual",
+    )
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
     intake_size: Mapped[int] = mapped_column(Integer, nullable=False)
     academy_quality_score: Mapped[float] = mapped_column(Float, nullable=False, default=50.0, server_default="50.0")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="generated", server_default="generated")
@@ -172,15 +200,15 @@ class AcademyCandidate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     current_ability_range_json: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict)
     potential_range_json: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict)
     scout_confidence: Mapped[str] = mapped_column(String(32), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="academy_candidate", server_default="academy_candidate")
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="academy_candidate", server_default="academy_candidate"
+    )
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class RegenVisualProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "regen_visual_profiles"
-    __table_args__ = (
-        UniqueConstraint("regen_profile_id", name="uq_regen_visual_profiles_regen_profile_id"),
-    )
+    __table_args__ = (UniqueConstraint("regen_profile_id", name="uq_regen_visual_profiles_regen_profile_id"),)
 
     regen_profile_id: Mapped[str] = mapped_column(
         String(36),
@@ -237,7 +265,9 @@ class RegenMarketActivity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
     )
     activity_type: Mapped[str] = mapped_column(String(48), nullable=False)
-    source_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="competition", server_default="competition")
+    source_scope: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="competition", server_default="competition"
+    )
     impact_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     value_delta_coin: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     stat_line_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
@@ -351,8 +381,12 @@ class RegenOnboardingFlag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("club_profiles.id", ondelete="CASCADE"),
         nullable=False,
     )
-    onboarding_type: Mapped[str] = mapped_column(String(32), nullable=False, default="starter_bundle", server_default="starter_bundle")
-    squad_bucket: Mapped[str] = mapped_column(String(32), nullable=False, default="first_team", server_default="first_team")
+    onboarding_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="starter_bundle", server_default="starter_bundle"
+    )
+    squad_bucket: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="first_team", server_default="first_team"
+    )
     squad_slot: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_non_tradable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     replacement_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
@@ -361,9 +395,7 @@ class RegenOnboardingFlag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class RegenTransferFeeRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "regen_transfer_fee_rules"
-    __table_args__ = (
-        UniqueConstraint("rule_key", name="uq_regen_transfer_fee_rules_rule_key"),
-    )
+    __table_args__ = (UniqueConstraint("rule_key", name="uq_regen_transfer_fee_rules_rule_key"),)
 
     rule_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     fee_bps: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -373,7 +405,9 @@ class RegenTransferFeeRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     elite_regen_share_cap: Mapped[float] = mapped_column(Float, nullable=False, default=0.08, server_default="0.08")
     demand_cooling_floor: Mapped[float] = mapped_column(Float, nullable=False, default=0.55, server_default="0.55")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    policy_source: Mapped[str] = mapped_column(String(32), nullable=False, default="system_default", server_default="system_default")
+    policy_source: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="system_default", server_default="system_default"
+    )
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
@@ -545,11 +579,19 @@ class RegenUnsettlingEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_regen_unsettling_events_approaching_club_id", "approaching_club_id"),
     )
 
-    regen_id: Mapped[str] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False)
-    current_club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
-    approaching_club_id: Mapped[str] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=False)
+    regen_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    current_club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    approaching_club_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=False
+    )
     previous_state: Mapped[str] = mapped_column(String(48), nullable=False, default="content", server_default="content")
-    resulting_state: Mapped[str] = mapped_column(String(48), nullable=False, default="content", server_default="content")
+    resulting_state: Mapped[str] = mapped_column(
+        String(48), nullable=False, default="content", server_default="content"
+    )
     effect_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     resisted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
@@ -563,20 +605,28 @@ class RegenTransferPressureState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_regen_transfer_pressure_states_current_club_id", "current_club_id"),
     )
 
-    regen_id: Mapped[str] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False)
-    current_club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
+    regen_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    current_club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
     current_state: Mapped[str] = mapped_column(String(48), nullable=False, default="content", server_default="content")
     ambition_pressure: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     transfer_desire: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     prestige_dissatisfaction: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     title_frustration: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     pressure_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
-    salary_expectation_fancoin_per_year: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    salary_expectation_fancoin_per_year: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     active_transfer_request: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     refuses_new_contract: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     end_of_contract_pressure: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     unresolved_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_big_club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
+    last_big_club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
     last_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
@@ -588,16 +638,24 @@ class RegenBigClubApproach(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_regen_big_club_approaches_approaching_club_id", "approaching_club_id"),
     )
 
-    regen_id: Mapped[str] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False)
-    current_club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
-    approaching_club_id: Mapped[str] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=False)
+    regen_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    current_club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    approaching_club_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=False
+    )
     prestige_gap_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     trophy_gap_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     resistance_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     contract_tenure_months: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     effect_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     resisted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
-    resulting_state: Mapped[str] = mapped_column(String(48), nullable=False, default="content", server_default="content")
+    resulting_state: Mapped[str] = mapped_column(
+        String(48), nullable=False, default="content", server_default="content"
+    )
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
@@ -609,10 +667,16 @@ class RegenTeamDynamicsEffect(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_regen_team_dynamics_effects_active", "active"),
     )
 
-    regen_id: Mapped[str] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False)
-    club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
+    regen_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    triggered_state: Mapped[str] = mapped_column(String(48), nullable=False, default="content", server_default="content")
+    triggered_state: Mapped[str] = mapped_column(
+        String(48), nullable=False, default="content", server_default="content"
+    )
     morale_penalty: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     chemistry_penalty: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     tactical_cohesion_penalty: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
@@ -630,12 +694,24 @@ class RegenContractOffer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_regen_contract_offers_status", "status"),
     )
 
-    regen_id: Mapped[str] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False)
-    transfer_bid_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("transfer_bids.id", ondelete="SET NULL"), nullable=True)
-    offering_club_id: Mapped[str] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=False)
-    training_fee_gtex_coin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    minimum_salary_fancoin_per_year: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    offered_salary_fancoin_per_year: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    regen_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    transfer_bid_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("transfer_bids.id", ondelete="SET NULL"), nullable=True
+    )
+    offering_club_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    training_fee_gtex_coin: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    minimum_salary_fancoin_per_year: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    offered_salary_fancoin_per_year: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     contract_years: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     current_offer_count_visible: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     decision_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
@@ -650,9 +726,15 @@ class RegenOfferVisibilityState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_regen_offer_visibility_state_offer_count", "visible_offer_count"),
     )
 
-    regen_id: Mapped[str] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False)
-    training_fee_gtex_coin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    minimum_salary_fancoin_per_year: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    regen_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    training_fee_gtex_coin: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    minimum_salary_fancoin_per_year: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     visible_offer_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     last_offer_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
@@ -665,17 +747,35 @@ class CurrencyConversionQuote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_currency_conversion_quotes_owner_user_id", "owner_user_id"),
     )
 
-    regen_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="SET NULL"), nullable=True)
-    offering_club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
-    owner_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    regen_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    offering_club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    owner_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     source_unit: Mapped[str] = mapped_column(String(24), nullable=False, default="coin", server_default="coin")
     target_unit: Mapped[str] = mapped_column(String(24), nullable=False, default="credit", server_default="credit")
-    required_target_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    available_target_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    shortfall_target_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    available_source_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    direct_source_equivalent: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    source_amount_required: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    required_target_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    available_target_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    shortfall_target_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    available_source_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    direct_source_equivalent: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    source_amount_required: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     premium_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     can_cover_shortfall: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     expires_on: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -690,18 +790,30 @@ class TransferHeadlineMediaRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_transfer_headline_media_records_tier", "announcement_tier"),
     )
 
-    regen_id: Mapped[str] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False)
-    buying_club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
-    selling_club_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True)
+    regen_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    buying_club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    selling_club_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("club_profiles.id", ondelete="SET NULL"), nullable=True
+    )
     related_entity_type: Mapped[str] = mapped_column(String(48), nullable=False)
     related_entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
     headline_category: Mapped[str] = mapped_column(String(64), nullable=False)
-    announcement_tier: Mapped[str] = mapped_column(String(32), nullable=False, default="feed_card", server_default="feed_card")
+    announcement_tier: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="feed_card", server_default="feed_card"
+    )
     estimated_transfer_fee_eur: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     estimated_salary_package_eur: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     estimated_total_value_eur: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    transfer_fee_gtex_coin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    salary_package_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    transfer_fee_gtex_coin: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    salary_package_fancoin: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     headline_text: Mapped[str] = mapped_column(Text, nullable=False)
     detail_text: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
@@ -714,12 +826,22 @@ class MajorTransferAnnouncement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_major_transfer_announcements_tier", "announcement_tier"),
     )
 
-    regen_id: Mapped[str] = mapped_column(String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False)
-    headline_record_id: Mapped[str] = mapped_column(String(36), ForeignKey("transfer_headline_media_records.id", ondelete="CASCADE"), nullable=False)
-    story_feed_item_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("story_feed_items.id", ondelete="SET NULL"), nullable=True)
-    platform_announcement_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("platform_announcements.id", ondelete="SET NULL"), nullable=True)
+    regen_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("regen_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    headline_record_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("transfer_headline_media_records.id", ondelete="CASCADE"), nullable=False
+    )
+    story_feed_item_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("story_feed_items.id", ondelete="SET NULL"), nullable=True
+    )
+    platform_announcement_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("platform_announcements.id", ondelete="SET NULL"), nullable=True
+    )
     announcement_category: Mapped[str] = mapped_column(String(64), nullable=False)
-    announcement_tier: Mapped[str] = mapped_column(String(32), nullable=False, default="feed_card", server_default="feed_card")
+    announcement_tier: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="feed_card", server_default="feed_card"
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="published", server_default="published")
     surfaces_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)

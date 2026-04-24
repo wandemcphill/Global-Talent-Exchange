@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from random import Random
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import (
@@ -20,16 +20,23 @@ from app.ingestion.models import (
     TeamStanding,
 )
 from app.market.player_eligibility_policy import market_access_payload
-from app.models.regen_ecosystem import NationalRegenSeed
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.national_team import NationalTeamCompetition
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.regen_ecosystem import CareerEvent, NationalRegenSeed, RegenBloodlineLink
 from app.models.regen import RegenLegacyRecord, RegenLineageProfile, RegenProfile, RegenScoutReport
 from app.regen_universe.awards_engine import AwardDefinition, AwardsEngine, DEFAULT_AWARD_DEFINITIONS
 from app.regen_universe.models import (
     RegenAward,
+    RegenAchievement,
     RegenAwardWinner,
     RegenHallOfFame,
     RegenPerformanceRecord,
     RegenRankingSnapshot,
     RegenSeason,
+    RegenStoryEvent,
 )
 from app.regen_universe.ranking_engine import PerformanceInput, RankingEngine
 from app.schemas.regen_core import (
@@ -139,12 +146,29 @@ class _UniverseProspect:
     metadata: dict[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class _UniverseSubject:
+    subject_key: str
+    player_id: str | None
+    national_seed_id: str | None
+    regen_profile_id: str | None
+    player_name: str
+    age: int | None
+    position_group: str
+    source_type: str
+    nationality_code: str | None = None
+
+
 @dataclass(slots=True)
 class _AggregateBucket:
     player_id: str
     player_name: str
     age: int | None
     position_group: str
+    player_row_id: str | None = None
+    national_seed_id: str | None = None
+    regen_profile_id: str | None = None
+    source_type: str = "regen"
     appearances: int = 0
     starts: int = 0
     minutes_played: int = 0
@@ -168,6 +192,11 @@ class _AggregateBucket:
     trophy_points: float = 0.0
     big_match_impact: float = 0.0
     source_ingestion_season_ids: set[str] = field(default_factory=set)
+    competition_families: set[str] = field(default_factory=set)
+    national_age_bands: set[str] = field(default_factory=set)
+    competition_titles: set[str] = field(default_factory=set)
+    competition_ids: set[str] = field(default_factory=set)
+    won_tournament: bool = False
 
 
 def _utcnow() -> datetime:
@@ -183,12 +212,12 @@ def _calculate_age(date_of_birth: date | None, as_of: date) -> int | None:
     return age
 
 
-def _position_group(player: Player) -> str:
+def _position_group_from_position(position: str | None, normalized_position: str | None = None) -> str:
     tokens = {
         token.strip().lower()
         for token in (
-            player.normalized_position,
-            player.position,
+            normalized_position,
+            position,
         )
         if token
     }
@@ -200,10 +229,14 @@ def _position_group(player: Player) -> str:
         return "midfielder"
     if any(token in {"st", "cf", "ss", "fw", "forward", "attacker", "winger", "lw", "rw"} for token in tokens):
         return "forward"
-    normalized = (player.normalized_position or "").strip().lower()
+    normalized = (normalized_position or "").strip().lower()
     if normalized in {"goalkeeper", "defender", "midfielder", "forward"}:
         return normalized
     return "forward"
+
+
+def _position_group(player: Player) -> str:
+    return _position_group_from_position(player.position, player.normalized_position)
 
 
 def _competition_importance(competition: Competition | None, internal_league: InternalLeague | None) -> float:
@@ -380,7 +413,9 @@ class RegenUniverseService:
             self.session.add(
                 RegenPerformanceRecord(
                     season_id=season.id,
-                    player_id=performance.player_id,
+                    subject_key=performance.player_id,
+                    player_id=self._performance_player_id(performance),
+                    national_seed_id=self._performance_national_seed_id(performance),
                     player_name=performance.player_name,
                     age=performance.age,
                     position_group=performance.position_group,
@@ -416,7 +451,9 @@ class RegenUniverseService:
                 self.session.add(
                     RegenRankingSnapshot(
                         season_id=season.id,
-                        player_id=item.player_id,
+                        subject_key=item.player_id,
+                        player_id=self._ranking_player_id(item.player_id),
+                        national_seed_id=self._ranking_national_seed_id(item.player_id),
                         player_name=item.player_name,
                         category=item.category,
                         score=item.score,
@@ -432,29 +469,32 @@ class RegenUniverseService:
             performances=computed_performances,
             rankings=rankings,
         )
+        award_real_player_ids = [
+            item.player_id for item in award_selections if not self._is_seed_subject(item.player_id)
+        ]
         regen_by_player = (
             {
                 profile.player_id: profile
                 for profile in self.session.scalars(
-                    select(RegenProfile).where(
-                        RegenProfile.player_id.in_([item.player_id for item in award_selections])
-                    )
+                    select(RegenProfile).where(RegenProfile.player_id.in_(award_real_player_ids))
                 ).all()
             }
-            if award_selections
+            if award_real_player_ids
             else {}
         )
         market_service = RegenMarketService(self.session)
         story_candidate_ids: set[str] = set()
         for selection in award_selections:
             award = award_lookup[selection.award_code]
-            if selection.rank is None or selection.rank <= 1:
+            if (selection.rank is None or selection.rank <= 1) and not self._is_seed_subject(selection.player_id):
                 story_candidate_ids.add(selection.player_id)
             self.session.add(
                 RegenAwardWinner(
                     award_id=award.id,
                     season_id=season.id,
-                    player_id=selection.player_id,
+                    subject_key=selection.player_id,
+                    player_id=self._ranking_player_id(selection.player_id),
+                    national_seed_id=self._ranking_national_seed_id(selection.player_id),
                     player_name=selection.player_name,
                     ranking_score=selection.ranking_score,
                     rank=selection.rank,
@@ -468,7 +508,7 @@ class RegenUniverseService:
                     regen.id,
                     RegenAwardEvent(
                         award_code=self._market_award_code(award),
-                        award_name=award.name,
+                        award_name=self._market_award_name(award),
                         award_category=award.category,
                         season_label=str(season.season_number),
                         rank=selection.rank,
@@ -506,6 +546,7 @@ class RegenUniverseService:
             next_season_id = next_season.id
 
         hall_of_fame_count = self._refresh_hall_of_fame()
+        self._sync_season_story_surfaces(season.id)
         self.session.flush()
         return {
             "season_id": season.id,
@@ -596,12 +637,14 @@ class RegenUniverseService:
         return {"entries": [self._hall_of_fame_payload(item) for item in entries]}
 
     def get_player_prestige_summary(self, player_id: str) -> dict[str, object] | None:
-        hall_of_fame = self.session.scalar(select(RegenHallOfFame).where(RegenHallOfFame.player_id == player_id))
+        hall_of_fame = None
+        if not self._is_seed_subject(player_id):
+            hall_of_fame = self.session.scalar(select(RegenHallOfFame).where(RegenHallOfFame.player_id == player_id))
         latest_ranking = self.session.execute(
             select(RegenRankingSnapshot, RegenSeason)
             .join(RegenSeason, RegenSeason.id == RegenRankingSnapshot.season_id)
             .where(
-                RegenRankingSnapshot.player_id == player_id,
+                RegenRankingSnapshot.subject_key == player_id,
                 RegenRankingSnapshot.category == "overall",
             )
             .order_by(RegenSeason.season_number.desc(), RegenRankingSnapshot.rank.asc())
@@ -610,7 +653,7 @@ class RegenUniverseService:
             select(RegenRankingSnapshot, RegenSeason)
             .join(RegenSeason, RegenSeason.id == RegenRankingSnapshot.season_id)
             .where(
-                RegenRankingSnapshot.player_id == player_id,
+                RegenRankingSnapshot.subject_key == player_id,
                 RegenRankingSnapshot.category == "overall",
                 RegenSeason.is_active.is_(True),
             )
@@ -620,7 +663,7 @@ class RegenUniverseService:
             select(RegenAwardWinner, RegenAward, RegenSeason)
             .join(RegenAward, RegenAward.id == RegenAwardWinner.award_id)
             .join(RegenSeason, RegenSeason.id == RegenAwardWinner.season_id)
-            .where(RegenAwardWinner.player_id == player_id)
+            .where(RegenAwardWinner.subject_key == player_id)
             .order_by(
                 RegenSeason.season_number.desc(),
                 RegenAward.sort_order.asc(),
@@ -1043,8 +1086,87 @@ class RegenUniverseService:
                 return prospect
         return None
 
+    @staticmethod
+    def _is_seed_subject(subject_key: str | None) -> bool:
+        return str(subject_key or "").strip().startswith("seed:")
+
+    def _subject_prospect(self, subject_key: str) -> _UniverseProspect | None:
+        normalized = (subject_key or "").strip()
+        if not normalized:
+            return None
+        if self._is_seed_subject(normalized):
+            seed_id = normalized.split(":", 1)[1]
+            seed = self.session.get(NationalRegenSeed, seed_id)
+            return self._prospect_from_seed(seed) if seed is not None else None
+        regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == normalized))
+        if regen is None:
+            return None
+        return self._prospect_from_regen(regen=regen, market_service=RegenMarketService(self.session))
+
+    def _resolve_subject(self, subject_key: str, *, as_of: date | None = None) -> _UniverseSubject | None:
+        normalized = (subject_key or "").strip()
+        if not normalized:
+            return None
+        if self._is_seed_subject(normalized):
+            seed_id = normalized.split(":", 1)[1]
+            seed = self.session.get(NationalRegenSeed, seed_id)
+            if seed is None:
+                return None
+            return _UniverseSubject(
+                subject_key=normalized,
+                player_id=None,
+                national_seed_id=seed.id,
+                regen_profile_id=None,
+                player_name=seed.display_name,
+                age=self._seed_age(seed),
+                position_group=_position_group_from_position(seed.primary_position, seed.primary_position),
+                source_type="national_seed",
+                nationality_code=seed.country_code,
+            )
+        player = self.session.get(Player, normalized)
+        if player is None:
+            return None
+        regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player.id))
+        reference_date = as_of or date.today()
+        return _UniverseSubject(
+            subject_key=player.id,
+            player_id=player.id,
+            national_seed_id=None,
+            regen_profile_id=regen.id if regen is not None else None,
+            player_name=player.full_name,
+            age=_calculate_age(player.date_of_birth, reference_date),
+            position_group=_position_group(player),
+            source_type="regen",
+            nationality_code=regen.birth_country_code if regen is not None else None,
+        )
+
+    def _subject_player_payload(self, subject_key: str) -> dict[str, object] | None:
+        prospect = self._subject_prospect(subject_key)
+        if prospect is None:
+            return None
+        return self._player_summary_payload(prospect)
+
+    def _performance_player_id(self, performance) -> str | None:
+        value = performance.metadata.get("player_id") if isinstance(performance.metadata, dict) else None
+        return str(value) if value else None
+
+    def _performance_national_seed_id(self, performance) -> str | None:
+        value = performance.metadata.get("national_seed_id") if isinstance(performance.metadata, dict) else None
+        return str(value) if value else None
+
+    def _ranking_player_id(self, subject_key: str) -> str | None:
+        return None if self._is_seed_subject(subject_key) else subject_key
+
+    def _ranking_national_seed_id(self, subject_key: str) -> str | None:
+        if not self._is_seed_subject(subject_key):
+            return None
+        _, _, seed_id = subject_key.partition(":")
+        return seed_id or None
+
     def get_player_lookup(self, player_id: str) -> dict[str, object] | None:
-        prospect = self._prospect_lookup(player_id)
+        prospect = self._subject_prospect(player_id)
+        if prospect is None:
+            prospect = self._prospect_lookup(player_id)
         if prospect is None or prospect.profile is None or prospect.card is None:
             return None
         return {
@@ -1054,6 +1176,9 @@ class RegenUniverseService:
             "scouting_note": self._scouting_note_for_prospect(prospect),
             "discovery_badges": list(prospect.discovery_badges),
             "market_value_coin": prospect.market_value_coin,
+            "prestige": self.get_player_prestige_summary(prospect.lookup_id),
+            "timeline": self.list_player_timeline(player_id=prospect.lookup_id, limit=8)["items"],
+            "achievements": self.list_achievements(subject_key=prospect.lookup_id, limit=8)["items"],
         }
 
     def get_player_showcase(self, player_id: str) -> dict[str, object] | None:
@@ -1084,7 +1209,403 @@ class RegenUniverseService:
             "legacy": self._legacy_payload(legacy, profile),
             "latest_value": latest_value,
             "discovery_badges": discovery_badges,
+            "timeline": self.list_player_timeline(player_id=player_id, limit=12)["items"],
+            "achievements": self.list_achievements(subject_key=player_id, limit=12)["items"],
         }
+
+    def list_player_timeline(
+        self,
+        *,
+        player_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        self._ensure_subject_story_surfaces(player_id)
+        items = list(
+            self.session.scalars(
+                select(RegenStoryEvent)
+                .where(RegenStoryEvent.subject_key == player_id)
+                .order_by(RegenStoryEvent.occurred_at.desc(), RegenStoryEvent.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        )
+        total = int(
+            self.session.scalar(
+                select(func.count()).select_from(RegenStoryEvent).where(RegenStoryEvent.subject_key == player_id)
+            )
+            or 0
+        )
+        return {
+            "player_id": player_id,
+            "items": [self._story_event_payload(item) for item in items],
+            "total": total,
+        }
+
+    def list_achievements(
+        self,
+        *,
+        subject_key: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        if subject_key:
+            self._ensure_subject_story_surfaces(subject_key)
+        stmt = select(RegenAchievement).order_by(RegenAchievement.earned_at.desc(), RegenAchievement.created_at.desc())
+        count_stmt = select(func.count()).select_from(RegenAchievement)
+        if subject_key:
+            stmt = stmt.where(RegenAchievement.subject_key == subject_key)
+            count_stmt = count_stmt.where(RegenAchievement.subject_key == subject_key)
+        items = list(self.session.scalars(stmt.offset(offset).limit(limit)))
+        total = int(self.session.scalar(count_stmt) or 0)
+        return {"items": [self._achievement_payload(item) for item in items], "total": total}
+
+    def _story_event_payload(self, event: RegenStoryEvent) -> dict[str, object]:
+        metadata = dict(event.metadata_json or {})
+        return {
+            "id": event.id,
+            "event_key": event.event_key,
+            "subject_key": event.subject_key,
+            "player_id": event.subject_key,
+            "player_name": metadata.get("player_name"),
+            "event_type": event.event_type,
+            "title": event.title,
+            "summary": event.summary,
+            "occurred_at": event.occurred_at,
+            "metadata_json": metadata,
+        }
+
+    def _achievement_payload(self, achievement: RegenAchievement) -> dict[str, object]:
+        metadata = dict(achievement.metadata_json or {})
+        return {
+            "id": achievement.id,
+            "achievement_key": achievement.achievement_key,
+            "subject_key": achievement.subject_key,
+            "player_id": achievement.subject_key,
+            "player_name": metadata.get("player_name"),
+            "achievement_type": achievement.achievement_type,
+            "title": achievement.title,
+            "description": achievement.description,
+            "earned_at": achievement.earned_at,
+            "metadata_json": metadata,
+        }
+
+    def _upsert_story_event(
+        self,
+        *,
+        event_key: str,
+        subject: _UniverseSubject,
+        event_type: str,
+        title: str,
+        summary: str,
+        occurred_at: datetime,
+        season_id: str | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> RegenStoryEvent:
+        payload = dict(metadata or {})
+        payload.setdefault("player_name", subject.player_name)
+        payload.setdefault("source_type", subject.source_type)
+        event = self.session.scalar(select(RegenStoryEvent).where(RegenStoryEvent.event_key == event_key))
+        if event is None:
+            event = RegenStoryEvent(
+                event_key=event_key,
+                subject_key=subject.subject_key,
+                player_id=subject.player_id,
+                regen_profile_id=subject.regen_profile_id,
+                national_seed_id=subject.national_seed_id,
+                season_id=season_id,
+                event_type=event_type,
+                title=title,
+                summary=summary,
+                occurred_at=occurred_at,
+                metadata_json=payload,
+            )
+            self.session.add(event)
+            return event
+        event.subject_key = subject.subject_key
+        event.player_id = subject.player_id
+        event.regen_profile_id = subject.regen_profile_id
+        event.national_seed_id = subject.national_seed_id
+        event.season_id = season_id
+        event.event_type = event_type
+        event.title = title
+        event.summary = summary
+        event.occurred_at = occurred_at
+        event.metadata_json = payload
+        return event
+
+    def _upsert_achievement(
+        self,
+        *,
+        achievement_key: str,
+        subject: _UniverseSubject,
+        achievement_type: str,
+        title: str,
+        description: str,
+        earned_at: datetime,
+        season_id: str | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> RegenAchievement:
+        payload = dict(metadata or {})
+        payload.setdefault("player_name", subject.player_name)
+        payload.setdefault("source_type", subject.source_type)
+        achievement = self.session.scalar(
+            select(RegenAchievement).where(RegenAchievement.achievement_key == achievement_key)
+        )
+        if achievement is None:
+            achievement = RegenAchievement(
+                achievement_key=achievement_key,
+                subject_key=subject.subject_key,
+                player_id=subject.player_id,
+                regen_profile_id=subject.regen_profile_id,
+                national_seed_id=subject.national_seed_id,
+                season_id=season_id,
+                achievement_type=achievement_type,
+                title=title,
+                description=description,
+                earned_at=earned_at,
+                metadata_json=payload,
+            )
+            self.session.add(achievement)
+            return achievement
+        achievement.subject_key = subject.subject_key
+        achievement.player_id = subject.player_id
+        achievement.regen_profile_id = subject.regen_profile_id
+        achievement.national_seed_id = subject.national_seed_id
+        achievement.season_id = season_id
+        achievement.achievement_type = achievement_type
+        achievement.title = title
+        achievement.description = description
+        achievement.earned_at = earned_at
+        achievement.metadata_json = payload
+        return achievement
+
+    def _sync_season_story_surfaces(self, season_id: str) -> None:
+        season = self.session.get(RegenSeason, season_id)
+        if season is None:
+            return
+        award_rows = self.session.execute(
+            select(RegenAwardWinner, RegenAward)
+            .join(RegenAward, RegenAward.id == RegenAwardWinner.award_id)
+            .where(RegenAwardWinner.season_id == season_id)
+        ).all()
+        for winner, award in award_rows:
+            subject = self._resolve_subject(winner.subject_key, as_of=season.end_date)
+            if subject is None:
+                continue
+            summary = f"{winner.player_name} won {award.name} in GTEX season {season.season_number}."
+            metadata = {
+                **dict(winner.metadata_json or {}),
+                "award_code": award.code,
+                "award_name": award.name,
+                "season_number": season.season_number,
+                "rank": winner.rank,
+            }
+            self._upsert_story_event(
+                event_key=f"award:{winner.id}",
+                subject=subject,
+                event_type="award_won",
+                title=award.name,
+                summary=summary,
+                occurred_at=winner.awarded_at,
+                season_id=season.id,
+                metadata=metadata,
+            )
+            self._upsert_achievement(
+                achievement_key=f"award:{winner.id}",
+                subject=subject,
+                achievement_type="award_won",
+                title=award.name,
+                description=summary,
+                earned_at=winner.awarded_at,
+                season_id=season.id,
+                metadata=metadata,
+            )
+
+        national_records = [
+            record
+            for record in self.session.scalars(
+                select(RegenPerformanceRecord)
+                .where(RegenPerformanceRecord.season_id == season_id)
+                .order_by(RegenPerformanceRecord.overall_score.desc())
+            )
+            if str((record.metadata_json or {}).get("competition_scope") or "").strip().lower() == "national"
+        ]
+        for record in national_records:
+            subject = self._resolve_subject(record.subject_key, as_of=season.end_date)
+            if subject is None:
+                continue
+            metadata = dict(record.metadata_json or {})
+            title = f"National-team call-up for {metadata.get('competition_title') or 'GTEX selection'}"
+            self._upsert_story_event(
+                event_key=f"callup:{season_id}:{record.subject_key}",
+                subject=subject,
+                event_type="national_team_callup",
+                title=title,
+                summary=f"{record.player_name} featured for the national side in {metadata.get('competition_title') or 'national-team competition'}.",
+                occurred_at=season.closed_at or _utcnow(),
+                season_id=season_id,
+                metadata=metadata,
+            )
+            if bool(metadata.get("won_tournament")):
+                tournament_title = str(metadata.get("competition_title") or "National competition")
+                self._upsert_story_event(
+                    event_key=f"tournament:{season_id}:{record.subject_key}",
+                    subject=subject,
+                    event_type="tournament_winner",
+                    title=f"{tournament_title} winner",
+                    summary=f"{record.player_name} finished the campaign as a tournament winner in {tournament_title}.",
+                    occurred_at=season.closed_at or _utcnow(),
+                    season_id=season_id,
+                    metadata=metadata,
+                )
+                self._upsert_achievement(
+                    achievement_key=f"tournament:{season_id}:{record.subject_key}",
+                    subject=subject,
+                    achievement_type="tournament_winner",
+                    title=f"{tournament_title} winner",
+                    description=f"Won {tournament_title} during GTEX season {season.season_number}.",
+                    earned_at=season.closed_at or _utcnow(),
+                    season_id=season_id,
+                    metadata=metadata,
+                )
+
+    def _ensure_subject_story_surfaces(self, subject_key: str) -> None:
+        subject = self._resolve_subject(subject_key)
+        if subject is None:
+            return
+        if subject.player_id:
+            career_entries = list(
+                self.session.scalars(
+                    select(PlayerCareerEntry)
+                    .where(PlayerCareerEntry.player_id == subject.player_id)
+                    .order_by(PlayerCareerEntry.start_on.asc(), PlayerCareerEntry.created_at.asc())
+                )
+            )
+            debut_entry = next((item for item in career_entries if (item.appearances or 0) > 0), None)
+            if debut_entry is not None and debut_entry.start_on is not None:
+                self._upsert_story_event(
+                    event_key=f"debut:{debut_entry.id}",
+                    subject=subject,
+                    event_type="debut",
+                    title="Senior debut",
+                    summary=f"{subject.player_name} made a debut for {debut_entry.club_name}.",
+                    occurred_at=datetime.combine(debut_entry.start_on, datetime.min.time(), tzinfo=timezone.utc),
+                    metadata={"club_name": debut_entry.club_name, "season_label": debut_entry.season_label},
+                )
+            first_goal_entry = next((item for item in career_entries if (item.goals or 0) > 0), None)
+            if first_goal_entry is not None and first_goal_entry.start_on is not None:
+                self._upsert_story_event(
+                    event_key=f"first-goal:{first_goal_entry.id}",
+                    subject=subject,
+                    event_type="first_goal",
+                    title="First goal",
+                    summary=f"{subject.player_name} hit a first goal for {first_goal_entry.club_name}.",
+                    occurred_at=datetime.combine(first_goal_entry.start_on, datetime.min.time(), tzinfo=timezone.utc),
+                    metadata={"club_name": first_goal_entry.club_name, "season_label": first_goal_entry.season_label},
+                )
+
+            lifecycle_events = list(
+                self.session.scalars(
+                    select(PlayerLifecycleEvent)
+                    .where(PlayerLifecycleEvent.player_id == subject.player_id)
+                    .order_by(PlayerLifecycleEvent.occurred_on.asc(), PlayerLifecycleEvent.created_at.asc())
+                )
+            )
+            for lifecycle in lifecycle_events:
+                if lifecycle.event_type not in {"transfer_request_submitted", "contract_renewed"}:
+                    continue
+                self._upsert_story_event(
+                    event_key=f"lifecycle:{lifecycle.id}",
+                    subject=subject,
+                    event_type=lifecycle.event_type,
+                    title=lifecycle.event_type.replace("_", " ").title(),
+                    summary=lifecycle.summary,
+                    occurred_at=datetime.combine(lifecycle.occurred_on, datetime.min.time(), tzinfo=timezone.utc),
+                    metadata=dict(lifecycle.details_json or {}),
+                )
+
+            career_events = list(
+                self.session.scalars(
+                    select(CareerEvent)
+                    .where(CareerEvent.player_id == subject.player_id)
+                    .order_by(CareerEvent.occurred_on.asc(), CareerEvent.created_at.asc())
+                )
+            )
+            for career_event in career_events:
+                if career_event.type != "requested_son_created":
+                    continue
+                occurred_at = datetime.combine(career_event.occurred_on, datetime.min.time(), tzinfo=timezone.utc)
+                event_metadata = dict(career_event.metadata_json or {})
+                event_token = str(event_metadata.get("order_id") or career_event.id)
+                self._upsert_story_event(
+                    event_key=f"career:{event_token}",
+                    subject=subject,
+                    event_type="requested_son_created",
+                    title="Requested son created",
+                    summary=career_event.summary or f"{subject.player_name} arrived through the request-son pathway.",
+                    occurred_at=occurred_at,
+                    metadata=event_metadata,
+                )
+                self._upsert_achievement(
+                    achievement_key=f"career:{event_token}",
+                    subject=subject,
+                    achievement_type="requested_son_created",
+                    title="Requested son created",
+                    description=career_event.summary
+                    or f"{subject.player_name} was generated through a paid request-son flow.",
+                    earned_at=occurred_at,
+                    metadata=event_metadata,
+                )
+
+            if subject.regen_profile_id:
+                bloodline = self.session.scalar(
+                    select(RegenBloodlineLink).where(RegenBloodlineLink.regen_profile_id == subject.regen_profile_id)
+                )
+                if bloodline is not None:
+                    metadata = dict(bloodline.metadata_json or {})
+                    self._upsert_story_event(
+                        event_key=f"bloodline:{bloodline.id}",
+                        subject=subject,
+                        event_type="bloodline_milestone",
+                        title="Bloodline milestone",
+                        summary=f"{subject.player_name} carries a traceable bloodline arc into the regen universe.",
+                        occurred_at=bloodline.created_at,
+                        metadata=metadata,
+                    )
+                    self._upsert_achievement(
+                        achievement_key=f"bloodline:{bloodline.id}",
+                        subject=subject,
+                        achievement_type="bloodline_milestone",
+                        title="Bloodline milestone",
+                        description=f"{subject.player_name} added a new milestone to an active regen bloodline.",
+                        earned_at=bloodline.created_at,
+                        metadata=metadata,
+                    )
+
+            hall_of_fame = self.session.scalar(
+                select(RegenHallOfFame).where(RegenHallOfFame.player_id == subject.player_id)
+            )
+            if hall_of_fame is not None:
+                metadata = dict(hall_of_fame.metadata_json or {})
+                self._upsert_story_event(
+                    event_key=f"hall-of-fame:{hall_of_fame.id}",
+                    subject=subject,
+                    event_type="hall_of_fame_inducted",
+                    title="Hall of Fame",
+                    summary=f"{subject.player_name} entered the GTEX Hall of Fame.",
+                    occurred_at=hall_of_fame.updated_at,
+                    metadata=metadata,
+                )
+                self._upsert_achievement(
+                    achievement_key=f"hall-of-fame:{hall_of_fame.id}",
+                    subject=subject,
+                    achievement_type="hall_of_fame_inducted",
+                    title="Hall of Fame",
+                    description=f"{subject.player_name} is now a GTEX Hall of Fame player.",
+                    earned_at=hall_of_fame.updated_at,
+                    metadata=metadata,
+                )
 
     def list_rising_stars(self, *, limit: int = 20, offset: int = 0, age_max: int = 21) -> dict[str, object]:
         candidates: list[tuple[float, dict[str, object]]] = []
@@ -1304,9 +1825,55 @@ class RegenUniverseService:
                 }
             )
 
+        recent_awards = self.session.execute(
+            select(RegenAwardWinner, RegenAward)
+            .join(RegenAward, RegenAward.id == RegenAwardWinner.award_id)
+            .order_by(RegenAwardWinner.awarded_at.desc(), RegenAward.sort_order.asc())
+            .limit(max(limit, 10))
+        ).all()
+        for winner, award in recent_awards:
+            items.append(
+                {
+                    "feed_id": f"award:{winner.id}",
+                    "feed_type": "award_won",
+                    "player_id": winner.subject_key,
+                    "regen_id": winner.subject_key,
+                    "player": self._subject_player_payload(winner.subject_key),
+                    "title": f"{winner.player_name} won {award.name}",
+                    "summary": str((winner.metadata_json or {}).get("selection_reason") or award.description),
+                    "occurred_at": winner.awarded_at,
+                    "importance": round(0.72 + (0.03 if winner.rank == 1 else 0.0), 4),
+                    "badges": ["award_won", award.code.lower()],
+                }
+            )
+
+        recent_story_events = list(
+            self.session.scalars(
+                select(RegenStoryEvent)
+                .where(RegenStoryEvent.event_type.in_(("transfer_request_submitted", "contract_renewed")))
+                .order_by(RegenStoryEvent.occurred_at.desc(), RegenStoryEvent.id.asc())
+                .limit(max(limit, 10))
+            )
+        )
+        for event in recent_story_events:
+            items.append(
+                {
+                    "feed_id": f"story:{event.id}",
+                    "feed_type": event.event_type,
+                    "player_id": event.subject_key,
+                    "regen_id": event.subject_key,
+                    "player": self._subject_player_payload(event.subject_key),
+                    "title": event.title,
+                    "summary": event.summary,
+                    "occurred_at": event.occurred_at,
+                    "importance": 0.74 if event.event_type == "transfer_request_submitted" else 0.64,
+                    "badges": [event.event_type],
+                }
+            )
+
         items.sort(
             key=lambda item: (
-                item["occurred_at"],
+                RegenUniverseService._aware_datetime(item["occurred_at"]),
                 item["importance"],
             ),
             reverse=True,
@@ -1316,29 +1883,16 @@ class RegenUniverseService:
             "total": len(items),
         }
 
-    def _build_performance_inputs(self, season: RegenSeason) -> list[PerformanceInput]:
-        players = list(
-            self.session.scalars(
-                select(Player)
+    def _build_club_performance_buckets(self, season: RegenSeason) -> dict[str, _AggregateBucket]:
+        player_rows = list(
+            self.session.execute(
+                select(Player, RegenProfile)
                 .join(RegenProfile, RegenProfile.player_id == Player.id)
                 .where(Player.is_real_player.is_(False))
                 .order_by(Player.full_name.asc(), Player.id.asc())
-            )
+            ).all()
         )
         source_season_ids = self._source_ingestion_season_ids(season)
-        previous_season = self.session.scalar(
-            select(RegenSeason)
-            .where(RegenSeason.season_number < season.season_number)
-            .order_by(RegenSeason.season_number.desc())
-        )
-        previous_scores = {}
-        if previous_season is not None:
-            previous_scores = {
-                record.player_id: record.overall_score
-                for record in self.session.scalars(
-                    select(RegenPerformanceRecord).where(RegenPerformanceRecord.season_id == previous_season.id)
-                )
-            }
         title_lookup: set[tuple[str, str]] = set()
         standings_stmt = select(TeamStanding).where(
             TeamStanding.position == 1,
@@ -1349,14 +1903,18 @@ class RegenUniverseService:
         for standing in self.session.scalars(standings_stmt):
             if standing.club_id and standing.season_id:
                 title_lookup.add((standing.club_id, standing.season_id))
+
         buckets = {
             player.id: _AggregateBucket(
                 player_id=player.id,
                 player_name=player.full_name,
                 age=_calculate_age(player.date_of_birth, season.end_date),
                 position_group=_position_group(player),
+                player_row_id=player.id,
+                regen_profile_id=regen.id,
+                source_type="regen",
             )
-            for player in players
+            for player, regen in player_rows
         }
 
         season_stats_stmt = (
@@ -1456,49 +2014,374 @@ class RegenUniverseService:
                 bucket.competition_weight += weight
             if stat.season_id:
                 bucket.source_ingestion_season_ids.add(stat.season_id)
+        return buckets
 
-        inputs: list[PerformanceInput] = []
-        for player in players:
-            bucket = buckets[player.id]
-            if bucket.appearances <= 0 and bucket.minutes_played <= 0 and bucket.goals <= 0 and bucket.assists <= 0:
-                continue
-            if bucket.season_rating_weight > 0:
-                average_rating = round(bucket.season_rating_total / bucket.season_rating_weight, 4)
-            elif bucket.match_rating_weight > 0:
-                average_rating = round(bucket.match_rating_total / bucket.match_rating_weight, 4)
-            else:
-                average_rating = None
-            if bucket.competition_weight > 0:
-                competition_importance = round(bucket.competition_total / bucket.competition_weight, 4)
-            else:
-                competition_importance = 1.0
-            consistency_score = self._consistency_score(bucket=bucket, average_rating=average_rating)
-            inputs.append(
-                PerformanceInput(
-                    player_id=player.id,
-                    player_name=player.full_name,
-                    age=bucket.age,
-                    position_group=bucket.position_group,
-                    appearances=bucket.appearances,
-                    starts=bucket.starts,
-                    minutes_played=bucket.minutes_played,
-                    goals=bucket.goals,
-                    assists=bucket.assists,
-                    clean_sheets=bucket.clean_sheets,
-                    saves=bucket.saves,
-                    average_rating=average_rating,
-                    matches_won=bucket.matches_won,
-                    competition_importance=competition_importance,
-                    consistency_score=consistency_score,
-                    previous_overall_score=previous_scores.get(player.id),
-                    metadata={
-                        "source_ingestion_season_ids": sorted(bucket.source_ingestion_season_ids),
-                        "match_count": bucket.match_count,
-                        "trophy_points": round(bucket.trophy_points, 4),
-                        "big_match_impact": round(bucket.big_match_impact, 4),
-                    },
-                )
+    def _build_national_performance_buckets(self, season: RegenSeason) -> dict[str, _AggregateBucket]:
+        competitions = [
+            item
+            for item in self.session.scalars(
+                select(NationalTeamCompetition)
+                .where(NationalTeamCompetition.linked_competition_id.is_not(None))
+                .order_by(NationalTeamCompetition.created_at.asc(), NationalTeamCompetition.id.asc())
             )
+            if self._national_competition_overlaps_season(item, season)
+        ]
+        if not competitions:
+            return {}
+        linked_lookup = {str(item.linked_competition_id): item for item in competitions if item.linked_competition_id}
+        match_rows = list(
+            self.session.scalars(
+                select(CompetitionMatch)
+                .where(CompetitionMatch.competition_id.in_(tuple(linked_lookup)))
+                .order_by(CompetitionMatch.match_date.asc(), CompetitionMatch.created_at.asc())
+            )
+        )
+        if not match_rows:
+            return {}
+        match_ids = [item.id for item in match_rows]
+        events_by_match: dict[str, list[CompetitionMatchEvent]] = defaultdict(list)
+        for event in self.session.scalars(
+            select(CompetitionMatchEvent)
+            .where(CompetitionMatchEvent.match_id.in_(match_ids))
+            .order_by(CompetitionMatchEvent.created_at.asc(), CompetitionMatchEvent.id.asc())
+        ):
+            events_by_match[event.match_id].append(event)
+
+        buckets: dict[str, _AggregateBucket] = {}
+        for match in match_rows:
+            national_competition = linked_lookup.get(match.competition_id)
+            if national_competition is None:
+                continue
+            family = self._national_competition_family(national_competition)
+            importance = self._national_competition_importance(national_competition, match.stage)
+            performance_rows = dict(match.metadata_json or {}).get("player_performances")
+            if isinstance(performance_rows, list) and performance_rows:
+                for raw in performance_rows:
+                    if not isinstance(raw, dict):
+                        continue
+                    self._apply_national_performance_row(
+                        buckets=buckets,
+                        raw=raw,
+                        season=season,
+                        national_competition=national_competition,
+                        competition_family=family,
+                        importance=importance,
+                    )
+                continue
+            self._apply_national_event_fallback(
+                buckets=buckets,
+                season=season,
+                national_competition=national_competition,
+                competition_family=family,
+                importance=importance,
+                events=events_by_match.get(match.id, []),
+            )
+        return buckets
+
+    @staticmethod
+    def _national_competition_overlaps_season(competition: NationalTeamCompetition, season: RegenSeason) -> bool:
+        candidates = (
+            competition.kickoff_at,
+            competition.completed_at,
+            competition.entry_opens_at,
+            competition.entry_closes_at,
+            competition.created_at,
+        )
+        if not any(candidates):
+            return True
+        window_start = datetime.combine(season.start_date, datetime.min.time(), tzinfo=timezone.utc)
+        window_end = datetime.combine(season.end_date + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        return any(
+            candidate is not None and window_start <= RegenUniverseService._aware_datetime(candidate) < window_end
+            for candidate in candidates
+        )
+
+    @staticmethod
+    def _aware_datetime(value: datetime) -> datetime:
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+    @staticmethod
+    def _national_competition_family(competition: NationalTeamCompetition) -> str:
+        descriptor = f"{competition.key} {competition.title}".strip().lower()
+        age_band = str(competition.age_band or "").strip().lower()
+        if "afcon" in descriptor:
+            return "afcon"
+        if "world cup" in descriptor and age_band == "u17":
+            return "u17_world_cup"
+        if "world cup" in descriptor and age_band == "u20":
+            return "u20_world_cup"
+        if "world cup" in descriptor:
+            return "world_cup"
+        return descriptor.replace(" ", "_") or "national_competition"
+
+    @staticmethod
+    def _national_competition_importance(competition: NationalTeamCompetition, stage: str | None) -> float:
+        family = RegenUniverseService._national_competition_family(competition)
+        importance = 1.08
+        if family in {"u17_world_cup", "u20_world_cup", "world_cup"}:
+            importance = 1.34
+        elif family == "afcon":
+            importance = 1.24
+        elif str(competition.region_type or "").strip().lower() == "global":
+            importance = 1.2
+        stage_label = str(stage or "").strip().lower()
+        if "final" in stage_label:
+            importance += 0.18
+        elif "semi" in stage_label:
+            importance += 0.12
+        elif "quarter" in stage_label or "knockout" in stage_label:
+            importance += 0.08
+        return round(importance, 4)
+
+    def _apply_national_performance_row(
+        self,
+        *,
+        buckets: dict[str, _AggregateBucket],
+        raw: dict[str, object],
+        season: RegenSeason,
+        national_competition: NationalTeamCompetition,
+        competition_family: str,
+        importance: float,
+    ) -> None:
+        subject_key = str(raw.get("subject_key") or raw.get("player_id") or "").strip()
+        national_seed_id = str(raw.get("national_seed_id") or "").strip()
+        if not subject_key and national_seed_id:
+            subject_key = f"seed:{national_seed_id}"
+        subject = self._resolve_subject(subject_key, as_of=season.end_date)
+        if subject is None:
+            return
+        bucket = buckets.get(subject.subject_key)
+        if bucket is None:
+            bucket = _AggregateBucket(
+                player_id=subject.subject_key,
+                player_name=subject.player_name,
+                age=subject.age,
+                position_group=subject.position_group,
+                player_row_id=subject.player_id,
+                national_seed_id=subject.national_seed_id,
+                regen_profile_id=subject.regen_profile_id,
+                source_type=subject.source_type,
+            )
+            buckets[subject.subject_key] = bucket
+
+        appearances = max(int(raw.get("appearances") or 1), 0)
+        starts = max(int(raw.get("starts") or (appearances if bool(raw.get("started", True)) else 0)), 0)
+        minutes = max(int(raw.get("minutes") or (90 if appearances > 0 else 0)), 0)
+        goals = max(int(raw.get("goals") or 0), 0)
+        assists = max(int(raw.get("assists") or 0), 0)
+        saves = max(int(raw.get("saves") or 0), 0)
+        clean_sheets = max(int(raw.get("clean_sheets") or (1 if raw.get("clean_sheet") else 0)), 0)
+        rating_raw = raw.get("rating")
+        rating_value = float(rating_raw) if rating_raw is not None else None
+        match_count = max(int(raw.get("match_count") or appearances or 1), 1)
+
+        bucket.appearances += appearances
+        bucket.starts += starts
+        bucket.minutes_played += minutes
+        bucket.goals += goals
+        bucket.assists += assists
+        bucket.clean_sheets += clean_sheets
+        bucket.saves += saves
+        bucket.match_count += match_count
+        bucket.start_matches += min(starts, match_count)
+        bucket.full_minutes_matches += min(match_count, 1 if minutes >= 75 else 0)
+        weight = max(minutes, appearances, 1)
+        if rating_value is not None:
+            bucket.season_rating_total += rating_value * weight
+            bucket.season_rating_weight += weight
+            bucket.match_rating_total += rating_value * match_count
+            bucket.match_rating_weight += match_count
+            bucket.rated_match_count += match_count
+            bucket.high_rating_matches += match_count if rating_value >= 7.0 else 0
+            bucket.big_match_impact += max(rating_value - 6.0, 0.35) * importance
+        bucket.competition_total += importance * weight
+        bucket.competition_weight += weight
+        if bool(raw.get("won_match")):
+            bucket.matches_won += min(match_count, appearances or 1)
+        if bool(raw.get("won_tournament")):
+            bucket.won_tournament = True
+            bucket.trophy_points += 1.8
+        bucket.competition_families.add(competition_family)
+        bucket.national_age_bands.add(str(national_competition.age_band or "senior").strip().lower())
+        bucket.competition_titles.add(national_competition.title)
+        bucket.competition_ids.add(national_competition.id)
+
+    def _apply_national_event_fallback(
+        self,
+        *,
+        buckets: dict[str, _AggregateBucket],
+        season: RegenSeason,
+        national_competition: NationalTeamCompetition,
+        competition_family: str,
+        importance: float,
+        events: list[CompetitionMatchEvent],
+    ) -> None:
+        by_subject: dict[str, dict[str, object]] = {}
+        for event in events:
+            subject_key = str(event.player_id or "").strip()
+            if not subject_key:
+                continue
+            row = by_subject.setdefault(
+                subject_key,
+                {
+                    "subject_key": subject_key,
+                    "appearances": 1,
+                    "starts": 1,
+                    "minutes": int((event.metadata_json or {}).get("minutes") or 90),
+                    "goals": 0,
+                    "assists": 0,
+                    "saves": 0,
+                    "clean_sheets": 0,
+                    "rating": (event.metadata_json or {}).get("rating"),
+                    "won_match": bool((event.metadata_json or {}).get("won_match")),
+                    "won_tournament": bool((event.metadata_json or {}).get("won_tournament")),
+                },
+            )
+            event_type = str(event.event_type or "").strip().lower()
+            if event_type in {"goal", "penalty_goal"}:
+                row["goals"] = int(row["goals"]) + 1
+            elif event_type == "assist":
+                row["assists"] = int(row["assists"]) + 1
+            elif event_type in {"save", "goalkeeper_save"}:
+                row["saves"] = int(row["saves"]) + 1
+            elif event_type == "clean_sheet":
+                row["clean_sheets"] = int(row["clean_sheets"]) + 1
+        for row in by_subject.values():
+            self._apply_national_performance_row(
+                buckets=buckets,
+                raw=row,
+                season=season,
+                national_competition=national_competition,
+                competition_family=competition_family,
+                importance=importance,
+            )
+
+    @staticmethod
+    def _merge_bucket(target: _AggregateBucket, incoming: _AggregateBucket) -> None:
+        target.player_name = incoming.player_name or target.player_name
+        target.age = incoming.age if incoming.age is not None else target.age
+        target.position_group = incoming.position_group or target.position_group
+        target.player_row_id = incoming.player_row_id or target.player_row_id
+        target.national_seed_id = incoming.national_seed_id or target.national_seed_id
+        target.regen_profile_id = incoming.regen_profile_id or target.regen_profile_id
+        target.source_type = incoming.source_type or target.source_type
+        target.appearances += incoming.appearances
+        target.starts += incoming.starts
+        target.minutes_played += incoming.minutes_played
+        target.goals += incoming.goals
+        target.assists += incoming.assists
+        target.clean_sheets += incoming.clean_sheets
+        target.saves += incoming.saves
+        target.season_rating_total += incoming.season_rating_total
+        target.season_rating_weight += incoming.season_rating_weight
+        target.match_rating_total += incoming.match_rating_total
+        target.match_rating_weight += incoming.match_rating_weight
+        target.competition_total += incoming.competition_total
+        target.competition_weight += incoming.competition_weight
+        target.matches_won += incoming.matches_won
+        target.match_count += incoming.match_count
+        target.rated_match_count += incoming.rated_match_count
+        target.high_rating_matches += incoming.high_rating_matches
+        target.full_minutes_matches += incoming.full_minutes_matches
+        target.start_matches += incoming.start_matches
+        target.has_season_stats = target.has_season_stats or incoming.has_season_stats
+        target.trophy_points += incoming.trophy_points
+        target.big_match_impact += incoming.big_match_impact
+        target.source_ingestion_season_ids.update(incoming.source_ingestion_season_ids)
+        target.competition_families.update(incoming.competition_families)
+        target.national_age_bands.update(incoming.national_age_bands)
+        target.competition_titles.update(incoming.competition_titles)
+        target.competition_ids.update(incoming.competition_ids)
+        target.won_tournament = target.won_tournament or incoming.won_tournament
+
+    def _performance_input_from_bucket(
+        self,
+        *,
+        bucket: _AggregateBucket,
+        previous_scores: dict[str, float],
+    ) -> PerformanceInput | None:
+        if bucket.appearances <= 0 and bucket.minutes_played <= 0 and bucket.goals <= 0 and bucket.assists <= 0:
+            return None
+        if bucket.season_rating_weight > 0:
+            average_rating = round(bucket.season_rating_total / bucket.season_rating_weight, 4)
+        elif bucket.match_rating_weight > 0:
+            average_rating = round(bucket.match_rating_total / bucket.match_rating_weight, 4)
+        else:
+            average_rating = None
+        competition_importance = (
+            round(bucket.competition_total / bucket.competition_weight, 4) if bucket.competition_weight > 0 else 1.0
+        )
+        metadata: dict[str, object] = {
+            "player_id": bucket.player_row_id,
+            "national_seed_id": bucket.national_seed_id,
+            "regen_profile_id": bucket.regen_profile_id,
+            "source_type": bucket.source_type,
+            "source_ingestion_season_ids": sorted(bucket.source_ingestion_season_ids),
+            "match_count": bucket.match_count,
+            "trophy_points": round(bucket.trophy_points, 4),
+            "big_match_impact": round(bucket.big_match_impact, 4),
+        }
+        if bucket.competition_families:
+            metadata.update(
+                {
+                    "competition_scope": "national",
+                    "competition_family": sorted(bucket.competition_families)[0],
+                    "competition_families": sorted(bucket.competition_families),
+                    "competition_title": sorted(bucket.competition_titles)[0] if bucket.competition_titles else None,
+                    "competition_ids": sorted(bucket.competition_ids),
+                    "national_age_band": (sorted(bucket.national_age_bands)[0] if bucket.national_age_bands else None),
+                    "won_tournament": bucket.won_tournament,
+                }
+            )
+        else:
+            metadata["competition_scope"] = "club"
+        consistency_score = self._consistency_score(bucket=bucket, average_rating=average_rating)
+        return PerformanceInput(
+            player_id=bucket.player_id,
+            player_name=bucket.player_name,
+            age=bucket.age,
+            position_group=bucket.position_group,
+            appearances=bucket.appearances,
+            starts=bucket.starts,
+            minutes_played=bucket.minutes_played,
+            goals=bucket.goals,
+            assists=bucket.assists,
+            clean_sheets=bucket.clean_sheets,
+            saves=bucket.saves,
+            average_rating=average_rating,
+            matches_won=bucket.matches_won,
+            competition_importance=competition_importance,
+            consistency_score=consistency_score,
+            previous_overall_score=previous_scores.get(bucket.player_id),
+            metadata=metadata,
+        )
+
+    def _build_performance_inputs(self, season: RegenSeason) -> list[PerformanceInput]:
+        buckets = self._build_club_performance_buckets(season)
+        for subject_key, incoming in self._build_national_performance_buckets(season).items():
+            existing = buckets.get(subject_key)
+            if existing is None:
+                buckets[subject_key] = incoming
+                continue
+            self._merge_bucket(existing, incoming)
+        previous_season = self.session.scalar(
+            select(RegenSeason)
+            .where(RegenSeason.season_number < season.season_number)
+            .order_by(RegenSeason.season_number.desc())
+        )
+        previous_scores = {}
+        if previous_season is not None:
+            previous_scores = {
+                record.subject_key: record.overall_score
+                for record in self.session.scalars(
+                    select(RegenPerformanceRecord).where(RegenPerformanceRecord.season_id == previous_season.id)
+                )
+            }
+        inputs: list[PerformanceInput] = []
+        for bucket in buckets.values():
+            performance_input = self._performance_input_from_bucket(bucket=bucket, previous_scores=previous_scores)
+            if performance_input is not None:
+                inputs.append(performance_input)
         return inputs
 
     def _consistency_score(self, *, bucket: _AggregateBucket, average_rating: float | None) -> float:
@@ -1527,13 +2410,13 @@ class RegenUniverseService:
         for ranking in self.session.scalars(
             select(RegenRankingSnapshot).where(RegenRankingSnapshot.category == "overall")
         ):
-            overall_rankings[ranking.player_id].append(ranking)
+            overall_rankings[ranking.subject_key].append(ranking)
         performance_records = defaultdict(list)
         for record in self.session.scalars(select(RegenPerformanceRecord)):
-            performance_records[record.player_id].append(record)
+            performance_records[record.subject_key].append(record)
         award_winners = defaultdict(list)
         for winner in self.session.scalars(select(RegenAwardWinner)):
-            award_winners[winner.player_id].append(winner)
+            award_winners[winner.subject_key].append(winner)
 
         for player in profiles:
             peak_rank = min((item.rank for item in overall_rankings.get(player.id, [])), default=None)
@@ -1676,10 +2559,17 @@ class RegenUniverseService:
             return market_award_code.strip()
         return award.code.lower()
 
+    def _market_award_name(self, award: RegenAward) -> str:
+        metadata = dict(award.metadata_json or {})
+        equivalent_name = metadata.get("equivalent_name")
+        if isinstance(equivalent_name, str) and equivalent_name.strip():
+            return equivalent_name.replace("Regen", "Star").strip()
+        return award.name.replace("Regen", "Star").strip()
+
     def _award_winner_payload(self, winner: RegenAwardWinner) -> dict[str, object]:
         return {
             "id": winner.id,
-            "player_id": winner.player_id,
+            "player_id": winner.subject_key,
             "player_name": winner.player_name,
             "ranking_score": winner.ranking_score,
             "rank": winner.rank,
@@ -1690,7 +2580,7 @@ class RegenUniverseService:
     def _ranking_payload(self, ranking: RegenRankingSnapshot) -> dict[str, object]:
         return {
             "id": ranking.id,
-            "player_id": ranking.player_id,
+            "player_id": ranking.subject_key,
             "player_name": ranking.player_name,
             "category": ranking.category,
             "score": ranking.score,

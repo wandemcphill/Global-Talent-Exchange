@@ -140,6 +140,43 @@ class RegenPlayerPrestigeSummaryView(CommonSchema):
     recent_awards: list[RegenRecentAwardView] = Field(default_factory=list)
 
 
+class RegenAchievementView(CommonSchema):
+    id: str
+    achievement_key: str
+    subject_key: str
+    player_id: str
+    player_name: str | None = None
+    achievement_type: str
+    title: str
+    description: str
+    earned_at: datetime
+    metadata_json: dict[str, object] = Field(default_factory=dict)
+
+
+class RegenAchievementPageView(CommonSchema):
+    items: list[RegenAchievementView] = Field(default_factory=list)
+    pagination: PaginationMeta | None = None
+
+
+class RegenStoryEventView(CommonSchema):
+    id: str
+    event_key: str
+    subject_key: str
+    player_id: str
+    player_name: str | None = None
+    event_type: str
+    title: str
+    summary: str
+    occurred_at: datetime
+    metadata_json: dict[str, object] = Field(default_factory=dict)
+
+
+class RegenPlayerTimelineView(CommonSchema):
+    player_id: str
+    items: list[RegenStoryEventView] = Field(default_factory=list)
+    pagination: PaginationMeta | None = None
+
+
 class RegenLegacySnapshotView(CommonSchema):
     regen_id: str
     player_id: str
@@ -165,6 +202,8 @@ class RegenUniversePlayerShowcaseView(CommonSchema):
     legacy: RegenLegacySnapshotView | None = None
     latest_value: RegenValueSnapshotView | None = None
     discovery_badges: list[str] = Field(default_factory=list)
+    timeline: list[RegenStoryEventView] = Field(default_factory=list)
+    achievements: list[RegenAchievementView] = Field(default_factory=list)
 
 
 class RegenPlayerMarketAccessView(CommonSchema):
@@ -201,6 +240,9 @@ class RegenUniversePlayerLookupView(CommonSchema):
     scouting_note: str | None = None
     discovery_badges: list[str] = Field(default_factory=list)
     market_value_coin: int | None = None
+    prestige: RegenPlayerPrestigeSummaryView | None = None
+    timeline: list[RegenStoryEventView] = Field(default_factory=list)
+    achievements: list[RegenAchievementView] = Field(default_factory=list)
 
 
 class RegenRisingStarEntryView(CommonSchema):

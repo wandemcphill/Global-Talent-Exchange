@@ -25,10 +25,12 @@ from app.regen_universe.expansion_service import (
 from app.regen_universe.models import RegenHallOfFame, RegenRankingSnapshot
 from app.regen_universe.service import RegenUniverseError, RegenUniverseService
 from app.schemas.regen_universe import (
+    RegenAchievementPageView,
     RegenAwardResultView,
     RegenAwardResultPageView,
     RegenBloodlinesView,
     RegenHallOfFameView,
+    RegenPlayerTimelineView,
     RegenRisingStarsView,
     RegenRankingLeaderboardView,
     RegenSeasonCloseRequest,
@@ -280,6 +282,31 @@ def list_regen_awards(
     return _cached_response(request, model_type=RegenAwardResultPageView, builder=build)
 
 
+@router.get("/achievements", response_model=RegenAchievementPageView)
+def list_regen_achievements(
+    request: Request,
+    player_id: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1),
+    limit: int | None = Query(default=None, ge=1, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
+    session: Session = Depends(get_session),
+) -> RegenAchievementPageView:
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
+
+    def build() -> RegenAchievementPageView:
+        payload = RegenUniverseService(session).list_achievements(
+            subject_key=player_id,
+            limit=params.per_page,
+            offset=params.offset,
+        )
+        total = int(payload.pop("total", 0))
+        payload["pagination"] = build_pagination_meta(params=params, total=total).model_dump(mode="json")
+        return RegenAchievementPageView.model_validate(payload)
+
+    return _cached_response(request, model_type=RegenAchievementPageView, builder=build, scope_key=player_id)
+
+
 @router.get("/rankings", response_model=RegenRankingLeaderboardView)
 def list_regen_rankings(
     request: Request,
@@ -359,6 +386,31 @@ def get_regen_player_showcase(
         builder=build,
         scope_key=player_id,
     )
+
+
+@router.get("/players/{player_id}/timeline", response_model=RegenPlayerTimelineView)
+def get_regen_player_timeline(
+    request: Request,
+    player_id: str,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1),
+    limit: int | None = Query(default=None, ge=1, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
+    session: Session = Depends(get_session),
+) -> RegenPlayerTimelineView:
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
+
+    def build() -> RegenPlayerTimelineView:
+        payload = RegenUniverseService(session).list_player_timeline(
+            player_id=player_id,
+            limit=params.per_page,
+            offset=params.offset,
+        )
+        total = int(payload.pop("total", 0))
+        payload["pagination"] = build_pagination_meta(params=params, total=total).model_dump(mode="json")
+        return RegenPlayerTimelineView.model_validate(payload)
+
+    return _cached_response(request, model_type=RegenPlayerTimelineView, builder=build, scope_key=player_id)
 
 
 @router.get("/player/{player_id}", response_model=RegenUniversePlayerLookupView)

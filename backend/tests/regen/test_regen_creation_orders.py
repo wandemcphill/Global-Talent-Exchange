@@ -19,6 +19,7 @@ from app.models.regen import RegenProfile
 from app.models.regen_ecosystem import CareerEvent, RegenBloodlineLink
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.regen_universe.models import RegenAchievement, RegenStoryEvent
 from app.regen_creation.router import router
 from app.regen_creation.service import RegenCreationService
 from app.wallets.service import LedgerPosting, WalletService
@@ -59,7 +60,7 @@ def _create_user(session, *, email: str, username: str, full_name: str) -> User:
         session,
         email=email,
         username=username,
-        password="SuperSecret1",
+        password="SuperSecret1",  # pragma: allowlist secret
         full_name=full_name,
     )
     session.commit()
@@ -281,9 +282,17 @@ def test_wallet_payment_generates_exactly_one_regen(session) -> None:
     career_event_count = session.scalar(
         select(func.count(CareerEvent.id)).where(CareerEvent.type == "requested_son_created")
     )
+    story_event_count = session.scalar(
+        select(func.count(RegenStoryEvent.id)).where(RegenStoryEvent.event_type == "requested_son_created")
+    )
+    achievement_count = session.scalar(
+        select(func.count(RegenAchievement.id)).where(RegenAchievement.achievement_type == "requested_son_created")
+    )
     assert int(regen_count or 0) == 1
     assert int(bloodline_count or 0) == 1
     assert int(career_event_count or 0) == 1
+    assert int(story_event_count or 0) == 1
+    assert int(achievement_count or 0) == 1
 
 
 def test_duplicate_generation_call_returns_existing_generated_regen(session) -> None:

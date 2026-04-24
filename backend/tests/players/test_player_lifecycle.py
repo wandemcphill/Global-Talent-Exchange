@@ -20,7 +20,6 @@ from app.ingestion.models import Club as IngestionClub
 from app.ingestion.models import Competition, Match, Player, PlayerSeasonStat, Season
 from app.models.base import Base
 from app.models.club_infra import ClubFacility
-from app.models.player_cards import PlayerCard, PlayerCardTier
 from app.models.club_profile import ClubProfile
 from app.models.notification_center import PlatformAnnouncement
 from app.models.notification_record import NotificationRecord
@@ -39,14 +38,16 @@ from app.models.regen import (
     RegenPersonalityProfile,
     RegenProfile,
     RegenTeamDynamicsEffect,
-    RegenTransferPressureState,
     TransferHeadlineMediaRecord,
 )
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.story_feed import StoryFeedItem
+from app.models.transfer_market import PlayerDecisionProfile
 from app.models.transfer_bid import TransferBid
 from app.models.transfer_window import TransferWindow
 from app.models.user import KycStatus, User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.regen_universe.service import RegenUniverseService
 from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionRequest
 from app.schemas.player_lifecycle import (
     BigClubApproachRequest,
@@ -650,9 +651,18 @@ def test_transfer_window_open_closed_validation(
     )
 
     assert exempt_bid.status == "submitted"
-    assert lifecycle_service.to_transfer_window_view(window, reference_on=date(2026, 5, 1)).status == TransferWindowStatus.UPCOMING
-    assert lifecycle_service.to_transfer_window_view(window, reference_on=date(2026, 6, 15)).status == TransferWindowStatus.OPEN
-    assert lifecycle_service.to_transfer_window_view(window, reference_on=date(2026, 9, 1)).status == TransferWindowStatus.CLOSED
+    assert (
+        lifecycle_service.to_transfer_window_view(window, reference_on=date(2026, 5, 1)).status
+        == TransferWindowStatus.UPCOMING
+    )
+    assert (
+        lifecycle_service.to_transfer_window_view(window, reference_on=date(2026, 6, 15)).status
+        == TransferWindowStatus.OPEN
+    )
+    assert (
+        lifecycle_service.to_transfer_window_view(window, reference_on=date(2026, 9, 1)).status
+        == TransferWindowStatus.CLOSED
+    )
 
 
 def test_transfer_bid_flow_completes_contract_move(
@@ -932,7 +942,10 @@ def test_reject_transfer_bid_leaves_player_state_unchanged(
 
     assert rejected.status == "rejected"
     assert lifecycle_session.get(Player, context["player_id"]).current_club_profile_id == context["club_profile_id"]
-    assert lifecycle_service.get_contract_summary(context["player_id"], on_date=date(2026, 3, 12)).active_contract.club_id == context["club_profile_id"]
+    assert (
+        lifecycle_service.get_contract_summary(context["player_id"], on_date=date(2026, 3, 12)).active_contract.club_id
+        == context["club_profile_id"]
+    )
 
 
 def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
@@ -1088,10 +1101,22 @@ def test_regen_bid_resolution_prefers_hometown_fit_over_highest_salary(
     lifecycle_session.add(hometown_profile)
     lifecycle_session.add_all(
         [
-            ClubReputationProfile(club_id=context["buyer_profile_id"], current_score=92, highest_score=92, prestige_tier="Elite"),
-            ClubReputationProfile(club_id=hometown_profile.id, current_score=38, highest_score=38, prestige_tier="Rising"),
-            ClubFacility(club_id=context["buyer_profile_id"], training_level=2, academy_level=2, medical_level=1, branding_level=1),
-            ClubFacility(club_id=hometown_profile.id, training_level=4, academy_level=4, medical_level=1, branding_level=1),
+            ClubReputationProfile(
+                club_id=context["buyer_profile_id"], current_score=92, highest_score=92, prestige_tier="Elite"
+            ),
+            ClubReputationProfile(
+                club_id=hometown_profile.id, current_score=38, highest_score=38, prestige_tier="Rising"
+            ),
+            ClubFacility(
+                club_id=context["buyer_profile_id"],
+                training_level=2,
+                academy_level=2,
+                medical_level=1,
+                branding_level=1,
+            ),
+            ClubFacility(
+                club_id=hometown_profile.id, training_level=4, academy_level=4, medical_level=1, branding_level=1
+            ),
         ]
     )
     lifecycle_session.commit()
@@ -1203,7 +1228,9 @@ def test_regen_special_training_obeys_cooldowns_and_lifetime_caps(
 
     lifecycle_service.apply_regen_special_training(
         context["player_id"],
-        RegenSpecialTrainingRequest(package_type="major", club_id=context["club_profile_id"], notes="Final tailored package"),
+        RegenSpecialTrainingRequest(
+            package_type="major", club_id=context["club_profile_id"], notes="Final tailored package"
+        ),
         reference_on=date(2026, 8, 1),
     )
 
@@ -1249,7 +1276,9 @@ def test_regen_transfer_listing_flows_into_player_overview(
         RegenTransferListingRequest(listed=True, reason="Needs a faster route to first-team minutes"),
         reference_on=date(2026, 3, 12),
     )
-    overview = lifecycle_service.get_player_overview(context["player_id"], on_date=date(2026, 3, 12), territory_code="ENG")
+    overview = lifecycle_service.get_player_overview(
+        context["player_id"], on_date=date(2026, 3, 12), territory_code="ENG"
+    )
 
     assert regen_summary.transfer_listed is True
     assert overview.regen_summary is not None
@@ -1380,9 +1409,7 @@ def test_big_club_approach_pushes_regen_into_pressure_state(
         reference_on=date(2026, 3, 12),
     )
 
-    approach = lifecycle_session.scalar(
-        select(RegenBigClubApproach).order_by(RegenBigClubApproach.created_at.desc())
-    )
+    approach = lifecycle_session.scalar(select(RegenBigClubApproach).order_by(RegenBigClubApproach.created_at.desc()))
     assert summary.pressure_state is not None
     assert summary.pressure_state.current_state in {
         "attracted_by_bigger_club",
@@ -1452,9 +1479,7 @@ def test_loyal_regen_can_resist_big_club_unsettling(
         reference_on=date(2026, 3, 12),
     )
 
-    approach = lifecycle_session.scalar(
-        select(RegenBigClubApproach).order_by(RegenBigClubApproach.created_at.desc())
-    )
+    approach = lifecycle_session.scalar(select(RegenBigClubApproach).order_by(RegenBigClubApproach.created_at.desc()))
     assert summary.pressure_state is not None
     assert summary.pressure_state.current_state not in {"transfer_requested", "unsettled"}
     assert summary.pressure_state.active_transfer_request is False
@@ -1785,7 +1810,9 @@ def _set_playing_time(
     appearances: int,
     minutes: int | None = None,
 ) -> None:
-    existing = session.scalar(select(PlayerSeasonStat).where(PlayerSeasonStat.id == f"agency-season-{context['player_id']}"))
+    existing = session.scalar(
+        select(PlayerSeasonStat).where(PlayerSeasonStat.id == f"agency-season-{context['player_id']}")
+    )
     if existing is not None:
         session.delete(existing)
         session.flush()
@@ -1844,7 +1871,9 @@ def test_player_agency_personality_generation_is_stable(lifecycle_session: Sessi
 
     first = service.get_snapshot(context["player_id"], reference_on=date(2026, 3, 12))
     second = service.get_snapshot(context["player_id"], reference_on=date(2026, 3, 12))
-    stored = lifecycle_session.scalar(select(PlayerPersonality).where(PlayerPersonality.player_id == context["player_id"]))
+    stored = lifecycle_session.scalar(
+        select(PlayerPersonality).where(PlayerPersonality.player_id == context["player_id"])
+    )
 
     assert first.personality == second.personality
     assert first.state.career_target_band == second.state.career_target_band
@@ -1853,7 +1882,15 @@ def test_player_agency_personality_generation_is_stable(lifecycle_session: Sessi
 
 
 @pytest.mark.parametrize(
-    ("label", "trait_overrides", "generated_at", "current_wage", "request_kwargs", "expected_decision", "expected_reason"),
+    (
+        "label",
+        "trait_overrides",
+        "generated_at",
+        "current_wage",
+        "request_kwargs",
+        "expected_decision",
+        "expected_reason",
+    ),
     [
         (
             "loyal_but_underpaid",
@@ -1939,7 +1976,9 @@ def test_contract_agency_decisions_are_explainable(
 
     assert decision.decision_code == expected_decision
     assert decision.primary_reasons
-    assert expected_reason in {item.code for item in decision.primary_reasons} | {item.code for item in decision.secondary_reasons}
+    assert expected_reason in {item.code for item in decision.primary_reasons} | {
+        item.code for item in decision.secondary_reasons
+    }
     assert decision.decision_weight_breakdown
     assert "wage_weight" in decision.decision_weight_breakdown
 
@@ -1974,7 +2013,14 @@ def test_contract_agency_decisions_are_explainable(
         (
             "elite_club_weaker_money_move",
             {"ambition": 88, "loyalty": 72, "greed": 54, "professionalism": 82},
-            {"current_reputation": 90, "buyer_reputation": 52, "current_titles": 4, "buyer_titles": 0, "current_training": 4, "buyer_training": 2},
+            {
+                "current_reputation": 90,
+                "buyer_reputation": 52,
+                "current_titles": 4,
+                "buyer_titles": 0,
+                "current_training": 4,
+                "buyer_training": 2,
+            },
             {"offered_wage_amount": Decimal("600.00"), "contract_years": 3, "expected_role": "starter"},
             "prefers_current_club",
             "current_club_pull",
@@ -2015,7 +2061,9 @@ def test_transfer_agency_decisions_cover_key_player_archetypes(
     )
 
     assert decision.decision_code == expected_decision
-    assert expected_reason in {item.code for item in decision.primary_reasons} | {item.code for item in decision.secondary_reasons}
+    assert expected_reason in {item.code for item in decision.primary_reasons} | {
+        item.code for item in decision.secondary_reasons
+    }
     assert decision.decision_weight_breakdown
     assert "club_prestige_weight" in decision.decision_weight_breakdown
 
@@ -2023,9 +2071,30 @@ def test_transfer_agency_decisions_cover_key_player_archetypes(
 @pytest.mark.parametrize(
     ("label", "trait_overrides", "starts", "appearances", "expect_transfer_request", "apply_denied_move"),
     [
-        ("benched_high_ego", {"ego": 92, "ambition": 86, "patience": 28}, 2, 18, {"agent_warning", "transfer_request", "public_unhappy_state"}, False),
-        ("denied_prior_move", {"ambition": 90, "loyalty": 34, "ego": 78}, 10, 20, {"transfer_request", "public_unhappy_state"}, True),
-        ("role_dissatisfaction", {"ego": 84, "development_focus": 70, "patience": 34}, 4, 22, {"agent_warning", "transfer_request", "public_unhappy_state"}, False),
+        (
+            "benched_high_ego",
+            {"ego": 92, "ambition": 86, "patience": 28},
+            2,
+            18,
+            {"agent_warning", "transfer_request", "public_unhappy_state"},
+            False,
+        ),
+        (
+            "denied_prior_move",
+            {"ambition": 90, "loyalty": 34, "ego": 78},
+            10,
+            20,
+            {"transfer_request", "public_unhappy_state"},
+            True,
+        ),
+        (
+            "role_dissatisfaction",
+            {"ego": 84, "development_focus": 70, "patience": 34},
+            4,
+            22,
+            {"agent_warning", "transfer_request", "public_unhappy_state"},
+            False,
+        ),
     ],
 )
 def test_transfer_request_behavior_triggers_for_unhappy_profiles(
@@ -2047,7 +2116,9 @@ def test_transfer_request_behavior_triggers_for_unhappy_profiles(
         decision_traits=trait_overrides,
     )
     _seed_agency_supporting_data(lifecycle_session, context, current_reputation=42, buyer_reputation=82)
-    _seed_contract(lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="180.00", ends_on=date(2026, 6, 30))
+    _seed_contract(
+        lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="180.00", ends_on=date(2026, 6, 30)
+    )
     _set_playing_time(lifecycle_session, context, starts=starts, appearances=appearances)
     service = PlayerAgencyService(lifecycle_session)
     if apply_denied_move:
@@ -2059,11 +2130,15 @@ def test_transfer_request_behavior_triggers_for_unhappy_profiles(
     assert snapshot.transfer_request_decision.decision_weight_breakdown
     assert "playing_time_weight" in snapshot.transfer_request_decision.decision_weight_breakdown
     if apply_denied_move:
-        assert "denied_move" in {item.code for item in snapshot.transfer_request_decision.primary_reasons} | {item.code for item in snapshot.transfer_request_decision.secondary_reasons}
+        assert "denied_move" in {item.code for item in snapshot.transfer_request_decision.primary_reasons} | {
+            item.code for item in snapshot.transfer_request_decision.secondary_reasons
+        }
         assert snapshot.transfer_request_decision.decision_weight_breakdown["denied_move_weight"] > 0
 
 
-def test_transfer_decision_cooldown_prevents_flip_flopping(lifecycle_session: Session, lifecycle_service: PlayerLifecycleService) -> None:
+def test_transfer_decision_cooldown_prevents_flip_flopping(
+    lifecycle_session: Session, lifecycle_service: PlayerLifecycleService
+) -> None:
     context = seed_base_context(lifecycle_session)
     seed_regen_context(
         lifecycle_session,
@@ -2086,13 +2161,233 @@ def test_transfer_decision_cooldown_prevents_flip_flopping(lifecycle_session: Se
 
     first = service.evaluate_transfer_opportunity(context["player_id"], request, reference_on=date(2026, 3, 12))
     second = service.evaluate_transfer_opportunity(context["player_id"], request, reference_on=date(2026, 3, 12))
-    agency_state = lifecycle_session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == context["player_id"]))
+    agency_state = lifecycle_session.scalar(
+        select(PlayerAgencyState).where(PlayerAgencyState.player_id == context["player_id"])
+    )
 
     assert first.decision_code == second.decision_code
     assert first.cooldown_until == second.cooldown_until
     assert first.decision_weight_breakdown == second.decision_weight_breakdown
     assert agency_state is not None
     assert agency_state.recent_offer_cooldown_until is not None
+
+
+def test_same_offer_can_produce_different_decisions_for_different_personalities(
+    lifecycle_session: Session,
+    lifecycle_service: PlayerLifecycleService,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2025, 7, 1, 12, 0),
+        decision_traits={"ambition": 92, "loyalty": 24, "greed": 40, "development_focus": 72},
+    )
+    _seed_agency_supporting_data(lifecycle_session, context, current_reputation=42, buyer_reputation=84)
+    _seed_contract(lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="240.00")
+    _set_playing_time(lifecycle_session, context, starts=8, appearances=22)
+    service = PlayerAgencyService(lifecycle_session)
+    request = TransferDecisionRequest(
+        destination_club_id=context["buyer_profile_id"],
+        offered_wage_amount=Decimal("360.00"),
+        contract_years=4,
+        expected_role="starter",
+        requested_on=date(2026, 3, 12),
+    )
+
+    ambitious = service.evaluate_transfer_decision(context["player_id"], request, reference_on=date(2026, 3, 12))
+
+    lifecycle_session.query(PlayerAgencyState).filter_by(player_id=context["player_id"]).delete()
+    lifecycle_session.query(PlayerPersonality).filter_by(player_id=context["player_id"]).delete()
+    lifecycle_session.query(PlayerDecisionProfile).filter_by(player_id=context["player_id"]).delete()
+    regen = lifecycle_session.scalar(select(RegenProfile).where(RegenProfile.player_id == context["player_id"]))
+    assert regen is not None
+    regen.metadata_json = {
+        **dict(regen.metadata_json or {}),
+        "decision_traits": {"ambition": 46, "loyalty": 90, "greed": 34, "development_focus": 40},
+    }
+    lifecycle_session.flush()
+
+    loyal = service.evaluate_transfer_decision(context["player_id"], request, reference_on=date(2026, 3, 12))
+
+    assert ambitious.decision_code != loyal.decision_code
+    assert ambitious.decision_score > loyal.decision_score
+    assert ambitious.explanation != loyal.explanation
+
+
+def test_preferred_club_shortlist_ranks_destinations_for_ambitious_regen(
+    lifecycle_session: Session,
+    lifecycle_service: PlayerLifecycleService,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    third_club = ClubProfile(
+        id="club-profile-harbor",
+        owner_user_id="user-owner",
+        club_name="Harbor FC",
+        short_name="HFC",
+        slug="harbor-fc",
+        primary_color="#101820",
+        secondary_color="#f0f0f0",
+        accent_color="#0099cc",
+        country_code="BE",
+        region_name="Antwerp",
+        city_name="Antwerp",
+    )
+    lifecycle_session.add(third_club)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2025, 7, 1, 12, 0),
+        decision_traits={"ambition": 90, "loyalty": 28, "greed": 38, "development_focus": 70},
+    )
+    _seed_agency_supporting_data(lifecycle_session, context, current_reputation=44, buyer_reputation=86)
+    _seed_contract(lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="210.00")
+    _set_playing_time(lifecycle_session, context, starts=10, appearances=22)
+    service = PlayerAgencyService(lifecycle_session)
+
+    shortlist = service.get_preferred_club_shortlist(
+        context["player_id"],
+        [
+            {
+                "destination_club_id": context["buyer_profile_id"],
+                "offered_wage_amount": "340.00",
+                "contract_years": 4,
+                "expected_role": "starter",
+                "requested_on": date(2026, 3, 12),
+            },
+            {
+                "destination_club_id": third_club.id,
+                "offered_wage_amount": "400.00",
+                "contract_years": 3,
+                "expected_role": "rotation",
+                "club_stature": 40.0,
+                "league_quality": 45.0,
+                "competition_level": 40.0,
+                "expected_minutes": 42.0,
+                "requested_on": date(2026, 3, 12),
+            },
+        ],
+        reference_on=date(2026, 3, 12),
+    )
+
+    assert shortlist
+    assert shortlist[0].rank == 1
+    assert shortlist[0].destination_club_id == context["buyer_profile_id"]
+    assert shortlist[0].decision.preferred_destination_rank == 1
+    assert shortlist[0].decision.decision_score >= shortlist[1].decision.decision_score
+
+
+def test_regen_agency_tick_creates_transfer_request_story_and_feed(
+    lifecycle_session: Session,
+    lifecycle_service: PlayerLifecycleService,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2025, 7, 1, 12, 0),
+        decision_traits={"ambition": 91, "loyalty": 26, "ego": 84, "resilience": 32},
+    )
+    lifecycle_session.add(
+        NationalRegenSeed(
+            seed_key="seed:phase7:ng:1",
+            display_name="Chinedu Balogun",
+            age=17,
+            age_band="u17",
+            country_code="NG",
+            country_name="Nigeria",
+            seed_type="preseeded_national_pool",
+            primary_position="ST",
+            current_rating=73,
+            potential_rating=90,
+            growth_curve=0.82,
+            rarity_tier="elite",
+            status="active",
+            metadata_json={"age": 17},
+        )
+    )
+    _seed_agency_supporting_data(lifecycle_session, context, current_reputation=42, buyer_reputation=82)
+    _seed_contract(
+        lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="170.00", ends_on=date(2026, 6, 30)
+    )
+    _set_playing_time(lifecycle_session, context, starts=2, appearances=20)
+    service = PlayerAgencyService(lifecycle_session)
+
+    summary = service.run_regen_agency_tick(reference_on=date(2026, 3, 12))
+
+    decision_profile = lifecycle_session.scalar(
+        select(PlayerDecisionProfile).where(PlayerDecisionProfile.player_id == context["player_id"])
+    )
+    transfer_event = lifecycle_session.scalar(
+        select(PlayerLifecycleEvent).where(
+            PlayerLifecycleEvent.player_id == context["player_id"],
+            PlayerLifecycleEvent.event_type == "transfer_request_submitted",
+        )
+    )
+    feed_item = lifecycle_session.scalar(
+        select(StoryFeedItem).where(
+            StoryFeedItem.story_type == "transfer_request_submitted",
+            StoryFeedItem.subject_id == context["player_id"],
+        )
+    )
+    lookup = RegenUniverseService(lifecycle_session).get_player_lookup(context["player_id"])
+    feed = RegenUniverseService(lifecycle_session).list_scouting_feed(limit=40)
+
+    assert summary["transfer_requests_created"] == 1
+    assert decision_profile is not None
+    assert decision_profile.frustration > 0
+    assert transfer_event is not None
+    assert feed_item is not None
+    assert lookup is not None
+    assert any(item["event_type"] == "transfer_request_submitted" for item in lookup["timeline"])
+    assert any(
+        item["feed_type"] == "transfer_request_submitted" and item["player_id"] == context["player_id"]
+        for item in feed["items"]
+    )
+
+
+def test_regen_agency_tick_skips_national_pool_only_regens(
+    lifecycle_session: Session,
+    lifecycle_service: PlayerLifecycleService,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2025, 7, 1, 12, 0),
+        decision_traits={"ambition": 93, "loyalty": 18, "ego": 88},
+    )
+    regen = lifecycle_session.scalar(select(RegenProfile).where(RegenProfile.player_id == context["player_id"]))
+    assert regen is not None
+    regen.generation_source = "preseeded_national_pool"
+    regen.metadata_json = {
+        **dict(regen.metadata_json or {}),
+        "national_pool_only": True,
+        "is_preseeded_national_regen": True,
+    }
+    _seed_agency_supporting_data(lifecycle_session, context, current_reputation=40, buyer_reputation=84)
+    _seed_contract(
+        lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="150.00", ends_on=date(2026, 6, 30)
+    )
+    _set_playing_time(lifecycle_session, context, starts=1, appearances=18)
+    service = PlayerAgencyService(lifecycle_session)
+
+    summary = service.run_regen_agency_tick(reference_on=date(2026, 3, 12))
+
+    transfer_event = lifecycle_session.scalar(
+        select(PlayerLifecycleEvent).where(
+            PlayerLifecycleEvent.player_id == context["player_id"],
+            PlayerLifecycleEvent.event_type == "transfer_request_submitted",
+        )
+    )
+
+    assert summary["transfer_requests_created"] == 0
+    assert summary["skipped_national_pool_only"] == 1
+    assert transfer_event is None
 
 
 def test_player_agency_layer_does_not_depend_on_locked_pricing_paths() -> None:

@@ -45,6 +45,7 @@ from app.models.regen_creation_order import (
 from app.models.regen_ecosystem import CareerEvent, RegenBloodlineLink
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.regen_universe.models import RegenAchievement, RegenStoryEvent
 from app.regen_creation.schemas import (
     RegenCreationGeneratedPlayerView,
     RegenCreationOrderListView,
@@ -730,6 +731,46 @@ class RegenCreationService:
                 impact_json={"order_id": order.id, "parent_player_id": parent_player.id},
                 summary=f"Requested son created from {parent_player.full_name}.",
                 metadata_json={"order_id": order.id},
+            )
+        )
+        self.session.add(
+            RegenStoryEvent(
+                event_key=f"career:{order.id}",
+                subject_key=player.id,
+                player_id=player.id,
+                regen_profile_id=regen.id,
+                season_id=None,
+                event_type="requested_son_created",
+                title="Requested son created",
+                summary=f"Requested son created from {parent_player.full_name}.",
+                occurred_at=utcnow(),
+                metadata_json={
+                    "order_id": order.id,
+                    "parent_player_id": parent_player.id,
+                    "parent_player_name": parent_player.full_name,
+                    "player_name": player.full_name,
+                    "source_type": "regen",
+                },
+            )
+        )
+        self.session.add(
+            RegenAchievement(
+                achievement_key=f"career:{order.id}",
+                subject_key=player.id,
+                player_id=player.id,
+                regen_profile_id=regen.id,
+                season_id=None,
+                achievement_type="requested_son_created",
+                title="Requested son created",
+                description=f"{player.full_name} was generated through the paid request-son flow.",
+                earned_at=utcnow(),
+                metadata_json={
+                    "order_id": order.id,
+                    "parent_player_id": parent_player.id,
+                    "parent_player_name": parent_player.full_name,
+                    "player_name": player.full_name,
+                    "source_type": "regen",
+                },
             )
         )
         self.session.add(

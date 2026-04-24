@@ -20,6 +20,11 @@ from app.ingestion.models import (
 )
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
+from app.models.competition import UserCompetition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.competition_round import CompetitionRound
+from app.models.national_team import NationalTeamCompetition
 from app.models.player_contract import PlayerContract
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
@@ -45,17 +50,19 @@ from app.models.regen import (
     RegenTwinsGroup,
     RegenValueSnapshot,
 )
-from app.models.regen_ecosystem import NationalRegenSeed
+from app.models.regen_ecosystem import CareerEvent, NationalRegenSeed, RegenBloodlineLink
 from app.models.user import User
 from app.models.story_feed import StoryFeedItem
 from app.players.read_models import PlayerSummaryReadModel
 from app.regen_universe.models import (
+    RegenAchievement,
     RegenAward,
     RegenAwardWinner,
     RegenHallOfFame,
     RegenPerformanceRecord,
     RegenRankingSnapshot,
     RegenSeason,
+    RegenStoryEvent,
 )
 from app.regen_universe.service import RegenUniverseService
 
@@ -77,6 +84,11 @@ def build_regen_universe_session() -> Session:
             Competition.__table__,
             IngestionSeason.__table__,
             Club.__table__,
+            UserCompetition.__table__,
+            CompetitionRound.__table__,
+            CompetitionMatch.__table__,
+            CompetitionMatchEvent.__table__,
+            NationalTeamCompetition.__table__,
             Match.__table__,
             TeamStanding.__table__,
             Player.__table__,
@@ -109,6 +121,8 @@ def build_regen_universe_session() -> Session:
             RegenDemandSignal.__table__,
             RegenScoutReport.__table__,
             NationalRegenSeed.__table__,
+            RegenBloodlineLink.__table__,
+            CareerEvent.__table__,
             PlayerSummaryReadModel.__table__,
             StoryFeedItem.__table__,
             PlayerSeasonStat.__table__,
@@ -119,6 +133,8 @@ def build_regen_universe_session() -> Session:
             RegenRankingSnapshot.__table__,
             RegenAwardWinner.__table__,
             RegenHallOfFame.__table__,
+            RegenAchievement.__table__,
+            RegenStoryEvent.__table__,
         ],
     )
     session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -294,19 +310,84 @@ def seed_two_season_universe(session: Session) -> dict[str, object]:
 
     season_one_stats = {
         "veteran": {"appearances": 26, "starts": 24, "minutes": 2240, "goals": 18, "assists": 6, "average_rating": 7.6},
-        "wonderkid": {"appearances": 25, "starts": 22, "minutes": 2060, "goals": 17, "assists": 8, "average_rating": 7.4},
-        "playmaker": {"appearances": 24, "starts": 23, "minutes": 2140, "goals": 4, "assists": 14, "average_rating": 7.5},
-        "defender": {"appearances": 28, "starts": 28, "minutes": 2520, "goals": 2, "assists": 2, "clean_sheets": 12, "average_rating": 7.4},
-        "keeper": {"appearances": 28, "starts": 28, "minutes": 2520, "clean_sheets": 14, "saves": 85, "average_rating": 7.5},
+        "wonderkid": {
+            "appearances": 25,
+            "starts": 22,
+            "minutes": 2060,
+            "goals": 17,
+            "assists": 8,
+            "average_rating": 7.4,
+        },
+        "playmaker": {
+            "appearances": 24,
+            "starts": 23,
+            "minutes": 2140,
+            "goals": 4,
+            "assists": 14,
+            "average_rating": 7.5,
+        },
+        "defender": {
+            "appearances": 28,
+            "starts": 28,
+            "minutes": 2520,
+            "goals": 2,
+            "assists": 2,
+            "clean_sheets": 12,
+            "average_rating": 7.4,
+        },
+        "keeper": {
+            "appearances": 28,
+            "starts": 28,
+            "minutes": 2520,
+            "clean_sheets": 14,
+            "saves": 85,
+            "average_rating": 7.5,
+        },
         "breakout": {"appearances": 18, "starts": 10, "minutes": 940, "goals": 2, "assists": 3, "average_rating": 6.7},
     }
     season_two_stats = {
         "veteran": {"appearances": 31, "starts": 31, "minutes": 2790, "goals": 30, "assists": 8, "average_rating": 7.9},
-        "wonderkid": {"appearances": 30, "starts": 29, "minutes": 2660, "goals": 22, "assists": 10, "average_rating": 7.7},
-        "playmaker": {"appearances": 31, "starts": 31, "minutes": 2780, "goals": 6, "assists": 18, "average_rating": 7.8},
-        "defender": {"appearances": 32, "starts": 32, "minutes": 2880, "goals": 1, "assists": 4, "clean_sheets": 18, "average_rating": 7.6},
-        "keeper": {"appearances": 32, "starts": 32, "minutes": 2880, "clean_sheets": 20, "saves": 102, "average_rating": 7.7},
-        "breakout": {"appearances": 29, "starts": 25, "minutes": 2360, "goals": 18, "assists": 12, "average_rating": 7.8},
+        "wonderkid": {
+            "appearances": 30,
+            "starts": 29,
+            "minutes": 2660,
+            "goals": 22,
+            "assists": 10,
+            "average_rating": 7.7,
+        },
+        "playmaker": {
+            "appearances": 31,
+            "starts": 31,
+            "minutes": 2780,
+            "goals": 6,
+            "assists": 18,
+            "average_rating": 7.8,
+        },
+        "defender": {
+            "appearances": 32,
+            "starts": 32,
+            "minutes": 2880,
+            "goals": 1,
+            "assists": 4,
+            "clean_sheets": 18,
+            "average_rating": 7.6,
+        },
+        "keeper": {
+            "appearances": 32,
+            "starts": 32,
+            "minutes": 2880,
+            "clean_sheets": 20,
+            "saves": 102,
+            "average_rating": 7.7,
+        },
+        "breakout": {
+            "appearances": 29,
+            "starts": 25,
+            "minutes": 2360,
+            "goals": 18,
+            "assists": 12,
+            "average_rating": 7.8,
+        },
     }
     for label, stats in season_one_stats.items():
         _create_season_stats(

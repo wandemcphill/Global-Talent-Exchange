@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
@@ -12,11 +12,25 @@ from sqlalchemy.orm import Session
 from app.club_identity.models.reputation import ClubReputationProfile
 from app.common.enums.injury_severity import InjurySeverity
 from app.core.config import Settings, get_settings
-from app.ingestion.models import Competition, Country, Match, Player, PlayerMatchStat, PlayerSeasonStat, PlayerVerification
+from app.ingestion.models import (
+    Competition,
+    Country,
+    Match,
+    Player,
+    PlayerMatchStat,
+    PlayerSeasonStat,
+    PlayerVerification,
+)
 from app.models.club_infra import ClubFacility
 from app.models.club_profile import ClubProfile
 from app.models.notification_record import NotificationRecord
-from app.models.player_cards import PlayerCard, PlayerCardHistory, PlayerCardHolding, PlayerCardOwnerHistory, PlayerCardTier
+from app.models.player_cards import (
+    PlayerCard,
+    PlayerCardHistory,
+    PlayerCardHolding,
+    PlayerCardOwnerHistory,
+    PlayerCardTier,
+)
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_contract import PlayerContract
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
@@ -43,7 +57,13 @@ from app.models.regen_ecosystem import (
     YouthAcademy,
 )
 from app.models.user import User
-from app.regen_universe.models import RegenAward as UniverseAward, RegenAwardWinner, RegenPerformanceRecord, RegenRankingSnapshot, RegenSeason
+from app.regen_universe.models import (
+    RegenAward as UniverseAward,
+    RegenAwardWinner,
+    RegenPerformanceRecord,
+    RegenRankingSnapshot,
+    RegenSeason,
+)
 from app.schemas.player_lifecycle import ContractCreateRequest, InjuryCreateRequest
 from app.schemas.regen_ecosystem import (
     AcademyGeneratedPlayerView,
@@ -116,6 +136,13 @@ _INJURY_TYPES = {
     InjurySeverity.MODERATE: "Hamstring strain",
     InjurySeverity.MAJOR: "Ligament damage",
     InjurySeverity.SEASON_ENDING: "ACL rupture",
+}
+_CLUB_PROGRESSION_REASONS = {
+    "season_rollover",
+    "academy_level_up",
+    "scout_mission_complete",
+    "youth_tournament_performance",
+    "club_progression_milestone",
 }
 
 
@@ -278,7 +305,10 @@ class RegenEcosystemService:
         batch = AcademyIntakeBatch(
             id=generated.batch.id,
             club_id=club.id,
+            season_id=None,
             season_label=generated.batch.season_label,
+            trigger_reason="academy_manual",
+            idempotency_key=f"academy-manual:{club.id}:{generated.batch.season_label}",
             intake_size=generated.batch.intake_size,
             academy_quality_score=generated.batch.academy_quality_score,
             status="generated",
@@ -286,6 +316,8 @@ class RegenEcosystemService:
                 "academy_level": academy.level,
                 "scouting_regions": list(academy.scouting_regions_json),
                 "rules_only": True,
+                "source": "academy_pipeline",
+                "reason": "academy_manual",
             },
             created_at=generated.batch.generated_at,
             updated_at=generated.batch.generated_at,
@@ -302,6 +334,11 @@ class RegenEcosystemService:
                 generated_profile=generated_profile,
                 generated_candidate=generated_candidate,
                 reference_on=reference_on or batch.created_at.date(),
+                generation_source="organic_newgen",
+                source_scope="academy_pipeline",
+                trigger_reason="academy_manual",
+                is_tradable=True,
+                audit_metadata={"source": "academy_pipeline", "reason": "academy_manual"},
             )
             generated_players.append(self._to_generated_player_view(candidate, regen, player, attr))
 
@@ -314,7 +351,121 @@ class RegenEcosystemService:
             generated_players=tuple(generated_players),
         )
 
-    def promote_academy_player(self, player_identifier: str, *, reference_on: date | None = None) -> AcademyPromotionView:
+    def generate_club_progression_intake(
+        self,
+        club_id: str,
+        reason: str,
+        season_id: str,
+        idempotency_key: str | None = None,
+        *,
+        reference_on: date | None = None,
+    ) -> AcademyGenerationResultView:
+        normalized_reason = reason.strip().lower()
+        if normalized_reason not in _CLUB_PROGRESSION_REASONS:
+            raise RegenEcosystemValidationError("unsupported_club_progression_reason")
+        club = self.session.get(ClubProfile, club_id)
+        if club is None:
+            raise RegenEcosystemNotFoundError("club_not_found")
+        season = self.session.get(RegenSeason, season_id)
+        if season is None:
+            raise RegenEcosystemNotFoundError("regen_season_not_found")
+        academy = self._ensure_academy_for_club(club)
+        existing_batch = self.session.scalar(
+            select(AcademyIntakeBatch).where(
+                AcademyIntakeBatch.club_id == club.id,
+                AcademyIntakeBatch.season_id == season.id,
+                AcademyIntakeBatch.trigger_reason == normalized_reason,
+            )
+        )
+        if existing_batch is not None:
+            return self._academy_generation_result_from_batch(academy=academy, batch=existing_batch)
+
+        effective_level = self._effective_academy_level(club.id, academy=academy)
+        intake_size = self._club_progression_intake_size(
+            club_id=club.id,
+            season_id=season.id,
+            reason=normalized_reason,
+            academy_level=effective_level,
+        )
+        effective_reference_on = reference_on or season.start_date
+        resolved_season_label = self._regen_season_label(season)
+        audit_metadata = {
+            "academy_level": effective_level,
+            "idempotency_key": (
+                idempotency_key or f"club-progression:{club.id}:{season.id}:{normalized_reason}"
+            ).strip(),
+            "reason": normalized_reason,
+            "rules_only": True,
+            "season_id": season.id,
+            "season_number": season.season_number,
+            "source": "club_progression",
+        }
+        club_context = self._build_progression_club_context(club, academy, academy_level=effective_level)
+        generated = self.generation_engine.generate_academy_intake(
+            club_id=club.id,
+            season_label=resolved_season_label,
+            club_context=club_context,
+            intake_size=intake_size,
+            rng=Random(
+                self._stable_seed(
+                    "club-progression",
+                    club.id,
+                    season.id,
+                    normalized_reason,
+                    str(intake_size),
+                )
+            ),
+        )
+        batch = AcademyIntakeBatch(
+            id=generated.batch.id,
+            club_id=club.id,
+            season_id=season.id,
+            season_label=generated.batch.season_label,
+            trigger_reason=normalized_reason,
+            idempotency_key=str(audit_metadata["idempotency_key"]),
+            intake_size=generated.batch.intake_size,
+            academy_quality_score=generated.batch.academy_quality_score,
+            status="generated",
+            metadata_json={
+                **audit_metadata,
+                "academy_quality_score": generated.batch.academy_quality_score,
+                "scouting_regions": list(academy.scouting_regions_json),
+            },
+            created_at=generated.batch.generated_at,
+            updated_at=generated.batch.generated_at,
+        )
+        self.session.add(batch)
+        self.session.flush()
+
+        generated_players: list[AcademyGeneratedPlayerView] = []
+        for generated_profile, generated_candidate in zip(generated.regens, generated.batch.candidates, strict=True):
+            candidate, regen, player, attr = self._persist_generated_regen(
+                club=club,
+                academy=academy,
+                batch=batch,
+                generated_profile=generated_profile,
+                generated_candidate=generated_candidate,
+                reference_on=effective_reference_on,
+                generation_source="club_progression_intake",
+                source_scope="club_progression",
+                trigger_reason=normalized_reason,
+                is_tradable=False,
+                audit_metadata=audit_metadata,
+            )
+            generated_players.append(self._to_generated_player_view(candidate, regen, player, attr))
+
+        self.session.flush()
+        return AcademyGenerationResultView(
+            academy=self._to_academy_view(academy),
+            batch_id=batch.id,
+            season_label=batch.season_label,
+            generated_count=len(generated_players),
+            generated_players=tuple(generated_players),
+        )
+
+    def promote_academy_player(
+        self, player_identifier: str, *, reference_on: date | None = None
+    ) -> AcademyPromotionView:
         candidate, regen, player = self._resolve_candidate_player(player_identifier)
         effective_date = reference_on or date.today()
         if candidate.age < 16:
@@ -355,7 +506,12 @@ class RegenEcosystemService:
             details={"academy_candidate_id": candidate.id, "contract_id": contract.id},
         )
         self._promote_career_entry(player.id)
-        self._notify(candidate.club_id, "ACADEMY_GRADUATE", f"{player.full_name} graduated from the academy.", resource_id=player.id)
+        self._notify(
+            candidate.club_id,
+            "ACADEMY_GRADUATE",
+            f"{player.full_name} graduated from the academy.",
+            resource_id=player.id,
+        )
         self.sync_agent_contract_pressure(player.id, reference_on=effective_date)
         self.session.flush()
         return AcademyPromotionView(
@@ -402,8 +558,15 @@ class RegenEcosystemService:
                     metadata_json={"scout_id": scout.id, "skill_rating": scout.skill_rating},
                 )
             )
-            self._notify(club.id, "REGEN_DISCOVERED", f"{player.full_name} has been discovered by scouting.", resource_id=player.id)
-            academy_candidate = self.session.scalar(select(AcademyCandidate).where(AcademyCandidate.regen_profile_id == regen.id))
+            self._notify(
+                club.id,
+                "REGEN_DISCOVERED",
+                f"{player.full_name} has been discovered by scouting.",
+                resource_id=player.id,
+            )
+            academy_candidate = self.session.scalar(
+                select(AcademyCandidate).where(AcademyCandidate.regen_profile_id == regen.id)
+            )
             discovered.append(self._to_generated_player_view(academy_candidate, regen, player, attr))
         self.session.flush()
         return ScoutDiscoveryResultView(
@@ -454,7 +617,9 @@ class RegenEcosystemService:
             generated_at=report.created_at,
         )
 
-    def update_dynamic_potentials(self, *, limit: int | None = None, reference_on: date | None = None) -> dict[str, object]:
+    def update_dynamic_potentials(
+        self, *, limit: int | None = None, reference_on: date | None = None
+    ) -> dict[str, object]:
         regens = self.session.scalars(select(RegenProfile).order_by(RegenProfile.generated_at.asc())).all()
         if limit is not None:
             regens = regens[: max(limit, 1)]
@@ -480,7 +645,9 @@ class RegenEcosystemService:
                 updated_maximum = _clamp_int(maximum + delta, minimum=max(minimum, regen.current_gsi), maximum=99)
                 if updated_maximum != maximum:
                     regen.potential_range_json = {"minimum": minimum, "maximum": updated_maximum}
-                    attr.last_potential_update_at = datetime.combine(effective_date, datetime.min.time(), tzinfo=timezone.utc)
+                    attr.last_potential_update_at = datetime.combine(
+                        effective_date, datetime.min.time(), tzinfo=timezone.utc
+                    )
                     self._sync_rarity_and_badges(regen, player, attr)
                     updated_player_ids.append(player.id)
             self._evolve_personality(player.id, reference_on=effective_date)
@@ -536,7 +703,11 @@ class RegenEcosystemService:
         elif resolved_type == "breakout":
             regen.potential_range_json = {
                 "minimum": int((regen.potential_range_json or {}).get("minimum", regen.current_gsi)),
-                "maximum": _clamp_int(int((regen.potential_range_json or {}).get("maximum", regen.current_gsi)) + 3, minimum=regen.current_gsi, maximum=99),
+                "maximum": _clamp_int(
+                    int((regen.potential_range_json or {}).get("maximum", regen.current_gsi)) + 3,
+                    minimum=regen.current_gsi,
+                    maximum=99,
+                ),
             }
             state = dict(attr.personality_state_json or {})
             state["confidence"] = _clamp_int(float(state.get("confidence", 50)) + 8)
@@ -625,7 +796,11 @@ class RegenEcosystemService:
                     player_id=player.id if player is not None else None,
                     regen_profile_id=regen.id if regen is not None else None,
                     display_name=player.full_name if player is not None else None,
-                    headline=f"{player.full_name} entered the regen universe." if player is not None else "New regen generated.",
+                    headline=(
+                        f"{player.full_name} entered the regen universe."
+                        if player is not None
+                        else "New regen generated."
+                    ),
                     details={"generation_source": event.generation_source, "season_label": event.season_label},
                 )
             )
@@ -646,7 +821,10 @@ class RegenEcosystemService:
                 )
             )
         promotions = self.session.scalars(
-            select(PlayerCareerEntry).where(PlayerCareerEntry.squad_role == "academy_graduate").order_by(PlayerCareerEntry.created_at.desc()).limit(max(limit, 1))
+            select(PlayerCareerEntry)
+            .where(PlayerCareerEntry.squad_role == "academy_graduate")
+            .order_by(PlayerCareerEntry.created_at.desc())
+            .limit(max(limit, 1))
         ).all()
         for promotion in promotions:
             items.append(
@@ -704,7 +882,9 @@ class RegenEcosystemService:
                     if player is None:
                         continue
                     attr = self._ensure_attribute_profile(regen)
-                    result.append(self._to_hub_player_view(regen, player, attr, score=record.improvement_score, rank=index))
+                    result.append(
+                        self._to_hub_player_view(regen, player, attr, score=record.improvement_score, rank=index)
+                    )
                 return tuple(result)
         return self._fallback_ranked_regens(limit=limit, sort_key="uniqueness")
 
@@ -712,13 +892,17 @@ class RegenEcosystemService:
         season = self._resolve_season(season_id)
         if season is None:
             return ()
-        awards = self.session.scalars(select(UniverseAward).order_by(UniverseAward.sort_order.asc(), UniverseAward.name.asc())).all()
+        awards = self.session.scalars(
+            select(UniverseAward).order_by(UniverseAward.sort_order.asc(), UniverseAward.name.asc())
+        ).all()
         results: list[RegenAwardHubView] = []
         for award in awards:
             winners = self.session.scalars(
                 select(RegenAwardWinner)
                 .where(RegenAwardWinner.award_id == award.id, RegenAwardWinner.season_id == season.id)
-                .order_by(RegenAwardWinner.rank.is_(None), RegenAwardWinner.rank.asc(), RegenAwardWinner.player_name.asc())
+                .order_by(
+                    RegenAwardWinner.rank.is_(None), RegenAwardWinner.rank.asc(), RegenAwardWinner.player_name.asc()
+                )
             ).all()
             vote_rows = self.session.execute(
                 select(RegenAwardVote.player_id, func.count(RegenAwardVote.id))
@@ -734,7 +918,12 @@ class RegenEcosystemService:
                     season_id=season.id,
                     season_number=season.season_number,
                     winners=[
-                        {"player_id": winner.player_id, "player_name": winner.player_name, "rank": winner.rank, "ranking_score": winner.ranking_score}
+                        {
+                            "player_id": winner.player_id,
+                            "player_name": winner.player_name,
+                            "rank": winner.rank,
+                            "ranking_score": winner.ranking_score,
+                        }
                         for winner in winners
                     ],
                     vote_totals=[
@@ -745,7 +934,9 @@ class RegenEcosystemService:
             )
         return tuple(results)
 
-    def cast_award_vote(self, award_id: str, *, user_id: str, player_id: str, season_id: str | None = None) -> RegenAwardVote:
+    def cast_award_vote(
+        self, award_id: str, *, user_id: str, player_id: str, season_id: str | None = None
+    ) -> RegenAwardVote:
         award = self.session.get(UniverseAward, award_id)
         if award is None:
             raise RegenEcosystemNotFoundError("award_not_found")
@@ -784,9 +975,15 @@ class RegenEcosystemService:
         visited: set[str] = set()
         while current is not None and current.id not in visited:
             visited.add(current.id)
-            bloodline = self.session.scalar(select(RegenBloodlineLink).where(RegenBloodlineLink.regen_profile_id == current.id))
+            bloodline = self.session.scalar(
+                select(RegenBloodlineLink).where(RegenBloodlineLink.regen_profile_id == current.id)
+            )
             player = self.session.get(Player, current.player_id)
-            legacy = self.session.get(RegenLegacyRecord, bloodline.parent_legacy_id) if bloodline is not None and bloodline.parent_legacy_id else None
+            legacy = (
+                self.session.get(RegenLegacyRecord, bloodline.parent_legacy_id)
+                if bloodline is not None and bloodline.parent_legacy_id
+                else None
+            )
             chain.append(
                 RegenBloodlineNodeView(
                     regen_profile_id=current.id,
@@ -816,7 +1013,9 @@ class RegenEcosystemService:
         return {"academies_processed": len(academies), "results": results}
 
     def run_scouting_discovery_jobs(self) -> dict[str, object]:
-        scouts = self.session.scalars(select(Scout).where(Scout.active.is_(True)).order_by(Scout.created_at.asc())).all()
+        scouts = self.session.scalars(
+            select(Scout).where(Scout.active.is_(True)).order_by(Scout.created_at.asc())
+        ).all()
         results = []
         for scout in scouts:
             discovered = self.discover_regens(scout.id, limit=3)
@@ -827,11 +1026,15 @@ class RegenEcosystemService:
         return self.update_dynamic_potentials()
 
     def run_career_event_jobs(self, *, limit: int = 10, reference_on: date | None = None) -> dict[str, object]:
-        regens = self.session.scalars(select(RegenProfile).order_by(RegenProfile.generated_at.asc()).limit(max(limit, 1))).all()
+        regens = self.session.scalars(
+            select(RegenProfile).order_by(RegenProfile.generated_at.asc()).limit(max(limit, 1))
+        ).all()
         created: list[str] = []
         for regen in regens:
             attr = self._ensure_attribute_profile(regen)
-            trigger_ratio = 0.18 + (attr.injury_risk / 500.0) + (int(attr.hidden_stats_json.get("clutch_factor", 50)) / 1000.0)
+            trigger_ratio = (
+                0.18 + (attr.injury_risk / 500.0) + (int(attr.hidden_stats_json.get("clutch_factor", 50)) / 1000.0)
+            )
             if self._stable_ratio("career-job", regen.id, str(reference_on or date.today())) > trigger_ratio:
                 continue
             event = self.trigger_career_event(regen.player_id, reference_on=reference_on)
@@ -847,7 +1050,13 @@ class RegenEcosystemService:
         generated_profile,
         generated_candidate,
         reference_on: date,
+        generation_source: str = "organic_newgen",
+        source_scope: str = "academy_pipeline",
+        trigger_reason: str = "academy_manual",
+        is_tradable: bool = True,
+        audit_metadata: dict[str, object] | None = None,
     ) -> tuple[AcademyCandidate, RegenProfile, Player, RegenAttributeProfile]:
+        audit_payload = dict(audit_metadata or {})
         country = self._ensure_country(generated_profile.birth_country_code)
         player = Player(
             source_provider="gtex_regen",
@@ -856,7 +1065,9 @@ class RegenEcosystemService:
             current_club_profile_id=club.id,
             full_name=generated_profile.display_name,
             first_name=generated_profile.display_name.split(" ", 1)[0],
-            last_name=generated_profile.display_name.split(" ", 1)[1] if " " in generated_profile.display_name else None,
+            last_name=(
+                generated_profile.display_name.split(" ", 1)[1] if " " in generated_profile.display_name else None
+            ),
             short_name=generated_profile.display_name,
             position=generated_profile.primary_position,
             normalized_position=self._normalized_position(generated_profile.primary_position),
@@ -864,7 +1075,7 @@ class RegenEcosystemService:
             preferred_foot="right",
             market_value_eur=float(generated_profile.current_gsi) * 12_000.0,
             profile_completeness_score=0.96,
-            is_tradable=True,
+            is_tradable=is_tradable,
             is_real_player=False,
             canonical_display_name=generated_profile.display_name,
         )
@@ -890,19 +1101,32 @@ class RegenEcosystemService:
             card_variant="academy_regen",
             supply_total=1,
             supply_available=1,
-            metadata_json={"origin_type": "academy_regen", "regen_id": generated_profile.regen_id},
+            metadata_json={
+                "origin_type": "academy_regen",
+                "reason": trigger_reason,
+                "regen_id": generated_profile.regen_id,
+                "source": source_scope,
+            },
         )
         self.session.add(card)
         self.session.flush()
         self.session.add(
             PlayerCardHistory(
                 player_card_id=card.id,
-                event_type="academy_intake_created",
-                description="Academy regen card created from the weekly youth pipeline.",
+                event_type=(
+                    "club_progression_intake_created"
+                    if source_scope == "club_progression"
+                    else "academy_intake_created"
+                ),
+                description=(
+                    "Club progression regen card created from a progression milestone."
+                    if source_scope == "club_progression"
+                    else "Academy regen card created from the weekly youth pipeline."
+                ),
                 delta_supply=1,
                 delta_available=1,
                 actor_user_id=club.owner_user_id,
-                metadata_json={"academy_id": academy.id},
+                metadata_json={"academy_id": academy.id, **audit_payload},
             )
         )
         self.session.add(
@@ -911,7 +1135,7 @@ class RegenEcosystemService:
                 owner_user_id=club.owner_user_id,
                 quantity_total=1,
                 quantity_reserved=0,
-                metadata_json={"origin": "academy_pipeline"},
+                metadata_json={"origin": source_scope, "trigger_reason": trigger_reason},
             )
         )
         self.session.add(
@@ -920,9 +1144,13 @@ class RegenEcosystemService:
                 from_user_id=None,
                 to_user_id=club.owner_user_id,
                 quantity=1,
-                event_type="academy_intake_created",
+                event_type=(
+                    "club_progression_intake_created"
+                    if source_scope == "club_progression"
+                    else "academy_intake_created"
+                ),
                 reference_id=generated_profile.regen_id,
-                metadata_json={"club_id": club.id},
+                metadata_json={"club_id": club.id, **audit_payload},
             )
         )
         regen = RegenProfile(
@@ -946,7 +1174,7 @@ class RegenEcosystemService:
                 "maximum": generated_profile.potential_range.maximum,
             },
             scout_confidence=generated_profile.scout_confidence,
-            generation_source="organic_newgen",
+            generation_source=generation_source,
             is_special_lineage=generated_profile.is_special_lineage,
             status="academy_candidate",
             club_quality_score=generated_profile.club_quality_score,
@@ -955,6 +1183,9 @@ class RegenEcosystemService:
                 "rules_only": True,
                 "academy_level": academy.level,
                 "academy_quality_multiplier": self._academy_quality_multiplier(academy, generated_profile.birth_region),
+                "source": source_scope,
+                "trigger_reason": trigger_reason,
+                **audit_payload,
             },
         )
         self.session.add(regen)
@@ -980,7 +1211,7 @@ class RegenEcosystemService:
             ethnolinguistic_profile=generated_profile.origin.ethnolinguistic_profile,
             religion_naming_pattern=generated_profile.origin.religion_naming_pattern,
             urbanicity=generated_profile.origin.urbanicity,
-            metadata_json={"scouting_regions": list(academy.scouting_regions_json)},
+            metadata_json={"scouting_regions": list(academy.scouting_regions_json), "source": source_scope},
         )
         self.session.add(origin)
         visual_profile = dict((generated_profile.metadata or {}).get("visual_profile") or {})
@@ -995,7 +1226,9 @@ class RegenEcosystemService:
                 metadata_json={},
             )
         )
-        player_personality = self._ensure_player_personality(player=player, regen=regen, regen_personality=regen_personality, origin=origin)
+        player_personality = self._ensure_player_personality(
+            player=player, regen=regen, regen_personality=regen_personality, origin=origin
+        )
         candidate = AcademyCandidate(
             id=generated_candidate.id,
             batch_id=batch.id,
@@ -1019,11 +1252,18 @@ class RegenEcosystemService:
             scout_confidence=generated_candidate.scout_confidence,
             status="academy_candidate",
             metadata_json={
-                "decision_deadline_on": generated_candidate.decision_deadline_on.isoformat() if generated_candidate.decision_deadline_on else None,
+                "decision_deadline_on": (
+                    generated_candidate.decision_deadline_on.isoformat()
+                    if generated_candidate.decision_deadline_on
+                    else None
+                ),
                 "free_agency_status": generated_candidate.free_agency_status,
                 "platform_capture_share_pct": generated_candidate.platform_capture_share_pct,
                 "previous_club_capture_share_pct": generated_candidate.previous_club_capture_share_pct,
                 "special_training_eligible": generated_candidate.special_training_eligible,
+                "source": source_scope,
+                "trigger_reason": trigger_reason,
+                **audit_payload,
             },
             created_at=generated_candidate.generated_at,
             updated_at=generated_candidate.generated_at,
@@ -1033,12 +1273,19 @@ class RegenEcosystemService:
             RegenGenerationEvent(
                 regen_profile_id=regen.id,
                 club_id=club.id,
-                generation_source="organic_newgen",
+                generation_source=generation_source,
                 season_label=batch.season_label,
                 event_status="generated",
-                probability_score=self._region_density(generated_profile.birth_region or generated_profile.birth_country_code),
+                probability_score=self._region_density(
+                    generated_profile.birth_region or generated_profile.birth_country_code
+                ),
                 quality_roll=self._academy_quality_multiplier(academy, generated_profile.birth_region),
-                metadata_json={"academy_batch_id": batch.id},
+                metadata_json={
+                    "academy_batch_id": batch.id,
+                    "reason": trigger_reason,
+                    "source": source_scope,
+                    **audit_payload,
+                },
             )
         )
         self.session.add(
@@ -1052,7 +1299,11 @@ class RegenEcosystemService:
                 goals=0,
                 assists=0,
                 honours_json=[],
-                notes="Generated through the academy player pipeline.",
+                notes=(
+                    "Generated through the club progression intake pipeline."
+                    if source_scope == "club_progression"
+                    else "Generated through the academy player pipeline."
+                ),
                 start_on=reference_on,
                 end_on=None,
             )
@@ -1060,14 +1311,46 @@ class RegenEcosystemService:
         self._record_player_event(
             player_id=player.id,
             club_id=club.id,
-            event_type="academy_intake_generated",
+            event_type=(
+                "club_progression_intake_generated"
+                if source_scope == "club_progression"
+                else "academy_intake_generated"
+            ),
             event_status="academy_pool",
             occurred_on=reference_on,
-            summary=f"{player.full_name} joined the academy pool.",
-            details={"academy_batch_id": batch.id, "academy_candidate_id": candidate.id},
+            summary=(
+                f"{player.full_name} joined the club progression intake."
+                if source_scope == "club_progression"
+                else f"{player.full_name} joined the academy pool."
+            ),
+            details={"academy_batch_id": batch.id, "academy_candidate_id": candidate.id, **audit_payload},
         )
+        if source_scope == "club_progression":
+            self.session.add(
+                CareerEvent(
+                    player_id=player.id,
+                    regen_profile_id=regen.id,
+                    type="club_progression_intake",
+                    occurred_on=reference_on,
+                    impact_json={
+                        "academy_level": audit_payload.get("academy_level", academy.level),
+                        "reason": trigger_reason,
+                    },
+                    summary=f"{player.full_name} joined through club progression intake.",
+                    metadata_json={"academy_batch_id": batch.id, "academy_candidate_id": candidate.id, **audit_payload},
+                )
+            )
         attr = self._ensure_attribute_profile(regen, player=player, personality=player_personality, refresh=True)
-        self._notify(club.id, "REGEN_DISCOVERED", f"{player.full_name} entered the academy pool.", resource_id=player.id)
+        self._notify(
+            club.id,
+            "REGEN_DISCOVERED",
+            (
+                f"{player.full_name} entered the club progression intake."
+                if source_scope == "club_progression"
+                else f"{player.full_name} entered the academy pool."
+            ),
+            resource_id=player.id,
+        )
         return candidate, regen, player, attr
 
     def _ensure_player_personality(
@@ -1135,14 +1418,24 @@ class RegenEcosystemService:
         player = player or self.session.get(Player, regen.player_id)
         if player is None:
             raise RegenEcosystemNotFoundError("regen_player_not_found")
-        personality = personality or self.session.scalar(select(PlayerPersonality).where(PlayerPersonality.player_id == player.id))
+        personality = personality or self.session.scalar(
+            select(PlayerPersonality).where(PlayerPersonality.player_id == player.id)
+        )
         if personality is None:
-            regen_personality = self.session.scalar(select(RegenPersonalityProfile).where(RegenPersonalityProfile.regen_profile_id == regen.id))
-            origin = self.session.scalar(select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == regen.id))
+            regen_personality = self.session.scalar(
+                select(RegenPersonalityProfile).where(RegenPersonalityProfile.regen_profile_id == regen.id)
+            )
+            origin = self.session.scalar(
+                select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == regen.id)
+            )
             if regen_personality is None or origin is None:
                 raise RegenEcosystemNotFoundError("regen_personality_or_origin_missing")
-            personality = self._ensure_player_personality(player=player, regen=regen, regen_personality=regen_personality, origin=origin)
-        attr = self.session.scalar(select(RegenAttributeProfile).where(RegenAttributeProfile.regen_profile_id == regen.id))
+            personality = self._ensure_player_personality(
+                player=player, regen=regen, regen_personality=regen_personality, origin=origin
+            )
+        attr = self.session.scalar(
+            select(RegenAttributeProfile).where(RegenAttributeProfile.regen_profile_id == regen.id)
+        )
         if attr is None:
             attr = RegenAttributeProfile(regen_profile_id=regen.id, player_id=player.id)
             self.session.add(attr)
@@ -1158,18 +1451,24 @@ class RegenEcosystemService:
 
     def _build_visible_stats(self, regen: RegenProfile, personality: PlayerPersonality) -> dict[str, int]:
         current_mid = _midpoint(regen.current_ability_range_json, regen.current_gsi)
-        technical = _clamp_int((current_mid * 0.68) + (personality.media_appetite * 0.08) + (personality.development_focus * 0.12))
+        technical = _clamp_int(
+            (current_mid * 0.68) + (personality.media_appetite * 0.08) + (personality.development_focus * 0.12)
+        )
         physical = _clamp_int((current_mid * 0.64) + (personality.competitiveness * 0.15) + 6)
         mental = _clamp_int((current_mid * 0.60) + (personality.professionalism * 0.20) + (personality.patience * 0.10))
         tactical = _clamp_int((current_mid * 0.62) + (personality.adaptability * 0.18))
         return {"technical": technical, "physical": physical, "mental": mental, "tactical": tactical}
 
     def _build_hidden_stats(self, regen: RegenProfile) -> dict[str, int]:
-        potential_gap = max(int((regen.potential_range_json or {}).get("maximum", regen.current_gsi)) - regen.current_gsi, 0)
+        potential_gap = max(
+            int((regen.potential_range_json or {}).get("maximum", regen.current_gsi)) - regen.current_gsi, 0
+        )
         consistency = self._stable_int("consistency", regen.id, minimum=35, maximum=92)
         injury_proneness = self._stable_int("injury_proneness", regen.id, minimum=18, maximum=82)
         clutch_factor = self._stable_int("clutch_factor", regen.id, minimum=30, maximum=96)
-        growth_variance = _clamp_int(self._stable_int("growth_variance", regen.id, minimum=25, maximum=88) + (potential_gap * 0.4))
+        growth_variance = _clamp_int(
+            self._stable_int("growth_variance", regen.id, minimum=25, maximum=88) + (potential_gap * 0.4)
+        )
         return {
             "consistency": consistency,
             "injury_proneness": injury_proneness,
@@ -1177,11 +1476,15 @@ class RegenEcosystemService:
             "growth_variance": growth_variance,
         }
 
-    def _build_personality_state(self, regen: RegenProfile, personality: PlayerPersonality) -> dict[str, int | float | str | bool]:
+    def _build_personality_state(
+        self, regen: RegenProfile, personality: PlayerPersonality
+    ) -> dict[str, int | float | str | bool]:
         return {
             "confidence": _clamp_int((personality.ambition * 0.35) + (regen.current_gsi * 0.45)),
             "morale": _clamp_int((personality.loyalty * 0.18) + (personality.professionalism * 0.32) + 24),
-            "pressure_response": _clamp_int((personality.temperament * 0.25) + (personality.patience * 0.35) + (personality.competitiveness * 0.20)),
+            "pressure_response": _clamp_int(
+                (personality.temperament * 0.25) + (personality.patience * 0.35) + (personality.competitiveness * 0.20)
+            ),
             "agent_pressure": 0,
             "mentor_boost": 0,
         }
@@ -1270,14 +1573,18 @@ class RegenEcosystemService:
         return 0.72
 
     def _recent_performance_signal(self, player_id: str) -> dict[str, float | int | bool]:
-        season_stats = self.session.scalars(select(PlayerSeasonStat).where(PlayerSeasonStat.player_id == player_id)).all()
+        season_stats = self.session.scalars(
+            select(PlayerSeasonStat).where(PlayerSeasonStat.player_id == player_id)
+        ).all()
         match_stats = self.session.scalars(select(PlayerMatchStat).where(PlayerMatchStat.player_id == player_id)).all()
         appearances = sum(max(stat.appearances or 0, 0) for stat in season_stats)
         minutes = sum(max(stat.minutes or 0, 0) for stat in season_stats)
         average_rating_values = [stat.average_rating for stat in season_stats if stat.average_rating is not None]
         if not average_rating_values:
             average_rating_values = [stat.rating for stat in match_stats if stat.rating is not None]
-        average_rating = round(sum(average_rating_values) / len(average_rating_values), 2) if average_rating_values else 6.5
+        average_rating = (
+            round(sum(average_rating_values) / len(average_rating_values), 2) if average_rating_values else 6.5
+        )
         goals = sum(max(stat.goals or 0, 0) for stat in season_stats)
         assists = sum(max(stat.assists or 0, 0) for stat in season_stats)
         return {
@@ -1303,7 +1610,11 @@ class RegenEcosystemService:
             if _age_on(peer.date_of_birth) < 28 and not force:
                 continue
             total_appearances = int(
-                self.session.scalar(select(func.coalesce(func.sum(PlayerCareerEntry.appearances), 0)).where(PlayerCareerEntry.player_id == peer.id))
+                self.session.scalar(
+                    select(func.coalesce(func.sum(PlayerCareerEntry.appearances), 0)).where(
+                        PlayerCareerEntry.player_id == peer.id
+                    )
+                )
                 or 0
             )
             if total_appearances < 80 and not force:
@@ -1336,7 +1647,10 @@ class RegenEcosystemService:
                 wins += 1
             if (stat.starts or 0) <= 0:
                 bench_count += 1
-            is_big = bool(getattr(competition, "is_major", False)) or (getattr(competition, "competition_strength", 0) or 0) >= 75
+            is_big = (
+                bool(getattr(competition, "is_major", False))
+                or (getattr(competition, "competition_strength", 0) or 0) >= 75
+            )
             if is_big:
                 big_matches += 1
                 if (stat.rating or 0) >= 7.0:
@@ -1362,7 +1676,9 @@ class RegenEcosystemService:
 
     def _choose_career_event(self, regen: RegenProfile, attr: RegenAttributeProfile) -> str:
         injury_roll = self._stable_ratio("career-injury", regen.id, str(len(attr.injury_history_json or [])))
-        breakout_roll = self._stable_ratio("career-breakout", regen.id, str((regen.potential_range_json or {}).get("maximum", regen.current_gsi)))
+        breakout_roll = self._stable_ratio(
+            "career-breakout", regen.id, str((regen.potential_range_json or {}).get("maximum", regen.current_gsi))
+        )
         if injury_roll < min(0.55, attr.injury_risk / 100.0):
             return "injury"
         if breakout_roll < 0.35 and int((regen.potential_range_json or {}).get("maximum", regen.current_gsi)) >= 84:
@@ -1448,6 +1764,94 @@ class RegenEcosystemService:
         for index, item in enumerate(result, start=1):
             item.rank = index
         return tuple(result)
+
+    def _academy_generation_result_from_batch(
+        self,
+        *,
+        academy: YouthAcademy,
+        batch: AcademyIntakeBatch,
+    ) -> AcademyGenerationResultView:
+        generated_players: list[AcademyGeneratedPlayerView] = []
+        rows = self.session.execute(
+            select(AcademyCandidate, RegenProfile, Player)
+            .join(RegenProfile, RegenProfile.id == AcademyCandidate.regen_profile_id)
+            .join(Player, Player.id == RegenProfile.player_id)
+            .where(AcademyCandidate.batch_id == batch.id)
+            .order_by(AcademyCandidate.created_at.asc(), AcademyCandidate.id.asc())
+        ).all()
+        for candidate, regen, player in rows:
+            attr = self._ensure_attribute_profile(regen, player=player)
+            generated_players.append(self._to_generated_player_view(candidate, regen, player, attr))
+        return AcademyGenerationResultView(
+            academy=self._to_academy_view(academy),
+            batch_id=batch.id,
+            season_label=batch.season_label,
+            generated_count=len(generated_players),
+            generated_players=tuple(generated_players),
+        )
+
+    def _ensure_academy_for_club(self, club: ClubProfile) -> YouthAcademy:
+        academy = self.session.scalar(select(YouthAcademy).where(YouthAcademy.club_id == club.id))
+        if academy is None:
+            academy = self.upsert_academy(club_user_id=club.owner_user_id, club_id=club.id)
+        elif academy.club_id != club.id:
+            academy.club_id = club.id
+            self.session.flush()
+        return academy
+
+    def _club_progression_intake_size(
+        self,
+        *,
+        club_id: str,
+        season_id: str,
+        reason: str,
+        academy_level: int,
+    ) -> int:
+        minimum, maximum = self._club_progression_intake_bounds(academy_level)
+        return self._stable_int(
+            "club-progression-intake-size",
+            club_id,
+            season_id,
+            reason,
+            str(academy_level),
+            minimum=minimum,
+            maximum=maximum,
+        )
+
+    def _club_progression_intake_bounds(self, academy_level: int) -> tuple[int, int]:
+        normalized_level = max(academy_level, 1)
+        if normalized_level <= 1:
+            return (1, 2)
+        if normalized_level == 2:
+            return (2, 3)
+        if normalized_level == 3:
+            return (3, 5)
+        return (5, 8)
+
+    def _regen_season_label(self, season: RegenSeason) -> str:
+        metadata_label = str((season.metadata_json or {}).get("season_label") or "").strip()
+        if metadata_label:
+            return metadata_label
+        return f"{season.start_date.year}/{season.end_date.year}"
+
+    def _build_progression_club_context(
+        self,
+        club: ClubProfile,
+        academy: YouthAcademy,
+        *,
+        academy_level: int,
+    ) -> RegenClubContext:
+        base_context = self._build_club_context(club, academy)
+        return replace(
+            base_context,
+            youth_coaching=max(base_context.youth_coaching, float(academy_level * 12)),
+            training_level=max(base_context.training_level, float(academy_level * 11)),
+            academy_level=max(base_context.academy_level, float(academy_level * 14)),
+            academy_investment=max(base_context.academy_investment, float(academy_level * 14)),
+            manager_youth_development=max(
+                base_context.manager_youth_development, float(min(95, (academy_level * 16) + 14))
+            ),
+        )
 
     def _to_generated_player_view(
         self,
@@ -1560,7 +1964,9 @@ class RegenEcosystemService:
             club = self.session.get(ClubProfile, club_id)
             if club is not None and club.owner_user_id == club_user_id:
                 return club
-        club = self.session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == club_user_id).order_by(ClubProfile.created_at.asc()))
+        club = self.session.scalar(
+            select(ClubProfile).where(ClubProfile.owner_user_id == club_user_id).order_by(ClubProfile.created_at.asc())
+        )
         if club is None:
             raise RegenEcosystemNotFoundError("club_not_found")
         return club
@@ -1570,7 +1976,9 @@ class RegenEcosystemService:
         regen = None
         if candidate is None:
             regen = self._resolve_regen(player_identifier)
-            candidate = self.session.scalar(select(AcademyCandidate).where(AcademyCandidate.regen_profile_id == regen.id))
+            candidate = self.session.scalar(
+                select(AcademyCandidate).where(AcademyCandidate.regen_profile_id == regen.id)
+            )
             if candidate is None:
                 raise RegenEcosystemNotFoundError("academy_candidate_not_found")
         else:
@@ -1620,13 +2028,16 @@ class RegenEcosystemService:
     def _build_club_context(self, club: ClubProfile, academy: YouthAcademy) -> RegenClubContext:
         facility = self.session.scalar(select(ClubFacility).where(ClubFacility.club_id == club.id))
         reputation = self.session.scalar(select(ClubReputationProfile).where(ClubReputationProfile.club_id == club.id))
-        academy_score = academy.level * 10
+        effective_level = self._effective_academy_level(club.id, academy=academy, facility=facility)
+        academy_score = effective_level * 10
         return RegenClubContext(
             country_code=club.country_code or self.settings.regen_generation.default_country_code,
             region_name=club.region_name,
             city_name=club.city_name,
-            youth_coaching=float((facility.academy_level if facility is not None else academy.level) * 10),
-            training_level=float((facility.training_level if facility is not None else academy.level) * 10),
+            youth_coaching=float(effective_level * 10),
+            training_level=float(
+                max(facility.training_level if facility is not None else effective_level, effective_level) * 10
+            ),
             academy_level=float(academy_score),
             academy_investment=float(academy_score),
             first_team_gsi=58.0,
@@ -1635,6 +2046,17 @@ class RegenEcosystemService:
             manager_youth_development=float(min(95, academy_score + 10)),
             urbanicity="urban" if club.city_name else None,
         )
+
+    def _effective_academy_level(
+        self,
+        club_id: str,
+        *,
+        academy: YouthAcademy,
+        facility: ClubFacility | None = None,
+    ) -> int:
+        resolved_facility = facility or self.session.scalar(select(ClubFacility).where(ClubFacility.club_id == club_id))
+        facility_level = resolved_facility.academy_level if resolved_facility is not None else academy.level
+        return max(1, academy.level, facility_level)
 
     def _academy_quality_multiplier(self, academy: YouthAcademy, region_name: str | None) -> float:
         base_random = 0.82 + (self._stable_ratio("academy-quality", academy.id, region_name or "default") * 0.36)
@@ -1660,13 +2082,16 @@ class RegenEcosystemService:
         return region_query.strip().lower() in tokens
 
     def _already_discovered(self, club_id: str, regen_id: str) -> bool:
-        return self.session.scalar(
-            select(RegenDiscoveryBadge.id).where(
-                RegenDiscoveryBadge.club_id == club_id,
-                RegenDiscoveryBadge.regen_id == regen_id,
-                RegenDiscoveryBadge.badge_code == "discovered",
+        return (
+            self.session.scalar(
+                select(RegenDiscoveryBadge.id).where(
+                    RegenDiscoveryBadge.club_id == club_id,
+                    RegenDiscoveryBadge.regen_id == regen_id,
+                    RegenDiscoveryBadge.badge_code == "discovered",
+                )
             )
-        ) is not None
+            is not None
+        )
 
     def _ensure_country(self, country_code: str) -> Country:
         code = country_code.upper()
@@ -1733,7 +2158,9 @@ class RegenEcosystemService:
 
     def _promote_career_entry(self, player_id: str) -> None:
         entry = self.session.scalar(
-            select(PlayerCareerEntry).where(PlayerCareerEntry.player_id == player_id).order_by(PlayerCareerEntry.created_at.desc())
+            select(PlayerCareerEntry)
+            .where(PlayerCareerEntry.player_id == player_id)
+            .order_by(PlayerCareerEntry.created_at.desc())
         )
         if entry is not None:
             entry.squad_role = "academy_graduate"
@@ -1758,7 +2185,9 @@ class RegenEcosystemService:
 
     def _latest_contract(self, player_id: str) -> PlayerContract | None:
         return self.session.scalar(
-            select(PlayerContract).where(PlayerContract.player_id == player_id).order_by(PlayerContract.ends_on.desc(), PlayerContract.created_at.desc())
+            select(PlayerContract)
+            .where(PlayerContract.player_id == player_id)
+            .order_by(PlayerContract.ends_on.desc(), PlayerContract.created_at.desc())
         )
 
     def _initial_salary_for_regen(self, regen: RegenProfile) -> Decimal:
@@ -1768,7 +2197,9 @@ class RegenEcosystemService:
 
     def _agent_salary_expectation(self, regen: RegenProfile, attr: RegenAttributeProfile, agent: Agent) -> Decimal:
         potential_max = int((regen.potential_range_json or {}).get("maximum", regen.current_gsi))
-        demand = max(300, round((potential_max * 9.5) + (agent.negotiation_skill * 4.2) + (attr.market_value_coin / 180)))
+        demand = max(
+            300, round((potential_max * 9.5) + (agent.negotiation_skill * 4.2) + (attr.market_value_coin / 180))
+        )
         return Decimal(str(demand))
 
     def _ensure_agent_for_player(self, player_id: str) -> Agent:
@@ -1789,7 +2220,9 @@ class RegenEcosystemService:
         return agent
 
     def _latest_or_active_season(self) -> RegenSeason | None:
-        season = self.session.scalar(select(RegenSeason).where(RegenSeason.is_active.is_(True)).order_by(RegenSeason.season_number.desc()))
+        season = self.session.scalar(
+            select(RegenSeason).where(RegenSeason.is_active.is_(True)).order_by(RegenSeason.season_number.desc())
+        )
         if season is not None:
             return season
         return self.session.scalar(select(RegenSeason).order_by(RegenSeason.season_number.desc()))

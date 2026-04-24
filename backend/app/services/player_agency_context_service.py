@@ -156,7 +156,11 @@ class PlayerAgencyContextService:
         salary_expectation = quantize_amount(
             max(
                 state.salary_expectation_amount,
-                Decimal(max(150, round((regen.current_gsi * 6.0) + (personality.ambition * 3.1) + (personality.greed * 2.6)))),
+                Decimal(
+                    max(
+                        150, round((regen.current_gsi * 6.0) + (personality.ambition * 3.1) + (personality.greed * 2.6))
+                    )
+                ),
                 current_wage,
             )
         )
@@ -237,9 +241,13 @@ class PlayerAgencyContextService:
         profile = self.session.get(ClubProfile, club_id)
         reputation = self.session.scalar(select(ClubReputationProfile).where(ClubReputationProfile.club_id == club_id))
         facility = self.session.scalar(select(ClubFacility).where(ClubFacility.club_id == club_id))
-        origin = self.session.scalar(select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == regen.id))
+        origin = self.session.scalar(
+            select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == regen.id)
+        )
 
-        reputation_score = float(club_stature if club_stature is not None else (reputation.current_score if reputation is not None else 45))
+        reputation_score = float(
+            club_stature if club_stature is not None else (reputation.current_score if reputation is not None else 45)
+        )
         trophy_score = clamp(
             (
                 ((reputation.total_league_titles if reputation is not None else 0) * 8)
@@ -250,24 +258,55 @@ class PlayerAgencyContextService:
         development_score = (
             clamp(development_fit)
             if development_fit is not None
-            else clamp((((facility.training_level if facility is not None else 1) + (facility.academy_level if facility is not None else 1)) / 2) * 20.0)
+            else clamp(
+                (
+                    (
+                        (facility.training_level if facility is not None else 1)
+                        + (facility.academy_level if facility is not None else 1)
+                    )
+                    / 2
+                )
+                * 20.0
+            )
         )
-        resolved_league_quality = clamp(league_quality if league_quality is not None else self._league_quality_for_player(player, reputation_score))
-        resolved_competition_level = clamp(competition_level if competition_level is not None else resolved_league_quality)
-        resolved_geography_score = clamp(geography_score) if geography_score is not None else self._geography_score(profile=profile, origin=origin)
+        resolved_league_quality = clamp(
+            league_quality if league_quality is not None else self._league_quality_for_player(player, reputation_score)
+        )
+        resolved_competition_level = clamp(
+            competition_level if competition_level is not None else resolved_league_quality
+        )
+        resolved_geography_score = (
+            clamp(geography_score)
+            if geography_score is not None
+            else self._geography_score(profile=profile, origin=origin)
+        )
         depth = self.position_depth(club_id, player.normalized_position)
         resolved_congestion = clamp(squad_congestion if squad_congestion is not None else max(10.0, depth * 22.0))
         resolved_minutes = clamp(
             expected_minutes
             if expected_minutes is not None
-            else (92.0 - (resolved_congestion * 0.55) + (development_score * 0.08) - (reputation_score * 0.08) + self._role_minutes_adjustment(role_label))
+            else (
+                92.0
+                - (resolved_congestion * 0.55)
+                + (development_score * 0.08)
+                - (reputation_score * 0.08)
+                + self._role_minutes_adjustment(role_label)
+            )
         )
         resolved_project = clamp(
             project_attractiveness
             if project_attractiveness is not None
-            else ((reputation_score * 0.36) + (development_score * 0.28) + (resolved_competition_level * 0.16) + (trophy_score * 0.12) + (8.0 if continental_football else 0.0))
+            else (
+                (reputation_score * 0.36)
+                + (development_score * 0.28)
+                + (resolved_competition_level * 0.16)
+                + (trophy_score * 0.12)
+                + (8.0 if continental_football else 0.0)
+            )
         )
-        resolved_stature = clamp(club_stature if club_stature is not None else ((reputation_score * 0.74) + (trophy_score * 0.26)))
+        resolved_stature = clamp(
+            club_stature if club_stature is not None else ((reputation_score * 0.74) + (trophy_score * 0.26))
+        )
         resolved_continental = bool(
             continental_football
             if continental_football is not None
@@ -340,7 +379,9 @@ class PlayerAgencyContextService:
     ) -> str:
         del personality
         age_years = self.resolve_age_years(player, regen=regen, reference_on=reference_on)
-        potential_gap = max(0, int((regen.potential_range_json or {}).get("maximum", regen.current_gsi)) - regen.current_gsi)
+        potential_gap = max(
+            0, int((regen.potential_range_json or {}).get("maximum", regen.current_gsi)) - regen.current_gsi
+        )
         lifecycle_months = self.lifecycle_months(regen, reference_on=reference_on)
         if age_years is not None:
             if age_years <= 19 and potential_gap >= 12:
@@ -407,28 +448,40 @@ class PlayerAgencyContextService:
     def position_depth(self, club_id: str | None, normalized_position: str | None) -> int:
         if club_id is None or normalized_position is None:
             return 0
-        statement = (
-            select(func.count(Player.id))
-            .where(
-                Player.current_club_profile_id == club_id,
-                Player.normalized_position == normalized_position,
-            )
+        statement = select(func.count(Player.id)).where(
+            Player.current_club_profile_id == club_id,
+            Player.normalized_position == normalized_position,
         )
         count = self.session.scalar(statement)
         return int(count or 0)
 
     def decision_cooldown(self, decision_code: str, *, reference_on: date) -> datetime:
-        days = 14 if decision_code in {"accept", "eager_to_join", "transfer_request", "public_unhappy_state", "requests_transfer_if_blocked"} else 7
+        days = (
+            14
+            if decision_code
+            in {"accept", "eager_to_join", "transfer_request", "public_unhappy_state", "requests_transfer_if_blocked"}
+            else 7
+        )
         return datetime.combine(reference_on + timedelta(days=days), datetime.min.time())
 
     def review_time(self, decision_code: str, *, reference_on: date) -> datetime:
-        days = 10 if decision_code in {"delay_undecided", "hesitant_needs_better_terms", "agent_warning", "private_unrest"} else 21
+        days = (
+            10
+            if decision_code in {"delay_undecided", "hesitant_needs_better_terms", "agent_warning", "private_unrest"}
+            else 21
+        )
         return datetime.combine(reference_on + timedelta(days=days), datetime.min.time())
 
     def _latest_season_stat(self, player: Player) -> PlayerSeasonStat | None:
-        if not player.season_stats:
-            return None
-        return max(player.season_stats, key=lambda item: (item.updated_at, item.created_at, item.id))
+        return self.session.scalar(
+            select(PlayerSeasonStat)
+            .where(PlayerSeasonStat.player_id == player.id)
+            .order_by(
+                PlayerSeasonStat.updated_at.desc(),
+                PlayerSeasonStat.created_at.desc(),
+                PlayerSeasonStat.id.desc(),
+            )
+        )
 
     def _league_quality_for_player(self, player: Player, reputation_score: float) -> float:
         if player.current_competition_id is None:
