@@ -52,7 +52,6 @@ class RentalContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     player_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
         nullable=False,
     )
     user_id: Mapped[str] = mapped_column(
@@ -104,7 +103,6 @@ class NationalTeamRentalSquadMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     player_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
         nullable=False,
     )
     player_name: Mapped[str] = mapped_column(String(160), nullable=False)

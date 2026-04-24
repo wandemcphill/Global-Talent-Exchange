@@ -121,12 +121,21 @@ class NationalTeamRentalPlayerView(BaseModel):
     current_league_name: str | None = None
     nationality: str | None = None
     country_code: str | None = None
+    age: int | None = None
     gsi: int
     base_value_coin: Decimal
     loan_price_coin: Decimal
     tier_label: str
     source_bucket: str
+    is_regen: bool = False
+    is_preseeded_national_regen: bool = False
+    market_eligible: bool = True
+    share_market_eligible: bool = True
     tradable: bool = True
+    buyable: bool = True
+    transferable: bool = True
+    card_mint_eligible: bool = True
+    national_pool_only: bool = False
     supply_mode: str = "infinite"
     demand_multiplier: Decimal = Field(default=Decimal("1.0000"))
 

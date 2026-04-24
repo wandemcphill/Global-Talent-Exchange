@@ -18,6 +18,7 @@ from app.global_memory.models import NationalTeamCountryRanking
 from app.ingestion.models import Country, Player
 from app.models.base import utcnow
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.user import User
 from app.national_team_engine.competition_profiles import infer_competition_family, profile_for
 
@@ -409,6 +410,50 @@ class NationalCompetitionLifecycleService:
                 reason="country_not_eligible",
             )
 
+    def _country_identity_tokens(self, country_code: str) -> set[str]:
+        normalized = country_code.strip().upper()
+        tokens = {normalized}
+        country = self.session.scalar(
+            select(Country).where(
+                or_(
+                    func.upper(Country.alpha2_code) == normalized,
+                    func.upper(Country.alpha3_code) == normalized,
+                    func.upper(Country.fifa_code) == normalized,
+                )
+            )
+        )
+        if country is None:
+            return tokens
+        for token in (country.alpha2_code, country.alpha3_code, country.fifa_code, country.name):
+            if token:
+                tokens.add(str(token).strip().upper())
+        return tokens
+
+    @staticmethod
+    def _seed_age(seed: NationalRegenSeed) -> int | None:
+        if getattr(seed, "age", None) is not None:
+            return int(seed.age)
+        metadata = dict(seed.metadata_json or {})
+        explicit = metadata.get("age")
+        if isinstance(explicit, int):
+            return explicit
+        return None
+
+    @staticmethod
+    def _seed_market_metadata() -> dict[str, Any]:
+        return {
+            "source_bucket": "preseeded",
+            "is_regen": True,
+            "is_preseeded_national_regen": True,
+            "market_eligible": False,
+            "share_market_eligible": False,
+            "tradable": False,
+            "buyable": False,
+            "transferable": False,
+            "card_mint_eligible": False,
+            "national_pool_only": True,
+        }
+
     def _normalize_squad(
         self,
         raw_squad: list[Any],
@@ -437,6 +482,7 @@ class NationalCompetitionLifecycleService:
 
         seen_player_ids: set[str] = set()
         normalized: list[dict[str, Any]] = []
+        country_tokens = self._country_identity_tokens(country_code)
         for index, item in enumerate(raw_squad, start=1):
             record = item.model_dump() if hasattr(item, "model_dump") else dict(item)
             player_id = str(record.get("player_id") or "").strip() or None
@@ -446,9 +492,11 @@ class NationalCompetitionLifecycleService:
             overall_rating = record.get("overall_rating")
             position = str(record.get("position") or "").strip() or None
             player = self.session.get(Player, player_id) if player_id else None
+            national_seed = self.session.get(NationalRegenSeed, player_id) if player_id and player is None else None
+            metadata_json = dict(record.get("metadata_json") or {})
 
             if player_id:
-                if player is None:
+                if player is None and national_seed is None:
                     raise NationalCompetitionLifecycleError(
                         f"Player '{player_id}' was not found.",
                         reason="player_not_found",
@@ -459,19 +507,38 @@ class NationalCompetitionLifecycleService:
                         reason="duplicate_player",
                     )
                 seen_player_ids.add(player_id)
-                if not player_name:
-                    player_name = (
-                        player.canonical_display_name
-                        or player.short_name
-                        or " ".join(part for part in [player.first_name, player.last_name] if part)
-                        or player.full_name
-                    )
-                if date_of_birth is None:
-                    date_of_birth = player.date_of_birth
-                if overall_rating is None:
-                    overall_rating = self._player_rating(player)
-                if position is None:
-                    position = player.normalized_position or player.position
+                if player is not None:
+                    if not player_name:
+                        player_name = (
+                            player.canonical_display_name
+                            or player.short_name
+                            or " ".join(part for part in [player.first_name, player.last_name] if part)
+                            or player.full_name
+                        )
+                    if date_of_birth is None:
+                        date_of_birth = player.date_of_birth
+                    if overall_rating is None:
+                        overall_rating = self._player_rating(player)
+                    if position is None:
+                        position = player.normalized_position or player.position
+                elif national_seed is not None:
+                    seed_tokens = self._country_identity_tokens(national_seed.country_code)
+                    if str(national_seed.country_name or "").strip():
+                        seed_tokens.add(str(national_seed.country_name).strip().upper())
+                    if not seed_tokens & country_tokens:
+                        raise NationalCompetitionLifecycleError(
+                            f"Player '{player_id}' is not eligible for {country_code}.",
+                            reason="player_not_eligible",
+                        )
+                    if not player_name:
+                        player_name = national_seed.display_name
+                    if explicit_age is None:
+                        explicit_age = self._seed_age(national_seed)
+                    if overall_rating is None:
+                        overall_rating = max(40, min(int(national_seed.current_rating), 99))
+                    if position is None:
+                        position = national_seed.primary_position
+                    metadata_json = {**metadata_json, **self._seed_market_metadata()}
             elif not player_name:
                 raise NationalCompetitionLifecycleError(
                     f"Squad player #{index} is missing a player name.",
@@ -501,7 +568,7 @@ class NationalCompetitionLifecycleService:
                     "resolved_age": resolved_age,
                     "overall_rating": max(40, min(int(overall_rating or 70), 99)),
                     "position": position,
-                    "metadata_json": dict(record.get("metadata_json") or {}),
+                    "metadata_json": metadata_json,
                 }
             )
         return normalized

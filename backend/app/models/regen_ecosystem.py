@@ -185,13 +185,23 @@ class NationalRegenSeed(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("seed_key", name="uq_national_regen_seeds_seed_key"),
         Index("ix_national_regen_seeds_country_code", "country_code"),
+        Index("ix_national_regen_seeds_age_band", "age_band"),
         Index("ix_national_regen_seeds_seed_type", "seed_type"),
         Index("ix_national_regen_seeds_rarity_tier", "rarity_tier"),
         Index("ix_national_regen_seeds_status", "status"),
+        Index(
+            "ix_national_regen_seeds_country_age_band_position_status",
+            "country_code",
+            "age_band",
+            "primary_position",
+            "status",
+        ),
     )
 
     seed_key: Mapped[str] = mapped_column(String(96), nullable=False)
     display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    age: Mapped[int] = mapped_column(Integer, nullable=False)
+    age_band: Mapped[str] = mapped_column(String(16), nullable=False, default="senior", server_default="senior")
     country_code: Mapped[str] = mapped_column(String(8), nullable=False)
     country_name: Mapped[str] = mapped_column(String(120), nullable=False)
     confederation_code: Mapped[str | None] = mapped_column(String(16), nullable=True)

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import TypeVar
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -41,6 +43,7 @@ from app.schemas.regen_universe import (
 )
 from app.schemas.regen_universe_expansion import (
     NationalRegenPreseedRequest,
+    NationalRegenPreseedSummaryView,
     NationalRegenSeedPageView,
     NationalRegenSeedView,
     RegenEvolutionResultView,
@@ -97,8 +100,10 @@ def _cached_response(
     builder: Callable[[], ModelT | dict[str, object]],
     scope_key: str | None = None,
 ) -> ModelT:
-    settings = request.app.state.settings
-    if settings.api_cache_enabled:
+    settings = getattr(request.app.state, "settings", None)
+    cache_enabled = bool(getattr(settings, "api_cache_enabled", False))
+    cache_ttl_seconds = int(getattr(settings, "regen_universe_cache_ttl_seconds", 0) or 0)
+    if cache_enabled:
         cached_payload = get_response_cache(request.app).get_json(
             namespace=REGEN_UNIVERSE_CACHE_NAMESPACE,
             route=request.url.path,
@@ -109,14 +114,14 @@ def _cached_response(
             return model_type.model_validate(cached_payload)
     payload = builder()
     response = payload if isinstance(payload, model_type) else model_type.model_validate(payload)
-    if settings.api_cache_enabled:
+    if cache_enabled:
         get_response_cache(request.app).set_json(
             namespace=REGEN_UNIVERSE_CACHE_NAMESPACE,
             route=request.url.path,
             request=request,
             scope_key=scope_key,
             payload=response.model_dump(mode="json"),
-            ttl_seconds=settings.regen_universe_cache_ttl_seconds,
+            ttl_seconds=cache_ttl_seconds,
         )
     return response
 
@@ -159,6 +164,73 @@ def _enqueue_regen_job(
         finished_at=execution.finished_at,
         error=execution.error,
         result=execution.result,
+    )
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _run_regen_job_inline(
+    request: Request,
+    *,
+    task_name: str,
+    runner: Callable[[RegenUniverseExpansionService], dict[str, object]],
+) -> RegenUniverseJobRunView:
+    session_factory = getattr(request.app.state, "session_factory", None)
+    if session_factory is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Regen universe worker queue is unavailable.",
+        )
+    queued_at = _utcnow()
+    started_at = _utcnow()
+    try:
+        with session_factory() as session:
+            service = RegenUniverseExpansionService(session)
+            result = runner(service)
+            session.commit()
+    except RegenUniverseExpansionError as exc:
+        raise_regen_universe_expansion_http_exception(exc)
+    finished_at = _utcnow()
+    _invalidate_regen_universe_cache(request)
+    return RegenUniverseJobRunView(
+        job_id=f"inline:{task_name}:{uuid4().hex}",
+        name=task_name,
+        status="success",
+        queued_at=queued_at,
+        started_at=started_at,
+        finished_at=finished_at,
+        error=None,
+        result=result,
+    )
+
+
+def _enqueue_or_run_regen_job(
+    request: Request,
+    response: Response,
+    *,
+    actor: User,
+    task_name: str,
+    callable_,
+    kwargs: dict[str, object],
+    inline_runner: Callable[[RegenUniverseExpansionService], dict[str, object]],
+) -> RegenUniverseJobRunView:
+    task_queue = get_task_queue_backend(request.app)
+    if isinstance(task_queue, NullTaskQueueBackend):
+        response.status_code = status.HTTP_200_OK
+        return _run_regen_job_inline(
+            request,
+            task_name=task_name,
+            runner=inline_runner,
+        )
+    response.status_code = status.HTTP_202_ACCEPTED
+    return _enqueue_regen_job(
+        request,
+        actor=actor,
+        task_name=task_name,
+        callable_=callable_,
+        kwargs=kwargs,
     )
 
 
@@ -376,7 +448,7 @@ def list_regen_scouting_feed(
     return _cached_response(request, model_type=RegenScoutingFeedView, builder=build)
 
 
-@router.get("/youth-tournaments", response_model=YouthTournamentPageView)
+@router.get("/youth-tournaments", response_model=list[YouthTournamentView])
 def list_youth_tournaments(
     request: Request,
     status_filter: str | None = Query(default=None, alias="status"),
@@ -385,29 +457,17 @@ def list_youth_tournaments(
     limit: int | None = Query(default=None, ge=1, deprecated=True),
     offset: int | None = Query(default=None, ge=0, deprecated=True),
     session: Session = Depends(get_session),
-) -> YouthTournamentPageView:
+) -> list[YouthTournamentView]:
     params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
-
-    def build() -> YouthTournamentPageView:
-        service = RegenUniverseExpansionService(session)
-        total_stmt = select(func.count()).select_from(YouthTournament)
-        if status_filter:
-            total_stmt = total_stmt.where(YouthTournament.status == status_filter)
-        total = int(session.scalar(total_stmt) or 0)
-        items = [
-            YouthTournamentView.model_validate(item)
-            for item in service.list_youth_tournaments(
-                status=status_filter,
-                limit=params.per_page,
-                offset=params.offset,
-            )
-        ]
-        return YouthTournamentPageView(
-            items=items,
-            pagination=build_pagination_meta(params=params, total=total),
+    service = RegenUniverseExpansionService(session)
+    return [
+        YouthTournamentView.model_validate(item)
+        for item in service.list_youth_tournaments(
+            status=status_filter,
+            limit=params.per_page,
+            offset=params.offset,
         )
-
-    return _cached_response(request, model_type=YouthTournamentPageView, builder=build)
+    ]
 
 
 @router.get("/youth-tournaments/{tournament_id}", response_model=YouthTournamentView)
@@ -437,6 +497,7 @@ def list_national_regens(
     country_code: str | None = Query(default=None),
     seed_type: str | None = Query(default=None),
     preseed_batch: str | None = Query(default=None),
+    age_band: str | None = Query(default=None),
     age_min: int | None = Query(default=None, ge=0, le=99),
     age_max: int | None = Query(default=None, ge=0, le=99),
     page: int = Query(default=1, ge=1),
@@ -456,11 +517,13 @@ def list_national_regens(
             total_stmt = total_stmt.where(NationalRegenSeed.seed_type == seed_type.strip().lower())
         if preseed_batch:
             total_stmt = total_stmt.where(NationalRegenSeed.preseed_batch == preseed_batch.strip())
+        if age_band:
+            total_stmt = total_stmt.where(NationalRegenSeed.age_band == age_band.strip().lower())
         seeds = list(session.scalars(total_stmt).all())
         if age_min is not None or age_max is not None:
             filtered: list[NationalRegenSeed] = []
             for seed in seeds:
-                age = service._legacy_national_seed_age(seed)
+                age = service._national_seed_age(seed)
                 if age is None:
                     continue
                 if age_min is not None and age < age_min:
@@ -476,6 +539,7 @@ def list_national_regens(
                 country_code=country_code,
                 seed_type=seed_type,
                 preseed_batch=preseed_batch,
+                age_band=age_band,
                 age_min=age_min,
                 age_max=age_max,
                 limit=params.per_page,
@@ -586,9 +650,10 @@ def preseed_national_regens(
 ) -> NationalRegenSeedPageView:
     service = RegenUniverseExpansionService(session)
     try:
-        items = service.seed_preseeded_national_regens(
+        result = service.seed_preseeded_national_regens(
             country_codes=payload.country_codes,
             seeds_per_country=payload.seeds_per_country,
+            age_band=payload.age_band,
             age_min=payload.age_min,
             age_max=payload.age_max,
             include_legendary_regens=payload.include_legendary_regens,
@@ -598,11 +663,12 @@ def preseed_national_regens(
         raise_regen_universe_expansion_http_exception(exc)
     session.commit()
     _invalidate_regen_universe_cache(request)
-    rendered = [NationalRegenSeedView.model_validate(item) for item in items]
+    rendered = [NationalRegenSeedView.model_validate(item) for item in result["items"]]
     params = resolve_pagination(page=1, per_page=len(rendered) or 1)
     return NationalRegenSeedPageView(
         items=rendered,
         pagination=build_pagination_meta(params=params, total=len(rendered)),
+        summary=NationalRegenPreseedSummaryView.model_validate(result["summary"]),
     )
 
 
@@ -630,15 +696,18 @@ def apply_regen_evolution(
 )
 def run_story_regeneration_job(
     request: Request,
+    response: Response,
     player_id: str | None = Query(default=None),
     actor: User = Depends(get_current_admin),
 ) -> RegenUniverseJobRunView:
-    return _enqueue_regen_job(
+    return _enqueue_or_run_regen_job(
         request,
+        response,
         actor=actor,
         task_name="regen_universe.story_regeneration",
         callable_=regen_story_regeneration_job,
         kwargs={"player_id": player_id},
+        inline_runner=lambda service: service.regenerate_stories(player_id=player_id),
     )
 
 
@@ -649,15 +718,18 @@ def run_story_regeneration_job(
 )
 def run_rivalry_detection_job(
     request: Request,
+    response: Response,
     player_id: str | None = Query(default=None),
     actor: User = Depends(get_current_admin),
 ) -> RegenUniverseJobRunView:
-    return _enqueue_regen_job(
+    return _enqueue_or_run_regen_job(
         request,
+        response,
         actor=actor,
         task_name="regen_universe.rivalry_detection",
         callable_=regen_rivalry_detection_job,
         kwargs={"player_id": player_id},
+        inline_runner=lambda service: service.detect_rivalries(player_id=player_id),
     )
 
 
@@ -668,15 +740,18 @@ def run_rivalry_detection_job(
 )
 def run_dna_evolution_job(
     request: Request,
+    response: Response,
     player_id: str | None = Query(default=None),
     actor: User = Depends(get_current_admin),
 ) -> RegenUniverseJobRunView:
-    return _enqueue_regen_job(
+    return _enqueue_or_run_regen_job(
         request,
+        response,
         actor=actor,
         task_name="regen_universe.dna_evolution",
         callable_=regen_dna_evolution_job,
         kwargs={"player_id": player_id},
+        inline_runner=lambda service: service.evolve_dna_profiles(player_id=player_id),
     )
 
 
@@ -687,13 +762,16 @@ def run_dna_evolution_job(
 )
 def run_tournament_scheduling_job(
     request: Request,
+    response: Response,
     days_ahead: int = Query(default=21, ge=1, le=90),
     actor: User = Depends(get_current_admin),
 ) -> RegenUniverseJobRunView:
-    return _enqueue_regen_job(
+    return _enqueue_or_run_regen_job(
         request,
+        response,
         actor=actor,
         task_name="regen_universe.tournament_scheduling",
         callable_=regen_tournament_scheduling_job,
         kwargs={"days_ahead": days_ahead},
+        inline_runner=lambda service: service.schedule_youth_tournaments(days_ahead=days_ahead),
     )

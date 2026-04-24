@@ -175,6 +175,7 @@ class NationalRegenSeedView(CommonSchema):
     seed_key: str
     display_name: str
     age: int | None = None
+    age_band: str = "senior"
     country_code: str
     country_name: str
     confederation_code: str | None = None
@@ -192,16 +193,26 @@ class NationalRegenSeedView(CommonSchema):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class NationalRegenPreseedSummaryView(CommonSchema):
+    created: int = 0
+    skipped_existing: int = 0
+    skipped_disabled_country: int = 0
+    failed: int = 0
+    failures: list[str] = Field(default_factory=list)
+
+
 class NationalRegenSeedPageView(CommonSchema):
     items: list[NationalRegenSeedView] = Field(default_factory=list)
     pagination: PaginationMeta
+    summary: NationalRegenPreseedSummaryView | None = None
 
 
 class NationalRegenPreseedRequest(CommonSchema):
     country_codes: list[str] = Field(default_factory=list, max_length=64)
     seeds_per_country: int = Field(default=10, ge=4, le=40)
-    age_min: int = Field(default=17, ge=14, le=21)
-    age_max: int = Field(default=20, ge=14, le=21)
+    age_band: str | None = Field(default=None, max_length=16)
+    age_min: int | None = Field(default=None, ge=14, le=30)
+    age_max: int | None = Field(default=None, ge=14, le=30)
     include_legendary_regens: bool = True
     preseed_batch: str = Field(default="system_start", min_length=3, max_length=64)
 

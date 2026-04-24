@@ -43,7 +43,7 @@ from app.regen_universe.dna import (
     normalize_dna_profile,
 )
 from app.regen_universe.models import RegenAwardWinner, RegenPerformanceRecord, RegenSeason
-from app.services.regen_service import RegenClubContext, RegenGenerationEngine, _NAMING_PROFILES
+from app.services.regen_service import RegenClubContext, RegenGenerationEngine, resolve_country_naming_profile
 from app.story_feed_engine.service import StoryFeedService
 
 
@@ -149,6 +149,56 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+_NATIONAL_SEED_POSITION_MINIMUMS: dict[str, int] = {
+    "GK": 3,
+    "CB": 5,
+    "RB": 2,
+    "LB": 2,
+    "DM": 3,
+    "CM": 5,
+    "AM": 3,
+    "RW": 2,
+    "LW": 2,
+    "ST": 3,
+}
+_NATIONAL_SEED_POSITION_ORDER: tuple[str, ...] = tuple(_NATIONAL_SEED_POSITION_MINIMUMS.keys())
+_NATIONAL_SEED_ACTIVE_STATUSES: tuple[str, ...] = ("active", "available")
+_NATIONAL_SEED_SECONDARY_MAP: dict[str, list[str]] = {
+    "GK": [],
+    "CB": ["RB", "LB"],
+    "RB": ["CB", "RW"],
+    "LB": ["CB", "LW"],
+    "DM": ["CB", "CM"],
+    "CM": ["DM", "AM"],
+    "AM": ["CM", "RW"],
+    "RW": ["AM", "ST"],
+    "LW": ["AM", "ST"],
+    "ST": ["AM", "RW"],
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _NationalSeedAgeBandPolicy:
+    key: str
+    age_min: int
+    age_max: int
+    default_batch: str
+
+    @property
+    def minimum_total(self) -> int:
+        return sum(_NATIONAL_SEED_POSITION_MINIMUMS.values())
+
+
+_NATIONAL_SEED_AGE_BAND_POLICIES: dict[str, _NationalSeedAgeBandPolicy] = {
+    "u17": _NationalSeedAgeBandPolicy(key="u17", age_min=14, age_max=17, default_batch="u17_batch"),
+    "u20": _NationalSeedAgeBandPolicy(key="u20", age_min=18, age_max=20, default_batch="u20_batch"),
+    "senior": _NationalSeedAgeBandPolicy(key="senior", age_min=21, age_max=30, default_batch="system_start"),
+}
+_NATIONAL_SEED_BATCH_AGE_BANDS: dict[str, str] = {
+    policy.default_batch: policy.key for policy in _NATIONAL_SEED_AGE_BAND_POLICIES.values()
+}
+
+
 @dataclass(slots=True)
 class _TournamentPlayerSeed:
     source_type: str
@@ -249,6 +299,93 @@ class RegenUniverseExpansionService:
             return 17 + ((position_slot - 1) % 4)
         return None
 
+    @staticmethod
+    def _national_seed_age(seed: NationalRegenSeed) -> int | None:
+        if getattr(seed, "age", None) is not None:
+            return int(seed.age)
+        return RegenUniverseExpansionService._legacy_national_seed_age(seed)
+
+    @staticmethod
+    def _normalized_age_band(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = "".join(character for character in str(value).strip().lower() if character.isalnum())
+        if not normalized:
+            return None
+        aliases = {
+            "u17": "u17",
+            "under17": "u17",
+            "u20": "u20",
+            "under20": "u20",
+            "senior": "senior",
+            "seniors": "senior",
+            "fallback": "senior",
+        }
+        return aliases.get(normalized, normalized)
+
+    @classmethod
+    def _national_seed_policy(
+        cls,
+        *,
+        age_band: str | None,
+        age_min: int | None,
+        age_max: int | None,
+        preseed_batch: str | None,
+    ) -> _NationalSeedAgeBandPolicy:
+        normalized_band = cls._normalized_age_band(age_band)
+        if normalized_band and normalized_band in _NATIONAL_SEED_AGE_BAND_POLICIES:
+            return _NATIONAL_SEED_AGE_BAND_POLICIES[normalized_band]
+        if age_min is not None or age_max is not None:
+            resolved_min = int(age_min if age_min is not None else age_max if age_max is not None else 17)
+            resolved_max = int(age_max if age_max is not None else resolved_min)
+            if resolved_min > resolved_max:
+                raise RegenUniverseExpansionValidationError("preseed_invalid_age_range")
+            for policy in _NATIONAL_SEED_AGE_BAND_POLICIES.values():
+                if policy.age_min == resolved_min and policy.age_max == resolved_max:
+                    return policy
+            return _NationalSeedAgeBandPolicy(
+                key=f"band{resolved_min}_{resolved_max}",
+                age_min=resolved_min,
+                age_max=resolved_max,
+                default_batch=(preseed_batch or "system_start").strip() or "system_start",
+            )
+        inferred_band = cls._normalized_age_band(_NATIONAL_SEED_BATCH_AGE_BANDS.get((preseed_batch or "").strip()))
+        if inferred_band and inferred_band in _NATIONAL_SEED_AGE_BAND_POLICIES:
+            return _NATIONAL_SEED_AGE_BAND_POLICIES[inferred_band]
+        return _NATIONAL_SEED_AGE_BAND_POLICIES["senior"]
+
+    @staticmethod
+    def _national_seed_target_counts(total_target: int) -> dict[str, int]:
+        targets = dict(_NATIONAL_SEED_POSITION_MINIMUMS)
+        extra_slots = max(0, int(total_target) - sum(targets.values()))
+        for offset in range(extra_slots):
+            position = _NATIONAL_SEED_POSITION_ORDER[offset % len(_NATIONAL_SEED_POSITION_ORDER)]
+            targets[position] += 1
+        return targets
+
+    @staticmethod
+    def _national_seed_age_band(seed: NationalRegenSeed) -> str:
+        normalized_band = RegenUniverseExpansionService._normalized_age_band(getattr(seed, "age_band", None))
+        if normalized_band:
+            return normalized_band
+        metadata = dict(seed.metadata_json or {})
+        metadata_band = RegenUniverseExpansionService._normalized_age_band(metadata.get("age_band"))
+        if metadata_band:
+            return metadata_band
+        batch_band = RegenUniverseExpansionService._normalized_age_band(
+            _NATIONAL_SEED_BATCH_AGE_BANDS.get((seed.preseed_batch or "").strip())
+        )
+        if batch_band:
+            return batch_band
+        age = RegenUniverseExpansionService._national_seed_age(seed)
+        if age is None:
+            return "senior"
+        if age <= 17:
+            return "u17"
+        if age <= 20:
+            return "u20"
+        return "senior"
+
     def get_player_story(self, player_id: str) -> dict[str, Any]:
         story = self.session.scalar(select(PlayerStory).where(PlayerStory.player_id == player_id))
         if story is None:
@@ -319,7 +456,16 @@ class RegenUniverseExpansionService:
         players = (
             [self._require_player(player_id)]
             if player_id
-            else list(self.session.scalars(select(Player).where(Player.source_provider == "gtex_regen")).all())
+            else list(
+                self.session.scalars(
+                    select(Player)
+                    .join(RegenProfile, RegenProfile.player_id == Player.id)
+                    .where(
+                        Player.source_provider == "gtex_regen",
+                        RegenProfile.generation_source != "new_club",
+                    )
+                ).all()
+            )
         )
         updated = 0
         for player in players:
@@ -335,7 +481,16 @@ class RegenUniverseExpansionService:
         players = (
             [self._require_player(player_id)]
             if player_id
-            else list(self.session.scalars(select(Player).where(Player.source_provider == "gtex_regen")).all())
+            else list(
+                self.session.scalars(
+                    select(Player)
+                    .join(RegenProfile, RegenProfile.player_id == Player.id)
+                    .where(
+                        Player.source_provider == "gtex_regen",
+                        RegenProfile.generation_source != "new_club",
+                    )
+                ).all()
+            )
         )
         count = 0
         for player in players:
@@ -1813,159 +1968,215 @@ class RegenUniverseExpansionService:
         *,
         country_codes: list[str] | None = None,
         seeds_per_country: int = 10,
-        age_min: int = 17,
-        age_max: int = 20,
+        age_band: str | None = None,
+        age_min: int | None = None,
+        age_max: int | None = None,
         include_legendary_regens: bool = True,
         preseed_batch: str = "system_start",
-    ) -> list[dict[str, Any]]:
-        if seeds_per_country < 4:
-            raise RegenUniverseExpansionValidationError("preseed_requires_four_or_more_slots")
-        if age_min > age_max:
-            raise RegenUniverseExpansionValidationError("preseed_invalid_age_range")
-        normalized_codes = {code.strip().upper() for code in country_codes or [] if code and code.strip()}
-        stmt = (
-            select(Country)
-            .where(Country.is_enabled_for_universe.is_(True))
-            .order_by(Country.name.asc(), Country.id.asc())
+    ) -> dict[str, Any]:
+        if seeds_per_country < 1:
+            raise RegenUniverseExpansionValidationError("preseed_requires_one_or_more_slots")
+        policy = self._national_seed_policy(
+            age_band=age_band,
+            age_min=age_min,
+            age_max=age_max,
+            preseed_batch=preseed_batch,
         )
-        countries = [
-            country
-            for country in self.session.scalars(stmt).all()
-            if not normalized_codes
-            or (country.alpha2_code or "").upper() in normalized_codes
-            or (country.alpha3_code or "").upper() in normalized_codes
-            or (country.fifa_code or "").upper() in normalized_codes
-            or str(country.id).upper() in normalized_codes
-        ]
+        batch = preseed_batch.strip() or policy.default_batch
+        total_target = max(policy.minimum_total, int(seeds_per_country))
+        target_counts = self._national_seed_target_counts(total_target)
+        normalized_codes = {code.strip().upper() for code in country_codes or [] if code and code.strip()}
+        all_countries = list(self.session.scalars(select(Country).order_by(Country.name.asc(), Country.id.asc())).all())
+        country_lookup: dict[str, Country] = {}
+        for country in all_countries:
+            for token in (
+                country.alpha2_code,
+                country.alpha3_code,
+                country.fifa_code,
+                str(country.id),
+            ):
+                normalized = _normalized_country_code(token)
+                if normalized is not None:
+                    country_lookup.setdefault(normalized, country)
+        summary: dict[str, Any] = {
+            "created": 0,
+            "skipped_existing": 0,
+            "skipped_disabled_country": 0,
+            "failed": 0,
+            "failures": [],
+        }
+        countries: list[Country] = []
+        if normalized_codes:
+            seen_country_ids: set[str] = set()
+            for code in sorted(normalized_codes):
+                country = country_lookup.get(code)
+                if country is None or not bool(country.is_enabled_for_universe):
+                    summary["skipped_disabled_country"] += 1
+                    continue
+                if country.id in seen_country_ids:
+                    continue
+                countries.append(country)
+                seen_country_ids.add(country.id)
+        else:
+            countries = [country for country in all_countries if bool(country.is_enabled_for_universe)]
         if not countries:
+            if normalized_codes:
+                return {"items": [], "summary": summary}
             raise RegenUniverseExpansionValidationError("preseed_countries_not_found")
-        batch = preseed_batch.strip() or "system_start"
         generation_engine = RegenGenerationEngine(get_settings())
         created: list[dict[str, Any]] = []
-        position_cycle = ("GK", "CB", "RB", "LB", "DM", "CM", "AM", "RW", "LW", "ST")
-        secondary_map = {
-            "GK": [],
-            "CB": ["RB", "LB"],
-            "RB": ["CB", "RW"],
-            "LB": ["CB", "LW"],
-            "DM": ["CB", "CM"],
-            "CM": ["DM", "AM"],
-            "AM": ["CM", "RW"],
-            "RW": ["AM", "ST"],
-            "LW": ["AM", "ST"],
-            "ST": ["AM", "RW"],
-        }
         for country_index, country in enumerate(countries):
-            country_code = self._national_seed_country_code(country, batch=batch)
-            country_profile = _NAMING_PROFILES.get(
-                country_code,
-                _NAMING_PROFILES[get_settings().regen_generation.default_country_code],
-            )
-            existing_count = int(
-                self.session.scalar(
-                    select(func.count()).where(
+            try:
+                country_code = self._national_seed_country_code(country, batch=batch)
+                country_profile = resolve_country_naming_profile(
+                    country_code,
+                    default_country_code=get_settings().regen_generation.default_country_code,
+                )
+                used_names = {
+                    seed.display_name.casefold()
+                    for seed in self.session.scalars(
+                        select(NationalRegenSeed).where(NationalRegenSeed.country_code == country_code)
+                    ).all()
+                }
+                context = RegenClubContext(
+                    country_code=country_code,
+                    region_name=country_profile.default_region,
+                    city_name=country_profile.default_city,
+                    youth_coaching=68.0,
+                    training_level=66.0,
+                    academy_level=70.0,
+                    academy_investment=64.0,
+                    first_team_gsi=65.0,
+                    club_reputation=62.0,
+                    competition_quality=65.0,
+                    manager_youth_development=67.0,
+                    urbanicity="urban",
+                )
+                rng = Random(f"{batch}:{country_code}:{policy.key}:{total_target}")
+                existing_seeds = list(
+                    self.session.scalars(
+                        select(NationalRegenSeed).where(
+                            NationalRegenSeed.country_code == country_code,
+                            NationalRegenSeed.age_band == policy.key,
+                            NationalRegenSeed.status.in_(_NATIONAL_SEED_ACTIVE_STATUSES),
+                        )
+                    ).all()
+                )
+                existing_counts: dict[str, int] = defaultdict(int)
+                for seed in existing_seeds:
+                    existing_counts[seed.primary_position] += 1
+                batch_counts: dict[str, int] = defaultdict(int)
+                for seed in self.session.scalars(
+                    select(NationalRegenSeed).where(
                         NationalRegenSeed.country_code == country_code,
+                        NationalRegenSeed.age_band == policy.key,
                         NationalRegenSeed.preseed_batch == batch,
                     )
-                )
-                or 0
-            )
-            used_names = {
-                seed.display_name.casefold()
-                for seed in self.session.scalars(
-                    select(NationalRegenSeed).where(NationalRegenSeed.country_code == country_code)
-                ).all()
-            }
-            context = RegenClubContext(
-                country_code=country_code,
-                region_name=country_profile.default_region,
-                city_name=country_profile.default_city,
-                youth_coaching=68.0,
-                training_level=66.0,
-                academy_level=70.0,
-                academy_investment=64.0,
-                first_team_gsi=65.0,
-                club_reputation=62.0,
-                competition_quality=65.0,
-                manager_youth_development=67.0,
-                urbanicity="urban",
-            )
-            rng = Random(f"{batch}:{country_code}:{seeds_per_country}")
-            for slot_index in range(existing_count, seeds_per_country):
-                primary_position = position_cycle[slot_index % len(position_cycle)]
-                rarity_tier = self._seed_rarity_for_slot(
-                    country_index=country_index,
-                    slot_index=slot_index,
-                    include_legendary_regens=include_legendary_regens,
-                )
-                rarity_bonus = {"common": 0, "rare": 3, "elite": 6, "legendary": 10}.get(rarity_tier, 0)
-                age = self._national_seed_age_for_slot(slot_index=slot_index, age_min=age_min, age_max=age_max)
-                regen_view = generation_engine._build_regen(
-                    club_id=f"national-pool-{country_code.lower()}",
-                    generation_source="national_pool",
-                    club_context=context,
-                    age=age,
-                    used_names=used_names,
-                    rng=rng,
-                    current_gsi_override=self._national_seed_gsi_for_age(
-                        age=age, slot_index=slot_index, rarity_bonus=rarity_bonus
-                    ),
-                )
-                current_rating = _clamp_int(
-                    (regen_view.current_rating or regen_view.current_gsi) + rarity_bonus, 62, 92
-                )
-                potential_rating = _clamp_int(
-                    max(regen_view.potential or current_rating + 6, current_rating + 5) + rarity_bonus, 74, 99
-                )
-                seed_key = f"{batch}:{country_code}:{slot_index + 1}:{primary_position}"
-                if (
-                    self.session.scalar(select(NationalRegenSeed).where(NationalRegenSeed.seed_key == seed_key))
-                    is not None
                 ):
-                    continue
-                seed = NationalRegenSeed(
-                    seed_key=seed_key,
-                    display_name=regen_view.display_name,
-                    country_code=country_code,
-                    country_name=country.name,
-                    confederation_code=country.confederation_code,
-                    seed_type="preseeded_national_pool" if rarity_tier != "legendary" else "legendary_regen",
-                    generation_index=1,
-                    primary_position=primary_position,
-                    secondary_positions_json=list(secondary_map.get(primary_position, [])),
-                    current_rating=current_rating,
-                    potential_rating=potential_rating,
-                    growth_curve=round(
-                        _clamp_float(float(regen_view.growth_curve) + (rarity_bonus / 100.0), 0.25, 1.0), 4
-                    ),
-                    personality_seed_json={
-                        "temperament": regen_view.personality.temperament,
-                        "ambition": regen_view.personality.ambition,
-                        "resilience": regen_view.personality.resilience,
-                        "work_rate": regen_view.personality.work_rate,
-                        "media_appetite": regen_view.personality.media_appetite,
-                        "story_seed": (
-                            regen_view.story_seed.model_dump(mode="json") if regen_view.story_seed is not None else {}
-                        ),
-                    },
-                    rarity_tier=rarity_tier,
-                    status="available",
-                    preseed_batch=batch,
-                    metadata_json={
-                        "nationality": country_code,
-                        "country_name": country.name,
-                        "source_generation": f"preseeded_{batch}",
-                        "position_slot": slot_index + 1,
-                        "rarity_weight": rarity_bonus,
-                        "age": age,
-                        "age_band": f"{age_min}-{age_max}",
-                    },
-                )
-                self.session.add(seed)
-                self.session.flush()
-                used_names.add(regen_view.display_name.casefold())
-                created.append(self._national_seed_view(seed))
-        return created
+                    batch_counts[seed.primary_position] += 1
+                for position in _NATIONAL_SEED_POSITION_ORDER:
+                    target_count = int(target_counts[position])
+                    existing_count = int(existing_counts.get(position, 0))
+                    summary["skipped_existing"] += min(existing_count, target_count)
+                    missing_count = max(0, target_count - existing_count)
+                    for created_offset in range(missing_count):
+                        batch_slot = batch_counts[position] + 1
+                        slot_index = existing_count + created_offset
+                        rarity_tier = self._seed_rarity_for_slot(
+                            country_index=country_index,
+                            slot_index=(slot_index + (country_index * len(_NATIONAL_SEED_POSITION_ORDER))),
+                            include_legendary_regens=include_legendary_regens,
+                        )
+                        rarity_bonus = {"common": 0, "rare": 3, "elite": 6, "legendary": 10}.get(rarity_tier, 0)
+                        age = self._national_seed_age_for_slot(
+                            slot_index=slot_index,
+                            age_min=policy.age_min,
+                            age_max=policy.age_max,
+                        )
+                        regen_view = generation_engine._build_regen(
+                            club_id=f"national-pool-{country_code.lower()}",
+                            generation_source="national_pool",
+                            club_context=context,
+                            age=age,
+                            used_names=used_names,
+                            rng=rng,
+                            current_gsi_override=self._national_seed_gsi_for_age(
+                                age=age,
+                                slot_index=slot_index,
+                                rarity_bonus=rarity_bonus,
+                            ),
+                        )
+                        current_rating = _clamp_int(
+                            (regen_view.current_rating or regen_view.current_gsi) + rarity_bonus,
+                            62,
+                            92,
+                        )
+                        potential_rating = _clamp_int(
+                            max(regen_view.potential or current_rating + 6, current_rating + 5) + rarity_bonus,
+                            74,
+                            99,
+                        )
+                        seed_key = f"{batch}:{country_code}:{policy.key}:{position}:{batch_slot}"
+                        if (
+                            self.session.scalar(select(NationalRegenSeed.id).where(NationalRegenSeed.seed_key == seed_key))
+                            is not None
+                        ):
+                            batch_counts[position] += 1
+                            summary["skipped_existing"] += 1
+                            continue
+                        seed = NationalRegenSeed(
+                            seed_key=seed_key,
+                            display_name=regen_view.display_name,
+                            age=age,
+                            age_band=policy.key,
+                            country_code=country_code,
+                            country_name=country.name,
+                            confederation_code=country.confederation_code,
+                            seed_type="preseeded_national_pool" if rarity_tier != "legendary" else "legendary_regen",
+                            generation_index=1,
+                            primary_position=position,
+                            secondary_positions_json=list(_NATIONAL_SEED_SECONDARY_MAP.get(position, [])),
+                            current_rating=current_rating,
+                            potential_rating=potential_rating,
+                            growth_curve=round(
+                                _clamp_float(float(regen_view.growth_curve) + (rarity_bonus / 100.0), 0.25, 1.0),
+                                4,
+                            ),
+                            personality_seed_json={
+                                "temperament": regen_view.personality.temperament,
+                                "ambition": regen_view.personality.ambition,
+                                "resilience": regen_view.personality.resilience,
+                                "work_rate": regen_view.personality.work_rate,
+                                "media_appetite": regen_view.personality.media_appetite,
+                                "story_seed": (
+                                    regen_view.story_seed.model_dump(mode="json")
+                                    if regen_view.story_seed is not None
+                                    else {}
+                                ),
+                            },
+                            rarity_tier=rarity_tier,
+                            status="active",
+                            preseed_batch=batch,
+                            metadata_json={
+                                "nationality": country_code,
+                                "country_name": country.name,
+                                "source_generation": f"preseeded_{batch}",
+                                "position_slot": batch_slot,
+                                "rarity_weight": rarity_bonus,
+                                "age": age,
+                                "age_band": policy.key,
+                            },
+                        )
+                        self.session.add(seed)
+                        self.session.flush()
+                        batch_counts[position] += 1
+                        used_names.add(regen_view.display_name.casefold())
+                        created.append(self._national_seed_view(seed))
+                        summary["created"] += 1
+            except Exception as exc:
+                summary["failed"] += 1
+                summary["failures"].append(f"{country.name}: {exc}")
+        return {"items": created, "summary": summary}
 
     def list_preseeded_national_regens(
         self,
@@ -1973,6 +2184,7 @@ class RegenUniverseExpansionService:
         country_code: str | None = None,
         seed_type: str | None = None,
         preseed_batch: str | None = None,
+        age_band: str | None = None,
         age_min: int | None = None,
         age_max: int | None = None,
         limit: int = 100,
@@ -1992,11 +2204,14 @@ class RegenUniverseExpansionService:
             stmt = stmt.where(NationalRegenSeed.seed_type == seed_type.strip().lower())
         if preseed_batch:
             stmt = stmt.where(NationalRegenSeed.preseed_batch == preseed_batch.strip())
+        normalized_age_band = self._normalized_age_band(age_band)
+        if normalized_age_band:
+            stmt = stmt.where(NationalRegenSeed.age_band == normalized_age_band)
         seeds = list(self.session.scalars(stmt).all())
         if age_min is not None or age_max is not None:
             filtered: list[NationalRegenSeed] = []
             for seed in seeds:
-                age = self._legacy_national_seed_age(seed)
+                age = self._national_seed_age(seed)
                 if age is None:
                     continue
                 if age_min is not None and age < age_min:
@@ -2192,7 +2407,8 @@ class RegenUniverseExpansionService:
             "id": seed.id,
             "seed_key": seed.seed_key,
             "display_name": seed.display_name,
-            "age": self._legacy_national_seed_age(seed),
+            "age": self._national_seed_age(seed),
+            "age_band": self._national_seed_age_band(seed),
             "country_code": seed.country_code,
             "country_name": seed.country_name,
             "confederation_code": seed.confederation_code,

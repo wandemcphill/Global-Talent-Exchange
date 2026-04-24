@@ -634,8 +634,7 @@ class DemoWorldVisibilitySeeder:
         expansion_service.seed_preseeded_national_regens(
             country_codes=[self._country_code(country) for country in countries.values()],
             seeds_per_country=18,
-            age_min=14,
-            age_max=17,
+            age_band="u17",
             include_legendary_regens=True,
             preseed_batch=DEMO_WORLD_VISIBILITY_BATCH,
         )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -18,6 +18,7 @@ from app.models.club_social import ClubIdentityMetrics, RivalryProfile
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.national_team import NationalTeamCompetition, NationalTeamEntry
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.national_team_tournament import (
     FreePlayerTier,
     NationalTeamRentalSquadMember,
@@ -55,6 +56,8 @@ SOURCE_BUCKET_REAL = "real"
 SOURCE_BUCKET_PRESEEDED = "preseeded"
 SOURCE_BUCKET_CLUB = "club"
 SUPPORTED_SOURCE_BUCKETS = frozenset({SOURCE_BUCKET_REAL, SOURCE_BUCKET_PRESEEDED, SOURCE_BUCKET_CLUB})
+NATIONAL_SEED_ACTIVE_STATUSES = frozenset({"active", "available"})
+NATIONAL_POOL_ONLY_SUPPLY_MODE = "national_pool_only"
 STARTER_PACK_SLOTS: tuple[str, ...] = ("GK", "ST", "WINGER", "MIDFIELDER", "MIDFIELDER")
 AUTO_BUILD_FORMATIONS: dict[str, tuple[str, ...]] = {
     "4-3-3": ("GK", "RB", "CB", "CB", "LB", "CM", "CM", "CM", "RW", "ST", "LW"),
@@ -70,6 +73,16 @@ TACTIC_TO_FORMATION = {
     "counter": "4-2-3-1",
     "balanced": "4-2-3-1",
 }
+
+
+def _player_age(player: Player, *, today: date | None = None) -> int | None:
+    reference_date = today or date.today()
+    if player.date_of_birth is None:
+        return None
+    age = reference_date.year - player.date_of_birth.year
+    if (reference_date.month, reference_date.day) < (player.date_of_birth.month, player.date_of_birth.day):
+        age -= 1
+    return max(age, 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,7 +432,87 @@ class NationalTeamTournamentService:
         }
         return tokens
 
-    def _player_catalog(self, *, limit: int = 300) -> list[dict[str, Any]]:
+    @staticmethod
+    def _competition_age_band(competition: NationalTeamCompetition | None) -> str:
+        normalized = str(getattr(competition, "age_band", None) or "senior").strip().lower()
+        if normalized in {"u17", "under17"}:
+            return "u17"
+        if normalized in {"u20", "under20"}:
+            return "u20"
+        return "senior"
+
+    @staticmethod
+    def _competition_reference_date(competition: NationalTeamCompetition | None) -> date:
+        if competition is not None and competition.kickoff_at is not None:
+            return competition.kickoff_at.date()
+        if competition is not None and competition.entry_closes_at is not None:
+            return competition.entry_closes_at.date()
+        return utcnow().date()
+
+    @classmethod
+    def _age_band_limit(cls, competition: NationalTeamCompetition | None) -> int | None:
+        age_band = cls._competition_age_band(competition)
+        if age_band == "u17":
+            return 17
+        if age_band == "u20":
+            return 20
+        return None
+
+    @staticmethod
+    def _seed_age(seed: NationalRegenSeed) -> int:
+        if getattr(seed, "age", None) is not None:
+            return int(seed.age)
+        metadata = dict(seed.metadata_json or {})
+        explicit_age = metadata.get("age")
+        if isinstance(explicit_age, int):
+            return explicit_age
+        return 18
+
+    @staticmethod
+    def _seed_age_band(seed: NationalRegenSeed) -> str:
+        normalized = str(getattr(seed, "age_band", None) or "").strip().lower()
+        if normalized in {"u17", "u20", "senior"}:
+            return normalized
+        metadata = dict(seed.metadata_json or {})
+        metadata_band = str(metadata.get("age_band") or "").strip().lower()
+        if metadata_band in {"u17", "u20", "senior"}:
+            return metadata_band
+        age = NationalTeamTournamentService._seed_age(seed)
+        if age <= 17:
+            return "u17"
+        if age <= 20:
+            return "u20"
+        return "senior"
+
+    @staticmethod
+    def _source_priority(item: dict[str, Any]) -> int:
+        bucket = str(item.get("source_bucket") or "").strip().lower()
+        if bucket == SOURCE_BUCKET_REAL:
+            return 2
+        if bucket == SOURCE_BUCKET_CLUB:
+            return 1
+        return 0
+
+    @staticmethod
+    def _pool_item_market_flags(item: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "is_regen": bool(item.get("is_regen", False)),
+            "is_preseeded_national_regen": bool(item.get("is_preseeded_national_regen", False)),
+            "market_eligible": bool(item.get("market_eligible", True)),
+            "share_market_eligible": bool(item.get("share_market_eligible", True)),
+            "tradable": bool(item.get("tradable", True)),
+            "buyable": bool(item.get("buyable", True)),
+            "transferable": bool(item.get("transferable", True)),
+            "card_mint_eligible": bool(item.get("card_mint_eligible", True)),
+            "national_pool_only": bool(item.get("national_pool_only", False)),
+        }
+
+    def _player_catalog(
+        self,
+        *,
+        limit: int = 300,
+        reference_date: date | None = None,
+    ) -> list[dict[str, Any]]:
         season_stats = (
             select(
                 PlayerSeasonStat.player_id.label("player_id"),
@@ -487,12 +580,21 @@ class NationalTeamTournamentService:
                     "nationality": country_name,
                     "country_code": country_alpha2 or country_fifa or country_alpha3,
                     "country_tokens": country_tokens,
+                    "age": _player_age(player, today=reference_date),
                     "gsi": gsi,
                     "base_value_coin": base_value_coin,
                     "loan_price_coin": self._loan_price_coin(gsi=gsi, source_bucket=source_bucket),
                     "tier_label": self._player_tier(overall_rating),
                     "source_bucket": source_bucket,
+                    "is_regen": not bool(player.is_real_player),
+                    "is_preseeded_national_regen": False,
+                    "market_eligible": bool(player.is_tradable),
+                    "share_market_eligible": bool(player.is_tradable),
                     "tradable": bool(player.is_tradable),
+                    "buyable": bool(player.is_tradable),
+                    "transferable": bool(player.is_tradable),
+                    "card_mint_eligible": bool(player.is_tradable),
+                    "national_pool_only": False,
                     "supply_mode": INFINITE_SUPPLY_MODE,
                 }
             )
@@ -500,6 +602,124 @@ class NationalTeamTournamentService:
             key=lambda item: (-int(item["overall_rating"]), -float(item["base_value_coin"]), str(item["player_name"]).lower())
         )
         return rows
+
+    def _country_filter_aliases(self, country_code: str | None) -> tuple[set[str], set[str]]:
+        normalized = self._normalize_token(country_code, upper=True)
+        if normalized is None:
+            return set(), set()
+        country = self.session.scalar(
+            select(IngestionCountry).where(
+                or_(
+                    func.upper(IngestionCountry.alpha2_code) == normalized,
+                    func.upper(IngestionCountry.alpha3_code) == normalized,
+                    func.upper(IngestionCountry.fifa_code) == normalized,
+                )
+            )
+        )
+        if country is None:
+            return {normalized}, set()
+        code_aliases = {
+            token
+            for token in {
+                self._normalize_token(country.alpha2_code, upper=True),
+                self._normalize_token(country.alpha3_code, upper=True),
+                self._normalize_token(country.fifa_code, upper=True),
+            }
+            if token is not None
+        }
+        name_aliases = {name for name in {self._normalize_token(country.name, upper=True)} if name is not None}
+        if not code_aliases:
+            code_aliases.add(normalized)
+        return code_aliases, name_aliases
+
+    def _national_seed_catalog(
+        self,
+        *,
+        filters: NationalPoolFilters,
+        competition: NationalTeamCompetition | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        age_band = self._competition_age_band(competition)
+        stmt = (
+            select(NationalRegenSeed)
+            .where(NationalRegenSeed.status.in_(tuple(NATIONAL_SEED_ACTIVE_STATUSES)))
+            .where(NationalRegenSeed.age_band == age_band)
+            .order_by(
+                NationalRegenSeed.country_name.asc(),
+                NationalRegenSeed.potential_rating.desc(),
+                NationalRegenSeed.current_rating.desc(),
+                NationalRegenSeed.display_name.asc(),
+            )
+            .limit(limit)
+        )
+        code_aliases, name_aliases = self._country_filter_aliases(filters.country_code)
+        if code_aliases or name_aliases:
+            clauses: list[Any] = []
+            if code_aliases:
+                clauses.append(func.upper(NationalRegenSeed.country_code).in_(tuple(sorted(code_aliases))))
+            if name_aliases:
+                clauses.append(func.upper(NationalRegenSeed.country_name).in_(tuple(sorted(name_aliases))))
+            stmt = stmt.where(or_(*clauses))
+        countries = list(self.session.scalars(select(IngestionCountry)).all())
+        countries_by_code: dict[str, IngestionCountry] = {}
+        countries_by_name: dict[str, IngestionCountry] = {}
+        for country in countries:
+            for token in (
+                self._normalize_token(country.alpha2_code, upper=True),
+                self._normalize_token(country.alpha3_code, upper=True),
+                self._normalize_token(country.fifa_code, upper=True),
+            ):
+                if token is not None:
+                    countries_by_code.setdefault(token, country)
+            normalized_name = self._normalize_token(country.name, upper=True)
+            if normalized_name is not None:
+                countries_by_name.setdefault(normalized_name, country)
+        items: list[dict[str, Any]] = []
+        for seed in self.session.scalars(stmt).all():
+            seed_age = self._seed_age(seed)
+            age_limit = self._age_band_limit(competition)
+            if age_limit is not None and seed_age > age_limit:
+                continue
+            country = countries_by_code.get(self._normalize_token(seed.country_code, upper=True) or "") or countries_by_name.get(
+                self._normalize_token(seed.country_name, upper=True) or ""
+            )
+            country_tokens = self._country_tokens(
+                country_name=country.name if country is not None else seed.country_name,
+                alpha2_code=country.alpha2_code if country is not None else seed.country_code,
+                alpha3_code=country.alpha3_code if country is not None else None,
+                fifa_code=country.fifa_code if country is not None else None,
+            )
+            gsi = max(55, min(95, int(round((seed.current_rating * 0.7) + (seed.potential_rating * 0.3)))))
+            items.append(
+                {
+                    "player_id": seed.id,
+                    "player_name": seed.display_name,
+                    "overall_rating": int(seed.current_rating),
+                    "primary_position": self._normalize_position(seed.primary_position),
+                    "current_club_name": None,
+                    "current_league_name": None,
+                    "nationality": seed.country_name,
+                    "country_code": country.alpha2_code if country is not None and country.alpha2_code else seed.country_code,
+                    "country_tokens": country_tokens,
+                    "age": seed_age,
+                    "gsi": gsi,
+                    "base_value_coin": self._base_value_coin(gsi=gsi),
+                    "loan_price_coin": self._loan_price_coin(gsi=gsi, source_bucket=SOURCE_BUCKET_PRESEEDED),
+                    "tier_label": self._player_tier(int(seed.current_rating)),
+                    "source_bucket": SOURCE_BUCKET_PRESEEDED,
+                    "is_regen": True,
+                    "is_preseeded_national_regen": True,
+                    "market_eligible": False,
+                    "share_market_eligible": False,
+                    "tradable": False,
+                    "buyable": False,
+                    "transferable": False,
+                    "card_mint_eligible": False,
+                    "national_pool_only": True,
+                    "supply_mode": NATIONAL_POOL_ONLY_SUPPLY_MODE,
+                }
+            )
+        return items
 
     def _normalize_pool_filters(
         self,
@@ -562,12 +782,38 @@ class NationalTeamTournamentService:
                 return False
         return True
 
-    def _national_pool(self, *, filters: NationalPoolFilters, limit: int = 300) -> list[dict[str, Any]]:
-        return [
-            item
-            for item in self._player_catalog(limit=max(limit, 300))
-            if self._pool_item_matches(item, filters=filters)
+    def _national_pool(
+        self,
+        *,
+        filters: NationalPoolFilters,
+        competition: NationalTeamCompetition | None = None,
+        limit: int = 300,
+    ) -> list[dict[str, Any]]:
+        reference_date = self._competition_reference_date(competition)
+        age_limit = self._age_band_limit(competition)
+        catalog = [
+            *self._player_catalog(limit=max(limit, 300), reference_date=reference_date),
+            *self._national_seed_catalog(filters=filters, competition=competition, limit=max(limit, 300)),
         ]
+        filtered = [
+            item
+            for item in catalog
+            if (
+                age_limit is None
+                or (item.get("age") is not None and int(item["age"]) <= age_limit)
+            )
+            and self._pool_item_matches(item, filters=filters)
+        ]
+        filtered.sort(
+            key=lambda item: (
+                -self._source_priority(item),
+                -int(item["overall_rating"]),
+                -int(item["gsi"]),
+                float(self._normalize_amount(item["loan_price_coin"])),
+                str(item["player_name"]).lower(),
+            )
+        )
+        return filtered
 
     def _pool_item_payload(self, item: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -579,12 +825,21 @@ class NationalTeamTournamentService:
             "current_league_name": item["current_league_name"],
             "nationality": item["nationality"],
             "country_code": item["country_code"],
+            "age": item.get("age"),
             "gsi": item["gsi"],
             "base_value_coin": item["base_value_coin"],
             "loan_price_coin": item["loan_price_coin"],
             "tier_label": item["tier_label"],
             "source_bucket": item["source_bucket"],
-            "tradable": item["tradable"],
+            "is_regen": bool(item.get("is_regen", False)),
+            "is_preseeded_national_regen": bool(item.get("is_preseeded_national_regen", False)),
+            "market_eligible": bool(item.get("market_eligible", True)),
+            "share_market_eligible": bool(item.get("share_market_eligible", True)),
+            "tradable": bool(item.get("tradable", True)),
+            "buyable": bool(item.get("buyable", True)),
+            "transferable": bool(item.get("transferable", True)),
+            "card_mint_eligible": bool(item.get("card_mint_eligible", True)),
+            "national_pool_only": bool(item.get("national_pool_only", False)),
             "supply_mode": item["supply_mode"],
             "demand_multiplier": item.get("demand_multiplier", Decimal("1.0000")),
         }
@@ -603,7 +858,7 @@ class NationalTeamTournamentService:
         positions: tuple[str, ...] = (),
         tradable_only: bool = False,
     ) -> dict[str, Any]:
-        self._require_competition(competition_id)
+        competition = self._require_competition(competition_id)
         filters = self._normalize_pool_filters(
             country_code=country_code,
             real_only=real_only,
@@ -615,7 +870,11 @@ class NationalTeamTournamentService:
         )
         catalog = [
             self._priced_pool_item(item)
-            for item in self._national_pool(filters=filters, limit=max(limit + offset, 1000))
+            for item in self._national_pool(
+                filters=filters,
+                competition=competition,
+                limit=max(limit + offset, 1000),
+            )
         ]
         items = catalog[offset : offset + limit]
         return {"total": len(catalog), "items": [self._pool_item_payload(item) for item in items]}
@@ -667,6 +926,7 @@ class NationalTeamTournamentService:
                 candidates,
                 key=lambda payload: (
                     payload[0],
+                    self._source_priority(payload[1]),
                     int(payload[1]["overall_rating"]),
                     int(payload[1]["gsi"]),
                     -float(payload[1]["loan_price_coin"]),
@@ -789,7 +1049,7 @@ class NationalTeamTournamentService:
         positions: tuple[str, ...] = (),
         tradable_only: bool = False,
     ) -> dict[str, Any]:
-        self._require_competition(competition_id)
+        competition = self._require_competition(competition_id)
         normalized_country = self._normalize_token(country_code, upper=True)
         if normalized_country is None:
             raise NationalTeamTournamentError("Country code is required for auto-build.", reason="country_code_required")
@@ -806,7 +1066,10 @@ class NationalTeamTournamentService:
             positions=positions,
             tradable_only=tradable_only,
         )
-        pool = [self._priced_pool_item(item) for item in self._national_pool(filters=filters, limit=1500)]
+        pool = [
+            self._priced_pool_item(item)
+            for item in self._national_pool(filters=filters, competition=competition, limit=1500)
+        ]
         selection = self._pick_mixed_auto_build(
             pool=pool,
             slots=AUTO_BUILD_FORMATIONS[formation],
@@ -1059,6 +1322,8 @@ class NationalTeamTournamentService:
         loan_price_coin: Decimal,
         is_free_player: bool,
         free_player_tier: str | None,
+        supply_mode: str = INFINITE_SUPPLY_MODE,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> RentalContract:
         start_date, end_date = self._contract_window(entry.competition)
         contract = RentalContract(
@@ -1079,7 +1344,8 @@ class NationalTeamTournamentService:
                 "primary_position": primary_position,
                 "source_bucket": source_bucket,
                 "gsi": gsi,
-                "supply_mode": INFINITE_SUPPLY_MODE,
+                "supply_mode": supply_mode,
+                **dict(extra_metadata or {}),
             },
         )
         self.session.add(contract)
@@ -1100,6 +1366,8 @@ class NationalTeamTournamentService:
         shirt_number: int | None,
         source_type: str,
         assigned_slot: str | None = None,
+        supply_mode: str = INFINITE_SUPPLY_MODE,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> NationalTeamRentalSquadMember:
         member = NationalTeamRentalSquadMember(
             entry_id=entry.id,
@@ -1116,7 +1384,8 @@ class NationalTeamTournamentService:
                 "source_bucket": source_bucket,
                 "gsi": gsi,
                 "assigned_slot": assigned_slot,
-                "supply_mode": INFINITE_SUPPLY_MODE,
+                "supply_mode": supply_mode,
+                **dict(extra_metadata or {}),
             },
         )
         self.session.add(member)
@@ -1200,6 +1469,7 @@ class NationalTeamTournamentService:
             self._priced_pool_item(item)
             for item in self._national_pool(
                 filters=self._normalize_pool_filters(country_code=entry.country_code),
+                competition=competition,
                 limit=1000,
             )
         ]
@@ -1217,6 +1487,7 @@ class NationalTeamTournamentService:
         selected = list(selection["selected"])
 
         for item in selected:
+            market_flags = self._pool_item_market_flags(item)
             contract = self._create_rental_contract(
                 entry=entry,
                 actor=actor,
@@ -1229,6 +1500,8 @@ class NationalTeamTournamentService:
                 loan_price_coin=Decimal("0.0000"),
                 is_free_player=True,
                 free_player_tier=item["tier_label"],
+                supply_mode=str(item.get("supply_mode") or INFINITE_SUPPLY_MODE),
+                extra_metadata=market_flags,
             )
             self._create_rental_member(
                 entry=entry,
@@ -1242,6 +1515,8 @@ class NationalTeamTournamentService:
                 shirt_number=None,
                 source_type="free",
                 assigned_slot=item.get("assigned_slot"),
+                supply_mode=str(item.get("supply_mode") or INFINITE_SUPPLY_MODE),
+                extra_metadata=market_flags,
             )
 
         self._refresh_entry_squad_size(entry)
@@ -1280,15 +1555,17 @@ class NationalTeamTournamentService:
             item["player_id"]: self._priced_pool_item(item)
             for item in self._national_pool(
                 filters=self._normalize_pool_filters(country_code=entry.country_code),
+                competition=competition,
                 limit=1000,
             )
         }
         item = player_catalog.get(player_id)
         if item is None:
             player_exists = self.session.get(Player, player_id) is not None
+            seed_exists = self.session.get(NationalRegenSeed, player_id) is not None
             raise NationalTeamTournamentError(
                 "Rental player is outside the national pool.",
-                reason="player_not_eligible" if player_exists else "player_not_found",
+                reason="player_not_eligible" if player_exists or seed_exists else "player_not_found",
             )
 
         loan_price = self._normalize_amount(item["loan_price_coin"])
@@ -1321,6 +1598,8 @@ class NationalTeamTournamentService:
             loan_price_coin=loan_price,
             is_free_player=False,
             free_player_tier=None,
+            supply_mode=str(item.get("supply_mode") or INFINITE_SUPPLY_MODE),
+            extra_metadata=self._pool_item_market_flags(item),
         )
         contract.metadata_json = {
             **dict(contract.metadata_json or {}),
@@ -1340,6 +1619,8 @@ class NationalTeamTournamentService:
             shirt_number=shirt_number,
             source_type="rental",
             assigned_slot=item["primary_position"],
+            supply_mode=str(item.get("supply_mode") or INFINITE_SUPPLY_MODE),
+            extra_metadata=self._pool_item_market_flags(item),
         )
         self._flag_rental_abuse(actor=actor, competition=competition, item=item, loan_price=loan_price)
         self._refresh_entry_squad_size(entry)

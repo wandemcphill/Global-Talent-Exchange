@@ -9,6 +9,33 @@ from app.core.config import get_settings
 from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 
 
+_NIGERIAN_SURNAMES = {
+    "Adekunle",
+    "Adebayo",
+    "Ogunleye",
+    "Balogun",
+    "Ojo",
+    "Olatunji",
+    "Adeleke",
+    "Akinola",
+    "Babatunde",
+    "Lawal",
+    "Adeyemi",
+    "Okeke",
+    "Eze",
+    "Okafor",
+    "Nwosu",
+    "Umeh",
+    "Onyeka",
+    "Musa",
+    "Bello",
+    "Garba",
+    "Shehu",
+    "Danjuma",
+    "Suleiman",
+}
+
+
 def test_regen_service_generates_region_aware_academy_intake(club_ops_services) -> None:
     regen = club_ops_services["regen"]
 
@@ -121,6 +148,69 @@ def test_regen_naming_respects_nigerian_cultural_boundaries() -> None:
     assert all(profile.origin.religion_naming_pattern == "muslim" for profile in hausa_bundle.regens)
     assert all("Chibuzor Adekunle" != profile.display_name for profile in igbo_bundle.regens + hausa_bundle.regens)
     assert all("Ibrahim Jacob" != profile.display_name for profile in igbo_bundle.regens + hausa_bundle.regens)
+
+
+def test_regen_naming_supports_senegalese_profiles_without_nigerian_fallback() -> None:
+    engine = RegenGenerationEngine(get_settings())
+
+    senegal_bundle = engine.generate_starter_regens(
+        club_id="club-dakar",
+        season_label="2025/2026",
+        club_context=RegenClubContext(country_code="SN", region_name="Dakar", city_name="Dakar"),
+        count=4,
+        used_names=set(),
+        rng=random.Random(31),
+    )
+
+    allowed_surnames = {"Diop", "Ndiaye", "Sarr", "Faye", "Seck", "Ndour"}
+    assert all(profile.origin.country_code == "SN" for profile in senegal_bundle.regens)
+    assert all(profile.origin.ethnolinguistic_profile == "senegambian" for profile in senegal_bundle.regens)
+    assert all(profile.origin.religion_naming_pattern == "muslim" for profile in senegal_bundle.regens)
+    assert all(profile.display_name.split(" ", 1)[1] in allowed_surnames for profile in senegal_bundle.regens)
+    assert all(profile.display_name.split(" ", 1)[1] not in _NIGERIAN_SURNAMES for profile in senegal_bundle.regens)
+
+
+def test_regen_naming_aliases_maghreb_countries_without_losing_country_identity() -> None:
+    engine = RegenGenerationEngine(get_settings())
+
+    algeria_bundle = engine.generate_starter_regens(
+        club_id="club-algiers",
+        season_label="2025/2026",
+        club_context=RegenClubContext(country_code="DZ"),
+        count=4,
+        used_names=set(),
+        rng=random.Random(41),
+    )
+
+    allowed_surnames = {"El Idrissi", "Amrani", "Bennani", "Alaoui", "Mansouri", "Haddad"}
+    assert all(profile.origin.country_code == "DZ" for profile in algeria_bundle.regens)
+    assert all(profile.origin.region_name == "Algiers" for profile in algeria_bundle.regens)
+    assert all(profile.origin.city_name == "Algiers" for profile in algeria_bundle.regens)
+    assert all(profile.origin.ethnolinguistic_profile == "maghrebi_arabic" for profile in algeria_bundle.regens)
+    assert all(
+        any(profile.display_name.endswith(surname) for surname in allowed_surnames)
+        for profile in algeria_bundle.regens
+    )
+
+
+def test_regen_naming_supports_korean_profiles_without_defaulting_to_nigeria() -> None:
+    engine = RegenGenerationEngine(get_settings())
+
+    korea_bundle = engine.generate_starter_regens(
+        club_id="club-seoul",
+        season_label="2025/2026",
+        club_context=RegenClubContext(country_code="KR", region_name="Seoul", city_name="Seoul"),
+        count=4,
+        used_names=set(),
+        rng=random.Random(51),
+    )
+
+    allowed_surnames = {"Kim", "Lee", "Park", "Choi", "Jung", "Kang"}
+    assert all(profile.origin.country_code == "KR" for profile in korea_bundle.regens)
+    assert all(profile.origin.ethnolinguistic_profile == "korean" for profile in korea_bundle.regens)
+    assert all(profile.origin.religion_naming_pattern == "secular" for profile in korea_bundle.regens)
+    assert all(profile.display_name.split(" ", 1)[1] in allowed_surnames for profile in korea_bundle.regens)
+    assert all(profile.display_name.split(" ", 1)[1] not in _NIGERIAN_SURNAMES for profile in korea_bundle.regens)
 
 
 def test_regen_quality_weighting_favors_strong_clubs() -> None:

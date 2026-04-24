@@ -689,6 +689,8 @@ class RegenUniverseService:
 
     @staticmethod
     def _seed_age(seed: NationalRegenSeed) -> int:
+        if getattr(seed, "age", None) is not None:
+            return int(seed.age)
         metadata = dict(seed.metadata_json or {})
         explicit = metadata.get("age")
         if isinstance(explicit, int):
@@ -986,7 +988,7 @@ class RegenUniverseService:
         seeds = list(
             self.session.scalars(
                 select(NationalRegenSeed)
-                .where(NationalRegenSeed.status == "available")
+                .where(NationalRegenSeed.status.in_(("active", "available")))
                 .order_by(
                     NationalRegenSeed.potential_rating.desc(),
                     NationalRegenSeed.current_rating.desc(),

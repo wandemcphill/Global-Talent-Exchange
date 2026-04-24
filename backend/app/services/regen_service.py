@@ -162,6 +162,46 @@ class GeneratedAcademyIntake:
     regens: tuple[RegenProfileView, ...]
 
 
+def _name_profile(
+    *,
+    key: str,
+    ethnolinguistic_profile: str,
+    religion_naming_pattern: str,
+    given_names: tuple[str, ...],
+    surnames: tuple[str, ...],
+) -> NameProfile:
+    return NameProfile(
+        key=key,
+        ethnolinguistic_profile=ethnolinguistic_profile,
+        religion_naming_pattern=religion_naming_pattern,
+        given_names=given_names,
+        surnames=surnames,
+    )
+
+
+def _country_profile(
+    *,
+    country_code: str,
+    default_region: str,
+    default_city: str,
+    urbanicity: str,
+    profiles: tuple[NameProfile, ...],
+    region_profile_weights: dict[str, tuple[tuple[str, float], ...]] | None = None,
+) -> CountryNamingProfile:
+    if region_profile_weights is None:
+        if len(profiles) != 1:
+            raise ValueError("region_profile_weights_required_for_multi_profile_country")
+        region_profile_weights = {"default": ((profiles[0].key, 1.0),)}
+    return CountryNamingProfile(
+        country_code=country_code,
+        default_region=default_region,
+        default_city=default_city,
+        urbanicity=urbanicity,
+        region_profile_weights=region_profile_weights,
+        profiles={profile.key: profile for profile in profiles},
+    )
+
+
 _NAMING_PROFILES: dict[str, CountryNamingProfile] = {
     "NG": CountryNamingProfile(
         country_code="NG",
@@ -297,6 +337,466 @@ _NAMING_PROFILES: dict[str, CountryNamingProfile] = {
         },
     ),
 }
+
+_NAMING_PROFILES.update(
+    {
+        "SN": _country_profile(
+            country_code="SN",
+            default_region="Dakar",
+            default_city="Dakar",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="senegambian_muslim",
+                    ethnolinguistic_profile="senegambian",
+                    religion_naming_pattern="muslim",
+                    given_names=("Mamadou", "Ousmane", "Ibrahima", "Cheikh", "Pape", "Abdoulaye", "Ismaila"),
+                    surnames=("Diop", "Ndiaye", "Sarr", "Faye", "Seck", "Ndour"),
+                ),
+            ),
+        ),
+        "CI": _country_profile(
+            country_code="CI",
+            default_region="Abidjan",
+            default_city="Abidjan",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="ivorian_mande_muslim",
+                    ethnolinguistic_profile="ivorian_mande",
+                    religion_naming_pattern="muslim",
+                    given_names=("Ibrahim", "Moussa", "Ousmane", "Abdoulaye", "Amadou", "Bakary"),
+                    surnames=("Kone", "Traore", "Fofana", "Bamba", "Diarra", "Doumbia"),
+                ),
+                _name_profile(
+                    key="ivorian_akan_christian",
+                    ethnolinguistic_profile="akan_ivoirien",
+                    religion_naming_pattern="christian",
+                    given_names=("Wilfried", "Franck", "Christian", "Jean-Philippe", "Serge", "Yao"),
+                    surnames=("Kouame", "Konan", "Koffi", "Yapo", "Kacou", "Aka"),
+                ),
+            ),
+            region_profile_weights={
+                "default": (("ivorian_mande_muslim", 0.6), ("ivorian_akan_christian", 0.4)),
+            },
+        ),
+        "CM": _country_profile(
+            country_code="CM",
+            default_region="Littoral",
+            default_city="Douala",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="cameroon_bantu_christian",
+                    ethnolinguistic_profile="cameroon_bantu",
+                    religion_naming_pattern="christian",
+                    given_names=("Andre", "Samuel", "Rigobert", "Carlos", "Fabrice", "Stephane", "Jean"),
+                    surnames=("Onana", "Song", "Mbeumo", "Nkoulou", "Moukoudi", "Baleba", "Eto'o"),
+                ),
+                _name_profile(
+                    key="cameroon_muslim",
+                    ethnolinguistic_profile="cameroon_sahelian",
+                    religion_naming_pattern="muslim",
+                    given_names=("Aboubakar", "Moussa", "Ibrahim", "Oumar", "Souaibou", "Youssoufa"),
+                    surnames=("Aboubakar", "Oumarou", "Mohamadou", "Moussa", "Bello", "Hamadou"),
+                ),
+            ),
+            region_profile_weights={
+                "default": (("cameroon_bantu_christian", 0.7), ("cameroon_muslim", 0.3)),
+            },
+        ),
+        "KE": _country_profile(
+            country_code="KE",
+            default_region="Nairobi County",
+            default_city="Nairobi",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="east_african_christian",
+                    ethnolinguistic_profile="east_african_bantu",
+                    religion_naming_pattern="christian",
+                    given_names=("Victor", "Brian", "Dennis", "Michael", "Kevin", "John"),
+                    surnames=("Otieno", "Omondi", "Wanyama", "Odhiambo", "Mutiso", "Kiptoo"),
+                ),
+            ),
+        ),
+        "ET": _country_profile(
+            country_code="ET",
+            default_region="Addis Ababa",
+            default_city="Addis Ababa",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="ethiopian",
+                    ethnolinguistic_profile="ethiopian",
+                    religion_naming_pattern="christian_mixed",
+                    given_names=("Abel", "Yonas", "Bereket", "Samuel", "Dawit", "Henok"),
+                    surnames=("Bekele", "Tesfaye", "Gebre", "Kebede", "Haile", "Demissie"),
+                ),
+            ),
+        ),
+        "EG": _country_profile(
+            country_code="EG",
+            default_region="Cairo",
+            default_city="Cairo",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="egyptian_arabic",
+                    ethnolinguistic_profile="egyptian_arabic",
+                    religion_naming_pattern="muslim_majority",
+                    given_names=("Mohamed", "Ahmed", "Omar", "Mostafa", "Mahmoud", "Youssef", "Karim"),
+                    surnames=("Salah", "Hegazy", "Elneny", "Ashour", "Hamdy", "Zaki"),
+                ),
+            ),
+        ),
+        "ZA": _country_profile(
+            country_code="ZA",
+            default_region="Gauteng",
+            default_city="Johannesburg",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="south_african_nguni",
+                    ethnolinguistic_profile="south_african_nguni",
+                    religion_naming_pattern="christian_mixed",
+                    given_names=("Sipho", "Sibusiso", "Thabo", "Themba", "Luyanda", "Bongani"),
+                    surnames=("Khumalo", "Ndlovu", "Zulu", "Nkosi", "Mokoena", "Mofokeng"),
+                ),
+                _name_profile(
+                    key="south_african_afrikaans",
+                    ethnolinguistic_profile="south_african_afrikaans",
+                    religion_naming_pattern="christian",
+                    given_names=("Pieter", "Johan", "Ruan", "Willem", "Francois", "Dian"),
+                    surnames=("van Wyk", "van der Merwe", "Steyn", "Botha", "Pretorius", "du Plessis"),
+                ),
+            ),
+            region_profile_weights={
+                "default": (("south_african_nguni", 0.8), ("south_african_afrikaans", 0.2)),
+            },
+        ),
+        "AO": _country_profile(
+            country_code="AO",
+            default_region="Luanda",
+            default_city="Luanda",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="lusophone_african",
+                    ethnolinguistic_profile="lusophone_african",
+                    religion_naming_pattern="christian_mixed",
+                    given_names=("Jose", "Joao", "Manuel", "Nelson", "Paulo", "Domingos", "Carlos"),
+                    surnames=("dos Santos", "Silva", "Mateus", "Fernandes", "Costa", "Pereira"),
+                ),
+            ),
+        ),
+        "AR": _country_profile(
+            country_code="AR",
+            default_region="Buenos Aires",
+            default_city="Buenos Aires",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="rioplatense_spanish",
+                    ethnolinguistic_profile="argentine_spanish",
+                    religion_naming_pattern="mixed",
+                    given_names=("Mateo", "Thiago", "Santiago", "Franco", "Tomas", "Benjamin"),
+                    surnames=("Gonzalez", "Rodriguez", "Fernandez", "Lopez", "Perez", "Romero"),
+                ),
+            ),
+        ),
+        "FR": _country_profile(
+            country_code="FR",
+            default_region="Ile-de-France",
+            default_city="Paris",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="french",
+                    ethnolinguistic_profile="french",
+                    religion_naming_pattern="secular_mixed",
+                    given_names=("Lucas", "Nathan", "Theo", "Enzo", "Hugo", "Maxime"),
+                    surnames=("Martin", "Bernard", "Dubois", "Moreau", "Laurent", "Roux"),
+                ),
+            ),
+        ),
+        "DE": _country_profile(
+            country_code="DE",
+            default_region="Berlin",
+            default_city="Berlin",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="german",
+                    ethnolinguistic_profile="german",
+                    religion_naming_pattern="secular_mixed",
+                    given_names=("Lukas", "Jonas", "Leon", "Felix", "Max", "Tim"),
+                    surnames=("Muller", "Schmidt", "Schneider", "Fischer", "Weber", "Wagner"),
+                ),
+            ),
+        ),
+        "IT": _country_profile(
+            country_code="IT",
+            default_region="Lombardy",
+            default_city="Milan",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="italian",
+                    ethnolinguistic_profile="italian",
+                    religion_naming_pattern="mixed",
+                    given_names=("Lorenzo", "Matteo", "Leonardo", "Andrea", "Riccardo", "Alessandro"),
+                    surnames=("Rossi", "Russo", "Ferrari", "Esposito", "Romano", "Colombo"),
+                ),
+            ),
+        ),
+        "PT": _country_profile(
+            country_code="PT",
+            default_region="Lisbon",
+            default_city="Lisbon",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="portuguese",
+                    ethnolinguistic_profile="portuguese",
+                    religion_naming_pattern="mixed",
+                    given_names=("Joao", "Diogo", "Tiago", "Goncalo", "Andre", "Rafael"),
+                    surnames=("Silva", "Santos", "Ferreira", "Pereira", "Costa", "Oliveira"),
+                ),
+            ),
+        ),
+        "GB": _country_profile(
+            country_code="GB",
+            default_region="Greater London",
+            default_city="London",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="british",
+                    ethnolinguistic_profile="british",
+                    religion_naming_pattern="secular_mixed",
+                    given_names=("Jack", "Oliver", "George", "Harry", "James", "Callum"),
+                    surnames=("Smith", "Brown", "Taylor", "Wilson", "Davies", "Thompson"),
+                ),
+            ),
+        ),
+        "US": _country_profile(
+            country_code="US",
+            default_region="New York",
+            default_city="New York",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="american_anglo",
+                    ethnolinguistic_profile="american_anglo",
+                    religion_naming_pattern="mixed",
+                    given_names=("Aiden", "Noah", "Mason", "Liam", "Ethan", "Logan"),
+                    surnames=("Johnson", "Williams", "Miller", "Davis", "Brown", "Wilson"),
+                ),
+                _name_profile(
+                    key="american_hispanic",
+                    ethnolinguistic_profile="american_hispanic",
+                    religion_naming_pattern="mixed",
+                    given_names=("Jose", "Angel", "Luis", "Mateo", "Diego", "Santiago"),
+                    surnames=("Garcia", "Martinez", "Lopez", "Hernandez", "Gonzalez", "Ramirez"),
+                ),
+                _name_profile(
+                    key="american_black",
+                    ethnolinguistic_profile="american_black",
+                    religion_naming_pattern="mixed",
+                    given_names=("Jaylen", "Malik", "Darius", "Elijah", "Micah", "Kendrick"),
+                    surnames=("Jackson", "Robinson", "Walker", "Washington", "Brooks", "Coleman"),
+                ),
+            ),
+            region_profile_weights={
+                "default": (("american_anglo", 0.45), ("american_hispanic", 0.30), ("american_black", 0.25)),
+            },
+        ),
+        "TR": _country_profile(
+            country_code="TR",
+            default_region="Istanbul",
+            default_city="Istanbul",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="turkish",
+                    ethnolinguistic_profile="turkish",
+                    religion_naming_pattern="muslim_secular_mix",
+                    given_names=("Ahmet", "Mehmet", "Yusuf", "Emre", "Arda", "Kerem"),
+                    surnames=("Yilmaz", "Kaya", "Demir", "Sahin", "Celik", "Aydin"),
+                ),
+            ),
+        ),
+        "KR": _country_profile(
+            country_code="KR",
+            default_region="Seoul",
+            default_city="Seoul",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="korean",
+                    ethnolinguistic_profile="korean",
+                    religion_naming_pattern="secular",
+                    given_names=("Min-jun", "Seo-jun", "Ji-ho", "Hyun-woo", "Jun-seo", "Do-yun"),
+                    surnames=("Kim", "Lee", "Park", "Choi", "Jung", "Kang"),
+                ),
+            ),
+        ),
+        "CN": _country_profile(
+            country_code="CN",
+            default_region="Beijing",
+            default_city="Beijing",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="chinese",
+                    ethnolinguistic_profile="han_chinese",
+                    religion_naming_pattern="secular",
+                    given_names=("Wei", "Jun", "Hao", "Yichen", "Ming", "Tao"),
+                    surnames=("Wang", "Li", "Zhang", "Liu", "Chen", "Yang"),
+                ),
+            ),
+        ),
+        "PL": _country_profile(
+            country_code="PL",
+            default_region="Masovian",
+            default_city="Warsaw",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="polish",
+                    ethnolinguistic_profile="polish",
+                    religion_naming_pattern="christian_secular_mix",
+                    given_names=("Jakub", "Mateusz", "Kacper", "Pawel", "Mikolaj", "Adam"),
+                    surnames=("Nowak", "Kowalski", "Wisniewski", "Wojcik", "Lewandowski", "Kaminski"),
+                ),
+            ),
+        ),
+        "RS": _country_profile(
+            country_code="RS",
+            default_region="Belgrade",
+            default_city="Belgrade",
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key="balkan_slavic",
+                    ethnolinguistic_profile="balkan_slavic",
+                    religion_naming_pattern="christian_mixed",
+                    given_names=("Luka", "Nikola", "Marko", "Stefan", "Milan", "Dusan"),
+                    surnames=("Jovic", "Mitrovic", "Savic", "Ilic", "Petrovic", "Milenkovic"),
+                ),
+            ),
+        ),
+    }
+)
+
+_COUNTRY_PROFILE_ALIASES: dict[str, tuple[str, str, str]] = {
+    "DZ": ("MA", "Algiers", "Algiers"),
+    "TN": ("MA", "Tunis", "Tunis"),
+    "LY": ("MA", "Tripoli", "Tripoli"),
+    "SD": ("EG", "Khartoum", "Khartoum"),
+    "GM": ("SN", "Banjul", "Banjul"),
+    "MR": ("SN", "Nouakchott", "Nouakchott"),
+    "BF": ("CI", "Centre", "Ouagadougou"),
+    "ML": ("CI", "Bamako", "Bamako"),
+    "BJ": ("GH", "Littoral", "Cotonou"),
+    "TG": ("GH", "Maritime", "Lome"),
+    "LR": ("GH", "Montserrado", "Monrovia"),
+    "SL": ("GH", "Western Area", "Freetown"),
+    "GA": ("CM", "Estuaire", "Libreville"),
+    "CG": ("CM", "Brazzaville", "Brazzaville"),
+    "CD": ("CM", "Kinshasa", "Kinshasa"),
+    "CF": ("CM", "Bangui", "Bangui"),
+    "GQ": ("CM", "Bioko Norte", "Malabo"),
+    "UG": ("KE", "Central Region", "Kampala"),
+    "TZ": ("KE", "Dar es Salaam", "Dar es Salaam"),
+    "RW": ("KE", "Kigali", "Kigali"),
+    "BI": ("KE", "Bujumbura Mairie", "Bujumbura"),
+    "ER": ("ET", "Maekel", "Asmara"),
+    "MZ": ("AO", "Maputo", "Maputo"),
+    "CV": ("AO", "Praia", "Praia"),
+    "ST": ("AO", "Agua Grande", "Sao Tome"),
+    "GW": ("AO", "Bissau", "Bissau"),
+    "ZW": ("ZA", "Harare", "Harare"),
+    "ZM": ("ZA", "Lusaka", "Lusaka"),
+    "BW": ("ZA", "Gaborone", "Gaborone"),
+    "NA": ("ZA", "Khomas", "Windhoek"),
+    "LS": ("ZA", "Maseru", "Maseru"),
+    "SZ": ("ZA", "Hhohho", "Mbabane"),
+    "MW": ("ZA", "Lilongwe", "Lilongwe"),
+    "UY": ("AR", "Montevideo", "Montevideo"),
+    "CL": ("AR", "Santiago Metropolitan", "Santiago"),
+    "PY": ("AR", "Asuncion", "Asuncion"),
+    "PE": ("AR", "Lima", "Lima"),
+    "CO": ("AR", "Bogota", "Bogota"),
+    "VE": ("AR", "Caracas", "Caracas"),
+    "EC": ("AR", "Pichincha", "Quito"),
+    "BO": ("AR", "La Paz", "La Paz"),
+    "MX": ("AR", "Mexico City", "Mexico City"),
+    "CR": ("AR", "San Jose", "San Jose"),
+    "PA": ("AR", "Panama", "Panama City"),
+    "DO": ("AR", "Santo Domingo", "Santo Domingo"),
+    "HN": ("AR", "Francisco Morazan", "Tegucigalpa"),
+    "SV": ("AR", "San Salvador", "San Salvador"),
+    "GT": ("AR", "Guatemala", "Guatemala City"),
+    "BE": ("FR", "Brussels-Capital", "Brussels"),
+    "LU": ("FR", "Luxembourg", "Luxembourg"),
+    "CH": ("FR", "Zurich", "Zurich"),
+    "AT": ("DE", "Vienna", "Vienna"),
+    "IE": ("GB", "Dublin", "Dublin"),
+    "NL": ("GB", "North Holland", "Amsterdam"),
+    "DK": ("GB", "Capital Region", "Copenhagen"),
+    "SE": ("GB", "Stockholm", "Stockholm"),
+    "NO": ("GB", "Oslo", "Oslo"),
+    "FI": ("GB", "Uusimaa", "Helsinki"),
+    "CZ": ("PL", "Prague", "Prague"),
+    "SK": ("PL", "Bratislava", "Bratislava"),
+    "UA": ("PL", "Kyiv", "Kyiv"),
+    "HU": ("PL", "Budapest", "Budapest"),
+    "HR": ("RS", "Zagreb", "Zagreb"),
+    "BA": ("RS", "Sarajevo", "Sarajevo"),
+    "ME": ("RS", "Podgorica", "Podgorica"),
+    "MK": ("RS", "Skopje", "Skopje"),
+    "SI": ("RS", "Ljubljana", "Ljubljana"),
+    "BG": ("RS", "Sofia", "Sofia"),
+    "AL": ("IT", "Tirana", "Tirana"),
+    "CA": ("US", "Ontario", "Toronto"),
+    "AU": ("GB", "New South Wales", "Sydney"),
+    "NZ": ("GB", "Auckland", "Auckland"),
+    "TW": ("CN", "Taipei", "Taipei"),
+    "HK": ("CN", "Hong Kong", "Hong Kong"),
+    "SA": ("EG", "Riyadh", "Riyadh"),
+    "QA": ("EG", "Doha", "Doha"),
+    "AE": ("EG", "Dubai", "Dubai"),
+    "JO": ("EG", "Amman", "Amman"),
+    "LB": ("EG", "Beirut", "Beirut"),
+    "SY": ("EG", "Damascus", "Damascus"),
+    "IQ": ("EG", "Baghdad", "Baghdad"),
+    "KW": ("EG", "Kuwait City", "Kuwait City"),
+    "OM": ("EG", "Muscat", "Muscat"),
+    "BH": ("EG", "Manama", "Manama"),
+}
+
+
+@lru_cache(maxsize=None)
+def resolve_country_naming_profile(country_code: str | None, *, default_country_code: str) -> CountryNamingProfile:
+    normalized_country_code = (country_code or default_country_code).strip().upper()
+    direct_profile = _NAMING_PROFILES.get(normalized_country_code)
+    if direct_profile is not None:
+        return direct_profile
+    alias = _COUNTRY_PROFILE_ALIASES.get(normalized_country_code)
+    if alias is not None:
+        base_code, default_region, default_city = alias
+        base_profile = _NAMING_PROFILES[base_code]
+        return CountryNamingProfile(
+            country_code=normalized_country_code,
+            default_region=default_region,
+            default_city=default_city,
+            urbanicity=base_profile.urbanicity,
+            region_profile_weights=base_profile.region_profile_weights,
+            profiles=base_profile.profiles,
+        )
+    return _NAMING_PROFILES[default_country_code]
 
 
 @dataclass(slots=True)
@@ -1206,9 +1706,9 @@ class RegenGenerationEngine:
         base_potential = base_regen.potential_range
 
         surname = base_regen.display_name.split(" ")[-1]
-        country_profile = _NAMING_PROFILES.get(
+        country_profile = resolve_country_naming_profile(
             base_regen.birth_country_code,
-            _NAMING_PROFILES[self.settings.regen_generation.default_country_code],
+            default_country_code=self.settings.regen_generation.default_country_code,
         )
         given_pool: list[str] = []
         for profile in country_profile.profiles.values():
@@ -1297,7 +1797,10 @@ class RegenGenerationEngine:
         lineage_city = lineage_selection.lineage_city_name if lineage_selection else None
         forced_surname = lineage_selection.forced_surname if lineage_selection else None
         country_code = (lineage_country or club_context.country_code or self.settings.regen_generation.default_country_code).upper()
-        country_profile = _NAMING_PROFILES.get(country_code, _NAMING_PROFILES[self.settings.regen_generation.default_country_code])
+        country_profile = resolve_country_naming_profile(
+            country_code,
+            default_country_code=self.settings.regen_generation.default_country_code,
+        )
         region_name = lineage_region or club_context.region_name or country_profile.default_region
         city_name = lineage_city or club_context.city_name or country_profile.default_city
         region_key = region_name.strip().lower()
@@ -1666,4 +2169,5 @@ __all__ = [
     "RegenGenerationEngine",
     "RegenService",
     "get_regen_service",
+    "resolve_country_naming_profile",
 ]
