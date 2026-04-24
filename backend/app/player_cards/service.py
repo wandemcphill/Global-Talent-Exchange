@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,7 +15,9 @@ from app.economy.economy_service import EconomyService
 from app.football_events_engine.service import RealWorldFootballEventService
 from app.ingestion.models import MarketSignal, Player
 from app.integrity_engine.service import IntegrityEngineService
+from app.market.player_eligibility_policy import is_card_mint_eligible, is_preseeded_national_regen
 from app.models.base import generate_uuid
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.player_cards import (
     PlayerAlias,
     PlayerCard,
@@ -41,8 +42,7 @@ from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.players.read_models import PlayerSummaryReadModel
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.avatar_service import AvatarService
-from app.wallets.service import LedgerPosting, WalletService
-
+from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_TRADE_FEE_BPS = 2000
@@ -114,7 +114,8 @@ class PlayerCardMarketService:
                     "player_name": player.full_name,
                     "position": player.normalized_position or player.position,
                     "nationality_code": player.country.alpha2_code if player.country is not None else None,
-                    "current_club_name": current_club_name or (player.current_club.name if player.current_club is not None else None),
+                    "current_club_name": current_club_name
+                    or (player.current_club.name if player.current_club is not None else None),
                     "card_supply_total": int(supply_total or 0),
                     "latest_value_credits": float(current_value_credits) if current_value_credits is not None else None,
                     "avatar": self._avatar_payload(player),
@@ -125,6 +126,7 @@ class PlayerCardMarketService:
     def _active_trading_fee_bps(self) -> int:
         rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
         return int(rule.trading_fee_bps if rule is not None else DEFAULT_TRADE_FEE_BPS)
+
     def get_player_detail(self, *, player_id: str) -> dict[str, object]:
         player = self.session.get(Player, player_id)
         if player is None:
@@ -133,13 +135,41 @@ class PlayerCardMarketService:
 
         tiers = {tier.id: tier for tier in self.session.scalars(select(PlayerCardTier)).all()}
         cards = list(self.session.scalars(select(PlayerCard).where(PlayerCard.player_id == player.id)).all())
-        aliases = [row.alias for row in self.session.scalars(select(PlayerAlias).where(PlayerAlias.player_id == player.id)).all()]
-        monikers = [row.moniker for row in self.session.scalars(select(PlayerMoniker).where(PlayerMoniker.player_id == player.id, PlayerMoniker.is_active.is_(True))).all()]
-        effects = list(self.session.scalars(select(PlayerCardEffect).join(PlayerCard, PlayerCardEffect.player_card_id == PlayerCard.id).where(PlayerCard.player_id == player.id)).all())
-        buffs = list(self.session.scalars(select(PlayerCardFormBuff).join(PlayerCard, PlayerCardFormBuff.player_card_id == PlayerCard.id).where(PlayerCard.player_id == player.id)).all())
+        aliases = [
+            row.alias
+            for row in self.session.scalars(select(PlayerAlias).where(PlayerAlias.player_id == player.id)).all()
+        ]
+        monikers = [
+            row.moniker
+            for row in self.session.scalars(
+                select(PlayerMoniker).where(PlayerMoniker.player_id == player.id, PlayerMoniker.is_active.is_(True))
+            ).all()
+        ]
+        effects = list(
+            self.session.scalars(
+                select(PlayerCardEffect)
+                .join(PlayerCard, PlayerCardEffect.player_card_id == PlayerCard.id)
+                .where(PlayerCard.player_id == player.id)
+            ).all()
+        )
+        buffs = list(
+            self.session.scalars(
+                select(PlayerCardFormBuff)
+                .join(PlayerCard, PlayerCardFormBuff.player_card_id == PlayerCard.id)
+                .where(PlayerCard.player_id == player.id)
+            ).all()
+        )
         momentum = self.session.scalar(select(PlayerCardMomentum).where(PlayerCardMomentum.player_id == player.id))
-        latest_stats = self.session.scalar(select(PlayerStatsSnapshot).where(PlayerStatsSnapshot.player_id == player.id).order_by(PlayerStatsSnapshot.as_of.desc()))
-        latest_market_snapshot = self.session.scalar(select(PlayerMarketValueSnapshot).where(PlayerMarketValueSnapshot.player_id == player.id).order_by(PlayerMarketValueSnapshot.as_of.desc()))
+        latest_stats = self.session.scalar(
+            select(PlayerStatsSnapshot)
+            .where(PlayerStatsSnapshot.player_id == player.id)
+            .order_by(PlayerStatsSnapshot.as_of.desc())
+        )
+        latest_market_snapshot = self.session.scalar(
+            select(PlayerMarketValueSnapshot)
+            .where(PlayerMarketValueSnapshot.player_id == player.id)
+            .order_by(PlayerMarketValueSnapshot.as_of.desc())
+        )
 
         card_views: list[dict[str, object]] = []
         for card in cards:
@@ -173,13 +203,18 @@ class PlayerCardMarketService:
             "form_buffs": [self._buff_payload(buff) for buff in buffs],
             "momentum": self._momentum_payload(momentum) if momentum else None,
             "latest_stats_snapshot": self._stats_payload(latest_stats) if latest_stats else None,
-            "latest_market_snapshot": self._market_snapshot_payload(latest_market_snapshot) if latest_market_snapshot else None,
+            "latest_market_snapshot": (
+                self._market_snapshot_payload(latest_market_snapshot) if latest_market_snapshot else None
+            ),
             "real_world_flags": [self._trending_flag_payload(flag) for flag in real_world_impact.active_flags],
-            "real_world_form_modifiers": [self._player_form_modifier_payload(item) for item in real_world_impact.active_form_modifiers],
+            "real_world_form_modifiers": [
+                self._player_form_modifier_payload(item) for item in real_world_impact.active_form_modifiers
+            ],
             "demand_signals": [self._demand_signal_payload(item) for item in real_world_impact.active_demand_signals],
             "recommendation_priority_delta": real_world_impact.recommendation_priority_delta,
             "market_buzz_score": real_world_impact.market_buzz_score,
         }
+
     def list_inventory(self, *, actor: User) -> list[dict[str, object]]:
         stmt = (
             select(PlayerCardHolding, PlayerCard, PlayerCardTier, Player)
@@ -218,7 +253,15 @@ class PlayerCardMarketService:
             )
         return inventory
 
-    def list_listings(self, *, status: str = "open", player_id: str | None = None, tier_id: str | None = None, seller_user_id: str | None = None, limit: int = 200) -> list[dict[str, object]]:
+    def list_listings(
+        self,
+        *,
+        status: str = "open",
+        player_id: str | None = None,
+        tier_id: str | None = None,
+        seller_user_id: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, object]]:
         stmt = (
             select(PlayerCardListing, PlayerCard, PlayerCardTier, Player)
             .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
@@ -238,7 +281,10 @@ class PlayerCardMarketService:
         for listing, card, tier, player in rows:
             listings.append(self._listing_payload(listing, card, tier, player))
         return listings
-    def create_listing(self, *, actor: User, player_card_id: str, quantity: int, price_per_card_credits: Decimal) -> dict[str, object]:
+
+    def create_listing(
+        self, *, actor: User, player_card_id: str, quantity: int, price_per_card_credits: Decimal
+    ) -> dict[str, object]:
         if quantity <= 0:
             raise PlayerCardValidationError("Listing quantity must be positive.")
         if price_per_card_credits <= Decimal("0"):
@@ -263,11 +309,33 @@ class PlayerCardMarketService:
             metadata_json={},
         )
         self.session.add(listing)
-        self._append_card_history(card.id, "listing.created", actor.id, delta_available=-quantity, metadata={"listing_id": listing.listing_id})
-        self._append_owner_history(card.id, from_user_id=actor.id, to_user_id=None, quantity=quantity, event_type="listed", reference_id=listing.listing_id)
+        self._append_card_history(
+            card.id, "listing.created", actor.id, delta_available=-quantity, metadata={"listing_id": listing.listing_id}
+        )
+        self._append_owner_history(
+            card.id,
+            from_user_id=actor.id,
+            to_user_id=None,
+            quantity=quantity,
+            event_type="listed",
+            reference_id=listing.listing_id,
+        )
         self.session.flush()
-        self._publish_event("player_card.listing.created", {"listing_id": listing.listing_id, "player_card_id": card.id, "player_id": card.player_id, "seller_user_id": actor.id, "quantity": quantity, "price_per_card_credits": str(price_per_card_credits)})
-        self._publish_event("market.listing.created", {"asset_id": card.player_id, "listing_id": listing.listing_id, "price": float(price_per_card_credits)})
+        self._publish_event(
+            "player_card.listing.created",
+            {
+                "listing_id": listing.listing_id,
+                "player_card_id": card.id,
+                "player_id": card.player_id,
+                "seller_user_id": actor.id,
+                "quantity": quantity,
+                "price_per_card_credits": str(price_per_card_credits),
+            },
+        )
+        self._publish_event(
+            "market.listing.created",
+            {"asset_id": card.player_id, "listing_id": listing.listing_id, "price": float(price_per_card_credits)},
+        )
         return self._listing_payload(listing, card, self._get_tier(card.tier_id), self._get_player(card.player_id))
 
     def cancel_listing(self, *, actor: User, listing_id: str) -> dict[str, object]:
@@ -280,11 +348,33 @@ class PlayerCardMarketService:
         holding = self._get_holding(actor.id, listing.player_card_id)
         holding.quantity_reserved = max(holding.quantity_reserved - listing.quantity, 0)
         listing.status = "cancelled"
-        self._append_card_history(card.id, "listing.cancelled", actor.id, delta_available=listing.quantity, metadata={"listing_id": listing.listing_id})
-        self._append_owner_history(card.id, from_user_id=actor.id, to_user_id=None, quantity=listing.quantity, event_type="listing_cancelled", reference_id=listing.listing_id)
+        self._append_card_history(
+            card.id,
+            "listing.cancelled",
+            actor.id,
+            delta_available=listing.quantity,
+            metadata={"listing_id": listing.listing_id},
+        )
+        self._append_owner_history(
+            card.id,
+            from_user_id=actor.id,
+            to_user_id=None,
+            quantity=listing.quantity,
+            event_type="listing_cancelled",
+            reference_id=listing.listing_id,
+        )
         self.session.flush()
-        self._publish_event("player_card.listing.cancelled", {"listing_id": listing.listing_id, "player_card_id": card.id, "player_id": card.player_id, "seller_user_id": actor.id})
+        self._publish_event(
+            "player_card.listing.cancelled",
+            {
+                "listing_id": listing.listing_id,
+                "player_card_id": card.id,
+                "player_id": card.player_id,
+                "seller_user_id": actor.id,
+            },
+        )
         return self._listing_payload(listing, card, self._get_tier(card.tier_id), self._get_player(card.player_id))
+
     def buy_listing(self, *, actor: User, listing_id: str, quantity: int | None = None) -> dict[str, object]:
         listing = self._get_listing(listing_id)
         if listing.status != "open":
@@ -364,8 +454,17 @@ class PlayerCardMarketService:
         )
         self.session.add(sale)
 
-        self._append_owner_history(card.id, from_user_id=seller.id, to_user_id=actor.id, quantity=quantity, event_type="sold", reference_id=sale.sale_id)
-        self._append_card_history(card.id, "sale.completed", actor.id, metadata={"sale_id": sale.sale_id, "listing_id": listing.listing_id})
+        self._append_owner_history(
+            card.id,
+            from_user_id=seller.id,
+            to_user_id=actor.id,
+            quantity=quantity,
+            event_type="sold",
+            reference_id=sale.sale_id,
+        )
+        self._append_card_history(
+            card.id, "sale.completed", actor.id, metadata={"sale_id": sale.sale_id, "listing_id": listing.listing_id}
+        )
         self._record_market_signal(card.player_id, sale, actor, seller)
         self._record_market_snapshot(card.player_id)
         self._update_momentum(card.player_id)
@@ -414,10 +513,12 @@ class PlayerCardMarketService:
             "settlement_reference": sale.settlement_reference,
             "created_at": sale.created_at,
         }
-    def add_watchlist(self, *, actor: User, player_id: str, player_card_id: str | None, notes: str | None) -> PlayerCardWatchlist:
+
+    def add_watchlist(
+        self, *, actor: User, player_id: str, player_card_id: str | None, notes: str | None
+    ) -> PlayerCardWatchlist:
         watch = self.session.scalar(
-            select(PlayerCardWatchlist)
-            .where(
+            select(PlayerCardWatchlist).where(
                 PlayerCardWatchlist.user_id == actor.id,
                 PlayerCardWatchlist.player_id == player_id,
                 PlayerCardWatchlist.player_card_id == player_card_id,
@@ -427,13 +528,19 @@ class PlayerCardMarketService:
             watch.notes = notes
             self.session.flush()
             return watch
-        watch = PlayerCardWatchlist(user_id=actor.id, player_id=player_id, player_card_id=player_card_id, notes=notes, metadata_json={})
+        watch = PlayerCardWatchlist(
+            user_id=actor.id, player_id=player_id, player_card_id=player_card_id, notes=notes, metadata_json={}
+        )
         self.session.add(watch)
         self.session.flush()
         return watch
 
     def list_watchlist(self, *, actor: User) -> list[PlayerCardWatchlist]:
-        stmt = select(PlayerCardWatchlist).where(PlayerCardWatchlist.user_id == actor.id).order_by(PlayerCardWatchlist.updated_at.desc())
+        stmt = (
+            select(PlayerCardWatchlist)
+            .where(PlayerCardWatchlist.user_id == actor.id)
+            .order_by(PlayerCardWatchlist.updated_at.desc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def remove_watchlist(self, *, actor: User, watchlist_id: str) -> None:
@@ -442,6 +549,7 @@ class PlayerCardMarketService:
             raise PlayerCardNotFoundError("Watchlist entry was not found.")
         self.session.delete(watch)
         self.session.flush()
+
     def apply_supply_batch(
         self,
         *,
@@ -464,11 +572,19 @@ class PlayerCardMarketService:
         if tier is None:
             raise PlayerCardValidationError("Card tier was not found.")
 
-        existing_batch = self.session.scalar(select(PlayerCardSupplyBatch).where(PlayerCardSupplyBatch.batch_key == batch_key))
+        existing_batch = self.session.scalar(
+            select(PlayerCardSupplyBatch).where(PlayerCardSupplyBatch.batch_key == batch_key)
+        )
         if existing_batch is not None:
             return existing_batch
 
-        card = self.session.scalar(select(PlayerCard).where(PlayerCard.player_id == player.id, PlayerCard.tier_id == tier.id, PlayerCard.edition_code == edition_code))
+        card = self.session.scalar(
+            select(PlayerCard).where(
+                PlayerCard.player_id == player.id,
+                PlayerCard.tier_id == tier.id,
+                PlayerCard.edition_code == edition_code,
+            )
+        )
         if card is None:
             card = PlayerCard(
                 player_id=player.id,
@@ -500,15 +616,30 @@ class PlayerCardMarketService:
         self.session.add(batch)
         card.supply_total += quantity
         card.supply_available += quantity
-        self._append_card_history(card.id, "supply.batch", actor.id, delta_supply=quantity, delta_available=quantity, metadata={"batch_key": batch_key})
+        self._append_card_history(
+            card.id,
+            "supply.batch",
+            actor.id,
+            delta_supply=quantity,
+            delta_available=quantity,
+            metadata={"batch_key": batch_key},
+        )
 
         if owner_user_id:
             holding = self._get_or_create_holding(owner_user_id, card.id)
             holding.quantity_total += quantity
             holding.last_acquired_at = datetime.now(UTC)
-            self._append_owner_history(card.id, from_user_id=None, to_user_id=owner_user_id, quantity=quantity, event_type="minted", reference_id=batch_key)
+            self._append_owner_history(
+                card.id,
+                from_user_id=None,
+                to_user_id=owner_user_id,
+                quantity=quantity,
+                event_type="minted",
+                reference_id=batch_key,
+            )
         self.session.flush()
         return batch
+
     def _record_market_signal(self, player_id: str, sale: PlayerCardSale, buyer: User, seller: User) -> None:
         signal = MarketSignal(
             source_provider="player_card_market",
@@ -539,7 +670,9 @@ class PlayerCardMarketService:
             .order_by(PlayerCardSale.created_at.desc())
         ).all()
         total_qty = sum(int(row.quantity) for row in sales_rows)
-        weighted_total = sum(self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows)
+        weighted_total = sum(
+            self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows
+        )
         avg_price = None
         high_price = None
         low_price = None
@@ -555,16 +688,21 @@ class PlayerCardMarketService:
             .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
             .where(PlayerCard.player_id == player_id, PlayerCardListing.status == "open")
         )
-        listing_count = self.session.scalar(
-            select(func.count(PlayerCardListing.id))
-            .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
-            .where(PlayerCard.player_id == player_id, PlayerCardListing.status == "open")
-        ) or 0
+        listing_count = (
+            self.session.scalar(
+                select(func.count(PlayerCardListing.id))
+                .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
+                .where(PlayerCard.player_id == player_id, PlayerCardListing.status == "open")
+            )
+            or 0
+        )
 
         snapshot = PlayerMarketValueSnapshot(
             player_id=player_id,
             as_of=now,
-            last_trade_price_credits=float(self._normalize_amount(sales_rows[0].price_per_card_credits)) if sales_rows else None,
+            last_trade_price_credits=(
+                float(self._normalize_amount(sales_rows[0].price_per_card_credits)) if sales_rows else None
+            ),
             avg_trade_price_credits=float(avg_price) if avg_price is not None else None,
             volume_24h=int(total_qty),
             listing_floor_price_credits=float(self._normalize_amount(floor_price)) if floor_price is not None else None,
@@ -609,7 +747,9 @@ class PlayerCardMarketService:
         total_qty = sum(int(row.quantity) for row in sales_rows)
         if total_qty == 0:
             return None
-        weighted_total = sum(self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows)
+        weighted_total = sum(
+            self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows
+        )
         return self._normalize_amount(weighted_total / Decimal(total_qty))
 
     def _run_integrity_checks(self, card: PlayerCard, sale: PlayerCardSale) -> None:
@@ -618,15 +758,24 @@ class PlayerCardMarketService:
         risk_service = RiskOpsService(self.session)
 
         lookback_7d = now - timedelta(days=7)
-        pair_count = self.session.scalar(
-            select(func.count(PlayerCardSale.id)).where(
-                PlayerCardSale.created_at >= lookback_7d,
-                or_(
-                    and_(PlayerCardSale.seller_user_id == sale.seller_user_id, PlayerCardSale.buyer_user_id == sale.buyer_user_id),
-                    and_(PlayerCardSale.seller_user_id == sale.buyer_user_id, PlayerCardSale.buyer_user_id == sale.seller_user_id),
-                ),
+        pair_count = (
+            self.session.scalar(
+                select(func.count(PlayerCardSale.id)).where(
+                    PlayerCardSale.created_at >= lookback_7d,
+                    or_(
+                        and_(
+                            PlayerCardSale.seller_user_id == sale.seller_user_id,
+                            PlayerCardSale.buyer_user_id == sale.buyer_user_id,
+                        ),
+                        and_(
+                            PlayerCardSale.seller_user_id == sale.buyer_user_id,
+                            PlayerCardSale.buyer_user_id == sale.seller_user_id,
+                        ),
+                    ),
+                )
             )
-        ) or 0
+            or 0
+        )
         if pair_count >= 3:
             subject = f"pair:{sale.seller_user_id}:{sale.buyer_user_id}"
             integrity_service.register_incident_once(
@@ -651,12 +800,15 @@ class PlayerCardMarketService:
             )
 
         lookback_24h = now - timedelta(hours=24)
-        churn_count = self.session.scalar(
-            select(func.count(PlayerCardSale.id)).where(
-                PlayerCardSale.player_card_id == sale.player_card_id,
-                PlayerCardSale.created_at >= lookback_24h,
+        churn_count = (
+            self.session.scalar(
+                select(func.count(PlayerCardSale.id)).where(
+                    PlayerCardSale.player_card_id == sale.player_card_id,
+                    PlayerCardSale.created_at >= lookback_24h,
+                )
             )
-        ) or 0
+            or 0
+        )
         if churn_count >= 6:
             subject = f"asset:{sale.player_card_id}:{now:%Y%m%d}"
             integrity_service.register_incident_once(
@@ -721,11 +873,14 @@ class PlayerCardMarketService:
                         metadata_json={"price": float(current_price), "average": float(average_price)},
                     )
 
-        volume_1h = self.session.scalar(
-            select(func.count(PlayerCardSale.id))
-            .join(PlayerCard, PlayerCardSale.player_card_id == PlayerCard.id)
-            .where(PlayerCard.player_id == card.player_id, PlayerCardSale.created_at >= now - timedelta(hours=1))
-        ) or 0
+        volume_1h = (
+            self.session.scalar(
+                select(func.count(PlayerCardSale.id))
+                .join(PlayerCard, PlayerCardSale.player_card_id == PlayerCard.id)
+                .where(PlayerCard.player_id == card.player_id, PlayerCardSale.created_at >= now - timedelta(hours=1))
+            )
+            or 0
+        )
         if volume_1h >= 12:
             risk_service.create_system_event(
                 actor_user_id=None,
@@ -738,7 +893,17 @@ class PlayerCardMarketService:
                 subject_id=card.player_id,
                 metadata_json={"volume_1h": int(volume_1h)},
             )
-    def _append_card_history(self, player_card_id: str, event_type: str, actor_user_id: str | None, *, delta_supply: int = 0, delta_available: int = 0, metadata: dict[str, Any] | None = None) -> None:
+
+    def _append_card_history(
+        self,
+        player_card_id: str,
+        event_type: str,
+        actor_user_id: str | None,
+        *,
+        delta_supply: int = 0,
+        delta_available: int = 0,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         self.session.add(
             PlayerCardHistory(
                 player_card_id=player_card_id,
@@ -751,7 +916,16 @@ class PlayerCardMarketService:
             )
         )
 
-    def _append_owner_history(self, player_card_id: str, *, from_user_id: str | None, to_user_id: str | None, quantity: int, event_type: str, reference_id: str | None) -> None:
+    def _append_owner_history(
+        self,
+        player_card_id: str,
+        *,
+        from_user_id: str | None,
+        to_user_id: str | None,
+        quantity: int,
+        event_type: str,
+        reference_id: str | None,
+    ) -> None:
         self.session.add(
             PlayerCardOwnerHistory(
                 player_card_id=player_card_id,
@@ -777,15 +951,29 @@ class PlayerCardMarketService:
         return listing
 
     def _get_holding(self, user_id: str, player_card_id: str) -> PlayerCardHolding:
-        holding = self.session.scalar(select(PlayerCardHolding).where(PlayerCardHolding.owner_user_id == user_id, PlayerCardHolding.player_card_id == player_card_id))
+        holding = self.session.scalar(
+            select(PlayerCardHolding).where(
+                PlayerCardHolding.owner_user_id == user_id, PlayerCardHolding.player_card_id == player_card_id
+            )
+        )
         if holding is None:
             raise PlayerCardValidationError("Player card holding was not found for this user.")
         return holding
 
     def _get_or_create_holding(self, user_id: str, player_card_id: str) -> PlayerCardHolding:
-        holding = self.session.scalar(select(PlayerCardHolding).where(PlayerCardHolding.owner_user_id == user_id, PlayerCardHolding.player_card_id == player_card_id))
+        holding = self.session.scalar(
+            select(PlayerCardHolding).where(
+                PlayerCardHolding.owner_user_id == user_id, PlayerCardHolding.player_card_id == player_card_id
+            )
+        )
         if holding is None:
-            holding = PlayerCardHolding(owner_user_id=user_id, player_card_id=player_card_id, quantity_total=0, quantity_reserved=0, metadata_json={})
+            holding = PlayerCardHolding(
+                owner_user_id=user_id,
+                player_card_id=player_card_id,
+                quantity_total=0,
+                quantity_reserved=0,
+                metadata_json={},
+            )
             self.session.add(holding)
             self.session.flush()
         return holding
@@ -798,9 +986,16 @@ class PlayerCardMarketService:
 
     def _get_player(self, player_id: str) -> Player:
         player = self.session.get(Player, player_id)
-        if player is None:
-            raise PlayerCardNotFoundError("Player was not found.")
-        return player
+        if player is not None:
+            if not is_card_mint_eligible(player):
+                raise PlayerCardValidationError("Player is not eligible for card minting.")
+            return player
+        seed = self.session.get(NationalRegenSeed, player_id)
+        if seed is not None and is_preseeded_national_regen(seed):
+            raise PlayerCardValidationError(
+                "Preseeded national regens are national-pool-only and cannot be card minted."
+            )
+        raise PlayerCardNotFoundError("Player was not found.")
 
     def _settlement_exists(self, reference: str) -> bool:
         existing = self.session.scalar(select(PlayerCardSale).where(PlayerCardSale.settlement_reference == reference))
@@ -810,6 +1005,7 @@ class PlayerCardMarketService:
         if self.event_publisher is None:
             return
         self.event_publisher.publish(DomainEvent(name=name, payload=payload))
+
     def _tier_payload(self, tier: PlayerCardTier) -> dict[str, object]:
         return {
             "tier_id": tier.id,
@@ -904,7 +1100,9 @@ class PlayerCardMarketService:
         return {
             "momentum_id": momentum.id,
             "player_id": momentum.player_id,
-            "last_trade_price_credits": float(momentum.last_trade_price_credits) if momentum.last_trade_price_credits is not None else None,
+            "last_trade_price_credits": (
+                float(momentum.last_trade_price_credits) if momentum.last_trade_price_credits is not None else None
+            ),
             "momentum_7d_pct": float(momentum.momentum_7d_pct),
             "momentum_30d_pct": float(momentum.momentum_30d_pct),
             "trend_direction": momentum.trend_direction,
@@ -927,17 +1125,31 @@ class PlayerCardMarketService:
             "snapshot_id": snapshot.id,
             "player_id": snapshot.player_id,
             "as_of": snapshot.as_of,
-            "last_trade_price_credits": float(snapshot.last_trade_price_credits) if snapshot.last_trade_price_credits is not None else None,
-            "avg_trade_price_credits": float(snapshot.avg_trade_price_credits) if snapshot.avg_trade_price_credits is not None else None,
+            "last_trade_price_credits": (
+                float(snapshot.last_trade_price_credits) if snapshot.last_trade_price_credits is not None else None
+            ),
+            "avg_trade_price_credits": (
+                float(snapshot.avg_trade_price_credits) if snapshot.avg_trade_price_credits is not None else None
+            ),
             "volume_24h": snapshot.volume_24h,
-            "listing_floor_price_credits": float(snapshot.listing_floor_price_credits) if snapshot.listing_floor_price_credits is not None else None,
+            "listing_floor_price_credits": (
+                float(snapshot.listing_floor_price_credits)
+                if snapshot.listing_floor_price_credits is not None
+                else None
+            ),
             "listing_count": snapshot.listing_count,
-            "high_24h_price_credits": float(snapshot.high_24h_price_credits) if snapshot.high_24h_price_credits is not None else None,
-            "low_24h_price_credits": float(snapshot.low_24h_price_credits) if snapshot.low_24h_price_credits is not None else None,
+            "high_24h_price_credits": (
+                float(snapshot.high_24h_price_credits) if snapshot.high_24h_price_credits is not None else None
+            ),
+            "low_24h_price_credits": (
+                float(snapshot.low_24h_price_credits) if snapshot.low_24h_price_credits is not None else None
+            ),
             "metadata_json": snapshot.metadata_json,
         }
 
-    def _listing_payload(self, listing: PlayerCardListing, card: PlayerCard, tier: PlayerCardTier, player: Player) -> dict[str, object]:
+    def _listing_payload(
+        self, listing: PlayerCardListing, card: PlayerCard, tier: PlayerCardTier, player: Player
+    ) -> dict[str, object]:
         summary = self._player_summary(player.id)
         return {
             "listing_id": listing.listing_id,

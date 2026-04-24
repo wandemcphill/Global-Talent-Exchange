@@ -12,9 +12,10 @@ from app.core.events import InMemoryEventPublisher
 from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
 from app.models.base import Base
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from app.players.token_service import PlayerTokenMarketService
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.wallets.service import LedgerPosting, WalletService
 
 
@@ -217,3 +218,39 @@ def test_player_share_market_respects_governor_price_caps(session) -> None:
     )
 
     assert repriced.share_price_coin == Decimal("0.0788")
+
+
+def test_preseeded_national_regens_cannot_issue_player_share_markets(session) -> None:
+    admin = _create_user(session, user_id="token-seed-admin", role=UserRole.ADMIN)
+    seed = NationalRegenSeed(
+        seed_key="seed:share-market:block",
+        display_name="Pape Ndiaye",
+        age=18,
+        age_band="u20",
+        country_code="SN",
+        country_name="Senegal",
+        seed_type="preseeded_national_pool",
+        primary_position="AM",
+        current_rating=72,
+        potential_rating=86,
+        growth_curve=0.74,
+        rarity_tier="rare",
+        status="available",
+        metadata_json={},
+    )
+    session.add(seed)
+    session.flush()
+
+    service = PlayerTokenMarketService(session=session)
+    with pytest.raises(
+        PlayerTokenMarketError,
+        match="national-pool-only and cannot be issued to the share market",
+    ) as exc_info:
+        service.issue_market(
+            actor=admin,
+            player_id=seed.id,
+            total_shares=1000,
+            share_price_coin=Decimal("0.1250"),
+        )
+
+    assert exc_info.value.reason == "preseeded_national_regen_share_market_ineligible"

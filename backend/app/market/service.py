@@ -9,8 +9,9 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.cache import CacheBackend, NullCacheBackend
-from app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
+from app.market.player_eligibility_policy import is_transfer_market_eligible
 from app.market.models import (
     Listing,
     ListingStatus,
@@ -1006,7 +1007,7 @@ class MarketPlayerQueryService:
                 avatar=self._avatar(record),
             ),
             market_profile=MarketPlayerMarketProfile(
-                is_tradable=player.is_tradable,
+                is_tradable=is_transfer_market_eligible(player),
                 market_value_eur=player.market_value_eur,
                 supply_tier=self._supply_tier_payload(record),
                 liquidity_band=self._liquidity_band_payload(record),

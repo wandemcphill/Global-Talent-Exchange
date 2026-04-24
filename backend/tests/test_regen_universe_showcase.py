@@ -153,6 +153,7 @@ def test_regen_universe_showcase_lists_rising_stars_bloodlines_and_feed() -> Non
                 NationalRegenSeed(
                     seed_key="seed:showcase:br:1",
                     display_name="Joao Aurora",
+                    age=17,
                     country_code="BR",
                     country_name="Brazil",
                     seed_type="preseeded_national_pool",
@@ -184,6 +185,9 @@ def test_regen_universe_showcase_lists_rising_stars_bloodlines_and_feed() -> Non
         assert "potential_spike" in feed_types
         assert any(item["player"]["age"] >= 15 for item in scouting_feed["items"] if item.get("player"))
         assert any(entry["player_id"].startswith("seed:") for entry in rising_stars["entries"])
+        seeded_entry = next(entry for entry in rising_stars["entries"] if entry["player_id"].startswith("seed:"))
+        assert seeded_entry["player"]["market_access"]["buy_cta_allowed"] is False
+        assert seeded_entry["player"]["market_access"]["tradable"] is False
     finally:
         session.close()
 
@@ -196,6 +200,7 @@ def test_regen_universe_player_lookup_resolves_real_and_seeded_players() -> None
         seed = NationalRegenSeed(
             seed_key="seed:lookup:ng:1",
             display_name="Tunde Skyline",
+            age=18,
             country_code="NG",
             country_name="Nigeria",
             seed_type="preseeded_national_pool",
@@ -224,6 +229,12 @@ def test_regen_universe_player_lookup_resolves_real_and_seeded_players() -> None
         assert seed_lookup["player"]["id"] == f"seed:{seed.id}"
         assert seed_lookup["player"]["source_type"] == "national_seed"
         assert seed_lookup["player"]["nationality"] == "Nigeria"
+        assert seed_lookup["player"]["market_access"]["buy_cta_allowed"] is False
+        assert seed_lookup["player"]["market_access"]["share_market_eligible"] is False
+        assert seed_lookup["player"]["market_access"]["tradable"] is False
+        assert seed_lookup["player"]["market_access"]["transferable"] is False
+        assert seed_lookup["player"]["market_access"]["card_mint_eligible"] is False
+        assert seed_lookup["player"]["market_access"]["national_pool_only"] is True
         assert seed_lookup["card"]["position"] == "AM"
     finally:
         session.close()

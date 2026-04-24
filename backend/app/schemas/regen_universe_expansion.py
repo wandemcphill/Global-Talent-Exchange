@@ -191,6 +191,15 @@ class NationalRegenSeedView(CommonSchema):
     status: str
     preseed_batch: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    market_eligible: bool = False
+    share_market_eligible: bool = False
+    tradable: bool = False
+    buyable: bool = False
+    transferable: bool = False
+    card_mint_eligible: bool = False
+    buy_cta_allowed: bool = False
+    is_preseeded_national_regen: bool = True
+    national_pool_only: bool = True
 
 
 class NationalRegenPreseedSummaryView(CommonSchema):

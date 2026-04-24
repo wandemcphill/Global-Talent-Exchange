@@ -239,6 +239,7 @@ def test_preseeded_national_regens_fill_u17_quota_gaps_and_remain_non_marketable
             assert item["buyable"] is False
             assert item["transferable"] is False
             assert item["card_mint_eligible"] is False
+            assert item["buy_cta_allowed"] is False
             assert item["national_pool_only"] is True
             assert item["age"] <= 17
 
@@ -363,5 +364,11 @@ def test_preseed_seeding_is_idempotent_and_u17_u20_position_filters_hold(migrate
         assert all(item["source_bucket"] == "preseeded" for item in u20_pool["items"])
         assert all(item["age"] is not None and item["age"] <= 17 for item in u17_pool["items"])
         assert all(item["age"] is not None and 18 <= item["age"] <= 20 for item in u20_pool["items"])
-        assert all(item["tradable"] is False and item["buyable"] is False for item in u17_pool["items"])
-        assert all(item["tradable"] is False and item["buyable"] is False for item in u20_pool["items"])
+        assert all(
+            item["tradable"] is False and item["buyable"] is False and item["buy_cta_allowed"] is False
+            for item in u17_pool["items"]
+        )
+        assert all(
+            item["tradable"] is False and item["buyable"] is False and item["buy_cta_allowed"] is False
+            for item in u20_pool["items"]
+        )

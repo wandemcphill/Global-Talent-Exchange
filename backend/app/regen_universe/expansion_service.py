@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.ingestion.models import Competition, Country, Match, Player, PlayerMatchStat
+from app.market.player_eligibility_policy import market_access_payload
 from app.match_engine.schemas import (
     MatchClubContextInput,
     MatchCompetitionContextInput,
@@ -2426,6 +2427,7 @@ class RegenUniverseExpansionService:
             "status": seed.status,
             "preseed_batch": seed.preseed_batch,
             "metadata": dict(seed.metadata_json or {}),
+            **market_access_payload(seed),
         }
 
     def _notify_player_owners(

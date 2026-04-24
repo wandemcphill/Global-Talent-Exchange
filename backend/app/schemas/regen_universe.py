@@ -167,6 +167,18 @@ class RegenUniversePlayerShowcaseView(CommonSchema):
     discovery_badges: list[str] = Field(default_factory=list)
 
 
+class RegenPlayerMarketAccessView(CommonSchema):
+    market_eligible: bool = True
+    share_market_eligible: bool = True
+    tradable: bool = True
+    buyable: bool = True
+    transferable: bool = True
+    card_mint_eligible: bool = True
+    buy_cta_allowed: bool = True
+    is_preseeded_national_regen: bool = False
+    national_pool_only: bool = False
+
+
 class RegenPlayerView(CommonSchema):
     id: str
     name: str
@@ -179,6 +191,7 @@ class RegenPlayerView(CommonSchema):
     growth_curve: float
     club_id: str | None = None
     source_type: str = "regen"
+    market_access: RegenPlayerMarketAccessView = Field(default_factory=RegenPlayerMarketAccessView)
 
 
 class RegenUniversePlayerLookupView(CommonSchema):

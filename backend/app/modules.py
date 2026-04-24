@@ -695,6 +695,7 @@ DOMAIN_MODULES = (
     _module("awards", router_path="app.awards.router:router", with_api_alias=True),
     _module("platform_experience", router_path="app.platform_experience.router:router"),
     _module("regen_ecosystem", router_path="app.regen_ecosystem.router:router", with_api_alias=True),
+    _module("regen_creation", router_path="app.regen_creation.router:router", with_api_alias=True),
     _module(
         "regen_universe",
         router_path="app.regen_universe.router:router",

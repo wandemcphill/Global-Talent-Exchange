@@ -16,6 +16,7 @@ from app.core.global_ids import global_competition_id, global_match_id
 from app.global_memory.constants import COMPETITION_ADVANCED
 from app.global_memory.models import NationalTeamCountryRanking
 from app.ingestion.models import Country, Player
+from app.market.player_eligibility_policy import market_access_payload
 from app.models.base import utcnow
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
 from app.models.regen_ecosystem import NationalRegenSeed
@@ -440,18 +441,11 @@ class NationalCompetitionLifecycleService:
         return None
 
     @staticmethod
-    def _seed_market_metadata() -> dict[str, Any]:
+    def _seed_market_metadata(seed: NationalRegenSeed) -> dict[str, Any]:
         return {
             "source_bucket": "preseeded",
             "is_regen": True,
-            "is_preseeded_national_regen": True,
-            "market_eligible": False,
-            "share_market_eligible": False,
-            "tradable": False,
-            "buyable": False,
-            "transferable": False,
-            "card_mint_eligible": False,
-            "national_pool_only": True,
+            **market_access_payload(seed),
         }
 
     def _normalize_squad(
@@ -538,7 +532,10 @@ class NationalCompetitionLifecycleService:
                         overall_rating = max(40, min(int(national_seed.current_rating), 99))
                     if position is None:
                         position = national_seed.primary_position
-                    metadata_json = {**metadata_json, **self._seed_market_metadata()}
+                    metadata_json = {
+                        **metadata_json,
+                        **self._seed_market_metadata(national_seed),
+                    }
             elif not player_name:
                 raise NationalCompetitionLifecycleError(
                     f"Squad player #{index} is missing a player name.",

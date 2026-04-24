@@ -11,6 +11,7 @@ import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_types.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/regens/request_son_screen.dart';
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_models.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
 import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
@@ -356,6 +357,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           clubName: clubName,
                         ),
                       ),
+                  onOpenRequestSon: _openRequestSon,
                 ),
                 const SizedBox(height: 20),
                 _HomeExpansionLanesPanel(
@@ -485,6 +487,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       if (hasClubScope) _regenUniverseController.refresh(),
     ]);
     _primeTradingSummary();
+  }
+
+  Future<void> _openRequestSon() async {
+    if (!widget.exchangeController.isAuthenticated) {
+      widget.onOpenLogin?.call();
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) {
+          return RequestSonScreen(
+            apiBaseUrl: widget.apiBaseUrl,
+            backendMode: widget.backendMode,
+            onOrderGenerated: _refresh,
+          );
+        },
+      ),
+    );
   }
 
   void _createControllers() {
@@ -1621,12 +1641,14 @@ class _HomeRegenUniverseSection extends StatelessWidget {
     required this.onRetry,
     required this.onOpenNationalTeams,
     required this.onOpenWorldRegens,
+    required this.onOpenRequestSon,
   });
 
   final RegenUniverseController controller;
   final Future<void> Function() onRetry;
   final VoidCallback onOpenNationalTeams;
   final VoidCallback onOpenWorldRegens;
+  final Future<void> Function() onOpenRequestSon;
 
   @override
   Widget build(BuildContext context) {
@@ -1676,6 +1698,11 @@ class _HomeRegenUniverseSection extends StatelessWidget {
                     onPressed: onOpenWorldRegens,
                     icon: const Icon(Icons.public_outlined),
                     label: const Text('Open world regen desk'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => onOpenRequestSon(),
+                    icon: const Icon(Icons.family_restroom_outlined),
+                    label: const Text('Request a son'),
                   ),
                 ],
               ),

@@ -11,8 +11,10 @@ from app.core.event_backbone import defer_event_publish_until_commit
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
+from app.market.player_eligibility_policy import is_preseeded_national_regen, is_share_market_eligible
 from app.models.admin_rules import AdminRewardRule
 from app.models.base import generate_uuid
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
@@ -934,9 +936,20 @@ class PlayerTokenMarketService:
             .where(Player.id == player_id)
         )
         player = self.session.scalar(statement)
-        if player is None:
-            raise PlayerTokenMarketError("Player was not found.", reason="player_not_found")
-        return player
+        if player is not None:
+            if not is_share_market_eligible(player):
+                raise PlayerTokenMarketError(
+                    "Player is not eligible for the share market.",
+                    reason="share_market_ineligible",
+                )
+            return player
+        seed = self.session.get(NationalRegenSeed, player_id)
+        if seed is not None and is_preseeded_national_regen(seed):
+            raise PlayerTokenMarketError(
+                "Preseeded national regens are national-pool-only and cannot be issued to the share market.",
+                reason="preseeded_national_regen_share_market_ineligible",
+            )
+        raise PlayerTokenMarketError("Player was not found.", reason="player_not_found")
 
     def _normalize_market_status(self, status: str | None) -> str:
         normalized_status = str(status or "active").strip().lower() or "active"

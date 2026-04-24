@@ -8,6 +8,7 @@ from app.core import database as database_module
 REQUIRED_REGEN_TABLES = {
     "career_events",
     "national_regen_seeds",
+    "regen_creation_orders",
     "regen_agents",
     "regen_attribute_profiles",
     "regen_bloodline_links",

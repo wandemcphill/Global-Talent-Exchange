@@ -277,6 +277,12 @@ from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_daily_stat import EconomyDailyStat
 from app.models.event_backbone import CompetitionQueueRecord, EventConsumerState, EventDeadLetter, EventOutbox
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
+from app.models.regen_creation_order import (
+    RegenCreationOrder,
+    RegenCreationOrderStatus,
+    RegenCreationPaymentMethod,
+    RegenCreationRequestType,
+)
 from app.models.fan_experience import (
     FanExperienceTicket,
     FanProfile,
@@ -895,6 +901,10 @@ __all__ = [
     "EventOutbox",
     "FancoinPurchaseOrder",
     "PurchaseOrderStatus",
+    "RegenCreationOrder",
+    "RegenCreationOrderStatus",
+    "RegenCreationPaymentMethod",
+    "RegenCreationRequestType",
     "GiftComboEvent",
     "GiftComboRule",
     "NotificationPreference",

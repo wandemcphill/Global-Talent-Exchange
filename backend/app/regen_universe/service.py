@@ -19,6 +19,7 @@ from app.ingestion.models import (
     Season as IngestionSeason,
     TeamStanding,
 )
+from app.market.player_eligibility_policy import market_access_payload
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.regen import RegenLegacyRecord, RegenLineageProfile, RegenProfile, RegenScoutReport
 from app.regen_universe.awards_engine import AwardDefinition, AwardsEngine, DEFAULT_AWARD_DEFINITIONS
@@ -820,7 +821,32 @@ class RegenUniverseService:
             "growth_curve": round(prospect.growth_curve, 4),
             "club_id": prospect.club_id,
             "source_type": prospect.source_type,
+            "market_access": self._prospect_market_access_payload(prospect),
         }
+
+    def _prospect_market_access_payload(self, prospect: _UniverseProspect) -> dict[str, bool]:
+        if prospect.source_type == "national_seed":
+            return market_access_payload(
+                {
+                    "source_type": "national_seed",
+                    "is_preseeded_national_regen": True,
+                    "national_pool_only": True,
+                }
+            )
+        if prospect.player_id is not None:
+            player = self.session.get(Player, prospect.player_id)
+            if player is not None:
+                return market_access_payload(player)
+        return market_access_payload(
+            {
+                "share_market_eligible": False,
+                "tradable": False,
+                "buyable": False,
+                "transferable": False,
+                "card_mint_eligible": False,
+                "buy_cta_allowed": False,
+            }
+        )
 
     def _scouting_note_for_prospect(self, prospect: _UniverseProspect) -> str:
         position_label = _position_story_label(prospect.position)

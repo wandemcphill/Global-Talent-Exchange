@@ -12,6 +12,7 @@ from app.gift_engine.service import GiftEngineError, GiftEngineService
 from app.ingestion.models import Competition as IngestionCompetition
 from app.ingestion.models import Country as IngestionCountry
 from app.ingestion.models import InternalLeague, Player, PlayerSeasonStat
+from app.market.player_eligibility_policy import market_access_payload
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
 from app.models.club_social import ClubIdentityMetrics, RivalryProfile
@@ -521,6 +522,7 @@ class NationalTeamTournamentService:
             "buyable": bool(item.get("buyable", True)),
             "transferable": bool(item.get("transferable", True)),
             "card_mint_eligible": bool(item.get("card_mint_eligible", True)),
+            "buy_cta_allowed": bool(item.get("buy_cta_allowed", True)),
             "national_pool_only": bool(item.get("national_pool_only", False)),
         }
 
@@ -604,14 +606,7 @@ class NationalTeamTournamentService:
                     "tier_label": self._player_tier(overall_rating),
                     "source_bucket": source_bucket,
                     "is_regen": not bool(player.is_real_player),
-                    "is_preseeded_national_regen": False,
-                    "market_eligible": bool(player.is_tradable),
-                    "share_market_eligible": bool(player.is_tradable),
-                    "tradable": bool(player.is_tradable),
-                    "buyable": bool(player.is_tradable),
-                    "transferable": bool(player.is_tradable),
-                    "card_mint_eligible": bool(player.is_tradable),
-                    "national_pool_only": False,
+                    **market_access_payload(player),
                     "supply_mode": INFINITE_SUPPLY_MODE,
                 }
             )
@@ -731,14 +726,7 @@ class NationalTeamTournamentService:
                     "tier_label": self._player_tier(int(seed.current_rating)),
                     "source_bucket": SOURCE_BUCKET_PRESEEDED,
                     "is_regen": True,
-                    "is_preseeded_national_regen": True,
-                    "market_eligible": False,
-                    "share_market_eligible": False,
-                    "tradable": False,
-                    "buyable": False,
-                    "transferable": False,
-                    "card_mint_eligible": False,
-                    "national_pool_only": True,
+                    **market_access_payload(seed),
                     "supply_mode": NATIONAL_POOL_ONLY_SUPPLY_MODE,
                 }
             )
@@ -859,6 +847,7 @@ class NationalTeamTournamentService:
             "buyable": bool(item.get("buyable", True)),
             "transferable": bool(item.get("transferable", True)),
             "card_mint_eligible": bool(item.get("card_mint_eligible", True)),
+            "buy_cta_allowed": bool(item.get("buy_cta_allowed", True)),
             "national_pool_only": bool(item.get("national_pool_only", False)),
             "supply_mode": item["supply_mode"],
             "demand_multiplier": item.get("demand_multiplier", Decimal("1.0000")),

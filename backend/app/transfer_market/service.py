@@ -14,6 +14,10 @@ from sqlalchemy.orm import Session
 from app.access_control.service import AccessControlService
 from app.core.events import DomainEvent, EventPublisher
 from app.ingestion.models import Player
+from app.market.player_eligibility_policy import (
+    is_preseeded_national_regen,
+    is_transfer_market_eligible,
+)
 from app.models.access_control import OrganizationRole, OrganizationType
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
@@ -21,6 +25,7 @@ from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_contract import PlayerContract
 from app.models.player_personality import PlayerPersonality
 from app.models.regen import RegenProfile
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.transfer_market import (
     ClubTeamDynamics,
     CoachDemand,
@@ -73,9 +78,7 @@ LATE_HIJACK_WINDOW_SECONDS = 60
 PLAYER_DECISION_DELAY_HOURS = 12
 AGENT_COUNTER_DEADLINE_HOURS = 12
 TRANSFER_MARKET_EXECUTION_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB})
-TRANSFER_MARKET_WATCHLIST_ROLES = frozenset(
-    {OrganizationRole.ADMIN, OrganizationRole.CLUB, OrganizationRole.SCOUT}
-)
+TRANSFER_MARKET_WATCHLIST_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB, OrganizationRole.SCOUT})
 
 
 class TransferMarketError(Exception):
@@ -240,7 +243,9 @@ class TransferMarketService:
                 if membership.organization_type == OrganizationType.CLUB and membership.role in allowed_roles
             )
         )
-        for owned_club_id in self.session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == actor.id)).all():
+        for owned_club_id in self.session.scalars(
+            select(ClubProfile.id).where(ClubProfile.owner_user_id == actor.id)
+        ).all():
             if owned_club_id not in eligible_club_ids:
                 eligible_club_ids.append(owned_club_id)
         active_club_id = context.active_organization_id
@@ -254,7 +259,9 @@ class TransferMarketService:
             return eligible_club_ids[0]
         if not eligible_club_ids:
             raise TransferMarketPermissionError(forbidden_detail)
-        raise TransferMarketValidationError("Club identity must be specified when multiple club contexts are available.")
+        raise TransferMarketValidationError(
+            "Club identity must be specified when multiple club contexts are available."
+        )
 
     def _require_actor_any_club_access(
         self,
@@ -420,10 +427,16 @@ class TransferMarketService:
         time_remaining = max(0, int((self._coerce_utc(listing.expires_at) - effective_at).total_seconds()))
         extended = False
         if time_remaining <= ANTI_SNIPING_WINDOW_SECONDS:
-            listing.expires_at = self._coerce_utc(listing.expires_at) + timedelta(seconds=ANTI_SNIPING_EXTENSION_SECONDS)
+            listing.expires_at = self._coerce_utc(listing.expires_at) + timedelta(
+                seconds=ANTI_SNIPING_EXTENSION_SECONDS
+            )
             listing.anti_sniping_extension_count += 1
             extended = True
-        if previous_bidder_id and previous_bidder_id != resolved_bidder_club_id and time_remaining <= LATE_HIJACK_WINDOW_SECONDS:
+        if (
+            previous_bidder_id
+            and previous_bidder_id != resolved_bidder_club_id
+            and time_remaining <= LATE_HIJACK_WINDOW_SECONDS
+        ):
             self._append_drama_event(
                 listing,
                 event_type="late_hijack",
@@ -497,7 +510,11 @@ class TransferMarketService:
                     "new_bidder_club_id": resolved_bidder_club_id,
                 },
             )
-        if previous_bidder_id and previous_bidder_id != resolved_bidder_club_id and time_remaining <= LATE_HIJACK_WINDOW_SECONDS:
+        if (
+            previous_bidder_id
+            and previous_bidder_id != resolved_bidder_club_id
+            and time_remaining <= LATE_HIJACK_WINDOW_SECONDS
+        ):
             self._notify_club_owner(
                 club_id=listing.selling_club_id,
                 event_name="transfer_market.transfer_hijack",
@@ -540,7 +557,11 @@ class TransferMarketService:
                 event_type="auction_won",
                 headline="Auction winner decided",
                 effective_at=effective_at,
-                metadata={"winning_bid_id": winning_bid.id, "bidder_club_id": winning_bid.bidder_club_id, "amount": str(winning_bid.amount)},
+                metadata={
+                    "winning_bid_id": winning_bid.id,
+                    "bidder_club_id": winning_bid.bidder_club_id,
+                    "amount": str(winning_bid.amount),
+                },
             )
         else:
             self._append_drama_event(
@@ -636,11 +657,15 @@ class TransferMarketService:
             payload=payload,
             player_decision=player_decision,
         )
-        concerns = list(dict.fromkeys([
-            *player_decision.concerns,
-            *(agent_negotiation.demands or []),
-            coach_opinion.reason if coach_opinion.stance == "reject" else "",
-        ]))
+        concerns = list(
+            dict.fromkeys(
+                [
+                    *player_decision.concerns,
+                    *(agent_negotiation.demands or []),
+                    coach_opinion.reason if coach_opinion.stance == "reject" else "",
+                ]
+            )
+        )
         concerns = [item for item in concerns if item]
         negotiation.player_decision_json = player_decision.model_dump(mode="json")
         negotiation.coach_opinion_json = coach_opinion.model_dump(mode="json")
@@ -896,7 +921,9 @@ class TransferMarketService:
         self.session.refresh(profile)
         return self._to_player_decision_profile_view(profile)
 
-    def upsert_coach_profile(self, club_id: str, payload: CoachProfileUpsertRequest, *, actor: User) -> CoachProfileView:
+    def upsert_coach_profile(
+        self, club_id: str, payload: CoachProfileUpsertRequest, *, actor: User
+    ) -> CoachProfileView:
         self._require_actor_club_access(
             actor,
             club_id,
@@ -999,7 +1026,9 @@ class TransferMarketService:
     def to_listing_view(self, listing: TransferListing, *, reference_at: datetime | None = None) -> TransferListingView:
         effective_at = self._coerce_utc(reference_at or utcnow())
         player = self._require_player(listing.player_id)
-        current_club = self.session.get(ClubProfile, player.current_club_profile_id) if player.current_club_profile_id else None
+        current_club = (
+            self.session.get(ClubProfile, player.current_club_profile_id) if player.current_club_profile_id else None
+        )
         clubs = self._clubs_by_ids(
             [listing.selling_club_id, listing.highest_bidder_id, player.current_club_profile_id]
             + [bid.bidder_club_id for bid in self._listing_bids(listing.id)]
@@ -1008,7 +1037,9 @@ class TransferMarketService:
             TransferBidderView(
                 bid_id=item.id,
                 club_id=item.bidder_club_id,
-                club_name=clubs.get(item.bidder_club_id).club_name if clubs.get(item.bidder_club_id) is not None else None,
+                club_name=(
+                    clubs.get(item.bidder_club_id).club_name if clubs.get(item.bidder_club_id) is not None else None
+                ),
                 amount=item.amount,
                 timestamp=self._coerce_utc(item.timestamp),
                 is_highest=item.id == self._winning_bid_id(listing.id),
@@ -1016,7 +1047,9 @@ class TransferMarketService:
             for item in self._listing_bids(listing.id)
         ]
         current_bid = next((item for item in bids if item.is_highest), None)
-        negotiation = self.session.scalar(select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id))
+        negotiation = self.session.scalar(
+            select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id)
+        )
         return TransferListingView(
             id=listing.id,
             window_id=listing.window_id,
@@ -1104,11 +1137,13 @@ class TransferMarketService:
             float(
                 quantize_amount(payload.wage_offer_amount)
                 / max(
-                    quantize_amount(decision_profile.wage_expectation_amount or 1)
-                    if decision_profile.wage_expectation_amount > 0
-                    else quantize_amount(
-                        (player_state.salary_expectation_amount if player_state is not None else Decimal("1.0"))
-                        or Decimal("1.0")
+                    (
+                        quantize_amount(decision_profile.wage_expectation_amount or 1)
+                        if decision_profile.wage_expectation_amount > 0
+                        else quantize_amount(
+                            (player_state.salary_expectation_amount if player_state is not None else Decimal("1.0"))
+                            or Decimal("1.0")
+                        )
                     ),
                     Decimal("1.0"),
                 )
@@ -1125,9 +1160,7 @@ class TransferMarketService:
             + ((100.0 - current_relationship.relationship_score) * 0.45)
         )
         ambition_fit = clamp(
-            (club_reputation * 0.52)
-            + (league_level * 0.20)
-            + (float(decision_profile.ambition_level) * 0.28)
+            (club_reputation * 0.52) + (league_level * 0.20) + (float(decision_profile.ambition_level) * 0.28)
         )
         agency_transfer_score, agency_contract_score = self._agency_scores(
             player=player,
@@ -1228,7 +1261,9 @@ class TransferMarketService:
             ).all()
         )
         tactical_fit = clamp(self._coach_tactical_fit(player.normalized_position, coach, demands))
-        squad_depth_fit = clamp(100.0 - (self._club_position_depth(destination_club_id, player.normalized_position) * 18.0))
+        squad_depth_fit = clamp(
+            100.0 - (self._club_position_depth(destination_club_id, player.normalized_position) * 18.0)
+        )
         personality = self.session.scalar(select(PlayerPersonality).where(PlayerPersonality.player_id == player.id))
         discipline_target = float(dict(coach.personality_json or {}).get("discipline", 50.0))
         personality_fit = clamp(
@@ -1278,14 +1313,18 @@ class TransferMarketService:
         notes: list[str] = []
         expected_wage = decision_profile.wage_expectation_amount
         if expected_wage <= 0:
-            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            agency_state = self.session.scalar(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+            )
             expected_wage = agency_state.salary_expectation_amount if agency_state is not None else Decimal("0")
         greed = personality.greed if personality is not None else 50
         ambition = self._resolved_ambition(decision_profile, personality)
         patience = personality.patience if personality is not None else 50
 
         if player_decision.action == "reject":
-            return AgentNegotiationView(action="reject", demands=player_decision.concerns, clauses=clauses, notes="Agent advised a rejection.")
+            return AgentNegotiationView(
+                action="reject", demands=player_decision.concerns, clauses=clauses, notes="Agent advised a rejection."
+            )
         if payload.release_clause_amount is None and ambition >= 68.0:
             demands.append("release clause")
             clauses["release_clause_requested"] = True
@@ -1309,7 +1348,9 @@ class TransferMarketService:
                 clauses=clauses,
                 notes="Agent is stalling to test the market.",
             )
-        return AgentNegotiationView(action="accept", demands=[], clauses=clauses, notes="Agent is satisfied with the terms.")
+        return AgentNegotiationView(
+            action="accept", demands=[], clauses=clauses, notes="Agent is satisfied with the terms."
+        )
 
     def _complete_transfer(
         self,
@@ -1337,7 +1378,9 @@ class TransferMarketService:
             ),
             submitted_on=reference_at.date(),
         )
-        contract_ends_on = (payload.contract_starts_on or reference_at.date()) + timedelta(days=(365 * payload.contract_years) - 1)
+        contract_ends_on = (payload.contract_starts_on or reference_at.date()) + timedelta(
+            days=(365 * payload.contract_years) - 1
+        )
         try:
             accepted = lifecycle_service.accept_bid(
                 window_id,
@@ -1370,7 +1413,9 @@ class TransferMarketService:
         winning_bid: TransferListingBid,
         effective_at: datetime,
     ) -> TransferNegotiation:
-        negotiation = self.session.scalar(select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id))
+        negotiation = self.session.scalar(
+            select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id)
+        )
         if negotiation is None:
             negotiation = TransferNegotiation(
                 listing_id=listing.id,
@@ -1396,7 +1441,9 @@ class TransferMarketService:
             is_active = window.opens_on <= reference_at <= window.closes_on
             return window.id, not is_active
         seller = self._require_club(listing.selling_club_id)
-        active_windows = lifecycle_service.list_transfer_windows(territory_code=seller.country_code, active_on=reference_at)
+        active_windows = lifecycle_service.list_transfer_windows(
+            territory_code=seller.country_code, active_on=reference_at
+        )
         if not active_windows:
             active_windows = lifecycle_service.list_transfer_windows(active_on=reference_at)
         if active_windows:
@@ -1435,8 +1482,12 @@ class TransferMarketService:
         if regen is None:
             current_contract = self.context_service.get_current_contract(player.id, reference_on=reference_at.date())
             current_wage = current_contract.wage_amount if current_contract is not None else Decimal("0")
-            transfer_score = clamp(float(payload.wage_offer_amount / max(current_wage or Decimal("1"), Decimal("1"))) * 65.0)
-            contract_score = clamp(float(payload.wage_offer_amount / max(current_wage or Decimal("1"), Decimal("1"))) * 68.0)
+            transfer_score = clamp(
+                float(payload.wage_offer_amount / max(current_wage or Decimal("1"), Decimal("1"))) * 65.0
+            )
+            contract_score = clamp(
+                float(payload.wage_offer_amount / max(current_wage or Decimal("1"), Decimal("1"))) * 68.0
+            )
             return transfer_score, contract_score
         agency = PlayerAgencyService(self.session)
         transfer = agency.evaluate_transfer_opportunity(
@@ -1469,7 +1520,11 @@ class TransferMarketService:
         normalized_position = (position or "").strip().lower()
         philosophy = coach.tactical_philosophy.strip().lower()
         fit = 55.0
-        if normalized_position in {"defender", "centre-back", "full-back"} and philosophy in {"pressing", "counter", "balanced"}:
+        if normalized_position in {"defender", "centre-back", "full-back"} and philosophy in {
+            "pressing",
+            "counter",
+            "balanced",
+        }:
             fit += 8.0
         if normalized_position in {"midfielder", "defensive_midfielder"} and philosophy in {"possession", "balanced"}:
             fit += 10.0
@@ -1498,7 +1553,9 @@ class TransferMarketService:
         coach_profile: CoachProfile,
     ) -> float:
         score = 50.0
-        preferred_leagues = {item.strip().lower() for item in list(decision_profile.preferred_leagues_json or []) if item}
+        preferred_leagues = {
+            item.strip().lower() for item in list(decision_profile.preferred_leagues_json or []) if item
+        }
         if destination_club.country_code and destination_club.country_code.strip().lower() in preferred_leagues:
             score += 22.0
         preferred_style = (decision_profile.preferred_play_style or "").strip().lower()
@@ -1527,12 +1584,16 @@ class TransferMarketService:
         if player_id in list(selling_dynamics.leaders_json or []):
             selling_dynamics.chemistry_risk = clamp(selling_dynamics.chemistry_risk + 8.0)
         destination_dynamics.chemistry_risk = clamp(
-            destination_dynamics.chemistry_risk + max(0.0, 58.0 - ((coach_opinion.tactical_fit + coach_opinion.personality_fit) / 2.0)) * 0.08
+            destination_dynamics.chemistry_risk
+            + max(0.0, 58.0 - ((coach_opinion.tactical_fit + coach_opinion.personality_fit) / 2.0)) * 0.08
         )
         relationship = self._player_coach_relationship(player_id, destination_club_id)
-        relationship.relationship_score = clamp(relationship.relationship_score + ((coach_opinion.personality_fit - 50.0) * 0.20) + 6.0)
+        relationship.relationship_score = clamp(
+            relationship.relationship_score + ((coach_opinion.personality_fit - 50.0) * 0.20) + 6.0
+        )
         relationship.integration_success_modifier = clamp(
-            relationship.integration_success_modifier + (((coach_opinion.tactical_fit + coach_opinion.personality_fit) / 2.0) - 50.0),
+            relationship.integration_success_modifier
+            + (((coach_opinion.tactical_fit + coach_opinion.personality_fit) / 2.0) - 50.0),
             -25.0,
             25.0,
         )
@@ -1583,7 +1644,11 @@ class TransferMarketService:
 
     def _watchlist_count(self, player_id: str) -> int:
         return len(
-            list(self.session.scalars(select(MarketWatchlistEntry).where(MarketWatchlistEntry.player_id == player_id)).all())
+            list(
+                self.session.scalars(
+                    select(MarketWatchlistEntry).where(MarketWatchlistEntry.player_id == player_id)
+                ).all()
+            )
         )
 
     def _current_player_club_id(self, player_id: str, *, on_date: date) -> str | None:
@@ -1618,7 +1683,9 @@ class TransferMarketService:
             return 2
         current_contracts = list(
             self.session.scalars(
-                select(PlayerContract).where(PlayerContract.club_id == club_id, PlayerContract.status.in_(("active", "expiring")))
+                select(PlayerContract).where(
+                    PlayerContract.club_id == club_id, PlayerContract.status.in_(("active", "expiring"))
+                )
             ).all()
         )
         if not current_contracts:
@@ -1780,10 +1847,7 @@ class TransferMarketService:
         unique_ids = [item for item in dict.fromkeys(player_ids) if item]
         if not unique_ids:
             return {}
-        return {
-            item.id: item
-            for item in self.session.scalars(select(Player).where(Player.id.in_(unique_ids))).all()
-        }
+        return {item.id: item for item in self.session.scalars(select(Player).where(Player.id.in_(unique_ids))).all()}
 
     def _clubs_by_ids(self, club_ids: list[str | None]) -> dict[str, ClubProfile]:
         unique_ids = [item for item in dict.fromkeys(club_ids) if item]
@@ -1888,16 +1952,25 @@ class TransferMarketService:
         return listing
 
     def _require_negotiation_by_listing(self, listing_id: str) -> TransferNegotiation:
-        negotiation = self.session.scalar(select(TransferNegotiation).where(TransferNegotiation.listing_id == listing_id))
+        negotiation = self.session.scalar(
+            select(TransferNegotiation).where(TransferNegotiation.listing_id == listing_id)
+        )
         if negotiation is None:
             raise TransferMarketNotFoundError("Transfer negotiation was not found for this listing.")
         return negotiation
 
     def _require_player(self, player_id: str) -> Player:
         player = self.session.get(Player, player_id)
-        if player is None:
-            raise TransferMarketNotFoundError(f"Player {player_id} was not found.")
-        return player
+        if player is not None:
+            if not is_transfer_market_eligible(player):
+                raise TransferMarketValidationError("Player is not eligible for transfer market listing.")
+            return player
+        seed = self.session.get(NationalRegenSeed, player_id)
+        if seed is not None and is_preseeded_national_regen(seed):
+            raise TransferMarketValidationError(
+                "Preseeded national regens are national-pool-only and cannot be transfer listed."
+            )
+        raise TransferMarketNotFoundError(f"Player {player_id} was not found.")
 
     def _require_club(self, club_id: str) -> ClubProfile:
         club = self.session.get(ClubProfile, club_id)

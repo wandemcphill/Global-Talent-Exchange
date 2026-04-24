@@ -26,12 +26,13 @@ from app.models.player_cards import (
     PlayerMarketValueSnapshot,
     PlayerStatsSnapshot,
 )
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.real_world_football import PlayerDemandSignal, RealWorldFootballEvent, TrendingPlayerFlag
 from app.models.risk_ops import SystemEvent
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.player_cards.marketplace_service import PlayerCardMarketplaceService
-from app.player_cards.service import PlayerCardValidationError
+from app.player_cards.service import PlayerCardMarketService, PlayerCardValidationError
 from app.players.read_models import PlayerSummaryReadModel
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -61,7 +62,9 @@ def _create_user(session, *, user_id: str, email: str, username: str, role: User
     return user
 
 
-def _create_player(session, *, player_id: str, name: str, position: str = "forward", value_eur: float = 2_000_000) -> Player:
+def _create_player(
+    session, *, player_id: str, name: str, position: str = "forward", value_eur: float = 2_000_000
+) -> Player:
     player = Player(
         id=player_id,
         source_provider="test",
@@ -196,11 +199,17 @@ def _seed_wallet(session, wallet: WalletService, user: User, *, amount: Decimal)
 def test_free_regen_loan_floor_and_settlement(session) -> None:
     lender = _create_user(session, user_id="lender", email="lender@example.com", username="lender")
     borrower = _create_user(session, user_id="borrower", email="borrower@example.com", username="borrower")
-    player = _create_player(session, player_id="player-regen", name="Regen Star", position="forward", value_eur=2_000_000)
+    player = _create_player(
+        session, player_id="player-regen", name="Regen Star", position="forward", value_eur=2_000_000
+    )
     _create_summary(session, player=player, rating=8.1, value_credits=20.0)
     tier = _create_tier(session, tier_id="tier-regen", code="elite")
     card = _create_card(session, card_id="card-regen", player=player, tier=tier, variant="regen_unique")
-    session.add(PlayerCardHolding(player_card_id=card.id, owner_user_id=lender.id, quantity_total=1, quantity_reserved=0, metadata_json={}))
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id, owner_user_id=lender.id, quantity_total=1, quantity_reserved=0, metadata_json={}
+        )
+    )
     session.flush()
 
     wallet = WalletService()
@@ -209,7 +218,9 @@ def test_free_regen_loan_floor_and_settlement(session) -> None:
     platform_account = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
     platform_balance_before = wallet.get_balance(session, platform_account)
 
-    listing = service.create_loan_listing(actor=lender, player_card_id=card.id, total_slots=1, duration_days=7, loan_fee_credits=Decimal("0.0000"))
+    listing = service.create_loan_listing(
+        actor=lender, player_card_id=card.id, total_slots=1, duration_days=7, loan_fee_credits=Decimal("0.0000")
+    )
     negotiation = service.create_loan_negotiation(
         actor=borrower,
         listing_id=listing["listing_id"],
@@ -235,13 +246,58 @@ def test_free_regen_loan_floor_and_settlement(session) -> None:
     assert returned["status"] == "returned"
 
 
+def test_preseeded_national_regens_cannot_be_card_minted(session) -> None:
+    admin = _create_user(session, user_id="card-admin", email="card-admin@example.com", username="card-admin")
+    _create_tier(session, tier_id="tier-preseed-block", code="elite-preseed-block")
+    seed = NationalRegenSeed(
+        seed_key="seed:card:block",
+        display_name="Mamadou Faye",
+        age=18,
+        age_band="u20",
+        country_code="SN",
+        country_name="Senegal",
+        seed_type="preseeded_national_pool",
+        primary_position="RW",
+        current_rating=70,
+        potential_rating=84,
+        growth_curve=0.72,
+        rarity_tier="rare",
+        status="available",
+        metadata_json={},
+    )
+    session.add(seed)
+    session.flush()
+
+    service = PlayerCardMarketService(session=session)
+    with pytest.raises(
+        PlayerCardValidationError,
+        match="national-pool-only and cannot be card minted",
+    ):
+        service.apply_supply_batch(
+            actor=admin,
+            player_id=seed.id,
+            tier_code="elite-preseed-block",
+            quantity=1,
+            edition_code="base",
+            season_label="2026",
+            batch_key="batch:preseed:block",
+            owner_user_id=admin.id,
+            source_type="admin_seed",
+            source_reference="seed:card:block",
+        )
+
+
 def test_sale_listing_guardrails_reject_price_outside_reference_band(session) -> None:
     seller = _create_user(session, user_id="guard-seller", email="guard-seller@example.com", username="guard-seller")
     player = _create_player(session, player_id="guard-player", name="Guarded Price")
     _create_summary(session, player=player, value_credits=20.0)
     tier = _create_tier(session, tier_id="tier-guard", code="elite")
     card = _create_card(session, card_id="card-guard", player=player, tier=tier)
-    session.add(PlayerCardHolding(player_card_id=card.id, owner_user_id=seller.id, quantity_total=1, quantity_reserved=0, metadata_json={}))
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id, owner_user_id=seller.id, quantity_total=1, quantity_reserved=0, metadata_json={}
+        )
+    )
     session.flush()
 
     service = PlayerCardMarketplaceService(session=session, wallet_service=WalletService())
@@ -258,12 +314,18 @@ def test_sale_listing_guardrails_reject_price_outside_reference_band(session) ->
 
 
 def test_sale_listing_relist_cooldown_persists_integrity_snapshot(session) -> None:
-    seller = _create_user(session, user_id="cooldown-seller", email="cooldown-seller@example.com", username="cooldown-seller")
+    seller = _create_user(
+        session, user_id="cooldown-seller", email="cooldown-seller@example.com", username="cooldown-seller"
+    )
     player = _create_player(session, player_id="cooldown-player", name="Cooldown Seller")
     _create_summary(session, player=player, value_credits=20.0)
     tier = _create_tier(session, tier_id="tier-cooldown", code="gold")
     card = _create_card(session, card_id="card-cooldown", player=player, tier=tier)
-    session.add(PlayerCardHolding(player_card_id=card.id, owner_user_id=seller.id, quantity_total=2, quantity_reserved=0, metadata_json={}))
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id, owner_user_id=seller.id, quantity_total=2, quantity_reserved=0, metadata_json={}
+        )
+    )
     session.flush()
 
     service = PlayerCardMarketplaceService(session=session, wallet_service=WalletService())
@@ -273,7 +335,9 @@ def test_sale_listing_relist_cooldown_persists_integrity_snapshot(session) -> No
         quantity=1,
         price_per_card_credits=Decimal("18.0000"),
     )
-    stored_listing = session.scalar(select(PlayerCardListing).where(PlayerCardListing.listing_id == listing["listing_id"]))
+    stored_listing = session.scalar(
+        select(PlayerCardListing).where(PlayerCardListing.listing_id == listing["listing_id"])
+    )
 
     assert stored_listing is not None
     assert stored_listing.integrity_context_json["reference_source"] == "player_summary.current_value"
@@ -296,7 +360,11 @@ def test_sale_integrity_signals_repeated_pair_and_price_anomaly(session) -> None
     _create_summary(session, player=player, value_credits=12.0)
     tier = _create_tier(session, tier_id="tier-signal", code="elite")
     card = _create_card(session, card_id="card-signal", player=player, tier=tier)
-    session.add(PlayerCardHolding(player_card_id=card.id, owner_user_id=seller.id, quantity_total=3, quantity_reserved=0, metadata_json={}))
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id, owner_user_id=seller.id, quantity_total=3, quantity_reserved=0, metadata_json={}
+        )
+    )
     session.flush()
 
     wallet = WalletService()
@@ -314,18 +382,20 @@ def test_sale_integrity_signals_repeated_pair_and_price_anomaly(session) -> None
     )
 
     for price in (Decimal("10.0000"), Decimal("10.0000"), Decimal("30.0000")):
-        listing = service.create_sale_listing(actor=seller, player_card_id=card.id, quantity=1, price_per_card_credits=price)
+        listing = service.create_sale_listing(
+            actor=seller, player_card_id=card.id, quantity=1, price_per_card_credits=price
+        )
         service.buy_sale_listing(actor=buyer, listing_id=listing["listing_id"])
 
     incidents = session.scalars(
         select(IntegrityIncident).where(IntegrityIncident.incident_type == "repeated_card_trade_pair")
     ).all()
     latest_sale = session.scalar(
-        select(PlayerCardSale).where(PlayerCardSale.player_card_id == card.id).order_by(PlayerCardSale.created_at.desc())
+        select(PlayerCardSale)
+        .where(PlayerCardSale.player_card_id == card.id)
+        .order_by(PlayerCardSale.created_at.desc())
     )
-    anomaly_event = session.scalar(
-        select(SystemEvent).where(SystemEvent.event_type == "player_card_price_anomaly")
-    )
+    anomaly_event = session.scalar(select(SystemEvent).where(SystemEvent.event_type == "player_card_price_anomaly"))
 
     assert len(incidents) == 2
     assert latest_sale is not None
@@ -340,9 +410,15 @@ def test_marketplace_search_filters_and_exact_views(session) -> None:
     loan_owner = _create_user(session, user_id="loan-owner", email="loan-owner@example.com", username="loan-owner")
     swap_owner = _create_user(session, user_id="swap-owner", email="swap-owner@example.com", username="swap-owner")
 
-    sale_player = _create_player(session, player_id="player-sale", name="Ayo Seller", position="forward", value_eur=1_500_000)
-    loan_player = _create_player(session, player_id="player-loan", name="Bola Lender", position="midfielder", value_eur=2_500_000)
-    swap_player = _create_player(session, player_id="player-swap", name="Chika Swapper", position="defender", value_eur=1_000_000)
+    sale_player = _create_player(
+        session, player_id="player-sale", name="Ayo Seller", position="forward", value_eur=1_500_000
+    )
+    loan_player = _create_player(
+        session, player_id="player-loan", name="Bola Lender", position="midfielder", value_eur=2_500_000
+    )
+    swap_player = _create_player(
+        session, player_id="player-swap", name="Chika Swapper", position="defender", value_eur=1_000_000
+    )
     _create_summary(session, player=sale_player, club_name="Red City", rating=7.2, value_credits=15.0)
     _create_summary(session, player=loan_player, club_name="Blue City", rating=8.4, value_credits=25.0)
     _create_summary(session, player=swap_player, club_name="Blue City", rating=6.8, value_credits=10.0)
@@ -352,14 +428,50 @@ def test_marketplace_search_filters_and_exact_views(session) -> None:
     loan_card = _create_card(session, card_id="loan-card", player=loan_player, tier=tier, variant="regen_unique")
     swap_card = _create_card(session, card_id="swap-card", player=swap_player, tier=tier)
 
-    session.add(PlayerCardHolding(player_card_id=sale_card.id, owner_user_id=seller.id, quantity_total=2, quantity_reserved=0, metadata_json={}))
-    session.add(PlayerCardHolding(player_card_id=loan_card.id, owner_user_id=loan_owner.id, quantity_total=1, quantity_reserved=0, metadata_json={}))
-    session.add(PlayerCardHolding(player_card_id=swap_card.id, owner_user_id=swap_owner.id, quantity_total=1, quantity_reserved=0, metadata_json={}))
+    session.add(
+        PlayerCardHolding(
+            player_card_id=sale_card.id,
+            owner_user_id=seller.id,
+            quantity_total=2,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
+    session.add(
+        PlayerCardHolding(
+            player_card_id=loan_card.id,
+            owner_user_id=loan_owner.id,
+            quantity_total=1,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
+    session.add(
+        PlayerCardHolding(
+            player_card_id=swap_card.id,
+            owner_user_id=swap_owner.id,
+            quantity_total=1,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
     session.flush()
 
     service = PlayerCardMarketplaceService(session=session, wallet_service=WalletService())
-    service.create_sale_listing(actor=seller, player_card_id=sale_card.id, quantity=1, price_per_card_credits=Decimal("12.0000"), is_negotiable=True)
-    service.create_loan_listing(actor=loan_owner, player_card_id=loan_card.id, total_slots=1, duration_days=5, loan_fee_credits=Decimal("3.5000"))
+    service.create_sale_listing(
+        actor=seller,
+        player_card_id=sale_card.id,
+        quantity=1,
+        price_per_card_credits=Decimal("12.0000"),
+        is_negotiable=True,
+    )
+    service.create_loan_listing(
+        actor=loan_owner,
+        player_card_id=loan_card.id,
+        total_slots=1,
+        duration_days=5,
+        loan_fee_credits=Decimal("3.5000"),
+    )
     service.create_swap_listing(actor=swap_owner, player_card_id=swap_card.id)
 
     loan_results = service.search_marketplace(listing_type="loan", asset_origin="regen_newgen", sort="cheapest")
@@ -374,7 +486,9 @@ def test_marketplace_search_filters_and_exact_views(session) -> None:
 
 def test_marketplace_search_preserves_avatar_seed_and_latest_value(session) -> None:
     seller = _create_user(session, user_id="seed-seller", email="seed-seller@example.com", username="seed-seller")
-    player = _create_player(session, player_id="seed-player", name="Seed Player", position="forward", value_eur=2_000_000)
+    player = _create_player(
+        session, player_id="seed-player", name="Seed Player", position="forward", value_eur=2_000_000
+    )
     _create_summary(
         session,
         player=player,
@@ -415,7 +529,9 @@ def test_marketplace_search_preserves_avatar_seed_and_latest_value(session) -> N
 
 def test_marketplace_search_applies_player_price_engine_signals(session) -> None:
     seller = _create_user(session, user_id="engine-seller", email="engine-seller@example.com", username="engine-seller")
-    player = _create_player(session, player_id="engine-player", name="Engine Nine", position="forward", value_eur=4_000_000)
+    player = _create_player(
+        session, player_id="engine-player", name="Engine Nine", position="forward", value_eur=4_000_000
+    )
     _create_summary(session, player=player, club_name="Green Pulse", rating=8.0, value_credits=40.0)
     tier = _create_tier(session, tier_id="tier-engine", code="platinum")
     card = _create_card(session, card_id="engine-card", player=player, tier=tier)
@@ -485,8 +601,8 @@ def test_marketplace_search_applies_player_price_engine_signals(session) -> None
 
     assert payload["total"] == 1
     item = payload["items"][0]
-    assert item["market_price_credits"] == Decimal("44.0000")
-    assert item["price_change_credits"] == Decimal("4.0000")
+    assert item["market_price_credits"] == Decimal("46.2000")
+    assert item["price_change_credits"] == Decimal("4.2000")
     assert item["price_change_percent"] == 10.0
     assert item["price_direction"] == "up"
     assert item["performance_score"] == pytest.approx(14.1)
@@ -506,7 +622,9 @@ def test_marketplace_search_applies_player_price_engine_signals(session) -> None
 
 def test_swap_execution_transfers_holdings(session) -> None:
     owner = _create_user(session, user_id="swap-lister", email="swap-lister@example.com", username="swap-lister")
-    counterparty = _create_user(session, user_id="swap-counter", email="swap-counter@example.com", username="swap-counter")
+    counterparty = _create_user(
+        session, user_id="swap-counter", email="swap-counter@example.com", username="swap-counter"
+    )
     owner_player = _create_player(session, player_id="player-owner", name="Owner Card")
     counter_player = _create_player(session, player_id="player-counter", name="Counter Card")
     _create_summary(session, player=owner_player, value_credits=12.0)
@@ -515,16 +633,40 @@ def test_swap_execution_transfers_holdings(session) -> None:
     owner_card = _create_card(session, card_id="owner-card", player=owner_player, tier=tier)
     counter_card = _create_card(session, card_id="counter-card", player=counter_player, tier=tier)
 
-    session.add(PlayerCardHolding(player_card_id=owner_card.id, owner_user_id=owner.id, quantity_total=1, quantity_reserved=0, metadata_json={}))
-    session.add(PlayerCardHolding(player_card_id=counter_card.id, owner_user_id=counterparty.id, quantity_total=1, quantity_reserved=0, metadata_json={}))
+    session.add(
+        PlayerCardHolding(
+            player_card_id=owner_card.id,
+            owner_user_id=owner.id,
+            quantity_total=1,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
+    session.add(
+        PlayerCardHolding(
+            player_card_id=counter_card.id,
+            owner_user_id=counterparty.id,
+            quantity_total=1,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
     session.flush()
 
     service = PlayerCardMarketplaceService(session=session, wallet_service=WalletService())
-    listing = service.create_swap_listing(actor=owner, player_card_id=owner_card.id, requested_player_card_id=counter_card.id)
-    execution = service.execute_swap_listing(actor=counterparty, listing_id=listing["listing_id"], counterparty_player_card_id=counter_card.id)
+    listing = service.create_swap_listing(
+        actor=owner, player_card_id=owner_card.id, requested_player_card_id=counter_card.id
+    )
+    execution = service.execute_swap_listing(
+        actor=counterparty, listing_id=listing["listing_id"], counterparty_player_card_id=counter_card.id
+    )
 
-    owner_received = session.query(PlayerCardHolding).filter_by(owner_user_id=owner.id, player_card_id=counter_card.id).one()
-    counter_received = session.query(PlayerCardHolding).filter_by(owner_user_id=counterparty.id, player_card_id=owner_card.id).one()
+    owner_received = (
+        session.query(PlayerCardHolding).filter_by(owner_user_id=owner.id, player_card_id=counter_card.id).one()
+    )
+    counter_received = (
+        session.query(PlayerCardHolding).filter_by(owner_user_id=counterparty.id, player_card_id=owner_card.id).one()
+    )
 
     assert execution["status"] == "executed"
     assert owner_received.quantity_total == 1

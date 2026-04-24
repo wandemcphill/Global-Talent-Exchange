@@ -135,6 +135,7 @@ class NationalTeamRentalPlayerView(BaseModel):
     buyable: bool = True
     transferable: bool = True
     card_mint_eligible: bool = True
+    buy_cta_allowed: bool = True
     national_pool_only: bool = False
     supply_mode: str = "infinite"
     demand_multiplier: Decimal = Field(default=Decimal("1.0000"))
