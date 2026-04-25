@@ -420,7 +420,7 @@ MonoBehaviour:
   - {fileID: 1102900370650125870}
   goal1SpotCollider: {fileID: 3015554633036055274}
   goal2SpotCollider: {fileID: 3620078348537374839}
-  externalPlaybackFieldMaterial: {fileID: 2100000, guid: 132d904bef4146545858414b7377b66b, type: 2}
+  externalPlaybackFieldMaterial: {fileID: 2100000, guid: 4546b54a0e376aa469cae5cbe945d3d0, type: 2}
   externalPlaybackFieldLengthPadding: 6
   externalPlaybackFieldWidthPadding: 2.5
   externalPlaybackFieldThickness: 0.08
