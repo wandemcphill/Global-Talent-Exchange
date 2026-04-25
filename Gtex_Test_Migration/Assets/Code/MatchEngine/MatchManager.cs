@@ -34,10 +34,12 @@ using FStudio.UI.MatchThemes.MatchEvents;
 using FStudio.MatchEngine.Input;
 using FStudio.GTEX;
 using FStudio.GTEX.Playback;
+using UnityEngine.Rendering;
 
 namespace FStudio.MatchEngine {
     public class MatchManager : SceneObjectSingleton<MatchManager> {
         private const int RequiredPlayersPerTeam = 11;
+        private const string ExternalPlaybackFieldVisualName = "GTEX_ExternalPlaybackFieldUnderlay";
 
         [Header("Field Settings")]
         public int fieldEndX = default;
@@ -113,6 +115,10 @@ namespace FStudio.MatchEngine {
 
         [SerializeField] private BoxCollider goal1SpotCollider = default;
         [SerializeField] private BoxCollider goal2SpotCollider = default;
+        [SerializeField] private Material externalPlaybackFieldMaterial = default;
+        [SerializeField] private float externalPlaybackFieldLengthPadding = 6f;
+        [SerializeField] private float externalPlaybackFieldWidthPadding = 2.5f;
+        [SerializeField] private float externalPlaybackFieldThickness = 0.08f;
 
         public Transform[] celebrationPoints;
 
@@ -138,6 +144,10 @@ namespace FStudio.MatchEngine {
 
         private GeneralUserInput generalInput;
         private GtexPlaybackSanitizer externalPlaybackSanitizer;
+        private Transform externalPlaybackFieldVisual;
+        private MeshRenderer externalPlaybackFieldVisualRenderer;
+        private Material runtimeExternalPlaybackFieldMaterial;
+        private bool createdExternalPlaybackFieldVisual;
 
         /// <summary>
         /// Which team started, team1 or team2?
@@ -168,6 +178,7 @@ namespace FStudio.MatchEngine {
         protected override void OnDestroy() {
             CancelKickoffCounter();
             DisposeMatchScopedManagers();
+            DisposeExternalPlaybackFieldVisual();
             AllPlayers = Enumerable.Empty<PlayerBase>();
             CurrentMatchDetails = null;
             UserTeam = null;
@@ -683,8 +694,10 @@ namespace FStudio.MatchEngine {
             }
 
             ExternalPlaybackPitchSpace = null;
+            ExternalPlaybackPitchZones = null;
             externalPlaybackSanitizer = null;
             ExternalPlaybackTeleportDistance = 6f;
+            SetExternalPlaybackFieldVisual(false);
             SetPlayerExternalPlayback(false);
             SetRefereeExternalPlayback(false);
         }
@@ -723,6 +736,7 @@ namespace FStudio.MatchEngine {
             ExternalPlaybackPitchZones = pitchSpace != null ? new GtexPitchZoneHelper(pitchSpace) : null;
             externalPlaybackSanitizer = pitchSpace != null ? new GtexPlaybackSanitizer(pitchSpace) : null;
             if (pitchSpace == null) {
+                SetExternalPlaybackFieldVisual(false);
                 return;
             }
 
@@ -731,6 +745,7 @@ namespace FStudio.MatchEngine {
 
             AlignGoalToPitch(goalNet1, GtexPitchZoneHelper.HomeTeamSide, goal1SpotCollider, "GoalRaycastAreaHome");
             AlignGoalToPitch(goalNet2, GtexPitchZoneHelper.AwayTeamSide, goal2SpotCollider, "GoalRaycastAreaAway");
+            LayoutExternalPlaybackFieldVisual();
         }
 
         private void AlignGoalToPitch(
@@ -743,10 +758,9 @@ namespace FStudio.MatchEngine {
             }
 
             var homeGoal = teamSide == GtexPitchZoneHelper.HomeTeamSide;
-            var goalLineCenter = ExternalPlaybackPitchZones.GetGoalCenter(teamSide);
-            var infieldInset = Mathf.Clamp(ExternalPlaybackPitchSpace.Length * 0.014f, 1.1f, 1.6f);
+            var infieldInset = Mathf.Clamp(ExternalPlaybackPitchSpace.Length * 0.021f, 1.85f, 2.6f);
             var inwardDirection = homeGoal ? ExternalPlaybackPitchZones.HomeToAwayAxis : -ExternalPlaybackPitchZones.HomeToAwayAxis;
-            var visualGoalCenter = ExternalPlaybackPitchZones.ClampToPlayableGrass(goalLineCenter + inwardDirection * infieldInset, 0f);
+            var visualGoalCenter = ExternalPlaybackPitchZones.GetGoalVisualCenter(teamSide, infieldInset);
             var previousPosition = goalNet.transform.position;
             goalNet.AlignToPitch(
                 visualGoalCenter,
@@ -758,21 +772,192 @@ namespace FStudio.MatchEngine {
                 goalSpotCollider.transform.position += positionDelta;
             }
 
-            var goalRaycastArea = FindGoalSceneTransform(goalRaycastAreaName);
+            var goalRaycastArea = FindSceneTransform(goalRaycastAreaName);
             if (goalRaycastArea != null) {
                 goalRaycastArea.position += positionDelta;
             }
 
-            if ((Application.isEditor || Debug.isDebugBuild) &&
-                !ExternalPlaybackPitchZones.IsLegalGoalVisualPosition(goalNet.transform, teamSide)) {
-                Debug.LogWarning(
-                    "[GTEX] Goal visual outside legal playback zone after alignment. teamSide=" +
-                    teamSide +
-                    " position=" + goalNet.transform.position.ToString("F2"));
+            if (Application.isEditor || Debug.isDebugBuild) {
+                ExternalPlaybackPitchZones.ValidateGoalVisual(
+                    goalNet.transform,
+                    teamSide,
+                    homeGoal ? "MatchManager Left Goal" : "MatchManager Right Goal");
             }
         }
 
-        private Transform FindGoalSceneTransform(string objectName) {
+        private void LayoutExternalPlaybackFieldVisual() {
+            if (ExternalPlaybackPitchSpace == null || ExternalPlaybackPitchZones == null) {
+                SetExternalPlaybackFieldVisual(false);
+                return;
+            }
+
+            var fieldVisual = EnsureExternalPlaybackFieldVisual();
+            if (fieldVisual == null || externalPlaybackFieldVisualRenderer == null) {
+                return;
+            }
+
+            var pitchSpace = ExternalPlaybackPitchSpace;
+            var pitchZones = ExternalPlaybackPitchZones;
+            var lengthPadding = Mathf.Clamp(externalPlaybackFieldLengthPadding, 0f, 18f);
+            var widthPadding = Mathf.Clamp(externalPlaybackFieldWidthPadding, 0f, 8f);
+            var thickness = Mathf.Clamp(externalPlaybackFieldThickness, 0.03f, 0.2f);
+            var targetRotation = Quaternion.LookRotation(pitchZones.LateralAxis, Vector3.up);
+            var targetPosition = new Vector3(
+                pitchSpace.Center.x,
+                pitchSpace.GrassY - thickness * 0.5f - 0.03f,
+                pitchSpace.Center.z);
+
+            fieldVisual.SetPositionAndRotation(targetPosition, targetRotation);
+            fieldVisual.localScale = new Vector3(
+                Mathf.Max(1f, pitchSpace.Length + lengthPadding * 2f),
+                thickness,
+                Mathf.Max(1f, pitchSpace.Width + widthPadding * 2f));
+
+            var renderer = externalPlaybackFieldVisualRenderer;
+            renderer.sharedMaterial = ResolveExternalPlaybackFieldMaterial();
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = true;
+            renderer.enabled = true;
+            renderer.gameObject.SetActive(true);
+
+            var templateGround = FindSceneTransform("fieldGround");
+            var templateRenderer = templateGround != null ? templateGround.GetComponent<MeshRenderer>() : null;
+            if (templateRenderer != null) {
+                templateRenderer.enabled = false;
+            }
+        }
+
+        private Transform EnsureExternalPlaybackFieldVisual() {
+            if (externalPlaybackFieldVisual != null && externalPlaybackFieldVisualRenderer != null) {
+                return externalPlaybackFieldVisual;
+            }
+
+            var existing = FindSceneTransform(ExternalPlaybackFieldVisualName);
+            if (existing != null) {
+                externalPlaybackFieldVisual = existing;
+                externalPlaybackFieldVisualRenderer = existing.GetComponent<MeshRenderer>();
+                return externalPlaybackFieldVisual;
+            }
+
+            var parent = FindSceneTransform("Field");
+            var visualObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            visualObject.name = ExternalPlaybackFieldVisualName;
+            visualObject.layer = parent != null ? parent.gameObject.layer : gameObject.layer;
+            visualObject.transform.SetParent(parent != null ? parent : transform, false);
+
+            var collider = visualObject.GetComponent<Collider>();
+            if (collider != null) {
+                if (Application.isPlaying) {
+                    Destroy(collider);
+                } else {
+                    DestroyImmediate(collider);
+                }
+            }
+
+            externalPlaybackFieldVisual = visualObject.transform;
+            externalPlaybackFieldVisualRenderer = visualObject.GetComponent<MeshRenderer>();
+            createdExternalPlaybackFieldVisual = true;
+            return externalPlaybackFieldVisual;
+        }
+
+        private Material ResolveExternalPlaybackFieldMaterial() {
+            if (runtimeExternalPlaybackFieldMaterial != null) {
+                return runtimeExternalPlaybackFieldMaterial;
+            }
+
+            if (externalPlaybackFieldMaterial != null) {
+                runtimeExternalPlaybackFieldMaterial = new Material(externalPlaybackFieldMaterial);
+            } else {
+                var shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null) {
+                    shader = Shader.Find("Standard");
+                }
+
+                if (shader == null) {
+                    return null;
+                }
+
+                runtimeExternalPlaybackFieldMaterial = new Material(shader);
+            }
+
+            runtimeExternalPlaybackFieldMaterial.name = "GTEX_ExternalPlaybackFieldUnderlayMat";
+            ApplyExternalPlaybackFieldTint(runtimeExternalPlaybackFieldMaterial);
+            return runtimeExternalPlaybackFieldMaterial;
+        }
+
+        private void ApplyExternalPlaybackFieldTint(Material material) {
+            if (material == null) {
+                return;
+            }
+
+            var fieldTint = new Color(0.16f, 0.46f, 0.18f, 1f);
+            if (material.HasProperty("_BaseColor")) {
+                var baseColor = material.GetColor("_BaseColor");
+                if (GetMaxColorComponent(baseColor) <= 0.05f) {
+                    material.SetColor("_BaseColor", fieldTint);
+                }
+            }
+
+            if (material.HasProperty("_Color")) {
+                var color = material.GetColor("_Color");
+                if (GetMaxColorComponent(color) <= 0.05f) {
+                    material.SetColor("_Color", fieldTint);
+                }
+            }
+
+            if (!material.HasProperty("_BaseColor") && material.HasProperty("_Color")) {
+                material.SetColor("_Color", fieldTint);
+            }
+
+            if (material.HasProperty("_Smoothness")) {
+                material.SetFloat("_Smoothness", 0f);
+            }
+
+            if (material.HasProperty("_Glossiness")) {
+                material.SetFloat("_Glossiness", 0f);
+            }
+        }
+
+        private static float GetMaxColorComponent(Color color) {
+            return Mathf.Max(color.r, Mathf.Max(color.g, color.b));
+        }
+
+        private void SetExternalPlaybackFieldVisual(bool value) {
+            if (externalPlaybackFieldVisualRenderer == null) {
+                return;
+            }
+
+            externalPlaybackFieldVisualRenderer.enabled = value;
+            if (externalPlaybackFieldVisual != null) {
+                externalPlaybackFieldVisual.gameObject.SetActive(value);
+            }
+        }
+
+        private void DisposeExternalPlaybackFieldVisual() {
+            if (runtimeExternalPlaybackFieldMaterial != null) {
+                if (Application.isPlaying) {
+                    Destroy(runtimeExternalPlaybackFieldMaterial);
+                } else {
+                    DestroyImmediate(runtimeExternalPlaybackFieldMaterial);
+                }
+
+                runtimeExternalPlaybackFieldMaterial = null;
+            }
+
+            if (createdExternalPlaybackFieldVisual && externalPlaybackFieldVisual != null) {
+                if (Application.isPlaying) {
+                    Destroy(externalPlaybackFieldVisual.gameObject);
+                } else {
+                    DestroyImmediate(externalPlaybackFieldVisual.gameObject);
+                }
+            }
+
+            externalPlaybackFieldVisual = null;
+            externalPlaybackFieldVisualRenderer = null;
+            createdExternalPlaybackFieldVisual = false;
+        }
+
+        private Transform FindSceneTransform(string objectName) {
             if (string.IsNullOrWhiteSpace(objectName)) {
                 return null;
             }
@@ -798,6 +983,7 @@ namespace FStudio.MatchEngine {
             ExternalPlaybackPitchZones = null;
             externalPlaybackSanitizer = null;
             ExternalPlaybackTeleportDistance = 6f;
+            SetExternalPlaybackFieldVisual(false);
             SetPlayerExternalPlayback(false);
             SetRefereeExternalPlayback(false);
 
@@ -825,8 +1011,10 @@ namespace FStudio.MatchEngine {
             GameTeam2?.Clear();
             ExternalPlaybackEnabled = false;
             ExternalPlaybackPitchSpace = null;
+            ExternalPlaybackPitchZones = null;
             externalPlaybackSanitizer = null;
             ExternalPlaybackTeleportDistance = 6f;
+            SetExternalPlaybackFieldVisual(false);
             SetPlayerExternalPlayback(false);
             SetRefereeExternalPlayback(false);
 
