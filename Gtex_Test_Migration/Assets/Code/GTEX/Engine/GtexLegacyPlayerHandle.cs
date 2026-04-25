@@ -22,6 +22,13 @@ namespace FStudio.GTEX.Engine
 
         public Vector3 Forward => IsValid ? player.PlayerController.Forward : Vector3.forward;
 
+        public Transform UnityTransform =>
+            IsValid && player.PlayerController.UnityObject != null
+                ? player.PlayerController.UnityObject.transform
+                : null;
+
+        public PlayerAnimator Animator => IsValid ? player.PlayerController.Animator : null;
+
         public Positions PositionRole =>
             player != null && player.MatchPlayer != null ? player.MatchPlayer.Position : default;
 

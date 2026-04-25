@@ -66,7 +66,7 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
         public float Height => collider != null ? collider.height : 0f;
 
-        private Vector3 targetAnimatorDirection;
+        private Vector2 targetAnimatorDirection;
         private Vector3 targetPosition;
         private bool externalPlaybackEnabled;
         private bool hasExternalPlaybackPose;
@@ -76,6 +76,15 @@ namespace FStudio.MatchEngine.Players.PlayerController
         [SerializeField] private float externalPlaybackMoveSpeed = 24f;
         [SerializeField] private float externalPlaybackTurnSpeed = 16f;
         [SerializeField] private float externalPlaybackTeleportDistance = 4f;
+
+        private const float LegacyAnimatorParameterLerpSpeed = 4f;
+        private const float LegacyMovementDirectionSpeedLeaningModifier = 2f;
+        private const float LegacyMovementDirectionAngleLeaningModifier = 0.05f;
+        private const float LegacyDirectionRecoveryWhenStop = 5f;
+        private const float LegacyStoppingSpeed = 5f;
+        private const float LegacyMinMoveSpeedToMove = 0.5f;
+        private const float LegacyLookApprovalAngle = 60f;
+        private const float LegacyLookBallHeightApprovalBonus = 60f;
 
         private void Awake()
         {
@@ -112,11 +121,7 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
         private void Start()
         {
-            if (BasePlayer != null)
-            {
-                playerAnimator.SetFloat(PlayerAnimatorVariable.Agility, 0.5f + (BasePlayer.MatchPlayer.ActualAgility / 200f));
-                UI.SetName(BasePlayer.MatchPlayer.Player.Name);
-            }
+            ApplyBasePlayerPresentation();
         }
 
         private void OnDestroy()
@@ -269,12 +274,113 @@ namespace FStudio.MatchEngine.Players.PlayerController
             playerAnimator.SetLook(in dT, target, weight);
         }
 
+        private (float turnResult, float angleDifferency) AgileToDirection(Vector3 targetDirection)
+        {
+            targetDirection.y = 0f;
+            if (targetDirection.sqrMagnitude <= 0.0001f)
+            {
+                return (1f, 0f);
+            }
+
+            targetDirection.Normalize();
+            var currentDirection = Direction;
+            currentDirection.y = 0f;
+            if (currentDirection.sqrMagnitude <= 0.0001f)
+            {
+                currentDirection = transform.forward;
+                currentDirection.y = 0f;
+            }
+
+            if (currentDirection.sqrMagnitude <= 0.0001f)
+            {
+                currentDirection = targetDirection;
+            }
+            else
+            {
+                currentDirection.Normalize();
+            }
+
+            var angleDifferency = Mathf.Abs(Vector3.SignedAngle(currentDirection, targetDirection, Vector3.up));
+            var agility =
+                BasePlayer != null && BasePlayer.MatchPlayer != null
+                    ? Mathf.Max(0.25f, BasePlayer.MatchPlayer.GetAgility())
+                    : 4f;
+
+            var settings = EngineSettings.Current;
+            var moveHardness =
+                settings != null && settings.AgileToDirectionMoveSpeedHardness != null
+                    ? settings.AgileToDirectionMoveSpeedHardness.Evaluate(MoveSpeed)
+                    : Mathf.Lerp(0.8f, 1.8f, Mathf.Clamp01(MoveSpeed / 6f));
+            var angleHardness =
+                settings != null && settings.AgileToDirectionAngleDifferencyHardness != null
+                    ? settings.AgileToDirectionAngleDifferencyHardness.Evaluate(angleDifferency)
+                    : Mathf.Lerp(0.6f, 2.25f, Mathf.InverseLerp(0f, 180f, angleDifferency));
+
+            var turnDifficulty = Mathf.Max(0.1f, moveHardness * angleHardness);
+            var turnResult = Mathf.Clamp(agility / (turnDifficulty + 1f), 0.25f, 12f);
+            return (turnResult, angleDifferency);
+        }
+
+        private void CalculateAnimatorDirection()
+        {
+            var forward = transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude <= 0.0001f)
+            {
+                forward = Vector3.forward;
+            }
+            else
+            {
+                forward.Normalize();
+            }
+
+            var desiredDirection = Direction;
+            desiredDirection.y = 0f;
+            if (desiredDirection.sqrMagnitude <= 0.0001f)
+            {
+                targetAnimatorDirection = Vector2.zero;
+                return;
+            }
+
+            desiredDirection.Normalize();
+            var angle = Vector3.SignedAngle(forward, desiredDirection, Vector3.up);
+            targetAnimatorDirection = new Vector2(
+                Mathf.Cos(angle * Mathf.Deg2Rad),
+                Mathf.Sin(angle * Mathf.Deg2Rad));
+        }
+
         public void SetPlayer(int number, PlayerBase basePlayer, Material kitMaterial)
         {
             this.BasePlayer = basePlayer;
             if (playerGraphic != null && basePlayer != null && basePlayer.MatchPlayer != null)
             {
                 playerGraphic.SetPlayer(number, kitMaterial, basePlayer.MatchPlayer.Player);
+            }
+
+            ApplyBasePlayerPresentation();
+
+            if (shadow == null && ShadowRenderer.Current != null)
+            {
+                shadow = ShadowRenderer.Current.Get();
+            }
+        }
+
+        private void ApplyBasePlayerPresentation()
+        {
+            if (BasePlayer == null || BasePlayer.MatchPlayer == null || BasePlayer.MatchPlayer.Player == null)
+            {
+                return;
+            }
+
+            gameObject.name = BasePlayer.MatchPlayer.Player.Name;
+            if (playerAnimator != null)
+            {
+                playerAnimator.SetFloat(PlayerAnimatorVariable.Agility, BasePlayer.MatchPlayer.ActualAgility / 100f);
+            }
+
+            if (UI != null)
+            {
+                UI.SetName(BasePlayer.MatchPlayer.Player.Name);
             }
         }
 
@@ -285,37 +391,65 @@ namespace FStudio.MatchEngine.Players.PlayerController
                 return false;
             }
 
+            this.targetPosition = targetPosition;
+
             targetPosition.y = ResolveGroundedY();
-            var toTarget = targetPosition - Position;
-            toTarget.y = 0f;
-            var distance = toTarget.magnitude;
-            if (distance <= 0.05f)
+            var distance = Vector3.Distance(Position, targetPosition);
+            var targetDirection = targetPosition - Position;
+            targetDirection.y = 0f;
+
+            var reachRadius = collider != null ? collider.radius : 0.35f;
+            if (distance > reachRadius)
+            {
+                if (targetDirection.sqrMagnitude <= 0.0001f)
+                {
+                    targetDirection = transform.forward;
+                    targetDirection.y = 0f;
+                }
+
+                targetDirection.Normalize();
+
+                var newRotation = Quaternion.LookRotation(targetDirection);
+                var directionAgile = AgileToDirection(targetDirection);
+                if (Direction.sqrMagnitude > 0.0001f)
+                {
+                    var currentRotation = Quaternion.LookRotation(Direction.normalized);
+                    Direction = Quaternion.Slerp(
+                            currentRotation,
+                            newRotation,
+                            Mathf.Max(deltaTime, 0f) * directionAgile.turnResult) *
+                        Vector3.forward;
+                }
+                else
+                {
+                    Direction = newRotation * Vector3.forward;
+                }
+
+                var targetMovement = 1f - (directionAgile.angleDifferency / 180f);
+                switch (movementType)
+                {
+                    case MovementType.Relax:
+                        targetMovement *= 0.25f;
+                        break;
+                    case MovementType.Normal:
+                        targetMovement *= 0.75f;
+                        break;
+                }
+
+                TargetMoveSpeed = Mathf.Clamp01(targetMovement);
+            }
+            else
             {
                 Stop(in deltaTime);
                 return true;
             }
 
-            var targetDirection = toTarget / Mathf.Max(distance, 0.001f);
-            var targetSpeed =
-                movementType switch
-                {
-                    MovementType.Relax => 2.2f,
-                    MovementType.Normal => 3.3f,
-                    _ => 4.35f,
-                };
-            TargetMoveSpeed = targetSpeed;
-            MoveSpeed = Mathf.MoveTowards(MoveSpeed, TargetMoveSpeed, 8f * Mathf.Max(deltaTime, 0f));
-            var nextPosition = Vector3.MoveTowards(Position, targetPosition, MoveSpeed * Mathf.Max(deltaTime, 0f));
-
-            Direction = targetDirection;
-            SetPosition(nextPosition);
             if (faceTowards)
             {
-                LookTo(in deltaTime, targetDirection);
+                LookTo(in deltaTime, targetPosition - Position);
             }
 
-            ApplyLegacyLocomotionAnimator(targetDirection, MoveSpeed);
-            return Vector3.Distance(nextPosition, targetPosition) <= 0.06f;
+            return false;
         }
 
         public bool LookTo(in float deltaTime, Vector3 lookDirection)
@@ -328,12 +462,34 @@ namespace FStudio.MatchEngine.Players.PlayerController
             lookDirection.y = 0f;
             if (lookDirection.sqrMagnitude <= 0.0001f)
             {
-                return false;
+                return true;
             }
 
-            var targetRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
-            SetRotation(Quaternion.Slerp(Rotation, targetRotation, Mathf.Clamp01(deltaTime * 7f)));
-            return true;
+            lookDirection.Normalize();
+            var agileSpeed = AgileToDirection(lookDirection).turnResult;
+            var holdingBallModifier =
+                BasePlayer != null && BasePlayer.IsHoldingBall
+                    ? Mathf.Max(1f, EngineSettings.Current != null ? EngineSettings.Current.AgileToDirectionWhenHoldingBallModifier : 1f)
+                    : 1f;
+            LerpRotation(
+                in deltaTime,
+                Quaternion.LookRotation(lookDirection, Vector3.up),
+                agileSpeed * holdingBallModifier);
+
+            var angle = Vector3.SignedAngle(transform.forward, lookDirection, Vector3.up);
+            var ballHeightMod = 0f;
+            if (BasePlayer != null &&
+                BasePlayer.IsHoldingBall &&
+                !BasePlayer.IsThrowHolder &&
+                Ball.Current != null)
+            {
+                ballHeightMod = Ball.Current.transform.position.y * LegacyLookBallHeightApprovalBonus;
+            }
+
+            var approvalAngle = BasePlayer != null && BasePlayer.IsThrowHolder
+                ? 10f
+                : LegacyLookApprovalAngle + ballHeightMod;
+            return Mathf.Abs(angle) <= approvalAngle;
         }
 
         public void Stop(in float deltaTime)
@@ -343,10 +499,8 @@ namespace FStudio.MatchEngine.Players.PlayerController
                 return;
             }
 
-            TargetMoveSpeed = 0f;
-            MoveSpeed = Mathf.MoveTowards(MoveSpeed, 0f, 10f * Mathf.Max(deltaTime, 0f));
-            Direction = Vector3.zero;
-            ApplyLegacyLocomotionAnimator(Vector3.zero, MoveSpeed);
+            TargetMoveSpeed = Mathf.Lerp(TargetMoveSpeed, 0f, Mathf.Max(deltaTime, 0f) * LegacyStoppingSpeed);
+            Direction = Vector3.Lerp(Direction, transform.forward, Mathf.Max(deltaTime, 0f) * LegacyDirectionRecoveryWhenStop);
         }
 
         public void ProcessMovement(in float time, in float deltaTime)
@@ -356,21 +510,109 @@ namespace FStudio.MatchEngine.Players.PlayerController
                 return;
             }
 
-            MoveSpeed = Mathf.MoveTowards(MoveSpeed, TargetMoveSpeed, 6f * Mathf.Max(deltaTime, 0f));
-            if (Direction.sqrMagnitude <= 0.0001f)
+            var safeDeltaTime = Mathf.Max(deltaTime, 0f);
+            var animatorLerpSpeed = safeDeltaTime * LegacyAnimatorParameterLerpSpeed;
+            var dribbleModifier = BasePlayer != null && BasePlayer.MatchPlayer != null
+                ? BasePlayer.MatchPlayer.GetDribbleSpeedModifier()
+                : 1f;
+            var topSpeed = BasePlayer != null && BasePlayer.MatchPlayer != null
+                ? BasePlayer.MatchPlayer.GetTopSpeed()
+                : 4.5f;
+            var finalSpeed =
+                TargetMoveSpeed *
+                topSpeed *
+                (BasePlayer != null && BasePlayer.IsHoldingBall ? dribbleModifier : 1f);
+
+            var shouldMove = finalSpeed > MoveSpeed;
+            var acceleration =
+                finalSpeed < MoveSpeed
+                    ? 3f
+                    : (BasePlayer != null && BasePlayer.MatchPlayer != null
+                        ? BasePlayer.MatchPlayer.GetAcceleration()
+                        : 6f);
+
+            MoveSpeed = Mathf.Lerp(MoveSpeed, finalSpeed, safeDeltaTime * acceleration);
+
+            var angle = Direction.sqrMagnitude > 0.0001f
+                ? Mathf.Abs(Vector3.SignedAngle(transform.forward, Direction, Vector3.up))
+                : 0f;
+            var movementLean =
+                Mathf.Abs(finalSpeed - MoveSpeed) * LegacyMovementDirectionSpeedLeaningModifier +
+                angle * LegacyMovementDirectionAngleLeaningModifier;
+            movementLean /= angle / 90f + 1f;
+
+            var shouldStop =
+                !enabled ||
+                MatchManager.Current == null ||
+                (!MatchManager.Current.MatchFlags.HasFlag(MatchStatus.Playing) &&
+                 !MatchManager.Current.MatchFlags.HasFlag(MatchStatus.Special));
+
+            ApplyLegacyLocomotionAnimator(
+                shouldStop ? Vector3.zero : Direction,
+                shouldStop ? 0f : MoveSpeed,
+                animatorLerpSpeed,
+                shouldStop);
+
+            if (shouldStop)
             {
-                ApplyLegacyLocomotionAnimator(Vector3.zero, MoveSpeed);
+                return;
+            }
+
+            if (Direction.sqrMagnitude > 0.0001f && (shouldMove || MoveSpeed > LegacyMinMoveSpeedToMove))
+            {
+                var moveDirection = Direction.normalized;
+                var nextPosition = Position + moveDirection * Mathf.Min(finalSpeed, MoveSpeed + movementLean * 0.08f) * safeDeltaTime;
+                SetPosition(nextPosition);
             }
         }
 
         public void Up(in float dT, MatchStatus matchStatus, Ball ball)
         {
+            if (externalPlaybackEnabled ||
+                playerAnimator == null ||
+                BasePlayer == null ||
+                ball == null ||
+                !BasePlayer.IsHoldingBall ||
+                (!BasePlayer.IsThrowHolder && matchStatus != MatchStatus.Playing))
+            {
+                return;
+            }
+
+            var followSpeedMod = 1f;
+            if (BasePlayer.ActiveBehaviour is ChipShootingBehaviour ||
+                BasePlayer.ActiveBehaviour is ShootingBehaviour ||
+                BasePlayer.ActiveBehaviour is PassingBehaviour ||
+                BasePlayer.ActiveBehaviour is CrossingBehaviour)
+            {
+                followSpeedMod = 1f - ball.transform.position.y;
+            }
+
+            followSpeedMod = Mathf.Clamp(followSpeedMod, 0.4f, 1f);
+
+            var ballHolderSituation = PlayerBallPoint.Situation.Normal;
+            if (BasePlayer.IsThrowHolder)
+            {
+                ballHolderSituation = PlayerBallPoint.Situation.ThrowIn;
+            }
+            else if (BasePlayer.IsGKUntouchable && !BasePlayer.IsGoalKickHolder)
+            {
+                ballHolderSituation = PlayerBallPoint.Situation.GK;
+            }
+
+            var holdingPosition = playerAnimator.BallPosition(ballHolderSituation);
+            var holdingRotation = playerAnimator.BallRotation(ballHolderSituation);
+            ball.HolderBehave(holdingPosition, holdingRotation, in dT, followSpeedMod);
         }
 
         public bool HitBall(in Vector3 targetVelocity, PlayerAnimatorVariable animatorVariable, out PlayerAnimatorVariable result, in float ballHoldTime, bool disableVolley = false)
         {
-            result = animatorVariable;
-            return false;
+            if (playerAnimator == null)
+            {
+                result = animatorVariable;
+                return false;
+            }
+
+            return playerAnimator.PlayBallHitAnimation(in targetVelocity, animatorVariable, out result, in ballHoldTime, disableVolley);
         }
 
         private void OnCollisionEnter(Collision collision)
@@ -389,25 +631,43 @@ namespace FStudio.MatchEngine.Players.PlayerController
             BasePlayer?.BallHitEvent();
         }
 
-        private void ApplyLegacyLocomotionAnimator(Vector3 worldDirection, float moveSpeed)
+        private void ApplyLegacyLocomotionAnimator(Vector3 worldDirection, float moveSpeed, float animatorLerpSpeed, bool shouldStop)
         {
             if (playerAnimator == null)
             {
                 return;
             }
 
-            var normalizedSpeed = Mathf.Clamp01(moveSpeed / 4.5f);
-            playerAnimator.SetFloat(PlayerAnimatorVariable.MoveSpeed, normalizedSpeed);
-            if (worldDirection.sqrMagnitude <= 0.0001f)
+            playerAnimator.SetFloat(PlayerAnimatorVariable.MoveSpeed, shouldStop ? 0f : Mathf.Max(LegacyMinMoveSpeedToMove, moveSpeed));
+
+            Direction = worldDirection.sqrMagnitude > 0.0001f ? worldDirection.normalized : Direction;
+            CalculateAnimatorDirection();
+            if (shouldStop)
             {
-                playerAnimator.SetFloat(PlayerAnimatorVariable.Horizontal, 0f);
-                playerAnimator.SetFloat(PlayerAnimatorVariable.Vertical, 0f);
-                return;
+                targetAnimatorDirection = Vector2.zero;
             }
 
-            var localDirection = transform.InverseTransformDirection(worldDirection.normalized);
-            playerAnimator.SetFloat(PlayerAnimatorVariable.Horizontal, Mathf.Clamp(localDirection.x, -1f, 1f));
-            playerAnimator.SetFloat(PlayerAnimatorVariable.Vertical, Mathf.Clamp(localDirection.z, -1f, 1f));
+            if (Mathf.Abs(targetAnimatorDirection.x) < 0.001f)
+            {
+                targetAnimatorDirection.x = 0f;
+            }
+
+            if (Mathf.Abs(targetAnimatorDirection.y) < 0.001f)
+            {
+                targetAnimatorDirection.y = 0f;
+            }
+
+            targetAnimatorDirection *= Mathf.Clamp01(TargetMoveSpeed);
+
+            var currentAnimatorHorizontal = playerAnimator.GetFloat(PlayerAnimatorVariable.Horizontal);
+            var currentAnimatorVertical = playerAnimator.GetFloat(PlayerAnimatorVariable.Vertical);
+
+            currentAnimatorHorizontal = Mathf.Lerp(currentAnimatorHorizontal, targetAnimatorDirection.y, animatorLerpSpeed);
+            currentAnimatorVertical = Mathf.Lerp(currentAnimatorVertical, targetAnimatorDirection.x, animatorLerpSpeed);
+
+            playerAnimator.SetFloat(PlayerAnimatorVariable.Horizontal, currentAnimatorHorizontal);
+            playerAnimator.SetFloat(PlayerAnimatorVariable.Vertical, currentAnimatorVertical);
+            playerAnimator.SetBool(PlayerAnimatorVariable.IsHoldingBall, BasePlayer != null && BasePlayer.IsHoldingBall);
         }
     }
 }

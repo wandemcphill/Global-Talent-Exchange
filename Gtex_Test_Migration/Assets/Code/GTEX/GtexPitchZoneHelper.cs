@@ -46,6 +46,12 @@ namespace FStudio.GTEX.Playback
 
         public GtexPitchSpace PitchSpace => pitchSpace;
 
+        public Vector3 PitchCenter => pitchSpace != null ? pitchSpace.Center : Vector3.zero;
+
+        public float HalfLength => pitchSpace != null ? pitchSpace.HalfLength : 52.5f;
+
+        public float HalfWidth => pitchSpace != null ? pitchSpace.HalfWidth : 34f;
+
         public Vector3 HomeToAwayAxis => homeToAwayAxis;
 
         public Vector3 LateralAxis => lateralAxis;
@@ -165,6 +171,55 @@ namespace FStudio.GTEX.Playback
             return Vector3.Dot(flattenedForward, expectedForward) >= 0.4f;
         }
 
+        public void SnapGoalVisual(Transform goal, int teamSide, bool rotateToFacePitch = true)
+        {
+            if (goal == null || pitchSpace == null)
+            {
+                return;
+            }
+
+            goal.position = GetGoalVisualCenter(teamSide, Mathf.Clamp(pitchSpace.Length * 0.021f, 1.85f, 2.6f));
+            if (!rotateToFacePitch)
+            {
+                return;
+            }
+
+            var look = Vector3.ProjectOnPlane(PitchCenter - goal.position, Vector3.up);
+            if (look.sqrMagnitude <= 0.001f)
+            {
+                return;
+            }
+
+            goal.rotation = Quaternion.LookRotation(look.normalized, Vector3.up);
+        }
+
+        public void ValidateGoalVisual(Transform goal, int teamSide, string label)
+        {
+            if (goal == null)
+            {
+                Debug.LogWarning("[GTEX Pitch] Missing goal visual: " + label);
+                return;
+            }
+
+            if (IsLegalGoalVisualPosition(goal, teamSide))
+            {
+                return;
+            }
+
+            var local = ToPitchLocal(goal.position);
+            Debug.LogWarning(
+                "[GTEX Pitch] Goal visual illegal: " +
+                label +
+                ". local=(" +
+                local.x.ToString("0.##") +
+                "," +
+                local.y.ToString("0.##") +
+                ") side=" +
+                (IsHomeTeam(teamSide) ? "home" : "away") +
+                " expectedGoalLine=" +
+                GetGoalLineCoordinate(teamSide).ToString("0.##"));
+        }
+
         public Vector3 GetGoalCenter(int teamSide)
         {
             if (pitchSpace == null)
@@ -175,6 +230,59 @@ namespace FStudio.GTEX.Playback
             return IsHomeTeam(teamSide)
                 ? pitchSpace.Center - homeToAwayAxis * pitchSpace.HalfLength
                 : pitchSpace.Center + homeToAwayAxis * pitchSpace.HalfLength;
+        }
+
+        public Vector3 GetGoalVisualCenter(int teamSide, float infieldInset, float lateralOffset = 0f)
+        {
+            if (pitchSpace == null)
+            {
+                return Vector3.zero;
+            }
+
+            var inwardDirection = IsHomeTeam(teamSide) ? homeToAwayAxis : -homeToAwayAxis;
+            var target =
+                GetGoalCenter(teamSide) +
+                inwardDirection * Mathf.Max(0f, infieldInset) +
+                lateralAxis * lateralOffset;
+            target.y = pitchSpace.GrassY;
+            return ClampToPlayableGrass(target, 0.18f);
+        }
+
+        public Vector3 GetDefaultGoalkeeperHome(int teamSide, float y)
+        {
+            if (pitchSpace == null)
+            {
+                return new Vector3(0f, y, 0f);
+            }
+
+            var inwardDirection = IsHomeTeam(teamSide) ? homeToAwayAxis : -homeToAwayAxis;
+            var homeTarget =
+                GetGoalCenter(teamSide) +
+                inwardDirection * Mathf.Clamp(GetSixYardDepth() * 0.36f, 1.25f, 2.1f);
+            homeTarget.y = y;
+            return ClampGoalkeeperHome(homeTarget, teamSide);
+        }
+
+        public Vector3 GetKeeperBallAngleTarget(Vector3 ballPos, Vector3 keeperCurrentPos, int teamSide)
+        {
+            if (pitchSpace == null)
+            {
+                return keeperCurrentPos;
+            }
+
+            var goalCenter = GetGoalCenter(teamSide);
+            var inwardDirection = IsHomeTeam(teamSide) ? homeToAwayAxis : -homeToAwayAxis;
+            var ballLocal = ToPitchLocal(ballPos);
+            var signedBallX = IsHomeTeam(teamSide) ? ballLocal.x : -ballLocal.x;
+            var danger = Mathf.InverseLerp(0f, pitchSpace.HalfLength, signedBallX);
+            var depthFromGoalLine = Mathf.Lerp(2f, Mathf.Min(GetGoalkeeperHomeDepth() - 1f, 7.5f), danger);
+            var lateral = Mathf.Clamp(ballLocal.y * 0.28f, -GetSixYardHalfWidth(), GetSixYardHalfWidth());
+            var target =
+                goalCenter +
+                inwardDirection * depthFromGoalLine +
+                lateralAxis * lateral;
+            target.y = keeperCurrentPos.y;
+            return ClampGoalkeeperHome(target, teamSide);
         }
 
         public float GetGoalLineCoordinate(int teamSide)
@@ -201,10 +309,26 @@ namespace FStudio.GTEX.Playback
 
             var cameraMargin =
                 Mathf.Clamp(
-                    Mathf.Min(pitchSpace.HalfLength * 0.09f, pitchSpace.HalfWidth * 0.16f),
-                    2.8f,
-                    6.25f);
+                    Mathf.Min(pitchSpace.HalfLength * 0.11f, pitchSpace.HalfWidth * 0.18f),
+                    4.4f,
+                    8.4f);
             return ClampToPlayableGrass(target, cameraMargin);
+        }
+
+        public float GetInteriorFreedom01(Vector3 worldPos, float safetyMargin)
+        {
+            if (pitchSpace == null)
+            {
+                return 1f;
+            }
+
+            var margin = Mathf.Max(0.1f, safetyMargin);
+            var clamped = ClampToPlayableGrass(worldPos, 0f);
+            var local = ToPitchLocal(clamped);
+            var distanceToLengthEdge = Mathf.Max(0f, pitchSpace.HalfLength - Mathf.Abs(local.x));
+            var distanceToWidthEdge = Mathf.Max(0f, pitchSpace.HalfWidth - Mathf.Abs(local.y));
+            var minDistanceToEdge = Mathf.Min(distanceToLengthEdge, distanceToWidthEdge);
+            return Mathf.Clamp01(minDistanceToEdge / margin);
         }
 
         public float DistanceToGoalCenter(Vector3 worldPos, int teamSide)

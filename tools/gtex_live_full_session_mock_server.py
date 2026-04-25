@@ -10,6 +10,7 @@ from typing import Any
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, WebSocket
 from fastapi.responses import JSONResponse
+from starlette.websockets import WebSocketState
 
 ACCESS_TOKEN = "live-full-session-access-token"  # pragma: allowlist secret
 REFRESH_TOKEN = "live-full-session-refresh-token"  # pragma: allowlist secret
@@ -22,6 +23,12 @@ FULLTIME_MINUTE = 90.0
 FRAME_MINUTE_STEP = 0.1
 FULLTIME_SEQUENCE = int(FULLTIME_MINUTE / FRAME_MINUTE_STEP)
 WEBSOCKET_FRAME_INTERVAL_SECONDS = 1.0
+SEND_TIMEOUT_SECONDS = 3.0
+CLIENT_IDLE_GRACE_SECONDS = 45.0
+PLAYABLE_X_MIN = 7.5
+PLAYABLE_X_MAX = 97.5
+PLAYABLE_Z_MIN = 8.5
+PLAYABLE_Z_MAX = 56.5
 HOLDER_WINDOW_MINUTES = 4.5
 HOLDER_CYCLE = (
     "home-8",
@@ -208,7 +215,8 @@ def _ball_state_for_minute(minute: float, holder_id: str) -> tuple[float, float,
         start_x = 57.0 if not previous_same_team else 39.0
         end_x = 13.0 if next_same_team else 31.0
     ball_x = start_x + ((end_x - start_x) * eased)
-    ball_z = max(8.0, min(60.0, lane_center + lane_curve))
+    ball_x = max(PLAYABLE_X_MIN + 3.0, min(PLAYABLE_X_MAX - 3.0, ball_x))
+    ball_z = _clamp_pitch_z(lane_center + lane_curve)
     return (round(ball_x, 3), round(ball_z, 3), attacking_home)
 
 
@@ -229,7 +237,11 @@ def _lane_sign(index: int, base_z: float) -> float:
 
 
 def _clamp_pitch_z(value: float) -> float:
-    return max(6.0, min(62.0, value))
+    return max(PLAYABLE_Z_MIN, min(PLAYABLE_Z_MAX, value))
+
+
+def _clamp_pitch_x(value: float) -> float:
+    return max(PLAYABLE_X_MIN, min(PLAYABLE_X_MAX, value))
 
 
 def _resolve_facing(velocity_x: float, velocity_z: float, default_x: float) -> tuple[float, float]:
@@ -358,11 +370,12 @@ def _home_player(
     animation_state = "idle"
     state = "holding"
     if role == "GK":
-        x = max(5.2, min(8.6, 5.2 + max(0.0, ball_x - 16.0) * 0.024))
-        z = _clamp_pitch_z(34.0 + (ball_z - 34.0) * 0.1)
-        speed_ratio = 0.03 if abs(ball_z - z) > 1.0 else 0.0
+        x = _clamp_pitch_x(5.8 + max(0.0, ball_x - 18.0) * 0.028)
+        z = _clamp_pitch_z(34.0 + (ball_z - 34.0) * 0.18)
+        lateral_delta = abs(ball_z - z)
+        speed_ratio = 0.22 if lateral_delta > 4.5 else 0.14 if lateral_delta > 2.0 else 0.04
         animation_state = "jog" if speed_ratio > 0.01 else "idle"
-        state = "guarding"
+        state = "set-position"
     elif has_possession:
         x = ball_x - 0.08
         z = ball_z
@@ -441,7 +454,7 @@ def _home_player(
         animation_state = "idle"
         state = "finished"
 
-    x = max(4.0, min(101.0, x))
+    x = _clamp_pitch_x(x)
     z = _clamp_pitch_z(z)
     velocity_x = 0.0
     velocity_z = 0.0
@@ -547,11 +560,12 @@ def _away_player(
     animation_state = "idle"
     state = "holding"
     if role == "GK":
-        x = min(99.0, max(95.6, 99.0 - max(0.0, 89.0 - ball_x) * 0.024))
-        z = _clamp_pitch_z(34.0 + (ball_z - 34.0) * 0.1)
-        speed_ratio = 0.03 if abs(ball_z - z) > 1.0 else 0.0
+        x = _clamp_pitch_x(99.2 - max(0.0, 87.0 - ball_x) * 0.028)
+        z = _clamp_pitch_z(34.0 + (ball_z - 34.0) * 0.18)
+        lateral_delta = abs(ball_z - z)
+        speed_ratio = 0.22 if lateral_delta > 4.5 else 0.14 if lateral_delta > 2.0 else 0.04
         animation_state = "jog" if speed_ratio > 0.01 else "idle"
-        state = "guarding"
+        state = "set-position"
     elif has_possession:
         x = ball_x + 0.08
         z = ball_z
@@ -630,7 +644,7 @@ def _away_player(
         animation_state = "idle"
         state = "finished"
 
-    x = max(4.0, min(101.0, x))
+    x = _clamp_pitch_x(x)
     z = _clamp_pitch_z(z)
     velocity_x = 0.0
     velocity_z = 0.0
@@ -885,6 +899,24 @@ async def get_session_summary() -> JSONResponse:
     return JSONResponse(STATE.build_summary())
 
 
+async def safe_send(websocket: WebSocket, payload: dict[str, Any]) -> bool:
+    if (
+        websocket.client_state != WebSocketState.CONNECTED
+        or websocket.application_state != WebSocketState.CONNECTED
+    ):
+        return False
+
+    try:
+        await asyncio.wait_for(
+            websocket.send_json(payload),
+            timeout=SEND_TIMEOUT_SECONDS,
+        )
+        return True
+    except Exception as exc:  # pragma: no cover - harness only
+        LOGGER.warning("[GTEX mock server] send failed, continuing simulation: %s", exc)
+        return False
+
+
 @app.get("/match/{match_id}/live")
 async def get_live_match(match_id: str, authorization: str | None = Header(default=None)) -> JSONResponse:
     if match_id != MATCH_ID:
@@ -944,9 +976,32 @@ async def websocket_match_stream(websocket: WebSocket, match_id: str) -> None:
     )
 
     try:
+        last_send_ok_at = asyncio.get_running_loop().time()
+        last_payload: dict[str, Any] | None = None
         while True:
             payload = build_payload()
-            await websocket.send_json(payload)
+            last_payload = payload
+            send_ok = await safe_send(websocket, payload)
+            if send_ok:
+                last_send_ok_at = asyncio.get_running_loop().time()
+            else:
+                if (
+                    websocket.client_state != WebSocketState.CONNECTED
+                    or websocket.application_state != WebSocketState.CONNECTED
+                ):
+                    LOGGER.info(
+                        "[GTEX mock server] websocket disconnected; ending simulation stream match=%s",
+                        match_id,
+                    )
+                    break
+
+                idle_for = asyncio.get_running_loop().time() - last_send_ok_at
+                if idle_for > CLIENT_IDLE_GRACE_SECONDS:
+                    LOGGER.warning(
+                        "[GTEX mock server] client idle too long; ending socket but preserving match state match=%s",
+                        match_id,
+                    )
+                    break
 
             if payload["phase"] == "fulltime":
                 LOGGER.info(
@@ -961,6 +1016,15 @@ async def websocket_match_stream(websocket: WebSocket, match_id: str) -> None:
                 return
 
             await asyncio.sleep(WEBSOCKET_FRAME_INTERVAL_SECONDS)
+        if last_payload is not None and last_payload.get("phase") != "fulltime":
+            await safe_send(
+                websocket,
+                {
+                    **last_payload,
+                    "phase": "fulltime",
+                    "clockMinute": FULLTIME_MINUTE,
+                },
+            )
     except Exception as exc:  # pragma: no cover - harness only
         LOGGER.info("full-session websocket closed match=%s reason=%s", match_id, exc)
 
@@ -971,7 +1035,15 @@ def main() -> None:
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info", access_log=False)
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level="info",
+        access_log=False,
+        ws_ping_interval=None,
+        ws_ping_timeout=None,
+    )
 
 
 if __name__ == "__main__":

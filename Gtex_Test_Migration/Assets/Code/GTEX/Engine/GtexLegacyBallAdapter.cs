@@ -25,5 +25,21 @@ namespace FStudio.GTEX.Engine
                 targetVelocity,
                 holder != null && holder.IsValid ? holder.RawPlayer : null);
         }
+
+        public Vector3 ResolveExternalReleaseAnchor(
+            GtexLegacyPlayerHandle holder,
+            Vector3 releaseDirection,
+            Vector3 fallbackPosition)
+        {
+            if (!IsAvailable)
+            {
+                return fallbackPosition;
+            }
+
+            return Ball.Current.ResolveExternalPlaybackReleaseAnchor(
+                holder != null && holder.IsValid ? holder.RawPlayer : null,
+                releaseDirection,
+                fallbackPosition);
+        }
     }
 }

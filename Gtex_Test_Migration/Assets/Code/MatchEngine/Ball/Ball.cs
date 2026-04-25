@@ -11,8 +11,10 @@ using FStudio.MatchEngine.EngineOptions;
 using FStudio.GTEX.Playback;
 using System.Linq;
 using System.Threading.Tasks;
+using FStudio.Data;
 using FStudio.MatchEngine.Players.PlayerController;
 using FStudio.MatchEngine.Graphics.EventRenderer;
+using FStudio.MatchEngine.Utilities;
 
 namespace FStudio.MatchEngine.Balls {
     [ExecuteInEditMode]
@@ -54,6 +56,13 @@ namespace FStudio.MatchEngine.Balls {
         [SerializeField] private float externalPlaybackHolderRunForwardScale = 0.84f;
         [SerializeField] private float externalPlaybackHolderDribbleFrequency = 8.2f;
         [SerializeField] private float externalPlaybackHolderDribbleLift = 0.035f;
+        [Header("GTEX Controlled Ball Visuals")]
+        [SerializeField] private float controlledForwardOffset = 0.46f;
+        [SerializeField] private float controlledSideOffset = 0.15f;
+        [SerializeField] private float controlledBallRadius = 0.11f;
+        [SerializeField] private float controlledFollowSharpness = 22f;
+        [SerializeField] private LayerMask pitchGroundMask = ~0;
+        private Vector3 _controlledBallVelocity;
 
         public Vector3 Velocity => ExternalPlaybackEnabled ? externalPlaybackVelocity : rigidbody.linearVelocity;
 
@@ -374,6 +383,147 @@ namespace FStudio.MatchEngine.Balls {
             }
 
             hasExternalPlaybackTarget = true;
+        }
+
+        public Vector3 ResolveExternalPlaybackReleaseAnchor(
+            PlayerBase holder,
+            Vector3 releaseDirection,
+            Vector3 fallbackPosition)
+        {
+            if (holder == null)
+            {
+                return fallbackPosition;
+            }
+
+            var forward = releaseDirection;
+            forward.y = 0f;
+            if (forward.sqrMagnitude <= 0.0001f)
+            {
+                forward = ResolveExternalPlaybackHolderForward(holder);
+            }
+            else
+            {
+                forward.Normalize();
+            }
+
+            var hasAnimatorBallPoint = TryResolveAnimatorControlledBallPoint(holder, out var anchor);
+            if (!hasAnimatorBallPoint)
+            {
+                anchor = ResolveControlledBallTarget(
+                    holder.PlayerController != null && holder.PlayerController.UnityObject != null
+                        ? holder.PlayerController.UnityObject.transform
+                        : null,
+                    null,
+                    ResolveExternalPlaybackHolderFootBias(holder) >= 0f);
+            }
+
+            anchor += forward * (hasAnimatorBallPoint ? 0.04f : 0.08f);
+
+            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackSanitizer != null)
+            {
+                anchor = MatchManager.Current.ExternalPlaybackSanitizer.SanitizeBallPosition(anchor, 0f);
+            }
+
+            if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackPitchZones != null)
+            {
+                anchor = MatchManager.Current.ExternalPlaybackPitchZones.ClampToPlayableGrass(anchor, 0.12f);
+                anchor.y = Mathf.Max(ResolveExternalPlaybackHolderY(), anchor.y);
+            }
+
+            return GtexPlaybackSanitizer.IsFinite(anchor) ? anchor : fallbackPosition;
+        }
+
+        public void ReleaseFromControlledFoot(
+            Transform carrier,
+            Transform dominantFootSocket,
+            bool rightFooted,
+            Vector3 releaseVelocity)
+        {
+            var releasePoint = ResolveControlledBallTarget(carrier, dominantFootSocket, rightFooted);
+            transform.position = releasePoint;
+            _controlledBallVelocity = Vector3.zero;
+            if (rigidbody == null)
+            {
+                return;
+            }
+
+            rigidbody.isKinematic = false;
+            rigidbody.linearVelocity = releaseVelocity;
+            rigidbody.angularVelocity = Vector3.zero;
+        }
+
+        private bool TryResolveAnimatorControlledBallPoint(PlayerBase holder, out Vector3 target)
+        {
+            target = Vector3.zero;
+            var animator = holder != null && holder.PlayerController != null ? holder.PlayerController.Animator : null;
+            if (animator == null)
+            {
+                return false;
+            }
+
+            var situation =
+                holder != null &&
+                holder.MatchPlayer != null &&
+                holder.MatchPlayer.Position == Positions.GK
+                    ? PlayerBallPoint.Situation.GK
+                    : PlayerBallPoint.Situation.Normal;
+
+            target = animator.BallPosition(situation);
+            if (!GtexPlaybackSanitizer.IsFinite(target))
+            {
+                return false;
+            }
+
+            var carrierY =
+                holder != null &&
+                holder.PlayerController != null &&
+                holder.PlayerController.UnityObject != null
+                    ? holder.PlayerController.UnityObject.transform.position.y
+                    : transform.position.y;
+            target = ResolveBallGroundHeight(target, carrierY);
+            return true;
+        }
+
+        private Vector3 ResolveControlledBallTarget(
+            Transform carrier,
+            Transform dominantFootSocket,
+            bool rightFooted)
+        {
+            if (carrier == null)
+            {
+                return transform.position;
+            }
+
+            Vector3 target;
+            if (dominantFootSocket != null)
+            {
+                target = dominantFootSocket.position + carrier.forward * 0.08f;
+            }
+            else
+            {
+                var side = rightFooted ? controlledSideOffset : -controlledSideOffset;
+                target =
+                    carrier.position +
+                    carrier.forward * controlledForwardOffset +
+                    carrier.right * side;
+            }
+
+            return ResolveBallGroundHeight(target, carrier.position.y);
+        }
+
+        private Vector3 ResolveBallGroundHeight(Vector3 target, float fallbackCarrierY)
+        {
+            var rayStart = target + Vector3.up * 1.25f;
+            if (Physics.Raycast(rayStart, Vector3.down, out var hit, 3f, pitchGroundMask, QueryTriggerInteraction.Ignore))
+            {
+                target.y = hit.point.y + controlledBallRadius;
+            }
+            else
+            {
+                target.y = fallbackCarrierY + controlledBallRadius;
+            }
+
+            return target;
         }
 
         /// <summary>
@@ -768,10 +918,17 @@ namespace FStudio.MatchEngine.Balls {
                 return;
             }
 
-            var nextPosition = Vector3.MoveTowards(
+            var nextPosition = Vector3.SmoothDamp(
                 rigidbody.position,
                 targetPosition,
-                externalPlaybackHolderFollowSpeed * Time.fixedDeltaTime);
+                ref _controlledBallVelocity,
+                Mathf.Max(0.01f, 1f / controlledFollowSharpness),
+                Mathf.Infinity,
+                Time.fixedDeltaTime);
+            nextPosition = Vector3.Lerp(
+                nextPosition,
+                targetPosition,
+                (1f - Mathf.Exp(-controlledFollowSharpness * Time.fixedDeltaTime)) * 0.35f);
 
             var turnT = 1f - Mathf.Exp(-18f * Time.fixedDeltaTime);
             var nextRotation = Quaternion.Slerp(rigidbody.rotation, targetRotation, turnT);
@@ -800,7 +957,19 @@ namespace FStudio.MatchEngine.Balls {
 
         private Vector3 ResolveExternalPlaybackHolderAnchor(PlayerBase holder)
         {
-            var anchor = holder != null ? holder.Position : transform.position;
+            var carrierTransform =
+                holder != null && holder.PlayerController != null && holder.PlayerController.UnityObject != null
+                    ? holder.PlayerController.UnityObject.transform
+                    : null;
+            var hasAnimatorBallPoint = TryResolveAnimatorControlledBallPoint(holder, out var anchor);
+            if (!hasAnimatorBallPoint)
+            {
+                anchor =
+                    ResolveControlledBallTarget(
+                        carrierTransform,
+                        null,
+                        ResolveExternalPlaybackHolderFootBias(holder) >= 0f);
+            }
             var forward = ResolveExternalPlaybackHolderForward(holder);
             var lateral = Vector3.Cross(Vector3.up, forward).normalized;
             var planarVelocity = holder != null ? holder.Velocity : Vector3.zero;
@@ -811,8 +980,8 @@ namespace FStudio.MatchEngine.Balls {
             var footPhase = Mathf.Lerp(footBias, dribblePhase, Mathf.Clamp01(speed01 * 1.2f));
             var forwardOffsetScale =
                 Mathf.Lerp(
-                    externalPlaybackHolderIdleForwardScale * 0.62f,
-                    externalPlaybackHolderRunForwardScale * 0.72f,
+                    externalPlaybackHolderIdleForwardScale * 0.88f,
+                    externalPlaybackHolderRunForwardScale * 1.08f,
                     speed01);
             var forwardOffset =
                 forward *
@@ -820,11 +989,15 @@ namespace FStudio.MatchEngine.Balls {
                 forwardOffsetScale;
             var lateralOffset =
                 lateral *
-                Mathf.Lerp(externalPlaybackHolderLateralOffset * 0.18f, externalPlaybackHolderLateralOffset * 0.52f, speed01) *
+                Mathf.Lerp(externalPlaybackHolderLateralOffset * 0.28f, externalPlaybackHolderLateralOffset * 0.74f, speed01) *
                 footPhase;
 
-            anchor += forwardOffset + lateralOffset;
-            anchor.y = ResolveExternalPlaybackHolderY() + Mathf.Abs(footPhase) * externalPlaybackHolderDribbleLift * speed01 * 0.38f;
+            var anchorForwardWeight = hasAnimatorBallPoint ? 0.16f : 0.32f;
+            var anchorLateralWeight = hasAnimatorBallPoint ? 0.24f : 0.6f;
+            anchor += forwardOffset * anchorForwardWeight + lateralOffset * anchorLateralWeight;
+            anchor.y = Mathf.Max(
+                ResolveExternalPlaybackHolderY(),
+                anchor.y + Mathf.Abs(footPhase) * externalPlaybackHolderDribbleLift * speed01 * 0.46f);
 
             if (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackSanitizer != null)
             {
