@@ -58,13 +58,18 @@ namespace FStudio.MatchEngine.Players.PlayerController {
         }
 
         private void Awake () {
+            animator = animator != null ? animator : GetComponent<Animator>();
+            playerGraphic = playerGraphic != null ? playerGraphic : GetComponent<PlayerGraphic>();
             animatorVariableHashes = AnimatorEnumHasher.GetHashes<PlayerAnimatorVariable>(animator);
-            
-            footLShadow = FootShadowRenderer.Current.Get();
-            footRShadow = FootShadowRenderer.Current.Get();
 
-            footLMaterial = footLShadow.GetComponentInChildren<Renderer>().material;
-            footRMaterial = footRShadow.GetComponentInChildren<Renderer>().material;
+            if (FootShadowRenderer.Current != null)
+            {
+                footLShadow = FootShadowRenderer.Current.Get();
+                footRShadow = FootShadowRenderer.Current.Get();
+
+                footLMaterial = ResolveShadowMaterial(footLShadow);
+                footRMaterial = ResolveShadowMaterial(footRShadow);
+            }
         }
 
         public void SetAnimatorSpeed (float f) {
@@ -97,6 +102,10 @@ namespace FStudio.MatchEngine.Players.PlayerController {
 
         private void Update() {
             const float MIN_MOVE_SPEED_TO_MOVE = 0.5f;
+            if (ballDribbleAnimator == null)
+            {
+                return;
+            }
 
             ballDribbleAnimator.SetFloat (
                 BALL_DRIBBLE_SPEED_ANIMATOR_FLOAT_NAME, 
@@ -104,10 +113,23 @@ namespace FStudio.MatchEngine.Players.PlayerController {
         }
 
         private void LateUpdate () {
+            if (animator == null ||
+                footLShadow == null ||
+                footRShadow == null ||
+                footLMaterial == null ||
+                footRMaterial == null)
+            {
+                return;
+            }
+
             void setBone (HumanBodyBones boneId, Transform target, Material material) {
                 const string SHADOW_POWER = "_Power";
 
                 var bone = animator.GetBoneTransform(boneId);
+                if (bone == null || target == null || material == null)
+                {
+                    return;
+                }
 
                 var pos = bone.position;
                 target.position = bone.position + bone.forward * footShadowForwardOffset;
@@ -156,7 +178,10 @@ namespace FStudio.MatchEngine.Players.PlayerController {
             switch (animatorVariable) {
                 case PlayerAnimatorVariable.MoveSpeed:
                     const string FAKE_CLOTH_POWER = "_FakeClothPower";
-                    playerGraphic.mainRenderer.material.SetFloat(FAKE_CLOTH_POWER, value + 1);
+                    if (playerGraphic != null && playerGraphic.mainRenderer != null && playerGraphic.mainRenderer.material != null)
+                    {
+                        playerGraphic.mainRenderer.material.SetFloat(FAKE_CLOTH_POWER, value + 1);
+                    }
                     break;
             }
         }
@@ -179,6 +204,17 @@ namespace FStudio.MatchEngine.Players.PlayerController {
             if (headLook != null) {
                 headLook.SetTarget(deltaTime, worldPosition, weight);
             }
+        }
+
+        private static Material ResolveShadowMaterial(Transform shadow)
+        {
+            if (shadow == null)
+            {
+                return null;
+            }
+
+            var renderer = shadow.GetComponentInChildren<Renderer>();
+            return renderer != null ? renderer.material : null;
         }
 
         /// <summary>

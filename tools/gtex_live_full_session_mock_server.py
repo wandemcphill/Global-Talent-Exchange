@@ -900,10 +900,7 @@ async def get_session_summary() -> JSONResponse:
 
 
 async def safe_send(websocket: WebSocket, payload: dict[str, Any]) -> bool:
-    if (
-        websocket.client_state != WebSocketState.CONNECTED
-        or websocket.application_state != WebSocketState.CONNECTED
-    ):
+    if websocket.client_state != WebSocketState.CONNECTED or websocket.application_state != WebSocketState.CONNECTED:
         return False
 
     try:

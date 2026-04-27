@@ -1,6 +1,7 @@
 using FStudio.MatchEngine.Balls;
 using FStudio.MatchEngine.Enums;
 using FStudio.MatchEngine;
+using FStudio.GTEX.Engine;
 using UnityEngine;
 
 using FStudio.MatchEngine.Players.Behaviours;
@@ -17,7 +18,24 @@ namespace FStudio.MatchEngine.Players.PlayerController
         public GameObject UnityObject => gameObject;
         public CapsuleCollider UnityCollider => collider;
 
-        public Vector3 Position => transform.position;
+        public Vector3 Position
+        {
+            get
+            {
+                if (this == null || gameObject == null || !gameObject)
+                {
+                    return lastKnownPosition;
+                }
+
+                if (transform == null)
+                {
+                    return lastKnownPosition;
+                }
+
+                lastKnownPosition = transform.position;
+                return lastKnownPosition;
+            }
+        }
         public Quaternion Rotation => transform.rotation;
         public Vector3 Forward => transform.forward;
 
@@ -68,6 +86,7 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
         private Vector2 targetAnimatorDirection;
         private Vector3 targetPosition;
+        private Vector3 lastKnownPosition;
         private bool externalPlaybackEnabled;
         private bool hasExternalPlaybackPose;
         private Vector3 externalPlaybackTargetPosition;
@@ -98,6 +117,8 @@ namespace FStudio.MatchEngine.Players.PlayerController
                 rigidbody.linearDamping = 1;
                 rigidbody.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionY;
             }
+
+            lastKnownPosition = transform != null ? transform.position : Vector3.zero;
         }
 
         private void FixedUpdate()
@@ -107,16 +128,25 @@ namespace FStudio.MatchEngine.Players.PlayerController
                 return;
             }
 
+            var distanceToTarget = Vector3.Distance(rigidbody.position, externalPlaybackTargetPosition);
+            var catchUpBlend = Mathf.Clamp01(distanceToTarget / 2.25f);
+            var baseMoveSpeed = Mathf.Clamp(externalPlaybackMoveSpeed, 6.5f, 10.5f);
+            var moveSpeed = Mathf.Lerp(baseMoveSpeed, baseMoveSpeed * 1.55f, catchUpBlend);
             var nextPosition = Vector3.MoveTowards(
                 rigidbody.position,
                 externalPlaybackTargetPosition,
-                externalPlaybackMoveSpeed * Time.fixedDeltaTime);
+                moveSpeed * Time.fixedDeltaTime);
 
-            var turnT = 1f - Mathf.Exp(-externalPlaybackTurnSpeed * Time.fixedDeltaTime);
+            var baseTurnSpeed = Mathf.Clamp(externalPlaybackTurnSpeed, 7.5f, 12.5f);
+            var turnSpeed = Mathf.Lerp(baseTurnSpeed, baseTurnSpeed * 1.45f, catchUpBlend);
+            var turnT = 1f - Mathf.Exp(-turnSpeed * Time.fixedDeltaTime);
             var nextRotation = Quaternion.Slerp(rigidbody.rotation, externalPlaybackTargetRotation, turnT);
 
-            rigidbody.MovePosition(nextPosition);
-            rigidbody.MoveRotation(nextRotation);
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                nextPosition,
+                nextRotation);
         }
 
         private void Start()
@@ -162,6 +192,7 @@ namespace FStudio.MatchEngine.Players.PlayerController
         {
             position.y = ResolveGroundedY();
             transform.position = position;
+            lastKnownPosition = position;
 
             if (rigidbody != null)
                 rigidbody.position = position;
@@ -185,8 +216,7 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
             if (rigidbody != null)
             {
-                rigidbody.linearVelocity = Vector3.zero;
-                rigidbody.angularVelocity = Vector3.zero;
+                GtexPlaybackPhysicsUtil.SafeSetRigidbodyVelocity(rigidbody, Vector3.zero, Vector3.zero);
                 rigidbody.isKinematic = value || !m_IsPhysicsEnabled;
             }
 
@@ -215,15 +245,19 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
             if (snap || Vector3.Distance(rigidbody.position, position) >= ResolveExternalPlaybackTeleportDistance())
             {
-                rigidbody.position = position;
-                rigidbody.rotation = rotation;
-                transform.SetPositionAndRotation(position, rotation);
+                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                    transform,
+                    rigidbody,
+                    position,
+                    rotation,
+                    true);
             }
         }
 
         public void SetPosition(Vector3 position)
         {
             position.y = ResolveGroundedY();
+            lastKnownPosition = position;
 
             if (rigidbody != null)
                 rigidbody.position = position;
@@ -622,6 +656,11 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
         private void LateUpdate()
         {
+            if (transform != null)
+            {
+                lastKnownPosition = transform.position;
+            }
+
             if (shadow != null)
                 shadow.position = Position;
         }

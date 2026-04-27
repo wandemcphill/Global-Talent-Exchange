@@ -1,4 +1,4 @@
-﻿using FStudio.Events;
+using FStudio.Events;
 using FStudio.Graphics;
 using FStudio.Loaders;
 using FStudio.Graphics.TimeOfDay;
@@ -14,13 +14,21 @@ using UnityEngine;
 using FStudio.MatchEngine.Graphics.GraphicsModes;
 using FStudio.Graphics.Cameras;
 using FStudio.GTEX;
+using FStudio.GTEX.Core;
 using FStudio.UI.MatchThemes.MatchEvents;
 using FStudio.MatchEngine.Enums;
 using FStudio.Database;
 
 namespace FStudio.MatchEngine {
+    public enum OriginalVisualEnvironmentMode {
+        EssentialOnly,
+        FullOriginalStadium,
+        None
+    }
+
     public class MatchEngineLoader : SceneObjectSingleton<MatchEngineLoader> {
         [SerializeField] private SingleAddressableLoader loader;
+        [SerializeField] private OriginalVisualEnvironmentMode originalVisualEnvironmentMode = OriginalVisualEnvironmentMode.EssentialOnly;
 
         private bool isLoading;
         private bool isLoaded;
@@ -79,10 +87,18 @@ namespace FStudio.MatchEngine {
             EventManager.Trigger(new BigLoadingEvent());
 
             var template = GraphicLoaders.Current;
+            var resolvedGtexConfig = gtexConfig ?? GtexMatchConfigLoader.Load();
 
             // load stadium scene
             StadiumType stadium = StadiumType.SmallStadium;
-            await template.stadiumLoader.LoadStadium(stadium);
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime())
+            {
+                await LoadOriginalVisualEnvironment(template, stadium);
+            }
+            else
+            {
+                await template.stadiumLoader.LoadStadium(stadium);
+            }
             // 
 
             await loader.Load(); // load match prefab.
@@ -111,7 +127,18 @@ namespace FStudio.MatchEngine {
             // load random ball.
             await template.ballLoader.LoadRandomBall();
 
-            GtexStadiumAtmosphere.InstallOrRefresh(matchEvent, gtexConfig ?? GtexMatchConfigLoader.Load());
+            var shouldUseAtmosphereUpgrade =
+                resolvedGtexConfig != null &&
+                !resolvedGtexConfig.ShouldPreserveOriginalScenePresentation &&
+                (resolvedGtexConfig.enableStadiumUpgrade ||
+                 resolvedGtexConfig.showCrowd ||
+                 resolvedGtexConfig.showBroadcastScaffolding);
+
+            if (shouldUseAtmosphereUpgrade) {
+                GtexStadiumAtmosphere.InstallOrRefresh(matchEvent, resolvedGtexConfig);
+            } else {
+                GtexStadiumAtmosphere.RemoveIfPresent();
+            }
             
             isLoaded = true;
             isLoading = false;
@@ -120,6 +147,135 @@ namespace FStudio.MatchEngine {
 
             // close loading.
             EventManager.Trigger<BigLoadingEvent>(null);
+        }
+
+        private async Task LoadOriginalVisualEnvironment(GraphicLoaders template, StadiumType stadium)
+        {
+            switch (originalVisualEnvironmentMode)
+            {
+                case OriginalVisualEnvironmentMode.None:
+                    Debug.Log("[GTEX OriginalVisualRuntime] Original visual environment skipped. Fallback pitch/camera will be used if needed.");
+                    break;
+                case OriginalVisualEnvironmentMode.EssentialOnly:
+                case OriginalVisualEnvironmentMode.FullOriginalStadium:
+                    Debug.Log("[GTEX OriginalVisualRuntime] Loading original visual environment: " + originalVisualEnvironmentMode + " via " + stadium + ".");
+                    await template.stadiumLoader.LoadStadium(stadium);
+                    SanitizeOriginalVisualEnvironment();
+                    break;
+            }
+        }
+
+        private void SanitizeOriginalVisualEnvironment()
+        {
+            if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime())
+            {
+                return;
+            }
+
+            Debug.Log("[GTEX OriginalVisualRuntime] Sanitizing original visual environment.");
+
+            DisableIfNameContains("DefaultScene");
+            DisableIfNameContains("MainMenu");
+            DisableIfNameContains("ReturnToMenu");
+            DisableIfNameContains("SceneTransition");
+            DisableIfNameContains("PauseMenu");
+
+            EnsureRenderersEnabled("Pitch");
+            EnsureRenderersEnabled("Grass");
+            EnsureRenderersEnabled("Field");
+            EnsureRenderersEnabled("Line");
+            EnsureRenderersEnabled("Goal");
+            EnsureLightsEnabled();
+        }
+
+        private static void DisableIfNameContains(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
+
+            var behaviours = FindObjectsByType<Behaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour == null)
+                {
+                    continue;
+                }
+
+                var objectName = behaviour.name ?? string.Empty;
+                var typeName = behaviour.GetType().Name ?? string.Empty;
+                if (objectName.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) < 0 &&
+                    typeName.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+
+                if (behaviour is Camera ||
+                    behaviour is Light)
+                {
+                    continue;
+                }
+
+                behaviour.enabled = false;
+            }
+
+            var transforms = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var transform in transforms)
+            {
+                if (transform == null || transform == MatchEngineLoader.Current?.transform)
+                {
+                    continue;
+                }
+
+                var name = transform.name ?? string.Empty;
+                if (name.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    transform.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        private static void EnsureRenderersEnabled(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
+
+            var renderers = FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var renderer in renderers)
+            {
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                var name = renderer.name ?? string.Empty;
+                if (name.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+
+                renderer.gameObject.SetActive(true);
+                renderer.enabled = true;
+            }
+        }
+
+        private static void EnsureLightsEnabled()
+        {
+            var lights = FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var light in lights)
+            {
+                if (light == null)
+                {
+                    continue;
+                }
+
+                light.gameObject.SetActive(true);
+                light.enabled = true;
+                light.intensity = Mathf.Max(light.intensity, light.type == LightType.Directional ? 1.1f : 0.35f);
+            }
         }
 
         private static void ResolveKitSelections(UpcomingMatchEvent matchEvent, ref bool homeKit, ref bool awayKit)

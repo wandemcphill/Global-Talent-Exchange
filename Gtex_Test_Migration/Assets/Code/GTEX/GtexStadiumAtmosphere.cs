@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FStudio.Database;
 using FStudio.GTEX.Engine;
+using FStudio.MatchEngine;
 using FStudio.UI.MatchThemes.MatchEvents;
 using Shared.Responses;
 using UnityEngine;
@@ -72,6 +73,19 @@ namespace FStudio.GTEX {
             instance.Apply(matchData, config);
         }
 
+        public static void RemoveIfPresent() {
+            var instance = FindFirstObjectByType<GtexStadiumAtmosphere>();
+            if (instance == null) {
+                return;
+            }
+
+            if (Application.isPlaying) {
+                Destroy(instance.gameObject);
+            } else {
+                DestroyImmediate(instance.gameObject);
+            }
+        }
+
         private void OnEnable() {
             GtexMatchController.EventStream.EventPublished += HandleControllerEvent;
             GtexMatchController.LiveStateObserved += LiveStateUpdated;
@@ -101,6 +115,7 @@ namespace FStudio.GTEX {
             }
 
             StartAmbience();
+            GtexRuntimeHierarchyCoordinator.EnsureMatchHierarchy(MatchManager.Current, this);
         }
 
         private void Update() {
@@ -526,6 +541,7 @@ namespace FStudio.GTEX {
 
         private void SanitizeImportedHierarchy(Transform root, Color fallbackColor, bool stripPitchPlane) {
             var field = ResolveFieldSize();
+            var fieldCenter = ResolveFieldCenter();
             var renderers = root.GetComponentsInChildren<Renderer>(true);
             var strippedFieldSurfaceCount = 0;
             var strippedSouthOccluderCount = 0;
@@ -536,7 +552,7 @@ namespace FStudio.GTEX {
                 }
 
                 if (stripPitchPlane) {
-                    if (IsImportedFieldSurfaceRenderer(renderer, field)) {
+                    if (IsImportedFieldSurfaceRenderer(renderer, field, fieldCenter)) {
                         renderer.enabled = false;
                         strippedFieldSurfaceCount += 1;
                         continue;
@@ -574,7 +590,7 @@ namespace FStudio.GTEX {
             }
         }
 
-        private static bool IsImportedFieldSurfaceRenderer(Renderer renderer, Vector2 fieldSize) {
+        private static bool IsImportedFieldSurfaceRenderer(Renderer renderer, Vector2 fieldSize, Vector3 fieldCenter) {
             if (renderer == null) {
                 return false;
             }
@@ -588,10 +604,35 @@ namespace FStudio.GTEX {
             }
 
             var bounds = renderer.bounds;
-            return bounds.size.x >= fieldSize.x * 0.7f &&
-                   bounds.size.z >= fieldSize.y * 0.7f &&
-                   bounds.min.y <= 0.5f &&
-                   bounds.max.y <= 6f;
+            if (bounds.size.x >= fieldSize.x * 0.7f &&
+                bounds.size.z >= fieldSize.y * 0.7f &&
+                bounds.min.y <= 0.5f &&
+                bounds.max.y <= 6f) {
+                return true;
+            }
+
+            var overlapsPitchFootprint =
+                bounds.max.x >= fieldCenter.x - fieldSize.x * 0.58f &&
+                bounds.min.x <= fieldCenter.x + fieldSize.x * 0.58f &&
+                bounds.max.z >= fieldCenter.z - fieldSize.y * 0.58f &&
+                bounds.min.z <= fieldCenter.z + fieldSize.y * 0.58f;
+
+            var lowFlatSurface =
+                bounds.min.y <= fieldCenter.y + 0.6f &&
+                bounds.max.y <= fieldCenter.y + 3.5f &&
+                bounds.size.y <= 3.2f;
+
+            var meaningfulPatch =
+                bounds.size.x >= fieldSize.x * 0.14f &&
+                bounds.size.z >= fieldSize.y * 0.14f;
+
+            var wideThinStrip =
+                (bounds.size.x >= fieldSize.x * 0.28f && bounds.size.z >= fieldSize.y * 0.06f) ||
+                (bounds.size.z >= fieldSize.y * 0.28f && bounds.size.x >= fieldSize.x * 0.06f);
+
+            return overlapsPitchFootprint &&
+                   lowFlatSurface &&
+                   (meaningfulPatch || wideThinStrip);
         }
 
         private static bool IsImportedSouthCameraOccluder(Renderer renderer, Vector2 fieldSize) {

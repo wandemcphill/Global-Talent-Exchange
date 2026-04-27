@@ -140,5 +140,59 @@ namespace FStudio.MatchEngine {
                 goalLineCenter.z);
             transform.SetPositionAndRotation(targetPosition, rotation);
         }
+
+        public float ResolveRequiredInfieldInset(Vector3 inwardDirection, float grassMargin = 0.18f) {
+            inwardDirection = Vector3.ProjectOnPlane(inwardDirection, Vector3.up);
+            if (inwardDirection.sqrMagnitude <= 0.0001f) {
+                inwardDirection = transform.forward;
+                inwardDirection.y = 0f;
+            }
+
+            if (inwardDirection.sqrMagnitude <= 0.0001f) {
+                inwardDirection = Vector3.right;
+            }
+
+            inwardDirection.Normalize();
+
+            var anchor = GroundAnchorPosition;
+            var outsideExtent = 0f;
+            var hasBounds = false;
+
+            void AccumulateBounds(Bounds bounds) {
+                var centerOffset = bounds.center - anchor;
+                centerOffset.y = 0f;
+                var planarExtents = new Vector3(bounds.extents.x, 0f, bounds.extents.z);
+                var supportRadius =
+                    Mathf.Abs(inwardDirection.x) * planarExtents.x +
+                    Mathf.Abs(inwardDirection.z) * planarExtents.z;
+                var projectedCenter = Vector3.Dot(centerOffset, inwardDirection);
+                outsideExtent = Mathf.Max(outsideExtent, supportRadius - projectedCenter);
+                hasBounds = true;
+            }
+
+            var renderers = GetComponentsInChildren<Renderer>(true);
+            foreach (var renderer in renderers) {
+                if (renderer == null || !renderer.enabled) {
+                    continue;
+                }
+
+                AccumulateBounds(renderer.bounds);
+            }
+
+            var colliders = GetComponentsInChildren<Collider>(true);
+            foreach (var collider in colliders) {
+                if (collider == null || !collider.enabled) {
+                    continue;
+                }
+
+                AccumulateBounds(collider.bounds);
+            }
+
+            if (!hasBounds) {
+                return Mathf.Max(0.18f, grassMargin);
+            }
+
+            return Mathf.Max(0.18f, outsideExtent + Mathf.Max(0.08f, grassMargin));
+        }
     }
 }

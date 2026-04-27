@@ -1,6 +1,6 @@
 ﻿
 using FStudio.MatchEngine.Enums;
-
+using FStudio.GTEX.Core;
 using UnityEngine;
 
 using System.Linq;
@@ -10,6 +10,11 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         private PlayerBase teammateToPass;
 
         public override bool Behave(bool isAlreadyActive) {
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime())
+            {
+                return false;
+            }
+
             if (matchStatus != MatchStatus.WaitingForKickOff) {
                 return false;
             }

@@ -145,7 +145,7 @@ namespace FStudio.GTEX.Playback
 
             var local = ToPitchLocal(goal.position);
             var expectedGoalLine = GetGoalLineCoordinate(teamSide);
-            var maxInfieldInset = Mathf.Clamp(pitchSpace.Length * 0.025f, 1f, 2.8f);
+            var maxInfieldInset = Mathf.Clamp(pitchSpace.Length * 0.055f, 2.2f, 5.8f);
             var maxOutfieldDrift = 0.9f;
             var maxLateralDrift = Mathf.Clamp(pitchSpace.Width * 0.04f, 1.15f, 2.4f);
             var onGoalLine =

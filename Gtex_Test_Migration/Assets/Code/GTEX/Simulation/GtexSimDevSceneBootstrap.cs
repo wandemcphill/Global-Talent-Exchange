@@ -1,3 +1,4 @@
+using FStudio.GTEX;
 using FStudio.GTEX.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -11,12 +12,18 @@ namespace FStudio.GTEX.Simulation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void TryBootstrap()
         {
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntimeScene())
+            {
+                GtexOriginalVisualRuntimePolicy.LogBlocked("GtexSimDevSceneBootstrap");
+                return;
+            }
+
             if (Application.isBatchMode)
             {
                 return;
             }
 
-            var config = GtexMatchConfigLoader.Load();
+            var config = GtexMatchConfigLoader.Load(true);
             if (config == null)
             {
                 return;
@@ -28,6 +35,9 @@ namespace FStudio.GTEX.Simulation
                 return;
             }
 
+            var mode = GtexBootModeResolver.ResolveBootMode(config);
+            GtexRuntimeFlags.SetMode(mode, GtexBootModeResolver.ResolveUnattended(mode));
+            GtexBootModeResolver.PrepareConfigForMode(config, mode);
             var runtimeMode = config.ResolveRuntimeMode();
 
             if (runtimeMode == GtexRuntimeMode.LivePlayback)

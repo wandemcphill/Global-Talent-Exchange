@@ -7,6 +7,13 @@ public class StartMatch : MonoBehaviour
 {
     void Start()
     {
+        if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime())
+        {
+            GtexOriginalVisualRuntimePolicy.LogBlocked("MatchStarter");
+            enabled = false;
+            return;
+        }
+
         if (Object.FindFirstObjectByType<GtexMatchRuntime>() != null ||
             Object.FindFirstObjectByType<GtexSimRuntimeHost>() != null)
         {

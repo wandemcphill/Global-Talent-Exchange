@@ -21,6 +21,7 @@ using FStudio.MatchEngine.Events;
 
 using FStudio.MatchEngine.Players.PlayerController;
 using FStudio.MatchEngine.Players.InputBehaviours;
+using FStudio.GTEX.Core;
 
 namespace FStudio.MatchEngine.Players {
 
@@ -343,6 +344,12 @@ namespace FStudio.MatchEngine.Players {
         };
 
         public void ProcessBehaviours (in float time) {
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                GtexRuntimeState.ActiveMode == GtexRuntimeMode.OriginalVisualRuntime) {
+                ActiveBehaviour = null;
+                return;
+            }
+
             // check animation block
             if (PlayerController.IsAnimationABlocker (in EngineOptions.EngineOptions_BallHitAnimations.Current.BlockBehavioursWhenThisClipsAreaPlaying)) {
                 return;

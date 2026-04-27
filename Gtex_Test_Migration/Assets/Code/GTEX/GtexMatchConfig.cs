@@ -37,13 +37,20 @@ namespace FStudio.GTEX
         public string homeTeamName = string.Empty;
         public string awayTeamName = string.Empty;
         public string dayTime = "Night";
-        public bool enableStadiumUpgrade = true;
+        public bool preserveOriginalScenePresentation = true;
+        public bool enableStadiumUpgrade = false;
         public bool showBroadcastScaffolding = false;
-        public bool showCrowd = true;
+        public bool showCrowd = false;
         public string stadiumVariant = "broadcast";
+        public bool useOriginalMatchCamera = true;
         public bool verboseLogging;
+        public bool enableRuntimeComparisonLogging = true;
+        public bool showRuntimeDebugOverlay = true;
+        public float comparisonLogIntervalSeconds = 2f;
         public float stalePredictionSeconds = 0.25f;
         public float teleportDistance = 2.5f;
+        public bool continueClockWhenTransportStalls = true;
+        public float stalledClockAdvanceMinutesPerSecond = 0.1f;
         public bool allowLocalSimulationInProductionScene = false;
         public bool use3DPlaybackForLocalSimulation = true;
         public bool stopReconnectAfterTerminal = true;
@@ -68,7 +75,8 @@ namespace FStudio.GTEX
                     return false;
                 }
 
-                return ResolveRuntimeMode() == GtexRuntimeMode.LivePlayback
+                var runtimeModeValue = ResolveRuntimeMode();
+                return runtimeModeValue == GtexRuntimeMode.LivePlayback
                     ? CanAutoStartLivePlayback
                     : true;
             }
@@ -79,6 +87,13 @@ namespace FStudio.GTEX
         public bool HasLiveAuthBootstrap =>
             !string.IsNullOrWhiteSpace(liveAccessToken) ||
             !string.IsNullOrWhiteSpace(liveRefreshToken);
+
+        public bool ShouldPreserveOriginalScenePresentation =>
+            preserveOriginalScenePresentation ||
+            (!enableStadiumUpgrade && !showCrowd && !showBroadcastScaffolding);
+
+        public bool ShouldUseOriginalMatchCamera =>
+            useOriginalMatchCamera || ShouldPreserveOriginalScenePresentation;
 
         public void ApplyRuntimeOverrides()
         {
@@ -124,6 +139,29 @@ namespace FStudio.GTEX
 
             runtimeMode = normalizedRuntimeMode;
             var runtimeModeValue = ResolveRuntimeMode();
+
+            if (runtimeModeValue == GtexRuntimeMode.OriginalVisualRuntime)
+            {
+                preserveOriginalScenePresentation = true;
+                enableStadiumUpgrade = false;
+                showBroadcastScaffolding = false;
+                showCrowd = false;
+                useOriginalMatchCamera = true;
+                use3DPlaybackForLocalSimulation = false;
+            }
+
+            if (ShouldPreserveOriginalScenePresentation)
+            {
+                preserveOriginalScenePresentation = true;
+                enableStadiumUpgrade = false;
+                showBroadcastScaffolding = false;
+                showCrowd = false;
+            }
+
+            if (ShouldUseOriginalMatchCamera)
+            {
+                useOriginalMatchCamera = true;
+            }
 
             if (runtimeModeValue == GtexRuntimeMode.LivePlayback && string.IsNullOrWhiteSpace(matchId))
             {
@@ -222,6 +260,18 @@ namespace FStudio.GTEX
                 Debug.LogWarning("[GTEX] teleportDistance was too low. Defaulting to 2.5.");
             }
 
+            if (comparisonLogIntervalSeconds < 0.25f)
+            {
+                comparisonLogIntervalSeconds = 2f;
+                Debug.LogWarning("[GTEX] comparisonLogIntervalSeconds was too low. Defaulting to 2.");
+            }
+
+            if (stalledClockAdvanceMinutesPerSecond < 0.01f)
+            {
+                stalledClockAdvanceMinutesPerSecond = 0.1f;
+                Debug.LogWarning("[GTEX] stalledClockAdvanceMinutesPerSecond was too low. Defaulting to 0.1.");
+            }
+
             if (simulationRandomSeed == 0)
             {
                 simulationRandomSeed = 1337;
@@ -245,9 +295,16 @@ namespace FStudio.GTEX
 
         public GtexRuntimeMode ResolveRuntimeMode()
         {
-            return NormalizeRuntimeModeToken(runtimeMode) == "simulation"
-                ? GtexRuntimeMode.LocalSimulation
-                : GtexRuntimeMode.LivePlayback;
+            switch (NormalizeRuntimeModeToken(runtimeMode))
+            {
+                case "simulation":
+                    return GtexRuntimeMode.LocalSimulation;
+                case "original-visual":
+                    return GtexRuntimeMode.OriginalVisualRuntime;
+                case "live":
+                default:
+                    return GtexRuntimeMode.LivePlayback;
+            }
         }
 
         private static bool IsBlockedProductionBaseUrl(string value)
@@ -292,6 +349,14 @@ namespace FStudio.GTEX
                 case "local-simulation":
                 case "localsimulation":
                     return "simulation";
+                case "original":
+                case "original-visual":
+                case "originalvisual":
+                case "original-visual-runtime":
+                case "originalvisualruntime":
+                case "visual-runtime":
+                case "visualruntime":
+                    return "original-visual";
                 case "live":
                 case "live-playback":
                 case "liveplayback":
@@ -370,6 +435,15 @@ namespace FStudio.GTEX
                 return commandLineValue;
             }
 
+            if (string.Equals(argName, "runtime-mode", StringComparison.OrdinalIgnoreCase))
+            {
+                var sceneRuntimeValue = ResolveRuntimeModeFromSceneOverride();
+                if (!string.IsNullOrWhiteSpace(sceneRuntimeValue))
+                {
+                    return sceneRuntimeValue;
+                }
+            }
+
             try
             {
                 return Environment.GetEnvironmentVariable(envVarName);
@@ -386,7 +460,7 @@ namespace FStudio.GTEX
             try
             {
                 var args = Environment.GetCommandLineArgs();
-                var flag = "--gtex-" + argName;
+                var flags = ResolveCommandLineFlags(argName);
                 for (var index = 0; index < args.Length; index += 1)
                 {
                     var candidate = args[index];
@@ -395,25 +469,124 @@ namespace FStudio.GTEX
                         continue;
                     }
 
-                    if (string.Equals(candidate, flag, StringComparison.OrdinalIgnoreCase))
+                    for (var flagIndex = 0; flagIndex < flags.Length; flagIndex += 1)
                     {
-                        if (index + 1 < args.Length)
+                        var flag = flags[flagIndex];
+                        if (string.IsNullOrWhiteSpace(flag))
                         {
-                            return args[index + 1];
+                            continue;
                         }
 
-                        return string.Empty;
-                    }
+                        if (string.Equals(candidate, flag, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (index + 1 < args.Length)
+                            {
+                                return args[index + 1];
+                            }
 
-                    if (candidate.StartsWith(flag + "=", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return candidate.Substring(flag.Length + 1);
+                            return string.Empty;
+                        }
+
+                        if (candidate.StartsWith(flag + "=", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return candidate.Substring(flag.Length + 1);
+                        }
                     }
                 }
             }
             catch (Exception exception)
             {
                 Debug.LogWarning("[GTEX] Failed to inspect command line args for '" + argName + "'.\n" + exception);
+            }
+
+            return null;
+        }
+
+        private static string[] ResolveCommandLineFlags(string argName)
+        {
+            var normalizedArgName = (argName ?? string.Empty).Trim();
+            switch (normalizedArgName)
+            {
+                case "runtime-mode":
+                    return new[] { "--gtex-runtime-mode", "--runtime-mode", "--runtimeMode" };
+                case "match-id":
+                    return new[] { "--gtex-match-id", "--match-id", "--matchId" };
+                case "environment":
+                    return new[] { "--gtex-environment", "--environment" };
+                case "base-url":
+                    return new[] { "--gtex-base-url", "--base-url", "--baseUrl" };
+                case "live-access-token":
+                    return new[] { "--gtex-live-access-token", "--live-access-token", "--liveAccessToken", "--auth" };
+                case "live-refresh-token":
+                    return new[] { "--gtex-live-refresh-token", "--live-refresh-token", "--liveRefreshToken" };
+                case "bootstrap-path":
+                    return new[] { "--gtex-bootstrap-path", "--bootstrap-path", "--bootstrapPath" };
+                default:
+                    return new[] { "--gtex-" + normalizedArgName };
+            }
+        }
+
+        private static string ResolveRuntimeModeFromSceneOverride()
+        {
+            var sceneOverride = ResolveCommandLineOverrideValue("--scene", "--gtex-scene");
+            if (string.IsNullOrWhiteSpace(sceneOverride))
+            {
+                return null;
+            }
+
+            var trimmed = sceneOverride.Trim();
+            if (string.Equals(trimmed, FStudio.GTEX.Core.GtexSceneLoader.OriginalVisualRuntimeSceneName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(trimmed, FStudio.GTEX.Core.GtexSceneLoader.OriginalVisualRuntimeScenePath, StringComparison.OrdinalIgnoreCase) ||
+                trimmed.EndsWith("/" + FStudio.GTEX.Core.GtexSceneLoader.OriginalVisualRuntimeSceneName + ".unity", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.EndsWith("\\" + FStudio.GTEX.Core.GtexSceneLoader.OriginalVisualRuntimeSceneName + ".unity", StringComparison.OrdinalIgnoreCase))
+            {
+                return "original-visual";
+            }
+
+            return null;
+        }
+
+        private static string ResolveCommandLineOverrideValue(params string[] flags)
+        {
+            try
+            {
+                var args = Environment.GetCommandLineArgs();
+                for (var index = 0; index < args.Length; index += 1)
+                {
+                    var candidate = args[index];
+                    if (string.IsNullOrWhiteSpace(candidate))
+                    {
+                        continue;
+                    }
+
+                    for (var flagIndex = 0; flagIndex < flags.Length; flagIndex += 1)
+                    {
+                        var flag = flags[flagIndex];
+                        if (string.IsNullOrWhiteSpace(flag))
+                        {
+                            continue;
+                        }
+
+                        if (string.Equals(candidate, flag, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (index + 1 < args.Length)
+                            {
+                                return args[index + 1];
+                            }
+
+                            return string.Empty;
+                        }
+
+                        if (candidate.StartsWith(flag + "=", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return candidate.Substring(flag.Length + 1);
+                        }
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[GTEX] Failed to inspect command line args.\n" + exception);
             }
 
             return null;
@@ -460,7 +633,7 @@ namespace FStudio.GTEX
             public string Message = string.Empty;
         }
 
-        public static GtexMatchConfig Load()
+        public static GtexMatchConfig Load(bool preferLocalSimulationWhenLiveConfigMissing = false)
         {
             GtexLiveStartupStatus.Clear();
             var asset = Resources.Load<TextAsset>(ResourcePath);
@@ -504,6 +677,11 @@ namespace FStudio.GTEX
 
                 var bootstrapStatus = TryApplyBootstrapPayload(parsed);
                 parsed.ApplyRuntimeOverrides();
+                if (preferLocalSimulationWhenLiveConfigMissing &&
+                    GtexBootModeResolver.ResolveBootMode(parsed) == GtexBootMode.LocalSimulation)
+                {
+                    GtexBootModeResolver.PrepareConfigForMode(parsed, GtexBootMode.LocalSimulation);
+                }
                 parsed.EnsureDefaults();
                 UpdateLiveStartupStatus(parsed, bootstrapStatus);
 

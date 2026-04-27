@@ -12,10 +12,14 @@ namespace FStudio.GTEX.Simulation
         private const float PitchLengthMeters = GtexPitchSpace.DefaultLength;
         private const float PitchWidthMeters = GtexPitchSpace.DefaultWidth;
         private const float ActiveEventLifetimeMinutes = 0.45f;
-        private const float RoutinePassIntervalMinutes = 0.85f;
-        private const float RoutinePassDurationMinutes = 0.12f;
-        private const float ShotDurationMinutes = 0.18f;
+        private const float RoutinePassIntervalMinutes = 0.62f;
+        private const float ShotDurationMinutes = 0.14f;
         private const float GoalResetDelayMinutes = 0.2f;
+        private const float PassivePlayerLerpSpeed = 2.2f;
+        private const float ActivePlayerLerpSpeed = 4.6f;
+        private const float GroundPassArcHeight = 0.04f;
+        private const float LoftedPassArcHeight = 0.24f;
+        private const float GoalkeeperDistributionArcHeight = 0.18f;
 
         private static readonly int[] ShirtNumbers = { 1, 2, 4, 5, 3, 6, 8, 10, 7, 9, 11 };
         private static readonly string[] Roles = { "GK", "RB", "CB", "CB", "LB", "DM", "CM", "AM", "RW", "ST", "LW" };
@@ -225,7 +229,7 @@ namespace FStudio.GTEX.Simulation
                         restartSide + "-8",
                         restartSide);
                     nextRoutinePassMinute = currentMinute + GoalResetDelayMinutes;
-                    currentCameraPreset = "box_zoom";
+                    currentCameraPreset = "broadcast";
                     currentCameraPresetUntilMinute = currentMinute + 0.28f;
                     continue;
                 }
@@ -246,7 +250,7 @@ namespace FStudio.GTEX.Simulation
                         recoveringSide + "-1",
                         recoveringSide);
                     nextRoutinePassMinute = currentMinute + 0.45f;
-                    currentCameraPreset = "box_zoom";
+                    currentCameraPreset = "broadcast";
                     currentCameraPresetUntilMinute = currentMinute + 0.22f;
                     continue;
                 }
@@ -258,7 +262,7 @@ namespace FStudio.GTEX.Simulation
                     ballHolderPlayerId = restartSide + "-6";
                     possessionSide = restartSide;
                     RegisterEvent("foul", currentMinute, teamSide, foulEvent.Summary, engine.HomeScore, engine.AwayScore, ballHolderPlayerId);
-                    currentCameraPreset = "box_zoom";
+                    currentCameraPreset = "broadcast";
                     currentCameraPresetUntilMinute = currentMinute + 0.18f;
                     nextRoutinePassMinute = currentMinute + 0.42f;
                     activeTransit = default;
@@ -276,7 +280,7 @@ namespace FStudio.GTEX.Simulation
                         engine.HomeScore,
                         engine.AwayScore,
                         ResolveCentralPlayerId(teamSide));
-                    currentCameraPreset = "box_zoom";
+                    currentCameraPreset = "broadcast";
                     currentCameraPresetUntilMinute = currentMinute + 0.18f;
                 }
             }
@@ -285,11 +289,11 @@ namespace FStudio.GTEX.Simulation
                 currentMinute >= nextRoutinePassMinute &&
                 !string.Equals(ResolvePhaseToken(engine.State), "fulltime", StringComparison.Ordinal))
             {
-                StartRoutinePass(currentMinute);
+                StartRoutinePass(currentMinute, engine.HomeScore, engine.AwayScore);
             }
         }
 
-        private void StartRoutinePass(float currentMinute)
+        private void StartRoutinePass(float currentMinute, int homeScore, int awayScore)
         {
             var sourcePlayerId = string.IsNullOrWhiteSpace(ballHolderPlayerId)
                 ? ResolveCentralPlayerId(possessionSide)
@@ -301,17 +305,36 @@ namespace FStudio.GTEX.Simulation
                 return;
             }
 
+            var sourcePlayer = FindPlayer(sourcePlayerId);
+            var targetPlayer = FindPlayer(targetPlayerId);
+            var targetPosition = targetPlayer != null
+                ? ClampToPitch(
+                    targetPlayer.Position +
+                    ResolveForward(targetPlayer) * 0.45f +
+                    targetPlayer.Velocity * 0.1f)
+                : Vector3.zero;
+            var passDurationMinutes = ResolveRoutinePassDuration(sourcePlayer, targetPlayer, targetPosition);
+            var passArcHeight = ResolveRoutinePassArcHeight(sourcePlayer, targetPlayer, targetPosition);
+            RegisterEvent(
+                "pass",
+                currentMinute,
+                possessionSide,
+                "Routine pass sequence.",
+                homeScore,
+                awayScore,
+                sourcePlayerId,
+                targetPlayerId);
             StartTransit(
                 sourcePlayerId,
-                FindPlayer(targetPlayerId)?.Position ?? Vector3.zero,
+                targetPosition,
                 currentMinute,
-                RoutinePassDurationMinutes,
-                0.5f,
+                passDurationMinutes,
+                passArcHeight,
                 "pass",
                 targetPlayerId,
                 possessionSide);
-            currentCameraPreset = "attack_push";
-            currentCameraPresetUntilMinute = currentMinute + 0.14f;
+            currentCameraPreset = "broadcast";
+            currentCameraPresetUntilMinute = currentMinute + 0.18f;
             nextRoutinePassMinute = currentMinute + RoutinePassIntervalMinutes;
         }
 
@@ -337,7 +360,8 @@ namespace FStudio.GTEX.Simulation
                 End = ClampToPitch(endPosition),
                 StartedAtMinute = currentMinute,
                 DurationMinutes = Mathf.Max(0.05f, durationMinutes),
-                ArcHeight = Mathf.Max(0.2f, arcHeight),
+                ArcHeight = Mathf.Max(0.02f, arcHeight),
+                TargetPlayerId = postTransitHolderPlayerId,
                 PostTransitHolderPlayerId = postTransitHolderPlayerId,
                 PostTransitPossessionSide = postTransitPossessionSide,
                 TrajectoryType = trajectoryType ?? "pass"
@@ -356,6 +380,19 @@ namespace FStudio.GTEX.Simulation
         {
             var teamHasPossession = string.Equals(possessionSide, teamSide, StringComparison.Ordinal);
             var attackDirection = string.Equals(teamSide, "home", StringComparison.Ordinal) ? 1f : -1f;
+            var ballAnchor = ResolveBallAnchor(currentMinute);
+            var activeReceiverPlayerId = activeTransit.Active ? activeTransit.PostTransitHolderPlayerId : string.Empty;
+            var supportPlayerId =
+                teamHasPossession
+                    ? ResolveSupportPlayerId(teamSide, string.IsNullOrWhiteSpace(ballHolderPlayerId) ? activeReceiverPlayerId : ballHolderPlayerId, activeReceiverPlayerId)
+                    : string.Empty;
+            var runnerPlayerId =
+                teamHasPossession
+                    ? ResolveRunnerPlayerId(teamSide, string.IsNullOrWhiteSpace(ballHolderPlayerId) ? activeReceiverPlayerId : ballHolderPlayerId, activeReceiverPlayerId)
+                    : string.Empty;
+            var presserPlayerId = !teamHasPossession ? ResolveNearestOutfieldPlayerId(teamSide, ballAnchor) : string.Empty;
+            var coverPlayerId = !teamHasPossession ? ResolveCoverPlayerId(teamSide, presserPlayerId, ballAnchor) : string.Empty;
+            var markerPlayerId = !teamHasPossession ? ResolveMarkerPlayerId(teamSide, activeReceiverPlayerId, ballAnchor, presserPlayerId, coverPlayerId) : string.Empty;
             for (var index = 0; index < teamPlayers.Length; index += 1)
             {
                 var player = teamPlayers[index];
@@ -369,37 +406,88 @@ namespace FStudio.GTEX.Simulation
                     ? HomeAnchors[index]
                     : MirrorAnchor(HomeAnchors[index]);
                 var lineWeight = ResolveLineWeight(player.Line);
-                var possessionShift = attackDirection * (teamHasPossession ? 1f : -0.65f) * lineWeight * 7f;
-                var roamX = Mathf.Sin(currentMinute * 0.55f + index * 0.61f) * (player.Role == "GK" ? 0.6f : 1.9f);
-                var roamZ = Mathf.Cos(currentMinute * 0.72f + index * 0.47f) * (player.Role == "GK" ? 1.2f : 3.4f);
+                var possessionShift = attackDirection * (teamHasPossession ? 1f : -0.38f) * lineWeight * 4.4f;
+                var roamX = Mathf.Sin(currentMinute * 0.45f + index * 0.61f) * (player.Role == "GK" ? 0.15f : 0.45f);
+                var roamZ = Mathf.Cos(currentMinute * 0.58f + index * 0.47f) * (player.Role == "GK" ? 0.45f : 1.15f);
                 var targetPosition = ClampToPitch(anchor + new Vector3(possessionShift + roamX, 0f, roamZ));
+                var playerId = player.PlayerId ?? string.Empty;
+                var isGoalkeeper = string.Equals(player.Role, "GK", StringComparison.Ordinal);
+                var isHolder = !activeTransit.Active && string.Equals(playerId, ballHolderPlayerId, StringComparison.Ordinal);
+                var isReceiver = !string.IsNullOrWhiteSpace(activeReceiverPlayerId) && string.Equals(playerId, activeReceiverPlayerId, StringComparison.Ordinal);
+                var isSupport = !string.IsNullOrWhiteSpace(supportPlayerId) && string.Equals(playerId, supportPlayerId, StringComparison.Ordinal);
+                var isRunner = !string.IsNullOrWhiteSpace(runnerPlayerId) && string.Equals(playerId, runnerPlayerId, StringComparison.Ordinal);
+                var isPresser = !string.IsNullOrWhiteSpace(presserPlayerId) && string.Equals(playerId, presserPlayerId, StringComparison.Ordinal);
+                var isCover = !string.IsNullOrWhiteSpace(coverPlayerId) && string.Equals(playerId, coverPlayerId, StringComparison.Ordinal);
+                var isMarker = !string.IsNullOrWhiteSpace(markerPlayerId) && string.Equals(playerId, markerPlayerId, StringComparison.Ordinal);
+                var lerpSpeed = PassivePlayerLerpSpeed;
 
-                if (string.Equals(player.PlayerId, ballHolderPlayerId, StringComparison.Ordinal))
+                if (isGoalkeeper)
+                {
+                    targetPosition = ResolveGoalkeeperTargetPosition(teamSide, ballAnchor);
+                    lerpSpeed = teamHasPossession ? 2.25f : 2.85f;
+                }
+                else if (isHolder)
                 {
                     targetPosition += new Vector3(attackDirection * 2.4f, 0f, Mathf.Sin(currentMinute * 1.1f) * 1.15f);
+                    targetPosition = Vector3.Lerp(targetPosition, ballAnchor + new Vector3(attackDirection * 1.8f, 0f, Mathf.Sin(currentMinute * 1.15f) * 1.1f), 0.42f);
+                    lerpSpeed = ActivePlayerLerpSpeed;
                 }
-                else if (activeTransit.Active && !string.IsNullOrWhiteSpace(activeTransit.PostTransitHolderPlayerId) &&
-                         string.Equals(player.PlayerId, activeTransit.PostTransitHolderPlayerId, StringComparison.Ordinal))
+                else if (isReceiver)
                 {
-                    targetPosition = Vector3.Lerp(targetPosition, activeTransit.End, 0.35f);
+                    var receiveTarget = activeTransit.Active
+                        ? activeTransit.End + ResolveForward(player) * 0.45f
+                        : ballAnchor + new Vector3(attackDirection * 4.8f, 0f, Mathf.Sign(player.Position.z) * 1.6f);
+                    targetPosition = Vector3.Lerp(targetPosition, ClampToPitch(receiveTarget), 0.78f);
                     targetPosition.y = 0f;
+                    lerpSpeed = ActivePlayerLerpSpeed;
+                }
+                else if (teamHasPossession && isSupport)
+                {
+                    var supportOffset = new Vector3(-attackDirection * 3.6f, 0f, Mathf.Clamp(player.Position.z - ballAnchor.z, -8f, 8f) * 0.55f);
+                    targetPosition = Vector3.Lerp(targetPosition, ClampToPitch(ballAnchor + supportOffset), 0.52f);
+                    lerpSpeed = 3.05f;
+                }
+                else if (teamHasPossession && isRunner)
+                {
+                    var laneZ = Mathf.Clamp(player.Position.z * 1.2f, -PitchWidthMeters * 0.34f, PitchWidthMeters * 0.34f);
+                    targetPosition = Vector3.Lerp(targetPosition, ClampToPitch(ballAnchor + new Vector3(attackDirection * 10.5f, 0f, laneZ)), 0.66f);
+                    lerpSpeed = 3.35f;
+                }
+                else if (!teamHasPossession && isPresser)
+                {
+                    targetPosition = Vector3.Lerp(targetPosition, ClampToPitch(ballAnchor - new Vector3(attackDirection * 0.6f, 0f, 0f)), 0.84f);
+                    lerpSpeed = ActivePlayerLerpSpeed;
+                }
+                else if (!teamHasPossession && isCover)
+                {
+                    targetPosition = Vector3.Lerp(targetPosition, ResolveDefensiveCoverPosition(teamSide, ballAnchor), 0.62f);
+                    lerpSpeed = 3f;
+                }
+                else if (!teamHasPossession && isMarker)
+                {
+                    targetPosition = Vector3.Lerp(targetPosition, ResolveMarkingPosition(teamSide, activeReceiverPlayerId, ballAnchor), 0.58f);
+                    lerpSpeed = 2.8f;
                 }
 
-                player.Position = Vector3.Lerp(previousPosition, ClampToPitch(targetPosition), Mathf.Clamp01(deltaSeconds * 3.1f));
+                player.Position = Vector3.Lerp(previousPosition, ClampToPitch(targetPosition), Mathf.Clamp01(deltaSeconds * lerpSpeed));
                 player.Position.y = 0f;
                 player.Velocity = (player.Position - previousPosition) / Mathf.Max(deltaSeconds, 0.02f);
                 player.HasPossession = !activeTransit.Active && string.Equals(player.PlayerId, ballHolderPlayerId, StringComparison.Ordinal);
                 player.SpeedRatio = Mathf.Clamp01(new Vector3(player.Velocity.x, 0f, player.Velocity.z).magnitude / 7.5f);
                 player.AnimationState = player.HasPossession
                     ? "dribble"
-                    : player.SpeedRatio > 0.72f
+                    : player.SpeedRatio > (isPresser || isRunner || isReceiver ? 0.4f : 0.66f)
                         ? "run"
-                        : player.SpeedRatio > 0.12f
+                    : player.SpeedRatio > 0.12f
                             ? "jog"
                             : "idle";
 
                 var facingTarget = player.HasPossession
                     ? ResolveGoalMouthTarget(teamSide, false) - player.Position
+                    : isReceiver && activeTransit.Active
+                        ? activeTransit.End - player.Position
+                    : isPresser || isCover || isMarker
+                        ? ballAnchor - player.Position
                     : player.Velocity.sqrMagnitude > 0.01f
                         ? player.Velocity
                         : new Vector3(attackDirection, 0f, 0f);
@@ -491,7 +579,15 @@ namespace FStudio.GTEX.Simulation
             }
         }
 
-        private void RegisterEvent(string type, float minute, string teamSide, string commentary, int homeScore, int awayScore, string primaryPlayerId)
+        private void RegisterEvent(
+            string type,
+            float minute,
+            string teamSide,
+            string commentary,
+            int homeScore,
+            int awayScore,
+            string primaryPlayerId,
+            string secondaryPlayerId = null)
         {
             nextEventSequence += 1;
             var gtexEvent = new GtexEvent
@@ -505,6 +601,8 @@ namespace FStudio.GTEX.Simulation
                 teamName = string.IsNullOrWhiteSpace(teamSide) ? string.Empty : teamSide,
                 primaryPlayerId = primaryPlayerId ?? string.Empty,
                 primaryPlayerName = primaryPlayerId ?? string.Empty,
+                secondaryPlayerId = secondaryPlayerId ?? string.Empty,
+                secondaryPlayerName = secondaryPlayerId ?? string.Empty,
                 homeScore = homeScore,
                 awayScore = awayScore,
                 bannerText = commentary ?? string.Empty,
@@ -610,28 +708,61 @@ namespace FStudio.GTEX.Simulation
         {
             var sourcePlayer = FindPlayer(sourcePlayerId);
             var teamPlayers = ResolveTeamPlayers(sourcePlayer != null ? sourcePlayer.TeamSide : possessionSide);
-            if (teamPlayers == null || teamPlayers.Length == 0)
+            if (sourcePlayer == null || teamPlayers == null || teamPlayers.Length == 0)
             {
-                return string.Empty;
+                return ResolveCentralPlayerId(possessionSide);
             }
 
-            var sourceIndex = ResolvePlayerIndex(sourcePlayerId);
-            for (var offset = 1; offset < teamPlayers.Length; offset += 1)
+            var bestScore = float.NegativeInfinity;
+            var bestPlayerId = string.Empty;
+            for (var index = 0; index < teamPlayers.Length; index += 1)
             {
-                var candidateIndex = (sourceIndex + offset) % teamPlayers.Length;
-                var candidate = teamPlayers[candidateIndex];
+                var candidate = teamPlayers[index];
                 if (candidate == null || candidate.Role == "GK")
                 {
                     continue;
                 }
 
-                if (!string.Equals(candidate.PlayerId, sourcePlayerId, StringComparison.Ordinal))
+                if (string.Equals(candidate.PlayerId, sourcePlayerId, StringComparison.Ordinal))
                 {
-                    return candidate.PlayerId;
+                    continue;
+                }
+
+                var attackDelta = ResolveAttackAxisDelta(candidate.Position.x - sourcePlayer.Position.x, sourcePlayer.TeamSide);
+                var lateralDistance = Mathf.Abs(candidate.Position.z - sourcePlayer.Position.z);
+                var directDistance = Vector3.Distance(candidate.Position, sourcePlayer.Position);
+                var score = 0f;
+                score += string.Equals(candidate.Line, "midfield", StringComparison.Ordinal) ? 3.2f : 0f;
+                score += string.Equals(candidate.Line, "attack", StringComparison.Ordinal) ? 2.6f : 0f;
+                score += IsWideRole(candidate) ? 0.8f : 0f;
+                score += Mathf.Clamp(attackDelta, -6f, 12f) * 0.18f;
+                score -= Mathf.Abs(directDistance - 14f) * 0.11f;
+                score -= lateralDistance * 0.045f;
+                if (attackDelta < -10f)
+                {
+                    score -= 3.5f;
+                }
+
+                if (sourcePlayer != null && string.Equals(sourcePlayer.Role, "GK", StringComparison.Ordinal))
+                {
+                    score += string.Equals(candidate.Line, "defense", StringComparison.Ordinal) ? 2.4f : 0f;
+                    score += string.Equals(candidate.Role, "DM", StringComparison.Ordinal) ? 2.1f : 0f;
+                    score -= Mathf.Max(0f, attackDelta - 6f) * 0.2f;
+                }
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestPlayerId = candidate.PlayerId;
                 }
             }
 
-            return teamPlayers[0] != null ? teamPlayers[0].PlayerId : string.Empty;
+            if (!string.IsNullOrWhiteSpace(bestPlayerId))
+            {
+                return bestPlayerId;
+            }
+
+            return ResolveCentralPlayerId(sourcePlayer != null ? sourcePlayer.TeamSide : possessionSide);
         }
 
         private string ResolveAttackingPlayerId(string teamSide)
@@ -752,6 +883,307 @@ namespace FStudio.GTEX.Simulation
         private static string ResolveTeamSide(GtexSimTeamSide teamSide)
         {
             return teamSide == GtexSimTeamSide.Away ? "away" : "home";
+        }
+
+        private Vector3 ResolveBallAnchor(float currentMinute)
+        {
+            if (activeTransit.Active)
+            {
+                var elapsedMinutes = Mathf.Max(0f, currentMinute - activeTransit.StartedAtMinute);
+                var t = Mathf.Clamp01(elapsedMinutes / Mathf.Max(0.01f, activeTransit.DurationMinutes));
+                var anchor = Vector3.Lerp(activeTransit.Start, activeTransit.End, t);
+                anchor.y = 0f;
+                return ClampToPitch(anchor);
+            }
+
+            if (!string.IsNullOrWhiteSpace(ballHolderPlayerId))
+            {
+                var holder = FindPlayer(ballHolderPlayerId);
+                if (holder != null)
+                {
+                    var holderAnchor = holder.Position + ResolveForward(holder) * 0.55f;
+                    holderAnchor.y = 0f;
+                    return ClampToPitch(holderAnchor);
+                }
+            }
+
+            var fallback = ballState.Position;
+            fallback.y = 0f;
+            return ClampToPitch(fallback);
+        }
+
+        private float ResolveRoutinePassDuration(GtexSimSpatialPlayerState sourcePlayer, GtexSimSpatialPlayerState targetPlayer, Vector3 targetPosition)
+        {
+            var startPosition = sourcePlayer != null ? sourcePlayer.Position : Vector3.zero;
+            var distance = Vector3.Distance(startPosition, targetPosition);
+            return Mathf.Clamp(0.08f + distance / 250f, 0.09f, 0.15f);
+        }
+
+        private float ResolveRoutinePassArcHeight(GtexSimSpatialPlayerState sourcePlayer, GtexSimSpatialPlayerState targetPlayer, Vector3 targetPosition)
+        {
+            var startPosition = sourcePlayer != null ? sourcePlayer.Position : Vector3.zero;
+            var distance = Vector3.Distance(startPosition, targetPosition);
+            if (sourcePlayer != null && string.Equals(sourcePlayer.Role, "GK", StringComparison.Ordinal))
+            {
+                return GoalkeeperDistributionArcHeight;
+            }
+
+            if (distance > 26f || (targetPlayer != null && IsWideRole(targetPlayer)))
+            {
+                return LoftedPassArcHeight;
+            }
+
+            return GroundPassArcHeight;
+        }
+
+        private string ResolveSupportPlayerId(string teamSide, string sourcePlayerId, string receiverPlayerId)
+        {
+            var sourcePlayer = FindPlayer(sourcePlayerId);
+            var teamPlayers = ResolveTeamPlayers(teamSide);
+            if (sourcePlayer == null || teamPlayers == null)
+            {
+                return string.Empty;
+            }
+
+            var bestScore = float.NegativeInfinity;
+            var bestPlayerId = string.Empty;
+            for (var index = 0; index < teamPlayers.Length; index += 1)
+            {
+                var candidate = teamPlayers[index];
+                if (candidate == null ||
+                    string.Equals(candidate.Role, "GK", StringComparison.Ordinal) ||
+                    string.Equals(candidate.PlayerId, sourcePlayerId, StringComparison.Ordinal) ||
+                    string.Equals(candidate.PlayerId, receiverPlayerId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var attackDelta = ResolveAttackAxisDelta(candidate.Position.x - sourcePlayer.Position.x, teamSide);
+                var distance = Vector3.Distance(candidate.Position, sourcePlayer.Position);
+                var lateralDistance = Mathf.Abs(candidate.Position.z - sourcePlayer.Position.z);
+                var score = 0f;
+                score += string.Equals(candidate.Line, "midfield", StringComparison.Ordinal) ? 3.1f : 0f;
+                score += string.Equals(candidate.Line, "defense", StringComparison.Ordinal) ? 1.8f : 0f;
+                score += attackDelta > -9f && attackDelta < 8f ? 1.9f : 0f;
+                score -= Mathf.Abs(distance - 10f) * 0.13f;
+                score -= lateralDistance * 0.06f;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestPlayerId = candidate.PlayerId;
+                }
+            }
+
+            return bestPlayerId;
+        }
+
+        private string ResolveRunnerPlayerId(string teamSide, string sourcePlayerId, string receiverPlayerId)
+        {
+            var sourcePlayer = FindPlayer(sourcePlayerId);
+            var teamPlayers = ResolveTeamPlayers(teamSide);
+            if (sourcePlayer == null || teamPlayers == null)
+            {
+                return string.Empty;
+            }
+
+            var bestScore = float.NegativeInfinity;
+            var bestPlayerId = string.Empty;
+            for (var index = 0; index < teamPlayers.Length; index += 1)
+            {
+                var candidate = teamPlayers[index];
+                if (candidate == null ||
+                    string.Equals(candidate.Role, "GK", StringComparison.Ordinal) ||
+                    string.Equals(candidate.PlayerId, sourcePlayerId, StringComparison.Ordinal) ||
+                    string.Equals(candidate.PlayerId, receiverPlayerId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var attackDelta = ResolveAttackAxisDelta(candidate.Position.x - sourcePlayer.Position.x, teamSide);
+                var score = 0f;
+                score += string.Equals(candidate.Line, "attack", StringComparison.Ordinal) ? 3.4f : 0f;
+                score += IsWideRole(candidate) ? 1.2f : 0f;
+                score += Mathf.Clamp(attackDelta, 0f, 18f) * 0.18f;
+                score -= Mathf.Abs(candidate.Position.z) * 0.02f;
+                if (attackDelta < 2f)
+                {
+                    score -= 2.5f;
+                }
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestPlayerId = candidate.PlayerId;
+                }
+            }
+
+            return bestPlayerId;
+        }
+
+        private string ResolveNearestOutfieldPlayerId(string teamSide, Vector3 targetPosition)
+        {
+            var teamPlayers = ResolveTeamPlayers(teamSide);
+            if (teamPlayers == null)
+            {
+                return string.Empty;
+            }
+
+            var bestDistance = float.MaxValue;
+            var bestPlayerId = string.Empty;
+            for (var index = 0; index < teamPlayers.Length; index += 1)
+            {
+                var candidate = teamPlayers[index];
+                if (candidate == null || string.Equals(candidate.Role, "GK", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var distance = Vector3.Distance(candidate.Position, targetPosition);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestPlayerId = candidate.PlayerId;
+                }
+            }
+
+            return bestPlayerId;
+        }
+
+        private string ResolveCoverPlayerId(string teamSide, string presserPlayerId, Vector3 ballAnchor)
+        {
+            var teamPlayers = ResolveTeamPlayers(teamSide);
+            if (teamPlayers == null)
+            {
+                return string.Empty;
+            }
+
+            var coverPosition = ResolveDefensiveCoverPosition(teamSide, ballAnchor);
+            var bestDistance = float.MaxValue;
+            var bestPlayerId = string.Empty;
+            for (var index = 0; index < teamPlayers.Length; index += 1)
+            {
+                var candidate = teamPlayers[index];
+                if (candidate == null ||
+                    string.Equals(candidate.Role, "GK", StringComparison.Ordinal) ||
+                    string.Equals(candidate.PlayerId, presserPlayerId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(candidate.Line, "defense", StringComparison.Ordinal) &&
+                    !string.Equals(candidate.Role, "DM", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var distance = Vector3.Distance(candidate.Position, coverPosition);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestPlayerId = candidate.PlayerId;
+                }
+            }
+
+            return bestPlayerId;
+        }
+
+        private string ResolveMarkerPlayerId(
+            string teamSide,
+            string threatPlayerId,
+            Vector3 ballAnchor,
+            string presserPlayerId,
+            string coverPlayerId)
+        {
+            var threatPlayer = FindPlayer(threatPlayerId);
+            var referencePosition = threatPlayer != null ? threatPlayer.Position : ballAnchor;
+            var teamPlayers = ResolveTeamPlayers(teamSide);
+            if (teamPlayers == null)
+            {
+                return string.Empty;
+            }
+
+            var bestDistance = float.MaxValue;
+            var bestPlayerId = string.Empty;
+            for (var index = 0; index < teamPlayers.Length; index += 1)
+            {
+                var candidate = teamPlayers[index];
+                if (candidate == null ||
+                    string.Equals(candidate.Role, "GK", StringComparison.Ordinal) ||
+                    string.Equals(candidate.PlayerId, presserPlayerId, StringComparison.Ordinal) ||
+                    string.Equals(candidate.PlayerId, coverPlayerId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(candidate.Line, "defense", StringComparison.Ordinal) &&
+                    !string.Equals(candidate.Line, "midfield", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var distance = Vector3.Distance(candidate.Position, referencePosition);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestPlayerId = candidate.PlayerId;
+                }
+            }
+
+            return bestPlayerId;
+        }
+
+        private static Vector3 ResolveGoalkeeperTargetPosition(string teamSide, Vector3 ballAnchor)
+        {
+            var goalX = string.Equals(teamSide, "home", StringComparison.Ordinal)
+                ? -PitchLengthMeters * 0.5f + 4.9f
+                : PitchLengthMeters * 0.5f - 4.9f;
+            var zClamp = Mathf.Clamp(ballAnchor.z * 0.28f, -PitchWidthMeters * 0.18f, PitchWidthMeters * 0.18f);
+            var xStep = Mathf.Clamp(Mathf.Abs(ballAnchor.x) * 0.02f, 0.35f, 1.65f);
+            goalX += string.Equals(teamSide, "home", StringComparison.Ordinal) ? xStep : -xStep;
+            return ClampToPitch(new Vector3(goalX, 0f, zClamp));
+        }
+
+        private static Vector3 ResolveDefensiveCoverPosition(string teamSide, Vector3 ballAnchor)
+        {
+            var goalCenter = string.Equals(teamSide, "home", StringComparison.Ordinal)
+                ? new Vector3(-PitchLengthMeters * 0.5f + 7.2f, 0f, 0f)
+                : new Vector3(PitchLengthMeters * 0.5f - 7.2f, 0f, 0f);
+            var cover = Vector3.Lerp(goalCenter, ballAnchor, 0.38f);
+            cover.z = Mathf.Clamp(cover.z, -PitchWidthMeters * 0.28f, PitchWidthMeters * 0.28f);
+            return ClampToPitch(cover);
+        }
+
+        private Vector3 ResolveMarkingPosition(string teamSide, string threatPlayerId, Vector3 ballAnchor)
+        {
+            var threatPlayer = FindPlayer(threatPlayerId);
+            if (threatPlayer == null)
+            {
+                return ResolveDefensiveCoverPosition(teamSide, ballAnchor);
+            }
+
+            var goalCenter = string.Equals(teamSide, "home", StringComparison.Ordinal)
+                ? new Vector3(-PitchLengthMeters * 0.5f + 9.5f, 0f, 0f)
+                : new Vector3(PitchLengthMeters * 0.5f - 9.5f, 0f, 0f);
+            return ClampToPitch(Vector3.Lerp(goalCenter, threatPlayer.Position, 0.62f));
+        }
+
+        private static float ResolveAttackAxisDelta(float deltaX, string teamSide)
+        {
+            return string.Equals(teamSide, "away", StringComparison.Ordinal) ? -deltaX : deltaX;
+        }
+
+        private static bool IsWideRole(GtexSimSpatialPlayerState player)
+        {
+            if (player == null || string.IsNullOrWhiteSpace(player.Role))
+            {
+                return false;
+            }
+
+            return
+                string.Equals(player.Role, "RW", StringComparison.Ordinal) ||
+                string.Equals(player.Role, "LW", StringComparison.Ordinal) ||
+                string.Equals(player.Role, "RB", StringComparison.Ordinal) ||
+                string.Equals(player.Role, "LB", StringComparison.Ordinal);
         }
 
         private static string ResolvePhaseToken(GtexSimState state)

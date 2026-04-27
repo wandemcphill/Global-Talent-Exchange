@@ -9,7 +9,9 @@ using UnityEngine;
 namespace FStudio.UI {
     public class BigLoadingPanel : EventPanel<BigLoadingEvent> {
         private static bool IsExternallyDrivenMatchActive() {
-            return GtexRuntimeBootstrap.IsLivePlaybackPendingOrActive() ||
+            return GtexRuntimeFlags.UsesGtexScoreAuthority ||
+                GtexRuntimeBootstrap.IsOriginalVisualRuntimeActive() ||
+                GtexRuntimeBootstrap.IsLivePlaybackPendingOrActive() ||
                 (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackEnabled);
         }
 

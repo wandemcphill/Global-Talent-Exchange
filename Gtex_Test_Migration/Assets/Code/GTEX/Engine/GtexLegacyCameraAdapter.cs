@@ -12,6 +12,28 @@ namespace FStudio.GTEX.Engine
 
         public string CurrentCameraType => CameraSystem.Current != null ? CameraSystem.Current.CurrentCameraType : string.Empty;
 
+        public Transform CurrentTargetTransform => CameraSystem.Current != null ? CameraSystem.Current.target : null;
+
+        public Vector3 CurrentTargetPosition
+        {
+            get
+            {
+                if (CameraSystem.Current == null)
+                {
+                    return Vector3.zero;
+                }
+
+                if (CameraSystem.Current.TargetPosition.HasValue)
+                {
+                    return CameraSystem.Current.TargetPosition.Value;
+                }
+
+                return CameraSystem.Current.target != null
+                    ? CameraSystem.Current.target.position
+                    : Vector3.zero;
+            }
+        }
+
         public void FocusToBall(bool instant = true)
         {
             if (!CanFocusBall)

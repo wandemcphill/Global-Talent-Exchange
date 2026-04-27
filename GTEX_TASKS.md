@@ -11,10 +11,11 @@ Rules:
 ## Current Target
 
 - `P5` is complete
-- `P6` is `READY`
-- Ship GTEX on top of the current engine first
-- Production readiness on the current engine is part of `P6`
-- Engine replacement is deferred until objective evidence says replacement is justified
+- `P6` remains `READY` for current-engine production hardening
+- `P6V` is `READY` for the controlled Original Visual Runtime Pivot
+- `P6V` supersedes the old P6/P7/P8 current-engine-only restriction for this isolated visual-runtime pivot only
+- The pivot is not a rewrite: GTEX remains the match authority and the original simulator owns football visuals in a separate scene
+- Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates
 
 ## Phases
 
@@ -120,6 +121,38 @@ Exit gate:
 - Unity live playback runs a full session with moving players, moving ball, stable camera, and no debug overlays
 - `main` is gated by backend checks and Unity Windows batch build verification before deploy
 - Staging passes a 15-minute soak run and production has actionable observability plus rollback-ready procedures
+
+### P6V Original Visual Runtime Pivot
+Status: `READY`
+
+Source prompt:
+- `Prompt C2` in `GTEX_PHASED_PROMPTS.md`
+
+Supersedence:
+- This phase explicitly supersedes the old P6/P7/P8 current-engine-only restriction for the controlled visual-runtime pivot.
+- The supersedence is limited to a separate original-visual scene and bridge path.
+- It does not authorize deleting current GTEX systems or rewriting the existing shipped scene.
+
+Scope:
+- Create branch `feature/original-visual-runtime`
+- Preserve all existing GTEX work and scenes
+- Create `Assets/Scenes/GTEX_OriginalVisualRuntime.unity`
+- Store/reference the clean original simulator package under `Assets/ThirdParty/OriginalFootballSimulator/`
+- Do not import duplicate active `FStudio.MatchEngine` code from the original simulator package
+- Add a runtime mode `OriginalVisualRuntime`, separate from live playback, local simulation, and external transform playback
+- Add `Assets/Code/GTEX/VisualBridge/` as the only integration point between GTEX match authority and original simulator visuals
+- Route backend/local-sim events into high-level football commands, not per-frame transform playback
+- Keep `MatchManager.SetExternalPlayback(false)` in the original-visual scene so original simulator movement, ball, keeper, and camera systems win
+- Keep `GtexScoreAuthority` as the single score source
+
+Exit gate:
+- Original-visual scene runs original simulator camera, player movement, ball control, pass, shot, dribble, and keeper behavior without GTEX backend
+- Scripted command replay can execute kickoff, possession, carry, pass, through pass, cross, shot saved, goal, and reset kickoff
+- Local GTEX simulation events can drive the visual bridge to half-time and full-time
+- Live/backend playback uses visual commands only on this path
+- `DrivePlayers` and `DriveBall` transform playback are inactive in `OriginalVisualRuntime`
+- Current GTEX scenes remain intact and build-stable
+- Windows batch build remains stable
 
 ### P7 Evidence For Engine Replacement
 Status: `BLOCKED`

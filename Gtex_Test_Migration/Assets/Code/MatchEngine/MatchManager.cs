@@ -40,6 +40,11 @@ namespace FStudio.MatchEngine {
     public class MatchManager : SceneObjectSingleton<MatchManager> {
         private const int RequiredPlayersPerTeam = 11;
         private const string ExternalPlaybackFieldVisualName = "GTEX_ExternalPlaybackFieldUnderlay";
+        private const string OriginalStadiumPitchObjectName = "ExtrudedField";
+        private const float FinalWhistleGraceSeconds = 1.5f;
+
+        public static event Action MatchResetting;
+        public static event Action MatchResetComplete;
 
         [Header("Field Settings")]
         public int fieldEndX = default;
@@ -116,6 +121,8 @@ namespace FStudio.MatchEngine {
         [SerializeField] private BoxCollider goal1SpotCollider = default;
         [SerializeField] private BoxCollider goal2SpotCollider = default;
         [SerializeField] private Material externalPlaybackFieldMaterial = default;
+        [SerializeField] private Texture2D externalPlaybackFieldGrassTexture = default;
+        [SerializeField] private Texture2D externalPlaybackFieldLinesTexture = default;
         [SerializeField] private float externalPlaybackFieldLengthPadding = 6f;
         [SerializeField] private float externalPlaybackFieldWidthPadding = 2.5f;
         [SerializeField] private float externalPlaybackFieldThickness = 0.08f;
@@ -137,6 +144,7 @@ namespace FStudio.MatchEngine {
 
         public MatchStatus MatchFlags = default;
         public bool ExternalPlaybackEnabled { get; private set; }
+        public static bool GlobalCommandDrivenVisualHold { get; private set; }
         public GtexPitchSpace ExternalPlaybackPitchSpace { get; private set; }
         public GtexPitchZoneHelper ExternalPlaybackPitchZones { get; private set; }
         public GtexPlaybackSanitizer ExternalPlaybackSanitizer => externalPlaybackSanitizer;
@@ -147,7 +155,18 @@ namespace FStudio.MatchEngine {
         private Transform externalPlaybackFieldVisual;
         private MeshRenderer externalPlaybackFieldVisualRenderer;
         private Material runtimeExternalPlaybackFieldMaterial;
+        private Material runtimeExternalPlaybackFieldBaseMaterial;
+        private Material runtimeExternalPlaybackFieldLinesMaterial;
         private bool createdExternalPlaybackFieldVisual;
+        private bool preserveOriginalScenePresentation = true;
+        private bool useOriginalMatchCamera = true;
+        private readonly Dictionary<Renderer, OriginalRendererState> originalStadiumPitchRendererStates = new Dictionary<Renderer, OriginalRendererState>();
+
+        private sealed class OriginalRendererState {
+            public Material[] sharedMaterials;
+            public ShadowCastingMode shadowCastingMode;
+            public bool receiveShadows;
+        }
 
         /// <summary>
         /// Which team started, team1 or team2?
@@ -159,6 +178,7 @@ namespace FStudio.MatchEngine {
         /// </summary>
         private int halfIndex = default;
         private CancellationTokenSource kickoffCounterToken;
+        private float finalWhistleEligibleAt = -1f;
 
         protected override void OnEnable() {
             base.OnEnable();
@@ -166,12 +186,14 @@ namespace FStudio.MatchEngine {
             EventManager.Subscribe<KickOffEvent>(KickOff);
             EventManager.Subscribe<ThrowInEvent>(OnThrowIn);
             EventManager.Subscribe<OutEvent>(OnCorner);
+            GtexScoreAuthority.ScoreChanged += HandleGtexScoreChanged;
         }
 
         private void OnDisable() {
             EventManager.UnSubscribe<KickOffEvent>(KickOff);
             EventManager.UnSubscribe<ThrowInEvent>(OnThrowIn);
             EventManager.UnSubscribe<OutEvent>(OnCorner);
+            GtexScoreAuthority.ScoreChanged -= HandleGtexScoreChanged;
         }
 
         [Preserve]
@@ -182,6 +204,7 @@ namespace FStudio.MatchEngine {
             AllPlayers = Enumerable.Empty<PlayerBase>();
             CurrentMatchDetails = null;
             UserTeam = null;
+            finalWhistleEligibleAt = -1f;
             base.OnDestroy();
         }
 
@@ -514,6 +537,14 @@ namespace FStudio.MatchEngine {
         }
 
         private async void StartKickoffCounter() {
+            if (FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime())
+            {
+                CancelKickoffCounter();
+                MatchFlags = MatchStatus.WaitingForKickOff;
+                Debug.Log("[GTEX OriginalVisualRuntime] Kickoff counter blocked; waiting for command-driven start.");
+                return;
+            }
+
             CancelKickoffCounter();
             kickoffCounterToken = new CancellationTokenSource();
             var token = kickoffCounterToken.Token;
@@ -557,6 +588,7 @@ namespace FStudio.MatchEngine {
             DisposeMatchScopedManagers();
 
             minutes = 0;
+            finalWhistleEligibleAt = -1f;
 
             GameTeam1.SetTeam(team1);
             GameTeam2.SetTeam(team2);
@@ -700,6 +732,7 @@ namespace FStudio.MatchEngine {
             SetExternalPlaybackFieldVisual(false);
             SetPlayerExternalPlayback(false);
             SetRefereeExternalPlayback(false);
+            finalWhistleEligibleAt = -1f;
         }
 
         private async void ApplyExternalPlaybackCamera() {
@@ -707,7 +740,7 @@ namespace FStudio.MatchEngine {
                 return;
             }
 
-            await CameraSystem.Current.SwitchCamera("Broadcast");
+            await CameraSystem.Current.SwitchCamera(useOriginalMatchCamera ? "Stadium" : "Broadcast");
 
             if (Ball.Current != null) {
                 CameraSystem.Current.FocusToBall();
@@ -725,10 +758,71 @@ namespace FStudio.MatchEngine {
             MatchFlags = matchStatus;
         }
 
+        private void HandleGtexScoreChanged(GtexScoreState score)
+        {
+            if (!GtexRuntimeFlags.UsesGtexScoreAuthority || score == null)
+            {
+                return;
+            }
+
+            homeTeamScore = Mathf.Max(0, score.homeScore);
+            awayTeamScore = Mathf.Max(0, score.awayScore);
+            minutes = Mathf.Max(0, score.minute);
+        }
+
         public void ConfigureExternalPlaybackSettings(GtexMatchConfig matchConfig) {
+            preserveOriginalScenePresentation = matchConfig == null || matchConfig.ShouldPreserveOriginalScenePresentation;
+            useOriginalMatchCamera = matchConfig == null || matchConfig.ShouldUseOriginalMatchCamera;
             ExternalPlaybackTeleportDistance = matchConfig != null
                 ? Mathf.Max(0.5f, matchConfig.teleportDistance)
                 : 6f;
+        }
+
+        public static void SetGlobalCommandDrivenVisualHold(bool value) {
+            GlobalCommandDrivenVisualHold = value;
+
+            if (value && Current != null) {
+                Current.CancelKickoffCounter();
+            }
+        }
+
+        public bool ShouldBlockAutonomousBehaviours() {
+            return FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                   (GlobalCommandDrivenVisualHold ||
+                    FStudio.GTEX.Core.GtexRuntimeState.ActiveMode == FStudio.GTEX.Core.GtexRuntimeMode.OriginalVisualRuntime);
+        }
+
+        public void ShowOriginalVisualRuntimeFieldVisual() {
+            if (!FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                return;
+            }
+
+            var fieldVisual = EnsureExternalPlaybackFieldVisual();
+            if (fieldVisual == null || externalPlaybackFieldVisualRenderer == null) {
+                return;
+            }
+
+            var fieldMaterial = ResolveExternalPlaybackFieldBaseMaterial() ?? ResolveExternalPlaybackFieldMaterial();
+            if (fieldMaterial == null) {
+                return;
+            }
+
+            fieldVisual.SetPositionAndRotation(
+                new Vector3(fieldEndX / 2f, 0.01f, fieldEndY / 2f),
+                Quaternion.identity);
+            fieldVisual.localScale = new Vector3(
+                Mathf.Max(0.1f, fieldEndX / 10f),
+                1f,
+                Mathf.Max(0.1f, fieldEndY / 10f));
+
+            externalPlaybackFieldVisualRenderer.sharedMaterial = fieldMaterial;
+            externalPlaybackFieldVisualRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            externalPlaybackFieldVisualRenderer.receiveShadows = false;
+            externalPlaybackFieldVisualRenderer.enabled = true;
+            externalPlaybackFieldVisualRenderer.gameObject.SetActive(true);
+            SetNamedSceneRenderersEnabled(OriginalStadiumPitchObjectName, false);
+
+            Debug.Log("[GTEX OriginalVisualRuntime] Contained pitch visual ready.");
         }
 
         public void ConfigureExternalPlaybackPitchSpace(GtexPitchSpace pitchSpace) {
@@ -758,8 +852,10 @@ namespace FStudio.MatchEngine {
             }
 
             var homeGoal = teamSide == GtexPitchZoneHelper.HomeTeamSide;
-            var infieldInset = Mathf.Clamp(ExternalPlaybackPitchSpace.Length * 0.021f, 1.85f, 2.6f);
             var inwardDirection = homeGoal ? ExternalPlaybackPitchZones.HomeToAwayAxis : -ExternalPlaybackPitchZones.HomeToAwayAxis;
+            var minimumInset = Mathf.Clamp(ExternalPlaybackPitchSpace.Length * 0.021f, 1.85f, 2.6f);
+            goalNet.transform.rotation = Quaternion.LookRotation(inwardDirection, Vector3.up);
+            var infieldInset = Mathf.Max(minimumInset, goalNet.ResolveRequiredInfieldInset(inwardDirection, 0.18f));
             var visualGoalCenter = ExternalPlaybackPitchZones.GetGoalVisualCenter(teamSide, infieldInset);
             var previousPosition = goalNet.transform.position;
             goalNet.AlignToPitch(
@@ -791,6 +887,33 @@ namespace FStudio.MatchEngine {
                 return;
             }
 
+            if (preserveOriginalScenePresentation) {
+                ApplyOriginalStadiumPitchPresentation();
+                var originalPitchSpace = ExternalPlaybackPitchSpace;
+                var originalPitchZones = ExternalPlaybackPitchZones;
+                var lineVisual = EnsureExternalPlaybackFieldVisual();
+                if (lineVisual != null && externalPlaybackFieldVisualRenderer != null) {
+                    var overlayRotation = Quaternion.LookRotation(originalPitchZones.LateralAxis, Vector3.up);
+                    lineVisual.SetPositionAndRotation(
+                        new Vector3(originalPitchSpace.Center.x, originalPitchSpace.GrassY + 0.03f, originalPitchSpace.Center.z),
+                        overlayRotation);
+                    lineVisual.localScale = new Vector3(
+                        Mathf.Max(0.1f, originalPitchSpace.Length / 10f),
+                        1f,
+                        Mathf.Max(0.1f, originalPitchSpace.Width / 10f));
+
+                    externalPlaybackFieldVisualRenderer.sharedMaterial = ResolveExternalPlaybackFieldLinesMaterial();
+                    externalPlaybackFieldVisualRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                    externalPlaybackFieldVisualRenderer.receiveShadows = false;
+                    externalPlaybackFieldVisualRenderer.enabled = true;
+                    externalPlaybackFieldVisualRenderer.gameObject.SetActive(true);
+                }
+
+                return;
+            }
+
+            RestoreOriginalStadiumPitchPresentation();
+
             var fieldVisual = EnsureExternalPlaybackFieldVisual();
             if (fieldVisual == null || externalPlaybackFieldVisualRenderer == null) {
                 return;
@@ -800,31 +923,100 @@ namespace FStudio.MatchEngine {
             var pitchZones = ExternalPlaybackPitchZones;
             var lengthPadding = Mathf.Clamp(externalPlaybackFieldLengthPadding, 0f, 18f);
             var widthPadding = Mathf.Clamp(externalPlaybackFieldWidthPadding, 0f, 8f);
-            var thickness = Mathf.Clamp(externalPlaybackFieldThickness, 0.03f, 0.2f);
             var targetRotation = Quaternion.LookRotation(pitchZones.LateralAxis, Vector3.up);
             var targetPosition = new Vector3(
                 pitchSpace.Center.x,
-                pitchSpace.GrassY - thickness * 0.5f - 0.03f,
+                preserveOriginalScenePresentation ? pitchSpace.GrassY + 0.03f : pitchSpace.GrassY - 0.01f,
                 pitchSpace.Center.z);
 
+            ExpandFieldPaddingForGoalVisuals(goalNet1, targetPosition, targetRotation, pitchSpace, ref lengthPadding, ref widthPadding);
+            ExpandFieldPaddingForGoalVisuals(goalNet2, targetPosition, targetRotation, pitchSpace, ref lengthPadding, ref widthPadding);
             fieldVisual.SetPositionAndRotation(targetPosition, targetRotation);
             fieldVisual.localScale = new Vector3(
-                Mathf.Max(1f, pitchSpace.Length + lengthPadding * 2f),
-                thickness,
-                Mathf.Max(1f, pitchSpace.Width + widthPadding * 2f));
+                Mathf.Max(0.1f, (pitchSpace.Length + lengthPadding * 2f) / 10f),
+                1f,
+                Mathf.Max(0.1f, (pitchSpace.Width + widthPadding * 2f) / 10f));
 
             var renderer = externalPlaybackFieldVisualRenderer;
             renderer.sharedMaterial = ResolveExternalPlaybackFieldMaterial();
             renderer.shadowCastingMode = ShadowCastingMode.Off;
-            renderer.receiveShadows = true;
+            renderer.receiveShadows = false;
             renderer.enabled = true;
             renderer.gameObject.SetActive(true);
+            SetNamedSceneRenderersEnabled(OriginalStadiumPitchObjectName, false);
+        }
 
-            var templateGround = FindSceneTransform("fieldGround");
-            var templateRenderer = templateGround != null ? templateGround.GetComponent<MeshRenderer>() : null;
-            if (templateRenderer != null) {
-                templateRenderer.enabled = false;
+        private void ExpandFieldPaddingForGoalVisuals(
+            GoalNet goalNet,
+            Vector3 fieldCenter,
+            Quaternion fieldRotation,
+            GtexPitchSpace pitchSpace,
+            ref float lengthPadding,
+            ref float widthPadding) {
+            if (goalNet == null || pitchSpace == null || !TryGetCompositeBounds(goalNet.transform, out var bounds)) {
+                return;
             }
+
+            var inverseRotation = Quaternion.Inverse(fieldRotation);
+            var extents = bounds.extents;
+            var center = bounds.center;
+            var maxLengthOverflow = 0f;
+            var maxWidthOverflow = 0f;
+
+            for (var x = -1; x <= 1; x += 2) {
+                for (var y = -1; y <= 1; y += 2) {
+                    for (var z = -1; z <= 1; z += 2) {
+                        var corner = center + Vector3.Scale(extents, new Vector3(x, y, z));
+                        var localCorner = inverseRotation * (corner - fieldCenter);
+                        maxLengthOverflow = Mathf.Max(maxLengthOverflow, Mathf.Abs(localCorner.x) - pitchSpace.HalfLength);
+                        maxWidthOverflow = Mathf.Max(maxWidthOverflow, Mathf.Abs(localCorner.z) - pitchSpace.HalfWidth);
+                    }
+                }
+            }
+
+            lengthPadding = Mathf.Clamp(Mathf.Max(lengthPadding, maxLengthOverflow + 0.35f), 0f, 18f);
+            widthPadding = Mathf.Clamp(Mathf.Max(widthPadding, maxWidthOverflow + 0.2f), 0f, 8f);
+        }
+
+        private static bool TryGetCompositeBounds(Transform root, out Bounds bounds) {
+            bounds = default;
+            if (root == null) {
+                return false;
+            }
+
+            var hasBounds = false;
+
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            for (var index = 0; index < renderers.Length; index += 1) {
+                var renderer = renderers[index];
+                if (renderer == null || !renderer.enabled) {
+                    continue;
+                }
+
+                if (!hasBounds) {
+                    bounds = renderer.bounds;
+                    hasBounds = true;
+                } else {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            var colliders = root.GetComponentsInChildren<Collider>(true);
+            for (var index = 0; index < colliders.Length; index += 1) {
+                var collider = colliders[index];
+                if (collider == null || !collider.enabled) {
+                    continue;
+                }
+
+                if (!hasBounds) {
+                    bounds = collider.bounds;
+                    hasBounds = true;
+                } else {
+                    bounds.Encapsulate(collider.bounds);
+                }
+            }
+
+            return hasBounds;
         }
 
         private Transform EnsureExternalPlaybackFieldVisual() {
@@ -840,7 +1032,7 @@ namespace FStudio.MatchEngine {
             }
 
             var parent = FindSceneTransform("Field");
-            var visualObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var visualObject = GameObject.CreatePrimitive(PrimitiveType.Plane);
             visualObject.name = ExternalPlaybackFieldVisualName;
             visualObject.layer = parent != null ? parent.gameObject.layer : gameObject.layer;
             visualObject.transform.SetParent(parent != null ? parent : transform, false);
@@ -881,8 +1073,107 @@ namespace FStudio.MatchEngine {
             }
 
             runtimeExternalPlaybackFieldMaterial.name = "GTEX_ExternalPlaybackFieldUnderlayMat";
+            SanitizeExternalPlaybackFieldMaterial(runtimeExternalPlaybackFieldMaterial);
             ApplyExternalPlaybackFieldTint(runtimeExternalPlaybackFieldMaterial);
             return runtimeExternalPlaybackFieldMaterial;
+        }
+
+        private Material ResolveExternalPlaybackFieldBaseMaterial() {
+            if (runtimeExternalPlaybackFieldBaseMaterial != null) {
+                return runtimeExternalPlaybackFieldBaseMaterial;
+            }
+
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (shader == null) {
+                return null;
+            }
+
+            runtimeExternalPlaybackFieldBaseMaterial = new Material(shader);
+            runtimeExternalPlaybackFieldBaseMaterial.name = "GTEX_ExternalPlaybackFieldBaseMat";
+            ApplyExternalPlaybackFieldBaseMaterial(runtimeExternalPlaybackFieldBaseMaterial);
+            return runtimeExternalPlaybackFieldBaseMaterial;
+        }
+
+        private Material ResolveExternalPlaybackFieldLinesMaterial() {
+            if (runtimeExternalPlaybackFieldLinesMaterial != null) {
+                return runtimeExternalPlaybackFieldLinesMaterial;
+            }
+
+            var shader = Resources.Load<Shader>("GTEX/Shaders/GtexFieldLineOverlay");
+            if (shader == null) {
+                return null;
+            }
+
+            runtimeExternalPlaybackFieldLinesMaterial = new Material(shader);
+            runtimeExternalPlaybackFieldLinesMaterial.name = "GTEX_ExternalPlaybackFieldLinesMat";
+            if (externalPlaybackFieldLinesTexture != null) {
+                runtimeExternalPlaybackFieldLinesMaterial.SetTexture("_MainTex", externalPlaybackFieldLinesTexture);
+            }
+
+            runtimeExternalPlaybackFieldLinesMaterial.SetColor("_LineColor", new Color(0.96f, 0.96f, 0.94f, 1f));
+            runtimeExternalPlaybackFieldLinesMaterial.SetFloat("_Cutoff", 0.08f);
+            return runtimeExternalPlaybackFieldLinesMaterial;
+        }
+
+        private static void SanitizeExternalPlaybackFieldMaterial(Material material) {
+            if (material == null) {
+                return;
+            }
+
+            var baseMap = material.HasProperty("_BaseMap") ? material.GetTexture("_BaseMap") : null;
+            var mainTexture = material.HasProperty("_MainTex") ? material.GetTexture("_MainTex") : null;
+            var sampledTexture = baseMap != null ? baseMap : mainTexture;
+            var sampledTextureName = sampledTexture != null ? sampledTexture.name : string.Empty;
+            if (!string.IsNullOrWhiteSpace(sampledTextureName) &&
+                sampledTextureName.IndexOf("extrudedfield", StringComparison.OrdinalIgnoreCase) >= 0) {
+                if (material.HasProperty("_BaseMap")) {
+                    material.SetTexture("_BaseMap", null);
+                }
+
+                if (material.HasProperty("_MainTex")) {
+                    material.SetTexture("_MainTex", null);
+                }
+            }
+
+            if (material.HasProperty("_Surface")) {
+                material.SetFloat("_Surface", 0f);
+            }
+
+            if (material.HasProperty("_AlphaClip")) {
+                material.SetFloat("_AlphaClip", 0f);
+            }
+
+            if (material.HasProperty("_Cutoff")) {
+                material.SetFloat("_Cutoff", 0f);
+            }
+
+            if (material.HasProperty("_ZWrite")) {
+                material.SetFloat("_ZWrite", 1f);
+            }
+
+            if (material.HasProperty("_SrcBlend")) {
+                material.SetFloat("_SrcBlend", 1f);
+            }
+
+            if (material.HasProperty("_DstBlend")) {
+                material.SetFloat("_DstBlend", 0f);
+            }
+
+            if (material.HasProperty("_SrcBlendAlpha")) {
+                material.SetFloat("_SrcBlendAlpha", 1f);
+            }
+
+            if (material.HasProperty("_DstBlendAlpha")) {
+                material.SetFloat("_DstBlendAlpha", 0f);
+            }
+
+            if (material.HasProperty("_Cull")) {
+                material.SetFloat("_Cull", 2f);
+            }
+
+            material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.DisableKeyword("_ALPHATEST_ON");
+            material.renderQueue = -1;
         }
 
         private void ApplyExternalPlaybackFieldTint(Material material) {
@@ -916,6 +1207,64 @@ namespace FStudio.MatchEngine {
             if (material.HasProperty("_Glossiness")) {
                 material.SetFloat("_Glossiness", 0f);
             }
+
+            if (material.HasProperty("_ReceiveShadows")) {
+                material.SetFloat("_ReceiveShadows", 0f);
+            }
+
+            if (material.HasProperty("_TotalHeight")) {
+                material.SetFloat("_TotalHeight", 0.035f);
+            }
+
+            if (material.HasProperty("_HeightMapPower")) {
+                material.SetFloat("_HeightMapPower", 0f);
+            }
+
+            if (material.HasProperty("_FieldLinesNoisePower")) {
+                material.SetFloat("_FieldLinesNoisePower", 0.2f);
+            }
+
+            if (material.HasProperty("_ShadowColor")) {
+                material.SetColor("_ShadowColor", new Color(0f, 0f, 0f, 0f));
+            }
+        }
+
+        private void ApplyExternalPlaybackFieldBaseMaterial(Material material) {
+            if (material == null) {
+                return;
+            }
+
+            if (externalPlaybackFieldGrassTexture != null) {
+                if (material.HasProperty("_BaseMap")) {
+                    material.SetTexture("_BaseMap", externalPlaybackFieldGrassTexture);
+                    material.SetTextureScale("_BaseMap", new Vector2(18f, 12f));
+                }
+
+                if (material.HasProperty("_MainTex")) {
+                    material.SetTexture("_MainTex", externalPlaybackFieldGrassTexture);
+                    material.SetTextureScale("_MainTex", new Vector2(18f, 12f));
+                }
+            }
+
+            if (material.HasProperty("_BaseColor")) {
+                material.SetColor("_BaseColor", new Color(0.42f, 0.58f, 0.34f, 1f));
+            }
+
+            if (material.HasProperty("_Color")) {
+                material.SetColor("_Color", Color.white);
+            }
+
+            if (material.HasProperty("_Smoothness")) {
+                material.SetFloat("_Smoothness", 0f);
+            }
+
+            if (material.HasProperty("_Glossiness")) {
+                material.SetFloat("_Glossiness", 0f);
+            }
+
+            if (material.HasProperty("_ReceiveShadows")) {
+                material.SetFloat("_ReceiveShadows", 0f);
+            }
         }
 
         private static float GetMaxColorComponent(Color color) {
@@ -923,6 +1272,11 @@ namespace FStudio.MatchEngine {
         }
 
         private void SetExternalPlaybackFieldVisual(bool value) {
+            if (!value) {
+                RestoreOriginalStadiumPitchPresentation();
+                SetNamedSceneRenderersEnabled(OriginalStadiumPitchObjectName, true);
+            }
+
             if (externalPlaybackFieldVisualRenderer == null) {
                 return;
             }
@@ -933,7 +1287,92 @@ namespace FStudio.MatchEngine {
             }
         }
 
+        private static void SetNamedSceneRenderersEnabled(string objectName, bool value) {
+            var renderers = GetNamedSceneRenderers(objectName);
+            for (var index = 0; index < renderers.Count; index += 1) {
+                if (renderers[index] != null) {
+                    renderers[index].enabled = value;
+                }
+            }
+        }
+
+        private void ApplyOriginalStadiumPitchPresentation() {
+            var replacementMaterial = ResolveExternalPlaybackFieldBaseMaterial();
+            if (replacementMaterial == null) {
+                return;
+            }
+
+            var renderers = GetNamedSceneRenderers(OriginalStadiumPitchObjectName);
+            for (var index = 0; index < renderers.Count; index += 1) {
+                var renderer = renderers[index];
+                if (renderer == null) {
+                    continue;
+                }
+
+                if (!originalStadiumPitchRendererStates.ContainsKey(renderer)) {
+                    originalStadiumPitchRendererStates[renderer] = new OriginalRendererState {
+                        sharedMaterials = renderer.sharedMaterials,
+                        shadowCastingMode = renderer.shadowCastingMode,
+                        receiveShadows = renderer.receiveShadows
+                    };
+                }
+
+                var materialCount = Mathf.Max(1, renderer.sharedMaterials != null ? renderer.sharedMaterials.Length : 0);
+                var replacementMaterials = new Material[materialCount];
+                for (var materialIndex = 0; materialIndex < replacementMaterials.Length; materialIndex += 1) {
+                    replacementMaterials[materialIndex] = replacementMaterial;
+                }
+
+                renderer.sharedMaterials = replacementMaterials;
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.enabled = true;
+            }
+        }
+
+        private void RestoreOriginalStadiumPitchPresentation() {
+            foreach (var kvp in originalStadiumPitchRendererStates) {
+                var renderer = kvp.Key;
+                var state = kvp.Value;
+                if (renderer == null || state == null) {
+                    continue;
+                }
+
+                renderer.sharedMaterials = state.sharedMaterials;
+                renderer.shadowCastingMode = state.shadowCastingMode;
+                renderer.receiveShadows = state.receiveShadows;
+                renderer.enabled = true;
+            }
+
+            originalStadiumPitchRendererStates.Clear();
+        }
+
+        private static List<Renderer> GetNamedSceneRenderers(string objectName) {
+            var results = new List<Renderer>();
+            if (string.IsNullOrWhiteSpace(objectName)) {
+                return results;
+            }
+
+            var transforms = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (var index = 0; index < transforms.Length; index += 1) {
+                var candidate = transforms[index];
+                if (candidate == null || !string.Equals(candidate.name, objectName, StringComparison.Ordinal)) {
+                    continue;
+                }
+
+                var renderers = candidate.GetComponentsInChildren<Renderer>(true);
+                for (var rendererIndex = 0; rendererIndex < renderers.Length; rendererIndex += 1) {
+                    if (renderers[rendererIndex] != null) {
+                        results.Add(renderers[rendererIndex]);
+                    }
+                }
+            }
+
+            return results;
+        }
+
         private void DisposeExternalPlaybackFieldVisual() {
+            RestoreOriginalStadiumPitchPresentation();
             if (runtimeExternalPlaybackFieldMaterial != null) {
                 if (Application.isPlaying) {
                     Destroy(runtimeExternalPlaybackFieldMaterial);
@@ -942,6 +1381,26 @@ namespace FStudio.MatchEngine {
                 }
 
                 runtimeExternalPlaybackFieldMaterial = null;
+            }
+
+            if (runtimeExternalPlaybackFieldBaseMaterial != null) {
+                if (Application.isPlaying) {
+                    Destroy(runtimeExternalPlaybackFieldBaseMaterial);
+                } else {
+                    DestroyImmediate(runtimeExternalPlaybackFieldBaseMaterial);
+                }
+
+                runtimeExternalPlaybackFieldBaseMaterial = null;
+            }
+
+            if (runtimeExternalPlaybackFieldLinesMaterial != null) {
+                if (Application.isPlaying) {
+                    Destroy(runtimeExternalPlaybackFieldLinesMaterial);
+                } else {
+                    DestroyImmediate(runtimeExternalPlaybackFieldLinesMaterial);
+                }
+
+                runtimeExternalPlaybackFieldLinesMaterial = null;
             }
 
             if (createdExternalPlaybackFieldVisual && externalPlaybackFieldVisual != null) {
@@ -986,6 +1445,7 @@ namespace FStudio.MatchEngine {
             SetExternalPlaybackFieldVisual(false);
             SetPlayerExternalPlayback(false);
             SetRefereeExternalPlayback(false);
+            finalWhistleEligibleAt = -1f;
 
             if (ball != null) {
                 ball.SetExternalPlayback(false);
@@ -1002,44 +1462,51 @@ namespace FStudio.MatchEngine {
         }
 
         public void ResetMatchState () {
-            Debug.Log("[MatchManager] ResetMatchState ()");
-            CancelKickoffCounter();
-            DisposeMatchScopedManagers();
-            GameTeam1?.ClearAllInputListeners();
-            GameTeam2?.ClearAllInputListeners();
-            GameTeam1?.Clear();
-            GameTeam2?.Clear();
-            ExternalPlaybackEnabled = false;
-            ExternalPlaybackPitchSpace = null;
-            ExternalPlaybackPitchZones = null;
-            externalPlaybackSanitizer = null;
-            ExternalPlaybackTeleportDistance = 6f;
-            SetExternalPlaybackFieldVisual(false);
-            SetPlayerExternalPlayback(false);
-            SetRefereeExternalPlayback(false);
+            MatchResetting?.Invoke();
 
-            if (UserTeam != null) {
-                UserTeam.ClearAllInputListeners();
-                UserTeam = null;
+            try {
+                Debug.Log("[MatchManager] ResetMatchState ()");
+                CancelKickoffCounter();
+                DisposeMatchScopedManagers();
+                GameTeam1?.ClearAllInputListeners();
+                GameTeam2?.ClearAllInputListeners();
+                GameTeam1?.Clear();
+                GameTeam2?.Clear();
+                ExternalPlaybackEnabled = false;
+                ExternalPlaybackPitchSpace = null;
+                ExternalPlaybackPitchZones = null;
+                externalPlaybackSanitizer = null;
+                ExternalPlaybackTeleportDistance = 6f;
+                SetExternalPlaybackFieldVisual(false);
+                SetPlayerExternalPlayback(false);
+                SetRefereeExternalPlayback(false);
+
+                if (UserTeam != null) {
+                    UserTeam.ClearAllInputListeners();
+                    UserTeam = null;
+                }
+
+                if (ball != null) {
+                    ball.SetExternalPlayback(false);
+                    var midPoint = new Vector3(fieldEndX / 2f, 0, fieldEndY / 2f);
+                    ball.ResetBall(midPoint);
+                }
+
+                homeTeamScore = 0;
+                awayTeamScore = 0;
+                minutes = 0;
+                whichTeamStarted = 0;
+                halfIndex = 0;
+                AllPlayers = Enumerable.Empty<PlayerBase>();
+                CurrentMatchDetails = null;
+                SetGoalColliders(true);
+                SetOutColliders(true);
+
+                MatchFlags = MatchStatus.NotPlaying;
             }
-
-            if (ball != null) {
-                ball.SetExternalPlayback(false);
-                var midPoint = new Vector3(fieldEndX / 2f, 0, fieldEndY / 2f);
-                ball.ResetBall(midPoint);
+            finally {
+                MatchResetComplete?.Invoke();
             }
-
-            homeTeamScore = 0;
-            awayTeamScore = 0;
-            minutes = 0;
-            whichTeamStarted = 0;
-            halfIndex = 0;
-            AllPlayers = Enumerable.Empty<PlayerBase>();
-            CurrentMatchDetails = null;
-            SetGoalColliders(true);
-            SetOutColliders(true);
-
-            MatchFlags = MatchStatus.NotPlaying;
         }
 
         private async Task CreateReferees () {
@@ -1201,33 +1668,21 @@ namespace FStudio.MatchEngine {
                 bool matchShouldContinue = minutes < 90;
 
                 if (!matchShouldContinue) {
-                    var ballPosition = Ball.Current.transform.position;
+                    if (finalWhistleEligibleAt < 0f) {
+                        finalWhistleEligibleAt = Time.time + FinalWhistleGraceSeconds;
+                    }
+
+                    var liveBall = Ball.Current;
+                    var ballPosition = liveBall != null ? liveBall.transform.position : Vector3.zero;
                     float size = Current.fieldEndX / 2.25f;
-                    if (ballPosition.x > size && ballPosition.x < Current.fieldEndX - size) {
-                        minutes = 0;
-
-                        Debug.Log("[MatchManager] FinalWhistle");
-
-                        EventManager.Trigger(new RefereeLastWhistleEvent());
-
-                        EventManager.Trigger(new FinalWhistleEvent(GameTeam1.Team.Team, GameTeam2.Team.Team));
-
-                        // game over.
-                        MatchFlags = MatchStatus.Special;
-
-                        // stop all players.
-                        foreach (var player in GameTeam1.GamePlayers.Concat (GameTeam2.GamePlayers).Concat (Referees)) {
-                            player.PlayerController.Animator.SetFloat(PlayerAnimatorVariable.Horizontal, 0);
-                            player.PlayerController.Animator.SetFloat(PlayerAnimatorVariable.Vertical, 0);
-                        }
-                        //
-
-                        // Stop following.
-                        CameraSystem.Current.target = null;
-
+                    var ballInCentralWindow = ballPosition.x > size && ballPosition.x < Current.fieldEndX - size;
+                    var ballSettled = liveBall == null || liveBall.Velocity.sqrMagnitude <= 16f;
+                    if (ballInCentralWindow || ballSettled || Time.time >= finalWhistleEligibleAt) {
+                        RunFinalWhistle();
                         return;
                     }
                 } else {
+                    finalWhistleEligibleAt = -1f;
                     minutes = Mathf.Min (90, minutes + deltaTime * matchSpeed);
                 }
             }
@@ -1301,6 +1756,27 @@ namespace FStudio.MatchEngine {
                         ball);
                 }
             }
+        }
+
+        private void RunFinalWhistle() {
+            if (MatchFlags != MatchStatus.Playing) {
+                return;
+            }
+
+            finalWhistleEligibleAt = -1f;
+            Debug.Log("[MatchManager] FinalWhistle");
+
+            EventManager.Trigger(new RefereeLastWhistleEvent());
+            EventManager.Trigger(new FinalWhistleEvent(GameTeam1.Team.Team, GameTeam2.Team.Team));
+
+            MatchFlags = MatchStatus.Special;
+
+            foreach (var player in GameTeam1.GamePlayers.Concat(GameTeam2.GamePlayers).Concat(Referees)) {
+                player.PlayerController.Animator.SetFloat(PlayerAnimatorVariable.Horizontal, 0);
+                player.PlayerController.Animator.SetFloat(PlayerAnimatorVariable.Vertical, 0);
+            }
+
+            CameraSystem.Current.target = null;
         }
 
         private void FixedUpdate() {
@@ -1494,9 +1970,16 @@ namespace FStudio.MatchEngine {
                     PlayerBase closest = null;
 
                     if (hasTheBall) {
-                        // closest one to the ball.
-                        closest = team.GamePlayers.Where(x => !x.MatchPlayer.Position.HasFlag(excludeKickerPosition)).
-                            OrderBy(x => Vector3.Distance(x.Position, position)).First();
+                        if (foulType == FoulType.GoalKick) {
+                            closest =
+                                team.GamePlayers.FirstOrDefault(x => x != null && x.IsGK) ??
+                                team.GamePlayers.Where(x => !x.MatchPlayer.Position.HasFlag(excludeKickerPosition)).
+                                    OrderBy(x => Vector3.Distance(x.Position, position)).First();
+                        } else {
+                            // closest one to the ball.
+                            closest = team.GamePlayers.Where(x => !x.MatchPlayer.Position.HasFlag(excludeKickerPosition)).
+                                OrderBy(x => Vector3.Distance(x.Position, position)).First();
+                        }
 
                         keepInField(ref position, 0.25f); // clamp ball pos.
 

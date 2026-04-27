@@ -33,6 +33,12 @@ namespace FStudio.GTEX.Editor
             SetRuntimeMode(GtexRuntimeMode.LocalSimulation);
         }
 
+        [MenuItem("Tools/GTEX/Runtime/Switch To Original Visual Runtime")]
+        public static void SwitchToOriginalVisualRuntimeMenu()
+        {
+            SetRuntimeMode(GtexRuntimeMode.OriginalVisualRuntime);
+        }
+
         [MenuItem("Tools/GTEX/Runtime/Run Local Simulation Test")]
         public static void RunLocalSimulationTestMenu()
         {
@@ -68,6 +74,13 @@ namespace FStudio.GTEX.Editor
         {
             SetRuntimeMode(GtexRuntimeMode.LocalSimulation);
             OpenScene(GtexSceneLoader.DevelopmentScenePath);
+        }
+
+        [MenuItem("Tools/GTEX/Runtime/Open Original Visual Scene")]
+        public static void OpenOriginalVisualSceneMenu()
+        {
+            SetRuntimeMode(GtexRuntimeMode.OriginalVisualRuntime);
+            OpenScene(GtexSceneLoader.OriginalVisualRuntimeScenePath);
         }
 
         public static string AbsoluteConfigPath =>
@@ -142,6 +155,11 @@ namespace FStudio.GTEX.Editor
 
             switch ((token ?? string.Empty).Trim().ToLowerInvariant())
             {
+                case "original-visual":
+                case "originalvisual":
+                case "original-visual-runtime":
+                case "originalvisualruntime":
+                    return GtexRuntimeMode.OriginalVisualRuntime;
                 case "simulation":
                 case "sim":
                 case "local-simulation":
@@ -154,7 +172,16 @@ namespace FStudio.GTEX.Editor
 
         private static string ToToken(GtexRuntimeMode runtimeMode)
         {
-            return runtimeMode == GtexRuntimeMode.LocalSimulation ? "simulation" : "live";
+            switch (runtimeMode)
+            {
+                case GtexRuntimeMode.LocalSimulation:
+                    return "simulation";
+                case GtexRuntimeMode.OriginalVisualRuntime:
+                    return "original-visual";
+                case GtexRuntimeMode.LivePlayback:
+                default:
+                    return "live";
+            }
         }
 
         private static string InsertRuntimeMode(string json, string token)
@@ -232,6 +259,11 @@ namespace FStudio.GTEX.Editor
                 {
                     GtexRuntimeModeTools.SetRuntimeMode(GtexRuntimeMode.LocalSimulation);
                 }
+
+                if (GUILayout.Button("Original Visual"))
+                {
+                    GtexRuntimeModeTools.SetRuntimeMode(GtexRuntimeMode.OriginalVisualRuntime);
+                }
             }
 
             EditorGUILayout.Space(8f);
@@ -283,6 +315,13 @@ namespace FStudio.GTEX.Editor
                     RunAction(
                         "Open dev scene with local simulation",
                         GtexRuntimeModeTools.OpenDevSceneWithLocalSimulationMenu);
+                }
+
+                if (GUILayout.Button("Original Visual Scene"))
+                {
+                    RunAction(
+                        "Open original visual scene",
+                        GtexRuntimeModeTools.OpenOriginalVisualSceneMenu);
                 }
             }
 

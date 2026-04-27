@@ -1,5 +1,6 @@
 using System;
 using FStudio.GTEX.Core;
+using FStudio.GTEX.VisualBridge;
 using FStudio.Events;
 using FStudio.MatchEngine.Events;
 using FStudio.UI.MatchThemes.MatchEvents;
@@ -23,6 +24,7 @@ namespace FStudio.GTEX.Engine
 
         private readonly IGtexMatchExecutor liveExecutor;
         private readonly IGtexMatchExecutor simulationExecutor;
+        private readonly IGtexMatchExecutor originalVisualRuntimeExecutor;
         private readonly GtexLegacyMatchManagerAdapter legacyMatchManagerAdapter;
         private readonly GtexLegacyMatchEngineLoaderAdapter legacyMatchEngineLoaderAdapter;
         private readonly GtexLegacyBallAdapter legacyBallAdapter;
@@ -33,10 +35,14 @@ namespace FStudio.GTEX.Engine
         private event Action<GtexLiveStateSignal> liveStateObserved;
         private GtexMatchState state;
 
-        private GtexMatchController(IGtexMatchExecutor liveExecutor, IGtexMatchExecutor simulationExecutor)
+        private GtexMatchController(
+            IGtexMatchExecutor liveExecutor,
+            IGtexMatchExecutor simulationExecutor,
+            IGtexMatchExecutor originalVisualRuntimeExecutor)
         {
             this.liveExecutor = liveExecutor ?? throw new ArgumentNullException(nameof(liveExecutor));
             this.simulationExecutor = simulationExecutor ?? throw new ArgumentNullException(nameof(simulationExecutor));
+            this.originalVisualRuntimeExecutor = originalVisualRuntimeExecutor ?? throw new ArgumentNullException(nameof(originalVisualRuntimeExecutor));
             legacyMatchManagerAdapter = new GtexLegacyMatchManagerAdapter();
             legacyMatchEngineLoaderAdapter = new GtexLegacyMatchEngineLoaderAdapter();
             legacyBallAdapter = new GtexLegacyBallAdapter();
@@ -53,7 +59,8 @@ namespace FStudio.GTEX.Engine
         public static GtexMatchController Shared =>
             sharedInstance ??= new GtexMatchController(
                 new GtexLegacyLiveMatchExecutor(),
-                new GtexLegacySimulationExecutor());
+                new GtexLegacySimulationExecutor(),
+                new GtexOriginalVisualRuntimeExecutor());
 
         public static IGtexClockSource ClockSource => Shared.clockSource;
 
@@ -156,9 +163,7 @@ namespace FStudio.GTEX.Engine
             }
 
             var runtimeMode = config.ResolveRuntimeMode();
-            var commandType = runtimeMode == GtexRuntimeMode.LivePlayback
-                ? GtexEngineCommandType.StartLivePlayback
-                : GtexEngineCommandType.StartLocalSimulation;
+            var commandType = ResolveCommandType(runtimeMode);
             var command = new GtexEngineCommand(commandType, runtimeMode, "GTEX controller auto-start requested.");
 
             UpdateState(
@@ -209,7 +214,7 @@ namespace FStudio.GTEX.Engine
 
             var started = executor.TryAutoStart(config, allowLocalSimulationInBatchMode, Log);
             var resolvedPhase = started
-                ? runtimeMode == GtexRuntimeMode.LocalSimulation ? GtexMatchPhase.Kickoff : GtexMatchPhase.Bootstrap
+                ? ResolveStartedPhase(runtimeMode)
                 : GtexMatchPhase.Failed;
             var message = started
                 ? "Runtime bootstrap delegated through " + executor.Name + "."
@@ -259,7 +264,9 @@ namespace FStudio.GTEX.Engine
                 OwnershipBoundary = LegacyOwnershipLabel,
                 ExecutorName = runtimeMode == GtexRuntimeMode.LivePlayback
                     ? nameof(GtexMatchRuntime)
-                    : "GtexSimRuntimeHost",
+                    : runtimeMode == GtexRuntimeMode.LocalSimulation
+                        ? "GtexSimRuntimeHost"
+                        : nameof(GtexVisualMatchDirector),
                 LastMessage = "Legacy bootstrap fallback engaged.",
                 UpdatedAtUtc = DateTime.UtcNow,
                 LastCommand = new GtexEngineCommand(
@@ -275,6 +282,13 @@ namespace FStudio.GTEX.Engine
                 return started;
             }
 
+            if (runtimeMode == GtexRuntimeMode.OriginalVisualRuntime)
+            {
+                var started = GtexVisualMatchDirector.TryAutoStart(resolvedConfig);
+                Shared.clockSource.UpdateSnapshot(0f, started, started ? GtexMatchPhase.Bootstrap : GtexMatchPhase.Failed);
+                return started;
+            }
+
             var liveStarted = GtexMatchRuntime.TryAutoStart(resolvedConfig);
             Shared.clockSource.UpdateSnapshot(0f, liveStarted, liveStarted ? GtexMatchPhase.Bootstrap : GtexMatchPhase.Failed);
             return liveStarted;
@@ -282,9 +296,37 @@ namespace FStudio.GTEX.Engine
 
         private IGtexMatchExecutor SelectExecutor(GtexRuntimeMode runtimeMode)
         {
+            switch (runtimeMode)
+            {
+                case GtexRuntimeMode.LocalSimulation:
+                    return simulationExecutor;
+                case GtexRuntimeMode.OriginalVisualRuntime:
+                    return originalVisualRuntimeExecutor;
+                case GtexRuntimeMode.LivePlayback:
+                default:
+                    return liveExecutor;
+            }
+        }
+
+        private static GtexEngineCommandType ResolveCommandType(GtexRuntimeMode runtimeMode)
+        {
+            switch (runtimeMode)
+            {
+                case GtexRuntimeMode.LocalSimulation:
+                    return GtexEngineCommandType.StartLocalSimulation;
+                case GtexRuntimeMode.OriginalVisualRuntime:
+                    return GtexEngineCommandType.StartOriginalVisualRuntime;
+                case GtexRuntimeMode.LivePlayback:
+                default:
+                    return GtexEngineCommandType.StartLivePlayback;
+            }
+        }
+
+        private static GtexMatchPhase ResolveStartedPhase(GtexRuntimeMode runtimeMode)
+        {
             return runtimeMode == GtexRuntimeMode.LocalSimulation
-                ? simulationExecutor
-                : liveExecutor;
+                ? GtexMatchPhase.Kickoff
+                : GtexMatchPhase.Bootstrap;
         }
 
         private void ReportRuntimeStateInternal(

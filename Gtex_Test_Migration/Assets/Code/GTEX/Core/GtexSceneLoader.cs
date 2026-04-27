@@ -9,10 +9,12 @@ namespace FStudio.GTEX.Core
         public const string BuildScenePath = "Assets/Scenes/Gtex_BuildScene.unity";
         public const string DevelopmentScenePath = "Assets/Scenes/Gtex_DevScene.unity";
         public const string ProductionScenePath = "Assets/Scenes/Gtex_MainScene.unity";
+        public const string OriginalVisualRuntimeScenePath = "Assets/Scenes/GTEX_OriginalVisualRuntime.unity";
 
         public const string BuildSceneName = "Gtex_BuildScene";
         public const string DevelopmentSceneName = "Gtex_DevScene";
         public const string ProductionSceneName = "Gtex_MainScene";
+        public const string OriginalVisualRuntimeSceneName = "GTEX_OriginalVisualRuntime";
 
         public static string ResolveStartupScenePath(GtexMode mode)
         {
@@ -32,7 +34,7 @@ namespace FStudio.GTEX.Core
         {
             return mode == GtexMode.Development
                 ? new[] { BuildScenePath }
-                : new[] { ProductionScenePath };
+                : new[] { ProductionScenePath, OriginalVisualRuntimeScenePath };
         }
 
         public static bool SceneExists(string scenePath)

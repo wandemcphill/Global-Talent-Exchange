@@ -1,5 +1,6 @@
 ﻿using FStudio.Animation;
 using FStudio.Events;
+using FStudio.GTEX;
 using FStudio.MatchEngine.Balls;
 using FStudio.MatchEngine.Enums;
 using FStudio.MatchEngine.Events;
@@ -61,7 +62,10 @@ namespace MatchEngine.MatchScenes.Implementations {
             scorerTeam = callback.HomeOrAway ? MM.Current.GameTeam2 : MM.Current.GameTeam1;
             concedeTeam = callback.HomeOrAway ? MM.Current.GameTeam1 : MM.Current.GameTeam2;
 
-            if (!callback.HomeOrAway) {
+            if (GtexRuntimeFlags.UsesGtexScoreAuthority) {
+                GtexRuntimeTelemetry.RegisterLegacyScoreWriteBlocked();
+                Debug.Log("[MatchManager] Ignoring legacy score write during GTEX score-authority mode.");
+            } else if (!callback.HomeOrAway) {
                 MM.Current.homeTeamScore++;
             } else {
                 MM.Current.awayTeamScore++;

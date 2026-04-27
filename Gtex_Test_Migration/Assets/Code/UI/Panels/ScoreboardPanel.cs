@@ -24,11 +24,17 @@ namespace FStudio.UI {
             EventManager.Subscribe<GoalScoredEvent>(GoalScored);
             EventManager.Subscribe<FirstWhistleEvent>(FirstWhistle);
             GtexMatchController.LiveStateObserved += GtexLiveStateUpdated;
+            GtexScoreAuthority.ScoreChanged += GtexScoreChanged;
+
+            if (GtexRuntimeFlags.UsesGtexScoreAuthority) {
+                GtexScoreChanged(GtexScoreAuthority.Current);
+            }
         }
 
         private void FirstWhistle(FirstWhistleEvent kickOffEvent) {
-            if (MatchEngine.MatchManager.Current != null &&
-                MatchEngine.MatchManager.Current.ExternalPlaybackEnabled) {
+            if (GtexRuntimeFlags.UsesGtexScoreAuthority ||
+                (MatchEngine.MatchManager.Current != null &&
+                 MatchEngine.MatchManager.Current.ExternalPlaybackEnabled)) {
                 return;
             }
 
@@ -47,11 +53,13 @@ namespace FStudio.UI {
             EventManager.UnSubscribe<GoalScoredEvent>(GoalScored);
             EventManager.UnSubscribe<FirstWhistleEvent>(FirstWhistle);
             GtexMatchController.LiveStateObserved -= GtexLiveStateUpdated;
+            GtexScoreAuthority.ScoreChanged -= GtexScoreChanged;
         }
 
         private void GoalScored(GoalScoredEvent goalScoredEvent) {
-            if (MatchEngine.MatchManager.Current != null &&
-                MatchEngine.MatchManager.Current.ExternalPlaybackEnabled) {
+            if (GtexRuntimeFlags.UsesGtexScoreAuthority ||
+                (MatchEngine.MatchManager.Current != null &&
+                 MatchEngine.MatchManager.Current.ExternalPlaybackEnabled)) {
                 return;
             }
 
@@ -68,6 +76,7 @@ namespace FStudio.UI {
 
         private void GameTimeUpdate(GameTimeEvent gameTimeUpdate) {
             if (timeCounter == null ||
+                GtexRuntimeFlags.UsesGtexScoreAuthority ||
                 (MatchEngine.MatchManager.Current != null &&
                  MatchEngine.MatchManager.Current.ExternalPlaybackEnabled)) {
                 return;
@@ -77,7 +86,7 @@ namespace FStudio.UI {
         }
 
         private void GtexLiveStateUpdated(GtexLiveStateSignal liveStateSignal) {
-            if (liveStateSignal.State == null) {
+            if (GtexRuntimeFlags.UsesGtexScoreAuthority || liveStateSignal.State == null) {
                 return;
             }
 
@@ -95,6 +104,14 @@ namespace FStudio.UI {
             SetClock(liveStateSignal.State.clockMinute);
         }
 
+        private void GtexScoreChanged(GtexScoreState score) {
+            if (!GtexRuntimeFlags.UsesGtexScoreAuthority || score == null) {
+                return;
+            }
+
+            ApplyScoreState(score.homeLabel, score.awayLabel, score.homeScore, score.awayScore, score.minute);
+        }
+
         private void SetClock(float matchMinute) {
             if (timeCounter == null) {
                 return;
@@ -106,6 +123,32 @@ namespace FStudio.UI {
             int seconds = (int)time - 60 * minutes;
 
             timeCounter.text = string.Format("{0:00}:{1:00}", minutes, seconds);
+        }
+
+        private void ApplyScoreState(string homeLabel, string awayLabel, int nextHomeScore, int nextAwayScore, float matchMinute) {
+            SetTeamLabel(homeTeamName, homeLabel);
+            SetTeamLabel(awayTeamName, awayLabel);
+
+            homeScore = Mathf.Max(0, nextHomeScore);
+            awayScore = Mathf.Max(0, nextAwayScore);
+
+            if (homeScoreText != null) {
+                homeScoreText.text = homeScore.ToString();
+            }
+
+            if (awayScoreText != null) {
+                awayScoreText.text = awayScore.ToString();
+            }
+
+            SetClock(matchMinute);
+        }
+
+        private static void SetTeamLabel(TextMeshProUGUI target, string value) {
+            if (target == null || string.IsNullOrWhiteSpace(value)) {
+                return;
+            }
+
+            target.text = value.Trim().ToUpperInvariant();
         }
 
         protected override void OnEventCalled(UpcomingMatchEvent eventObject) {
@@ -133,6 +176,10 @@ namespace FStudio.UI {
             awayScore = 0;
             homeScoreText.text = string.Empty;
             awayScoreText.text = string.Empty;
+
+            if (GtexRuntimeFlags.UsesGtexScoreAuthority) {
+                GtexScoreChanged(GtexScoreAuthority.Current);
+            }
         }
     }
 }

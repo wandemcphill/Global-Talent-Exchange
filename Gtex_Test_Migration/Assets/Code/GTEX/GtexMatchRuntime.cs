@@ -74,6 +74,12 @@ namespace FStudio.GTEX
             private const float WebSocketStaleHardCapSeconds = 20f;
             private const int WebSocketFastReconnectAttemptThreshold = 4;
             private const float WebSocketFastReconnectDelaySeconds = 2f;
+            private const float RuntimeHierarchyAuditIntervalSeconds = 1f;
+            private const float RuntimeDebugMarkerHeight = 0.18f;
+            private const int MaxActiveAttackRuns = 3;
+            private const int MaxActiveSupportOptions = 2;
+            private const int MaxActivePressers = 2;
+            private const int MaxFarSideSprints = 1;
 
         private struct SyntheticBallTransit
         {
@@ -110,6 +116,42 @@ namespace FStudio.GTEX
             public float MoveSpeed;
             public float Horizontal;
             public float Vertical;
+        }
+
+        private struct RuntimeActiveMoverBreakdown
+        {
+            public int AttackRuns;
+            public int SupportOptions;
+            public int Pressers;
+            public int Markers;
+            public int FarSideDrifts;
+            public int Goalkeepers;
+
+            public int TotalOutfield => AttackRuns + SupportOptions + Pressers + Markers + FarSideDrifts;
+        }
+
+        private struct RuntimeComparisonSnapshot
+        {
+            public GtexRuntimeComparisonMode Mode;
+            public string PitchRootPath;
+            public Vector3 PitchRootPosition;
+            public Vector3 PitchRootRotationEuler;
+            public Vector3 PitchRootScale;
+            public float PitchLength;
+            public float PitchWidth;
+            public Vector3 LeftGoalPosition;
+            public Vector3 RightGoalPosition;
+            public Bounds HomePenaltyBox;
+            public Bounds AwayPenaltyBox;
+            public Vector3 CameraTargetPoint;
+            public string BallOwnerId;
+            public Vector3 BallPosition;
+            public Vector3 HomeGoalkeeperPosition;
+            public Vector3 AwayGoalkeeperPosition;
+            public RuntimeActiveMoverBreakdown HomeMovers;
+            public RuntimeActiveMoverBreakdown AwayMovers;
+            public Vector3 PlayFocusCentroid;
+            public bool CosmeticEnvironmentActive;
         }
 
         private GtexMatchConfig config;
@@ -175,6 +217,19 @@ namespace FStudio.GTEX
         private string liveBehaviorEventHolderId = string.Empty;
         private float liveBehaviorEventObservedAt = -1f;
         private float liveBehaviorEventClockMinute = -1f;
+        private float nextRuntimeHierarchyAuditAt = -1f;
+        private float lastRuntimeComparisonLogAt = -1f;
+        private float lastSyntheticClockLogAt = -1f;
+        private float authoritativeClockMinute = -1f;
+        private float syntheticDisplayClockMinute = -1f;
+        private bool usingSyntheticClockAdvance;
+        private RuntimeComparisonSnapshot lastOriginalReferenceSnapshot;
+        private RuntimeComparisonSnapshot lastGtexRuntimeSnapshot;
+        private Vector3 lastLiveCameraTarget = Vector3.zero;
+        private Vector3 lastLivePlayFocusCentroid = Vector3.zero;
+        private RuntimeActiveMoverBreakdown lastHomeActiveMoverBreakdown;
+        private RuntimeActiveMoverBreakdown lastAwayActiveMoverBreakdown;
+        private GUIStyle runtimeOverlayStyle;
         private float liveBallIntentCreatedAt = -1f;
         private float liveBallIntentExpiresAt = -1f;
         private int liveBallIntentSequence = -1;
@@ -568,7 +623,7 @@ namespace FStudio.GTEX
         {
             var activeEvent = currentState != null ? currentState.ResolveActiveEvent() : null;
             return
-                "minute=" + (currentState != null ? currentState.clockMinute.ToString("0.##") : "n/a") +
+                "minute=" + (currentState != null ? ResolveDisplayClockMinute().ToString("0.##") : "n/a") +
                 " score=" + (currentState != null ? currentState.homeScore : 0) + "-" + (currentState != null ? currentState.awayScore : 0) +
                 " phase=" + (currentState != null ? ResolveControllerPhase(currentState).ToString() : "None") +
                 " seq=" + (currentState != null ? ResolveStateSequence(currentState).ToString() : "-1") +
@@ -587,7 +642,8 @@ namespace FStudio.GTEX
                 " loaded=" + matchLoaded +
                 " pitch=" + pitchSpaceSource +
                 " intent=" + ResolveRuntimeIntentToken() +
-                " event=" + (activeEvent != null ? ((activeEvent.type ?? string.Empty).Trim()) : string.Empty);
+                " event=" + (activeEvent != null ? ((activeEvent.type ?? string.Empty).Trim()) : string.Empty) +
+                " synthClock=" + usingSyntheticClockAdvance;
         }
 
         private static string ResolveRuntimeBallHolderId(MatchResponse state)
@@ -598,6 +654,883 @@ namespace FStudio.GTEX
             }
 
             return (state.ballPosition.playerId ?? string.Empty).Trim();
+        }
+
+        private float ResolveDisplayClockMinute()
+        {
+            if (currentState == null)
+            {
+                return 0f;
+            }
+
+            return usingSyntheticClockAdvance
+                ? Mathf.Max(currentState.clockMinute, syntheticDisplayClockMinute)
+                : currentState.clockMinute;
+        }
+
+        private void EnsureRuntimeHierarchy()
+        {
+            if (Time.unscaledTime < nextRuntimeHierarchyAuditAt)
+            {
+                return;
+            }
+
+            nextRuntimeHierarchyAuditAt = Time.unscaledTime + RuntimeHierarchyAuditIntervalSeconds;
+            if (MatchManager.Current == null)
+            {
+                return;
+            }
+
+            GtexRuntimeHierarchyCoordinator.EnsureMatchHierarchy(
+                MatchManager.Current,
+                UnityEngine.Object.FindFirstObjectByType<GtexStadiumAtmosphere>());
+        }
+
+        private void TryAdvanceStalledClock()
+        {
+            if (!matchLoaded ||
+                currentState == null ||
+                config == null ||
+                !config.continueClockWhenTransportStalls ||
+                IsTerminalLiveState(currentState))
+            {
+                usingSyntheticClockAdvance = false;
+                return;
+            }
+
+            var staleThreshold = Mathf.Max(config.pollIntervalSeconds * 3f, config.maxRetryDelaySeconds);
+            staleThreshold = Mathf.Min(staleThreshold, WebSocketStaleHardCapSeconds);
+            var staleDuration = Mathf.Max(0f, Time.unscaledTime - stateReceivedAt);
+            if (staleDuration < staleThreshold)
+            {
+                usingSyntheticClockAdvance = false;
+                syntheticDisplayClockMinute = Mathf.Max(syntheticDisplayClockMinute, currentState.clockMinute);
+                return;
+            }
+
+            if (authoritativeClockMinute < 0f)
+            {
+                authoritativeClockMinute = currentState.clockMinute;
+            }
+
+            syntheticDisplayClockMinute = Mathf.Clamp(
+                authoritativeClockMinute +
+                (staleDuration - staleThreshold) * Mathf.Max(0.01f, config.stalledClockAdvanceMinutesPerSecond),
+                currentState.clockMinute,
+                90f);
+            usingSyntheticClockAdvance = syntheticDisplayClockMinute > currentState.clockMinute + 0.01f;
+            if (!usingSyntheticClockAdvance)
+            {
+                return;
+            }
+
+            if (GtexMatchController.MatchManagerAdapter.IsAvailable)
+            {
+                GtexMatchController.MatchManagerAdapter.ApplyExternalLiveState(
+                    syntheticDisplayClockMinute,
+                    currentState.homeScore,
+                    currentState.awayScore,
+                    ResolveMatchStatus(currentState));
+            }
+
+            if (Time.unscaledTime - lastSyntheticClockLogAt >= RuntimeTraceHeartbeatIntervalSeconds)
+            {
+                lastSyntheticClockLogAt = Time.unscaledTime;
+                AppendRuntimeTrace(
+                    "stall-clock",
+                    "authoritative=" + authoritativeClockMinute.ToString("0.##") +
+                    " display=" + syntheticDisplayClockMinute.ToString("0.##") +
+                    " staleSeconds=" + staleDuration.ToString("0.0"));
+            }
+        }
+
+        private void TrackRuntimeComparison()
+        {
+            if (config == null ||
+                !config.enableRuntimeComparisonLogging ||
+                currentState == null)
+            {
+                return;
+            }
+
+            EnsurePitchSpaceResolved();
+            if (pitchSpace == null)
+            {
+                return;
+            }
+
+            var interval = Mathf.Max(0.25f, config.comparisonLogIntervalSeconds);
+            if (Time.unscaledTime - lastRuntimeComparisonLogAt < interval)
+            {
+                return;
+            }
+
+            lastRuntimeComparisonLogAt = Time.unscaledTime;
+            lastOriginalReferenceSnapshot = CaptureRuntimeComparisonSnapshot(GtexRuntimeComparisonMode.OriginalReferenceMode);
+            lastGtexRuntimeSnapshot = CaptureRuntimeComparisonSnapshot(GtexRuntimeComparisonMode.GtexRuntimeMode);
+
+            AppendRuntimeTrace("compare", BuildRuntimeComparisonSummary(lastOriginalReferenceSnapshot));
+            AppendRuntimeTrace("compare", BuildRuntimeComparisonSummary(lastGtexRuntimeSnapshot));
+            AppendRuntimeTrace(
+                "compare-delta",
+                BuildRuntimeDivergenceSummary(lastOriginalReferenceSnapshot, lastGtexRuntimeSnapshot));
+        }
+
+        private RuntimeComparisonSnapshot CaptureRuntimeComparisonSnapshot(GtexRuntimeComparisonMode mode)
+        {
+            EnsurePitchSpaceResolved();
+
+            var pitchRoot = ResolveRuntimeComparisonPitchRoot();
+            var ballOwnerId = ResolveRuntimeBallHolderId(currentState);
+            var liveBallPosition =
+                currentState != null && currentState.ballPosition != null
+                    ? ResolvePredictedFieldPosition(currentState.ballPosition, ResolveLivePredictionSeconds())
+                    : pitchSpace != null ? pitchSpace.Center : Vector3.zero;
+            var cameraTargetPoint =
+                mode == GtexRuntimeComparisonMode.OriginalReferenceMode
+                    ? ResolveReferenceCameraTarget(currentState)
+                    : (GtexMatchController.CameraAdapter.IsAvailable
+                        ? GtexMatchController.CameraAdapter.CurrentTargetPosition
+                        : lastLiveCameraTarget);
+            cameraTargetPoint = ClampToFieldBounds(cameraTargetPoint, false);
+            var playFocusCentroid =
+                mode == GtexRuntimeComparisonMode.OriginalReferenceMode
+                    ? ResolveReferencePlayFocusCentroid(currentState, liveBallPosition, cameraTargetPoint)
+                    : ClampToFieldBounds(
+                        lastLivePlayFocusCentroid == Vector3.zero
+                            ? ResolveLiveCameraActionCentroid(currentState, cameraTargetPoint)
+                            : lastLivePlayFocusCentroid,
+                        false);
+
+            var snapshot = new RuntimeComparisonSnapshot
+            {
+                Mode = mode,
+                PitchRootPath = ResolveTransformPath(pitchRoot),
+                PitchRootPosition = pitchRoot != null ? pitchRoot.position : Vector3.zero,
+                PitchRootRotationEuler = pitchRoot != null ? pitchRoot.rotation.eulerAngles : Vector3.zero,
+                PitchRootScale = pitchRoot != null ? pitchRoot.lossyScale : Vector3.one,
+                PitchLength = pitchSpace != null ? pitchSpace.Length : ResolvePitchLengthMeters(currentState),
+                PitchWidth = pitchSpace != null ? pitchSpace.Width : ResolvePitchWidthMeters(currentState),
+                LeftGoalPosition = pitchZones != null ? pitchZones.GetGoalCenter(GtexPitchZoneHelper.HomeTeamSide) : Vector3.zero,
+                RightGoalPosition = pitchZones != null ? pitchZones.GetGoalCenter(GtexPitchZoneHelper.AwayTeamSide) : Vector3.zero,
+                HomePenaltyBox = pitchZones != null ? pitchZones.GetPenaltyBoxBounds(GtexPitchZoneHelper.HomeTeamSide) : default,
+                AwayPenaltyBox = pitchZones != null ? pitchZones.GetPenaltyBoxBounds(GtexPitchZoneHelper.AwayTeamSide) : default,
+                CameraTargetPoint = cameraTargetPoint,
+                BallOwnerId = ballOwnerId,
+                BallPosition =
+                    mode == GtexRuntimeComparisonMode.OriginalReferenceMode
+                        ? ResolveReferenceBallPosition(currentState, ballOwnerId, liveBallPosition)
+                        : ResolveComparisonBallPosition(liveBallPosition),
+                HomeGoalkeeperPosition = ResolveReferenceGoalkeeperPosition("home", liveBallPosition),
+                AwayGoalkeeperPosition = ResolveReferenceGoalkeeperPosition("away", liveBallPosition),
+                HomeMovers =
+                    mode == GtexRuntimeComparisonMode.OriginalReferenceMode
+                        ? ResolveReferenceActiveMoversForSide(currentState, "home")
+                        : ResolveObservedActiveMoversForSide(currentState, "home"),
+                AwayMovers =
+                    mode == GtexRuntimeComparisonMode.OriginalReferenceMode
+                        ? ResolveReferenceActiveMoversForSide(currentState, "away")
+                        : ResolveObservedActiveMoversForSide(currentState, "away"),
+                PlayFocusCentroid = playFocusCentroid,
+                CosmeticEnvironmentActive = GtexRuntimeHierarchyCoordinator.FindCosmeticEnvironmentRoot() != null &&
+                                           GtexRuntimeHierarchyCoordinator.FindCosmeticEnvironmentRoot().gameObject.activeInHierarchy
+            };
+
+            if (mode == GtexRuntimeComparisonMode.GtexRuntimeMode)
+            {
+                if (TryResolveGoalkeeperPositionBySide(currentState, "home", false, out var homeKeeper))
+                {
+                    snapshot.HomeGoalkeeperPosition = homeKeeper;
+                }
+
+                if (TryResolveGoalkeeperPositionBySide(currentState, "away", false, out var awayKeeper))
+                {
+                    snapshot.AwayGoalkeeperPosition = awayKeeper;
+                }
+            }
+
+            return snapshot;
+        }
+
+        private Transform ResolveRuntimeComparisonPitchRoot()
+        {
+            return FindSceneTransformByName("PitchRoot") ??
+                   FindSceneTransformByName("Field") ??
+                   FindSceneTransformByName("fieldGround")?.parent ??
+                   FindSceneTransformByName("Grass")?.parent;
+        }
+
+        private Vector3 ResolveComparisonBallPosition(Vector3 fallbackPosition)
+        {
+            if (GtexMatchController.BallAdapter.IsAvailable)
+            {
+                return ClampToFieldBounds(GtexMatchController.BallAdapter.Position, true);
+            }
+
+            return ClampToFieldBounds(fallbackPosition, true);
+        }
+
+        private Vector3 ResolveReferenceBallPosition(MatchResponse state, string ballOwnerId, Vector3 liveBallPosition)
+        {
+            if (string.IsNullOrWhiteSpace(ballOwnerId))
+            {
+                return ResolveComparisonBallPosition(liveBallPosition);
+            }
+
+            var holderPosition = ResolveRuntimePlayerPositionById(state, ballOwnerId, liveBallPosition);
+            var releaseDirection = liveBallPosition - holderPosition;
+            releaseDirection.y = 0f;
+            if (releaseDirection.sqrMagnitude <= 0.0001f)
+            {
+                releaseDirection = ResolveAttackDirection(ResolvePlayerTeamSideToken(state, ballOwnerId));
+            }
+
+            var footAnchor = ResolveReadableFootAnchor(state, ballOwnerId, holderPosition, releaseDirection);
+            if ((liveBallPosition - footAnchor).sqrMagnitude <= 1.4f * 1.4f)
+            {
+                return footAnchor;
+            }
+
+            return ClampToFieldBounds(Vector3.Lerp(footAnchor, liveBallPosition, 0.3f), true);
+        }
+
+        private Vector3 ResolveReadableFootAnchor(MatchResponse state, string playerId, Vector3 fallbackOrigin, Vector3 releaseDirection)
+        {
+            var anchor = ResolveBallReleaseOrigin(state, playerId, fallbackOrigin, releaseDirection);
+            if (!TryGetBoundPlayerByPlayerId(playerId, out var boundPlayer) || boundPlayer == null || !boundPlayer.IsValid)
+            {
+                return anchor;
+            }
+
+            var forward = boundPlayer.Forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude <= 0.0001f)
+            {
+                forward = ResolveAttackDirection(ResolvePlayerTeamSideToken(state, playerId));
+            }
+
+            forward.Normalize();
+            var right = Vector3.Cross(Vector3.up, forward).normalized;
+            var computedAnchor =
+                boundPlayer.Position +
+                forward * 0.45f +
+                right * 0.16f * ResolveDeterministicFootSide(playerId);
+            computedAnchor.y =
+                pitchSpace != null
+                    ? pitchSpace.GrassY + GtexPlaybackSanitizer.DefaultBallHeight
+                    : anchor.y;
+            return ClampToFieldBounds(Vector3.Lerp(computedAnchor, anchor, 0.35f), true);
+        }
+
+        private static float ResolveDeterministicFootSide(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return -1f;
+            }
+
+            var checksum = 0;
+            for (var index = 0; index < playerId.Length; index += 1)
+            {
+                checksum += playerId[index];
+            }
+
+            return checksum % 2 == 0 ? -1f : 1f;
+        }
+
+        private Vector3 ResolveReferenceCameraTarget(MatchResponse state)
+        {
+            EnsurePitchSpaceResolved();
+            var ballPosition =
+                state != null && state.ballPosition != null
+                    ? ResolvePredictedFieldPosition(state.ballPosition, ResolveLivePredictionSeconds())
+                    : pitchSpace != null ? pitchSpace.Center : Vector3.zero;
+            var holderId = ResolveRuntimeBallHolderId(state);
+            Vector3? carrierPosition = null;
+            if (!string.IsNullOrWhiteSpace(holderId))
+            {
+                carrierPosition = ResolveRuntimePlayerPositionById(state, holderId, ballPosition);
+            }
+
+            var focus = ballPosition;
+            if (carrierPosition.HasValue)
+            {
+                focus = Vector3.Lerp(focus, carrierPosition.Value, 0.74f);
+            }
+
+            var nearbyPlayers = CollectNearbyActivePlayerPositions(state, carrierPosition ?? ballPosition);
+            if (nearbyPlayers.Count > 0)
+            {
+                var centroid = Vector3.zero;
+                for (var index = 0; index < nearbyPlayers.Count; index += 1)
+                {
+                    centroid += nearbyPlayers[index];
+                }
+
+                centroid /= Mathf.Max(1, nearbyPlayers.Count);
+                focus = Vector3.Lerp(focus, centroid, 0.24f);
+            }
+
+            var referenceCentroid = ResolveReferencePlayFocusCentroid(state, ballPosition, focus);
+            focus = Vector3.Lerp(focus, referenceCentroid, 0.34f);
+
+            var hasIntentTarget =
+                Time.unscaledTime < liveBallIntentExpiresAt &&
+                !string.IsNullOrWhiteSpace(liveBallIntentTargetPlayerId);
+            if (hasIntentTarget)
+            {
+                var receiverPosition = ResolveRuntimePlayerPositionById(state, liveBallIntentTargetPlayerId, liveBallIntentTarget);
+                focus = Vector3.Lerp(focus, receiverPosition, syntheticBallTransit.Active ? 0.42f : 0.28f);
+            }
+
+            if (syntheticBallTransit.Active)
+            {
+                focus = Vector3.Lerp(focus, Vector3.Lerp(syntheticBallTransit.Start, syntheticBallTransit.End, 0.5f), 0.44f);
+            }
+
+            var holderSide = ResolvePlayerTeamSideToken(state, holderId);
+            if (!string.IsNullOrWhiteSpace(holderSide) &&
+                pitchZones != null &&
+                IsNearTeamBox(ballPosition, ResolveOpposingPitchTeamSideIndex(holderSide)))
+            {
+                var goalSide = ResolveOpposingPitchTeamSideIndex(holderSide);
+                var goalCenter = pitchZones.GetGoalCenter(goalSide);
+                var boxCenter = pitchZones.GetPenaltyBoxBounds(goalSide).center;
+                focus = Vector3.Lerp(focus, Vector3.Lerp(boxCenter, goalCenter, 0.35f), 0.3f);
+            }
+
+            var lookAhead = new Vector3(0f, 0f, 0f);
+            if (syntheticBallTransit.Active)
+            {
+                lookAhead = syntheticBallTransit.End - ballPosition;
+            }
+            else if (hasIntentTarget)
+            {
+                lookAhead = liveBallIntentTarget - ballPosition;
+            }
+            else if (state != null && state.ballPosition != null)
+            {
+                lookAhead = ResolvePlaybackBallVelocity(state.ballPosition, false);
+            }
+
+            lookAhead.y = 0f;
+            focus += Vector3.ClampMagnitude(lookAhead, 7.5f) * 0.16f;
+            if (pitchZones != null)
+            {
+                focus = pitchZones.GetSafeCameraFocusPoint(focus);
+            }
+
+            focus.y = pitchSpace != null ? pitchSpace.GrassY : 0f;
+            return ClampToFieldBounds(focus, false);
+        }
+
+        private Vector3 ResolveReferencePlayFocusCentroid(MatchResponse state, Vector3 ballPosition, Vector3 fallbackFocus)
+        {
+            var centroid = ResolveLiveCameraActionCentroid(state, fallbackFocus);
+            if (Time.unscaledTime < liveBallIntentExpiresAt &&
+                !string.IsNullOrWhiteSpace(liveBallIntentTargetPlayerId))
+            {
+                centroid = Vector3.Lerp(
+                    centroid,
+                    ResolveRuntimePlayerPositionById(state, liveBallIntentTargetPlayerId, liveBallIntentTarget),
+                    0.24f);
+            }
+
+            if (syntheticBallTransit.Active)
+            {
+                centroid = Vector3.Lerp(centroid, Vector3.Lerp(syntheticBallTransit.Start, syntheticBallTransit.End, 0.5f), 0.34f);
+            }
+
+            centroid = ClampToFieldBounds(Vector3.Lerp(ballPosition, centroid, 0.72f), false);
+            centroid.y = pitchSpace != null ? pitchSpace.GrassY : 0f;
+            return centroid;
+        }
+
+        private Vector3 ResolveReferenceGoalkeeperPosition(string teamSide, Vector3 ballPosition)
+        {
+            EnsurePitchSpaceResolved();
+            if (pitchZones == null || pitchSpace == null)
+            {
+                return ballPosition;
+            }
+
+            var teamSideIndex = ResolvePitchTeamSideIndex(teamSide);
+            var defaultHome = pitchZones.GetDefaultGoalkeeperHome(teamSideIndex, pitchSpace.GrassY);
+            var ballAngleTarget = pitchZones.GetKeeperBallAngleTarget(ballPosition, defaultHome, teamSideIndex);
+            var threat01 =
+                1f - Mathf.Clamp01(
+                    pitchZones.DistanceToGoalCenter(ballPosition, teamSideIndex) /
+                    Mathf.Max(1f, pitchSpace.HalfLength));
+            if (string.Equals(ResolvePossessionSideToken(), NormalizeTeamSideToken(teamSide), StringComparison.Ordinal))
+            {
+                threat01 *= 0.22f;
+            }
+
+            return ClampToFieldBounds(Vector3.Lerp(defaultHome, ballAngleTarget, Mathf.Lerp(0.18f, 1f, threat01)), false);
+        }
+
+        private bool TryResolveGoalkeeperPositionBySide(
+            MatchResponse state,
+            string teamSide,
+            bool referenceMode,
+            out Vector3 position)
+        {
+            if (state != null && state.players != null)
+            {
+                var normalizedTeamSide = NormalizeTeamSideToken(teamSide);
+                var livePlayers = state.players;
+                for (var index = 0; index < livePlayers.Length; index += 1)
+                {
+                    var livePlayer = livePlayers[index];
+                    if (livePlayer == null ||
+                        livePlayer.isBall ||
+                        ResolveLiveRoleBucket(livePlayer) != 0 ||
+                        !string.Equals(NormalizeTeamSideToken(livePlayer.teamSide), normalizedTeamSide, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (referenceMode)
+                    {
+                        var ballPosition =
+                            state.ballPosition != null
+                                ? ResolvePredictedFieldPosition(state.ballPosition, ResolveLivePredictionSeconds())
+                                : pitchSpace != null ? pitchSpace.Center : Vector3.zero;
+                        position = ResolveReferenceGoalkeeperPosition(normalizedTeamSide, ballPosition);
+                        return true;
+                    }
+
+                    if (TryGetBoundPlayer(livePlayer, out var handle) && handle != null && handle.IsValid)
+                    {
+                        position = ClampToFieldBounds(handle.Position, false);
+                        return true;
+                    }
+
+                    position = ResolveRuntimeFieldPosition(livePlayer, state, Vector3.zero);
+                    return true;
+                }
+            }
+
+            position = ResolveReferenceGoalkeeperPosition(
+                teamSide,
+                currentState != null && currentState.ballPosition != null
+                    ? ResolvePredictedFieldPosition(currentState.ballPosition, ResolveLivePredictionSeconds())
+                    : pitchSpace != null ? pitchSpace.Center : Vector3.zero);
+            return false;
+        }
+
+        private RuntimeActiveMoverBreakdown ResolveObservedActiveMoversForSide(MatchResponse state, string teamSide)
+        {
+            var breakdown = default(RuntimeActiveMoverBreakdown);
+            if (state == null || state.players == null)
+            {
+                return breakdown;
+            }
+
+            var normalizedTeamSide = NormalizeTeamSideToken(teamSide);
+            var possessionSide = ResolvePossessionSideToken();
+            var ballAnchor =
+                state.ballPosition != null
+                    ? ResolvePredictedFieldPosition(state.ballPosition, ResolveLivePredictionSeconds())
+                    : pitchSpace != null ? pitchSpace.Center : Vector3.zero;
+            var holderId = ResolveRuntimeBallHolderId(state);
+            var livePlayers = state.players;
+            for (var index = 0; index < livePlayers.Length; index += 1)
+            {
+                var livePlayer = livePlayers[index];
+                if (livePlayer == null ||
+                    livePlayer.isBall ||
+                    !livePlayer.active ||
+                    !string.Equals(NormalizeTeamSideToken(livePlayer.teamSide), normalizedTeamSide, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var roleBucket = ResolveLiveRoleBucket(livePlayer);
+                if (roleBucket == 0)
+                {
+                    breakdown.Goalkeepers += 1;
+                    continue;
+                }
+
+                var currentPosition = ResolveRuntimeFieldPosition(livePlayer, state, ballAnchor);
+                var urgency = ResolveLiveMovementUrgency(livePlayer, currentPosition);
+                var ballRank = ResolveTeamBallRank(livePlayer, currentPosition, ballAnchor);
+                var markRank = ResolveTeamDistanceRank(
+                    livePlayer,
+                    currentPosition,
+                    ResolveRuntimePlayerPositionById(state, holderId, ballAnchor));
+                var sameTeamAsPossession =
+                    !string.IsNullOrWhiteSpace(possessionSide) &&
+                    string.Equals(normalizedTeamSide, possessionSide, StringComparison.Ordinal);
+                var isIntentReceiver =
+                    Time.unscaledTime < liveBallIntentExpiresAt &&
+                    string.Equals(
+                        (livePlayer.playerId ?? string.Empty).Trim(),
+                        (liveBallIntentTargetPlayerId ?? string.Empty).Trim(),
+                        StringComparison.Ordinal);
+
+                if (!IsLikelyObservedMover(livePlayer, urgency))
+                {
+                    continue;
+                }
+
+                if (livePlayer.hasPossession)
+                {
+                    breakdown.AttackRuns += 1;
+                }
+                else if (sameTeamAsPossession)
+                {
+                    if (isIntentReceiver || ballRank <= 1)
+                    {
+                        breakdown.SupportOptions += 1;
+                    }
+                    else if (ballRank <= 2)
+                    {
+                        breakdown.AttackRuns += 1;
+                    }
+                    else
+                    {
+                        breakdown.FarSideDrifts += 1;
+                    }
+                }
+                else if (markRank <= 1)
+                {
+                    breakdown.Pressers += 1;
+                }
+                else if (ballRank <= 1)
+                {
+                    breakdown.Markers += 1;
+                }
+                else
+                {
+                    breakdown.FarSideDrifts += 1;
+                }
+            }
+
+            return breakdown;
+        }
+
+        private RuntimeActiveMoverBreakdown ResolveReferenceActiveMoversForSide(MatchResponse state, string teamSide)
+        {
+            var breakdown = default(RuntimeActiveMoverBreakdown);
+            if (state == null || state.players == null)
+            {
+                return breakdown;
+            }
+
+            var normalizedTeamSide = NormalizeTeamSideToken(teamSide);
+            var possessionSide = ResolvePossessionSideToken();
+            var sameTeamAsPossession = string.Equals(normalizedTeamSide, possessionSide, StringComparison.Ordinal);
+            var looseBall =
+                string.IsNullOrWhiteSpace(possessionSide) ||
+                state.ballPosition == null ||
+                string.IsNullOrWhiteSpace(state.ballPosition.playerId);
+            var ballAnchor =
+                state.ballPosition != null
+                    ? ResolvePredictedFieldPosition(state.ballPosition, ResolveLivePredictionSeconds())
+                    : pitchSpace != null ? pitchSpace.Center : Vector3.zero;
+            var holderId = ResolveRuntimeBallHolderId(state);
+            var livePlayers = state.players;
+            for (var index = 0; index < livePlayers.Length; index += 1)
+            {
+                var livePlayer = livePlayers[index];
+                if (livePlayer == null ||
+                    livePlayer.isBall ||
+                    !livePlayer.active ||
+                    !string.Equals(NormalizeTeamSideToken(livePlayer.teamSide), normalizedTeamSide, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var roleBucket = ResolveLiveRoleBucket(livePlayer);
+                if (roleBucket == 0)
+                {
+                    breakdown.Goalkeepers += 1;
+                    continue;
+                }
+
+                var currentPosition = ResolveRuntimeFieldPosition(livePlayer, state, ballAnchor);
+                var ballRank = ResolveTeamBallRank(livePlayer, currentPosition, ballAnchor);
+                var markRank = ResolveTeamDistanceRank(
+                    livePlayer,
+                    currentPosition,
+                    ResolveRuntimePlayerPositionById(state, holderId, ballAnchor));
+                var isIntentReceiver =
+                    Time.unscaledTime < liveBallIntentExpiresAt &&
+                    string.Equals(
+                        (livePlayer.playerId ?? string.Empty).Trim(),
+                        (liveBallIntentTargetPlayerId ?? string.Empty).Trim(),
+                        StringComparison.Ordinal);
+
+                if (livePlayer.hasPossession)
+                {
+                    breakdown.AttackRuns = Mathf.Min(MaxActiveAttackRuns, breakdown.AttackRuns + 1);
+                    continue;
+                }
+
+                if (sameTeamAsPossession)
+                {
+                    if (isIntentReceiver || ballRank == 0)
+                    {
+                        breakdown.SupportOptions = Mathf.Min(MaxActiveSupportOptions, breakdown.SupportOptions + 1);
+                    }
+                    else if (ballRank <= 2)
+                    {
+                        breakdown.AttackRuns = Mathf.Min(MaxActiveAttackRuns, breakdown.AttackRuns + 1);
+                    }
+                    else if (breakdown.FarSideDrifts < MaxFarSideSprints)
+                    {
+                        breakdown.FarSideDrifts += 1;
+                    }
+
+                    continue;
+                }
+
+                if (looseBall)
+                {
+                    if (ballRank <= 1 && breakdown.Pressers < MaxActivePressers)
+                    {
+                        breakdown.Pressers += 1;
+                    }
+                    else if (ballRank == 2 && breakdown.Markers < 1)
+                    {
+                        breakdown.Markers += 1;
+                    }
+                    else if (breakdown.FarSideDrifts < MaxFarSideSprints)
+                    {
+                        breakdown.FarSideDrifts += 1;
+                    }
+
+                    continue;
+                }
+
+                if (markRank <= 1 && breakdown.Pressers < MaxActivePressers)
+                {
+                    breakdown.Pressers += 1;
+                }
+                else if (ballRank == 0 && breakdown.Markers < 1)
+                {
+                    breakdown.Markers += 1;
+                }
+                else if (breakdown.FarSideDrifts < MaxFarSideSprints)
+                {
+                    breakdown.FarSideDrifts += 1;
+                }
+            }
+
+            return breakdown;
+        }
+
+        private bool IsLikelyObservedMover(PlayerPosition livePlayer, float urgency)
+        {
+            if (livePlayer == null)
+            {
+                return false;
+            }
+
+            if (livePlayer.hasPossession)
+            {
+                return true;
+            }
+
+            if (TryGetBoundPlayer(livePlayer, out var handle) && handle != null && handle.IsValid)
+            {
+                var planarVelocity = handle.Velocity;
+                planarVelocity.y = 0f;
+                return planarVelocity.magnitude > 0.55f || urgency >= 0.58f;
+            }
+
+            var liveVelocity = ResolveLiveFieldVelocity(livePlayer);
+            liveVelocity.y = 0f;
+            return liveVelocity.magnitude > 0.5f || urgency >= 0.58f;
+        }
+
+        private string BuildRuntimeComparisonSummary(RuntimeComparisonSnapshot snapshot)
+        {
+            return
+                snapshot.Mode +
+                " minute=" + ResolveDisplayClockMinute().ToString("0.##") +
+                " pitchRoot=" + snapshot.PitchRootPath +
+                " pitchTransform=" + FormatPlaybackVector(snapshot.PitchRootPosition) +
+                "/" + FormatPlaybackVector(snapshot.PitchRootRotationEuler) +
+                "/" + FormatPlaybackVector(snapshot.PitchRootScale) +
+                " pitchSize=(" + snapshot.PitchLength.ToString("0.##") + "," + snapshot.PitchWidth.ToString("0.##") + ")" +
+                " goals=" + FormatPlaybackVector(snapshot.LeftGoalPosition) + "->" + FormatPlaybackVector(snapshot.RightGoalPosition) +
+                " penaltyHome=" + FormatBounds(snapshot.HomePenaltyBox) +
+                " penaltyAway=" + FormatBounds(snapshot.AwayPenaltyBox) +
+                " camera=" + FormatPlaybackVector(snapshot.CameraTargetPoint) +
+                " holder=" + snapshot.BallOwnerId +
+                " ball=" + FormatPlaybackVector(snapshot.BallPosition) +
+                " keepers=" + FormatPlaybackVector(snapshot.HomeGoalkeeperPosition) + "/" + FormatPlaybackVector(snapshot.AwayGoalkeeperPosition) +
+                " movers=" + FormatRuntimeMovers(snapshot.HomeMovers) + "|" + FormatRuntimeMovers(snapshot.AwayMovers) +
+                " focus=" + FormatPlaybackVector(snapshot.PlayFocusCentroid) +
+                " cosmeticActive=" + snapshot.CosmeticEnvironmentActive;
+        }
+
+        private static string BuildRuntimeDivergenceSummary(
+            RuntimeComparisonSnapshot referenceSnapshot,
+            RuntimeComparisonSnapshot runtimeSnapshot)
+        {
+            return
+                "cameraDelta=" + Vector3.Distance(referenceSnapshot.CameraTargetPoint, runtimeSnapshot.CameraTargetPoint).ToString("0.##") +
+                " ballDelta=" + Vector3.Distance(referenceSnapshot.BallPosition, runtimeSnapshot.BallPosition).ToString("0.##") +
+                " playDelta=" + Vector3.Distance(referenceSnapshot.PlayFocusCentroid, runtimeSnapshot.PlayFocusCentroid).ToString("0.##") +
+                " homeKeeperDelta=" + Vector3.Distance(referenceSnapshot.HomeGoalkeeperPosition, runtimeSnapshot.HomeGoalkeeperPosition).ToString("0.##") +
+                " awayKeeperDelta=" + Vector3.Distance(referenceSnapshot.AwayGoalkeeperPosition, runtimeSnapshot.AwayGoalkeeperPosition).ToString("0.##") +
+                " holderMismatch=" + (!string.Equals(referenceSnapshot.BallOwnerId, runtimeSnapshot.BallOwnerId, StringComparison.Ordinal)) +
+                " homeMoverDelta=" + (runtimeSnapshot.HomeMovers.TotalOutfield - referenceSnapshot.HomeMovers.TotalOutfield) +
+                " awayMoverDelta=" + (runtimeSnapshot.AwayMovers.TotalOutfield - referenceSnapshot.AwayMovers.TotalOutfield) +
+                " cosmeticActive=" + runtimeSnapshot.CosmeticEnvironmentActive;
+        }
+
+        private static string FormatBounds(Bounds bounds)
+        {
+            return
+                "c" + FormatPlaybackVector(bounds.center) +
+                " s" + FormatPlaybackVector(bounds.size);
+        }
+
+        private static string FormatRuntimeMovers(RuntimeActiveMoverBreakdown breakdown)
+        {
+            return
+                "atk=" + breakdown.AttackRuns +
+                ",sup=" + breakdown.SupportOptions +
+                ",press=" + breakdown.Pressers +
+                ",mark=" + breakdown.Markers +
+                ",drift=" + breakdown.FarSideDrifts +
+                ",gk=" + breakdown.Goalkeepers;
+        }
+
+        private static string ResolveTransformPath(Transform transform)
+        {
+            if (transform == null)
+            {
+                return "<missing>";
+            }
+
+            var path = transform.name;
+            var current = transform.parent;
+            while (current != null)
+            {
+                path = current.name + "/" + path;
+                current = current.parent;
+            }
+
+            return path;
+        }
+
+        private static Transform FindSceneTransformByName(string transformName)
+        {
+            if (string.IsNullOrWhiteSpace(transformName))
+            {
+                return null;
+            }
+
+            var allTransforms = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            for (var index = 0; index < allTransforms.Length; index += 1)
+            {
+                var candidate = allTransforms[index];
+                if (candidate != null && string.Equals(candidate.name, transformName, StringComparison.Ordinal))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private void DrawRuntimeDebugScene()
+        {
+            if (config == null || !config.showRuntimeDebugOverlay || currentState == null)
+            {
+                return;
+            }
+
+            DrawWorldMarker(lastOriginalReferenceSnapshot.CameraTargetPoint, Color.yellow, 0.55f);
+            DrawWorldMarker(lastGtexRuntimeSnapshot.CameraTargetPoint, Color.cyan, 0.55f);
+            DrawWorldMarker(lastOriginalReferenceSnapshot.PlayFocusCentroid, new Color(1f, 0.6f, 0.1f), 0.42f);
+            DrawWorldMarker(lastGtexRuntimeSnapshot.PlayFocusCentroid, Color.green, 0.42f);
+
+            Debug.DrawLine(
+                lastOriginalReferenceSnapshot.CameraTargetPoint + Vector3.up * 0.35f,
+                lastGtexRuntimeSnapshot.CameraTargetPoint + Vector3.up * 0.35f,
+                Color.magenta);
+
+            var holderId = ResolveRuntimeBallHolderId(currentState);
+            if (!string.IsNullOrWhiteSpace(holderId))
+            {
+                var holderPosition = ResolveRuntimePlayerPositionById(currentState, holderId, lastGtexRuntimeSnapshot.BallPosition);
+                Debug.DrawLine(
+                    holderPosition + Vector3.up * RuntimeDebugMarkerHeight,
+                    lastOriginalReferenceSnapshot.BallPosition + Vector3.up * RuntimeDebugMarkerHeight,
+                    Color.yellow);
+                Debug.DrawLine(
+                    holderPosition + Vector3.up * (RuntimeDebugMarkerHeight + 0.04f),
+                    lastGtexRuntimeSnapshot.BallPosition + Vector3.up * (RuntimeDebugMarkerHeight + 0.04f),
+                    Color.cyan);
+            }
+
+            if (Time.unscaledTime < liveBallIntentExpiresAt &&
+                !string.IsNullOrWhiteSpace(liveBallIntentTargetPlayerId))
+            {
+                var receiverPosition = ResolveRuntimePlayerPositionById(currentState, liveBallIntentTargetPlayerId, liveBallIntentTarget);
+                Debug.DrawLine(
+                    lastOriginalReferenceSnapshot.BallPosition + Vector3.up * 0.22f,
+                    receiverPosition + Vector3.up * 0.22f,
+                    Color.green);
+            }
+        }
+
+        private static void DrawWorldMarker(Vector3 position, Color color, float radius)
+        {
+            var up = Vector3.up * Mathf.Max(0.05f, radius);
+            var right = Vector3.right * Mathf.Max(0.05f, radius);
+            var forward = Vector3.forward * Mathf.Max(0.05f, radius);
+            Debug.DrawLine(position - right, position + right, color);
+            Debug.DrawLine(position - forward, position + forward, color);
+            Debug.DrawLine(position, position + up, color);
+        }
+
+        private void EnsureRuntimeOverlayStyle()
+        {
+            if (runtimeOverlayStyle != null)
+            {
+                return;
+            }
+
+            runtimeOverlayStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 12,
+                wordWrap = true,
+                normal = { textColor = Color.white }
+            };
+        }
+
+        private void OnGUI()
+        {
+            if (config == null || !config.showRuntimeDebugOverlay || currentState == null)
+            {
+                return;
+            }
+
+            EnsureRuntimeOverlayStyle();
+            var summary = new StringBuilder();
+            summary.AppendLine("GTEX Runtime Comparison");
+            summary.AppendLine(
+                "Clock " + ResolveDisplayClockMinute().ToString("0.##") +
+                (usingSyntheticClockAdvance ? " (stall-advanced)" : string.Empty) +
+                "  Holder " + ResolveRuntimeBallHolderId(currentState));
+            summary.AppendLine("Reference: " + BuildRuntimeComparisonSummary(lastOriginalReferenceSnapshot));
+            summary.AppendLine("Runtime:   " + BuildRuntimeComparisonSummary(lastGtexRuntimeSnapshot));
+            summary.AppendLine("Delta:     " + BuildRuntimeDivergenceSummary(lastOriginalReferenceSnapshot, lastGtexRuntimeSnapshot));
+
+            var rect = new Rect(12f, 12f, Mathf.Min(Screen.width - 24f, 900f), 154f);
+            GUI.Box(rect, string.Empty);
+            GUI.Label(
+                new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f),
+                summary.ToString(),
+                runtimeOverlayStyle);
         }
 
         private void ResolvePitchSpace()
@@ -879,6 +1812,7 @@ namespace FStudio.GTEX
                 return;
             }
 
+            var displayClockMinute = ResolveDisplayClockMinute();
             var phase = ResolveControllerPhase(currentState).ToString();
             if (!string.Equals(runtimeTraceLastLoggedPhase, phase, StringComparison.Ordinal))
             {
@@ -895,7 +1829,7 @@ namespace FStudio.GTEX
                 {
                     AppendRuntimeTrace(
                         "event",
-                        "minute=" + currentState.clockMinute.ToString("0.##") +
+                        "minute=" + displayClockMinute.ToString("0.##") +
                         " type=" + ((activeEvent.type ?? string.Empty).Trim()) +
                         " primary=" + ((activeEvent.primaryPlayerId ?? string.Empty).Trim()) +
                         " score=" + currentState.homeScore + "-" + currentState.awayScore);
@@ -907,7 +1841,7 @@ namespace FStudio.GTEX
             {
                 AppendRuntimeTrace(
                     "holder",
-                    "minute=" + currentState.clockMinute.ToString("0.##") +
+                    "minute=" + displayClockMinute.ToString("0.##") +
                     " from=" + runtimeTraceLastLoggedBallHolderId +
                     " to=" + holderId +
                     " ballSpeed=" + runtimeTraceBallSpeed.ToString("0.##"));
@@ -916,16 +1850,16 @@ namespace FStudio.GTEX
 
             if (runtimeTraceMovingPlayerCount > 0 || runtimeTraceBallSpeed >= LiveBallPassSpeedUnitsPerSecond)
             {
-                runtimeTraceLastMotionClockMinute = currentState.clockMinute;
+                runtimeTraceLastMotionClockMinute = displayClockMinute;
             }
             else if (runtimeTraceLastMotionClockMinute < 0f)
             {
-                runtimeTraceLastMotionClockMinute = currentState.clockMinute;
+                runtimeTraceLastMotionClockMinute = displayClockMinute;
             }
-            else if (currentState.clockMinute - runtimeTraceLastMotionClockMinute >= RuntimeTraceStationaryClockDeltaThresholdMinutes)
+            else if (displayClockMinute - runtimeTraceLastMotionClockMinute >= RuntimeTraceStationaryClockDeltaThresholdMinutes)
             {
                 AppendRuntimeTrace("warn", "clock advanced with no detected motion. " + BuildRuntimeTraceSummary());
-                runtimeTraceLastMotionClockMinute = currentState.clockMinute;
+                runtimeTraceLastMotionClockMinute = displayClockMinute;
             }
 
             if (Time.unscaledTime - runtimeTraceLastHeartbeatAt >= RuntimeTraceHeartbeatIntervalSeconds)
@@ -1029,6 +1963,7 @@ namespace FStudio.GTEX
                     MatchManager.Current.ConfigureExternalPlaybackSettings(config);
                 }
                 ResolvePitchSpace();
+                EnsureRuntimeHierarchy();
             }
             else if (config != null && config.verboseLogging)
             {
@@ -1036,6 +1971,7 @@ namespace FStudio.GTEX
             }
 
             BindPlayers();
+            EnsureRuntimeHierarchy();
             TryConsumeLiveState(lastKnownState, true);
 
             matchLoaded = true;
@@ -1429,6 +2365,7 @@ namespace FStudio.GTEX
         private void Update()
         {
             MaintainLiveTransport();
+            EnsureRuntimeHierarchy();
 
             if (!matchLoaded || playbackApplier == null || playbackApplier.CurrentState == null)
             {
@@ -1436,8 +2373,11 @@ namespace FStudio.GTEX
                 return;
             }
 
+            TryAdvanceStalledClock();
             playbackApplier.Tick(Time.deltaTime);
+            TrackRuntimeComparison();
             TrackRuntimeTrace();
+            DrawRuntimeDebugScene();
         }
 
         // =========================
@@ -1805,6 +2745,9 @@ namespace FStudio.GTEX
             TrackMotionBoundaryState(state, forceSnap);
             currentState = state;
             stateReceivedAt = Time.unscaledTime;
+            authoritativeClockMinute = state.clockMinute;
+            syntheticDisplayClockMinute = state.clockMinute;
+            usingSyntheticClockAdvance = false;
             staleStateWarningLogged = false;
             consecutiveTransportFailures = 0;
             lastTransportError = string.Empty;
@@ -2750,89 +3693,49 @@ namespace FStudio.GTEX
 
         private void ValidateActiveMoverBudgets(PlayerPosition[] livePlayers)
         {
+            lastHomeActiveMoverBreakdown = ResolveObservedActiveMoversForSide(currentState, "home");
+            lastAwayActiveMoverBreakdown = ResolveObservedActiveMoversForSide(currentState, "away");
+
             if (config == null || !config.verboseLogging || currentState == null || pitchZones == null || livePlayers == null)
             {
                 return;
             }
 
-            var ballAnchor =
-                currentState.ballPosition != null
-                    ? ResolvePredictedFieldPosition(currentState.ballPosition, 0f)
-                    : pitchSpace != null ? pitchSpace.Center : Vector3.zero;
-            var possessionSide = ResolvePossessionSideToken();
-            var homeAttackers = 0;
-            var awayAttackers = 0;
-            var homeDefenders = 0;
-            var awayDefenders = 0;
+            var referenceHome = ResolveReferenceActiveMoversForSide(currentState, "home");
+            var referenceAway = ResolveReferenceActiveMoversForSide(currentState, "away");
 
-            for (var index = 0; index < livePlayers.Length; index += 1)
+            void ReportIfOver(string side, string category, int observed, int allowed, float throttle = 2f)
             {
-                var livePlayer = livePlayers[index];
-                if (livePlayer == null || livePlayer.isBall || !livePlayer.active || ResolveLiveRoleBucket(livePlayer) == 0)
+                if (observed <= allowed)
                 {
-                    continue;
+                    return;
                 }
 
-                var teamSide = NormalizeTeamSideToken(livePlayer.teamSide);
-                if (string.IsNullOrWhiteSpace(teamSide))
-                {
-                    continue;
-                }
-
-                var currentPosition = ResolveRuntimeFieldPosition(livePlayer, currentState, ballAnchor);
-                var urgency = ResolveLiveMovementUrgency(livePlayer, currentPosition);
-                if (urgency < 0.32f)
-                {
-                    continue;
-                }
-
-                var sameTeamAsPossession =
-                    !string.IsNullOrWhiteSpace(possessionSide) &&
-                    string.Equals(teamSide, possessionSide, StringComparison.Ordinal);
-                if (sameTeamAsPossession && IsNearTeamBox(ballAnchor, ResolveOpposingPitchTeamSideIndex(teamSide)))
-                {
-                    if (ResolvePitchTeamSideIndex(teamSide) == GtexPitchZoneHelper.HomeTeamSide)
-                    {
-                        homeAttackers += 1;
-                    }
-                    else
-                    {
-                        awayAttackers += 1;
-                    }
-                }
-                else if (!sameTeamAsPossession && IsNearTeamBox(ballAnchor, ResolvePitchTeamSideIndex(teamSide)))
-                {
-                    if (ResolvePitchTeamSideIndex(teamSide) == GtexPitchZoneHelper.HomeTeamSide)
-                    {
-                        homeDefenders += 1;
-                    }
-                    else
-                    {
-                        awayDefenders += 1;
-                    }
-                }
+                ReportRuntimeValidation(
+                    side + "_" + category + "_over_budget",
+                    "observed=" + observed + " allowed=" + allowed,
+                    throttle);
             }
 
-            const int maxActiveAttackRunsNearBox = 4;
-            const int maxActivePressersNearBox = 3;
-            if (homeAttackers > maxActiveAttackRunsNearBox)
-            {
-                ReportRuntimeValidation("home_attack_budget_exceeded", "count=" + homeAttackers, 2f);
-            }
+            ReportIfOver("home", "attack_runs", lastHomeActiveMoverBreakdown.AttackRuns, MaxActiveAttackRuns);
+            ReportIfOver("away", "attack_runs", lastAwayActiveMoverBreakdown.AttackRuns, MaxActiveAttackRuns);
+            ReportIfOver("home", "support_options", lastHomeActiveMoverBreakdown.SupportOptions, MaxActiveSupportOptions);
+            ReportIfOver("away", "support_options", lastAwayActiveMoverBreakdown.SupportOptions, MaxActiveSupportOptions);
+            ReportIfOver("home", "pressers", lastHomeActiveMoverBreakdown.Pressers, MaxActivePressers);
+            ReportIfOver("away", "pressers", lastAwayActiveMoverBreakdown.Pressers, MaxActivePressers);
+            ReportIfOver("home", "far_side_sprints", lastHomeActiveMoverBreakdown.FarSideDrifts, MaxFarSideSprints);
+            ReportIfOver("away", "far_side_sprints", lastAwayActiveMoverBreakdown.FarSideDrifts, MaxFarSideSprints);
 
-            if (awayAttackers > maxActiveAttackRunsNearBox)
+            if (lastHomeActiveMoverBreakdown.TotalOutfield > referenceHome.TotalOutfield + 1 ||
+                lastAwayActiveMoverBreakdown.TotalOutfield > referenceAway.TotalOutfield + 1)
             {
-                ReportRuntimeValidation("away_attack_budget_exceeded", "count=" + awayAttackers, 2f);
-            }
-
-            if (homeDefenders > maxActivePressersNearBox)
-            {
-                ReportRuntimeValidation("home_defend_budget_exceeded", "count=" + homeDefenders, 2f);
-            }
-
-            if (awayDefenders > maxActivePressersNearBox)
-            {
-                ReportRuntimeValidation("away_defend_budget_exceeded", "count=" + awayDefenders, 2f);
+                ReportRuntimeValidation(
+                    "movement_budget_diverged_from_reference",
+                    "homeObserved=" + FormatRuntimeMovers(lastHomeActiveMoverBreakdown) +
+                    " homeReference=" + FormatRuntimeMovers(referenceHome) +
+                    " awayObserved=" + FormatRuntimeMovers(lastAwayActiveMoverBreakdown) +
+                    " awayReference=" + FormatRuntimeMovers(referenceAway),
+                    2f);
             }
         }
 
@@ -3976,6 +4879,7 @@ namespace FStudio.GTEX
                 pitchSpace.MinZ + safeInsetZ,
                 pitchSpace.MaxZ - safeInsetZ);
             focusPosition.y = 0f;
+            lastLivePlayFocusCentroid = actionCentroid;
             if (pitchZones != null)
             {
                 var safeFocusPosition = pitchZones.GetSafeCameraFocusPoint(focusPosition);
@@ -3990,9 +4894,11 @@ namespace FStudio.GTEX
                         2f);
                 }
 
+                lastLiveCameraTarget = safeFocusPosition;
                 return safeFocusPosition;
             }
 
+            lastLiveCameraTarget = focusPosition;
             return focusPosition;
         }
 
@@ -4105,33 +5011,68 @@ namespace FStudio.GTEX
             var focus = ballPosition;
             if (ballCarrierPosition.HasValue)
             {
-                focus = Vector3.Lerp(focus, ballCarrierPosition.Value, 0.68f);
+                focus = Vector3.Lerp(focus, ballCarrierPosition.Value, 0.72f);
             }
 
             if (nearbyActivePlayers != null && nearbyActivePlayers.Count > 0)
             {
                 var centroid = Vector3.zero;
-                var count = 0;
+                var totalWeight = 0f;
                 for (var index = 0; index < nearbyActivePlayers.Count; index += 1)
                 {
                     var position = nearbyActivePlayers[index];
-                    if ((position - ballPosition).sqrMagnitude > 32f * 32f)
+                    var distance = Vector3.Distance(position, ballPosition);
+                    if (distance > 35f)
                     {
                         continue;
                     }
 
-                    centroid += position;
-                    count += 1;
+                    var weight = 1f - Mathf.Clamp01(distance / 35f);
+                    centroid += position * Mathf.Max(0.12f, weight);
+                    totalWeight += Mathf.Max(0.12f, weight);
                 }
 
-                if (count > 0)
+                if (totalWeight > 0.001f)
                 {
-                    centroid /= count;
-                    focus = Vector3.Lerp(focus, centroid, 0.3f);
+                    centroid /= totalWeight;
+                    focus = Vector3.Lerp(focus, centroid, 0.34f);
                 }
             }
 
-            var lookAhead = new Vector3(ballVelocity.x, 0f, ballVelocity.z);
+            if (Time.unscaledTime < liveBallIntentExpiresAt &&
+                !string.IsNullOrWhiteSpace(liveBallIntentTargetPlayerId))
+            {
+                var receiverPosition = ResolveRuntimePlayerPositionById(currentState, liveBallIntentTargetPlayerId, liveBallIntentTarget);
+                focus = Vector3.Lerp(focus, receiverPosition, syntheticBallTransit.Active ? 0.42f : 0.26f);
+            }
+
+            if (syntheticBallTransit.Active)
+            {
+                focus = Vector3.Lerp(focus, Vector3.Lerp(syntheticBallTransit.Start, syntheticBallTransit.End, 0.5f), 0.48f);
+            }
+
+            var holderId = ResolveRuntimeBallHolderId(currentState);
+            var holderSide = ResolvePlayerTeamSideToken(currentState, holderId);
+            if (!string.IsNullOrWhiteSpace(holderSide) &&
+                pitchZones != null &&
+                IsNearTeamBox(ballPosition, ResolveOpposingPitchTeamSideIndex(holderSide)))
+            {
+                var goalSide = ResolveOpposingPitchTeamSideIndex(holderSide);
+                var goalCenter = pitchZones.GetGoalCenter(goalSide);
+                var boxCenter = pitchZones.GetPenaltyBoxBounds(goalSide).center;
+                focus = Vector3.Lerp(focus, Vector3.Lerp(boxCenter, goalCenter, 0.35f), 0.32f);
+            }
+
+            var lookAhead = syntheticBallTransit.Active
+                ? syntheticBallTransit.End - ballPosition
+                : new Vector3(ballVelocity.x, 0f, ballVelocity.z);
+            if (lookAhead.sqrMagnitude <= 0.0001f &&
+                Time.unscaledTime < liveBallIntentExpiresAt)
+            {
+                lookAhead = liveBallIntentTarget - ballPosition;
+            }
+
+            lookAhead.y = 0f;
             lookAhead = Vector3.ClampMagnitude(lookAhead, 8f);
             focus += lookAhead * 0.18f;
             var safeFocus = pitchZones != null ? pitchZones.GetSafeCameraFocusPoint(focus) : focus;
@@ -4931,19 +5872,52 @@ namespace FStudio.GTEX
                 eventType.Contains("goal") ||
                 eventType.Contains("shot") ||
                 eventType.Contains("save");
+            var widthRunnerCandidate =
+                sameSideBallRank == 2 &&
+                roleBucket >= 2 &&
+                Mathf.Abs(ResolveBehaviorLaneSign(livePlayer, roleBucket)) >= 0.5f;
             var primarySupportBand = looseBallBehavior ? 1 : 0;
             var engagedWithoutBall =
                 isIntentReceiver ||
                 sameSideBallRank <= primarySupportBand ||
                 (!sameTeamAsPossession && markRank != int.MaxValue && markRank <= 1);
+            var supportOptionCandidate =
+                sameTeamAsPossession &&
+                !looseBallBehavior &&
+                sameSideBallRank == 0;
+            var runnerCandidate =
+                sameTeamAsPossession &&
+                !looseBallBehavior &&
+                (sameSideBallRank == 1 || widthRunnerCandidate);
+            var nearestPresserCandidate =
+                !sameTeamAsPossession &&
+                markRank != int.MaxValue &&
+                markRank == 0;
+            var coverDefenderCandidate =
+                !sameTeamAsPossession &&
+                markRank != int.MaxValue &&
+                markRank == 1;
+            var markerCandidate =
+                !sameTeamAsPossession &&
+                sameSideBallRank == 0 &&
+                roleBucket <= 2;
+            var farSideDriftCandidate =
+                !livePlayer.hasPossession &&
+                !isIntentReceiver &&
+                (sameTeamAsPossession
+                    ? sameSideBallRank == 3
+                    : markRank != int.MaxValue && markRank > 1 && sameSideBallRank <= 2);
             var withinMovementBudget =
                 livePlayer.hasPossession ||
                 isIntentReceiver ||
                 (looseBallBehavior
-                    ? sameSideBallRank <= 1 || (!sameTeamAsPossession && markRank != int.MaxValue && markRank == 0)
-                    : sameTeamAsPossession
-                        ? sameSideBallRank == 0 || (sameSideBallRank == 1 && (attackEvent || roleBucket >= 2))
-                        : markRank != int.MaxValue && markRank <= 1);
+                    ? sameSideBallRank <= 1 || nearestPresserCandidate
+                    : supportOptionCandidate ||
+                      runnerCandidate ||
+                      nearestPresserCandidate ||
+                      coverDefenderCandidate ||
+                      markerCandidate ||
+                      (farSideDriftCandidate && roleBucket <= 2));
             var passiveShapePlayer =
                 !livePlayer.hasPossession &&
                 !withinMovementBudget &&
@@ -4962,11 +5936,10 @@ namespace FStudio.GTEX
 
             if (nearAttackingBox && !looseBallBehavior)
             {
-                var widthRunnerCandidate = sameSideBallRank == 2 && roleBucket >= 2 && Mathf.Abs(ResolveBehaviorLaneSign(livePlayer, roleBucket)) >= 0.5f;
                 withinMovementBudget =
                     livePlayer.hasPossession ||
                     isIntentReceiver ||
-                    sameSideBallRank == 0 ||
+                    supportOptionCandidate ||
                     (sameSideBallRank == 1 && roleBucket >= 2) ||
                     widthRunnerCandidate;
                 passiveShapePlayer = !withinMovementBudget && !livePlayer.hasPossession;
@@ -4976,9 +5949,9 @@ namespace FStudio.GTEX
             {
                 withinMovementBudget =
                     livePlayer.hasPossession ||
-                    (markRank != int.MaxValue && markRank <= 1) ||
-                    sameSideBallRank == 0 ||
-                    (sameSideBallRank == 1 && roleBucket <= 2);
+                    nearestPresserCandidate ||
+                    coverDefenderCandidate ||
+                    markerCandidate;
                 passiveShapePlayer = !withinMovementBudget && !livePlayer.hasPossession;
             }
 
@@ -5009,7 +5982,7 @@ namespace FStudio.GTEX
                                 : (markRank == 0 ? 0.8f : markRank == 1 ? 0.28f : sameSideBallRank == 0 ? 0.12f : sameSideBallRank == 1 ? 0.05f : 0.015f);
             if (!withinMovementBudget && !livePlayer.hasPossession && !isIntentReceiver)
             {
-                movementInvolvement *= looseBallBehavior ? 0.18f : 0.08f;
+                movementInvolvement *= looseBallBehavior ? 0.12f : 0.03f;
             }
             if (nearAttackingBox && !livePlayer.hasPossession)
             {
@@ -6417,7 +7390,7 @@ namespace FStudio.GTEX
                         bodyAlignment < 0.18f);
                 }
 
-                if (config != null && config.verboseLogging)
+                if (config != null && (config.verboseLogging || config.showRuntimeDebugOverlay))
                 {
                     Debug.DrawLine(releaseAnchor + Vector3.up * 0.2f, targetPosition + Vector3.up * 0.2f, passLikeEvent ? Color.cyan : Color.red, 1.25f, false);
                 }

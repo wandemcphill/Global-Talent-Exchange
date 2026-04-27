@@ -371,6 +371,14 @@ namespace FStudio.MatchEngine {
                         continue;
                     }
 
+                    if (MatchManager.Current != null && MatchManager.Current.ShouldBlockAutonomousBehaviours()) {
+                        if (!GamePlayers[i].IsHoldingBall) {
+                            GamePlayers[i].Stop(deltaTime);
+                        }
+
+                        continue;
+                    }
+
                     GamePlayers[i].ProcessBehaviours(in time);
                 } else {
                     Debug.LogError("Player is null.");

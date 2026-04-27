@@ -5,14 +5,83 @@ These prompts are rewritten to fit the current GTEX codebase.
 Context that must be respected:
 - GTEX currently sits on top of an existing 3D match engine.
 - The current engine remains the default ship path until evidence proves replacement is worth the cost.
+- Exception: Prompt C2 is a READY controlled visual-runtime pivot that supersedes the old current-engine-only restriction for an isolated original-visual scene only.
 - Existing core ownership already lives in:
   - `Assets/Code/GTEX/GtexMatchRuntime.cs`
   - `Assets/Code/MatchEngine/MatchEngineLoader.cs`
   - `Assets/Code/MatchEngine/MatchManager.cs`
   - `Assets/Code/Events/EventManager.cs`
 - New work must be additive and must not replace those systems unless a later phase explicitly says so and the evidence gate is satisfied.
+- Prompt C2 may add a separate visual bridge and scene, but must not delete or rewrite the current GTEX scene path.
 - Prompt C and Prompt D are integration and evidence phases, not replacement phases.
 - Prompt E is the earliest phase allowed to replace ownership away from legacy engine classes.
+
+## Prompt C2: Implement Now
+
+### Controlled Original Visual Runtime Pivot
+
+You are working inside the Unity project `GTEX 3D Football Engine`.
+
+This phase supersedes the old P6/P7/P8 current-engine-only restriction for this controlled visual-runtime pivot only. It is not a rewrite.
+
+Goal:
+- GTEX remains the match authority.
+- The original football simulator becomes the 3D visual football executor in a separate scene.
+- GTEX sends high-level football intentions instead of per-frame transform playback.
+
+Rules:
+- Create branch `feature/original-visual-runtime`
+- Do not revert, delete, or overwrite current GTEX work
+- Keep existing GTEX scenes intact, especially `Gtex_MainScene`
+- Preserve Windows batchmode build stability
+- Do not import duplicate active `FStudio.MatchEngine` code from the original package
+- Use the clean `Football Soccer Simulator.unitypackage` as reference
+- Store/reference the original simulator under `Assets/ThirdParty/OriginalFootballSimulator/`
+- Import only missing non-code assets if required
+
+Tasks:
+1. Create isolated scene
+   - Add `Assets/Scenes/GTEX_OriginalVisualRuntime.unity`
+   - Use the original simulator camera, pitch, ball, player, keeper, pass, shot, dribble, and spacing systems
+   - Keep the current GTEX scenes switchable and unchanged
+
+2. Add runtime mode
+   - Add `OriginalVisualRuntime`
+   - Keep it separate from `LivePlayback`, `LocalSimulation`, and external transform playback
+   - In this mode call `MatchManager.SetExternalPlayback(false)`
+   - Disable `GtexPlaybackApplier`, `DrivePlayers`, `DriveBall`, synthetic ball transit, GTEX camera focus override, GTEX goalkeeper clamps, GTEX ball anchor hacks, and stadium/crowd gameplay influence
+
+3. Add visual bridge
+   - Create `Assets/Code/GTEX/VisualBridge/`
+   - Use namespace `FStudio.GTEX.VisualBridge`
+   - Add `GtexVisualCommandType`, `GtexVisualCommand`, `GtexVisualMatchDirector`, `GtexOriginalSimAdapter`, `GtexPlayerVisualMap`, `GtexScoreVisualBridge`, and `GtexOriginalPlayerVisualProxy`
+   - Use string player/team IDs in commands
+   - Convert GTEX IDs to simulator `PlayerBase`, `GK`, `Ball`, and camera references only inside the map/adapter
+
+4. Execute visual actions through original simulator APIs
+   - Possession: `Ball.Current.Hold(player)`
+   - Pass/cross: `PlayerBase.Pass(...)` and `PlayerBase.Cross(...)`
+   - Shot: calculate target velocity, then `PlayerBase.Shoot(...)`
+   - Carry/support: coroutine using `PlayerBase.MoveTo(...)`
+   - Camera: `CameraSystem.SwitchCamera(...)` and `FocusToBall()`
+   - Kickoff/reset: original instant placement methods only
+   - Do not use raw transform driving except kickoff/reset placement
+
+5. Keep score authoritative
+   - `GtexScoreAuthority` remains the only score source
+   - `GtexScoreVisualBridge` mirrors GTEX score into UI
+   - Prevent old goal events from independently incrementing a second scoreboard in the original-visual scene
+
+Acceptance criteria:
+- Project compiles
+- `GTEX_OriginalVisualRuntime.unity` opens
+- Old camera, player movement, ball, pass, shot, dribble, and keeper behavior work without GTEX backend
+- Scripted command replay covers kickoff, possession, carry, pass, through pass, cross, shot saved, goal, and reset kickoff
+- Local GTEX sim events flow through `GtexVisualMatchDirector`
+- Half-time and full-time work
+- Live/backend playback uses visual commands only
+- `DrivePlayers` and `DriveBall` transform playback are inactive in `OriginalVisualRuntime`
+- Existing Windows batch build remains stable
 
 ## Prompt A: Implement Immediately
 

@@ -1,0 +1,30 @@
+namespace FStudio.GTEX.VisualBridge
+{
+    public enum GtexVisualCommandType
+    {
+        None,
+        StartMatch,
+        SetTeams,
+        SetClock,
+        SetScore,
+        AssignPossession,
+        CarryBall,
+        SupportRun,
+        MarkPlayer,
+        PressBallCarrier,
+        HoldShape,
+        CoverSpace,
+        Pass,
+        ThroughPass,
+        Cross,
+        Shoot,
+        KeeperSave,
+        KeeperClaim,
+        Goal,
+        Foul,
+        OutOfPlay,
+        ResetKickoff,
+        EndHalf,
+        EndMatch
+    }
+}

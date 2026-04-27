@@ -9,6 +9,7 @@ namespace FStudio.GTEX.Engine
         AutoStartRuntime,
         StartLivePlayback,
         StartLocalSimulation,
+        StartOriginalVisualRuntime,
         UseLegacyBootstrapFallback
     }
 

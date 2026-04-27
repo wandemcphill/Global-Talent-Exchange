@@ -1,4 +1,5 @@
 ﻿using FStudio.Animation;
+using FStudio.GTEX.Engine;
 using FStudio.MatchEngine.Players;
 using FStudio.Utilities;
 
@@ -84,7 +85,9 @@ namespace FStudio.MatchEngine.Balls {
             private set {
                 m_isOnCrossMode = value;
 
-                crossIndicator.SetActive(value);
+                if (crossIndicator != null) {
+                    crossIndicator.SetActive(value);
+                }
             }
             get { return m_isOnCrossMode; }
         }
@@ -200,12 +203,16 @@ namespace FStudio.MatchEngine.Balls {
                 rigidbody.linearVelocity = ballVel;
             }
 
-            ballShadow.position = ballPos;
+            if (ballShadow != null) {
+                ballShadow.position = ballPos;
+            }
             // ball shadow power.
             float height = ballPos.y;
             ballPos.y = 0;
             float heightPow = Mathf.Max (0, 0.6f - height);
-            shadowMaterial.SetFloat(BALL_SHADOW_POWER, heightPow);
+            if (shadowMaterial != null) {
+                shadowMaterial.SetFloat(BALL_SHADOW_POWER, heightPow);
+            }
         }
 
         private void FixedUpdate()
@@ -231,8 +238,11 @@ namespace FStudio.MatchEngine.Balls {
                 externalPlaybackTargetPosition,
                 externalPlaybackMoveSpeed * Time.fixedDeltaTime);
 
-            rigidbody.MovePosition(nextPosition);
-            rigidbody.MoveRotation(externalPlaybackTargetRotation);
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                nextPosition,
+                externalPlaybackTargetRotation);
         }
 
         /// <summary>
@@ -377,9 +387,11 @@ namespace FStudio.MatchEngine.Balls {
 
             if (!hasExternalPlaybackTarget ||
                 Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackTeleportDistance()) {
-                rigidbody.position = targetPosition;
-                rigidbody.rotation = externalPlaybackTargetRotation;
-                transform.SetPositionAndRotation(targetPosition, externalPlaybackTargetRotation);
+                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                    transform,
+                    rigidbody,
+                    targetPosition,
+                    externalPlaybackTargetRotation);
             }
 
             hasExternalPlaybackTarget = true;
@@ -448,8 +460,7 @@ namespace FStudio.MatchEngine.Balls {
             }
 
             rigidbody.isKinematic = false;
-            rigidbody.linearVelocity = releaseVelocity;
-            rigidbody.angularVelocity = Vector3.zero;
+            GtexPlaybackPhysicsUtil.SafeSetRigidbodyVelocity(rigidbody, releaseVelocity, Vector3.zero);
         }
 
         private bool TryResolveAnimatorControlledBallPoint(PlayerBase holder, out Vector3 target)
@@ -631,7 +642,9 @@ namespace FStudio.MatchEngine.Balls {
             target.z = Mathf.Clamp(target.z, 1, MatchManager.Current.SizeOfField.y - 1);
             //
 
-            crossIndicator.transform.position = target + Vector3.up * 0.05f;
+            if (crossIndicator != null) {
+                crossIndicator.transform.position = target + Vector3.up * 0.05f;
+            }
 
             IsOnCrossMode = true;
 
@@ -848,7 +861,12 @@ namespace FStudio.MatchEngine.Balls {
                 rigidbody.angularVelocity = Vector3.zero;
             }
             transform.position = target;
-            rigidbody.MovePosition(target);
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                target,
+                externalPlaybackTargetRotation,
+                true);
             LastHolder = null;
             LastTouchedPlayer = null;
 
@@ -912,9 +930,12 @@ namespace FStudio.MatchEngine.Balls {
 
             if (Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackHolderSnapDistance())
             {
-                rigidbody.position = targetPosition;
-                rigidbody.rotation = targetRotation;
-                transform.SetPositionAndRotation(targetPosition, targetRotation);
+                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                    transform,
+                    rigidbody,
+                    targetPosition,
+                    targetRotation,
+                    true);
                 return;
             }
 
@@ -933,8 +954,11 @@ namespace FStudio.MatchEngine.Balls {
             var turnT = 1f - Mathf.Exp(-18f * Time.fixedDeltaTime);
             var nextRotation = Quaternion.Slerp(rigidbody.rotation, targetRotation, turnT);
 
-            rigidbody.MovePosition(nextPosition);
-            rigidbody.MoveRotation(nextRotation);
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                nextPosition,
+                nextRotation);
             holdedPosition = nextPosition;
         }
 
@@ -948,11 +972,13 @@ namespace FStudio.MatchEngine.Balls {
             var targetPosition = ResolveExternalPlaybackHolderAnchor(holder);
             var targetRotation = ResolveExternalPlaybackHolderRotation(holder);
             holdedPosition = targetPosition;
-            rigidbody.linearVelocity = Vector3.zero;
-            rigidbody.angularVelocity = Vector3.zero;
-            rigidbody.position = targetPosition;
-            rigidbody.rotation = targetRotation;
-            transform.SetPositionAndRotation(targetPosition, targetRotation);
+            GtexPlaybackPhysicsUtil.SafeSetRigidbodyVelocity(rigidbody, Vector3.zero, Vector3.zero);
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                targetPosition,
+                targetRotation,
+                true);
         }
 
         private Vector3 ResolveExternalPlaybackHolderAnchor(PlayerBase holder)
@@ -1138,13 +1164,18 @@ namespace FStudio.MatchEngine.Balls {
                 EventManager.Trigger(new BallHitTheWoodWorkEvent(collision.impulse.magnitude));
             }
 
-            if (!MatchManager.Current.MatchFlags.HasFlag(Enums.MatchStatus.Playing)) {
+            if (MatchManager.Current == null ||
+                !MatchManager.Current.MatchFlags.HasFlag(Enums.MatchStatus.Playing)) {
                 return; //rest is for player ball control
             }
 
             if (colliderLayer == LayerMask.NameToLayer (Tags.PLAYER_LAYER)) {
-				
-                LastTouchedPlayer = collision.collider.gameObject.GetComponent<IPlayerController>().BasePlayer;
+                var playerController = collision.collider.gameObject.GetComponent<IPlayerController>();
+                if (playerController == null) {
+                    return;
+                }
+
+                LastTouchedPlayer = playerController.BasePlayer;
 
                 float time = Time.time;
                 if (nextCollision > time) {

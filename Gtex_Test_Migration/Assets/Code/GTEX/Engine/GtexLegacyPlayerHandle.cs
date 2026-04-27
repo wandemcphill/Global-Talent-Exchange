@@ -14,7 +14,10 @@ namespace FStudio.GTEX.Engine
             this.player = player;
         }
 
-        public bool IsValid => player != null && player.PlayerController != null;
+        public bool IsValid =>
+            player != null &&
+            player.PlayerController != null &&
+            player.PlayerController.UnityObject != null;
 
         public Vector3 Position => IsValid ? player.Position : Vector3.zero;
 
@@ -22,12 +25,32 @@ namespace FStudio.GTEX.Engine
 
         public Vector3 Forward => IsValid ? player.PlayerController.Forward : Vector3.forward;
 
+        public Vector3 Velocity => player != null ? player.Velocity : Vector3.zero;
+
+        public float MoveSpeed => player != null ? player.MoveSpeed : 0f;
+
+        public bool IsHoldingBall => player != null && player.IsHoldingBall;
+
+        public bool IsGoalkeeper => player != null && player.IsGK;
+
+        public string DebugLabel =>
+            player != null && player.MatchPlayer != null && player.MatchPlayer.Player != null &&
+            !string.IsNullOrWhiteSpace(player.MatchPlayer.Player.Name)
+                ? player.MatchPlayer.Player.Name
+                : DatabasePlayerId.HasValue
+                    ? DatabasePlayerId.Value.ToString()
+                    : ShirtNumber.ToString();
+
         public Transform UnityTransform =>
             IsValid && player.PlayerController.UnityObject != null
                 ? player.PlayerController.UnityObject.transform
                 : null;
 
         public PlayerAnimator Animator => IsValid ? player.PlayerController.Animator : null;
+
+        public Rigidbody Rigidbody => UnityTransform != null ? UnityTransform.GetComponent<Rigidbody>() : null;
+
+        public MonoBehaviour LegacyController => player != null ? player.PlayerController as MonoBehaviour : null;
 
         public Positions PositionRole =>
             player != null && player.MatchPlayer != null ? player.MatchPlayer.Position : default;

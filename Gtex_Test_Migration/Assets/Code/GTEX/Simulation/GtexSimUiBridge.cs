@@ -1,4 +1,5 @@
 using FStudio.Events;
+using FStudio.GTEX;
 using FStudio.UI.Events;
 using UnityEngine;
 
@@ -92,9 +93,12 @@ namespace FStudio.GTEX.Simulation
                 return;
             }
 
+            var score = GtexScoreAuthority.Current;
             LastState = engine.State;
-            LastMatchMinute = engine.Clock.CurrentMatchMinute;
-            Scoreline = engine.HomeScore + " - " + engine.AwayScore;
+            LastMatchMinute = GtexRuntimeFlags.IsLocalSimulation ? score.minute : engine.Clock.CurrentMatchMinute;
+            Scoreline = GtexRuntimeFlags.IsLocalSimulation
+                ? score.homeScore + " - " + score.awayScore
+                : engine.HomeScore + " - " + engine.AwayScore;
             LastEventSummary = string.IsNullOrWhiteSpace(fallbackSummary) ? LastEventSummary : fallbackSummary;
         }
 
@@ -145,13 +149,24 @@ namespace FStudio.GTEX.Simulation
                 return;
             }
 
+            var score = GtexScoreAuthority.Current;
+            var homeLabel = !string.IsNullOrWhiteSpace(score.homeLabel)
+                ? score.homeLabel
+                : host != null ? host.HomeDisplayName : "Home";
+            var awayLabel = !string.IsNullOrWhiteSpace(score.awayLabel)
+                ? score.awayLabel
+                : host != null ? host.AwayDisplayName : "Away";
+            var homeScore = GtexRuntimeFlags.IsLocalSimulation ? score.homeScore : engine != null ? engine.HomeScore : 0;
+            var awayScore = GtexRuntimeFlags.IsLocalSimulation ? score.awayScore : engine != null ? engine.AwayScore : 0;
+            var matchMinute = GtexRuntimeFlags.IsLocalSimulation ? score.minute : engine != null ? engine.Clock.CurrentMatchMinute : 0f;
+
             EventManager.Trigger(
                 new GtexSimUiUpdateEvent(
-                    host != null ? host.HomeDisplayName : "Home",
-                    host != null ? host.AwayDisplayName : "Away",
-                    engine != null ? engine.HomeScore : 0,
-                    engine != null ? engine.AwayScore : 0,
-                    engine != null ? engine.Clock.CurrentMatchMinute : 0f,
+                    homeLabel,
+                    awayLabel,
+                    homeScore,
+                    awayScore,
+                    matchMinute,
                     LastState,
                     LastEventSummary));
         }

@@ -2,6 +2,7 @@ using System;
 using FStudio.GTEX;
 using FStudio.GTEX.Engine;
 using FStudio.GTEX.Simulation;
+using FStudio.GTEX.VisualBridge;
 using FStudio.MatchEngine;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -41,6 +42,14 @@ namespace FStudio.GTEX.Core
             return livePlaybackRequested;
         }
 
+        public static bool IsOriginalVisualRuntimeActive()
+        {
+            var director = UnityEngine.Object.FindFirstObjectByType<GtexVisualMatchDirector>();
+            return GtexRuntimeFlags.IsOriginalVisualRuntime ||
+                   (director != null && director.IsRuntimeReady) ||
+                   GtexMatchController.CurrentState.RuntimeMode == GtexRuntimeMode.OriginalVisualRuntime;
+        }
+
         public static bool TryAutoStart()
         {
             return TryAutoStart(null);
@@ -61,6 +70,22 @@ namespace FStudio.GTEX.Core
             }
 
             var runtimeMode = resolvedConfig.ResolveRuntimeMode();
+            if (runtimeMode == GtexRuntimeMode.OriginalVisualRuntime ||
+                GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntimeScene())
+            {
+                Debug.Log("[GTEX Runtime Bootstrap] OriginalVisualRuntime requested.");
+
+                var director = UnityEngine.Object.FindFirstObjectByType<GtexVisualMatchDirector>();
+                if (director == null)
+                {
+                    Debug.LogError("[GTEX Runtime Bootstrap] No GtexVisualMatchDirector found in OriginalVisualRuntime scene.");
+                    return false;
+                }
+
+                director.Initialize(resolvedConfig);
+                return true;
+            }
+
             livePlaybackRequested = runtimeMode == GtexRuntimeMode.LivePlayback;
             var activeSceneName = SceneManager.GetActiveScene().name;
             Debug.Log(

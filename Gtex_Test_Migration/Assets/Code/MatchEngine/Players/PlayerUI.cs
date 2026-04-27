@@ -38,7 +38,11 @@ namespace FStudio.MatchEngine.Players {
         }
 
         public void SetBool(UIAnimatorVariable prop, bool value) {
-            if (!animator.isActiveAndEnabled) {
+            if (this == null || gameObject == null || animator == null) {
+                return;
+            }
+
+            if (!gameObject.activeInHierarchy || !animator.isActiveAndEnabled) {
                 return;
             }
 
@@ -60,6 +64,11 @@ namespace FStudio.MatchEngine.Players {
         private void LateUpdate () {
             if (mainCamera == null) {
                 mainCamera = MainCamera.Current;
+            }
+
+            if (mainCamera == null || transform == null)
+            {
+                return;
             }
             
             var toCamera = Quaternion.LookRotation(transform.position - mainCamera.transform.position);

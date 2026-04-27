@@ -26,8 +26,16 @@ namespace FStudio.UI.MatchThemes {
                 (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackEnabled);
         }
 
+        private static bool IsOriginalVisualRuntimeMatch() {
+            return GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime();
+        }
+
         protected override void Update() {
             base.Update();
+
+            if (IsOriginalVisualRuntimeMatch()) {
+                return;
+            }
 
             if (!IsActive || !IsExternallyDrivenMatchActive()) {
                 return;
@@ -42,6 +50,13 @@ namespace FStudio.UI.MatchThemes {
 
             if (eventObject == null) {
                 Disappear();
+                return;
+            }
+
+            if (IsOriginalVisualRuntimeMatch()) {
+                Debug.Log("[GTEX OriginalVisualRuntime] Blocked UpcomingMatchPanel; command-driven scene owns startup.");
+                Disappear();
+                EventManager.Trigger<LoadingEvent>(null);
                 return;
             }
 
@@ -89,6 +104,13 @@ namespace FStudio.UI.MatchThemes {
         }
 
         public async void StartMatch () {
+            if (IsOriginalVisualRuntimeMatch()) {
+                Debug.Log("[GTEX OriginalVisualRuntime] UpcomingMatchPanel StartMatch ignored; command-driven scene owns startup.");
+                Disappear();
+                EventManager.Trigger<LoadingEvent>(null);
+                return;
+            }
+
             if (IsExternallyDrivenMatchActive()) {
                 Debug.Log("[GTEX] Ignoring manual StartMatch because live playback already owns the match.");
                 Disappear();

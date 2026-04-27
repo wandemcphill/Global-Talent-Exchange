@@ -1,3 +1,4 @@
+using FStudio.GTEX;
 using UnityEngine;
 
 namespace FStudio.GTEX.Simulation
@@ -43,21 +44,32 @@ namespace FStudio.GTEX.Simulation
             }
 
             EnsureStyles();
+            var score = GtexScoreAuthority.Current;
+            var homeLabel = !string.IsNullOrWhiteSpace(score.homeLabel)
+                ? score.homeLabel
+                : host != null ? host.HomeDisplayName : "Home";
+            var awayLabel = !string.IsNullOrWhiteSpace(score.awayLabel)
+                ? score.awayLabel
+                : host != null ? host.AwayDisplayName : "Away";
+            var matchMinute = score.minute > 0f
+                ? score.minute.ToString("0.0")
+                : host != null && host.Engine != null
+                    ? host.Engine.Clock.CurrentMatchMinute.ToString("0.0")
+                    : "0.0";
+            var lastEvent = !string.IsNullOrWhiteSpace(score.lastEvent)
+                ? score.lastEvent
+                : uiBridge != null ? uiBridge.LastEventSummary : "Waiting for kickoff";
 
             var rect = new Rect(origin.x, origin.y, size.x, size.y);
             GUI.Box(rect, GUIContent.none, panelStyle);
 
             GUILayout.BeginArea(rect);
             GUILayout.Label("GTEX Local Simulation", titleStyle);
-            DrawLine(host != null ? host.HomeDisplayName : "Home", host != null ? host.AwayDisplayName : "Away");
-            DrawLine("Score", uiBridge != null ? uiBridge.Scoreline : "0 - 0");
+            DrawLine(homeLabel, awayLabel);
+            DrawLine("Score", score.homeScore + " - " + score.awayScore);
             DrawLine("State", uiBridge != null ? uiBridge.LastState.ToString() : "Idle");
-            DrawLine(
-                "Minute",
-                host != null && host.Engine != null
-                    ? host.Engine.Clock.CurrentMatchMinute.ToString("0.0")
-                    : "0.0");
-            DrawLine("Last Event", uiBridge != null ? uiBridge.LastEventSummary : "Waiting for kickoff");
+            DrawLine("Minute", matchMinute);
+            DrawLine("Last Event", lastEvent);
             DrawLine("Banner", simRenderer != null ? simRenderer.ActiveBannerText : "-");
             DrawLine("Crowd", crowdController != null ? crowdController.MoodLabel : "Muted");
             DrawLine(

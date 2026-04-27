@@ -1,4 +1,5 @@
-﻿using FStudio.Events;
+using FStudio.Events;
+using FStudio.GTEX.Core;
 using FStudio.MatchEngine.Cameras;
 using FStudio.MatchEngine.Events;
 using FStudio.UI;
@@ -34,6 +35,12 @@ namespace FStudio.MatchEngine.UI {
         };
 
         private void Awake() {
+            if (!GtexOriginalVisualRuntimePolicy.AllowPauseMenuCameraControl)
+            {
+                Debug.Log("[GTEX UI] MatchPausePanel passive during OriginalVisualRuntime boot.");
+                return;
+            }
+
             var qNames = QualitySettings.names;
 
             qualitySelector.Max = qNames.Length;

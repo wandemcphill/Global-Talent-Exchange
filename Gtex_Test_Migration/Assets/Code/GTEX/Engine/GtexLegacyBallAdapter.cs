@@ -1,5 +1,6 @@
 using FStudio.MatchEngine;
 using FStudio.MatchEngine.Balls;
+using FStudio.MatchEngine.Players;
 using UnityEngine;
 
 namespace FStudio.GTEX.Engine
@@ -9,6 +10,12 @@ namespace FStudio.GTEX.Engine
         public bool IsAvailable => MatchManager.Current != null && Ball.Current != null;
 
         public Transform Transform => Ball.Current != null ? Ball.Current.transform : null;
+
+        public Vector3 Position => Ball.Current != null ? Ball.Current.transform.position : Vector3.zero;
+
+        public Vector3 Velocity => Ball.Current != null ? Ball.Current.Velocity : Vector3.zero;
+
+        public PlayerBase HolderPlayer => Ball.Current != null ? Ball.Current.HolderPlayer : null;
 
         public void ApplyExternalState(
             Vector3 targetPosition,
