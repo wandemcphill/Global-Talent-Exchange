@@ -24,6 +24,8 @@ NAMING_CONVENTION = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+CONTRACT_PLAYER_FK_NAME = "fk_national_team_rental_contracts_player_id_ingestion_players"
+SQUAD_MEMBER_PLAYER_FK_NAME = "fk_national_team_rental_squad_members_player_id_ingesti_a300"
 
 
 def _column_names(bind, table_name: str) -> set[str]:
@@ -41,12 +43,27 @@ def _create_index_if_missing(bind, *, table_name: str, index_name: str, columns:
 
 
 def _has_player_fk(bind, table_name: str) -> bool:
+    return (
+        _get_foreign_key(
+            bind,
+            table_name,
+            constrained_columns=("player_id",),
+            referred_table="ingestion_players",
+        )
+        is not None
+    )
+
+
+def _get_foreign_key(
+    bind, table_name: str, *, constrained_columns: tuple[str, ...], referred_table: str
+) -> dict | None:
     for foreign_key in sa.inspect(bind).get_foreign_keys(table_name):
-        constrained = tuple(foreign_key.get("constrained_columns") or ())
-        referred_table = foreign_key.get("referred_table")
-        if constrained == ("player_id",) and referred_table == "ingestion_players":
-            return True
-    return False
+        if (
+            tuple(foreign_key.get("constrained_columns") or ()) == constrained_columns
+            and foreign_key.get("referred_table") == referred_table
+        ):
+            return foreign_key
+    return None
 
 
 def _metadata_dict(value) -> dict[str, object]:
@@ -137,9 +154,64 @@ def _restore_player_fk(table_name: str, *, constraint_name: str) -> None:
         )
 
 
+def _drop_foreign_key(table_name: str, *, constraint_name: str) -> None:
+    op.drop_constraint(constraint_name, table_name, type_="foreignkey")
+
+
+def _restore_foreign_key(table_name: str, *, foreign_key: dict) -> None:
+    constraint_name = str(foreign_key.get("name") or "").strip()
+    if not constraint_name:
+        raise RuntimeError(f"Expected named foreign key on {table_name}.")
+
+    local_columns = [str(column) for column in foreign_key.get("constrained_columns") or ()]
+    remote_table = str(foreign_key.get("referred_table") or "").strip()
+    remote_columns = [str(column) for column in foreign_key.get("referred_columns") or ()]
+    options = foreign_key.get("options") if isinstance(foreign_key.get("options"), dict) else {}
+    kwargs = {"ondelete": options.get("ondelete")} if options and options.get("ondelete") else {}
+
+    op.create_foreign_key(
+        constraint_name,
+        table_name,
+        remote_table,
+        local_columns,
+        remote_columns,
+        **kwargs,
+    )
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    contract_player_fk = (
+        _get_foreign_key(
+            bind,
+            "national_team_rental_contracts",
+            constrained_columns=("player_id",),
+            referred_table="ingestion_players",
+        )
+        if inspector.has_table("national_team_rental_contracts")
+        else None
+    )
+    squad_member_player_fk = (
+        _get_foreign_key(
+            bind,
+            "national_team_rental_squad_members",
+            constrained_columns=("player_id",),
+            referred_table="ingestion_players",
+        )
+        if inspector.has_table("national_team_rental_squad_members")
+        else None
+    )
+    rental_contract_fk = (
+        _get_foreign_key(
+            bind,
+            "national_team_rental_squad_members",
+            constrained_columns=("rental_contract_id",),
+            referred_table="national_team_rental_contracts",
+        )
+        if contract_player_fk is not None and inspector.has_table("national_team_rental_squad_members")
+        else None
+    )
 
     if inspector.has_table("national_regen_seeds"):
         columns = _column_names(bind, "national_regen_seeds")
@@ -164,38 +236,61 @@ def upgrade() -> None:
             columns=["country_code", "age_band", "primary_position", "status"],
         )
 
-    if inspector.has_table("national_team_rental_contracts") and _has_player_fk(bind, "national_team_rental_contracts"):
+    if rental_contract_fk is not None:
+        _drop_foreign_key(
+            "national_team_rental_squad_members",
+            constraint_name=str(rental_contract_fk["name"]),
+        )
+    if contract_player_fk is not None:
         _drop_player_fk(
             "national_team_rental_contracts",
-            constraint_name="fk_national_team_rental_contracts_player_id_ingestion_players",
+            constraint_name=str(contract_player_fk["name"]),
         )
-    if inspector.has_table("national_team_rental_squad_members") and _has_player_fk(
-        bind, "national_team_rental_squad_members"
-    ):
+    if squad_member_player_fk is not None:
         _drop_player_fk(
             "national_team_rental_squad_members",
-            constraint_name="fk_national_team_rental_squad_members_player_id_ingestion_players",
+            constraint_name=str(squad_member_player_fk["name"]),
         )
+    if rental_contract_fk is not None:
+        _restore_foreign_key("national_team_rental_squad_members", foreign_key=rental_contract_fk)
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    contract_player_fk_missing = inspector.has_table("national_team_rental_contracts") and not _has_player_fk(
+        bind, "national_team_rental_contracts"
+    )
+    rental_contract_fk = (
+        _get_foreign_key(
+            bind,
+            "national_team_rental_squad_members",
+            constrained_columns=("rental_contract_id",),
+            referred_table="national_team_rental_contracts",
+        )
+        if contract_player_fk_missing and inspector.has_table("national_team_rental_squad_members")
+        else None
+    )
 
+    if rental_contract_fk is not None:
+        _drop_foreign_key(
+            "national_team_rental_squad_members",
+            constraint_name=str(rental_contract_fk["name"]),
+        )
     if inspector.has_table("national_team_rental_squad_members") and not _has_player_fk(
         bind, "national_team_rental_squad_members"
     ):
         _restore_player_fk(
             "national_team_rental_squad_members",
-            constraint_name="fk_national_team_rental_squad_members_player_id_ingestion_players",
+            constraint_name=SQUAD_MEMBER_PLAYER_FK_NAME,
         )
-    if inspector.has_table("national_team_rental_contracts") and not _has_player_fk(
-        bind, "national_team_rental_contracts"
-    ):
+    if contract_player_fk_missing:
         _restore_player_fk(
             "national_team_rental_contracts",
-            constraint_name="fk_national_team_rental_contracts_player_id_ingestion_players",
+            constraint_name=CONTRACT_PLAYER_FK_NAME,
         )
+    if rental_contract_fk is not None:
+        _restore_foreign_key("national_team_rental_squad_members", foreign_key=rental_contract_fk)
 
     if inspector.has_table("national_regen_seeds"):
         if "ix_national_regen_seeds_country_age_band_position_status" in _index_names(bind, "national_regen_seeds"):
