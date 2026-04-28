@@ -127,6 +127,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         _ensure_alembic_version_capacity(connection)
+        # Inspector queries above can autobegin a transaction on SQLAlchemy 2.x.
+        # Commit that preflight work so Alembic controls the migration transaction.
+        connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

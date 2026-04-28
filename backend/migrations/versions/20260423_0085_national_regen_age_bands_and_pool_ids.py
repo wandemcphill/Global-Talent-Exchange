@@ -28,6 +28,10 @@ CONTRACT_PLAYER_FK_NAME = "fk_national_team_rental_contracts_player_id_ingestion
 SQUAD_MEMBER_PLAYER_FK_NAME = "fk_national_team_rental_squad_members_player_id_ingesti_a300"
 
 
+def _is_sqlite(bind) -> bool:
+    return bind.dialect.name == "sqlite"
+
+
 def _column_names(bind, table_name: str) -> set[str]:
     return {column["name"] for column in sa.inspect(bind).get_columns(table_name)}
 
@@ -154,11 +158,19 @@ def _restore_player_fk(table_name: str, *, constraint_name: str) -> None:
         )
 
 
-def _drop_foreign_key(table_name: str, *, constraint_name: str) -> None:
+def _drop_foreign_key(bind, table_name: str, *, constraint_name: str) -> None:
+    if _is_sqlite(bind):
+        with op.batch_alter_table(
+            table_name,
+            recreate="always",
+            naming_convention=NAMING_CONVENTION,
+        ) as batch_op:
+            batch_op.drop_constraint(constraint_name, type_="foreignkey")
+        return
     op.drop_constraint(constraint_name, table_name, type_="foreignkey")
 
 
-def _restore_foreign_key(table_name: str, *, foreign_key: dict) -> None:
+def _restore_foreign_key(bind, table_name: str, *, foreign_key: dict) -> None:
     constraint_name = str(foreign_key.get("name") or "").strip()
     if not constraint_name:
         raise RuntimeError(f"Expected named foreign key on {table_name}.")
@@ -168,6 +180,21 @@ def _restore_foreign_key(table_name: str, *, foreign_key: dict) -> None:
     remote_columns = [str(column) for column in foreign_key.get("referred_columns") or ()]
     options = foreign_key.get("options") if isinstance(foreign_key.get("options"), dict) else {}
     kwargs = {"ondelete": options.get("ondelete")} if options and options.get("ondelete") else {}
+
+    if _is_sqlite(bind):
+        with op.batch_alter_table(
+            table_name,
+            recreate="always",
+            naming_convention=NAMING_CONVENTION,
+        ) as batch_op:
+            batch_op.create_foreign_key(
+                constraint_name,
+                remote_table,
+                local_columns,
+                remote_columns,
+                **kwargs,
+            )
+        return
 
     op.create_foreign_key(
         constraint_name,
@@ -238,6 +265,7 @@ def upgrade() -> None:
 
     if rental_contract_fk is not None:
         _drop_foreign_key(
+            bind,
             "national_team_rental_squad_members",
             constraint_name=str(rental_contract_fk["name"]),
         )
@@ -252,7 +280,7 @@ def upgrade() -> None:
             constraint_name=str(squad_member_player_fk["name"]),
         )
     if rental_contract_fk is not None:
-        _restore_foreign_key("national_team_rental_squad_members", foreign_key=rental_contract_fk)
+        _restore_foreign_key(bind, "national_team_rental_squad_members", foreign_key=rental_contract_fk)
 
 
 def downgrade() -> None:
@@ -274,6 +302,7 @@ def downgrade() -> None:
 
     if rental_contract_fk is not None:
         _drop_foreign_key(
+            bind,
             "national_team_rental_squad_members",
             constraint_name=str(rental_contract_fk["name"]),
         )
@@ -290,7 +319,7 @@ def downgrade() -> None:
             constraint_name=CONTRACT_PLAYER_FK_NAME,
         )
     if rental_contract_fk is not None:
-        _restore_foreign_key("national_team_rental_squad_members", foreign_key=rental_contract_fk)
+        _restore_foreign_key(bind, "national_team_rental_squad_members", foreign_key=rental_contract_fk)
 
     if inspector.has_table("national_regen_seeds"):
         if "ix_national_regen_seeds_country_age_band_position_status" in _index_names(bind, "national_regen_seeds"):
