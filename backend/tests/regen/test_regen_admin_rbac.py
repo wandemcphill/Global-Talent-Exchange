@@ -72,7 +72,7 @@ def _seed_regen_player_for_portraits(client, *, prefix: str) -> str:
             id=f"{prefix}-owner",
             email=f"{prefix}-owner@example.com",
             username=f"{prefix}_owner",
-            password_hash="hash",
+            password_hash="hash",  # pragma: allowlist secret
             full_name="Portrait Owner",
         )
         session.add(owner)

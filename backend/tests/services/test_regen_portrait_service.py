@@ -13,7 +13,6 @@ from app.models.base import Base
 from app.models.regen import RegenProfile
 from app.services.regen_portrait_service import RegenPortraitService
 
-
 FACE_RECIPE_FIELDS = {
     "seed",
     "skinToneId",

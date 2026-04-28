@@ -282,11 +282,7 @@ class RegenBootstrapService:
                 visual_profile=regen_visual_profile,
             )
             lineage_payload = generated.metadata.get("lineage") if isinstance(generated.metadata, dict) else None
-            customization_payload = (
-                lineage_payload.get("customization")
-                if isinstance(lineage_payload, dict)
-                else None
-            )
+            customization_payload = lineage_payload.get("customization") if isinstance(lineage_payload, dict) else None
             if isinstance(customization_payload, dict):
                 raw_foot = customization_payload.get("favorite_foot")
                 if isinstance(raw_foot, str):
@@ -333,7 +329,9 @@ class RegenBootstrapService:
                             metadata_json={"source": "bootstrap"},
                         )
                     )
-            twins_group_key = generated.metadata.get("twins_group_key") if isinstance(generated.metadata, dict) else None
+            twins_group_key = (
+                generated.metadata.get("twins_group_key") if isinstance(generated.metadata, dict) else None
+            )
             if twins_group_key:
                 self.session.add(
                     RegenTwinsGroup(

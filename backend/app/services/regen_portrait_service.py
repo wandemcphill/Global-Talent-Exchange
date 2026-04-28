@@ -55,7 +55,9 @@ class RegenPortraitResult:
 
 
 class _Canvas:
-    def __init__(self, width: int = PORTRAIT_SIZE, height: int = PORTRAIT_SIZE, background: tuple[int, int, int] = (23, 35, 45)):
+    def __init__(
+        self, width: int = PORTRAIT_SIZE, height: int = PORTRAIT_SIZE, background: tuple[int, int, int] = (23, 35, 45)
+    ):
         self.width = width
         self.height = height
         self.data = bytearray(background * width * height)
@@ -123,7 +125,12 @@ class _Canvas:
             )
 
         header = struct.pack(">IIBBBBB", self.width, self.height, 8, 2, 0, 0, 0)
-        return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b"")
+        return (
+            b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", header)
+            + chunk(b"IDAT", zlib.compress(bytes(rows), 9))
+            + chunk(b"IEND", b"")
+        )
 
 
 class RegenPortraitService:
@@ -261,7 +268,9 @@ class RegenPortraitService:
             rating=seed.current_rating,
         )
         png_bytes = self.render_png(recipe)
-        storage_key, portrait_url = self._save_png(png_bytes, "national_regen_portraits", f"{seed.id}_{face_seed[:16]}.png")
+        storage_key, portrait_url = self._save_png(
+            png_bytes, "national_regen_portraits", f"{seed.id}_{face_seed[:16]}.png"
+        )
         seed.metadata_json = {
             **metadata,
             "faceSeed": face_seed,
@@ -288,7 +297,9 @@ class RegenPortraitService:
     ) -> RegenPortraitResult:
         player = self._require_player(player_id)
         if image_data_uri and image_data_uri.strip():
-            portrait_url, storage_key, mime_type, file_size, checksum = self._save_data_uri_override(player.id, image_data_uri)
+            portrait_url, storage_key, mime_type, file_size, checksum = self._save_data_uri_override(
+                player.id, image_data_uri
+            )
         else:
             portrait_url = (portrait_url or "").strip()
             if not portrait_url:
@@ -348,7 +359,9 @@ class RegenPortraitService:
         return RegenPortraitResult(
             player_id=player.id,
             face_seed=str(player.dna_profile.get("faceSeed") or "") or None,
-            face_recipe=player.dna_profile.get("faceRecipe") if isinstance(player.dna_profile.get("faceRecipe"), dict) else None,
+            face_recipe=(
+                player.dna_profile.get("faceRecipe") if isinstance(player.dna_profile.get("faceRecipe"), dict) else None
+            ),
             portrait_url=portrait_url,
             status="override",
             storage_key=storage_key,
@@ -363,7 +376,9 @@ class RegenPortraitService:
     ) -> RegenPortraitResult:
         player = self._require_player(player_id)
         image = self._portrait_image_row(player.id)
-        banned_url = image.source_url if image is not None else self._first_string(player.dna_profile or {}, "portraitUrl")
+        banned_url = (
+            image.source_url if image is not None else self._first_string(player.dna_profile or {}, "portraitUrl")
+        )
         if image is not None:
             image.moderation_status = "rejected"
             image.is_primary = False
@@ -380,7 +395,9 @@ class RegenPortraitService:
         }
         regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player.id))
         if regen is not None:
-            visual_profile = self.session.scalar(select(RegenVisualProfile).where(RegenVisualProfile.regen_profile_id == regen.id))
+            visual_profile = self.session.scalar(
+                select(RegenVisualProfile).where(RegenVisualProfile.regen_profile_id == regen.id)
+            )
             if visual_profile is not None:
                 metadata = dict(visual_profile.metadata_json or {})
                 visual_profile.metadata_json = {
@@ -396,7 +413,9 @@ class RegenPortraitService:
         return RegenPortraitResult(
             player_id=player.id,
             face_seed=str(player.dna_profile.get("faceSeed") or "") or None,
-            face_recipe=player.dna_profile.get("faceRecipe") if isinstance(player.dna_profile.get("faceRecipe"), dict) else None,
+            face_recipe=(
+                player.dna_profile.get("faceRecipe") if isinstance(player.dna_profile.get("faceRecipe"), dict) else None
+            ),
             portrait_url=None,
             status="banned",
             storage_key=None,
@@ -518,9 +537,7 @@ class RegenPortraitService:
         }
         regen_metadata = dict(regen.metadata_json or {})
         visual_metadata = (
-            dict(regen_metadata.get("visual_profile"))
-            if isinstance(regen_metadata.get("visual_profile"), dict)
-            else {}
+            dict(regen_metadata.get("visual_profile")) if isinstance(regen_metadata.get("visual_profile"), dict) else {}
         )
         visual_metadata.update(
             {
@@ -658,7 +675,9 @@ class RegenPortraitService:
         if not raw:
             raise RegenPortraitError("portrait_image_data_empty")
         checksum = hashlib.sha256(raw).hexdigest()
-        storage_key, portrait_url = self._save_png(raw, "portrait_overrides", f"{player_id}_{checksum[:16]}.{extension}")
+        storage_key, portrait_url = self._save_png(
+            raw, "portrait_overrides", f"{player_id}_{checksum[:16]}.{extension}"
+        )
         return portrait_url, storage_key, mime_type, len(raw), checksum
 
     @staticmethod
@@ -741,7 +760,23 @@ class RegenPortraitService:
 
 
 def _index_from_id(value: str, count: int) -> int:
-    if value.startswith(("skin_", "face_", "eye_", "eye_shape_", "brow_", "nose_", "mouth_", "hair_", "hair_style_", "facial_", "shirt_", "shirt_style_", "bg_")):
+    if value.startswith(
+        (
+            "skin_",
+            "face_",
+            "eye_",
+            "eye_shape_",
+            "brow_",
+            "nose_",
+            "mouth_",
+            "hair_",
+            "hair_style_",
+            "facial_",
+            "shirt_",
+            "shirt_style_",
+            "bg_",
+        )
+    ):
         try:
             return int(value.rsplit("_", 1)[1]) % count
         except (IndexError, ValueError):
