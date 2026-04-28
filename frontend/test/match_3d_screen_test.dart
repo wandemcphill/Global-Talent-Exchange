@@ -12,7 +12,7 @@ import 'package:gte_frontend/widgets/match_3d/entities/pitch_entity.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 
 void main() {
-  testWidgets('3D match screen renders replay scene and controls', (
+  testWidgets('3D match screen is blocked for the 2D launch', (
     WidgetTester tester,
   ) async {
     final CompetitionSummary competition = _buildCompetition(
@@ -38,13 +38,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 64));
 
-    expect(find.text('3D Match Viewer'), findsOneWidget);
-    expect(find.byType(Gtex3dScene), findsOneWidget);
-    expect(find.byKey(const Key('real-match-scorebug')), findsOneWidget);
-    expect(find.byKey(const Key('real-match-tactical-hud')), findsOneWidget);
-    expect(find.byKey(const Key('commentary-ribbon')), findsOneWidget);
-    expect(find.text('Restart'), findsAtLeastNWidgets(1));
-    expect(find.text('Next event'), findsOneWidget);
+    expect(find.text('Coming soon'), findsWidgets);
+    expect(find.text('Route blocked'), findsOneWidget);
+    expect(find.textContaining('2D match viewer'), findsWidgets);
+    expect(find.byType(Gtex3dScene), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();

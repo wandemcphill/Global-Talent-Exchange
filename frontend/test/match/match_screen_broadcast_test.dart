@@ -60,9 +60,10 @@ void main() {
     await _scrollTo(tester, find.text('Derby Live'));
     expect(find.text('Derby Live'), findsOneWidget);
     expect(find.text('GTEX Prime'), findsOneWidget);
-    expect(find.text('Open 2D'), findsOneWidget);
-    expect(find.text('Open Broadcast+'), findsOneWidget);
-    expect(find.text('Open 3D'), findsOneWidget);
+    expect(find.text('Open Match'), findsOneWidget);
+    expect(find.text('Open 2D'), findsNothing);
+    expect(find.text('Open Broadcast+'), findsNothing);
+    expect(find.text('Open 3D'), findsNothing);
     expect(find.text('Open spectate probe'), findsNothing);
     expect(find.text('View coming soon note'), findsNothing);
     expect(find.text('Open simulation'), findsNothing);

@@ -36,11 +36,17 @@ void main() {
   testWidgets(
     'arena overview renders fixture snapshots when valid seeded data exists',
     (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1600, 2200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final CompetitionController controller = CompetitionController(
         api: CompetitionApi.fixture(),
         currentUserId: 'fixture-user',
         currentUserName: 'Fixture Trader',
       );
+      await controller.bootstrap();
 
       await tester.pumpWidget(
         MaterialApp(
@@ -65,13 +71,13 @@ void main() {
       expect(find.text('GTEX Spotlight Cup'), findsWidgets);
 
       await tester.dragUntilVisible(
-        find.text('User-hosted competitions'),
+        find.text('User-created competitions'),
         find.byType(ListView).first,
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('User-hosted competitions'), findsOneWidget);
+      expect(find.text('User-created competitions'), findsOneWidget);
 
       await tester.dragUntilVisible(
         find.text('Featured now'),
@@ -198,7 +204,7 @@ void main() {
     },
   );
 
-  testWidgets('arena host CTA is truthfully gated for ineligible users', (
+  testWidgets('arena host CTA lets authenticated launch users create', (
     WidgetTester tester,
   ) async {
     final CompetitionController controller = CompetitionController(
@@ -232,17 +238,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Request creator access to host'), findsOneWidget);
+    expect(find.text('Create competition'), findsWidgets);
+    expect(find.text('Request creator access to host'), findsNothing);
     expect(find.text('Host Competition'), findsNothing);
 
-    await tester.tap(find.text('Request creator access to host'));
-    await tester.pumpAndSettle();
-
-    expect(openedCreatorAccess, isTrue);
+    expect(openedCreatorAccess, isFalse);
   });
 
-  testWidgets('arena host CTA is truthfully gated for ineligible users',
-      (WidgetTester tester) async {
+  testWidgets('arena host CTA opens competition creation for launch users', (
+    WidgetTester tester,
+  ) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
       currentUserId: 'fixture-user',
@@ -274,13 +279,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Request creator access to host'), findsOneWidget);
+    expect(find.text('Create competition'), findsWidgets);
+    expect(find.text('Request creator access to host'), findsNothing);
     expect(find.text('Host competition'), findsNothing);
 
-    await tester.tap(find.text('Request creator access to host'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Create competition'));
     await tester.pumpAndSettle();
 
-    expect(openedCreatorAccess, isTrue);
+    expect(find.text('Create competition'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('Preview & publish'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Preview & publish'), findsOneWidget);
+    expect(openedCreatorAccess, isFalse);
   });
 }
 

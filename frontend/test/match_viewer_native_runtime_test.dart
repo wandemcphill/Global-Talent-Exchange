@@ -12,11 +12,10 @@ import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 
 void main() {
   testWidgets(
-    'viewer surfaces native runtime waiting status while Android 3D is syncing',
+    'viewer keeps Android native 3D blocked and renders the 2D launch pitch',
     (WidgetTester tester) async {
       final CompetitionSummary competition = _buildCompetition(
         id: 'match-viewer-native-runtime-waiting',
@@ -48,23 +47,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 96));
 
-      await tester.scrollUntilVisible(
-        find.text(
-          'Native 3D session opened; waiting for the first native frame sync.',
-          skipOffstage: false,
-        ),
-        260,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pump();
-
-      expect(find.byType(AndroidView, skipOffstage: false), findsOneWidget);
       expect(
-        find.text(
-          'Native 3D session opened; waiting for the first native frame sync.',
-          skipOffstage: false,
-        ),
+        find.byKey(const Key('match-pitch-2d-canvas'), skipOffstage: false),
         findsOneWidget,
+      );
+      expect(find.byType(AndroidView, skipOffstage: false), findsNothing);
+      expect(
+        find.textContaining('Native 3D session', skipOffstage: false),
+        findsNothing,
       );
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
@@ -73,7 +63,7 @@ void main() {
   );
 
   testWidgets(
-    'viewer falls back to Flutter 3D and surfaces status after unexpected native close',
+    'viewer ignores unexpected native close and stays on the 2D launch pitch',
     (WidgetTester tester) async {
       final CompetitionSummary competition = _buildCompetition(
         id: 'match-viewer-native-runtime-close',
@@ -109,24 +99,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 16));
 
-      await tester.scrollUntilVisible(
-        find.text(
-          'Native 3D session closed; Flutter 3D fallback active.',
-          skipOffstage: false,
-        ),
-        260,
-        scrollable: find.byType(Scrollable).first,
+      expect(
+        find.byKey(const Key('match-pitch-2d-canvas'), skipOffstage: false),
+        findsOneWidget,
       );
-      await tester.pump();
-
-      expect(find.byType(Gtex3dScene, skipOffstage: false), findsOneWidget);
       expect(find.byType(AndroidView, skipOffstage: false), findsNothing);
       expect(
-        find.text(
-          'Native 3D session closed; Flutter 3D fallback active.',
-          skipOffstage: false,
-        ),
-        findsOneWidget,
+        find.textContaining('Flutter 3D fallback', skipOffstage: false),
+        findsNothing,
       );
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
@@ -280,7 +260,9 @@ class _ViewerNativeBridgeBackend
       playerCount:
           entities
               .whereType<Map<String, dynamic>>()
-              .where((Map<String, dynamic> entity) => entity['type'] == 'player')
+              .where(
+                (Map<String, dynamic> entity) => entity['type'] == 'player',
+              )
               .length,
       lastFrameId: event['frameId'] as String?,
       phase: event['phase'] as String?,

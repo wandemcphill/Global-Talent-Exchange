@@ -75,33 +75,25 @@ void main() {
     }
   });
 
-  test(
-    '3D inventory stays truthful about launch blocking',
-    () {
-      final AppRouteSurface? threeD = appRouteSurfaceFor(
-        AppRoutes.matchesThreeD,
-      );
+  test('3D inventory stays truthful about launch blocking', () {
+    final AppRouteSurface? threeD = appRouteSurfaceFor(AppRoutes.matchesThreeD);
 
-      expect(threeD, isNotNull);
-      expect(threeD!.state, AppRouteSurfaceState.placeholder);
-      expect(threeD.label, 'Coming soon');
-      expect(threeD.summary, contains('3D match viewing is blocked'));
-    },
-  );
+    expect(threeD, isNotNull);
+    expect(threeD!.state, AppRouteSurfaceState.placeholder);
+    expect(threeD.label, 'Coming soon');
+    expect(threeD.summary, contains('3D match viewing is blocked'));
+  });
 
-  test(
-    'simulation inventory stays blocked for launch',
-    () {
-      final AppRouteSurface? simulation = appRouteSurfaceFor(
-        AppRoutes.matchesSimulate,
-      );
+  test('simulation inventory stays blocked for launch', () {
+    final AppRouteSurface? simulation = appRouteSurfaceFor(
+      AppRoutes.matchesSimulate,
+    );
 
-      expect(simulation, isNotNull);
-      expect(simulation!.state, AppRouteSurfaceState.placeholder);
-      expect(simulation.summary, contains('Coming soon for launch.'));
-      expect(simulation.summary.toLowerCase(), contains('blocked'));
-    },
-  );
+    expect(simulation, isNotNull);
+    expect(simulation!.state, AppRouteSurfaceState.placeholder);
+    expect(simulation.summary, contains('Coming soon for launch.'));
+    expect(simulation.summary.toLowerCase(), contains('blocked'));
+  });
 
   testWidgets('home quick actions surface live world routing honestly', (
     WidgetTester tester,
@@ -150,7 +142,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Coming soon'), findsWidgets);
-    expect(find.text('Native 3D is coming soon'), findsOneWidget);
+    expect(find.text('Route blocked'), findsOneWidget);
+    expect(find.textContaining('2D match viewer'), findsWidgets);
   });
 }
 

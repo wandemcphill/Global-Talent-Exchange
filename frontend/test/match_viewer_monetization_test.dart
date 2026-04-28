@@ -8,12 +8,11 @@ import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
-  testWidgets('non-premium users are prompted before switching into 3D', (
+  testWidgets('non-premium users stay on the 2D launch viewer', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 1200);
@@ -44,31 +43,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(Pitch2dWidget), findsOneWidget);
-
-    await tester.ensureVisible(find.text('3D lane').last);
-    await tester.tap(find.text('3D lane').last);
-    await _pumpForOverlayTransition(tester);
-
-    expect(find.textContaining('Watch in Cinematic Mode'), findsOneWidget);
-
-    await tester.tap(find.text('Continue in 2D'));
-    await _pumpForOverlayTransition(tester);
-
-    expect(find.byType(Pitch2dWidget), findsOneWidget);
-    expect(find.byType(Gtex3dScene), findsNothing);
-
-    await tester.ensureVisible(find.text('3D lane').last);
-    await tester.tap(find.text('3D lane').last);
-    await _pumpForOverlayTransition(tester);
-    await tester.tap(find.text('Unlock & Watch'));
-    await _pumpForOverlayTransition(tester);
-
-    expect(find.byType(Gtex3dScene), findsOneWidget);
+    expect(find.byType(MatchPitch2D), findsOneWidget);
+    expect(find.byKey(const Key('match-pitch-2d-canvas')), findsOneWidget);
+    expect(find.text('3D lane'), findsNothing);
+    expect(find.textContaining('Watch in Cinematic Mode'), findsNothing);
   });
 
   testWidgets(
-    'premium users bypass the paywall and spectator mode keeps gifting hidden',
+    'premium render requests stay on 2D and spectator mode keeps gifting hidden',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1440, 1200);
       tester.view.devicePixelRatio = 1;
@@ -101,8 +83,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
-      expect(find.byType(Gtex3dScene), findsOneWidget);
-      expect(find.text('Pro Manager'), findsWidgets);
+      expect(find.byType(MatchPitch2D), findsOneWidget);
+      expect(find.byKey(const Key('match-pitch-2d-canvas')), findsOneWidget);
+      expect(find.text('Pro Manager'), findsNothing);
       expect(find.textContaining('Watch in Cinematic Mode'), findsNothing);
       expect(find.widgetWithText(FilledButton, 'Restart'), findsNothing);
       expect(find.textContaining('Gift'), findsNothing);
@@ -146,20 +129,19 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(Gtex3dScene), findsOneWidget);
+    expect(find.byType(MatchPitch2D), findsOneWidget);
     expect(find.textContaining('Gift'), findsNothing);
-    expect(find.text('Pause'), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-controls')), findsOneWidget);
 
     monetization.fallbackToTwoD(reason: Match3dFailureReason.performanceDrop);
     await _pumpForOverlayTransition(tester);
 
-    expect(find.byType(Pitch2dWidget), findsOneWidget);
-    expect(find.byType(Gtex3dScene), findsNothing);
-    expect(find.text('Pause'), findsOneWidget);
+    expect(find.byType(MatchPitch2D), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-controls')), findsOneWidget);
   });
 
   testWidgets(
-    'viewer surfaces sponsored clips, ad banners, and rewarded coins',
+    'launch viewer hides sponsored clips, ad banners, and rewarded coins',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1440, 1200);
       tester.view.devicePixelRatio = 1;
@@ -187,29 +169,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
-      expect(find.byKey(const Key('match-ad-preroll')), findsOneWidget);
-      expect(
-        find.byKey(const Key('match-sponsored-highlight')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('match-rewarded-ad-card')), findsOneWidget);
-
-      await tester.ensureVisible(
-        find.byKey(const Key('match-rewarded-ad-card')),
-      );
-      await tester.tap(find.textContaining('Watch Ad'));
-      await tester.pump();
-
-      expect(
-        find.text('50 coin reward added to your balance.'),
-        findsOneWidget,
-      );
-      expect(find.text('Reward claimed'), findsOneWidget);
-
-      await tester.pump(const Duration(seconds: 16));
-      await tester.pump();
-
-      expect(find.byKey(const Key('match-ad-live-banner')), findsOneWidget);
+      expect(find.byType(MatchPitch2D), findsOneWidget);
+      expect(find.byKey(const Key('match-ad-preroll')), findsNothing);
+      expect(find.byKey(const Key('match-sponsored-highlight')), findsNothing);
+      expect(find.byKey(const Key('match-rewarded-ad-card')), findsNothing);
+      expect(find.byKey(const Key('match-ad-live-banner')), findsNothing);
     },
   );
 }

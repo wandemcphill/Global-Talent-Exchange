@@ -95,13 +95,10 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await _scrollTo(tester, find.text('Player Shares'));
-      expect(find.text('Player Shares'), findsOneWidget);
-      expect(find.text('Kobbie Mainoo'), findsWidgets);
-      expect(
-        find.text('Verified club context required for transfer actions'),
-        findsOneWidget,
-      );
+      await _scrollTo(tester, find.text('Transfer Market'));
+      expect(find.text('Transfer Market'), findsWidgets);
+      expect(find.text('Scout players'), findsOneWidget);
+      expect(find.text('Scout'), findsWidgets);
     },
   );
 
@@ -224,11 +221,11 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    await _scrollTo(tester, find.text('Open 2D'));
-    expect(find.text('Open 2D'), findsOneWidget);
-    expect(find.text('Open Broadcast+'), findsOneWidget);
-    await _scrollTo(tester, find.text('Open 3D'));
-    expect(find.text('Open 3D'), findsOneWidget);
+    await _scrollTo(tester, find.text('Open Match'));
+    expect(find.text('Open Match'), findsOneWidget);
+    expect(find.text('Open 2D'), findsNothing);
+    expect(find.text('Open Broadcast+'), findsNothing);
+    expect(find.text('Open 3D'), findsNothing);
     expect(find.text('View coming soon note'), findsNothing);
     expect(find.text('Open simulate'), findsNothing);
     expect(find.text('Open simulation'), findsNothing);

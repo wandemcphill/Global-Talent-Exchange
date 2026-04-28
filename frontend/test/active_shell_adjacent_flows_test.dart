@@ -143,9 +143,11 @@ void main() {
       );
       await tester.ensureVisible(walletOverviewButton);
       await tester.tap(walletOverviewButton);
-      await _pumpUntilText(tester, 'Wallet balances');
-      expect(find.text('Wallet balances'), findsOneWidget);
-      expect(find.text('FAN COIN'), findsOneWidget);
+      await _pumpUntilText(tester, 'Club funds');
+      expect(find.text('Club Wallet'), findsOneWidget);
+      expect(find.text('Club funds'), findsOneWidget);
+      expect(find.text('TRANSFER BALANCE'), findsOneWidget);
+      expect(find.text('CLUB CREDIT'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');
@@ -156,7 +158,8 @@ void main() {
       );
       await tester.ensureVisible(fundWalletButton);
       await tester.tap(fundWalletButton);
-      await _pumpUntilText(tester, 'Fund GTEX wallet');
+      await _pumpUntilText(tester, 'Choose a deposit method');
+      expect(find.text('Deposit'), findsOneWidget);
       expect(find.text('Continue to Paystack'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -180,9 +183,9 @@ void main() {
       );
       await tester.ensureVisible(depositHistoryButton);
       await tester.tap(depositHistoryButton);
-      await _pumpUntilText(tester, 'GTEX wallet activity');
-      expect(find.text('No GTEX wallet activity yet'), findsOneWidget);
-      expect(find.text('Top up GTEX'), findsOneWidget);
+      await _pumpUntilText(tester, 'Transaction History');
+      expect(find.text('No wallet activity yet'), findsOneWidget);
+      expect(find.text('Deposit'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');
@@ -307,7 +310,7 @@ void main() {
         find.text('Deposit DEP-1001 submitted. Pending review.'),
       );
       await tester.pumpAndSettle();
-      expect(find.text('GTEX wallet activity'), findsOneWidget);
+      expect(find.text('Transaction History'), findsOneWidget);
 
       await tester.pageBack();
       await tester.pumpAndSettle();

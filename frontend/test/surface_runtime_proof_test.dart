@@ -443,12 +443,11 @@ void main() {
 
       router.go(AppRoutes.competitions);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(
-        find.widgetWithText(OutlinedButton, 'Open full engine'),
-      );
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Open full engine'));
+      expect(find.text('Open full engine'), findsNothing);
+
+      router.go(AppRoutes.streamerEngine);
       await tester.pumpAndSettle();
-      expect(find.text('Streamer Tournament Engine'), findsOneWidget);
+      expect(find.text('Streamer tournaments coming soon'), findsOneWidget);
     },
   );
 
@@ -573,28 +572,16 @@ void main() {
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Open 2D'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Open Match'));
       await _pumpViewerRoute(tester);
-      expect(find.text('2D Match Viewer'), findsWidgets);
+      expect(find.byKey(const Key('match-pitch-2d-canvas')), findsOneWidget);
       expect(find.text('Viewer contract unavailable'), findsNothing);
       expect(find.text('Route blocked'), findsNothing);
 
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Open Broadcast+'));
-      await _pumpViewerRoute(tester);
-      expect(find.text('Broadcast Package'), findsWidgets);
-
-      router.go(AppRoutes.matches);
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Open 3D'));
-      await _pumpViewerRoute(tester);
-      expect(find.text('3D Match Viewer'), findsWidgets);
-      expect(find.text('Route blocked'), findsNothing);
-      expect(find.text('FLUTTER_3D'), findsOneWidget);
-
-      router.go(AppRoutes.matches);
-      await tester.pumpAndSettle();
+      expect(find.text('Open Broadcast+'), findsNothing);
+      expect(find.text('Open 3D'), findsNothing);
       expect(find.text('Open spectate probe'), findsNothing);
       expect(find.text('View coming soon note'), findsNothing);
       expect(find.text('Open simulation'), findsNothing);

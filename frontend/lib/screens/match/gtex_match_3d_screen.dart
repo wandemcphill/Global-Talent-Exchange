@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
-import 'package:gte_frontend/models/match_viewer_presentation.dart';
 import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
-import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
+import 'package:gte_frontend/features/match/live_match_viewer_route_support.dart';
+
+import 'gtex_match_viewer_screen.dart'
+    show MatchViewContinuationLoader, MatchViewStateLoader;
 
 class GtexMatch3dScreen extends StatelessWidget {
   const GtexMatch3dScreen({
@@ -32,25 +34,19 @@ class GtexMatch3dScreen extends StatelessWidget {
   final Match3dUserEntitlement entitlement;
   final MatchGiftClient? giftClient;
   final Match3DBridge? engineBridge;
-  final Match3dAndroidLiveBootstrapProvisioner?
-  androidLiveBootstrapProvisioner;
+  final Match3dAndroidLiveBootstrapProvisioner? androidLiveBootstrapProvisioner;
 
   @override
   Widget build(BuildContext context) {
-    return GtexMatchViewerScreen(
-      competition: competition,
-      matchKey: matchKey,
-      fallbackSnapshot: fallbackSnapshot,
-      preferFallback: preferFallback,
-      presentationMode: MatchViewerPresentationMode.replay,
-      renderMode: RenderMode.threeD,
-      viewStateLoader: viewStateLoader,
-      continuationLoader: continuationLoader,
-      entitlement: entitlement,
-      giftClient: giftClient,
-      titleOverride: '3D Match Viewer',
-      engineBridge: engineBridge,
-      androidLiveBootstrapProvisioner: androidLiveBootstrapProvisioner,
+    return const MatchRouteBlockedScreen(
+      title: 'Coming soon',
+      subtitle:
+          'Advanced match viewing is coming soon. The launch matchday experience is the 2D tactical viewer.',
+      reason:
+          'This route is blocked for launch while managers use the 2D match viewer.',
+      detailTitle: 'Coming soon',
+      detailSubtitle:
+          'Open fixtures and use the 2D match viewer for launch matchday.',
     );
   }
 }

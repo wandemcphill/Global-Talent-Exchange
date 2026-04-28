@@ -190,10 +190,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
 
-      expect(find.text('Wallet balances'), findsOneWidget);
-      expect(find.text('GTEX COIN'), findsOneWidget);
-      expect(find.text('FAN COIN'), findsOneWidget);
-      expect(find.text('Top up GTEX'), findsOneWidget);
+      expect(find.text('Club funds'), findsOneWidget);
+      expect(find.text('TRANSFER BALANCE'), findsOneWidget);
+      expect(find.text('CLUB CREDIT'), findsOneWidget);
+      expect(find.text('Deposit'), findsOneWidget);
     });
 
     testWidgets('club sale market surface opens against fixture data', (

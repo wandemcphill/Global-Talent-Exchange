@@ -161,7 +161,7 @@ void main() {
     expect(find.text('Reject'), findsOneWidget);
   });
 
-  testWidgets('creator-share admin control opens the admin control surface', (
+  testWidgets('creator-share admin control is blocked for launch', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -178,9 +178,12 @@ void main() {
     );
 
     await tester.tap(find.text('Open control'));
-    await _pumpUntilText(tester, 'Creator share market control');
+    await _pumpUntilText(tester, 'Share market admin controls coming soon');
 
-    expect(find.text('Creator share market control'), findsOneWidget);
+    expect(
+      find.text('Share market admin controls coming soon'),
+      findsOneWidget,
+    );
     expect(find.text('Club selection required'), findsNothing);
   });
 
@@ -332,9 +335,9 @@ void main() {
     final Finder playerCardsButton = find.text('Player cards');
     await tester.ensureVisible(playerCardsButton);
     await tester.tap(playerCardsButton);
-    await _pumpUntilText(tester, 'Player-card marketplace');
+    await _pumpUntilText(tester, 'Transfer Market');
 
-    expect(find.text('Player-card marketplace'), findsOneWidget);
+    expect(find.text('Transfer Market'), findsWidgets);
   });
 
   testWidgets(
@@ -567,14 +570,14 @@ void main() {
       final Finder creatorSharesButton = find.text('Creator shares');
       await tester.ensureVisible(creatorSharesButton);
       await tester.tap(creatorSharesButton);
-      await _pumpUntilText(tester, 'Ibadan Lions FC creator shares');
+      await _pumpUntilText(tester, 'Club share market coming soon');
 
-      expect(find.text('Ibadan Lions FC creator shares'), findsOneWidget);
+      expect(find.text('Club share market coming soon'), findsOneWidget);
       expect(find.text('Club selection required'), findsNothing);
     },
   );
 
-  testWidgets('arena quick links open tournament routes', (
+  testWidgets('arena quick links expose launch routes and hide streamer engine', (
     WidgetTester tester,
   ) async {
     final CompetitionController controller = CompetitionController(
@@ -597,11 +600,11 @@ void main() {
     await tester.pumpAndSettle();
     await _scrollUntilVisible(
       tester,
-      find.text('Arena extensions'),
+      find.text('Competition routes'),
       scrollable: find.byType(ListView).first,
     );
 
-    expect(find.text('Arena extensions'), findsOneWidget);
+    expect(find.text('Competition routes'), findsWidgets);
     final Finder fanPredictionsButton = find.widgetWithText(
       FilledButton,
       'Fan predictions (live match only)',
@@ -613,13 +616,8 @@ void main() {
       ),
       findsOneWidget,
     );
-
-    final Finder streamerTournamentsButton = find.text('Streamer tournaments');
-    await tester.ensureVisible(streamerTournamentsButton);
-    await tester.tap(streamerTournamentsButton);
-    await _pumpUntilText(tester, 'Streamer tournament engine');
-
-    expect(find.text('Streamer tournament engine'), findsOneWidget);
+    expect(find.text('Streamer tournaments'), findsNothing);
+    expect(find.text('Streamer tournament engine'), findsNothing);
   });
 
   testWidgets('club hub quick links open world context routes', (

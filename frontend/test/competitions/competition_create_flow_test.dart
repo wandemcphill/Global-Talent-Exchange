@@ -8,8 +8,9 @@ import 'package:gte_frontend/screens/competitions/competition_share_screen.dart'
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('create flow reaches publish preview and share screen',
-      (WidgetTester tester) async {
+  testWidgets('create flow reaches publish preview and share screen', (
+    WidgetTester tester,
+  ) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
       currentUserId: 'fixture-user',
@@ -28,10 +29,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byType(TextField).first,
-      'Friday Skill League',
-    );
+    await tester.enterText(find.byType(TextField).first, 'Friday Skill League');
     await tester.pumpAndSettle();
 
     expect(find.text('Create competition'), findsWidgets);
@@ -39,9 +37,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
-        home: CompetitionPublishPreviewScreen(
-          controller: controller,
-        ),
+        home: CompetitionPublishPreviewScreen(controller: controller),
       ),
     );
     await tester.pumpAndSettle();
@@ -51,9 +47,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
-        home: CompetitionShareScreen(
-          controller: controller,
-        ),
+        home: CompetitionShareScreen(controller: controller),
       ),
     );
     await tester.pumpAndSettle();
@@ -62,8 +56,9 @@ void main() {
     expect(find.text('Invite code'), findsOneWidget);
   });
 
-  testWidgets('create flow stays locked for non-eligible users',
-      (WidgetTester tester) async {
+  testWidgets('create flow is visible for authenticated launch users', (
+    WidgetTester tester,
+  ) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
       currentUserId: 'fixture-user',
@@ -86,13 +81,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Creator access required to host'), findsOneWidget);
-    expect(find.byType(TextField), findsNothing);
-    expect(find.text('Preview & publish'), findsNothing);
-
-    await tester.tap(find.text('Request creator access'));
-    await tester.pumpAndSettle();
-
-    expect(openedCreatorAccess, isTrue);
+    expect(find.text('Create competition'), findsWidgets);
+    expect(find.byType(TextField), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('Preview & publish'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Preview & publish'), findsOneWidget);
+    expect(find.text('Competition creation unavailable'), findsNothing);
+    expect(openedCreatorAccess, isFalse);
   });
 }
