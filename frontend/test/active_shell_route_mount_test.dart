@@ -26,7 +26,7 @@ import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets(
-    'router mounts live 2D routes, blocks advanced match routes, and profile admin',
+    'router mounts live 2D routes, live broadcast, gated Flutter 3D, and profile admin',
     (WidgetTester tester) async {
       final ProviderContainer container = _buildContainer(
         session: const AuthSession(
