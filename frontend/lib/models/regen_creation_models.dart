@@ -1,5 +1,15 @@
 import 'package:gte_frontend/data/gte_models.dart';
 
+String? _generatedImageUrl(Map<String, Object?> json) {
+  return GteJson.stringOrNull(json, <String>[
+    'image_url',
+    'portrait_url',
+    'photo_url',
+    'imageUrl',
+    'portraitUrl',
+  ]);
+}
+
 class RequestSonOrderDraft {
   const RequestSonOrderDraft({
     required this.parentPlayerId,
@@ -67,6 +77,7 @@ class RegenCreationParentPlayer {
     this.position,
     this.countryCode,
     this.countryName,
+    this.imageUrl,
     this.clubId,
     this.clubName,
   });
@@ -76,6 +87,7 @@ class RegenCreationParentPlayer {
   final String? position;
   final String? countryCode;
   final String? countryName;
+  final String? imageUrl;
   final String? clubId;
   final String? clubName;
 
@@ -96,6 +108,7 @@ class RegenCreationParentPlayer {
         'country_name',
         'countryName',
       ]),
+      imageUrl: _generatedImageUrl(json),
       clubId: GteJson.stringOrNull(json, <String>['club_id', 'clubId']),
       clubName: GteJson.stringOrNull(json, <String>['club_name', 'clubName']),
     );
@@ -115,6 +128,7 @@ class RegenCreationGeneratedPlayer {
     this.countryName,
     this.clubId,
     this.clubName,
+    this.imageUrl,
     this.cardId,
   });
 
@@ -127,6 +141,7 @@ class RegenCreationGeneratedPlayer {
   final String? countryName;
   final String? clubId;
   final String? clubName;
+  final String? imageUrl;
   final int currentRating;
   final int potentialRating;
   final String? cardId;
@@ -155,6 +170,7 @@ class RegenCreationGeneratedPlayer {
       ]),
       clubId: GteJson.stringOrNull(json, <String>['club_id', 'clubId']),
       clubName: GteJson.stringOrNull(json, <String>['club_name', 'clubName']),
+      imageUrl: _generatedImageUrl(json),
       currentRating: GteJson.integer(json, <String>[
         'current_rating',
         'currentRating',

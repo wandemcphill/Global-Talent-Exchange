@@ -73,6 +73,8 @@ class RegenCardBadgeView(CommonSchema):
 
 class RegenCardView(CommonSchema):
     name: str
+    image_url: str | None = None
+    portrait_url: str | None = None
     face_seed: str | None = None
     position: str
     rating: int

@@ -289,12 +289,30 @@ class MatchViewState {
       GteJson.value(json, <String>['frames']) ?? const <Object?>[],
       label: 'match frames',
     );
-    final List<MatchTimelineFrame> frames = rawFrames
-      .map(MatchTimelineFrame.fromJson)
-      .toList(growable: false)..sort(
-      (MatchTimelineFrame left, MatchTimelineFrame right) =>
-          left.timeSeconds.compareTo(right.timeSeconds),
+    final List<MatchEvent> events = rawEvents
+        .map(MatchEvent.fromJson)
+        .toList(growable: false);
+    final MatchViewerTeam homeTeam = MatchViewerTeam.fromJson(
+      GteJson.value(json, <String>['home_team', 'homeTeam']),
     );
+    final MatchViewerTeam awayTeam = MatchViewerTeam.fromJson(
+      GteJson.value(json, <String>['away_team', 'awayTeam']),
+    );
+    final List<MatchTimelineFrame> parsedFrames = rawFrames
+        .map(MatchTimelineFrame.fromJson)
+        .toList(growable: false);
+    final List<MatchTimelineFrame> frames =
+        (parsedFrames.isEmpty
+              ? _framesFromEventPositions(
+                events: events,
+                homeTeam: homeTeam,
+                awayTeam: awayTeam,
+              )
+              : parsedFrames)
+          ..sort(
+            (MatchTimelineFrame left, MatchTimelineFrame right) =>
+                left.timeSeconds.compareTo(right.timeSeconds),
+          );
     return MatchViewState(
       matchId: GteJson.string(json, <String>['match_id', 'matchId']),
       source: GteJson.string(json, <String>['source'], fallback: 'unknown'),
@@ -313,13 +331,9 @@ class MatchViewState {
         'duration_seconds',
         'durationSeconds',
       ], fallback: frames.isEmpty ? 0 : frames.last.timeSeconds.ceil()),
-      homeTeam: MatchViewerTeam.fromJson(
-        GteJson.value(json, <String>['home_team', 'homeTeam']),
-      ),
-      awayTeam: MatchViewerTeam.fromJson(
-        GteJson.value(json, <String>['away_team', 'awayTeam']),
-      ),
-      events: rawEvents.map(MatchEvent.fromJson).toList(growable: false),
+      homeTeam: homeTeam,
+      awayTeam: awayTeam,
+      events: events,
       frames: frames,
       fairnessIndicator: MatchFairnessIndicator.fromJson(
         GteJson.value(json, <String>[
@@ -361,11 +375,11 @@ class MatchViewState {
                   null
               ? null
               : MatchPresentationPackage.fromJson(
-                  GteJson.value(json, <String>[
-                    'presentation_package',
-                    'presentationPackage',
-                  ]),
-                ),
+                GteJson.value(json, <String>[
+                  'presentation_package',
+                  'presentationPackage',
+                ]),
+              ),
     );
   }
 
@@ -437,6 +451,168 @@ class MatchViewState {
   MatchViewerTeam teamForSide(MatchViewerSide side) {
     return side == MatchViewerSide.home ? homeTeam : awayTeam;
   }
+}
+
+List<MatchTimelineFrame> _framesFromEventPositions({
+  required List<MatchEvent> events,
+  required MatchViewerTeam homeTeam,
+  required MatchViewerTeam awayTeam,
+}) {
+  final List<MatchTimelineFrame> frames = <MatchTimelineFrame>[];
+  for (final MatchEvent event in events) {
+    if (event.positions.isEmpty) {
+      continue;
+    }
+    final bool homeAttacksRight = event.minute < 45;
+    final List<MatchViewerPlayerFrame> players = event.positions
+        .map(
+          (MatchEventPlayerPosition position) => _playerFrameFromEventPosition(
+            event: event,
+            position: position,
+            homeTeam: homeTeam,
+            awayTeam: awayTeam,
+          ),
+        )
+        .toList(growable: false);
+    frames.add(
+      MatchTimelineFrame(
+        id: '${event.id}:event-position',
+        timeSeconds: event.timeSeconds,
+        clockMinute: event.minute.toDouble(),
+        phase: _phaseForEvent(event.type),
+        homeScore: event.homeScore,
+        awayScore: event.awayScore,
+        homeAttacksRight: homeAttacksRight,
+        possessionSide: _possessionSideForEvent(event, homeTeam, awayTeam),
+        activeEventId: event.id,
+        eventBanner: event.bannerText,
+        players: players,
+        ball: _ballFrameFromEvent(event, players),
+      ),
+    );
+  }
+  return frames;
+}
+
+MatchViewerPlayerFrame _playerFrameFromEventPosition({
+  required MatchEvent event,
+  required MatchEventPlayerPosition position,
+  required MatchViewerTeam homeTeam,
+  required MatchViewerTeam awayTeam,
+}) {
+  final MatchViewerSide side =
+      position.side ??
+      _sideFromTeamId(position.teamId ?? event.teamId, homeTeam, awayTeam) ??
+      MatchViewerSide.home;
+  final String teamId =
+      position.teamId ??
+      (side == MatchViewerSide.home ? homeTeam.teamId : awayTeam.teamId);
+  final String label =
+      position.shirtNumber?.toString() ??
+      _shortPlayerLabel(position.playerName) ??
+      '?';
+  final bool highlighted =
+      event.highlightedPlayerIds.contains(position.playerId) ||
+      event.primaryPlayerId == position.playerId ||
+      event.secondaryPlayerId == position.playerId;
+  return MatchViewerPlayerFrame(
+    playerId: position.playerId,
+    teamId: teamId,
+    side: side,
+    shirtNumber: position.shirtNumber,
+    label: label,
+    role: matchViewerRoleFromString(position.role ?? 'midfielder'),
+    line: matchPlayerLineFromString(
+      position.line ?? position.role ?? 'midfield',
+    ),
+    state:
+        highlighted
+            ? MatchViewerPlayerState.moving
+            : MatchViewerPlayerState.idle,
+    active: true,
+    highlighted: highlighted,
+    position: position.position,
+    anchorPosition: position.position,
+    animationState:
+        event.type == MatchViewerEventType.pass
+            ? MatchPlayerAnimationState.pass
+            : MatchPlayerAnimationState.jog,
+  );
+}
+
+MatchViewerBallFrame _ballFrameFromEvent(
+  MatchEvent event,
+  List<MatchViewerPlayerFrame> players,
+) {
+  final MatchEventBallTarget? ball = event.ball;
+  if (ball != null) {
+    return ball.toFrame();
+  }
+  final String? ownerPlayerId =
+      event.secondaryPlayerId ?? event.primaryPlayerId;
+  for (final MatchViewerPlayerFrame player in players) {
+    if (player.playerId == ownerPlayerId) {
+      return MatchViewerBallFrame(
+        position: player.position,
+        ownerPlayerId: ownerPlayerId,
+        state: event.type == MatchViewerEventType.pass ? 'pass' : 'rolling',
+      );
+    }
+  }
+  return MatchViewerBallFrame(
+    position: const MatchViewerPoint(x: 50, y: 50),
+    ownerPlayerId: ownerPlayerId,
+    state: event.type == MatchViewerEventType.pass ? 'pass' : 'rolling',
+  );
+}
+
+MatchViewerSide _possessionSideForEvent(
+  MatchEvent event,
+  MatchViewerTeam homeTeam,
+  MatchViewerTeam awayTeam,
+) {
+  return _sideFromTeamId(event.teamId, homeTeam, awayTeam) ??
+      MatchViewerSide.home;
+}
+
+MatchViewerSide? _sideFromTeamId(
+  String? teamId,
+  MatchViewerTeam homeTeam,
+  MatchViewerTeam awayTeam,
+) {
+  if (teamId == null) {
+    return null;
+  }
+  if (teamId == awayTeam.teamId || teamId.toLowerCase() == 'away') {
+    return MatchViewerSide.away;
+  }
+  if (teamId == homeTeam.teamId || teamId.toLowerCase() == 'home') {
+    return MatchViewerSide.home;
+  }
+  return null;
+}
+
+MatchViewerPhase _phaseForEvent(MatchViewerEventType type) {
+  return switch (type) {
+    MatchViewerEventType.kickoff => MatchViewerPhase.kickoff,
+    MatchViewerEventType.setPiece ||
+    MatchViewerEventType.penalty => MatchViewerPhase.setPiece,
+    MatchViewerEventType.halftime => MatchViewerPhase.halftime,
+    MatchViewerEventType.fulltime => MatchViewerPhase.fulltime,
+    _ => MatchViewerPhase.openPlay,
+  };
+}
+
+String? _shortPlayerLabel(String? name) {
+  final String trimmed = (name ?? '').trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+  final List<String> parts = trimmed.split(RegExp(r'\s+'));
+  if (parts.length > 1) {
+    return parts.last.length <= 2 ? parts.last : parts.last.substring(0, 2);
+  }
+  return trimmed.length <= 2 ? trimmed : trimmed.substring(0, 2);
 }
 
 const Object _matchViewStateUnset = Object();

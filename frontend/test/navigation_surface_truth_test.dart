@@ -25,7 +25,7 @@ void main() {
             .map((AppDestination destination) => destination.location)
             .toSet();
 
-    expect(primaryLocations, contains(AppRoutes.world));
+    expect(primaryLocations, isNot(contains(AppRoutes.world)));
     expect(primaryLocations, isNot(contains(AppRoutes.matchesNativeThreeD)));
     expect(
       appRouteSurfaceFor(AppRoutes.world)?.state,
@@ -37,7 +37,7 @@ void main() {
     );
     expect(
       appRouteSurfaceFor(AppRoutes.matchesSimulate)?.state,
-      AppRouteSurfaceState.hidden,
+      AppRouteSurfaceState.placeholder,
     );
     expect(appRouteSurfaceFor('/profile/admin/god-mode'), isNull);
   });
@@ -76,29 +76,29 @@ void main() {
   });
 
   test(
-    'Flutter 3D inventory stays truthful about gating and rendering mode',
+    '3D inventory stays truthful about launch blocking',
     () {
       final AppRouteSurface? threeD = appRouteSurfaceFor(
         AppRoutes.matchesThreeD,
       );
 
       expect(threeD, isNotNull);
-      expect(threeD!.summary, contains('Flutter-rendered'));
-      expect(threeD.summary, contains('entitlement'));
-      expect(threeD.summary.toLowerCase(), isNot(contains('native 3d')));
+      expect(threeD!.state, AppRouteSurfaceState.placeholder);
+      expect(threeD.label, 'Coming soon');
+      expect(threeD.summary, contains('3D match viewing is blocked'));
     },
   );
 
   test(
-    'simulation inventory stays fixture-gated instead of live-shell visible',
+    'simulation inventory stays blocked for launch',
     () {
       final AppRouteSurface? simulation = appRouteSurfaceFor(
         AppRoutes.matchesSimulate,
       );
 
       expect(simulation, isNotNull);
-      expect(simulation!.state, AppRouteSurfaceState.hidden);
-      expect(simulation.summary, contains('fixture-mode'));
+      expect(simulation!.state, AppRouteSurfaceState.placeholder);
+      expect(simulation.summary, contains('Coming soon for launch.'));
       expect(simulation.summary.toLowerCase(), contains('blocked'));
     },
   );
@@ -111,7 +111,7 @@ void main() {
 
     expect(find.text('World'), findsOneWidget);
     expect(find.text('World Preview'), findsNothing);
-    expect(find.text('Matches'), findsOneWidget);
+    expect(find.text('Fixtures'), findsOneWidget);
     expect(find.text('Competitions'), findsOneWidget);
   });
 
@@ -140,12 +140,9 @@ void main() {
     );
 
     expect(nativeThreeD, isNotNull);
-    expect(nativeThreeD!.summary, contains('stays blocked'));
-    expect(nativeThreeD.summary.toLowerCase(), contains('scaffold'));
-    expect(
-      nativeThreeD.summary.toLowerCase(),
-      isNot(contains('verified native bridge')),
-    );
+    expect(nativeThreeD!.state, AppRouteSurfaceState.placeholder);
+    expect(nativeThreeD.label, 'Coming soon');
+    expect(nativeThreeD.summary, contains('Advanced match viewing is blocked'));
 
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: MatchNative3dBlockedScreen())),

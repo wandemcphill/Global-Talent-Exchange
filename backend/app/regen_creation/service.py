@@ -56,6 +56,7 @@ from app.regen_creation.schemas import (
     RequestSonOptionsView,
 )
 from app.services.regen_service import OwnerSonContext, OwnerSonRequest, RegenClubContext, RegenGenerationEngine
+from app.services.regen_portrait_service import RegenPortraitService
 from app.treasury.service import TreasuryError, TreasuryService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
@@ -671,16 +672,20 @@ class RegenCreationService:
         )
 
         visual_profile = dict(generated_regen.metadata.get("visual_profile") or {})
-        self.session.add(
-            RegenVisualProfile(
-                regen_profile_id=regen.id,
-                portrait_seed=str(visual_profile.get("portrait_seed", generated_regen.regen_id)),
-                skin_tone=visual_profile.get("skin_tone"),
-                hair_profile=visual_profile.get("hair_profile"),
-                accessory_profile_json={},
-                kit_style=visual_profile.get("kit_style"),
-                metadata_json={"request_son_order_id": order.id},
-            )
+        regen_visual_profile = RegenVisualProfile(
+            regen_profile_id=regen.id,
+            portrait_seed=str(visual_profile.get("portrait_seed", generated_regen.regen_id)),
+            skin_tone=visual_profile.get("skin_tone"),
+            hair_profile=visual_profile.get("hair_profile"),
+            accessory_profile_json={},
+            kit_style=visual_profile.get("kit_style"),
+            metadata_json={"request_son_order_id": order.id},
+        )
+        self.session.add(regen_visual_profile)
+        RegenPortraitService(self.session).ensure_player_portrait(
+            player,
+            regen=regen,
+            visual_profile=regen_visual_profile,
         )
 
         lineage_payload = (
@@ -859,6 +864,8 @@ class RegenCreationService:
         return RegenCreationParentPlayerView(
             player_id=player.id,
             full_name=player.full_name,
+            image_url=self._player_image_url(player),
+            portrait_url=self._player_image_url(player),
             position=player.position or player.normalized_position,
             country_code=self._country_code(country),
             country_name=country.name if country is not None else None,
@@ -880,6 +887,8 @@ class RegenCreationService:
             player_id=player.id,
             regen_profile_id=regen.id,
             full_name=player.full_name,
+            image_url=self._player_image_url(player),
+            portrait_url=self._player_image_url(player),
             age=self._calculate_age(player.date_of_birth),
             position=regen.primary_position,
             country_code=self._country_code(country),
@@ -890,6 +899,34 @@ class RegenCreationService:
             potential_rating=int(potential.get("maximum") or regen.current_gsi),
             card_id=regen.linked_unique_card_id,
         )
+
+    def _player_image_url(self, player: Player) -> str | None:
+        dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
+        for key in ("portraitUrl", "portrait_url", "image_url", "photo_url"):
+            value = dna.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        for image in sorted(
+            player.image_metadata,
+            key=lambda item: (
+                not item.is_primary,
+                item.moderation_status != "approved",
+                item.created_at,
+                item.id,
+            ),
+        ):
+            if image.moderation_status == "rejected":
+                continue
+            if image.source_url:
+                return image.source_url
+            if image.storage_key:
+                return image.storage_key
+        if not bool(player.is_real_player):
+            try:
+                return RegenPortraitService(self.session).ensure_player_portrait(player).portrait_url
+            except Exception:
+                return None
+        return None
 
     def _order_view(self, order: RegenCreationOrder) -> RegenCreationOrderView:
         metadata = dict(order.metadata_json or {})

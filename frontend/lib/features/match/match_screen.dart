@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
-import '../../data/gte_api_repository.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -20,8 +19,6 @@ class MatchScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bool authenticated = ref.watch(isAuthenticatedProvider);
-    final bool fixtureMode =
-        ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture;
     final AsyncValue<LiveMatchOverview> overview = ref.watch(
       liveMatchOverviewProvider,
     );
@@ -32,16 +29,15 @@ class MatchScreen extends ConsumerWidget {
             : DataSourceStatus.live;
 
     return AppPageLayout(
-      title: 'Matches',
-      subtitle:
-          'Premium live match hub for viewer launch, broadcast package entry, and honest separation between live routes, gated 3D, and fixture-mode-only local tools.',
+      title: 'Fixtures',
+      subtitle: 'Fixtures, live 2D match viewing, and results for matchday.',
       trailing: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: <Widget>[
           DataSourceBadge(status: status),
           const MatchViewerCapabilityBadge(
-            capability: MatchViewerCapability.pseudo3d,
+            capability: MatchViewerCapability.twoD,
           ),
         ],
       ),
@@ -50,15 +46,15 @@ class MatchScreen extends ConsumerWidget {
           eyebrow: authenticated ? 'MATCHDAY LIVE' : 'AUTH REQUIRED',
           title:
               authenticated
-                  ? 'Launch the right viewer lane with broadcast-grade clarity.'
-                  : 'Sign in before the live broadcast desk can mount match programs.',
+                  ? 'Open fixtures and follow matchday in 2D.'
+                  : 'Sign in to follow live fixtures and results.',
           description:
-              'The shipped Matches tab reads /api/broadcast/home for live discovery, then routes cleanly into 2D, Broadcast+, and the entitlement-gated Flutter 3D lane without masking blocked backend truth.',
+              'The launch matchday view keeps fixtures, scores, and the 2D viewer in focus while advanced viewing modes stay Coming soon.',
           metrics: <Widget>[
             GtexStatTile(
-              label: 'Programs',
+              label: 'Fixtures',
               value: snapshot == null ? '...' : '${snapshot.entries.length}',
-              support: 'Live broadcast-home cards',
+              support: 'Live fixture cards',
               tone: GtexSurfaceTone.live,
             ),
             GtexStatTile(
@@ -67,14 +63,13 @@ class MatchScreen extends ConsumerWidget {
                   snapshot == null
                       ? '...'
                       : '${snapshot.entries.where((LiveMatchOverviewEntry item) => item.isFeatured).length}',
-              support: 'Prime matchday packages',
+              support: 'Featured fixtures',
               tone: GtexSurfaceTone.info,
             ),
             GtexStatTile(
               label: 'Capability',
-              value: '2D + Broadcast+ + gated 3D',
-              support:
-                  'Flutter 3D only opens when live session and entitlement qualify',
+              value: '2D',
+              support: 'Manager matchday view',
               tone: GtexSurfaceTone.warning,
             ),
           ],
@@ -85,7 +80,7 @@ class MatchScreen extends ConsumerWidget {
               return GteStatePanel(
                 title: 'No live matches published',
                 message:
-                    '${value.sourcePath} responded successfully, but it did not publish any current live match programs.',
+                    '${value.sourcePath} responded successfully, but it did not publish any current fixtures.',
                 icon: Icons.tv_off_rounded,
                 accentColor: Theme.of(context).colorScheme.tertiary,
               );
@@ -93,11 +88,11 @@ class MatchScreen extends ConsumerWidget {
             return Column(
               children: <Widget>[
                 GtexSectionPanel(
-                  eyebrow: 'LIVE PROGRAMS',
-                  title: 'Live programs',
+                  eyebrow: 'LIVE FIXTURES',
+                  title: 'Live fixtures',
                   subtitle:
                       value.generatedAt == null
-                          ? 'Current programs from the broadcast home endpoint.'
+                          ? 'Current fixtures from the matchday feed.'
                           : 'Generated ${value.generatedAt!.toIso8601String()}',
                   child: Column(
                     children: <Widget>[
@@ -109,18 +104,13 @@ class MatchScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                if (fixtureMode) ...<Widget>[
-                  const SizedBox(height: 24),
-                  const _FixtureSimulationDeck(),
-                ],
               ],
             );
           },
           loading:
               () => GteStatePanel(
                 title: 'Loading live matches',
-                message:
-                    'The active shell is fetching /api/broadcast/home. No local match fixtures are used on this page.',
+                message: 'The active shell is fetching live fixture cards.',
                 isLoading: true,
               ),
           error:
@@ -132,10 +122,6 @@ class MatchScreen extends ConsumerWidget {
                     icon: Icons.error_outline_rounded,
                     accentColor: Theme.of(context).colorScheme.error,
                   ),
-                  if (fixtureMode) ...<Widget>[
-                    const SizedBox(height: 24),
-                    const _FixtureSimulationDeck(),
-                  ],
                 ],
               ),
         ),
@@ -152,7 +138,7 @@ class _LiveMatchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GtexSectionPanel(
-      eyebrow: entry.isLive ? 'LIVE PROGRAM' : 'SCHEDULED PROGRAM',
+      eyebrow: entry.isLive ? 'LIVE FIXTURE' : 'SCHEDULED FIXTURE',
       title: entry.title,
       subtitle: entry.subtitle,
       emphasized: entry.isFeatured,
@@ -182,96 +168,8 @@ class _LiveMatchCard extends StatelessWidget {
                 () => context.push(
                   AppRoutes.matchesViewerLocation(entry.matchKey),
                 ),
-            child: const Text('Open 2D'),
+            child: const Text('Open Match'),
           ),
-          OutlinedButton(
-            onPressed:
-                () => context.push(
-                  AppRoutes.matchesBroadcastLocation(entry.matchKey),
-                ),
-            child: const Text('Open Broadcast+'),
-          ),
-          OutlinedButton(
-            onPressed:
-                () => context.push(
-                  AppRoutes.matchesThreeDLocation(entry.matchKey),
-                ),
-            child: const Text('Open 3D'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FixtureSimulationDeck extends StatelessWidget {
-  const _FixtureSimulationDeck();
-
-  @override
-  Widget build(BuildContext context) {
-    return GtexSectionPanel(
-      eyebrow: 'FIXTURE TOOLS',
-      title: 'Local simulation sandbox',
-      subtitle:
-          'This route is only exposed during explicit fixture-mode runs, so the live shell never advertises a local-only match path as backend-backed.',
-      child: Column(
-        children: <Widget>[
-          _ActionCard(
-            title: 'Simulation sandbox',
-            description:
-                'Explicit fixture-mode local simulation path. This route does not present itself as a live backend feed.',
-            chips: const <String>['FIXTURE MODE', 'LOCAL'],
-            primaryLabel: 'Open simulation',
-            onPrimaryTap: () => context.push(AppRoutes.matchesSimulate),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
-    required this.title,
-    required this.description,
-    required this.chips,
-    required this.primaryLabel,
-    required this.onPrimaryTap,
-  });
-
-  final String title;
-  final String description;
-  final List<String> chips;
-  final String primaryLabel;
-  final VoidCallback onPrimaryTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GtexListTile(
-      title: title,
-      subtitle: description,
-      leadingIcon: Icons.rocket_launch_rounded,
-      tone: GtexSurfaceTone.info,
-      trailing: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: <Widget>[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: chips
-                .map(
-                  (String value) => GtexPill(
-                    label: value,
-                    tone:
-                        value == 'COMING SOON'
-                            ? GtexSurfaceTone.warning
-                            : GtexSurfaceTone.info,
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(onPressed: onPrimaryTap, child: Text(primaryLabel)),
         ],
       ),
     );

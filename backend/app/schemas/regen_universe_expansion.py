@@ -174,6 +174,9 @@ class NationalRegenSeedView(CommonSchema):
     id: str
     seed_key: str
     display_name: str
+    image_url: str | None = None
+    portrait_url: str | None = None
+    face_seed: str | None = None
     age: int | None = None
     age_band: str = "senior"
     country_code: str

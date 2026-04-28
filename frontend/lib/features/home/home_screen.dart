@@ -53,21 +53,21 @@ class HomeScreen extends ConsumerWidget {
     final String runtimeMode = _runtimeModeLabel(appConfig.backendMode);
 
     return AppPageLayout(
-      title: 'Home',
+      title: 'Club HQ',
       subtitle:
-          'A clear football home for your session, scouting, world discovery, competitions, and live challenges.',
+          'Your 2D football manager hub for squad building, transfers, fixtures, scouting, and competitions.',
       trailing: DataSourceBadge(
         status: blocked ? DataSourceStatus.blocked : DataSourceStatus.live,
       ),
       children: <Widget>[
         GtexHeroPanel(
-          eyebrow: authenticated ? 'LIVE HOME' : 'GUEST HOME',
+          eyebrow: authenticated ? 'MANAGER HQ' : 'GUEST HQ',
           title:
               authenticated
-                  ? 'Everything important in your football world, one step away.'
-                  : 'See the live football world before you sign in.',
+                  ? 'Run your club from one clear manager screen.'
+                  : 'Scout the football world before you sign in.',
           description:
-              'Home brings together your session, scouting, world, competitions, and live challenges without burying the next best move.',
+              'Check fixtures, manage your squad, scout the Transfer Market, create competitions, and track club funds.',
           metrics: <Widget>[
             GtexStatTile(
               label: 'Session',
@@ -78,9 +78,7 @@ class HomeScreen extends ConsumerWidget {
                           : 'Authenticated'
                       : 'Guest',
               support:
-                  profile == null
-                      ? 'Live auth state syncing'
-                      : '${profile.followers} followers',
+                  profile == null ? 'Manager profile syncing' : 'Club session',
               tone:
                   authenticated
                       ? GtexSurfaceTone.live
@@ -91,8 +89,8 @@ class HomeScreen extends ConsumerWidget {
               value:
                   competitions == null
                       ? '...'
-                      : '${competitions.gtexCompetitions.length + competitions.hostedCompetitions.length + competitions.streamerTournaments.length}',
-              support: 'Platform, hosted, and creator families',
+                      : '${competitions.gtexCompetitions.length + competitions.hostedCompetitions.length}',
+              support: 'Official and manager-hosted cups',
               tone: GtexSurfaceTone.info,
             ),
             GtexStatTile(
@@ -100,7 +98,7 @@ class HomeScreen extends ConsumerWidget {
               value:
                   market == null
                       ? '...'
-                      : '${market.playerShares.length} shares / ${market.transferListings.length} listings',
+                      : '${market.transferListings.length} transfer listings',
               support:
                   market?.wallet == null
                       ? 'Funds not loaded yet'
@@ -125,7 +123,7 @@ class HomeScreen extends ConsumerWidget {
             ),
             _RouteLaunchButton(
               surface: appRouteSurfaceFor(AppRoutes.market)!,
-              icon: Icons.candlestick_chart_rounded,
+              icon: Icons.storefront_rounded,
               onPressed: () => context.go(AppRoutes.market),
             ),
             _RouteLaunchButton(
@@ -157,10 +155,10 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
         GtexSectionPanel(
-          eyebrow: 'DEPLOYMENT SIGNAL',
-          title: 'This web shell is wired to the runtime you deployed',
+          eyebrow: 'CLUB STATUS',
+          title: 'Launch matchday is set for 2D football management',
           subtitle:
-              'This panel reflects the active web build configuration instead of hidden fixture text.',
+              'The main paths are fixtures, Transfer Market, competitions, wallet actions, and manager profile.',
           accentColor: GteShellTheme.accentCapital,
           emphasized: true,
           child: Wrap(
@@ -168,15 +166,15 @@ class HomeScreen extends ConsumerWidget {
             runSpacing: 12,
             children: <Widget>[
               GtexStatTile(
-                label: 'Runtime',
+                label: 'Data',
                 value: runtimeMode,
-                support: 'Derived from GTE_BACKEND_MODE',
+                support: 'Live football feeds',
                 tone: GtexSurfaceTone.live,
               ),
               GtexStatTile(
-                label: 'API Host',
+                label: 'Club Network',
                 value: runtimeHost,
-                support: 'Derived from GTE_API_BASE_URL',
+                support: 'Active connection',
                 tone: GtexSurfaceTone.info,
               ),
               GtexStatTile(
@@ -193,18 +191,18 @@ class HomeScreen extends ConsumerWidget {
               ),
               GtexStatTile(
                 label: 'Routes',
-                value: '${appDestinations.length} primary lanes',
-                support: 'Home, Matches, Scouting, World, and Profile',
+                value: '${appDestinations.length} routes',
+                support: 'Squad, fixtures, market, competitions, manager',
                 tone: GtexSurfaceTone.warning,
               ),
             ],
           ),
         ),
         GtexSectionPanel(
-          eyebrow: 'LIVE ROUTES',
-          title: 'Core football routes are mounted in the active shell',
+          eyebrow: 'FOOTBALL ROUTES',
+          title: 'Core football routes are ready',
           subtitle:
-              'Federations, national teams, and the transfer center live as first-class routes instead of being buried in summaries.',
+              'Federations, national teams, and transfer listings stay easy to reach.',
           child: Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -229,9 +227,8 @@ class HomeScreen extends ConsumerWidget {
         ),
         _AsyncSummaryPanel<ProfileData>(
           value: profileValue,
-          title: 'Session',
-          subtitle:
-              'Identity, follower signal, and club context stay live-backed.',
+          title: 'Manager',
+          subtitle: 'Identity and club context stay ready for launch flows.',
           builder: (BuildContext context, ProfileData data) {
             final String label =
                 data.authenticated
@@ -271,30 +268,24 @@ class HomeScreen extends ConsumerWidget {
         ),
         _AsyncSummaryPanel<CompetitionHubData>(
           value: competitionsValue,
-          title: 'Competition Pulse',
-          subtitle: 'Three live competition families, one hierarchy.',
+          title: 'Competition Board',
+          subtitle: 'Official and manager-hosted competitions.',
           builder: (BuildContext context, CompetitionHubData data) {
             return Wrap(
               spacing: 12,
               runSpacing: 12,
               children: <Widget>[
                 GtexStatTile(
-                  label: 'GTEX',
+                  label: 'Official',
                   value: '${data.gtexCompetitions.length}',
                   support: 'Platform-run football',
                   tone: GtexSurfaceTone.live,
                 ),
                 GtexStatTile(
-                  label: 'Hosted',
+                  label: 'Manager Cups',
                   value: '${data.hostedCompetitions.length}',
                   support: 'User-hosted football',
                   tone: GtexSurfaceTone.info,
-                ),
-                GtexStatTile(
-                  label: 'Creator',
-                  value: '${data.streamerTournaments.length}',
-                  support: 'Streamer tournaments',
-                  tone: GtexSurfaceTone.warning,
                 ),
               ],
             );
@@ -302,15 +293,15 @@ class HomeScreen extends ConsumerWidget {
         ),
         _AsyncSummaryPanel<MarketDashboardData>(
           value: marketValue,
-          title: 'Scouting Pulse',
-          subtitle: 'A live read on players, transfers, and account readiness.',
+          title: 'Transfer Market Pulse',
+          subtitle: 'A live read on players, listings, and account readiness.',
           builder: (BuildContext context, MarketDashboardData data) {
             return Wrap(
               spacing: 12,
               runSpacing: 12,
               children: <Widget>[
                 GtexStatTile(
-                  label: 'Shares',
+                  label: 'Players',
                   value: '${data.playerShares.length}',
                   support: 'Real-player discovery',
                   tone: GtexSurfaceTone.live,
@@ -350,8 +341,8 @@ class HomeScreen extends ConsumerWidget {
         ),
         _AsyncSummaryPanel<WorldAggregateData>(
           value: worldValue,
-          title: 'World Pulse',
-          subtitle: 'Living football-universe signals and history.',
+          title: 'Scouting Network',
+          subtitle: 'Football signals, prospects, and history.',
           builder: (BuildContext context, WorldAggregateData data) {
             return Wrap(
               spacing: 12,
@@ -360,7 +351,7 @@ class HomeScreen extends ConsumerWidget {
                 GtexStatTile(
                   label: 'Rising stars',
                   value: '${data.risingStars.length}',
-                  support: 'Live regen universe',
+                  support: 'Live prospect scouting',
                   tone: GtexSurfaceTone.live,
                 ),
                 GtexStatTile(

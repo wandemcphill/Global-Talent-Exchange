@@ -17,7 +17,7 @@ from app.core.config import (
     load_player_card_market_integrity_config,
 )
 from app.core.events import EventPublisher, InMemoryEventPublisher
-from app.ingestion.models import Player
+from app.ingestion.models import Player, PlayerImageMetadata
 from app.integrity_engine.service import IntegrityEngineService
 from app.models.base import generate_uuid
 from app.models.card_access import (
@@ -52,6 +52,7 @@ from app.player_cards.service import PlayerCardNotFoundError, PlayerCardPermissi
 from app.players.read_models import PlayerSummaryReadModel
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.avatar_service import AvatarIdentityInput, AvatarService
+from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
 from app.value_engine.authority import authoritative_reference_credits
 from app.value_engine.scoring import credits_from_real_world_value
 from app.wallets.service import LedgerPosting, WalletService
@@ -145,6 +146,63 @@ class PlayerCardMarketplaceService:
         if value.tzinfo is None:
             return value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
+
+    @staticmethod
+    def _image_url_from_payload(payload: dict[str, Any] | None) -> str | None:
+        if not payload:
+            return None
+        for key in ("image_url", "portrait_url", "photo_url"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        image_payload = payload.get("image")
+        if isinstance(image_payload, dict):
+            for key in ("source_url", "url", "storage_key"):
+                value = image_payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return None
+
+    @staticmethod
+    def _player_image_url_expr():
+        return (
+            select(func.coalesce(PlayerImageMetadata.source_url, PlayerImageMetadata.storage_key))
+            .where(
+                PlayerImageMetadata.player_id == Player.id,
+                PlayerImageMetadata.image_role == "portrait",
+                PlayerImageMetadata.moderation_status != "rejected",
+            )
+            .order_by(PlayerImageMetadata.is_primary.desc(), PlayerImageMetadata.created_at.asc())
+            .limit(1)
+            .scalar_subquery()
+        )
+
+    def _image_url(self, player: Player, *, summary_payload: dict[str, Any] | None = None) -> str | None:
+        direct = self._image_url_from_payload(summary_payload)
+        if direct:
+            return direct
+        candidates = sorted(
+            player.image_metadata,
+            key=lambda image: (
+                not image.is_primary,
+                image.moderation_status != "approved",
+                image.created_at,
+                image.id,
+            ),
+        )
+        for image in candidates:
+            if image.moderation_status == "rejected":
+                continue
+            if image.source_url:
+                return image.source_url
+            if image.storage_key:
+                return image.storage_key
+        if not bool(player.is_real_player):
+            try:
+                return RegenPortraitService(self.session).ensure_player_portrait(player).portrait_url
+            except RegenPortraitError:
+                return None
+        return None
 
     @staticmethod
     def _available_holding_quantity(holding: PlayerCardHolding) -> int:
@@ -348,6 +406,10 @@ class PlayerCardMarketplaceService:
                 player,
                 summary_payload=summary_payload if isinstance(summary_payload, dict) else None,
             ).model_dump(),
+            "image_url": self._image_url(
+                player,
+                summary_payload=summary_payload if isinstance(summary_payload, dict) else None,
+            ),
         }
 
     def _base_value_credits(self, context: dict[str, Any]) -> Decimal:
@@ -1459,6 +1521,7 @@ class PlayerCardMarketplaceService:
                 PlayerSummaryReadModel.average_rating.label("average_rating"),
                 PlayerSummaryReadModel.current_value_credits.label("latest_value_credits"),
                 PlayerSummaryReadModel.summary_json.label("player_summary_json"),
+                self._player_image_url_expr().label("image_url"),
                 PlayerCardTier.code.label("tier_code"),
                 PlayerCardTier.name.label("tier_name"),
                 PlayerCardTier.rarity_rank.label("rarity_rank"),
@@ -1557,6 +1620,7 @@ class PlayerCardMarketplaceService:
                 PlayerSummaryReadModel.average_rating.label("average_rating"),
                 PlayerSummaryReadModel.current_value_credits.label("latest_value_credits"),
                 PlayerSummaryReadModel.summary_json.label("player_summary_json"),
+                self._player_image_url_expr().label("image_url"),
                 PlayerCardTier.code.label("tier_code"),
                 PlayerCardTier.name.label("tier_name"),
                 PlayerCardTier.rarity_rank.label("rarity_rank"),
@@ -1642,6 +1706,7 @@ class PlayerCardMarketplaceService:
                 PlayerSummaryReadModel.average_rating.label("average_rating"),
                 PlayerSummaryReadModel.current_value_credits.label("latest_value_credits"),
                 PlayerSummaryReadModel.summary_json.label("player_summary_json"),
+                self._player_image_url_expr().label("image_url"),
                 PlayerCardTier.code.label("tier_code"),
                 PlayerCardTier.name.label("tier_name"),
                 PlayerCardTier.rarity_rank.label("rarity_rank"),
@@ -1701,6 +1766,7 @@ class PlayerCardMarketplaceService:
             summary_payload = {}
         if payload.get("latest_value_credits") is not None:
             payload["latest_value_credits"] = float(payload["latest_value_credits"])
+        payload["image_url"] = payload.get("image_url") or self._image_url_from_payload(summary_payload)
         payload["avatar"] = self.avatar_service.build_from_payload(
             AvatarIdentityInput(
                 player_id=str(payload.get("player_id") or ""),
@@ -1870,6 +1936,7 @@ class PlayerCardMarketplaceService:
             "position": context["player"].normalized_position or context["player"].position,
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
             "avatar": context["avatar"],
+            "image_url": context["image_url"],
             "tier_code": context["tier"].code,
             "tier_name": context["tier"].name,
             "rarity_rank": context["tier"].rarity_rank,
@@ -2117,6 +2184,7 @@ class PlayerCardMarketplaceService:
             "position": context["player"].normalized_position or context["player"].position,
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
             "avatar": context["avatar"],
+            "image_url": context["image_url"],
             "tier_code": context["tier"].code,
             "tier_name": context["tier"].name,
             "rarity_rank": context["tier"].rarity_rank,
@@ -2172,6 +2240,7 @@ class PlayerCardMarketplaceService:
             "position": context["player"].normalized_position or context["player"].position,
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
             "avatar": context["avatar"],
+            "image_url": context["image_url"],
             "tier_code": context["tier"].code,
             "tier_name": context["tier"].name,
             "rarity_rank": context["tier"].rarity_rank,
@@ -2633,6 +2702,7 @@ class PlayerCardMarketplaceService:
             "position": context["player"].normalized_position or context["player"].position,
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
             "avatar": context["avatar"],
+            "image_url": context["image_url"],
             "tier_code": context["tier"].code,
             "tier_name": context["tier"].name,
             "rarity_rank": context["tier"].rarity_rank,

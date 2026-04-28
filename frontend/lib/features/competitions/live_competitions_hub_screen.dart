@@ -32,8 +32,8 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
       title: family?.label ?? 'Competitions',
       subtitle:
           family == null
-              ? 'Elite event platform for GTEX, hosted, and creator competition families.'
-              : 'This family is sourced from one live backend flow. Deeper actions stay on dedicated detail screens.',
+              ? 'Create, join, and manage football competitions.'
+              : 'Fixtures, standings, results, and prize pools stay on dedicated competition screens.',
       trailing: DataSourceBadge(
         status:
             hubValue.hasError
@@ -42,18 +42,18 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
       ),
       children: <Widget>[
         GtexHeroPanel(
-          eyebrow: family == null ? 'EVENT PLATFORM' : 'COMPETITION FAMILY',
+          eyebrow: family == null ? 'COMPETITIONS' : 'COMPETITION',
           title:
               family == null
-                  ? 'Discover live football competition families with clear event separation.'
-                  : '${family!.label} is isolated to one live backend contract.',
+                  ? 'Build your club schedule with leagues, cups, and hosted competitions.'
+                  : '${family!.label} competitions are ready for matchday.',
           description:
               family == null
-                  ? 'Platform-run, hosted, and creator events remain visually distinct so users can trust where authority, reward logic, and lifecycle controls come from.'
-                  : 'Actions and status changes only appear when the session and backend contract genuinely allow them.',
+                  ? 'Create competitions, join live fixtures, track standings, and chase prize pools from one football hub.'
+                  : 'Join, manage, view fixtures, check standings, and review results when your session allows it.',
           metrics: <Widget>[
             GtexStatTile(
-              label: 'GTEX',
+              label: 'Official',
               value:
                   snapshot == null
                       ? '...'
@@ -62,7 +62,7 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
               tone: GtexSurfaceTone.live,
             ),
             GtexStatTile(
-              label: 'Hosted',
+              label: 'Manager Cups',
               value:
                   snapshot == null
                       ? '...'
@@ -70,23 +70,15 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
               support: 'User-hosted football',
               tone: GtexSurfaceTone.info,
             ),
-            GtexStatTile(
-              label: 'Creator',
-              value:
-                  snapshot == null
-                      ? '...'
-                      : '${snapshot.streamerTournaments.length}',
-              support: 'E-game tournaments',
-              tone: GtexSurfaceTone.warning,
-            ),
           ],
           actions:
               family == null
                   ? <Widget>[
                     FilledButton.icon(
-                      onPressed: () => context.push(AppRoutes.streamerEngine),
-                      icon: const Icon(Icons.live_tv_rounded),
-                      label: const Text('Open streamer engine'),
+                      onPressed:
+                          () => context.push(AppRoutes.competitionsCreate),
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('Create Competition'),
                     ),
                   ]
                   : const <Widget>[],
@@ -163,13 +155,7 @@ class _FamilyOverview extends StatelessWidget {
         family: CompetitionFamilyRoute.hosted,
         count: hub.hostedCompetitions.length,
         description:
-            'User-hosted football competitions from /api/hosted-competitions.',
-      ),
-      _FamilyCardData(
-        family: CompetitionFamilyRoute.streamer,
-        count: hub.streamerTournaments.length,
-        description:
-            'Creator-hosted e-game tournaments from /api/streamer-tournaments.',
+            'Manager-hosted football competitions with fixtures and prize pools.',
       ),
     ];
 
@@ -189,12 +175,12 @@ class _FamilyOverview extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     GtexStatTile(
-                      label: 'Live items',
+                      label: 'Live competitions',
                       value: '${card.count}',
                       support:
                           card.count == 1
-                              ? '1 active card'
-                              : 'family inventory',
+                              ? '1 competition'
+                              : 'competition board',
                       tone: GtexSurfaceTone.live,
                     ),
                     const SizedBox(height: 16),
@@ -210,13 +196,6 @@ class _FamilyOverview extends StatelessWidget {
                           icon: const Icon(Icons.open_in_new_rounded),
                           label: const Text('Open family'),
                         ),
-                        if (card.family == CompetitionFamilyRoute.streamer)
-                          OutlinedButton.icon(
-                            onPressed:
-                                () => context.push(AppRoutes.streamerEngine),
-                            icon: const Icon(Icons.live_tv_rounded),
-                            label: const Text('Open full engine'),
-                          ),
                       ],
                     ),
                   ],
@@ -237,6 +216,15 @@ class _FamilyList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (family == CompetitionFamilyRoute.streamer) {
+      return const GteStatePanel(
+        eyebrow: 'COMING SOON',
+        title: 'Streamer competitions coming soon',
+        message:
+            'This competition surface is blocked for launch while GTEX focuses on the 2D football manager experience.',
+        icon: Icons.lock_clock_outlined,
+      );
+    }
     final List<Widget> cards = switch (family) {
       CompetitionFamilyRoute.gtex => hub.gtexCompetitions
           .map(

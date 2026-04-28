@@ -22,6 +22,24 @@ class RegenSeasonCloseRequest(CommonSchema):
     start_next_season: bool = True
 
 
+class RegenPortraitOverrideRequest(CommonSchema):
+    portrait_url: str | None = Field(default=None, max_length=255)
+    image_data_uri: str | None = None
+
+
+class RegenPortraitBanRequest(CommonSchema):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class RegenPortraitAdminView(CommonSchema):
+    player_id: str
+    face_seed: str | None = None
+    face_recipe: dict[str, object] | None = None
+    portrait_url: str | None = None
+    status: str
+    storage_key: str | None = None
+
+
 class RegenSeasonView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -221,6 +239,8 @@ class RegenPlayerMarketAccessView(CommonSchema):
 class RegenPlayerView(CommonSchema):
     id: str
     name: str
+    image_url: str | None = None
+    portrait_url: str | None = None
     age: int
     nationality: str
     nationality_code: str | None = None

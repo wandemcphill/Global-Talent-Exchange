@@ -1,29 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/gte_api_repository.dart';
-import '../../shared/providers/auth_provider.dart';
 import 'live_match_viewer_route_support.dart';
-import 'match_simulate_screen.dart';
 
-class MatchSimulateRouteScreen extends ConsumerWidget {
+class MatchSimulateRouteScreen extends StatelessWidget {
   const MatchSimulateRouteScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final GteBackendMode mode = ref.watch(criticalBackendModeProvider);
-    if (mode == GteBackendMode.fixture) {
-      return const MatchSimulateScreen();
-    }
+  Widget build(BuildContext context) {
     return const MatchRouteBlockedScreen(
-      title: 'Simulation sandbox blocked',
+      title: 'Coming soon',
       subtitle:
-          'The local simulation sandbox is reserved for explicit fixture-mode runs and is disabled in the live shell.',
+          'Local match tools are coming soon. The launch route is the 2D tactical viewer.',
       reason:
-          'This route does not consume live backend state. It is only available when the app is started in fixture mode for local QA, so live shells keep it blocked instead of mounting local simulation data.',
-      detailTitle: 'Fixture mode required',
+          'This route is blocked for launch while managers use the 2D match viewer.',
+      detailTitle: 'Coming soon',
       detailSubtitle:
-          'The shipped live shell keeps local-only simulation tools off the active match surface.',
+          'Open fixtures and use the 2D match viewer for launch matchday.',
     );
   }
 }

@@ -47,6 +47,7 @@ from app.schemas.regen_core import (
     RegenStorySeedView,
 )
 from app.services.regen_market_service import RegenAwardEvent, RegenMarketService
+from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
 
 
 class RegenUniverseError(ValueError):
@@ -143,6 +144,7 @@ class _UniverseProspect:
     market_value_coin: int | None = None
     profile: RegenProfileView | None = None
     card: dict[str, object] | None = None
+    image_url: str | None = None
     metadata: dict[str, object] = field(default_factory=dict)
 
 
@@ -837,6 +839,8 @@ class RegenUniverseService:
             badges.append({"code": badge.lower().replace(" ", "_"), "label": badge, "emphasis": "standard"})
         return {
             "name": prospect.name,
+            "image_url": prospect.image_url,
+            "portrait_url": prospect.image_url,
             "position": prospect.position,
             "rating": prospect.current_rating,
             "potential": prospect.potential,
@@ -851,10 +855,52 @@ class RegenUniverseService:
             "badges": tuple(badges),
         }
 
+    @staticmethod
+    def _image_url_from_metadata(metadata: dict[str, object] | None) -> str | None:
+        if not isinstance(metadata, dict):
+            return None
+        for key in ("image_url", "portrait_url", "photo_url", "portraitUrl"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        visual_profile = metadata.get("visual_profile")
+        if isinstance(visual_profile, dict):
+            for key in ("image_url", "portrait_url", "photo_url", "portraitUrl"):
+                value = visual_profile.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return None
+
+    def _regen_portrait_url(
+        self,
+        *,
+        player_id: str | None,
+        regen: RegenProfile,
+        metadata: dict[str, object],
+    ) -> str | None:
+        existing = self._image_url_from_metadata(metadata)
+        if existing:
+            return existing
+        if not player_id:
+            return None
+        player = self.session.get(Player, player_id)
+        if player is None:
+            return None
+        dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
+        existing = self._image_url_from_metadata(dna)
+        if existing:
+            return existing
+        try:
+            return RegenPortraitService(self.session).ensure_player_portrait(player, regen=regen).portrait_url
+        except RegenPortraitError:
+            return None
+
     def _player_summary_payload(self, prospect: _UniverseProspect) -> dict[str, object]:
         return {
             "id": prospect.lookup_id,
             "name": prospect.name,
+            "image_url": prospect.image_url,
+            "portrait_url": prospect.image_url,
             "age": prospect.age,
             "nationality": prospect.nationality,
             "nationality_code": prospect.nationality_code,
@@ -910,6 +956,13 @@ class RegenUniverseService:
             return None
         latest_value = market_service.get_latest_value_view(regen.id)
         discovery_badges = tuple(badge.badge_name for badge in market_service.list_discovery_badges(regen.id))
+        metadata = dict(profile.metadata)
+        image_url = self._regen_portrait_url(player_id=profile.player_id, regen=regen, metadata=metadata)
+        if image_url:
+            metadata = {**metadata, "image_url": image_url, "portrait_url": image_url}
+        card_payload = self._card_payload(profile, legacy_score=0.0, discovery_badges=list(discovery_badges))
+        if image_url:
+            card_payload = {**card_payload, "image_url": image_url, "portrait_url": image_url}
         return _UniverseProspect(
             lookup_id=profile.player_id or f"regen:{profile.regen_id}",
             player_id=profile.player_id,
@@ -931,12 +984,15 @@ class RegenUniverseService:
             discovery_badges=discovery_badges,
             market_value_coin=latest_value.current_value_coin,
             profile=profile,
-            card=self._card_payload(profile, legacy_score=0.0, discovery_badges=list(discovery_badges)),
-            metadata=dict(profile.metadata),
+            card=card_payload,
+            image_url=image_url,
+            metadata=metadata,
         )
 
     def _prospect_from_seed(self, seed: NationalRegenSeed) -> _UniverseProspect:
         story_seed = dict((seed.personality_seed_json or {}).get("story_seed") or {})
+        metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
+        image_url = self._image_url_from_metadata(metadata)
         lookup_id = f"seed:{seed.id}"
         prospect = _UniverseProspect(
             lookup_id=lookup_id,
@@ -969,7 +1025,8 @@ class RegenUniverseService:
                 )
             ),
             market_value_coin=self._seed_market_value(seed),
-            metadata=dict(seed.metadata_json or {}),
+            image_url=image_url,
+            metadata=metadata,
         )
         profile = self._synthetic_profile_from_prospect(prospect)
         return replace(prospect, profile=profile, card=self._synthetic_card_payload(prospect))
@@ -1197,14 +1254,18 @@ class RegenUniverseService:
             if legacy is not None
             else float(prestige["legacy_score"]) if prestige is not None else 0.0
         )
+        image_url = self._regen_portrait_url(player_id=profile.player_id, regen=regen, metadata=dict(profile.metadata))
+        card_payload = self._card_payload(
+            profile,
+            legacy_score=legacy_score,
+            discovery_badges=discovery_badges,
+        )
+        if image_url:
+            card_payload = {**card_payload, "image_url": image_url, "portrait_url": image_url}
         return {
             "player_id": player_id,
             "profile": profile,
-            "card": self._card_payload(
-                profile,
-                legacy_score=legacy_score,
-                discovery_badges=discovery_badges,
-            ),
+            "card": card_payload,
             "prestige": prestige,
             "legacy": self._legacy_payload(legacy, profile),
             "latest_value": latest_value,
@@ -2657,6 +2718,8 @@ class RegenUniverseService:
         traits_icons = tuple(tag.lower().replace(" ", "_") for tag in trait_source if tag)
         return {
             "name": profile.display_name,
+            "image_url": self._image_url_from_metadata(metadata),
+            "portrait_url": self._image_url_from_metadata(metadata),
             "face_seed": visual_profile.get("portrait_seed"),
             "position": profile.primary_position,
             "rating": profile.current_rating or profile.current_gsi,

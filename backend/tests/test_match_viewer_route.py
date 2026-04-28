@@ -114,6 +114,70 @@ def test_match_viewer_route_scales_stored_payload_by_mode() -> None:
     assert "velocity" in first_player
 
 
+def test_match_viewer_route_emits_pass_events_with_animation_targets() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=29))
+    base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
+    stored_view = base_view.model_dump(mode="json")
+    stored_view["events"][0].update(
+        {
+            "event_id": "pass-001",
+            "event_type": "pass",
+            "primary_player_id": "home-6",
+            "primary_player_name": "Zakaria",
+            "secondary_player_id": "home-8",
+            "secondary_player_name": "Schingienne",
+            "banner_text": "Zakaria to Schingienne",
+            "commentary": "Zakaria lays it back to Schingienne",
+            "duration_ms": 920,
+            "positions": [
+                {
+                    "player_id": "home-6",
+                    "player_name": "Zakaria",
+                    "team_id": "home",
+                    "side": "home",
+                    "shirt_number": 6,
+                    "role": "midfielder",
+                    "line": "midfield",
+                    "position": {"x": 44.0, "y": 52.0},
+                },
+                {
+                    "player_id": "home-8",
+                    "player_name": "Schingienne",
+                    "team_id": "home",
+                    "side": "home",
+                    "shirt_number": 8,
+                    "role": "midfielder",
+                    "line": "midfield",
+                    "position": {"x": 52.0, "y": 48.0},
+                },
+            ],
+            "ball": {
+                "position": {"x": 52.0, "y": 48.0},
+                "owner_player_id": "home-8",
+                "state": "pass",
+            },
+        }
+    )
+    _insert_match(
+        session_factory,
+        replay_payload.match_id,
+        metadata_json={"match_viewer": stored_view},
+    )
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+
+    assert response.status_code == 200
+    event = response.json()["events"][0]
+    assert event["event_type"] == "pass"
+    assert event["commentary"] == "Zakaria lays it back to Schingienne"
+    assert event["duration_ms"] == 800
+    assert event["positions"][0]["player_id"] == "home-6"
+    assert event["positions"][1]["position"] == {"x": 52.0, "y": 48.0}
+    assert event["ball"]["owner_player_id"] == "home-8"
+
+
 def test_match_viewer_route_exposes_match_gift_target_metadata() -> None:
     app, session_factory = _build_app()
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=41))

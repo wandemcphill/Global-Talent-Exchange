@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.common.schemas.base import CommonSchema
 from app.fairness.spend_balance_controller import SpendTier, TournamentFairnessMode
@@ -24,6 +24,7 @@ class MatchViewerEventType(StrEnum):
     HALFTIME = "halftime"
     FULLTIME = "fulltime"
     ATTACK = "attack"
+    PASS = "pass"
     SET_PIECE = "set_piece"
     PENALTY = "penalty"
     NEUTRAL = "neutral"
@@ -168,6 +169,17 @@ class MatchViewerBallFrameView(CommonSchema):
     velocity: MatchViewerVector3View | None = None
 
 
+class MatchViewerEventPositionView(CommonSchema):
+    player_id: str
+    player_name: str | None = None
+    team_id: str | None = None
+    side: MatchViewerSide | None = None
+    shirt_number: int | None = Field(default=None, ge=1, le=99)
+    role: str | None = None
+    line: str | None = None
+    position: MatchViewerPointView
+
+
 class MatchViewerEventView(CommonSchema):
     event_id: str
     sequence: int = Field(ge=0)
@@ -195,6 +207,20 @@ class MatchViewerEventView(CommonSchema):
     review_reason: str | None = None
     review_decision: str | None = None
     score_commit: str = Field(default="immediate")
+    duration_ms: int = Field(default=500, ge=300, le=800)
+    positions: list[MatchViewerEventPositionView] = Field(default_factory=list)
+    ball: MatchViewerBallFrameView | None = None
+
+    @field_validator("duration_ms", mode="before")
+    @classmethod
+    def _clamp_duration_ms(cls, value: object) -> int:
+        if value is None:
+            return 500
+        try:
+            duration_ms = int(value)
+        except (TypeError, ValueError):
+            return 500
+        return max(300, min(800, duration_ms))
 
 
 class MatchTimelineFrameView(CommonSchema):

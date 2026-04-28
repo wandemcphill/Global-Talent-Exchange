@@ -12,10 +12,7 @@ import 'gte_bank_details_screen.dart';
 import 'gte_kyc_screen.dart';
 
 class GteWithdrawalEligibilityScreen extends StatefulWidget {
-  const GteWithdrawalEligibilityScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteWithdrawalEligibilityScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -51,8 +48,10 @@ class _GteWithdrawalEligibilityScreenState
       ),
       body: FutureBuilder<GteWithdrawalEligibility>(
         future: _eligibilityFuture,
-        builder: (BuildContext context,
-            AsyncSnapshot<GteWithdrawalEligibility> snapshot) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<GteWithdrawalEligibility> snapshot,
+        ) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -66,8 +65,9 @@ class _GteWithdrawalEligibilityScreenState
             );
           }
           final GteWithdrawalEligibility eligibility = snapshot.data!;
-          final String? requestBlockReason =
-              _withdrawalEligibilityBlockReason(eligibility);
+          final String? requestBlockReason = _withdrawalEligibilityBlockReason(
+            eligibility,
+          );
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
@@ -79,15 +79,16 @@ class _GteWithdrawalEligibilityScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Withdrawable now',
-                          style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Withdrawable now',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         gteFormatCredits(eligibility.withdrawableNow),
-                        style: Theme.of(context)
-                            .textTheme
-                            .displaySmall
-                            ?.copyWith(fontSize: 30),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.displaySmall?.copyWith(fontSize: 30),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -109,8 +110,10 @@ class _GteWithdrawalEligibilityScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Eligibility checks',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Eligibility checks',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 12),
                       _StatusRow(
                         label: 'KYC status',
@@ -120,9 +123,10 @@ class _GteWithdrawalEligibilityScreenState
                       const SizedBox(height: 8),
                       _StatusRow(
                         label: 'Bank details',
-                        value: eligibility.requiresBankAccount
-                            ? 'Required'
-                            : 'On file',
+                        value:
+                            eligibility.requiresBankAccount
+                                ? 'Required'
+                                : 'On file',
                         ok: !eligibility.requiresBankAccount,
                       ),
                     ],
@@ -137,9 +141,9 @@ class _GteWithdrawalEligibilityScreenState
                       onPressed: () {
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
-                            builder: (BuildContext context) => GteKycScreen(
-                              controller: widget.controller,
-                            ),
+                            builder:
+                                (BuildContext context) =>
+                                    GteKycScreen(controller: widget.controller),
                           ),
                         );
                       },
@@ -150,10 +154,10 @@ class _GteWithdrawalEligibilityScreenState
                       onPressed: () {
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
-                            builder: (BuildContext context) =>
-                                GteBankDetailsScreen(
-                              controller: widget.controller,
-                            ),
+                            builder:
+                                (BuildContext context) => GteBankDetailsScreen(
+                                  controller: widget.controller,
+                                ),
                           ),
                         );
                       },
@@ -161,19 +165,21 @@ class _GteWithdrawalEligibilityScreenState
                       label: const Text('Bank details'),
                     ),
                     FilledButton.icon(
-                      onPressed: requestBlockReason == null
-                          ? () {
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder: (BuildContext context) =>
-                                      GteWithdrawalRequestScreen(
-                                    controller: widget.controller,
-                                    eligibility: eligibility,
+                      onPressed:
+                          requestBlockReason == null
+                              ? () {
+                                Navigator.of(context).push<void>(
+                                  MaterialPageRoute<void>(
+                                    builder:
+                                        (BuildContext context) =>
+                                            GteWithdrawalRequestScreen(
+                                              controller: widget.controller,
+                                              eligibility: eligibility,
+                                            ),
                                   ),
-                                ),
-                              );
-                            }
-                          : null,
+                                );
+                              }
+                              : null,
                       icon: const Icon(Icons.payments_outlined),
                       label: const Text('Request withdrawal'),
                     ),
@@ -181,10 +187,11 @@ class _GteWithdrawalEligibilityScreenState
                       onPressed: () {
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
-                            builder: (BuildContext context) =>
-                                GteWithdrawalHistoryScreen(
-                              controller: widget.controller,
-                            ),
+                            builder:
+                                (BuildContext context) =>
+                                    GteWithdrawalHistoryScreen(
+                                      controller: widget.controller,
+                                    ),
                           ),
                         );
                       },
@@ -281,7 +288,8 @@ class _GteWithdrawalRequestScreenState
     }
     if (_quote == null || _quote?.blockedReason != null) {
       setState(() {
-        _error = _quote?.blockedReason ??
+        _error =
+            _quote?.blockedReason ??
             'Generate a withdrawal quote before submitting.';
       });
       return;
@@ -297,27 +305,29 @@ class _GteWithdrawalRequestScreenState
       _error = null;
     });
     try {
-      final GteTreasuryWithdrawalRequest request =
-          await widget.controller.api.createWithdrawalRequest(
-        GteWithdrawalCreateRequest(
-          amountCoin: amount,
-          bankAccountId: _selectedBankId,
-          sourceScope: _sourceScope,
-          notes: _notesController.text.trim().isEmpty
-              ? null
-              : _notesController.text.trim(),
-        ),
-      );
+      final GteTreasuryWithdrawalRequest request = await widget.controller.api
+          .createWithdrawalRequest(
+            GteWithdrawalCreateRequest(
+              amountCoin: amount,
+              bankAccountId: _selectedBankId,
+              sourceScope: _sourceScope,
+              notes:
+                  _notesController.text.trim().isEmpty
+                      ? null
+                      : _notesController.text.trim(),
+            ),
+          );
       if (!mounted) {
         return;
       }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) => GteWithdrawalReceiptScreen(
-            controller: widget.controller,
-            withdrawalId: request.id,
-            reference: request.reference,
-          ),
+          builder:
+              (BuildContext context) => GteWithdrawalReceiptScreen(
+                controller: widget.controller,
+                withdrawalId: request.id,
+                reference: request.reference,
+              ),
         ),
       );
       if (mounted) {
@@ -353,13 +363,13 @@ class _GteWithdrawalRequestScreenState
       _quoteError = null;
     });
     try {
-      final GteWithdrawalQuote quote =
-          await widget.controller.api.fetchWithdrawalQuote(
-        GteWithdrawalQuoteRequest(
-          amountCoin: amount,
-          sourceScope: _sourceScope,
-        ),
-      );
+      final GteWithdrawalQuote quote = await widget.controller.api
+          .fetchWithdrawalQuote(
+            GteWithdrawalQuoteRequest(
+              amountCoin: amount,
+              sourceScope: _sourceScope,
+            ),
+          );
       if (!mounted) {
         return;
       }
@@ -385,15 +395,17 @@ class _GteWithdrawalRequestScreenState
 
   @override
   Widget build(BuildContext context) {
-    final String? initialBlockReason =
-        _withdrawalEligibilityBlockReason(widget.eligibility);
-    final String? submitGuardMessage = initialBlockReason ??
+    final String? initialBlockReason = _withdrawalEligibilityBlockReason(
+      widget.eligibility,
+    );
+    final String? submitGuardMessage =
+        initialBlockReason ??
         _quote?.blockedReason ??
         (_selectedBankId == null
             ? 'Add a bank account before submitting a withdrawal request.'
             : _quote == null
-                ? 'Preview a clear withdrawal quote before submitting.'
-                : null);
+            ? 'Preview a clear withdrawal quote before submitting.'
+            : null);
     return Scaffold(
       appBar: AppBar(title: const Text('Request withdrawal')),
       body: ListView(
@@ -405,19 +417,22 @@ class _GteWithdrawalRequestScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Withdrawable now',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Withdrawable now',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   gteFormatCredits(widget.eligibility.withdrawableNow),
-                  style: Theme.of(context)
-                      .textTheme
-                      .displaySmall
-                      ?.copyWith(fontSize: 28),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.displaySmall?.copyWith(fontSize: 28),
                 ),
                 const SizedBox(height: 14),
-                Text('Withdrawal source',
-                    style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  'Withdrawal source',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -426,36 +441,39 @@ class _GteWithdrawalRequestScreenState
                     ChoiceChip(
                       label: const Text('Trade balance'),
                       selected: _sourceScope == 'trade',
-                      onSelected: _isSubmitting
-                          ? null
-                          : (_) {
-                              setState(() {
-                                _sourceScope = 'trade';
-                                _quote = null;
-                              });
-                            },
+                      onSelected:
+                          _isSubmitting
+                              ? null
+                              : (_) {
+                                setState(() {
+                                  _sourceScope = 'trade';
+                                  _quote = null;
+                                });
+                              },
                     ),
                     ChoiceChip(
                       label: const Text('Competition rewards'),
                       selected: _sourceScope == 'competition',
-                      onSelected: _isSubmitting
-                          ? null
-                          : (_) {
-                              setState(() {
-                                _sourceScope = 'competition';
-                                _quote = null;
-                              });
-                            },
+                      onSelected:
+                          _isSubmitting
+                              ? null
+                              : (_) {
+                                setState(() {
+                                  _sourceScope = 'competition';
+                                  _quote = null;
+                                });
+                              },
                     ),
                   ],
                 ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: _amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
-                    labelText: 'Amount (GTEX Coin)',
+                    labelText: 'Amount (Transfer Balance)',
                     prefixIcon: Icon(Icons.payments_outlined),
                   ),
                 ),
@@ -463,9 +481,10 @@ class _GteWithdrawalRequestScreenState
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.tonalIcon(
-                    onPressed: _isQuoting || initialBlockReason != null
-                        ? null
-                        : _requestQuote,
+                    onPressed:
+                        _isQuoting || initialBlockReason != null
+                            ? null
+                            : _requestQuote,
                     icon: const Icon(Icons.receipt_long_outlined),
                     label: Text(
                       _isQuoting ? 'Generating quote...' : 'Preview quote',
@@ -500,14 +519,17 @@ class _GteWithdrawalRequestScreenState
           ] else if (_quote != null) ...<Widget>[
             const SizedBox(height: 16),
             GteSurfacePanel(
-              accentColor: _quote?.blockedReason != null
-                  ? GteShellTheme.accentWarm
-                  : GteShellTheme.accentCapital,
+              accentColor:
+                  _quote?.blockedReason != null
+                      ? GteShellTheme.accentWarm
+                      : GteShellTheme.accentCapital,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Withdrawal quote',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Withdrawal quote',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 12,
@@ -556,8 +578,10 @@ class _GteWithdrawalRequestScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Payout destination',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Payout destination',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 12),
                 if (_accounts.isEmpty)
                   GteStatePanel(
@@ -570,10 +594,11 @@ class _GteWithdrawalRequestScreenState
                       Navigator.of(context)
                           .push<void>(
                             MaterialPageRoute<void>(
-                              builder: (BuildContext context) =>
-                                  GteBankDetailsScreen(
-                                controller: widget.controller,
-                              ),
+                              builder:
+                                  (BuildContext context) =>
+                                      GteBankDetailsScreen(
+                                        controller: widget.controller,
+                                      ),
                             ),
                           )
                           .then((_) => _loadAccounts());
@@ -583,12 +608,16 @@ class _GteWithdrawalRequestScreenState
                   DropdownButtonFormField<String>(
                     value: _selectedBankId,
                     items: _accounts
-                        .map((GteUserBankAccount account) =>
-                            DropdownMenuItem<String>(
-                              value: account.id,
-                              child: Text(
-                                  '${account.bankName} - ${account.accountNumber}'),
-                            ))
+                        .map(
+                          (
+                            GteUserBankAccount account,
+                          ) => DropdownMenuItem<String>(
+                            value: account.id,
+                            child: Text(
+                              '${account.bankName} - ${account.accountNumber}',
+                            ),
+                          ),
+                        )
                         .toList(growable: false),
                     onChanged: (String? value) {
                       setState(() {
@@ -627,9 +656,10 @@ class _GteWithdrawalRequestScreenState
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _isSubmitting || submitGuardMessage != null
-                        ? null
-                        : _submit,
+                    onPressed:
+                        _isSubmitting || submitGuardMessage != null
+                            ? null
+                            : _submit,
                     child: Text(_isSubmitting ? 'Submitting...' : 'Submit'),
                   ),
                 ),
@@ -666,14 +696,16 @@ class _GteWithdrawalReceiptScreenState
   @override
   void initState() {
     super.initState();
-    _receiptFuture =
-        widget.controller.api.fetchWithdrawalReceipt(widget.withdrawalId);
+    _receiptFuture = widget.controller.api.fetchWithdrawalReceipt(
+      widget.withdrawalId,
+    );
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _receiptFuture =
-          widget.controller.api.fetchWithdrawalReceipt(widget.withdrawalId);
+      _receiptFuture = widget.controller.api.fetchWithdrawalReceipt(
+        widget.withdrawalId,
+      );
     });
   }
 
@@ -688,8 +720,10 @@ class _GteWithdrawalReceiptScreenState
       ),
       body: FutureBuilder<GteWithdrawalReceipt>(
         future: _receiptFuture,
-        builder: (BuildContext context,
-            AsyncSnapshot<GteWithdrawalReceipt> snapshot) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<GteWithdrawalReceipt> snapshot,
+        ) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -758,8 +792,10 @@ class _GteWithdrawalReceiptScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Payout destination',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Payout destination',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         '${withdrawal.bankName} • ${withdrawal.bankAccountNumber}',
@@ -796,10 +832,7 @@ class _GteWithdrawalReceiptScreenState
 }
 
 class GteWithdrawalHistoryScreen extends StatefulWidget {
-  const GteWithdrawalHistoryScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteWithdrawalHistoryScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -835,8 +868,10 @@ class _GteWithdrawalHistoryScreenState
       ),
       body: FutureBuilder<List<GteTreasuryWithdrawalRequest>>(
         future: _withdrawalsFuture,
-        builder: (BuildContext context,
-            AsyncSnapshot<List<GteTreasuryWithdrawalRequest>> snapshot) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<List<GteTreasuryWithdrawalRequest>> snapshot,
+        ) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -864,8 +899,10 @@ class _GteWithdrawalHistoryScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(withdrawal.reference,
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        withdrawal.reference,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         'Status: ${gteFormatOrderStatus(_withdrawalStatusLabel(withdrawal.status))}',
@@ -890,12 +927,13 @@ class _GteWithdrawalHistoryScreenState
                             onPressed: () {
                               Navigator.of(context).push<void>(
                                 MaterialPageRoute<void>(
-                                  builder: (BuildContext context) =>
-                                      GteWithdrawalReceiptScreen(
-                                    controller: widget.controller,
-                                    withdrawalId: withdrawal.id,
-                                    reference: withdrawal.reference,
-                                  ),
+                                  builder:
+                                      (BuildContext context) =>
+                                          GteWithdrawalReceiptScreen(
+                                            controller: widget.controller,
+                                            withdrawalId: withdrawal.id,
+                                            reference: withdrawal.reference,
+                                          ),
                                 ),
                               );
                             },
@@ -905,13 +943,14 @@ class _GteWithdrawalHistoryScreenState
                             onPressed: () {
                               Navigator.of(context).push<void>(
                                 MaterialPageRoute<void>(
-                                  builder: (BuildContext context) =>
-                                      GteDisputeCreateScreen(
-                                    controller: widget.controller,
-                                    reference: withdrawal.reference,
-                                    resourceId: withdrawal.id,
-                                    resourceType: 'withdrawal',
-                                  ),
+                                  builder:
+                                      (BuildContext context) =>
+                                          GteDisputeCreateScreen(
+                                            controller: widget.controller,
+                                            reference: withdrawal.reference,
+                                            resourceId: withdrawal.id,
+                                            resourceType: 'withdrawal',
+                                          ),
                                 ),
                               );
                             },
@@ -932,7 +971,8 @@ class _GteWithdrawalHistoryScreenState
 }
 
 String? _withdrawalEligibilityBlockReason(
-    GteWithdrawalEligibility eligibility) {
+  GteWithdrawalEligibility eligibility,
+) {
   if (eligibility.policyBlocked) {
     return eligibility.policyBlockReason ??
         'Policy acceptance required before withdrawal is enabled.';
@@ -959,10 +999,7 @@ String? _withdrawalEligibilityBlockReason(
 }
 
 class _QuoteMetric extends StatelessWidget {
-  const _QuoteMetric({
-    required this.label,
-    required this.value,
-  });
+  const _QuoteMetric({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1004,12 +1041,16 @@ class _StatusRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Icon(ok ? Icons.check_circle : Icons.warning_amber_rounded,
-            color: ok ? GteShellTheme.positive : GteShellTheme.warning),
+        Icon(
+          ok ? Icons.check_circle : Icons.warning_amber_rounded,
+          color: ok ? GteShellTheme.positive : GteShellTheme.warning,
+        ),
         const SizedBox(width: 8),
         Expanded(
-          child: Text('$label: $value',
-              style: Theme.of(context).textTheme.bodyMedium),
+          child: Text(
+            '$label: $value',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
         ),
       ],
     );

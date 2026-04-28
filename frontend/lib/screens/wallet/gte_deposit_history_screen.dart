@@ -33,7 +33,7 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
     });
   }
 
-  Future<void> _openTopUp() async {
+  Future<void> _openDeposit() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => GteFundWalletScreen(controller: widget.controller),
@@ -46,15 +46,15 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GTEX wallet activity'),
+        title: const Text('Transaction History'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openTopUp,
+        onPressed: _openDeposit,
         icon: const Icon(Icons.add),
-        label: const Text('Top up GTEX'),
+        label: const Text('Deposit'),
       ),
       body: FutureBuilder<List<GteWalletTransactionRecord>>(
         future: _transactionsFuture,
@@ -71,9 +71,9 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
           if (transactions.isEmpty) {
             return const Center(
               child: GteStatePanel(
-                title: 'No GTEX wallet activity yet',
+                title: 'No wallet activity yet',
                 message:
-                    'Top up GTEX Coin or request a withdrawal to start your wallet history.',
+                    'Deposit funds or request a withdrawal to start your wallet history.',
                 icon: Icons.account_balance_wallet_outlined,
               ),
             );

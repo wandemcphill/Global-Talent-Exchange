@@ -5,16 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../core/actions/action_pipeline.dart';
 import '../core/actions/event_service.dart';
 import '../core/theme/app_motion.dart';
+import '../controllers/competition_controller.dart';
+import '../data/competition_api.dart';
+import '../data/gte_api_repository.dart';
 import '../features/competitions/live_competitions_hub_screen.dart';
 import '../features/competitions/live_competitions_provider.dart';
-import '../features/competitions/streamer_tournament_engine_route_screen.dart';
 import '../features/home/home_screen.dart';
-import '../features/match/match_3d_route_screen.dart';
-import '../features/match/match_broadcast_screen.dart';
-import '../features/match/match_native_3d_blocked_screen.dart';
 import '../features/match/match_screen.dart';
-import '../features/match/match_simulate_route_screen.dart';
-import '../features/match/match_spectate_screen.dart';
 import '../features/match/match_viewer_route_screen.dart';
 import '../features/national_teams/national_teams_screen.dart';
 import '../features/profile/profile_admin_screen.dart';
@@ -33,6 +30,8 @@ import '../features/world/world_screen.dart';
 import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
 import '../shared/widgets/app_shell_scaffold.dart';
+import '../widgets/gte_route_integrity_screen.dart';
+import '../screens/competitions/competition_create_screen.dart';
 import 'app_destinations.dart';
 
 CompetitionFamilyRoute _competitionFamilyFromSegment(String value) {
@@ -108,10 +107,12 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
           StatefulShellBranch(
             routes: <RouteBase>[
               GoRoute(
-                path: AppRoutes.world,
+                path: AppRoutes.competitions,
                 pageBuilder:
                     (BuildContext context, GoRouterState state) =>
-                        const NoTransitionPage<void>(child: WorldScreen()),
+                        const NoTransitionPage<void>(
+                          child: LiveCompetitionsHubScreen(),
+                        ),
               ),
             ],
           ),
@@ -126,6 +127,15 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutes.world,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const WorldScreen(),
+                ),
       ),
       GoRoute(
         path: AppRoutes.transferCenter,
@@ -257,22 +267,26 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
                 ),
       ),
       GoRoute(
-        path: AppRoutes.competitions,
+        path: AppRoutes.competitionsCreate,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 AppMotion.slidePage<void>(
                   state: state,
-                  child: const LiveCompetitionsHubScreen(),
+                  child: _CompetitionCreateRouteScreen(
+                    baseUrl: apiBaseUrl,
+                    backendMode: ref.watch(criticalBackendModeProvider),
+                    accessToken: authSession?.accessToken,
+                    currentUserId: authSession?.userId ?? '',
+                    currentUserName: authSession?.resolvedUserName,
+                    isAuthenticated: authSession?.isAuthenticated ?? false,
+                  ),
                 ),
       ),
       GoRoute(
         path: AppRoutes.streamerEngine,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const StreamerTournamentEngineRouteScreen(),
-                ),
+                _comingSoonPage(state, title: 'Streamer tournaments'),
       ),
       GoRoute(
         path: AppRoutes.competitionsFamily,
@@ -312,51 +326,105 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoutes.matchesBroadcast,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String matchKey = state.pathParameters['matchKey'] ?? '';
-          return AppMotion.slidePage<void>(
-            state: state,
-            child: MatchBroadcastScreen(matchKey: matchKey),
-          );
-        },
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                _comingSoonPage(state, title: 'Broadcast package'),
       ),
       GoRoute(
         path: AppRoutes.matchesThreeD,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String matchKey = state.pathParameters['matchKey'] ?? '';
-          return AppMotion.slidePage<void>(
-            state: state,
-            child: Match3dRouteScreen(matchKey: matchKey),
-          );
-        },
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                _comingSoonPage(state, title: 'Advanced match viewing'),
       ),
       GoRoute(
         path: AppRoutes.matchesNativeThreeD,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const MatchNative3dBlockedScreen(),
-                ),
+                _comingSoonPage(state, title: 'Advanced match viewing'),
       ),
       GoRoute(
         path: AppRoutes.matchesSpectate,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const MatchSpectateScreen(),
-                ),
+                _comingSoonPage(state, title: 'Spectate mode'),
       ),
       GoRoute(
         path: AppRoutes.matchesSimulate,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const MatchSimulateRouteScreen(),
-                ),
+                _comingSoonPage(state, title: 'Match simulation tools'),
       ),
     ],
   );
 });
+
+Page<void> _comingSoonPage(GoRouterState state, {required String title}) {
+  return AppMotion.slidePage<void>(
+    state: state,
+    child: GteRouteIntegrityScreen.blocked(
+      eyebrow: 'COMING SOON',
+      title: '$title coming soon',
+      message:
+          'This route is blocked for launch while GTEX focuses on the 2D football manager experience.',
+      icon: Icons.lock_clock_outlined,
+    ),
+  );
+}
+
+class _CompetitionCreateRouteScreen extends StatefulWidget {
+  const _CompetitionCreateRouteScreen({
+    required this.baseUrl,
+    required this.backendMode,
+    required this.accessToken,
+    required this.currentUserId,
+    required this.currentUserName,
+    required this.isAuthenticated,
+  });
+
+  final String baseUrl;
+  final GteBackendMode backendMode;
+  final String? accessToken;
+  final String currentUserId;
+  final String? currentUserName;
+  final bool isAuthenticated;
+
+  @override
+  State<_CompetitionCreateRouteScreen> createState() =>
+      _CompetitionCreateRouteScreenState();
+}
+
+class _CompetitionCreateRouteScreenState
+    extends State<_CompetitionCreateRouteScreen> {
+  late final CompetitionController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CompetitionController(
+      api: CompetitionApi.standard(
+        baseUrl: widget.baseUrl,
+        mode: widget.backendMode,
+        accessToken: widget.accessToken,
+      ),
+      currentUserId: widget.currentUserId,
+      currentUserName: widget.currentUserName,
+    )..startNewDraft();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompetitionCreateScreen(
+      controller: _controller,
+      isAuthenticated: widget.isAuthenticated,
+      isCheckingHostEligibility: false,
+      hostEligible: widget.isAuthenticated,
+      onOpenLogin: () => context.push(AppRoutes.profileLogin),
+    );
+  }
+}

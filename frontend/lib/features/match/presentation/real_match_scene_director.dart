@@ -131,6 +131,7 @@ class RealMatchSceneDirector {
         case MatchViewerEventType.fulltime:
           return MatchSceneEventMapping.fulltime;
         case MatchViewerEventType.attack:
+        case MatchViewerEventType.pass:
           return _isChanceCreation(frame)
               ? MatchSceneEventMapping.chance_creation
               : MatchSceneEventMapping.possession_phase;

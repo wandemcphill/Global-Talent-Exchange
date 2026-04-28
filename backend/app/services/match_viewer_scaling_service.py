@@ -23,6 +23,7 @@ _MODE_WINDOWS = {
 }
 _BUILDUP_TYPES = {
     MatchViewerEventType.ATTACK,
+    MatchViewerEventType.PASS,
     MatchViewerEventType.GOAL,
     MatchViewerEventType.MISS,
     MatchViewerEventType.PENALTY,
@@ -31,6 +32,7 @@ _BUILDUP_TYPES = {
 }
 _MISS_ELIGIBLE_TYPES = {
     MatchViewerEventType.ATTACK,
+    MatchViewerEventType.PASS,
     MatchViewerEventType.GOAL,
     MatchViewerEventType.PENALTY,
     MatchViewerEventType.SET_PIECE,
@@ -140,6 +142,7 @@ class MatchViewerScalingService:
             MatchViewerEventType.HALFTIME: 0.15,
             MatchViewerEventType.FULLTIME: 0.15,
             MatchViewerEventType.ATTACK: 0.85,
+            MatchViewerEventType.PASS: 0.5,
             MatchViewerEventType.SET_PIECE: 0.95,
             MatchViewerEventType.PENALTY: 1.15,
             MatchViewerEventType.NEUTRAL: 0.45,

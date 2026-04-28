@@ -165,14 +165,15 @@ MatchViewState qualifyLiveMatchViewerState({
   if (resolvedMatchId.isEmpty || resolvedMatchId != normalizedMatchKey) {
     throw const GteApiException(
       type: GteApiErrorType.parsing,
-      message: 'This Flutter 3D session is unavailable for the selected match.',
+      message:
+          'This 2D matchday session is unavailable for the selected match.',
     );
   }
   if (state.frames.isEmpty) {
     throw const GteApiException(
       type: GteApiErrorType.parsing,
       message:
-          'This Flutter 3D session is unavailable because the live timeline was incomplete.',
+          'This 2D matchday session is unavailable because the live timeline was incomplete.',
     );
   }
   final int lastFrameSecond = state.frames.last.timeSeconds.ceil();
@@ -180,14 +181,14 @@ MatchViewState qualifyLiveMatchViewerState({
     throw const GteApiException(
       type: GteApiErrorType.parsing,
       message:
-          'This Flutter 3D session is unavailable because the live segment timing was inconsistent.',
+          'This 2D matchday session is unavailable because the live segment timing was inconsistent.',
     );
   }
   if (state.durationSeconds < state.segmentEndSeconds) {
     throw const GteApiException(
       type: GteApiErrorType.parsing,
       message:
-          'This Flutter 3D session is unavailable because the verified timeline ended unexpectedly.',
+          'This 2D matchday session is unavailable because the verified timeline ended unexpectedly.',
     );
   }
   if (state.durationSeconds < lastFrameSecond ||
@@ -195,7 +196,7 @@ MatchViewState qualifyLiveMatchViewerState({
     throw const GteApiException(
       type: GteApiErrorType.parsing,
       message:
-          'This Flutter 3D session is unavailable because the live segment did not verify cleanly.',
+          'This 2D matchday session is unavailable because the live segment did not verify cleanly.',
     );
   }
   if (state.hasMoreSegments &&
@@ -203,7 +204,7 @@ MatchViewState qualifyLiveMatchViewerState({
     throw const GteApiException(
       type: GteApiErrorType.parsing,
       message:
-          'This Flutter 3D session is unavailable because the next live segment could not be verified.',
+          'This 2D matchday session is unavailable because the next live segment could not be verified.',
     );
   }
   return state;

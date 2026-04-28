@@ -104,6 +104,7 @@ class PlayerCardPlayerSummaryView(BaseModel):
     card_supply_total: int
     latest_value_credits: float | None
     avatar: PlayerAvatarView
+    image_url: str | None = None
 
 
 class PlayerCardPlayerDetailView(BaseModel):
@@ -113,6 +114,7 @@ class PlayerCardPlayerDetailView(BaseModel):
     nationality_code: str | None
     current_club_name: str | None
     avatar: PlayerAvatarView
+    image_url: str | None = None
     aliases: list[str]
     monikers: list[str]
     cards: list[PlayerCardView]
@@ -134,6 +136,7 @@ class PlayerCardHoldingView(BaseModel):
     player_id: str
     player_name: str
     avatar: PlayerAvatarView
+    image_url: str | None = None
     latest_value_credits: float | None = None
     tier_code: str
     tier_name: str
@@ -150,6 +153,7 @@ class PlayerCardListingView(BaseModel):
     player_id: str
     player_name: str
     avatar: PlayerAvatarView
+    image_url: str | None = None
     latest_value_credits: float | None = None
     tier_code: str
     tier_name: str
@@ -167,6 +171,7 @@ class PlayerCardLoanListingView(BaseModel):
     player_id: str
     player_name: str
     avatar: PlayerAvatarView
+    image_url: str | None = None
     position: str | None
     tier_code: str
     tier_name: str

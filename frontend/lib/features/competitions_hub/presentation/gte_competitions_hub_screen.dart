@@ -253,10 +253,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
               if (widget.navigationDependencies != null) ...<Widget>[
                 const SizedBox(height: 20),
                 _ArenaRoutePanel(
-                  onOpenStreamerTournaments:
-                      () => _openFeatureRoute(
-                        const StreamerTournamentsListRouteData(),
-                      ),
+                  onOpenStreamerTournaments: () {},
                   onOpenNationsCup:
                       () => _openFeatureRoute(
                         const NationalTeamCompetitionsRouteData(),
@@ -424,10 +421,10 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
 
     return <Widget>[
       const _ArenaSectionHeader(
-        eyebrow: 'E-GAMES',
+        eyebrow: 'COMPETITIONS',
         title: 'Competitions Hub',
         description:
-            'GTEX-hosted fixtures, creator competitions, and fast-match E-Games share one launch surface so joining and hosting stay obvious.',
+            'Official fixtures, manager-hosted cups, standings, results, and prize pools share one launch surface.',
       ),
       const SizedBox(height: 12),
       GteSurfacePanel(
@@ -528,7 +525,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
           eyebrow: 'MATCHDAY BOARD',
           title: 'Live fixture desk',
           description:
-              'A quick broadcast strip for the stories most likely to spill into highlights, results, and bracket movement.',
+              'A quick fixture strip for the stories most likely to shape highlights, results, and bracket movement.',
         ),
         const SizedBox(height: 12),
         ...liveBoard.map(
@@ -590,10 +587,10 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         ],
         if (creatorCompetitions.isNotEmpty) ...<Widget>[
           const _ArenaSectionHeader(
-            eyebrow: 'CREATOR-HOSTED',
-            title: 'User-hosted competitions',
+            eyebrow: 'MANAGER-HOSTED',
+            title: 'User-created competitions',
             description:
-                'Creator competitions use published rules, transparent payouts, and invite-driven joins.',
+                'Manager competitions use published rules, transparent payouts, and invite-driven joins.',
           ),
           const SizedBox(height: 12),
           ...creatorCompetitions.map(
@@ -601,7 +598,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
               padding: const EdgeInsets.only(bottom: 16),
               child: _CompetitionCard(
                 competition: item,
-                contextLabel: 'Creator-hosted',
+                contextLabel: 'Manager-hosted',
                 onOpen: () => _openCompetition(item.id),
               ),
             ),
@@ -846,8 +843,8 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             (BuildContext context) => CompetitionCreateScreen(
               controller: widget.controller,
               isAuthenticated: widget.isAuthenticated,
-              isCheckingHostEligibility: widget.isCheckingCreatorAccess,
-              hostEligible: widget.canHostCompetitions,
+              isCheckingHostEligibility: false,
+              hostEligible: widget.isAuthenticated,
               onOpenLogin: widget.onOpenLogin,
               onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
             ),
@@ -859,24 +856,12 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     if (!widget.isAuthenticated) {
       return widget.onOpenLogin;
     }
-    if (widget.isCheckingCreatorAccess) {
-      return null;
-    }
-    if (!widget.canHostCompetitions) {
-      return widget.onOpenCreatorAccessRequest;
-    }
     return _openCreateCompetition;
   }
 
   String _hostLabel() {
     if (!widget.isAuthenticated) {
       return 'Sign in to create';
-    }
-    if (widget.isCheckingCreatorAccess) {
-      return 'Checking creator access';
-    }
-    if (!widget.canHostCompetitions) {
-      return 'Request creator access to host';
     }
     return 'Create competition';
   }
@@ -885,21 +870,12 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     if (!widget.isAuthenticated) {
       return Icons.login;
     }
-    if (!widget.canHostCompetitions) {
-      return Icons.how_to_reg_outlined;
-    }
     return Icons.add;
   }
 
   String _hostDescription() {
     if (!widget.isAuthenticated) {
       return 'Sign in to create your own competition.';
-    }
-    if (widget.isCheckingCreatorAccess) {
-      return 'Checking whether this account can host creator competitions.';
-    }
-    if (!widget.canHostCompetitions) {
-      return 'Creator access must be approved before this account can host competitions.';
     }
     return 'Create a competition, publish clear rules, and share invite codes for private joins.';
   }
@@ -939,12 +915,12 @@ class _ArenaRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Arena extensions',
+            'Competition routes',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'These routes open E-Games, prediction, national-team, world, and transfer shells without disturbing the competitions hub tab model.',
+            'These routes open national-team, world, and transfer views without disturbing the competitions hub tabs.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -952,11 +928,6 @@ class _ArenaRoutePanel extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              FilledButton.tonalIcon(
-                onPressed: onOpenStreamerTournaments,
-                icon: const Icon(Icons.live_tv_outlined),
-                label: const Text('Streamer tournaments'),
-              ),
               FilledButton.tonalIcon(
                 onPressed: null,
                 icon: const Icon(Icons.insights_outlined),

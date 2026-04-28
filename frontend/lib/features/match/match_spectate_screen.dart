@@ -8,11 +8,14 @@ class MatchSpectateScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MatchRouteBlockedScreen(
-      title: '2D Spectate Probe',
+      title: 'Coming soon',
       subtitle:
-          'This manual probe route stays blocked until live viewer sessions, commentary, and event streams are available without fabricated fallback state.',
+          'Spectate mode is coming soon. The launch route is the 2D tactical viewer.',
       reason:
-          'The 2D spectate probe is unavailable until the real backend can serve the full live match-viewer session without fallback substitution.',
+          'This route is blocked for launch while managers use the 2D match viewer.',
+      detailTitle: 'Coming soon',
+      detailSubtitle:
+          'Open fixtures and use the 2D match viewer for launch matchday.',
     );
   }
 }

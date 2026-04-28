@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:gte_frontend/models/match_event.dart';
@@ -6,8 +8,12 @@ import 'package:gte_frontend/models/match_view_state.dart';
 
 class MatchPlaybackController extends ChangeNotifier {
   static const int maxFrameGapMs = 2200;
-  static const Duration _maxInterpolationGap =
-      Duration(milliseconds: maxFrameGapMs);
+  static const int minAnimationMs = 300;
+  static const int defaultAnimationMs = 500;
+  static const int maxAnimationMs = 800;
+  static const Duration _maxInterpolationGap = Duration(
+    milliseconds: maxFrameGapMs,
+  );
 
   MatchPlaybackController({
     required TickerProvider vsync,
@@ -36,21 +42,26 @@ class MatchPlaybackController extends ChangeNotifier {
 
   double get positionSeconds => _positionSeconds;
 
-  double get progress => viewState.durationSeconds <= 0
-      ? 0
-      : _positionSeconds / viewState.durationSeconds;
+  double get progress =>
+      viewState.durationSeconds <= 0
+          ? 0
+          : _positionSeconds / viewState.durationSeconds;
 
   MatchTimelineFrame get leftFrame => _framePair.$1;
 
   MatchTimelineFrame get rightFrame => _framePair.$2;
 
-  double get interpolationT => _framePair.$3;
+  double get interpolationT => _easedFrameInterpolationT(_framePair);
 
   MatchTimelineFrame get displayFrame => leftFrame.interpolate(
-        rightFrame,
-        interpolationT,
-        maxGap: _maxInterpolationGap,
-      );
+    rightFrame,
+    interpolationT,
+    maxGap: _maxInterpolationGap,
+  );
+
+  static int clampAnimationDurationMs(int? value) {
+    return (value ?? defaultAnimationMs).clamp(minAnimationMs, maxAnimationMs);
+  }
 
   MatchEvent? get activeEvent {
     final MatchEvent? exact = viewState.eventById(rightFrame.activeEventId);
@@ -91,6 +102,24 @@ class MatchPlaybackController extends ChangeNotifier {
         .where((MatchEvent event) => event.timeSeconds >= _positionSeconds - 2)
         .take(6)
         .toList(growable: false);
+  }
+
+  double _easedFrameInterpolationT(
+    (MatchTimelineFrame, MatchTimelineFrame, double) framePair,
+  ) {
+    final MatchTimelineFrame left = framePair.$1;
+    final MatchTimelineFrame right = framePair.$2;
+    final double rawT = framePair.$3.clamp(0.0, 1.0).toDouble();
+    final double spanMs = (right.timeSeconds - left.timeSeconds) * 1000;
+    if (spanMs <= 0 || rawT <= 0 || rawT >= 1) {
+      return rawT;
+    }
+    final MatchEvent? event = viewState.eventById(right.activeEventId);
+    final int requestedMs = clampAnimationDurationMs(event?.durationMs);
+    final double effectiveMs = math.min(spanMs, requestedMs.toDouble());
+    final double windowT =
+        ((rawT * spanMs) / effectiveMs).clamp(0.0, 1.0).toDouble();
+    return windowT * windowT * (3 - (2 * windowT));
   }
 
   void play() {

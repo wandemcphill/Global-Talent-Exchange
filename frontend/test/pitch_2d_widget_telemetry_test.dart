@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/widgets/match/ball_widget.dart';
-import 'package:gte_frontend/widgets/match/formation_overlay_widget.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_telemetry.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
-import 'package:gte_frontend/widgets/match/player_marker_widget.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 
@@ -27,7 +25,7 @@ void main() {
         ),
       );
 
-      final Pitch2dTelemetryStyle style = Pitch2dWidget.describeTelemetryStyle(
+      final Pitch2dTelemetryStyle style = MatchPitch2D.describeTelemetryStyle(
         frame,
       );
 
@@ -39,147 +37,78 @@ void main() {
       expect(style.attacksRight, isTrue);
       expect(style.homeCompactness, closeTo(0.72, 0.0001));
       expect(style.awayCompactness, closeTo(0.39, 0.0001));
-      expect(style.accentColor, const Color(0xFFF97066));
-      expect(style.fieldGradient, hasLength(3));
     },
   );
 
-  test('pitch telemetry style flags restart and away attack orientation', () {
-    final viewState = buildBroadcastTestViewState();
-    final MatchTimelineFrame frame = viewState.frames[4].copyWith(
-      possessionSide: MatchViewerSide.away,
-      possessionPhase: MatchPossessionPhase.setPiece,
-      transitionState: MatchTransitionState.awayReset,
-      dangerZone: 'set_piece',
-      pressureIndex: 0.64,
-      frameTags: const <String>['set_piece'],
-      ball: viewState.frames[4].ball.copyWith(
-        position: const MatchViewerPoint(x: 18, y: 62),
-        state: 'placed',
-      ),
-    );
-
-    final Pitch2dTelemetryStyle style = Pitch2dWidget.describeTelemetryStyle(
-      frame,
-    );
-
-    expect(style.showSetPieceOverlay, isTrue);
-    expect(style.showTransitionLane, isFalse);
-    expect(style.showDangerOverlay, isFalse);
-    expect(style.attacksRight, isFalse);
-    expect(style.accentColor, const Color(0xFFFDB022));
+  test('2D marker and ball sizing stays in launch bounds', () {
+    expect(MatchPitch2D.playerMarkerRadiusFor(const Size(180, 120)), 6);
+    expect(MatchPitch2D.playerMarkerRadiusFor(const Size(1200, 760)), 10);
+    expect(MatchPitch2D.ballRadiusFor(const Size(180, 120)), 4);
+    expect(MatchPitch2D.ballRadiusFor(const Size(1200, 760)), 6);
   });
 
-  testWidgets('pitch widget wires telemetry style into the overlay layer', (
-    WidgetTester tester,
-  ) async {
+  test('pass and shot movement can draw a subtle ball trail', () {
     final viewState = buildBroadcastTestViewState();
-    final MatchTimelineFrame frame = viewState.frames[1].copyWith(
-      possessionPhase: MatchPossessionPhase.finalThird,
-      transitionState: MatchTransitionState.homeBreak,
-      dangerZone: 'final_third',
-      pressureIndex: 0.74,
-      compactnessHome: 0.67,
-      compactnessAway: 0.44,
-      frameTags: const <String>['counter'],
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: SizedBox(
-              width: 900,
-              child: Pitch2dWidget(viewState: viewState, frame: frame),
-            ),
-          ),
-        ),
+    final MatchTimelineFrame previous = viewState.frames[1].copyWith(
+      ball: viewState.frames[1].ball.copyWith(
+        position: const MatchViewerPoint(x: 42, y: 50),
+        state: 'rolling',
       ),
     );
-
-    expect(find.byType(Pitch2dTelemetryOverlay), findsOneWidget);
-    final Pitch2dTelemetryOverlay overlay = tester
-        .widget<Pitch2dTelemetryOverlay>(find.byType(Pitch2dTelemetryOverlay));
-    expect(overlay.style.showDangerOverlay, isTrue);
-    expect(overlay.style.showTransitionLane, isTrue);
-    expect(overlay.style.showSetPieceOverlay, isFalse);
-    expect(overlay.style.dangerZone, 'final_third');
-    expect(overlay.style.pressureIndex, closeTo(0.74, 0.0001));
-
-    final DecoratedBox decoratedBox = tester.widget<DecoratedBox>(
-      find
-          .descendant(
-            of: find.byType(Pitch2dWidget),
-            matching: find.byType(DecoratedBox),
-          )
-          .first,
-    );
-    final BoxDecoration decoration = decoratedBox.decoration as BoxDecoration;
-    final LinearGradient gradient = decoration.gradient! as LinearGradient;
-    expect(gradient.colors, overlay.style.fieldGradient);
-  });
-
-  testWidgets('pitch widget passes telemetry style into actor widgets', (
-    WidgetTester tester,
-  ) async {
-    final viewState = buildBroadcastTestViewState();
-    final MatchTimelineFrame frame = viewState.frames[2].copyWith(
-      possessionPhase: MatchPossessionPhase.boxAttack,
-      transitionState: MatchTransitionState.homeBreak,
-      dangerZone: 'box',
-      pressureIndex: 0.91,
-      frameTags: const <String>['counter', 'box_entry'],
+    final MatchTimelineFrame current = viewState.frames[2].copyWith(
       ball: viewState.frames[2].ball.copyWith(
-        ownerPlayerId: 'home-9',
-        state: 'shot',
-        elevation: 2.4,
+        position: const MatchViewerPoint(x: 58, y: 50),
+        state: 'pass',
       ),
     );
+    final MatchEvent passEvent = viewState.events[1].copyWith(
+      type: MatchViewerEventType.pass,
+    );
+
+    expect(
+      MatchPitch2D.shouldShowBallTrail(
+        previousFrame: previous,
+        frame: current,
+        activeEvent: passEvent,
+      ),
+      isTrue,
+    );
+    expect(
+      MatchPitch2D.shouldShowBallTrail(
+        previousFrame: previous,
+        frame: previous,
+        activeEvent: passEvent,
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('MatchPitch2D paints a scaled full pitch canvas', (
+    WidgetTester tester,
+  ) async {
+    final viewState = buildBroadcastTestViewState();
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Center(
             child: SizedBox(
-              width: 900,
-              child: Pitch2dWidget(viewState: viewState, frame: frame),
+              width: 525,
+              child: MatchPitch2D(
+                viewState: viewState,
+                frame: viewState.frames[1],
+                previousFrame: viewState.frames.first,
+                activeEvent: viewState.events[1],
+              ),
             ),
           ),
         ),
       ),
     );
 
-    final Pitch2dTelemetryOverlay overlay = tester
-        .widget<Pitch2dTelemetryOverlay>(find.byType(Pitch2dTelemetryOverlay));
-    final List<PlayerMarkerWidget> playerWidgets = tester
-        .widgetList<PlayerMarkerWidget>(find.byType(PlayerMarkerWidget))
-        .toList(growable: false);
-    final FormationOverlayWidget formationOverlay = tester
-        .widget<FormationOverlayWidget>(find.byType(FormationOverlayWidget));
-    final BallWidget ballWidget = tester.widget<BallWidget>(
-      find.byType(BallWidget),
-    );
-
-    expect(playerWidgets, isNotEmpty);
-    expect(
-      playerWidgets.every(
-        (PlayerMarkerWidget widget) =>
-            identical(widget.telemetryStyle, overlay.style),
-      ),
-      isTrue,
-    );
-    expect(
-      playerWidgets.any(
-        (PlayerMarkerWidget widget) =>
-            widget.ballOwnerPlayerId == frame.ball.ownerPlayerId,
-      ),
-      isTrue,
-    );
-    expect(formationOverlay.frame.id, frame.id);
-    expect(formationOverlay.style.possessionSide, MatchViewerSide.home);
-    expect(formationOverlay.style.showTransitionGuide, isTrue);
-    expect(identical(ballWidget.telemetryStyle, overlay.style), isTrue);
-    expect(ballWidget.ball.state, 'shot');
-    expect(ballWidget.ball.ownerPlayerId, 'home-9');
+    expect(find.byKey(const Key('match-pitch-2d-canvas')), findsOneWidget);
+    final Size size = tester.getSize(find.byType(MatchPitch2D));
+    expect(size.width, closeTo(525, 0.1));
+    expect(size.width / size.height, closeTo(105 / 68, 0.01));
   });
 }

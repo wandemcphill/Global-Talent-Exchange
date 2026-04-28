@@ -347,6 +347,7 @@ class Match3dSceneManager {
         case MatchViewerEventType.offside:
           target = Match3dAnimationState.recover;
         case MatchViewerEventType.attack ||
+            MatchViewerEventType.pass ||
             MatchViewerEventType.setPiece ||
             MatchViewerEventType.kickoff ||
             MatchViewerEventType.redCard ||
@@ -537,6 +538,7 @@ class Match3dSceneManager {
             highlightedEntityIds: highlightedEntityIds.toList()..sort(),
           );
         case MatchViewerEventType.attack:
+        case MatchViewerEventType.pass:
           break;
         case MatchViewerEventType.injury ||
             MatchViewerEventType.halftime ||

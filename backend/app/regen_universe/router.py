@@ -31,6 +31,9 @@ from app.schemas.regen_universe import (
     RegenAwardResultPageView,
     RegenBloodlinesView,
     RegenHallOfFameView,
+    RegenPortraitAdminView,
+    RegenPortraitBanRequest,
+    RegenPortraitOverrideRequest,
     RegenPlayerTimelineView,
     RegenRisingStarsView,
     RegenRankingLeaderboardView,
@@ -54,6 +57,7 @@ from app.schemas.regen_universe_expansion import (
     YouthTournamentCreateRequest,
     YouthTournamentView,
 )
+from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitNotFoundError, RegenPortraitService
 from app.wallets.service import WalletService
 from app.workers.jobs import (
     regen_dna_evolution_job,
@@ -257,6 +261,12 @@ def _require_regen_permissions(request: Request, actor: User, *permissions: str)
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc
+
+
+def _raise_portrait_http_exception(exc: RegenPortraitError) -> None:
+    if isinstance(exc, RegenPortraitNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/seasons", response_model=RegenSeasonPageView)
@@ -749,6 +759,68 @@ def preseed_national_regens(
         pagination=build_pagination_meta(params=params, total=len(rendered)),
         summary=NationalRegenPreseedSummaryView.model_validate(result["summary"]),
     )
+
+
+@admin_router.post("/players/{player_id}/portrait/regenerate", response_model=RegenPortraitAdminView)
+def regenerate_regen_portrait(
+    player_id: str,
+    request: Request,
+    actor: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> RegenPortraitAdminView:
+    _require_regen_permissions(request, actor, "manage_regen_generation")
+    try:
+        result = RegenPortraitService(session).regenerate_player_portrait(player_id)
+    except RegenPortraitError as exc:
+        _raise_portrait_http_exception(exc)
+    session.commit()
+    _invalidate_regen_universe_cache(request)
+    return RegenPortraitAdminView.model_validate(result.as_payload())
+
+
+@admin_router.post("/players/{player_id}/portrait/override", response_model=RegenPortraitAdminView)
+def override_regen_portrait(
+    player_id: str,
+    payload: RegenPortraitOverrideRequest,
+    request: Request,
+    actor: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> RegenPortraitAdminView:
+    _require_regen_permissions(request, actor, "manage_regen_generation")
+    try:
+        result = RegenPortraitService(session).override_player_portrait(
+            player_id,
+            portrait_url=payload.portrait_url,
+            image_data_uri=payload.image_data_uri,
+            actor_user_id=actor.id,
+        )
+    except RegenPortraitError as exc:
+        _raise_portrait_http_exception(exc)
+    session.commit()
+    _invalidate_regen_universe_cache(request)
+    return RegenPortraitAdminView.model_validate(result.as_payload())
+
+
+@admin_router.post("/players/{player_id}/portrait/ban", response_model=RegenPortraitAdminView)
+def ban_regen_portrait(
+    player_id: str,
+    payload: RegenPortraitBanRequest,
+    request: Request,
+    actor: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> RegenPortraitAdminView:
+    _require_regen_permissions(request, actor, "manage_regen_generation")
+    try:
+        result = RegenPortraitService(session).ban_player_portrait(
+            player_id,
+            reason=payload.reason,
+            actor_user_id=actor.id,
+        )
+    except RegenPortraitError as exc:
+        _raise_portrait_http_exception(exc)
+    session.commit()
+    _invalidate_regen_universe_cache(request)
+    return RegenPortraitAdminView.model_validate(result.as_payload())
 
 
 @admin_router.post("/seasons/{season_id}/evolution", response_model=RegenEvolutionResultView)

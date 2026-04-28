@@ -9,6 +9,7 @@ import '../../../widgets/gte_shell_theme.dart';
 import '../../../widgets/gte_state_panel.dart';
 import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/gtex_branding.dart';
+import '../../../widgets/football_player_card.dart';
 import '../../../widgets/player_card_avatar.dart';
 import '../data/player_card_marketplace_models.dart';
 import 'player_card_marketplace_controller.dart';
@@ -18,6 +19,7 @@ class PlayerCardMarketplaceScreen extends StatefulWidget {
     super.key,
     required this.baseUrl,
     required this.backendMode,
+    this.controller,
     this.accessToken,
     this.currentUserId,
     this.onOpenLogin,
@@ -26,6 +28,7 @@ class PlayerCardMarketplaceScreen extends StatefulWidget {
 
   final String baseUrl;
   final GteBackendMode backendMode;
+  final PlayerCardMarketplaceController? controller;
   final String? accessToken;
   final String? currentUserId;
   final VoidCallback? onOpenLogin;
@@ -40,6 +43,7 @@ class _PlayerCardMarketplaceScreenState
     extends State<PlayerCardMarketplaceScreen>
     with SingleTickerProviderStateMixin {
   late final PlayerCardMarketplaceController _controller;
+  late final bool _ownsController;
   late final TabController _tabController;
   late final TextEditingController _searchController;
   late final TextEditingController _negotiationIdController;
@@ -49,12 +53,15 @@ class _PlayerCardMarketplaceScreenState
   @override
   void initState() {
     super.initState();
-    _controller = PlayerCardMarketplaceController.standard(
-      baseUrl: widget.baseUrl,
-      backendMode: widget.backendMode,
-      accessToken: widget.accessToken,
-    );
-    _tabController = TabController(length: 6, vsync: this);
+    _ownsController = widget.controller == null;
+    _controller =
+        widget.controller ??
+        PlayerCardMarketplaceController.standard(
+          baseUrl: widget.baseUrl,
+          backendMode: widget.backendMode,
+          accessToken: widget.accessToken,
+        );
+    _tabController = TabController(length: 3, vsync: this);
     _searchController = TextEditingController();
     _negotiationIdController = TextEditingController();
     _reload();
@@ -65,7 +72,9 @@ class _PlayerCardMarketplaceScreenState
     _tabController.dispose();
     _searchController.dispose();
     _negotiationIdController.dispose();
-    _controller.dispose();
+    if (_ownsController) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
@@ -82,7 +91,6 @@ class _PlayerCardMarketplaceScreenState
         ),
         includeAuthed: _hasAuth,
       ),
-      if (_hasAuth) _controller.loadLoanContracts(),
     ]);
   }
 
@@ -96,7 +104,7 @@ class _PlayerCardMarketplaceScreenState
           child: Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
-              title: const Text('Player-card marketplace'),
+              title: const Text('Transfer Market'),
               actions: <Widget>[
                 IconButton(onPressed: _reload, icon: const Icon(Icons.refresh)),
               ],
@@ -107,24 +115,19 @@ class _PlayerCardMarketplaceScreenState
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
                 children: <Widget>[
                   GtexHeroBanner(
-                    eyebrow: 'PLAYER-CARD MARKETPLACE',
-                    title:
-                        'Buy, loan, swap, and track player cards in one market.',
+                    eyebrow: 'TRANSFER MARKET',
+                    title: 'Scout, sign, and list players for your club.',
                     description:
-                        'Prices, fees, loan terms, and swaps come straight from the live market feed.',
+                        'Use a simple football manager flow: View Player, Buy Now, Make Bid, List for Transfer, or Remove Listing.',
                     accent: const Color(0xFF91C9FF),
                     chips: <Widget>[
                       GteMetricChip(
-                        label: 'Sales',
+                        label: 'Listed',
                         value: _controller.marketplaceSales.total.toString(),
                       ),
                       GteMetricChip(
-                        label: 'Loans',
-                        value: _controller.marketplaceLoans.total.toString(),
-                      ),
-                      GteMetricChip(
-                        label: 'Swaps',
-                        value: _controller.marketplaceSwaps.total.toString(),
+                        label: 'Squad',
+                        value: _controller.inventory.length.toString(),
                       ),
                       GteMetricChip(
                         label: 'Session',
@@ -150,7 +153,7 @@ class _PlayerCardMarketplaceScreenState
                         TextField(
                           controller: _searchController,
                           decoration: const InputDecoration(
-                            labelText: 'Search player cards',
+                            labelText: 'Scout players',
                             hintText: 'player, club, position',
                           ),
                           onSubmitted: (_) => _reload(),
@@ -159,7 +162,7 @@ class _PlayerCardMarketplaceScreenState
                         FilledButton.tonalIcon(
                           onPressed: _reload,
                           icon: const Icon(Icons.search),
-                          label: const Text('Search'),
+                          label: const Text('Scout'),
                         ),
                       ],
                     ),
@@ -182,12 +185,9 @@ class _PlayerCardMarketplaceScreenState
                       controller: _tabController,
                       isScrollable: true,
                       tabs: const <Tab>[
-                        Tab(text: 'Sales'),
-                        Tab(text: 'Loans'),
-                        Tab(text: 'Swaps'),
-                        Tab(text: 'Inventory'),
-                        Tab(text: 'My moves'),
-                        Tab(text: 'Watchlist'),
+                        Tab(text: 'Transfer Market'),
+                        Tab(text: 'Squad'),
+                        Tab(text: 'My Listings'),
                       ],
                     ),
                   ),
@@ -198,11 +198,8 @@ class _PlayerCardMarketplaceScreenState
                       controller: _tabController,
                       children: <Widget>[
                         _buildSalesTab(context),
-                        _buildLoansTab(context),
-                        _buildSwapsTab(context),
                         _buildInventoryTab(context),
-                        _buildDeskTab(context),
-                        _buildWatchlistTab(context),
+                        _buildMyListingsTab(context),
                       ],
                     ),
                   ),
@@ -220,7 +217,7 @@ class _PlayerCardMarketplaceScreenState
         _controller.marketplaceSales.items;
     if (_controller.marketplaceError != null && items.isEmpty) {
       return GteStatePanel(
-        title: 'Sales unavailable',
+        title: 'Transfer Market unavailable',
         message: _controller.marketplaceError!,
         actionLabel: 'Retry',
         onAction: _reload,
@@ -229,15 +226,15 @@ class _PlayerCardMarketplaceScreenState
     }
     if (_controller.isLoadingMarketplace && items.isEmpty) {
       return const GteStatePanel(
-        title: 'Loading sales',
-        message: 'Cards, prices, and availability are loading.',
+        title: 'Loading Transfer Market',
+        message: 'Players, prices, and availability are loading.',
         icon: Icons.storefront_outlined,
         isLoading: true,
       );
     }
     if (items.isEmpty) {
       return const GteStatePanel(
-        title: 'No cards on sale right now',
+        title: 'No players listed right now',
         message: 'Try a new search or check back when the next listings drop.',
         icon: Icons.search_off_outlined,
       );
@@ -257,95 +254,9 @@ class _PlayerCardMarketplaceScreenState
                         : !_hasAuth
                         ? widget.onOpenLogin
                         : () => _showBuySaleDialog(context, item),
-                primaryLabel: isOwner ? 'Cancel sale' : 'Buy card',
+                primaryLabel: isOwner ? 'Remove Listing' : 'Buy Now',
                 onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-                secondaryLabel: 'View player',
-              ),
-            );
-          })
-          .toList(growable: false),
-    );
-  }
-
-  Widget _buildLoansTab(BuildContext context) {
-    final List<PlayerCardMarketplaceListing> items =
-        _controller.marketplaceLoans.items;
-    if (_controller.isLoadingMarketplace && items.isEmpty) {
-      return const GteStatePanel(
-        title: 'Loading loans',
-        message: 'Loan listings and flexible borrowing terms are loading.',
-        icon: Icons.handshake_outlined,
-        isLoading: true,
-      );
-    }
-    if (items.isEmpty) {
-      return const GteStatePanel(
-        title: 'No loans live right now',
-        message: 'Try a new search or check back when clubs list new loans.',
-        icon: Icons.search_off_outlined,
-      );
-    }
-    return Column(
-      children: items
-          .map((PlayerCardMarketplaceListing item) {
-            final bool isOwner =
-                widget.currentUserId == item.listingOwnerUserId;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _MarketplaceListingTile(
-                listing: item,
-                onPrimary:
-                    isOwner
-                        ? () => _controller.cancelLoanListing(item.listingId)
-                        : !_hasAuth
-                        ? widget.onOpenLogin
-                        : () => _showLoanNegotiationDialog(context, item),
-                primaryLabel: isOwner ? 'Cancel loan' : 'Negotiate',
-                onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-                secondaryLabel: 'View player',
-              ),
-            );
-          })
-          .toList(growable: false),
-    );
-  }
-
-  Widget _buildSwapsTab(BuildContext context) {
-    final List<PlayerCardMarketplaceListing> items =
-        _controller.marketplaceSwaps.items;
-    if (_controller.isLoadingMarketplace && items.isEmpty) {
-      return const GteStatePanel(
-        title: 'Loading swaps',
-        message: 'Swap listings and requested card targets are loading.',
-        icon: Icons.swap_horiz_outlined,
-        isLoading: true,
-      );
-    }
-    if (items.isEmpty) {
-      return const GteStatePanel(
-        title: 'No swaps live right now',
-        message: 'No swap offers match this search right now.',
-        icon: Icons.search_off_outlined,
-      );
-    }
-    return Column(
-      children: items
-          .map((PlayerCardMarketplaceListing item) {
-            final bool isOwner =
-                widget.currentUserId == item.listingOwnerUserId;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _MarketplaceListingTile(
-                listing: item,
-                onPrimary:
-                    isOwner
-                        ? () => _controller.cancelSwapListing(item.listingId)
-                        : !_hasAuth
-                        ? widget.onOpenLogin
-                        : () => _showExecuteSwapDialog(context, item),
-                primaryLabel: isOwner ? 'Cancel swap' : 'Execute swap',
-                onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-                secondaryLabel: 'View player',
+                secondaryLabel: 'View Player',
               ),
             );
           })
@@ -357,7 +268,7 @@ class _PlayerCardMarketplaceScreenState
     if (!_hasAuth) {
       return GteStatePanel(
         title: 'Sign in required',
-        message: 'Sign in to list cards from your own squad.',
+        message: 'Sign in to list players from your own squad.',
         actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
         onAction: widget.onOpenLogin,
         icon: Icons.lock_outline,
@@ -365,16 +276,16 @@ class _PlayerCardMarketplaceScreenState
     }
     if (_controller.isLoadingSupport && _controller.inventory.isEmpty) {
       return const GteStatePanel(
-        title: 'Loading inventory',
-        message: 'Your card inventory and available quantities are loading.',
+        title: 'Loading squad',
+        message: 'Your squad cards and available quantities are loading.',
         icon: Icons.inventory_2_outlined,
         isLoading: true,
       );
     }
     if (_controller.inventory.isEmpty) {
       return const GteStatePanel(
-        title: 'No cards in your locker yet',
-        message: 'Buy or win player cards to start listing them.',
+        title: 'No tradable players in your squad yet',
+        message: 'Sign players or win cards to start listing them.',
         icon: Icons.inventory_2_outlined,
       );
     }
@@ -386,8 +297,6 @@ class _PlayerCardMarketplaceScreenState
               child: _HoldingTile(
                 holding: holding,
                 onSale: () => _showCreateSaleDialog(context, holding),
-                onLoan: () => _showCreateLoanDialog(context, holding),
-                onSwap: () => _showCreateSwapDialog(context, holding),
               ),
             );
           })
@@ -395,6 +304,54 @@ class _PlayerCardMarketplaceScreenState
     );
   }
 
+  Widget _buildMyListingsTab(BuildContext context) {
+    if (!_hasAuth) {
+      return GteStatePanel(
+        title: 'Sign in required',
+        message: 'Sign in to manage your Transfer Market listings.',
+        actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
+        onAction: widget.onOpenLogin,
+        icon: Icons.lock_outline,
+      );
+    }
+    if (_controller.myListings.isEmpty) {
+      return const GteStatePanel(
+        title: 'No listed players',
+        message: 'Use List for Transfer from your squad to open a listing.',
+        icon: Icons.assignment_outlined,
+      );
+    }
+    return Column(
+      children: _controller.myListings
+          .map(
+            (PlayerCardListing listing) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: FootballPlayerCard(
+                playerName: listing.playerName,
+                avatar: listing.avatar,
+                imageUrl: listing.imageUrl,
+                tierLabel: listing.tierName,
+                position: listing.tierCode,
+                valueLabel: gteFormatCredits(listing.pricePerCardCredits),
+                attributes: <String>[
+                  '${listing.quantity} listed',
+                  listing.status.toUpperCase(),
+                ],
+                actions: <Widget>[
+                  FilledButton.tonal(
+                    onPressed:
+                        () => _controller.cancelSaleListing(listing.listingId),
+                    child: const Text('Remove Listing'),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  // ignore: unused_element
   Widget _buildDeskTab(BuildContext context) {
     if (!_hasAuth) {
       return GteStatePanel(
@@ -431,11 +388,12 @@ class _PlayerCardMarketplaceScreenState
                     contentPadding: EdgeInsets.zero,
                     leading: PlayerCardAvatar(
                       avatar: AvatarMapper.fromListing(listing),
+                      imageUrl: listing.imageUrl,
                       size: 42,
                     ),
                     title: Text(listing.playerName),
                     subtitle: Text(
-                      '${listing.quantity} cards â€¢ ${gteFormatCredits(listing.pricePerCardCredits)}',
+                      '${listing.quantity} cards | ${gteFormatCredits(listing.pricePerCardCredits)}',
                     ),
                   ),
                 ),
@@ -462,11 +420,12 @@ class _PlayerCardMarketplaceScreenState
                       avatar: AvatarMapper.fromMarketplaceLoanContract(
                         contract,
                       ),
+                      imageUrl: contract.imageUrl,
                       size: 42,
                     ),
                     title: Text(contract.playerName),
                     subtitle: Text(
-                      '${contract.contractStatus.toUpperCase()} â€¢ ${gteFormatCredits(contract.effectiveLoanFeeCredits)} â€¢ due ${gteFormatDateTime(contract.dueAt)}',
+                      '${contract.contractStatus.toUpperCase()} | ${gteFormatCredits(contract.effectiveLoanFeeCredits)} | due ${gteFormatDateTime(contract.dueAt)}',
                     ),
                     trailing: Wrap(
                       spacing: 8,
@@ -496,6 +455,7 @@ class _PlayerCardMarketplaceScreenState
     );
   }
 
+  // ignore: unused_element
   Widget _buildWatchlistTab(BuildContext context) {
     if (!_hasAuth) {
       return GteStatePanel(
@@ -552,12 +512,12 @@ class _PlayerCardMarketplaceScreenState
     );
     await _showSimpleSheet(
       context,
-      title: 'Create sale listing',
+      title: 'List Player for Transfer',
       fields: <Widget>[
         TextField(
           controller: priceController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Price per card'),
+          decoration: const InputDecoration(labelText: 'Buy Now price'),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -566,7 +526,7 @@ class _PlayerCardMarketplaceScreenState
           decoration: const InputDecoration(labelText: 'Quantity'),
         ),
       ],
-      submitLabel: 'Create sale',
+      submitLabel: 'List for Transfer',
       onSubmit: () async {
         final double? price = double.tryParse(priceController.text.trim());
         final int? quantity = int.tryParse(quantityController.text.trim());
@@ -588,6 +548,7 @@ class _PlayerCardMarketplaceScreenState
     quantityController.dispose();
   }
 
+  // ignore: unused_element
   Future<void> _showCreateLoanDialog(
     BuildContext context,
     PlayerCardHolding holding,
@@ -646,6 +607,7 @@ class _PlayerCardMarketplaceScreenState
     durationController.dispose();
   }
 
+  // ignore: unused_element
   Future<void> _showCreateSwapDialog(
     BuildContext context,
     PlayerCardHolding holding,
@@ -689,10 +651,10 @@ class _PlayerCardMarketplaceScreenState
     );
     await _showSimpleSheet(
       context,
-      title: 'Buy sale listing',
+      title: 'Buy Now',
       fields: <Widget>[
         Text(
-          '${listing.playerName} â€¢ ${gteFormatCredits(listing.salePriceCredits ?? 0)} per card',
+          '${listing.playerName} - ${gteFormatCredits(listing.salePriceCredits ?? 0)}',
         ),
         const SizedBox(height: 12),
         TextField(
@@ -701,7 +663,7 @@ class _PlayerCardMarketplaceScreenState
           decoration: const InputDecoration(labelText: 'Quantity'),
         ),
       ],
-      submitLabel: 'Buy sale',
+      submitLabel: 'Buy Now',
       onSubmit: () async {
         final int? quantity = int.tryParse(quantityController.text.trim());
         if (quantity == null || quantity <= 0) {
@@ -985,17 +947,13 @@ class _ExecutionSummaryPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final PlayerCardMarketplaceSaleExecution? sale =
         controller.latestSaleExecution;
-    final PlayerCardMarketplaceLoanContract? contract =
-        controller.latestLoanContract;
-    final PlayerCardMarketplaceSwapExecution? swap =
-        controller.latestSwapExecution;
-    if (sale == null && contract == null && swap == null) {
+    if (sale == null) {
       return const GteSurfacePanel(
         child: ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.insights_outlined),
-          title: Text('Latest deal recap'),
-          subtitle: Text('Finished sales, loans, and swaps show up here.'),
+          title: Text('Latest transfer'),
+          subtitle: Text('Completed Buy Now deals show up here.'),
         ),
       );
     }
@@ -1004,22 +962,13 @@ class _ExecutionSummaryPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Latest deal recap',
+            'Latest transfer',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
-          if (sale != null)
-            Text(
-              'Sale: ${gteFormatCredits(sale.grossCredits)} gross | fee ${gteFormatCredits(sale.feeCredits)} | seller net ${gteFormatCredits(sale.sellerNetCredits)}',
-            ),
-          if (contract != null)
-            Text(
-              'Loan: ${contract.contractStatus.toUpperCase()} | lender net ${gteFormatCredits(contract.lenderNetCredits)} | fee ${gteFormatCredits(contract.platformFeeCredits)}',
-            ),
-          if (swap != null)
-            Text(
-              'Swap: ${swap.status.toUpperCase()} | owner card ${swap.ownerPlayerCardId} for ${swap.counterpartyPlayerCardId}',
-            ),
+          Text(
+            'Signed player for ${gteFormatCredits(sale.grossCredits)}. Seller received ${gteFormatCredits(sale.sellerNetCredits)} after fees.',
+          ),
         ],
       ),
     );
@@ -1057,7 +1006,7 @@ class _MarketplaceListingTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              PlayerCardAvatar(avatar: avatar),
+              PlayerCardAvatar(avatar: avatar, imageUrl: listing.imageUrl),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -1069,7 +1018,7 @@ class _MarketplaceListingTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${listing.tierName} â€¢ ${listing.clubName ?? 'Unknown club'} â€¢ ${listing.position ?? 'n/a'}',
+                      '${listing.tierName} | ${listing.clubName ?? 'Unknown club'} | ${listing.position ?? 'n/a'}',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -1093,6 +1042,13 @@ class _MarketplaceListingTile extends StatelessWidget {
                   label: 'Available',
                   value: listing.availableQuantity.toString(),
                 ),
+              if (listing.averageRating != null)
+                GteMetricChip(
+                  label: 'Rating',
+                  value: listing.averageRating!.round().toString(),
+                ),
+              if (listing.position != null)
+                GteMetricChip(label: 'Position', value: listing.position!),
               if (listing.loanDurationDays != null)
                 GteMetricChip(
                   label: 'Duration',
@@ -1113,6 +1069,8 @@ class _MarketplaceListingTile extends StatelessWidget {
                 onPressed: onSecondary,
                 child: Text(secondaryLabel),
               ),
+              if (listing.isNegotiable)
+                const OutlinedButton(onPressed: null, child: Text('Make Bid')),
             ],
           ),
         ],
@@ -1122,17 +1080,10 @@ class _MarketplaceListingTile extends StatelessWidget {
 }
 
 class _HoldingTile extends StatelessWidget {
-  const _HoldingTile({
-    required this.holding,
-    required this.onSale,
-    required this.onLoan,
-    required this.onSwap,
-  });
+  const _HoldingTile({required this.holding, required this.onSale});
 
   final PlayerCardHolding holding;
   final VoidCallback onSale;
-  final VoidCallback onLoan;
-  final VoidCallback onSwap;
 
   @override
   Widget build(BuildContext context) {
@@ -1144,7 +1095,11 @@ class _HoldingTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              PlayerCardAvatar(avatar: avatar, size: 52),
+              PlayerCardAvatar(
+                avatar: avatar,
+                size: 52,
+                imageUrl: holding.imageUrl,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -1156,7 +1111,7 @@ class _HoldingTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${holding.tierName} â€¢ ${holding.quantityAvailable}/${holding.quantityTotal} available',
+                      '${holding.tierName} | ${holding.quantityAvailable}/${holding.quantityTotal} available',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -1171,15 +1126,7 @@ class _HoldingTile extends StatelessWidget {
             children: <Widget>[
               FilledButton.tonal(
                 onPressed: onSale,
-                child: const Text('Create sale'),
-              ),
-              FilledButton.tonal(
-                onPressed: onLoan,
-                child: const Text('Create loan'),
-              ),
-              OutlinedButton(
-                onPressed: onSwap,
-                child: const Text('Create swap'),
+                child: const Text('List for Transfer'),
               ),
             ],
           ),

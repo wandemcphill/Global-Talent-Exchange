@@ -25,6 +25,7 @@ from app.schemas.match_viewer import (
     MatchViewerCameraPreset,
     MatchTimelineFrameView,
     MatchViewerBallFrameView,
+    MatchViewerEventPositionView,
     MatchViewerEventType,
     MatchViewerEventView,
     MatchViewerPhase,
@@ -460,6 +461,9 @@ class MatchTimelineService:
                 review_reason=self._optional_text(metadata.get("review_reason")),
                 review_decision=self._optional_text(metadata.get("review_decision")),
                 score_commit=self._optional_text(metadata.get("score_commit")) or "immediate",
+                duration_ms=self._event_duration_ms(context_metadata),
+                positions=self._event_positions_from_metadata(context_metadata),
+                ball=self._event_ball_from_metadata(context_metadata),
             ),
             source_type=event.event_type.value,
             team_side=None,
@@ -602,12 +606,17 @@ class MatchTimelineService:
                 ],
                 flags=[],
                 playback_profile=self._optional_text(event.meta.get("chance_family"))
-                or ("build_up" if viewer_type is MatchViewerEventType.ATTACK else "neutral"),
+                or (
+                    "build_up" if viewer_type in {MatchViewerEventType.ATTACK, MatchViewerEventType.PASS} else "neutral"
+                ),
                 miss_variant="wide" if viewer_type is MatchViewerEventType.MISS else None,
                 reviewable=bool(event.meta.get("reviewable", False)),
                 review_reason=self._optional_text(event.meta.get("review_reason")),
                 review_decision=self._optional_text(event.meta.get("review_decision")),
                 score_commit="immediate",
+                duration_ms=self._event_duration_ms(context_metadata),
+                positions=self._event_positions_from_metadata(context_metadata),
+                ball=self._event_ball_from_metadata(context_metadata),
             ),
             source_type=raw_event_type,
             team_side=team_side,
@@ -1092,6 +1101,124 @@ class MatchTimelineService:
             normalized = md5(player_name.encode("utf-8")).hexdigest()[:10]
         prefix = "neutral" if side is None else side.value
         return f"{prefix}:{normalized}"
+
+    def _event_duration_ms(self, metadata: dict[str, Any] | None) -> int:
+        if not isinstance(metadata, dict):
+            return 500
+        raw_duration = (
+            metadata.get("duration_ms")
+            or metadata.get("durationMs")
+            or metadata.get("animation_duration_ms")
+            or metadata.get("animationDurationMs")
+        )
+        if raw_duration is None:
+            return 500
+        try:
+            duration_ms = int(raw_duration)
+        except (TypeError, ValueError):
+            return 500
+        return max(300, min(800, duration_ms))
+
+    def _event_positions_from_metadata(
+        self,
+        metadata: dict[str, Any] | None,
+    ) -> list[MatchViewerEventPositionView]:
+        if not isinstance(metadata, dict):
+            return []
+        raw_positions = metadata.get("positions") or metadata.get("player_positions")
+        if not isinstance(raw_positions, list):
+            return []
+
+        positions: list[MatchViewerEventPositionView] = []
+        for raw_item in raw_positions:
+            if not isinstance(raw_item, dict):
+                continue
+            point = self._metadata_point(raw_item.get("position")) or self._metadata_point(raw_item)
+            if point is None:
+                continue
+            player_id = self._optional_text(raw_item.get("player_id") or raw_item.get("id"))
+            if player_id is None:
+                continue
+            payload: dict[str, Any] = {
+                "player_id": player_id,
+                "player_name": self._optional_text(
+                    raw_item.get("player_name")
+                    or raw_item.get("name")
+                    or raw_item.get("player")
+                    or raw_item.get("label")
+                ),
+                "team_id": self._optional_text(raw_item.get("team_id")),
+                "side": self._optional_text(raw_item.get("side")),
+                "shirt_number": self._optional_int(raw_item.get("shirt_number") or raw_item.get("number")),
+                "role": self._optional_text(raw_item.get("role")),
+                "line": self._optional_text(raw_item.get("line")),
+                "position": point,
+            }
+            try:
+                positions.append(MatchViewerEventPositionView.model_validate(payload))
+            except ValueError:
+                continue
+        return positions
+
+    def _event_ball_from_metadata(self, metadata: dict[str, Any] | None) -> MatchViewerBallFrameView | None:
+        if not isinstance(metadata, dict):
+            return None
+        raw_ball = metadata.get("ball") or metadata.get("ball_target")
+        if not isinstance(raw_ball, dict):
+            return None
+        point = (
+            self._metadata_point(raw_ball.get("position"))
+            or self._metadata_point(raw_ball.get("target"))
+            or self._metadata_point(raw_ball.get("target_position"))
+            or self._metadata_point(raw_ball)
+        )
+        if point is None:
+            return None
+        payload: dict[str, Any] = {
+            "position": point,
+            "height": self._positive_float(
+                raw_ball.get("height")
+                if raw_ball.get("height") is not None
+                else raw_ball.get("elevation", raw_ball.get("z", 0.0))
+            ),
+            "owner_player_id": self._optional_text(
+                raw_ball.get("owner_player_id") or raw_ball.get("owner") or raw_ball.get("owner_id")
+            ),
+            "state": self._optional_text(raw_ball.get("state") or raw_ball.get("motion")) or "rolling",
+        }
+        if isinstance(raw_ball.get("spin"), dict):
+            payload["spin"] = raw_ball["spin"]
+        if isinstance(raw_ball.get("velocity"), dict):
+            payload["velocity"] = raw_ball["velocity"]
+        try:
+            return MatchViewerBallFrameView.model_validate(payload)
+        except ValueError:
+            return None
+
+    def _metadata_point(self, value: object | None) -> dict[str, float] | None:
+        if not isinstance(value, dict):
+            return None
+        x = value.get("x")
+        y = value.get("y")
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            return None
+        return {"x": self._clamp(float(x)), "y": self._clamp(float(y))}
+
+    def _optional_int(self, value: object | None) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _positive_float(self, value: object | None) -> float:
+        if value is None:
+            return 0.0
+        try:
+            return max(0.0, float(value))
+        except (TypeError, ValueError):
+            return 0.0
 
     def _live_render_contract(self, event: LiveMatchStreamEventView) -> dict[str, Any] | None:
         payload: dict[str, Any] = {}
@@ -2088,6 +2215,7 @@ class MatchTimelineService:
             MatchViewerEventType.MISS,
             MatchViewerEventType.SAVE,
             MatchViewerEventType.ATTACK,
+            MatchViewerEventType.PASS,
             MatchViewerEventType.PENALTY,
             MatchViewerEventType.SET_PIECE,
             MatchViewerEventType.OFFSIDE,
@@ -2245,7 +2373,12 @@ class MatchTimelineService:
                 owner_player_id=primary or default_owner,
                 state="stopped",
             )
-        if viewer_type in {MatchViewerEventType.PENALTY, MatchViewerEventType.SET_PIECE, MatchViewerEventType.ATTACK}:
+        if viewer_type in {
+            MatchViewerEventType.PENALTY,
+            MatchViewerEventType.SET_PIECE,
+            MatchViewerEventType.ATTACK,
+            MatchViewerEventType.PASS,
+        }:
             if stage == "pre":
                 return ball_frame(
                     position=self._ball_near_player(primary_pos or event_origin),
@@ -2479,6 +2612,7 @@ class MatchTimelineService:
         build_up_pattern = self._optional_text((event.metadata or {}).get("build_up_pattern"))
         if event.view.event_type in {
             MatchViewerEventType.ATTACK,
+            MatchViewerEventType.PASS,
             MatchViewerEventType.GOAL,
             MatchViewerEventType.MISS,
             MatchViewerEventType.SAVE,
@@ -2832,6 +2966,7 @@ class MatchTimelineService:
                 return MatchViewerAnimationState.SHOOT
             if event.view.event_type in {
                 MatchViewerEventType.ATTACK,
+                MatchViewerEventType.PASS,
                 MatchViewerEventType.OFFSIDE,
             } and frame.stage in {MatchViewerPlaybackStage.PRE, MatchViewerPlaybackStage.EVENT}:
                 return MatchViewerAnimationState.PASS
@@ -2891,6 +3026,7 @@ class MatchTimelineService:
             MatchEventType.FULLTIME: MatchViewerEventType.FULLTIME,
             MatchEventType.PENALTY_AWARDED: MatchViewerEventType.PENALTY,
             MatchEventType.SET_PIECE_CHANCE: MatchViewerEventType.SET_PIECE,
+            MatchEventType.POSSESSION_SWING: MatchViewerEventType.PASS,
             MatchEventType.DANGEROUS_ATTACK: MatchViewerEventType.ATTACK,
             MatchEventType.COUNTER_ATTACK: MatchViewerEventType.ATTACK,
             MatchEventType.SHOT: MatchViewerEventType.ATTACK,
@@ -2919,6 +3055,13 @@ class MatchTimelineService:
             "penalty_missed",
         }:
             return MatchViewerEventType.MISS
+        if normalized_event in {"pass", "key_pass", "completed_pass"} or normalized_raw in {
+            "pass",
+            "key_pass",
+            "completed_pass",
+            "possession_swing",
+        }:
+            return MatchViewerEventType.PASS
         if normalized_event in {"attack", "shot"} or normalized_raw in {"attack", "counter", "counter_attack"}:
             return MatchViewerEventType.ATTACK
         if normalized_event in {"full_time", "fulltime"} or normalized_raw in {"full_time", "fulltime"}:

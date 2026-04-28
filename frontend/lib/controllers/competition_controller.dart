@@ -68,7 +68,7 @@ class CompetitionController extends ChangeNotifier {
       id: draft.competitionId ?? 'preview',
       name:
           draft.name.trim().isEmpty
-              ? 'Untitled creator competition'
+              ? 'Untitled competition'
               : draft.name.trim(),
       format: draft.format,
       visibility: draft.visibility,
@@ -439,13 +439,13 @@ class CompetitionController extends ChangeNotifier {
   String formatJoinReason(String? reason) {
     switch (reason) {
       case 'already_joined':
-        return 'You are already entered in this creator competition.';
+        return 'You are already entered in this competition.';
       case 'competition_not_open':
-        return 'This creator competition is not open for new entries yet.';
+        return 'This competition is not open for new entries yet.';
       case 'competition_full':
-        return 'This creator competition has reached capacity.';
+        return 'This competition has reached capacity.';
       case 'invite_required':
-        return 'An invite code is required before you can join this creator competition.';
+        return 'An invite code is required before you can join this competition.';
       default:
         return 'Review the published rules and contest status before joining.';
     }

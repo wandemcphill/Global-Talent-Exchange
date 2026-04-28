@@ -116,13 +116,16 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await _scrollTo(tester, find.text('Issue share market'));
-      expect(find.text('Issue share market'), findsOneWidget);
+      await _scrollTo(tester, find.text('Regenerate Portrait'));
+      expect(find.text('Open Admin Controls'), findsOneWidget);
+      expect(find.text('Regenerate Portrait'), findsOneWidget);
+      expect(find.text('Upload/Override Portrait'), findsOneWidget);
+      expect(find.text('Ban Bad Portrait'), findsOneWidget);
       expect(find.text('Trigger import'), findsNothing);
       expect(find.text('Resume selected batch'), findsNothing);
-      expect(find.text('Open God Mode'), findsNothing);
       await _scrollTo(tester, find.text('Player import is blocked'));
       expect(find.text('Player import is blocked'), findsOneWidget);
+      expect(find.text('Squad supply is blocked'), findsNothing);
     },
   );
 }

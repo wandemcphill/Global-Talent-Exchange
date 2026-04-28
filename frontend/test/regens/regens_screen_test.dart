@@ -29,7 +29,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Regen universe is blocked'), findsOneWidget);
+    expect(find.text('Prospect scouting is blocked'), findsOneWidget);
     expect(find.textContaining('Backend unavailable'), findsOneWidget);
     expect(find.text('Mateus Sol'), findsNothing);
   });
@@ -68,7 +68,10 @@ void main() {
     expect(find.text('Not Tradable'), findsWidgets);
     expect(find.text('Seyi Adewale'), findsOneWidget);
     expect(find.text('Requested Son'), findsWidgets);
-    expect(find.text('Bloodline Regen'), findsWidgets);
+    expect(
+      find.textContaining('Bloodline Regen', findRichText: true),
+      findsWidgets,
+    );
   });
 }
 

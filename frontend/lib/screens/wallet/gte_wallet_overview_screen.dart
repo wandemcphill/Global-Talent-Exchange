@@ -48,7 +48,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
     await widget.controller.loadPortfolio();
   }
 
-  Future<void> _openTopUp() async {
+  Future<void> _openDeposit() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => GteFundWalletScreen(controller: widget.controller),
@@ -93,7 +93,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GTEX wallet'),
+        title: const Text('Club Wallet'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
@@ -108,8 +108,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
           if (!snapshot.hasData || snapshot.data!.length < 5) {
             return const Center(
               child: GteStatePanel(
-                title: 'GTEX wallet unavailable',
-                message: 'Unable to load the GTEX wallet balances right now.',
+                title: 'Club wallet unavailable',
+                message: 'Unable to load the club wallet balances right now.',
                 icon: Icons.account_balance_wallet_outlined,
               ),
             );
@@ -158,12 +158,12 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Wallet balances',
+                        'Club funds',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Track GTEX Coin for funding and withdrawals, plus Fan Coin for gifting and fan-economy actions.',
+                        'Track deposits, transfer funds, prize rewards, and withdrawals.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
@@ -212,9 +212,9 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                         runSpacing: 10,
                         children: <Widget>[
                           FilledButton.icon(
-                            onPressed: _openTopUp,
+                            onPressed: _openDeposit,
                             icon: const Icon(Icons.add_circle_outline),
-                            label: const Text('Top up GTEX'),
+                            label: const Text('Deposit'),
                           ),
                           OutlinedButton.icon(
                             onPressed: _openWithdrawals,
@@ -224,13 +224,13 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                           OutlinedButton.icon(
                             onPressed: _openTransactions,
                             icon: const Icon(Icons.receipt_long_outlined),
-                            label: const Text('Transactions'),
+                            label: const Text('Transaction History'),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Fan Coin is your gifting balance. GTEX Coin remains the rail for deposits, trading, and withdrawals.',
+                        'Deposited funds can be used for transfers, entry fees, prize rewards, and withdrawals.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -299,16 +299,16 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Wallet rules',
+                        'Wallet actions',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'GTEX Coin handles deposits, player trading, and withdrawals.',
+                        'Deposit funds before signing players or entering paid competitions.',
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Fan Coin is kept in sync as the gifting and fan-economy balance.',
+                        'Withdrawals stay gated by account checks and bank details.',
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -327,7 +327,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Recent GTEX wallet activity',
+                        'Transaction History',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 12),
@@ -335,7 +335,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                         const GteStatePanel(
                           title: 'No wallet activity yet',
                           message:
-                              'Top up GTEX Coin or request a withdrawal to create wallet history.',
+                              'Deposit funds or request a withdrawal to create wallet history.',
                           icon: Icons.payments_outlined,
                         )
                       else
@@ -552,7 +552,7 @@ String _providerStatusLabel(String? status) {
     case 'ready':
       return 'Ready';
     case 'mock':
-      return 'Simulation';
+      return 'Test mode';
     case 'blocked':
       return 'Blocked';
     case 'unavailable':
@@ -565,9 +565,9 @@ String _providerStatusLabel(String? status) {
 String _walletUnitLabel(GteLedgerUnit unit) {
   switch (unit) {
     case GteLedgerUnit.credit:
-      return 'Fan Coin';
+      return 'Club Credit';
     case GteLedgerUnit.coin:
-      return 'GTEX Coin';
+      return 'Transfer Balance';
     case GteLedgerUnit.unknown:
       return 'Wallet Unit';
   }
@@ -576,9 +576,9 @@ String _walletUnitLabel(GteLedgerUnit unit) {
 String _walletUnitDetail(GteLedgerUnit unit) {
   switch (unit) {
     case GteLedgerUnit.credit:
-      return 'Gifting and fan economy balance';
+      return 'Club rewards and bonus balance';
     case GteLedgerUnit.coin:
-      return 'Funding, trading, and withdrawal balance';
+      return 'Deposit, transfer, and withdrawal balance';
     case GteLedgerUnit.unknown:
       return 'Wallet balance';
   }

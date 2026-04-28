@@ -59,7 +59,8 @@ class MatchBroadcastPresentationBuilder {
       viewState.events,
       positionSeconds,
     );
-    final bool isFulltime = displayFrame.phase == MatchViewerPhase.fulltime ||
+    final bool isFulltime =
+        displayFrame.phase == MatchViewerPhase.fulltime ||
         positionSeconds >= (viewState.durationSeconds - 0.01);
     final bool revealScorelessDraw = isFulltime && lastGoal == null;
     final int? visibleHomeScore =
@@ -74,10 +75,10 @@ class MatchBroadcastPresentationBuilder {
     );
     final ({String? headline, String? subtitle}) commentary =
         _commentaryForEvent(
-      focusEvent: focusEvent,
-      positionSeconds: positionSeconds,
-      isVarChecking: isVarChecking,
-    );
+          focusEvent: focusEvent,
+          positionSeconds: positionSeconds,
+          isVarChecking: isVarChecking,
+        );
     final MatchPitchPresentation pitchPresentation = _pitchPresentation(
       viewState: viewState,
       positionSeconds: positionSeconds,
@@ -221,25 +222,25 @@ class MatchBroadcastPresentationBuilder {
     if (isVarChecking) {
       return (
         headline: 'VAR checking...',
-        subtitle: focusEvent.commentary.isNotEmpty
-            ? focusEvent.commentary
-            : focusEvent.bannerText,
+        subtitle:
+            focusEvent.commentary.isNotEmpty
+                ? focusEvent.commentary
+                : focusEvent.bannerText,
       );
     }
     return (
       headline: _headlineForEvent(focusEvent, positionSeconds),
-      subtitle: focusEvent.commentary.isNotEmpty
-          ? focusEvent.commentary
-          : focusEvent.bannerText,
+      subtitle:
+          focusEvent.commentary.isNotEmpty
+              ? focusEvent.commentary
+              : focusEvent.bannerText,
     );
   }
 
-  static String _headlineForEvent(
-    MatchEvent event,
-    double positionSeconds,
-  ) {
+  static String _headlineForEvent(MatchEvent event, double positionSeconds) {
     switch (event.type) {
       case MatchViewerEventType.attack:
+      case MatchViewerEventType.pass:
       case MatchViewerEventType.miss:
       case MatchViewerEventType.penalty:
       case MatchViewerEventType.setPiece:
@@ -355,9 +356,10 @@ class MatchBroadcastPresentationBuilder {
     required MatchTimelineFrame displayFrame,
     required MatchEvent? focusEvent,
   }) {
-    final MatchViewerSide side = focusEvent?.teamId == 'away'
-        ? MatchViewerSide.away
-        : MatchViewerSide.home;
+    final MatchViewerSide side =
+        focusEvent?.teamId == 'away'
+            ? MatchViewerSide.away
+            : MatchViewerSide.home;
     return side == MatchViewerSide.home
         ? displayFrame.homeAttacksRight
         : !displayFrame.homeAttacksRight;

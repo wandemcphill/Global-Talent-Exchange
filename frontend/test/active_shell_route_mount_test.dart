@@ -26,7 +26,7 @@ import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets(
-    'router mounts live 2D routes, live broadcast, gated Flutter 3D, and profile admin',
+    'router mounts live 2D routes, blocks advanced match routes, and profile admin',
     (WidgetTester tester) async {
       final ProviderContainer container = _buildContainer(
         session: const AuthSession(
@@ -51,32 +51,32 @@ void main() {
 
       router.go(AppRoutes.matchesViewerLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.text('2D Match Viewer'), findsWidgets);
+      expect(find.byKey(const Key('match-2d-score-strip')), findsWidgets);
+      expect(find.byKey(const Key('match-pitch-2d-canvas')), findsWidgets);
       expect(find.text('Route blocked'), findsNothing);
 
       router.go(AppRoutes.matchesBroadcastLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.text('Broadcast Package'), findsWidgets);
+      expect(find.text('Broadcast package coming soon'), findsOneWidget);
 
       router.go(AppRoutes.matchesThreeDLocation('live-match-001'));
-      await _pumpViewerRoute(tester);
-      await _pumpUntilVisible(tester, find.text('FLUTTER_3D'));
-      expect(find.text('3D Match Viewer'), findsWidgets);
-      expect(find.text('Route blocked'), findsNothing);
-      expect(find.text('FLUTTER_3D'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.text('Advanced match viewing coming soon'), findsOneWidget);
+      expect(find.text('FLUTTER_3D'), findsNothing);
 
       router.go(AppRoutes.matchesNativeThreeD);
       await tester.pumpAndSettle();
-      expect(find.text('Native 3D is coming soon'), findsOneWidget);
+      expect(find.text('Advanced match viewing coming soon'), findsOneWidget);
 
       router.go(AppRoutes.streamerEngine);
       await tester.pumpAndSettle();
-      expect(find.text('Streamer Tournament Engine'), findsOneWidget);
+      expect(find.text('Streamer tournaments coming soon'), findsOneWidget);
 
       router.go(AppRoutes.profileAdmin);
       await tester.pumpAndSettle();
       expect(find.text('Profile > Admin'), findsOneWidget);
-      expect(find.text('Admin tooling is blocked'), findsOneWidget);
+      expect(find.text('Open Admin Controls'), findsOneWidget);
+      expect(find.text('Regenerate Portrait'), findsOneWidget);
     },
   );
 
@@ -126,28 +126,6 @@ void main() {
       expect(find.text('Sign in'), findsOneWidget);
     },
   );
-}
-
-Future<void> _pumpViewerRoute(WidgetTester tester) async {
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 64));
-  await tester.pump(const Duration(milliseconds: 64));
-}
-
-Future<void> _pumpUntilVisible(
-  WidgetTester tester,
-  Finder finder, {
-  Duration step = const Duration(milliseconds: 100),
-  Duration timeout = const Duration(seconds: 3),
-}) async {
-  final int attempts = timeout.inMilliseconds ~/ step.inMilliseconds;
-  for (int index = 0; index < attempts; index += 1) {
-    if (finder.evaluate().isNotEmpty) {
-      return;
-    }
-    await tester.pump(step);
-  }
-  expect(finder, findsOneWidget);
 }
 
 ProviderContainer _buildContainer({AuthSession? session}) {

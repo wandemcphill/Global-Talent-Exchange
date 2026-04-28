@@ -538,7 +538,10 @@ class MatchViewerBallFrame {
       ]),
       state: GteJson.string(json, <String>['state'], fallback: 'rolling'),
       elevation:
-          GteJson.number(json, <String>['elevation'], fallback: 0).toDouble(),
+          GteJson.number(json, <String>[
+            'elevation',
+            'height',
+          ], fallback: 0).toDouble(),
     );
   }
 

@@ -61,6 +61,8 @@ class RegenCreationPricingView(CommonSchema):
 class RegenCreationParentPlayerView(CommonSchema):
     player_id: str
     full_name: str
+    image_url: str | None = None
+    portrait_url: str | None = None
     position: str | None = None
     country_code: str | None = None
     country_name: str | None = None
@@ -80,6 +82,8 @@ class RegenCreationGeneratedPlayerView(CommonSchema):
     player_id: str
     regen_profile_id: str
     full_name: str
+    image_url: str | None = None
+    portrait_url: str | None = None
     age: int
     position: str
     country_code: str | None = None

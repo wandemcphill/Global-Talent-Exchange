@@ -304,7 +304,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     setState(() {
       _verification = null;
       _error =
-          'Mock payment was marked as failed locally. No wallet credit was applied.';
+          'Test payment was marked as failed locally. No wallet credit was applied.';
     });
   }
 
@@ -443,7 +443,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     final String label = _providerLabel(provider);
     switch (_providerStatus(provider)) {
       case 'blocked':
-        return 'Instant gateway funding is currently disabled for this wallet. Use the bank transfer rail below.';
+        return 'Instant deposit is currently disabled for this wallet. Use bank transfer below.';
       case 'unavailable':
         return '$label is unavailable until live gateway credentials are configured.';
       default:
@@ -455,15 +455,15 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     final String label = _providerLabel(provider);
     switch (_providerStatus(provider)) {
       case 'ready':
-        return '$label checkout is ready for live funding.';
+        return '$label checkout is ready for deposits.';
       case 'mock':
-        return '$label is available in local simulation mode for this environment.';
+        return '$label is available in test payment mode for this environment.';
       case 'blocked':
-        return 'Instant gateway funding is currently routed away from $label. Use bank transfer below.';
+        return 'Instant deposit is currently routed away from $label. Use bank transfer below.';
       case 'unavailable':
         return '$label is unavailable until live gateway credentials are configured.';
       default:
-        return 'Loading current $label funding status...';
+        return 'Loading current $label deposit status...';
     }
   }
 
@@ -480,20 +480,20 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
             !compliance.canDeposit);
     final String blockedMessage =
         compliance == null
-            ? 'Wallet funding is currently unavailable.'
+            ? 'Wallet deposit is currently unavailable.'
             : compliance.requiredPolicyAcceptancesMissing > 0
             ? compliance.requiredPolicyAcceptancesMissing == 1
                 ? 'Complete 1 policy item to unlock deposits.'
                 : 'Complete ${compliance.requiredPolicyAcceptancesMissing} policy items to unlock deposits.'
             : walletOverview?.policyBlockReason ??
-                'Deposits are currently restricted for this wallet configuration.';
+                'Deposits are currently restricted for this club wallet.';
     final bool instantFundingReady =
         !_isLoadingWalletOverview &&
         !blocked &&
         _providerSupportsCheckout(_automaticProvider) &&
         session == null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Fund GTEX wallet')),
+      appBar: AppBar(title: const Text('Deposit')),
       body: RefreshIndicator(
         onRefresh: _refreshFundingSurface,
         child: ListView(
@@ -540,12 +540,12 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Choose a funding method',
+                    'Choose a deposit method',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Instant checkout credits GTEX Coin for trading and withdrawals. You can also create a manual bank transfer request when admin enables bank transfer funding.',
+                    'Instant checkout credits your transfer balance. Manual bank transfer stays visible when gateway deposits are paused.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
@@ -564,10 +564,10 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   const SizedBox(height: 8),
                   Text(
                     walletOverview == null
-                        ? 'Loading the live funding rail and gateway availability.'
+                        ? 'Loading the live deposit rail and gateway availability.'
                         : walletOverview.depositMode == 'gateway'
-                        ? 'Automatic checkout supports Paystack and KoraPay for GTEX Coin top-ups.'
-                        : 'Instant checkout is currently unavailable because funding is routed through manual bank transfer review.',
+                        ? 'Automatic checkout supports Paystack and KoraPay deposits.'
+                        : 'Instant checkout is currently unavailable because deposits are routed through manual bank transfer review.',
                   ),
                   if (walletOverview != null) ...<Widget>[
                     const SizedBox(height: 8),
@@ -615,7 +615,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       helperText:
                           _automaticProvider == 'korapay'
                               ? 'KoraPay currently accepts whole-number NGN amounts.'
-                              : 'Enter the GTEX top-up amount to route through the selected gateway.',
+                              : 'Enter the deposit amount to route through the selected gateway.',
                       prefixIcon: const Icon(Icons.payments_outlined),
                     ),
                   ),
@@ -628,7 +628,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     icon: const Icon(Icons.open_in_new_outlined),
                     label: Text(
                       _isSubmitting
-                          ? 'Creating payment session...'
+                          ? 'Creating deposit session...'
                           : 'Continue to ${_providerLabel(_automaticProvider)}',
                     ),
                   ),
@@ -656,7 +656,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       Padding(
                         padding: EdgeInsets.only(top: 10),
                         child: Text(
-                          'Local payment simulation is active because no live ${_providerLabel(session.provider)} secret key is configured for this environment.',
+                          'Test payment mode is active because no live ${_providerLabel(session.provider)} key is configured for this environment.',
                         ),
                       ),
                     const SizedBox(height: 14),
@@ -668,7 +668,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                           FilledButton.tonalIcon(
                             onPressed: _isVerifying ? null : _verifyTopUp,
                             icon: const Icon(Icons.check_circle_outline),
-                            label: const Text('Simulate payment success'),
+                            label: const Text('Mark test payment successful'),
                           )
                         else
                           FilledButton.tonalIcon(
@@ -689,7 +689,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                                     ? null
                                     : _simulateMockFailure,
                             icon: const Icon(Icons.cancel_outlined),
-                            label: const Text('Simulate payment failure'),
+                            label: const Text('Mark test payment failed'),
                           ),
                         OutlinedButton.icon(
                           onPressed: _isVerifying ? null : _verifyTopUp,
@@ -698,7 +698,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                             _isVerifying
                                 ? 'Verifying...'
                                 : session.mockMode
-                                ? 'Verify mock payment'
+                                ? 'Verify test payment'
                                 : 'Verify payment',
                           ),
                         ),
@@ -728,7 +728,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'New GTEX balance: ${gteFormatCompetitionAmount(verification.wallet.balance, verification.wallet.currency)}',
+                      'New transfer balance: ${gteFormatCompetitionAmount(verification.wallet.balance, verification.wallet.currency)}',
                     ),
                     Text(
                       'Transaction status: ${_titleCase(verification.transaction.status)}',
@@ -749,7 +749,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Create a manual bank transfer request to receive admin payment details and the locked reference that credits GTEX Coin after review.',
+                    'Create a manual bank transfer request to receive admin payment details and the locked reference that credits your transfer balance after review.',
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -793,7 +793,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       'Amount: ${gteFormatFiat(activeDeposit.amountFiat, currency: activeDeposit.currencyCode)}',
                     ),
                     Text(
-                      'GTEX Coin credited on approval: ${gteFormatCredits(activeDeposit.amountCoin)}',
+                      'Transfer balance credited on approval: ${gteFormatCredits(activeDeposit.amountCoin)}',
                     ),
                     Text('Status: ${_titleCase(activeDeposit.status.name)}'),
                     const SizedBox(height: 10),
@@ -876,7 +876,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
             if (_error != null) ...<Widget>[
               const SizedBox(height: 18),
               GteStatePanel(
-                title: 'Funding issue',
+                title: 'Deposit issue',
                 message: _error!,
                 icon: Icons.warning_amber_rounded,
               ),

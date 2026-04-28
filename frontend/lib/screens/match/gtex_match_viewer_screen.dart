@@ -1,32 +1,21 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/controllers/match_playback_controller.dart';
-import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
-import 'package:gte_frontend/features/match/presentation/broadcast_package_repository.dart';
-import 'package:gte_frontend/features/match/presentation/real_match_scene_director.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/commentary_ribbon_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/real_match_scorebug_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/real_match_tactical_hud_widget.dart';
+import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_monetization.dart';
-import 'package:gte_frontend/models/match_viewer_presentation.dart';
+import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/models/real_match_engine_presentation.dart';
+import 'package:gte_frontend/models/match_viewer_presentation.dart';
 import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
-import 'package:gte_frontend/widgets/match/broadcast/gtex_gifting_sheet.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
-import 'package:gte_frontend/widgets/match_3d/native_match_3d_surface.dart';
-import 'package:gte_frontend/widgets/match_3d/monetization/match_3d_upgrade_prompt.dart';
-import 'package:gte_frontend/widgets/match_3d/monetization/premium_controls.dart';
 
 typedef MatchViewStateLoader = Future<MatchViewState> Function();
 typedef MatchViewContinuationLoader =
@@ -69,8 +58,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final MatchGiftClient? giftClient;
   final String? titleOverride;
   final Match3DBridge? engineBridge;
-  final Match3dAndroidLiveBootstrapProvisioner?
-  androidLiveBootstrapProvisioner;
+  final Match3dAndroidLiveBootstrapProvisioner? androidLiveBootstrapProvisioner;
 
   @override
   State<GtexMatchViewerScreen> createState() => _GtexMatchViewerScreenState();
@@ -80,48 +68,27 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     with SingleTickerProviderStateMixin {
   late Future<MatchViewState> _viewStateFuture;
   MatchPlaybackController? _controller;
-  Match3dMonetizationService? _monetizationService;
-  bool _ownsMonetizationService = false;
-  String? _statusMessage;
-  String? _nativeRuntimeStatusMessage;
-  final List<Match3dOverlayBurst> _overlayBursts = <Match3dOverlayBurst>[];
-
-  RenderMode get _requestedRenderMode {
-    switch (widget.renderMode) {
-      case RenderMode.threeD:
-        return RenderMode.threeD;
-      case RenderMode.auto:
-      case RenderMode.twoD:
-        return RenderMode.twoD;
-    }
-  }
 
   @override
   void initState() {
     super.initState();
     _viewStateFuture = _load();
-    _configureMonetizationService();
   }
 
   @override
   void didUpdateWidget(covariant GtexMatchViewerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.monetizationService != widget.monetizationService ||
-        oldWidget.entitlement != widget.entitlement ||
-        oldWidget.renderMode != widget.renderMode) {
-      _configureMonetizationService();
+    if (oldWidget.matchKey != widget.matchKey ||
+        oldWidget.viewStateLoader != widget.viewStateLoader ||
+        oldWidget.fallbackSnapshot != widget.fallbackSnapshot ||
+        oldWidget.preferFallback != widget.preferFallback) {
+      _reload();
     }
   }
 
   @override
   void dispose() {
     _controller?.dispose();
-    final Match3dMonetizationService? monetizationService =
-        _monetizationService;
-    monetizationService?.removeListener(_handleMonetizationChanged);
-    if (_ownsMonetizationService) {
-      monetizationService?.dispose();
-    }
     super.dispose();
   }
 
@@ -143,45 +110,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     _controller = null;
     setState(() {
       _viewStateFuture = _load();
-      _statusMessage = null;
-      _nativeRuntimeStatusMessage = null;
-      _overlayBursts.clear();
     });
-  }
-
-  void _configureMonetizationService() {
-    final Match3dMonetizationService nextService =
-        widget.monetizationService ??
-        Match3dMonetizationService(
-          entitlement: widget.entitlement,
-          initialRenderMode: _requestedRenderMode,
-        );
-    final Match3dMonetizationService? currentService = _monetizationService;
-    if (identical(currentService, nextService)) {
-      nextService.updateEntitlement(widget.entitlement);
-      if (nextService.selectedRenderMode != _requestedRenderMode) {
-        nextService.selectRenderMode(_requestedRenderMode);
-      }
-      return;
-    }
-    currentService?.removeListener(_handleMonetizationChanged);
-    if (_ownsMonetizationService) {
-      currentService?.dispose();
-    }
-    _monetizationService = nextService;
-    _ownsMonetizationService = widget.monetizationService == null;
-    nextService.updateEntitlement(widget.entitlement);
-    if (nextService.selectedRenderMode != _requestedRenderMode) {
-      nextService.selectRenderMode(_requestedRenderMode);
-    }
-    nextService.addListener(_handleMonetizationChanged);
-  }
-
-  void _handleMonetizationChanged() {
-    if (!mounted) {
-      return;
-    }
-    setState(() {});
   }
 
   MatchPlaybackController _ensureController(MatchViewState viewState) {
@@ -199,212 +128,12 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     return created;
   }
 
-  Match3dMonetizationService _ensureMonetizationService() {
-    final Match3dMonetizationService? monetizationService =
-        _monetizationService;
-    if (monetizationService != null) {
-      return monetizationService;
-    }
-    _configureMonetizationService();
-    return _monetizationService!;
-  }
-
-  Match3dMatchContext _buildMatchContext(MatchViewState viewState) {
-    return Match3dMatchContext(
-      matchId: viewState.matchId,
-      competitionId: widget.competition.id,
-      isFinal: widget.competition.status == CompetitionStatus.completed,
-      isMajorMatch: true,
-      isSpectator: widget.isSpectator,
-      presentationMode: widget.presentationMode,
-    );
-  }
-
-  MatchEngineCameraPreset _cameraPresetFor(Match3dCameraPreset preset) {
-    switch (preset) {
-      case Match3dCameraPreset.broadcast:
-        return MatchEngineCameraPreset.tactical_high;
-      case Match3dCameraPreset.sideline:
-        return MatchEngineCameraPreset.attacking_third_left;
-      case Match3dCameraPreset.goalbox:
-        return MatchEngineCameraPreset.goal_replay;
-    }
-  }
-
-  void _setStatusMessage(String? message) {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _statusMessage = message;
-    });
-  }
-
-  void _setNativeRuntimeStatusMessage(String? message) {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _nativeRuntimeStatusMessage = message;
-    });
-  }
-
-  void _pushOverlayBurst(Match3dOverlayBurst? burst) {
-    if (!mounted || burst == null) {
-      return;
-    }
-    setState(() {
-      _overlayBursts.insert(0, burst);
-      if (_overlayBursts.length > 6) {
-        _overlayBursts.removeRange(6, _overlayBursts.length);
-      }
-    });
-  }
-
-  MatchGiftTarget? _giftTargetFor(MatchViewState viewState) {
-    if (widget.giftClient == null) {
-      return null;
-    }
-    return MatchGiftTarget.fromMetadata(viewState.monetization.metadata);
-  }
-
-  Future<void> _openGiftSheet(MatchViewState viewState) async {
-    if (_giftTargetFor(viewState) == null) {
-      return;
-    }
-    await GtexGiftingSheet.show(
-      context,
-      onSelected: (MatchGiftCatalogItem gift) => _sendGift(viewState, gift),
-    );
-  }
-
-  Future<void> _sendGift(
-    MatchViewState viewState,
-    MatchGiftCatalogItem gift,
-  ) async {
-    final MatchGiftClient? giftClient = widget.giftClient;
-    final MatchGiftTarget? target = _giftTargetFor(viewState);
-    if (giftClient == null || target == null) {
-      return;
-    }
-    _setStatusMessage('Sending ${gift.label} to ${target.recipientLabel}...');
-    try {
-      final MatchGiftReceipt receipt = await giftClient.sendGift(
-        target: target,
-        gift: gift,
-      );
-      _setStatusMessage(receipt.confirmationMessage);
-    } catch (error) {
-      _setStatusMessage(
-        AppFeedback.messageFor(
-          error,
-          fallback: 'The live gift could not be sent.',
-        ),
-      );
-    }
-  }
-
-  Future<void> _selectRenderMode(
-    MatchViewState viewState,
-    RenderMode mode,
-  ) async {
-    final Match3dMonetizationService monetizationService =
-        _ensureMonetizationService();
-    final Match3dMatchContext matchContext = _buildMatchContext(viewState);
-    if (mode != RenderMode.threeD) {
-      _setNativeRuntimeStatusMessage(null);
-      monetizationService.selectRenderMode(mode);
-      return;
-    }
-    if (canAccess3D(matchContext, monetizationService.effectiveEntitlement)) {
-      monetizationService.selectRenderMode(RenderMode.threeD);
-      return;
-    }
-    final Match3dUpgradeAction? action = await Match3dUpgradePrompt.show(
-      context,
-      matchUnlockPrice: Match3dMonetizationService.threeDUnlockPrice,
-      tournamentBoostPrice: monetizationService.tournamentBoostPrice,
-    );
-    if (!mounted) {
-      return;
-    }
-    switch (action) {
-      case Match3dUpgradeAction.unlock3d:
-        final Match3dActionResult result = await monetizationService
-            .unlockThreeDForMatch(matchContext);
-        if (!mounted) {
-          return;
-        }
-        _setStatusMessage(result.message);
-        _pushOverlayBurst(result.overlayBurst);
-        if (result.success) {
-          monetizationService.selectRenderMode(RenderMode.threeD);
-        } else {
-          monetizationService.selectRenderMode(RenderMode.twoD);
-        }
-      case Match3dUpgradeAction.upgradeTournament:
-        final Match3dActionResult result = await monetizationService
-            .upgradeTournamentExperience(matchContext);
-        if (!mounted) {
-          return;
-        }
-        _setStatusMessage(result.message);
-        _pushOverlayBurst(result.overlayBurst);
-        if (result.success) {
-          monetizationService.selectRenderMode(RenderMode.threeD);
-        } else {
-          monetizationService.selectRenderMode(RenderMode.twoD);
-        }
-      case Match3dUpgradeAction.continueIn2d:
-      case null:
-        monetizationService.selectRenderMode(RenderMode.twoD);
-    }
-  }
-
-  Future<void> _unlockInteraction(
-    Match3dPaidInteraction interaction,
-    MatchViewState viewState,
-  ) async {
-    final Match3dActionResult result = await _ensureMonetizationService()
-        .unlockInteraction(interaction, _buildMatchContext(viewState));
-    _setStatusMessage(result.message);
-    _pushOverlayBurst(result.overlayBurst);
-  }
-
-  Future<void> _upgradeTournamentExperience(MatchViewState viewState) async {
-    final Match3dActionResult result = await _ensureMonetizationService()
-        .upgradeTournamentExperience(_buildMatchContext(viewState));
-    _setStatusMessage(result.message);
-    _pushOverlayBurst(result.overlayBurst);
-  }
-
-  Future<void> _claimRewardedAd(MatchAdPlacement placement) async {
-    final Match3dActionResult result = await _ensureMonetizationService()
-        .claimRewardedAd(
-          adId: placement.id,
-          rewardCoins: placement.rewardCoins ?? 0,
-          brand: placement.brand,
-        );
-    _setStatusMessage(result.message);
-    _pushOverlayBurst(result.overlayBurst);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: Text(widget.titleOverride ?? '2D Match Viewer'),
-          actions: <Widget>[
-            IconButton(
-              tooltip: 'Reload replay',
-              onPressed: _reload,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
         body: FutureBuilder<MatchViewState>(
           future: _viewStateFuture,
           builder: (
@@ -412,371 +141,67 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
             AsyncSnapshot<MatchViewState> snapshot,
           ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.all(20),
-                child: GteStatePanel(
-                  eyebrow: 'MATCH VIEWER',
-                  title: 'Loading replay timeline',
-                  message:
-                      'Preparing the 2D pitch, timeline frames, and replay controls.',
-                  icon: Icons.sports_soccer,
-                  accentColor: GteShellTheme.accentArena,
-                  isLoading: true,
-                ),
-              );
+              return const _MatchViewerLoading();
             }
-            if (!snapshot.hasData) {
-              return Padding(
-                padding: const EdgeInsets.all(20),
-                child: GteStatePanel(
-                  title: 'Replay unavailable',
-                  message:
-                      'Unable to load the serialized replay timeline right now.',
-                  icon: Icons.warning_amber_outlined,
-                  actionLabel: 'Retry',
-                  onAction: _reload,
-                ),
-              );
+            if (snapshot.hasError || !snapshot.hasData) {
+              return _MatchViewerError(onReload: _reload);
             }
-
             final MatchViewState viewState = snapshot.data!;
+            if (viewState.frames.isEmpty) {
+              return _MatchViewerError(
+                onReload: _reload,
+                message:
+                    'This match does not yet have a 2D timeline to display.',
+              );
+            }
             final MatchPlaybackController controller = _ensureController(
               viewState,
             );
-            final Match3dMonetizationService monetizationService =
-                _ensureMonetizationService();
             return ListenableBuilder(
-              listenable: Listenable.merge(<Listenable>[
-                controller,
-                monetizationService,
-              ]),
+              listenable: controller,
               builder: (BuildContext context, Widget? child) {
-                final Match3dMatchContext matchContext = _buildMatchContext(
-                  viewState,
-                );
+                final MatchTimelineFrame frame = controller.displayFrame;
                 final MatchEvent? activeEvent = controller.activeEvent;
-                final RenderMode effectiveRenderMode = monetizationService
-                    .effectiveRenderModeFor(matchContext);
-                final bool showThreeD =
-                    effectiveRenderMode == RenderMode.threeD;
-                final bool adsEnabled = viewState.monetization.adsEnabled;
-                final MatchAdPlacement? preRollPlacement =
-                    adsEnabled
-                        ? viewState.monetization.firstActiveOfType(
-                          MatchAdPlacementType.preRoll,
-                          controller.positionSeconds,
-                        )
-                        : null;
-                final MatchAdPlacement? sponsoredPlacement =
-                    adsEnabled
-                        ? viewState.monetization.sponsoredPlacementForEvent(
-                              activeEvent?.id,
-                            ) ??
-                            viewState.monetization.firstOfType(
-                              MatchAdPlacementType.sponsoredHighlight,
-                            )
-                        : null;
-                final MatchAdPlacement? liveBannerPlacement =
-                    adsEnabled
-                        ? viewState.monetization.firstActiveOfType(
-                          MatchAdPlacementType.liveBanner,
-                          controller.positionSeconds,
-                        )
-                        : null;
-                final MatchAdPlacement? rewardedPlacement =
-                    adsEnabled
-                        ? viewState.monetization.firstOfType(
-                          MatchAdPlacementType.rewardedAd,
-                        )
-                        : null;
-                final bool rewardClaimed =
-                    rewardedPlacement != null &&
-                    monetizationService.hasClaimedRewardedAd(
-                      rewardedPlacement.id,
-                    );
-                final package = const BroadcastPackageRepository().resolve(
-                  viewState,
-                );
-                final presentation = RealMatchSceneDirector.resolve(
-                  viewState: viewState,
-                  frame: controller.displayFrame,
-                  package: package,
-                  activeEvent: activeEvent,
-                  playbackSeconds: controller.positionSeconds,
-                );
-                final String commentaryHeadline =
-                    presentation.lowerThirdHeadline;
-                final String commentaryDetail = presentation.lowerThirdDetail;
-                return LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                    final bool wide = constraints.maxWidth >= 1040;
-                    final Widget viewerPanel = Column(
+                return SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                    child: Column(
                       children: <Widget>[
+                        _ScoreStrip(
+                          timeLabel: _formatPlaybackClock(
+                            controller.positionSeconds,
+                          ),
+                          homeName: viewState.homeTeam.shortName,
+                          awayName: viewState.awayTeam.shortName,
+                          homeScore: frame.homeScore,
+                          awayScore: frame.awayScore,
+                          onReload: _reload,
+                        ),
+                        const SizedBox(height: 10),
                         Expanded(
-                          child: Stack(
-                            children: <Widget>[
-                              Positioned.fill(
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    18,
-                                    18,
-                                    18,
-                                    18,
-                                  ),
-                                  child: RepaintBoundary(
-                                    child:
-                                        showThreeD
-                                            ? NativeMatch3dSurface(
-                                              viewState: viewState,
-                                              frame: controller.displayFrame,
-                                              activeEvent: activeEvent,
-                                              cameraPreset: _cameraPresetFor(
-                                                monetizationService
-                                                    .cameraPreset,
-                                              ),
-                                              bridge: widget.engineBridge,
-                                              androidLiveBootstrapProvisioner:
-                                                  widget
-                                                      .androidLiveBootstrapProvisioner,
-                                              onRuntimeStatusMessageChanged:
-                                                  _setNativeRuntimeStatusMessage,
-                                            )
-                                            : Pitch2dWidget(
-                                              viewState: viewState,
-                                              frame: controller.displayFrame,
-                                            ),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 28,
-                                left: 28,
-                                right: 28,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    RealMatchScorebugWidget(
-                                      homeName: viewState.homeTeam.shortName,
-                                      awayName: viewState.awayTeam.shortName,
-                                      homeScore:
-                                          controller.displayFrame.homeScore,
-                                      awayScore:
-                                          controller.displayFrame.awayScore,
-                                      clockLabel: presentation.clockLabel,
-                                      phaseLabel: presentation.phaseLabel,
-                                      stateLabel: presentation.stateLabel,
-                                      cameraLabel: presentation.cameraLabel,
-                                      eventLabel:
-                                          presentation.scorebugEventLabel,
-                                      competitionLabel: widget.competition.name,
-                                      detailLabel: presentation.telemetryLabel,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 360,
-                                        ),
-                                        child: CommentaryRibbonWidget(
-                                          headline: commentaryHeadline,
-                                          detail: commentaryDetail,
-                                          label: presentation.stateLabel,
-                                          trailing: presentation.pressureLabel,
-                                          accentColor:
-                                              presentation.isDangerMoment
-                                                  ? const Color(0xFFF97066)
-                                                  : GteShellTheme.accentArena,
-                                        ),
-                                      ),
-                                    ),
-                                    if (!wide) ...<Widget>[
-                                      const SizedBox(height: 12),
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 360,
-                                          ),
-                                          child: RealMatchTacticalHudWidget(
-                                            package: package,
-                                            presentation: presentation,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              if (sponsoredPlacement != null)
-                                Positioned(
-                                  left: 28,
-                                  top: 116,
-                                  child: _AdPlacementChip(
-                                    key: const Key('match-sponsored-highlight'),
-                                    brand: sponsoredPlacement.brand,
-                                    message: sponsoredPlacement.message,
-                                    accentColor: GteShellTheme.accentArena,
-                                  ),
-                                ),
-                              if (preRollPlacement != null)
-                                Positioned(
-                                  left: 28,
-                                  bottom: 96,
-                                  child: _AdPlacementChip(
-                                    key: const Key('match-ad-preroll'),
-                                    brand: preRollPlacement.brand,
-                                    message: preRollPlacement.message,
-                                    accentColor: GteShellTheme.accentCapital,
-                                  ),
-                                ),
-                              if (liveBannerPlacement != null)
-                                Positioned(
-                                  left: 28,
-                                  right: 28,
-                                  bottom: 92,
-                                  child: _LiveBannerCard(
-                                    key: const Key('match-ad-live-banner'),
-                                    brand: liveBannerPlacement.brand,
-                                    message: liveBannerPlacement.message,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        if (!widget.isSpectator)
-                          _ControlBar(
-                            controller: controller,
-                            compactReplayControls: widget.isSpectator,
-                          ),
-                      ],
-                    );
-                    final Widget railContent = Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        if (wide) ...<Widget>[
-                          RealMatchTacticalHudWidget(
-                            package: package,
-                            presentation: presentation,
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        if (rewardedPlacement != null) ...<Widget>[
-                          _RewardedAdCard(
-                            placement: rewardedPlacement,
-                            claimed: rewardClaimed,
-                            onClaim:
-                                rewardClaimed
-                                    ? null
-                                    : () => _claimRewardedAd(rewardedPlacement),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        if (_statusMessage != null) ...<Widget>[
-                          _StatusCard(message: _statusMessage!),
-                          const SizedBox(height: 12),
-                        ],
-                        if (_nativeRuntimeStatusMessage != null) ...<Widget>[
-                          _StatusCard(message: _nativeRuntimeStatusMessage!),
-                          const SizedBox(height: 12),
-                        ],
-                        if (_giftTargetFor(viewState)
-                            case final MatchGiftTarget giftTarget) ...<Widget>[
-                          _MatchGiftActionCard(
-                            recipientLabel: giftTarget.recipientLabel,
-                            onSendGift: () => _openGiftSheet(viewState),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        PremiumControls(
-                          entitlement: monetizationService.effectiveEntitlement,
-                          selectedRenderMode:
-                              monetizationService.selectedRenderMode,
-                          effectiveRenderMode: effectiveRenderMode,
-                          threeDAvailable: canAccess3D(
-                            matchContext,
-                            monetizationService.effectiveEntitlement,
-                          ),
-                          availableCoins:
-                              monetizationService.availableCoinBalance,
-                          cameraPreset: monetizationService.cameraPreset,
-                          canUsePremiumCamera: monetizationService
-                              .canUsePremiumCamera(matchContext),
-                          canUseFastReplay: monetizationService
-                              .canUseFastReplay(matchContext),
-                          onRenderModeSelected:
-                              (RenderMode mode) =>
-                                  _selectRenderMode(viewState, mode),
-                          onCameraPresetSelected:
-                              (Match3dCameraPreset preset) =>
-                                  monetizationService.setCameraPreset(
-                                    preset,
-                                    matchContext,
-                                  ),
-                          onUnlockSlowMotion:
-                              () => _unlockInteraction(
-                                Match3dPaidInteraction.slowMotionReplay,
-                                viewState,
-                              ),
-                          onUnlockAlternateCamera:
-                              () => _unlockInteraction(
-                                Match3dPaidInteraction.alternateCameraAngle,
-                                viewState,
-                              ),
-                          onUnlockHighlightAttack:
-                              () => _unlockInteraction(
-                                Match3dPaidInteraction.highlightNextAttack,
-                                viewState,
-                              ),
-                          onUpgradeTournament:
-                              monetizationService.tournamentBoostPrice == null
-                                  ? null
-                                  : () =>
-                                      _upgradeTournamentExperience(viewState),
-                        ),
-                        const SizedBox(height: 12),
-                        _EventRail(
-                          controller: controller,
-                          viewState: viewState,
-                          scrollable: false,
-                        ),
-                      ],
-                    );
-                    if (wide) {
-                      return Row(
-                        children: <Widget>[
-                          Expanded(flex: 3, child: viewerPanel),
-                          SizedBox(
-                            width: 400,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
-                              child: Scrollbar(
-                                thumbVisibility: true,
-                                child: SingleChildScrollView(
-                                  child: railContent,
-                                ),
-                              ),
+                          child: Center(
+                            child: MatchPitch2D(
+                              viewState: viewState,
+                              frame: frame,
+                              previousFrame: controller.leftFrame,
+                              activeEvent: activeEvent,
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 10),
+                        _CommentaryCapsule(
+                          text: _commentaryFor(
+                            activeEvent: activeEvent,
+                            frame: frame,
+                          ),
+                        ),
+                        if (!widget.isSpectator) ...<Widget>[
+                          const SizedBox(height: 8),
+                          _CompactControlBar(controller: controller),
                         ],
-                      );
-                    }
-                    return ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.zero,
-                      children: <Widget>[
-                        SizedBox(
-                          height: math.max(480, constraints.maxHeight * 1.1),
-                          child: viewerPanel,
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                          child: railContent,
-                        ),
                       ],
-                    );
-                  },
+                    ),
+                  ),
                 );
               },
             );
@@ -787,140 +212,78 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   }
 }
 
-class _ControlBar extends StatelessWidget {
-  const _ControlBar({
-    required this.controller,
-    this.compactReplayControls = false,
+class _ScoreStrip extends StatelessWidget {
+  const _ScoreStrip({
+    required this.timeLabel,
+    required this.homeName,
+    required this.awayName,
+    required this.homeScore,
+    required this.awayScore,
+    required this.onReload,
   });
 
-  final MatchPlaybackController controller;
-  final bool compactReplayControls;
+  final String timeLabel;
+  final String homeName;
+  final String awayName;
+  final int homeScore;
+  final int awayScore;
+  final VoidCallback onReload;
 
   @override
   Widget build(BuildContext context) {
+    final TextStyle? teamStyle = Theme.of(context).textTheme.labelLarge
+        ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800);
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-      child: Row(
-        children: <Widget>[
-          FilledButton.icon(
-            onPressed: controller.togglePlayPause,
-            icon: Icon(controller.isPlaying ? Icons.pause : Icons.play_arrow),
-            label: Text(controller.isPlaying ? 'Pause' : 'Play'),
-          ),
-          if (!compactReplayControls) ...<Widget>[
-            const SizedBox(width: 10),
-            FilledButton.tonalIcon(
-              onPressed: controller.restart,
-              icon: const Icon(Icons.replay),
-              label: const Text('Restart'),
-            ),
-            const SizedBox(width: 10),
-            FilledButton.tonalIcon(
-              onPressed: controller.cycleSpeed,
-              icon: const Icon(Icons.speed),
-              label: Text('${controller.speed.toStringAsFixed(0)}x'),
-            ),
-            const SizedBox(width: 10),
-            FilledButton.tonalIcon(
-              onPressed: controller.jumpToNextEvent,
-              icon: const Icon(Icons.skip_next),
-              label: const Text('Next event'),
-            ),
-          ],
-          const SizedBox(width: 14),
-          Expanded(
-            child: LinearProgressIndicator(
-              value: controller.progress.clamp(0, 1),
-              minHeight: 7,
-              borderRadius: BorderRadius.circular(999),
-              backgroundColor: Colors.white.withValues(alpha: 0.08),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                GteShellTheme.accentArena,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AdPlacementChip extends StatelessWidget {
-  const _AdPlacementChip({
-    super.key,
-    required this.brand,
-    required this.message,
-    required this.accentColor,
-  });
-
-  final String brand;
-  final String message;
-  final Color accentColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 320),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      key: const Key('match-2d-score-strip'),
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: const Color(0xD9111D2B),
-        border: Border.all(color: accentColor.withValues(alpha: 0.38)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            brand,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: accentColor,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            message,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LiveBannerCard extends StatelessWidget {
-  const _LiveBannerCard({
-    super.key,
-    required this.brand,
-    required this.message,
-  });
-
-  final String brand;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xFF101D2D), Color(0xFF18314A)],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        color: const Color(0xEE111827),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.campaign_outlined, color: GteShellTheme.accentArena),
+          _TimePill(label: timeLabel),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              '$brand | $message',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
+              homeName.toUpperCase(),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: teamStyle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '$homeScore - $awayScore',
+            key: const Key('match-2d-scoreline'),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              awayName.toUpperCase(),
+              overflow: TextOverflow.ellipsis,
+              style: teamStyle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Reload match',
+            child: IconButton(
+              onPressed: onReload,
+              icon: const Icon(Icons.refresh, size: 18),
+              color: Colors.white,
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                fixedSize: const Size.square(32),
+                minimumSize: const Size.square(32),
+                padding: EdgeInsets.zero,
               ),
             ),
           ),
@@ -930,56 +293,123 @@ class _LiveBannerCard extends StatelessWidget {
   }
 }
 
-class _RewardedAdCard extends StatelessWidget {
-  const _RewardedAdCard({
-    required this.placement,
-    required this.claimed,
-    required this.onClaim,
-  });
+class _TimePill extends StatelessWidget {
+  const _TimePill({required this.label});
 
-  final MatchAdPlacement placement;
-  final bool claimed;
-  final VoidCallback? onClaim;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final int rewardCoins = placement.rewardCoins ?? 0;
     return Container(
-      key: const Key('match-rewarded-ad-card'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      key: const Key('match-2d-clock'),
+      width: 64,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        color: const Color(0xD7101B2A),
-        border: Border.all(
-          color: GteShellTheme.accentCapital.withValues(alpha: 0.34),
+        color: const Color(0xFF0B5CAD),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+}
+
+class _CommentaryCapsule extends StatelessWidget {
+  const _CommentaryCapsule({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+        key: const Key('match-2d-commentary-bar'),
+        constraints: const BoxConstraints(maxWidth: 620, minHeight: 30),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xEA0B1220),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFEE7CCC), width: 1.2),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: const Color(0xFFEE7CCC).withValues(alpha: 0.24),
+              blurRadius: 12,
+              spreadRadius: 0.5,
+            ),
+          ],
+        ),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactControlBar extends StatelessWidget {
+  const _CompactControlBar({required this.controller});
+
+  final MatchPlaybackController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('match-2d-controls'),
+      constraints: const BoxConstraints(maxWidth: 620),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
         children: <Widget>[
-          Text(
-            placement.brand,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: GteShellTheme.accentCapital,
-              fontWeight: FontWeight.w800,
-            ),
+          _ControlIconButton(
+            tooltip: controller.isPlaying ? 'Pause' : 'Play',
+            icon: controller.isPlaying ? Icons.pause : Icons.play_arrow,
+            onPressed: controller.togglePlayPause,
           ),
-          const SizedBox(height: 6),
-          Text(
-            placement.message,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+          _ControlIconButton(
+            tooltip: 'Restart',
+            icon: Icons.replay,
+            onPressed: controller.restart,
           ),
-          const SizedBox(height: 12),
-          FilledButton.tonalIcon(
-            onPressed: onClaim,
-            icon: Icon(
-              claimed ? Icons.verified_outlined : Icons.play_circle_outline,
-            ),
-            label: Text(
-              claimed ? 'Reward claimed' : 'Watch Ad · +$rewardCoins coins',
+          _ControlIconButton(
+            tooltip: 'Speed ${controller.speed.toStringAsFixed(0)}x',
+            icon: Icons.speed,
+            onPressed: controller.cycleSpeed,
+          ),
+          _ControlIconButton(
+            tooltip: 'Next event',
+            icon: Icons.skip_next,
+            onPressed: controller.jumpToNextEvent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: LinearProgressIndicator(
+              value: controller.progress.clamp(0, 1),
+              minHeight: 5,
+              borderRadius: BorderRadius.circular(999),
+              backgroundColor: Colors.white.withValues(alpha: 0.10),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFF7DD3FC),
+              ),
             ),
           ),
         ],
@@ -988,216 +418,101 @@ class _RewardedAdCard extends StatelessWidget {
   }
 }
 
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.message});
+class _ControlIconButton extends StatelessWidget {
+  const _ControlIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
 
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        color: Colors.white,
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.white.withValues(alpha: 0.08),
+          fixedSize: const Size.square(34),
+          minimumSize: const Size.square(34),
+          padding: EdgeInsets.zero,
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchViewerLoading extends StatelessWidget {
+  const _MatchViewerLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SafeArea(
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: GteStatePanel(
+          eyebrow: 'MATCHDAY',
+          title: 'Loading 2D match',
+          message: 'Preparing the pitch, squads, ball, and commentary.',
+          icon: Icons.sports_soccer,
+          accentColor: GteShellTheme.accentArena,
+          isLoading: true,
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchViewerError extends StatelessWidget {
+  const _MatchViewerError({
+    required this.onReload,
+    this.message = 'Unable to load the 2D match timeline right now.',
+  });
+
+  final VoidCallback onReload;
   final String message;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withValues(alpha: 0.06),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: GteStatePanel(
+          title: 'Match unavailable',
+          message: message,
+          icon: Icons.warning_amber_outlined,
+          actionLabel: 'Retry',
+          onAction: onReload,
         ),
       ),
     );
   }
 }
 
-class _MatchGiftActionCard extends StatelessWidget {
-  const _MatchGiftActionCard({
-    required this.recipientLabel,
-    required this.onSendGift,
-  });
-
-  final String recipientLabel;
-  final VoidCallback onSendGift;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: const Color(0xD7101B2A),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'Live support gifting',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Send a verified match gift to $recipientLabel through the live gift engine.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: onSendGift,
-            icon: const Icon(Icons.card_giftcard_rounded),
-            label: const Text('Send gift'),
-          ),
-        ],
-      ),
-    );
-  }
+String _formatPlaybackClock(double seconds) {
+  final int totalSeconds = math.max(0, seconds.floor());
+  final int minutes = totalSeconds ~/ 60;
+  final int remainder = totalSeconds % 60;
+  return '${minutes.toString().padLeft(2, '0')}:${remainder.toString().padLeft(2, '0')}';
 }
 
-class _EventRail extends StatelessWidget {
-  const _EventRail({
-    required this.controller,
-    required this.viewState,
-    required this.scrollable,
-  });
-
-  final MatchPlaybackController controller;
-  final MatchViewState viewState;
-  final bool scrollable;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withValues(alpha: 0.05),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
-      ),
-      child: ListenableBuilder(
-        listenable: controller,
-        builder: (BuildContext context, Widget? child) {
-          final MatchEvent? activeEvent = controller.activeEvent;
-          final List<MatchEvent> events = controller.upcomingEvents;
-          final List<Widget> children = <Widget>[
-            Text('Replay lane', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Source: ${viewState.source} | ${viewState.durationSeconds}s | ${viewState.events.length} events',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 14),
-            if (activeEvent != null)
-              _EventTile(event: activeEvent, active: true),
-            ...events
-                .where((MatchEvent item) => item.id != activeEvent?.id)
-                .map(
-                  (MatchEvent item) => Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: _EventTile(event: item),
-                  ),
-                ),
-          ];
-          return scrollable
-              ? ListView(padding: const EdgeInsets.all(16), children: children)
-              : Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: children,
-                ),
-              );
-        },
-      ),
-    );
+String _commentaryFor({
+  required MatchEvent? activeEvent,
+  required MatchTimelineFrame frame,
+}) {
+  final String? commentary = activeEvent?.commentary.trim();
+  if (commentary != null && commentary.isNotEmpty) {
+    return commentary;
   }
-}
-
-class _EventTile extends StatelessWidget {
-  const _EventTile({required this.event, this.active = false});
-
-  final MatchEvent event;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color accent = _tileAccent(event.type);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color:
-            active
-                ? accent.withValues(alpha: 0.16)
-                : Colors.white.withValues(alpha: 0.04),
-        border: Border.all(
-          color:
-              active
-                  ? accent.withValues(alpha: 0.55)
-                  : Colors.white.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(event.icon, color: accent, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  event.bannerText,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${event.clockLabel} | ${event.teamName ?? 'Match'}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                ),
-                if (event.isDataUnavailable) ...<Widget>[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Data unavailable placeholder',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: Colors.white60),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  final String? banner = frame.eventBanner?.trim();
+  if (banner != null && banner.isNotEmpty) {
+    return banner;
   }
-}
-
-Color _tileAccent(MatchViewerEventType type) {
-  switch (type) {
-    case MatchViewerEventType.goal:
-      return const Color(0xFF17B26A);
-    case MatchViewerEventType.save:
-      return const Color(0xFF53B1FD);
-    case MatchViewerEventType.miss:
-      return const Color(0xFFF79009);
-    case MatchViewerEventType.offside:
-      return const Color(0xFFF97066);
-    case MatchViewerEventType.redCard:
-      return const Color(0xFFF04438);
-    default:
-      return const Color(0xFFD0D5DD);
-  }
+  return 'The match is settling into shape.';
 }

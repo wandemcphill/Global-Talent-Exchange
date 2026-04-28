@@ -100,20 +100,15 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<Object?> payload =
-          await Future.wait<Object?>(<Future<Object?>>[
-        _repository.searchMarketplace(query),
-        _repository.listMarketplaceSales(query),
-        _repository.listMarketplaceLoans(query),
-        _repository.listMarketplaceSwaps(query),
-      ]);
+      final PlayerCardMarketplaceSearchResult result = await _repository
+          .listMarketplaceSales(query);
       if (!_marketplaceGate.isActive(requestId)) {
         return;
       }
-      marketplace = payload[0] as PlayerCardMarketplaceSearchResult;
-      marketplaceSales = payload[1] as PlayerCardMarketplaceSearchResult;
-      marketplaceLoans = payload[2] as PlayerCardMarketplaceSearchResult;
-      marketplaceSwaps = payload[3] as PlayerCardMarketplaceSearchResult;
+      marketplace = result;
+      marketplaceSales = result;
+      marketplaceLoans = const PlayerCardMarketplaceSearchResult.empty();
+      marketplaceSwaps = const PlayerCardMarketplaceSearchResult.empty();
     } catch (error) {
       if (_marketplaceGate.isActive(requestId)) {
         marketplaceError = AppFeedback.messageFor(error);
@@ -144,23 +139,22 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     try {
       final List<Object?> payload =
           await Future.wait<Object?>(<Future<Object?>>[
-        _repository.listPlayers(playersQuery),
-        _repository.listListings(listingsQuery),
-        _repository.listLoanSupportListings(loanSupportQuery),
-        if (includeAuthed) _repository.listInventory(),
-        if (includeAuthed) _repository.listMyListings(),
-        if (includeAuthed) _repository.listWatchlist(),
-      ]);
+            _repository.listPlayers(playersQuery),
+            _repository.listListings(listingsQuery),
+            if (includeAuthed) _repository.listInventory(),
+            if (includeAuthed) _repository.listMyListings(),
+            if (includeAuthed) _repository.listWatchlist(),
+          ]);
       if (!_supportGate.isActive(requestId)) {
         return;
       }
       players = payload[0] as List<PlayerCardPlayerSummary>;
       listings = payload[1] as List<PlayerCardListing>;
-      loanSupportListings = payload[2] as List<PlayerCardLoanSupportListing>;
+      loanSupportListings = const <PlayerCardLoanSupportListing>[];
       if (includeAuthed) {
-        inventory = payload[3] as List<PlayerCardHolding>;
-        myListings = payload[4] as List<PlayerCardListing>;
-        watchlist = payload[5] as List<PlayerCardWatchlistItem>;
+        inventory = payload[2] as List<PlayerCardHolding>;
+        myListings = payload[3] as List<PlayerCardListing>;
+        watchlist = payload[4] as List<PlayerCardWatchlistItem>;
       }
     } catch (error) {
       if (_supportGate.isActive(requestId)) {
@@ -181,8 +175,9 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final PlayerCardPlayerDetail detail =
-          await _repository.fetchPlayerDetail(playerId);
+      final PlayerCardPlayerDetail detail = await _repository.fetchPlayerDetail(
+        playerId,
+      );
       if (!_playerGate.isActive(requestId)) {
         return;
       }
@@ -209,8 +204,8 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final PlayerCardMarketplaceLoanContractList result =
-          await _repository.listLoanContracts(query);
+      final PlayerCardMarketplaceLoanContractList result = await _repository
+          .listLoanContracts(query);
       if (!_contractsGate.isActive(requestId)) {
         return;
       }
@@ -292,8 +287,10 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     actionError = null;
     notifyListeners();
     try {
-      latestSaleExecution =
-          await _repository.buySaleListing(listingId, request);
+      latestSaleExecution = await _repository.buySaleListing(
+        listingId,
+        request,
+      );
       await Future.wait<void>(<Future<void>>[
         loadMarketplace(query: currentMarketplaceQuery),
         loadSupport(
@@ -376,8 +373,10 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     actionError = null;
     notifyListeners();
     try {
-      latestLoanNegotiation =
-          await _repository.createLoanNegotiation(listingId, request);
+      latestLoanNegotiation = await _repository.createLoanNegotiation(
+        listingId,
+        request,
+      );
       await Future.wait<void>(<Future<void>>[
         loadMarketplace(query: currentMarketplaceQuery),
         loadLoanContracts(query: currentLoanContractsQuery),
@@ -401,8 +400,10 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     actionError = null;
     notifyListeners();
     try {
-      latestLoanNegotiation =
-          await _repository.counterLoanNegotiation(negotiationId, request);
+      latestLoanNegotiation = await _repository.counterLoanNegotiation(
+        negotiationId,
+        request,
+      );
       await Future.wait<void>(<Future<void>>[
         loadMarketplace(query: currentMarketplaceQuery),
         loadLoanContracts(query: currentLoanContractsQuery),
@@ -423,8 +424,9 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     actionError = null;
     notifyListeners();
     try {
-      latestLoanContract =
-          await _repository.acceptLoanNegotiation(negotiationId);
+      latestLoanContract = await _repository.acceptLoanNegotiation(
+        negotiationId,
+      );
       await Future.wait<void>(<Future<void>>[
         loadMarketplace(query: currentMarketplaceQuery),
         loadLoanContracts(query: currentLoanContractsQuery),
@@ -536,8 +538,10 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     actionError = null;
     notifyListeners();
     try {
-      latestSwapExecution =
-          await _repository.executeSwapListing(listingId, request);
+      latestSwapExecution = await _repository.executeSwapListing(
+        listingId,
+        request,
+      );
       await Future.wait<void>(<Future<void>>[
         loadMarketplace(query: currentMarketplaceQuery),
         loadSupport(

@@ -42,6 +42,7 @@ from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.players.read_models import PlayerSummaryReadModel
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.avatar_service import AvatarService
+from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
 from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -119,6 +120,7 @@ class PlayerCardMarketService:
                     "card_supply_total": int(supply_total or 0),
                     "latest_value_credits": float(current_value_credits) if current_value_credits is not None else None,
                     "avatar": self._avatar_payload(player),
+                    "image_url": self._image_url(player),
                 }
             )
         return results
@@ -196,6 +198,7 @@ class PlayerCardMarketService:
             "nationality_code": player.country.alpha2_code if player.country is not None else None,
             "current_club_name": player.current_club.name if player.current_club is not None else None,
             "avatar": self._avatar_payload(player),
+            "image_url": self._image_url(player),
             "aliases": aliases,
             "monikers": monikers,
             "cards": card_views,
@@ -238,6 +241,7 @@ class PlayerCardMarketService:
                     "player_id": player.id,
                     "player_name": player.full_name,
                     "avatar": self._avatar_payload(player, summary=summary),
+                    "image_url": self._image_url(player, summary=summary),
                     "latest_value_credits": self._latest_value_credits(
                         player.id,
                         summary=summary,
@@ -1157,6 +1161,7 @@ class PlayerCardMarketService:
             "player_id": player.id,
             "player_name": player.full_name,
             "avatar": self._avatar_payload(player, summary=summary),
+            "image_url": self._image_url(player, summary=summary),
             "latest_value_credits": self._latest_value_credits(
                 player.id,
                 summary=summary,
@@ -1201,6 +1206,60 @@ class PlayerCardMarketService:
             player,
             summary_payload=summary_payload,
         ).model_dump()
+
+    @staticmethod
+    def _image_url_from_payload(payload: dict[str, Any] | None) -> str | None:
+        if not payload:
+            return None
+        for key in ("image_url", "portrait_url", "photo_url"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        image_payload = payload.get("image")
+        if isinstance(image_payload, dict):
+            for key in ("source_url", "url", "storage_key"):
+                value = image_payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return None
+
+    def _image_url(
+        self,
+        player: Player,
+        *,
+        summary: PlayerSummaryReadModel | None = None,
+    ) -> str | None:
+        resolved_summary = summary if summary is not None else self._player_summary(player.id)
+        summary_payload = (
+            resolved_summary.summary_json
+            if resolved_summary is not None and isinstance(resolved_summary.summary_json, dict)
+            else None
+        )
+        direct = self._image_url_from_payload(summary_payload)
+        if direct:
+            return direct
+        candidates = sorted(
+            player.image_metadata,
+            key=lambda image: (
+                not image.is_primary,
+                image.moderation_status != "approved",
+                image.created_at,
+                image.id,
+            ),
+        )
+        for image in candidates:
+            if image.moderation_status == "rejected":
+                continue
+            if image.source_url:
+                return image.source_url
+            if image.storage_key:
+                return image.storage_key
+        if not bool(player.is_real_player):
+            try:
+                return RegenPortraitService(self.session).ensure_player_portrait(player).portrait_url
+            except RegenPortraitError:
+                return None
+        return None
 
     def _new_id(self, prefix: str) -> str:
         return f"{prefix}_{generate_uuid().split('-')[0]}"

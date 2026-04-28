@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/data/match_gift_api.dart';
-import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_monetization.dart';
 import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
+import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
-import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
-import 'package:gte_frontend/widgets/match_3d/monetization/gifting_overlay.dart';
+import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
+import 'package:gte_frontend/widgets/match_3d/native_match_3d_surface.dart';
+import 'package:gte_frontend/widgets/match_3d/monetization/premium_controls.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 
@@ -77,172 +75,13 @@ void main() {
     expect(late.players.first.position.x, 78);
   });
 
-  testWidgets(
-    'match viewer renders fallback replay, controls, and offside placeholder',
-    (WidgetTester tester) async {
-      final CompetitionSummary competition = _buildCompetition(
-        id: 'match-viewer-test',
-      );
-      final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-        competition,
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: GteShellTheme.build(),
-          home: GtexMatchViewerScreen(
-            competition: competition,
-            matchKey: competition.id,
-            fallbackSnapshot: snapshot,
-            preferFallback: true,
-            viewStateLoader: () async {
-              final viewState = await MatchViewerMapper.load(
-                competition: competition,
-                matchKey: competition.id,
-                fallbackSnapshot: snapshot,
-                preferFallback: true,
-              );
-              final MatchEvent offsideEvent = viewState.events.firstWhere(
-                (event) => event.type == MatchViewerEventType.offside,
-              );
-              return viewState.copyWith(events: <MatchEvent>[offsideEvent]);
-            },
-          ),
-        ),
-      );
-
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 64));
-
-      await tester.scrollUntilVisible(
-        find.widgetWithText(FilledButton, 'Next event'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pump();
-
-      expect(find.text('2D Match Viewer'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Pause'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Restart'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Next event'), findsOneWidget);
-      expect(
-        find.text(snapshot.homeTeam.substring(0, 3).toUpperCase()),
-        findsWidgets,
-      );
-      expect(
-        find.text(snapshot.awayTeam.substring(0, 3).toUpperCase()),
-        findsWidgets,
-      );
-
-      await tester.tap(find.widgetWithText(FilledButton, 'Pause'));
-      await tester.pump();
-
-      await tester.scrollUntilVisible(
-        find.text('Replay lane'),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pump();
-
-      expect(find.text('Replay lane'), findsOneWidget);
-      expect(find.text('Offside (data unavailable)'), findsWidgets);
-    },
-  );
-
-  test(
-    'fallback viewer marks the synthetic offside path as data unavailable',
-    () async {
-      final CompetitionSummary competition = _buildCompetition(
-        id: 'match-viewer-placeholder',
-      );
-      final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-        competition,
-      );
-
-      final viewState = await MatchViewerMapper.load(
-        competition: competition,
-        matchKey: competition.id,
-        fallbackSnapshot: snapshot,
-        preferFallback: true,
-      );
-
-      final offsideEvent = viewState.events.firstWhere(
-        (event) => event.type == MatchViewerEventType.offside,
-      );
-      expect(offsideEvent.isDataUnavailable, isTrue);
-      expect(offsideEvent.bannerText, 'Offside (data unavailable)');
-    },
-  );
-
-  testWidgets('match viewer remains stable across back-to-back replay loads', (
-    WidgetTester tester,
-  ) async {
-    final CompetitionSummary firstCompetition = _buildCompetition(
-      id: 'match-viewer-first',
-    );
-    final CompetitionSummary secondCompetition = _buildCompetition(
-      id: 'match-viewer-second',
-    );
-    final LiveMatchSnapshot firstSnapshot = LiveMatchFixtures.buildSnapshot(
-      firstCompetition,
-    );
-    final LiveMatchSnapshot secondSnapshot = LiveMatchFixtures.buildSnapshot(
-      secondCompetition,
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GtexMatchViewerScreen(
-          competition: firstCompetition,
-          matchKey: firstCompetition.id,
-          fallbackSnapshot: firstSnapshot,
-          preferFallback: true,
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 48));
-
-    await tester.scrollUntilVisible(
-      find.text('Replay lane'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Replay lane'), findsOneWidget);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GtexMatchViewerScreen(
-          competition: secondCompetition,
-          matchKey: secondCompetition.id,
-          fallbackSnapshot: secondSnapshot,
-          preferFallback: true,
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 64));
-
-    expect(find.text('2D Match Viewer'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Replay lane'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Replay lane'), findsOneWidget);
-  });
-
-  testWidgets('match viewer sends live gifts through the backend contract', (
+  testWidgets('match viewer renders the minimal 2D matchday surface', (
     WidgetTester tester,
   ) async {
     final CompetitionSummary competition = _buildCompetition(
-      id: 'match-viewer-gifting',
+      id: 'match-viewer-test',
     );
-    final _FakeMatchGiftClient giftClient = _FakeMatchGiftClient();
+    final viewState = buildBroadcastTestViewState();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -250,49 +89,73 @@ void main() {
         home: GtexMatchViewerScreen(
           competition: competition,
           matchKey: competition.id,
-          viewStateLoader:
-              () async => buildBroadcastTestViewState().copyWith(
-                monetization: const MatchViewerMonetization(
-                  metadata: <String, Object?>{
-                    'gift_recipient_user_id': 'creator-user-1',
-                    'gift_recipient_label': 'Studio Kai',
-                    'gift_source_scope': 'user_hosted',
-                  },
-                ),
-              ),
-          giftClient: giftClient,
+          viewStateLoader: () async => viewState,
         ),
       ),
     );
 
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump(const Duration(milliseconds: 80));
 
-    await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Send gift'),
-      200,
-      scrollable: find.byType(Scrollable).first,
+    expect(find.byKey(const Key('match-2d-score-strip')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-scoreline')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-commentary-bar')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-controls')), findsOneWidget);
+    expect(find.byType(MatchPitch2D), findsOneWidget);
+    expect(find.byType(NativeMatch3dSurface), findsNothing);
+    expect(find.byType(PremiumControls), findsNothing);
+  });
+
+  testWidgets('match viewer can pause and resume the 2D playback loop', (
+    WidgetTester tester,
+  ) async {
+    final CompetitionSummary competition = _buildCompetition(
+      id: 'match-viewer-controls',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Send gift'));
-    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Fire'));
-    await tester.pumpAndSettle();
-
-    expect(giftClient.lastTarget?.recipientUserId, 'creator-user-1');
-    expect(giftClient.lastTarget?.sourceScope, 'user_hosted');
-    expect(giftClient.lastGift?.key, 'fire');
-    expect(
-      find.text('Fire sent to Studio Kai for 2.0000 Fan Coin.'),
-      findsOneWidget,
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GtexMatchViewerScreen(
+          competition: competition,
+          matchKey: competition.id,
+          viewStateLoader: () async => buildBroadcastTestViewState(),
+        ),
+      ),
     );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+
+    expect(find.byTooltip('Pause'), findsOneWidget);
+    await tester.tap(find.byTooltip('Pause'));
+    await tester.pump();
+    expect(find.byTooltip('Play'), findsOneWidget);
+  });
+
+  test('event-only pass payloads can build a fallback 2D frame', () {
+    final Map<String, Object?> payload = _eventOnlyPassPayload();
+
+    final state = buildBroadcastTestViewState();
+    final parsed = state.copyWith(
+      events: const <MatchEvent>[],
+      frames: const <MatchTimelineFrame>[],
+    );
+    expect(parsed.events, isEmpty);
+
+    final MatchViewState eventState = MatchViewState.fromJson(payload);
+    expect(eventState.events.single.type, MatchViewerEventType.pass);
+    expect(eventState.events.single.durationMs, 650);
+    expect(eventState.frames, hasLength(1));
+    expect(eventState.frames.single.ball.position.x, 55);
+    expect(eventState.frames.single.ball.ownerPlayerId, 'away-8');
   });
 }
 
 CompetitionSummary _buildCompetition({required String id}) {
   return CompetitionSummary(
     id: id,
-    name: 'GTEX Replay Test',
+    name: 'GTEX 2D Match Test',
     format: CompetitionFormat.league,
     visibility: CompetitionVisibility.public,
     status: CompetitionStatus.completed,
@@ -308,7 +171,7 @@ CompetitionSummary _buildCompetition({required String id}) {
     hostFeeAmount: 0,
     prizePool: 0,
     payoutStructure: const <CompetitionPayoutBreakdown>[],
-    rulesSummary: 'Replay validation fixture',
+    rulesSummary: '2D viewer validation fixture',
     matchType: MatchType.gtexHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
@@ -317,22 +180,86 @@ CompetitionSummary _buildCompetition({required String id}) {
   );
 }
 
-class _FakeMatchGiftClient implements MatchGiftClient {
-  MatchGiftTarget? lastTarget;
-  MatchGiftCatalogItem? lastGift;
-
-  @override
-  Future<MatchGiftReceipt> sendGift({
-    required MatchGiftTarget target,
-    required MatchGiftCatalogItem gift,
-  }) async {
-    lastTarget = target;
-    lastGift = gift;
-    return MatchGiftReceipt(
-      giftKey: gift.key,
-      giftDisplayName: gift.label,
-      grossAmount: gift.fanCoinAmount.toStringAsFixed(4),
-      recipientLabel: target.recipientLabel,
-    );
-  }
+Map<String, Object?> _eventOnlyPassPayload() {
+  return <String, Object?>{
+    'match_id': 'event-only-pass',
+    'source': 'test',
+    'supports_offside': true,
+    'duration_seconds': 20,
+    'home_team': <String, Object?>{
+      'team_id': 'home',
+      'team_name': 'Valencia',
+      'short_name': 'VAL',
+      'side': 'home',
+      'formation': '4-3-3',
+      'primary_color': '#FFFFFF',
+      'secondary_color': '#111827',
+      'accent_color': '#FDB022',
+      'goalkeeper_color': '#EC4899',
+    },
+    'away_team': <String, Object?>{
+      'team_id': 'away',
+      'team_name': 'Dumbarton',
+      'short_name': 'DUM',
+      'side': 'away',
+      'formation': '4-3-3',
+      'primary_color': '#4C1D95',
+      'secondary_color': '#FFFFFF',
+      'accent_color': '#FDE68A',
+      'goalkeeper_color': '#FDE68A',
+    },
+    'events': <Object?>[
+      <String, Object?>{
+        'event_id': 'pass-1',
+        'sequence': 1,
+        'event_type': 'pass',
+        'minute': 1,
+        'added_time': 0,
+        'clock_label': '00:11',
+        'time_seconds': 11,
+        'team_id': 'away',
+        'team_name': 'Dumbarton',
+        'primary_player_id': 'away-6',
+        'primary_player_name': 'Zakaria',
+        'secondary_player_id': 'away-8',
+        'secondary_player_name': 'Schingienne',
+        'home_score': 0,
+        'away_score': 0,
+        'banner_text': 'Pass',
+        'commentary': 'Zakaria lays it back to Schingienne',
+        'emphasis_level': 1,
+        'duration_ms': 650,
+        'highlighted_player_ids': <Object?>['away-6', 'away-8'],
+        'flags': <Object?>[],
+        'positions': <Object?>[
+          <String, Object?>{
+            'player_id': 'away-6',
+            'player_name': 'Zakaria',
+            'team_id': 'away',
+            'side': 'away',
+            'shirt_number': 6,
+            'role': 'midfielder',
+            'line': 'midfield',
+            'position': <String, Object?>{'x': 48, 'y': 50},
+          },
+          <String, Object?>{
+            'player_id': 'away-8',
+            'player_name': 'Schingienne',
+            'team_id': 'away',
+            'side': 'away',
+            'shirt_number': 8,
+            'role': 'midfielder',
+            'line': 'midfield',
+            'position': <String, Object?>{'x': 55, 'y': 48},
+          },
+        ],
+        'ball': <String, Object?>{
+          'position': <String, Object?>{'x': 55, 'y': 48},
+          'owner_player_id': 'away-8',
+          'state': 'pass',
+        },
+      },
+    ],
+    'frames': <Object?>[],
+  };
 }

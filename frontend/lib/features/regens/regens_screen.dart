@@ -11,6 +11,7 @@ import '../../shared/providers/regen_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../widgets/football_player_card.dart';
 import '../../widgets/gte_state_panel.dart';
 
 class RegensScreen extends ConsumerWidget {
@@ -23,9 +24,9 @@ class RegensScreen extends ConsumerWidget {
     );
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     return AppPageLayout(
-      title: 'Regen Universe',
+      title: 'Scout Prospects',
       subtitle:
-          'Live rising stars, awards, national-team rental pools, and generated bloodline stories. Fixture content only appears in explicit fixture mode.',
+          'Scout rising prospects, national-pool depth, form, potential, and club-building stories.',
       trailing: DataSourceBadge(
         status:
             value.hasError ? DataSourceStatus.blocked : DataSourceStatus.live,
@@ -55,21 +56,20 @@ class RegensScreen extends ConsumerWidget {
               ),
           loading:
               () => const GteStatePanel(
-                eyebrow: 'REGEN UNIVERSE',
-                title: 'Loading live regen universe',
+                eyebrow: 'SCOUT',
+                title: 'Loading prospects',
                 message:
-                    'Syncing rising stars, awards, national-team rental pools, and request-son orders from the backend.',
+                    'Syncing rising stars, awards, national-pool depth, and request-son orders.',
                 icon: Icons.auto_awesome_rounded,
                 isLoading: true,
               ),
           error:
               (Object error, StackTrace stackTrace) => GteStatePanel(
-                eyebrow: 'REGEN UNIVERSE',
-                title: 'Regen universe is blocked',
+                eyebrow: 'SCOUT',
+                title: 'Prospect scouting is blocked',
                 message: AppFeedback.messageFor(
                   error,
-                  fallback:
-                      'The live regen universe is unavailable right now. No fixture regens are being shown in its place.',
+                  fallback: 'Live prospect scouting is unavailable right now.',
                 ),
                 icon: Icons.warning_amber_rounded,
               ),
@@ -89,9 +89,9 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     return GtexHeroPanel(
       eyebrow: 'LIVE TALENT MAP',
-      title: 'Every regen surface now reads the backend before it renders.',
+      title: 'Scout the next wave of football talent.',
       description:
-          'Awards, national-team rental pools, scouting feed stories, and request-son results are all live-backed. When live data fails, this screen blocks instead of inventing fake regens.',
+          'Review ratings, form, potential, national-pool depth, and request-son prospects with clean football card visuals.',
       metrics: <Widget>[
         _MetricChip(
           label: 'Awards',
@@ -131,7 +131,7 @@ class _AwardsPanel extends StatelessWidget {
     return GtexSectionPanel(
       title: 'Awards',
       subtitle:
-          'Live `/regen-universe/awards` results. Preseeded national regens can win here without becoming tradable.',
+          'Prospect awards and form stories. National-pool players can win here without becoming tradable.',
       child:
           awards.isEmpty
               ? const _EmptyState(
@@ -188,8 +188,7 @@ class _NationalPoolPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return GtexSectionPanel(
       title: 'National Pool',
-      subtitle:
-          'Preseeded national regens are shown as rental-only squad fillers. Buy, trade, and transfer CTAs stay hidden because the backend marks them non-tradable.',
+      subtitle: 'National-pool prospects are rental-only squad depth.',
       child:
           nationalRegens.isEmpty
               ? const _EmptyState(
@@ -200,16 +199,21 @@ class _NationalPoolPanel extends StatelessWidget {
                     .map(
                       (NationalRegenSeed seed) => Padding(
                         padding: const EdgeInsets.only(bottom: spacingSM),
-                        child: GtexListTile(
-                          title: seed.displayName,
-                          subtitle:
-                              '${seed.countryName} | ${seed.primaryPosition} | ${seed.ageBand.toUpperCase()} | Age ${seed.age ?? '--'} | OVR ${seed.currentRating} | POT ${seed.potentialRating}',
-                          leadingIcon: Icons.flag_circle_rounded,
-                          tone: GtexSurfaceTone.info,
-                          trailing: SizedBox(
-                            width: 220,
-                            child: _BadgeWrap(labels: seed.badgeLabels),
-                          ),
+                        child: FootballPlayerCard(
+                          playerName: seed.displayName,
+                          tierLabel: seed.rarityTier,
+                          avatar: null,
+                          imageUrl: seed.imageUrl,
+                          position: seed.primaryPosition,
+                          nationalityCode: seed.countryCode,
+                          rating: seed.currentRating,
+                          ageLabel: '${seed.age ?? '--'}',
+                          potentialLabel: '${seed.potentialRating}',
+                          attributes: <String>[
+                            seed.countryName,
+                            seed.ageBand.toUpperCase(),
+                            ...seed.badgeLabels.take(2),
+                          ],
                         ),
                       ),
                     )
@@ -228,7 +232,7 @@ class _RisingStarsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return GtexSectionPanel(
       title: 'Rising Stars',
-      subtitle: 'Live `/regen-universe/rising-stars` prospects.',
+      subtitle: 'Scouted rising prospects with form and potential.',
       child:
           stars.isEmpty
               ? const _EmptyState(
@@ -239,16 +243,21 @@ class _RisingStarsPanel extends StatelessWidget {
                     .map(
                       (RegenRisingStar star) => Padding(
                         padding: const EdgeInsets.only(bottom: spacingSM),
-                        child: GtexListTile(
-                          title: star.player.name,
-                          subtitle:
-                              '${star.player.nationality} | ${star.player.position} | ${star.player.currentRating}/${star.player.potential} | ${star.momentumLabel}',
-                          leadingIcon: Icons.auto_awesome_rounded,
-                          tone: GtexSurfaceTone.live,
-                          trailing: SizedBox(
-                            width: 240,
-                            child: _BadgeWrap(labels: star.displayBadges),
-                          ),
+                        child: FootballPlayerCard(
+                          playerName: star.player.name,
+                          tierLabel: star.player.sourceType,
+                          avatar: null,
+                          imageUrl: star.player.imageUrl,
+                          position: star.player.position,
+                          nationalityCode: star.player.nationalityCode,
+                          rating: star.player.currentRating,
+                          ageLabel: '${star.player.age}',
+                          potentialLabel: '${star.player.potential}',
+                          attributes: <String>[
+                            star.player.nationality,
+                            star.momentumLabel,
+                            ...star.displayBadges.take(2),
+                          ],
                         ),
                       ),
                     )
@@ -274,8 +283,7 @@ class _RequestedSonsPanel extends StatelessWidget {
         .toList(growable: false);
     return GtexSectionPanel(
       title: 'Requested Sons',
-      subtitle:
-          'Authenticated live order feed for paid request-son generation. Generated sons stay visible here after backend settlement and creation.',
+      subtitle: 'Authenticated order feed for paid request-son prospects.',
       child:
           !authenticated
               ? const _EmptyState(
@@ -290,23 +298,20 @@ class _RequestedSonsPanel extends StatelessWidget {
                     .map(
                       (RegenCreationOrder order) => Padding(
                         padding: const EdgeInsets.only(bottom: spacingSM),
-                        child: GtexListTile(
-                          title:
+                        child: FootballPlayerCard(
+                          playerName:
                               order.generatedPlayer?.fullName ??
                               'Requested son',
-                          subtitle:
-                              '${order.generatedPlayer?.position ?? '--'} | Age ${order.generatedPlayer?.age ?? '--'} | ${order.generatedPlayer?.currentRating ?? '--'}/${order.generatedPlayer?.potentialRating ?? '--'} | ${order.status}',
-                          leadingIcon: Icons.family_restroom_rounded,
-                          tone: GtexSurfaceTone.success,
-                          trailing: const SizedBox(
-                            width: 180,
-                            child: _BadgeWrap(
-                              labels: <String>[
-                                'Requested Son',
-                                'Bloodline Regen',
-                              ],
-                            ),
-                          ),
+                          tierLabel: 'Requested Son',
+                          avatar: null,
+                          imageUrl: order.generatedPlayer?.imageUrl,
+                          position: order.generatedPlayer?.position,
+                          nationalityCode: order.generatedPlayer?.countryCode,
+                          rating: order.generatedPlayer?.currentRating,
+                          ageLabel: '${order.generatedPlayer?.age ?? '--'}',
+                          potentialLabel:
+                              '${order.generatedPlayer?.potentialRating ?? '--'}',
+                          attributes: <String>[order.status, 'Bloodline Regen'],
                         ),
                       ),
                     )

@@ -187,6 +187,7 @@ class GtexMatchOverlayController {
       MatchViewerEventType.save ||
       MatchViewerEventType.miss ||
       MatchViewerEventType.attack ||
+      MatchViewerEventType.pass ||
       MatchViewerEventType.setPiece ||
       MatchViewerEventType.penalty => GtexBroadcastEventType.missedChance,
       MatchViewerEventType.yellowCard => GtexBroadcastEventType.yellowCard,
@@ -320,6 +321,7 @@ class GtexMatchOverlayController {
         return 'Huge save';
       case MatchViewerEventType.miss:
       case MatchViewerEventType.attack:
+      case MatchViewerEventType.pass:
       case MatchViewerEventType.setPiece:
       case MatchViewerEventType.penalty:
         return 'Chance';

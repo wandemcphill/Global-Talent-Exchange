@@ -309,6 +309,80 @@ def test_match_timeline_service_maps_infinite_league_chance_and_save_events_to_a
     )
 
 
+def test_match_timeline_service_maps_live_pass_events_to_2d_contract() -> None:
+    service = MatchTimelineService()
+
+    view_state = service.build_from_live_stream(
+        match_id="match-live-pass-001",
+        source="infinite_league_runtime",
+        home_team_id="home-team",
+        home_team_name="North City",
+        away_team_id="away-team",
+        away_team_name="South Town",
+        events=[
+            LiveMatchStreamEventView(
+                match_id="match-live-pass-001",
+                event_id="match-live-pass-001:pass",
+                sequence=1,
+                tick=11,
+                minute=0,
+                event_type="pass",
+                team_id="home-team",
+                team="North City",
+                team_side="home",
+                player_id="north-city-6",
+                player="Zakaria",
+                secondary_player_id="north-city-8",
+                secondary_player="Schingienne",
+                commentary="Zakaria lays it back to Schingienne",
+                position=LiveMatchRenderPointView(x=44.0, y=52.0),
+                target_position=LiveMatchRenderPointView(x=52.0, y=48.0),
+                meta={
+                    "duration_ms": 650,
+                    "positions": [
+                        {
+                            "player_id": "north-city-6",
+                            "player_name": "Zakaria",
+                            "team_id": "home-team",
+                            "side": "home",
+                            "shirt_number": 6,
+                            "role": "midfielder",
+                            "line": "midfield",
+                            "position": {"x": 44.0, "y": 52.0},
+                        },
+                        {
+                            "player_id": "north-city-8",
+                            "player_name": "Schingienne",
+                            "team_id": "home-team",
+                            "side": "home",
+                            "shirt_number": 8,
+                            "role": "midfielder",
+                            "line": "midfield",
+                            "position": {"x": 52.0, "y": 48.0},
+                        },
+                    ],
+                    "ball": {
+                        "position": {"x": 52.0, "y": 48.0},
+                        "owner_player_id": "north-city-8",
+                        "state": "pass",
+                    },
+                },
+            ),
+        ],
+    )
+
+    event = next(event for event in view_state.events if event.event_id == "match-live-pass-001:pass")
+    assert event.event_type is MatchViewerEventType.PASS
+    assert event.commentary == "Zakaria lays it back to Schingienne"
+    assert event.duration_ms == 650
+    assert event.positions[0].position.x == 44.0
+    assert event.positions[1].position.y == 48.0
+    assert event.ball is not None
+    assert event.ball.owner_player_id == "north-city-8"
+    assert all(0.0 <= frame.ball.position.x <= 100.0 for frame in view_state.frames)
+    assert all(0.0 <= player.position.y <= 100.0 for frame in view_state.frames for player in frame.players)
+
+
 def _archive_event_type(event_type: MatchEventType) -> str | None:
     mapping = {
         MatchEventType.GOAL: "goals",

@@ -973,6 +973,7 @@ class Match3dTimelineController extends ChangeNotifier {
     if (event != null) {
       switch (event.type) {
         case MatchViewerEventType.attack:
+        case MatchViewerEventType.pass:
         case MatchViewerEventType.setPiece:
         case MatchViewerEventType.penalty:
           return _SegmentStage.buildUp;
@@ -1216,6 +1217,7 @@ class Match3dTimelineController extends ChangeNotifier {
       MatchViewerEventType.save ||
       MatchViewerEventType.miss ||
       MatchViewerEventType.attack ||
+      MatchViewerEventType.pass ||
       MatchViewerEventType.penalty ||
       MatchViewerEventType.setPiece => MatchCameraPreset.attackPush,
       _ => MatchCameraPreset.broadcast,

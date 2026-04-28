@@ -33,6 +33,7 @@ from app.models.regen import (
     RegenTwinsGroup,
     RegenVisualProfile,
 )
+from app.services.regen_portrait_service import RegenPortraitService
 from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 
 _COUNTRY_NAMES = {
@@ -265,16 +266,20 @@ class RegenBootstrapService:
                 )
             )
             visual_profile = generated.metadata.get("visual_profile", {})
-            self.session.add(
-                RegenVisualProfile(
-                    regen_profile_id=regen.id,
-                    portrait_seed=str(visual_profile.get("portrait_seed", generated.regen_id)),
-                    skin_tone=str(visual_profile.get("skin_tone") or ""),
-                    hair_profile=str(visual_profile.get("hair_profile") or ""),
-                    accessory_profile_json={},
-                    kit_style=str(visual_profile.get("kit_style") or ""),
-                    metadata_json={},
-                )
+            regen_visual_profile = RegenVisualProfile(
+                regen_profile_id=regen.id,
+                portrait_seed=str(visual_profile.get("portrait_seed", generated.regen_id)),
+                skin_tone=str(visual_profile.get("skin_tone") or ""),
+                hair_profile=str(visual_profile.get("hair_profile") or ""),
+                accessory_profile_json={},
+                kit_style=str(visual_profile.get("kit_style") or ""),
+                metadata_json={},
+            )
+            self.session.add(regen_visual_profile)
+            RegenPortraitService(self.session).ensure_player_portrait(
+                player,
+                regen=regen,
+                visual_profile=regen_visual_profile,
             )
             lineage_payload = generated.metadata.get("lineage") if isinstance(generated.metadata, dict) else None
             customization_payload = (

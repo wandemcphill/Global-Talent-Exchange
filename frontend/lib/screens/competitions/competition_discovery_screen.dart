@@ -364,8 +364,8 @@ class _CompetitionDiscoveryScreenState
             (BuildContext context) => CompetitionCreateScreen(
               controller: _controller,
               isAuthenticated: widget.isAuthenticated,
-              isCheckingHostEligibility: widget.isCheckingCreatorAccess,
-              hostEligible: widget.canHostCompetitions,
+              isCheckingHostEligibility: false,
+              hostEligible: widget.isAuthenticated,
               onOpenLogin: widget.onOpenLogin,
               onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
             ),

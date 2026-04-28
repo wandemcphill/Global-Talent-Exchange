@@ -22,6 +22,7 @@ class AppRoutes {
   static const String profileSignup = '/profile/signup';
   static const String profileAdmin = '/profile/admin';
   static const String competitions = '/competitions';
+  static const String competitionsCreate = '/competitions/create';
   static const String competitionsFamily = '/competitions/:family';
   static const String competitionsDetail = '/competitions/:family/:id';
   static const String streamerEngine = '/competitions/streamer/engine';
@@ -128,15 +129,15 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'Home',
     location: AppRoutes.home,
     state: AppRouteSurfaceState.live,
-    summary: 'Live home route with clear summaries and launch points.',
+    summary:
+        'Club HQ with squad, fixtures, transfer, and competition entry points.',
     primaryNav: true,
   ),
   AppRouteSurface(
-    label: 'Matches',
+    label: 'Fixtures',
     location: AppRoutes.matches,
     state: AppRouteSurfaceState.live,
-    summary:
-        'Live match discovery with explicit viewer lanes. Local simulation remains gated to explicit fixture-mode runs.',
+    summary: 'Fixtures, live 2D match viewing, and results.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -148,11 +149,10 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Scouting',
+    label: 'Transfer Market',
     location: AppRoutes.market,
     state: AppRouteSurfaceState.live,
-    summary:
-        'Live player market and transfer workflows with a dedicated transfer center route.',
+    summary: 'Buy, bid, sign, and list players from the live transfer market.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -162,22 +162,20 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     state: AppRouteSurfaceState.live,
     summary:
         'Live world discovery with routed federation, national team, and competition-family entry points. Deeper world programs stay gated to explicit routes as they ship.',
-    primaryNav: true,
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Regen Universe',
+    label: 'Regen Prospects',
     location: AppRoutes.regens,
     state: AppRouteSurfaceState.hidden,
     summary:
-        'Dedicated live regen-universe route for awards, national-pool regens, and request-son tracking.',
+        'Dedicated live route for regen prospects, awards, and national-pool players.',
   ),
   AppRouteSurface(
-    label: 'Transfer Center',
+    label: 'Transfer Listings',
     location: AppRoutes.transferCenter,
     state: AppRouteSurfaceState.live,
-    summary:
-        'Dedicated live transfer-listing route with detail, bidding, and negotiation context.',
+    summary: 'Dedicated transfer-listing route with player views and bids.',
     quickAction: true,
   ),
   AppRouteSurface(
@@ -222,10 +220,10 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Profile',
+    label: 'Manager',
     location: AppRoutes.profile,
     state: AppRouteSurfaceState.live,
-    summary: 'Live session, auth, and admin affordances.',
+    summary: 'Manager account, club wallet, and admin access.',
     primaryNav: true,
   ),
   AppRouteSurface(
@@ -250,7 +248,16 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'Competitions',
     location: AppRoutes.competitions,
     state: AppRouteSurfaceState.live,
-    summary: 'Live competition-family discovery.',
+    summary: 'Create, join, manage, and review football competitions.',
+    primaryNav: true,
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Create Competition',
+    location: AppRoutes.competitionsCreate,
+    state: AppRouteSurfaceState.live,
+    summary:
+        'Authenticated managers can create user-hosted football competitions.',
     quickAction: true,
   ),
   AppRouteSurface(
@@ -266,11 +273,11 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     summary: 'Deep competition-detail route.',
   ),
   AppRouteSurface(
-    label: 'Streamer Tournament Engine',
+    label: 'Coming soon',
     location: AppRoutes.streamerEngine,
-    state: AppRouteSurfaceState.live,
-    summary: 'Live bridge into the existing streamer tournament engine.',
-    quickAction: true,
+    state: AppRouteSurfaceState.placeholder,
+    summary:
+        'Coming soon for launch. Extra competition tools are not in the 2D manager shell.',
   ),
   AppRouteSurface(
     label: '2D Match Viewer',
@@ -280,38 +287,38 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
         'Deep 2D viewer route that opens the qualified live viewer session or a truthful fallback when the session feed is unavailable.',
   ),
   AppRouteSurface(
-    label: 'Broadcast+ Viewer',
+    label: 'Coming soon',
     location: AppRoutes.matchesBroadcast,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Deep route for live pseudo-3D broadcast sessions.',
-  ),
-  AppRouteSurface(
-    label: '3D Match Viewer',
-    location: AppRoutes.matchesThreeD,
-    state: AppRouteSurfaceState.hidden,
+    state: AppRouteSurfaceState.placeholder,
     summary:
-        'Deep Flutter-rendered 3D viewer route that opens only when live match-viewer sessions and real 3D entitlement qualify together.',
+        'Coming soon for launch. 2D match viewing is the active matchday route.',
   ),
   AppRouteSurface(
-    label: 'Native 3D',
+    label: 'Coming soon',
+    location: AppRoutes.matchesThreeD,
+    state: AppRouteSurfaceState.placeholder,
+    summary:
+        'Coming soon for launch. 3D match viewing is blocked in the active shell.',
+  ),
+  AppRouteSurface(
+    label: 'Coming soon',
     location: AppRoutes.matchesNativeThreeD,
     state: AppRouteSurfaceState.placeholder,
     summary:
-        'Visible truth route only. A native Android match_3d bridge scaffold exists, but the dedicated native-only route stays blocked until a verified live match contract and shippable runtime are proven.',
+        'Coming soon for launch. Advanced match viewing is blocked in the active shell.',
   ),
   AppRouteSurface(
-    label: '2D Spectate Probe',
+    label: 'Spectate',
     location: AppRoutes.matchesSpectate,
-    state: AppRouteSurfaceState.hidden,
-    summary:
-        'Deep manual spectate route reserved for explicit live spectate sessions and truthful fallback playback.',
+    state: AppRouteSurfaceState.placeholder,
+    summary: 'Coming soon for launch. Use fixtures and the 2D viewer instead.',
   ),
   AppRouteSurface(
     label: 'Simulation',
     location: AppRoutes.matchesSimulate,
-    state: AppRouteSurfaceState.hidden,
+    state: AppRouteSurfaceState.placeholder,
     summary:
-        'Deep route reserved for explicit fixture-mode local simulation. Live shells resolve it to a blocked disclosure screen.',
+        'Coming soon for launch. Local simulation tools are blocked in the active shell.',
   ),
 ];
 
@@ -327,43 +334,43 @@ AppRouteSurface? appRouteSurfaceFor(String location) {
 AppDestination _primaryDestinationFor(AppRouteSurface surface) {
   return switch (surface.location) {
     AppRoutes.home => const AppDestination(
-      label: 'Home',
+      label: 'Club HQ',
       location: AppRoutes.home,
       icon: Icons.home_outlined,
       selectedIcon: Icons.home_rounded,
-      subtitle: 'Club HQ',
+      subtitle: 'Manager Home',
       surfaceState: AppRouteSurfaceState.live,
     ),
     AppRoutes.matches => const AppDestination(
-      label: 'Matches',
+      label: 'Fixtures',
       location: AppRoutes.matches,
       icon: Icons.sports_soccer_outlined,
       selectedIcon: Icons.sports_soccer_rounded,
-      subtitle: 'Live Match Control',
+      subtitle: '2D Matchday',
       surfaceState: AppRouteSurfaceState.live,
     ),
     AppRoutes.market => const AppDestination(
-      label: 'Scouting',
+      label: 'Transfer Market',
       location: AppRoutes.market,
       icon: Icons.storefront_outlined,
       selectedIcon: Icons.storefront_rounded,
-      subtitle: 'Player Market & Transfers',
+      subtitle: 'Sign Players',
       surfaceState: AppRouteSurfaceState.live,
     ),
-    AppRoutes.world => const AppDestination(
-      label: 'World',
-      location: AppRoutes.world,
-      icon: Icons.public_outlined,
-      selectedIcon: Icons.public_rounded,
-      subtitle: 'World & Regens',
+    AppRoutes.competitions => const AppDestination(
+      label: 'Competitions',
+      location: AppRoutes.competitions,
+      icon: Icons.emoji_events_outlined,
+      selectedIcon: Icons.emoji_events_rounded,
+      subtitle: 'Fixtures & Prizes',
       surfaceState: AppRouteSurfaceState.live,
     ),
     AppRoutes.profile => const AppDestination(
-      label: 'Profile',
+      label: 'Manager',
       location: AppRoutes.profile,
       icon: Icons.person_outline_rounded,
       selectedIcon: Icons.person_rounded,
-      subtitle: 'Account',
+      subtitle: 'Club Account',
       surfaceState: AppRouteSurfaceState.live,
     ),
     _ =>

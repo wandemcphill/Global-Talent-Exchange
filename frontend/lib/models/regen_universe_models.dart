@@ -2,6 +2,26 @@ import 'dart:collection';
 
 import 'package:gte_frontend/data/gte_models.dart';
 
+String? _imageUrlFromPayload(
+  Map<String, Object?> json, {
+  Map<String, Object?> metadata = const <String, Object?>{},
+}) {
+  return GteJson.stringOrNull(json, <String>[
+        'image_url',
+        'portrait_url',
+        'photo_url',
+        'imageUrl',
+        'portraitUrl',
+      ]) ??
+      GteJson.stringOrNull(metadata, <String>[
+        'image_url',
+        'portrait_url',
+        'photo_url',
+        'imageUrl',
+        'portraitUrl',
+      ]);
+}
+
 class RegenMarketAccess {
   const RegenMarketAccess({
     this.marketEligible = true,
@@ -77,6 +97,7 @@ class RegenUniversePlayer {
     required this.growthCurve,
     required this.sourceType,
     this.nationalityCode,
+    this.imageUrl,
     this.clubId,
     this.marketAccess = const RegenMarketAccess(),
   });
@@ -86,6 +107,7 @@ class RegenUniversePlayer {
   final int age;
   final String nationality;
   final String? nationalityCode;
+  final String? imageUrl;
   final String position;
   final int potential;
   final int currentRating;
@@ -185,6 +207,7 @@ class RegenUniversePlayer {
         'source_type',
         'generation_source',
       ], fallback: 'regen'),
+      imageUrl: _imageUrlFromPayload(json),
       clubId: GteJson.stringOrNull(json, <String>['club_id', 'clubId']),
       marketAccess: RegenMarketAccess.fromJson(
         GteJson.value(json, <String>['market_access', 'marketAccess']) ?? json,
@@ -330,6 +353,7 @@ class NationalRegenSeed {
     this.growthCurve = 0.5,
     this.status = 'active',
     this.preseedBatch,
+    this.imageUrl,
     this.marketEligible = false,
     this.shareMarketEligible = false,
     this.tradable = false,
@@ -356,6 +380,7 @@ class NationalRegenSeed {
   final String rarityTier;
   final String status;
   final String? preseedBatch;
+  final String? imageUrl;
   final Map<String, Object?> metadata;
   final bool marketEligible;
   final bool shareMarketEligible;
@@ -450,6 +475,7 @@ class NationalRegenSeed {
         'preseed_batch',
         'preseedBatch',
       ]),
+      imageUrl: _imageUrlFromPayload(json, metadata: metadata),
       metadata: metadata,
       marketEligible: GteJson.boolean(json, <String>[
         'market_eligible',
@@ -493,6 +519,7 @@ class NationalRegenSeed {
       currentRating: currentRating,
       growthCurve: growthCurve,
       sourceType: seedType,
+      imageUrl: imageUrl,
       clubId: null,
       marketAccess: marketAccess,
     );

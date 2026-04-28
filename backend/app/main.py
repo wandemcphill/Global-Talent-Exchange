@@ -4,10 +4,12 @@ import asyncio
 from contextlib import asynccontextmanager
 import logging
 import os
+from pathlib import Path
 from threading import Thread
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -174,6 +176,7 @@ def register_core(app: FastAPI) -> None:
     settings: Settings = app.state.settings
 
     _mount_tts_app(app)
+    _mount_generated_media(app)
     app.include_router(health_router)
     app.add_middleware(AuthEnforcementMiddleware)
     app.add_middleware(RateLimitMiddleware)
@@ -184,6 +187,12 @@ def register_core(app: FastAPI) -> None:
     app.dependency_overrides[core_get_session] = context.database.get_session
     app.dependency_overrides[core_get_read_session] = context.database.get_read_session
     app.dependency_overrides[auth_get_session] = context.database.get_session
+
+
+def _mount_generated_media(app: FastAPI) -> None:
+    media_root = os.environ.get("GTE_GENERATED_MEDIA_ROOT")
+    directory = Path(media_root) if media_root else Path(__file__).resolve().parents[1] / "generated_media"
+    app.mount("/generated-media", StaticFiles(directory=str(directory), check_dir=False), name="generated_media")
 
 
 async def _startup_app(app: FastAPI) -> None:

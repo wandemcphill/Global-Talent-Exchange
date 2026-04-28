@@ -20,6 +20,7 @@ class PlayerCardMarketplaceListingView(BaseModel):
     average_rating: float | None
     latest_value_credits: float | None = None
     avatar: PlayerAvatarView
+    image_url: str | None = None
     tier_code: str
     tier_name: str
     rarity_rank: int
@@ -120,6 +121,7 @@ class PlayerCardMarketplaceLoanListingView(BaseModel):
     position: str | None
     average_rating: float | None
     avatar: PlayerAvatarView
+    image_url: str | None = None
     tier_code: str
     tier_name: str
     rarity_rank: int
@@ -180,6 +182,7 @@ class PlayerCardMarketplaceLoanContractView(BaseModel):
     position: str | None
     average_rating: float | None
     avatar: PlayerAvatarView
+    image_url: str | None = None
     tier_code: str
     tier_name: str
     rarity_rank: int
@@ -237,6 +240,7 @@ class PlayerCardMarketplaceSwapListingView(BaseModel):
     position: str | None
     average_rating: float | None
     avatar: PlayerAvatarView
+    image_url: str | None = None
     tier_code: str
     tier_name: str
     rarity_rank: int

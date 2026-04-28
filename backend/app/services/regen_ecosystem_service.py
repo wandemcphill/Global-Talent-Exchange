@@ -85,6 +85,7 @@ from app.schemas.regen_ecosystem import (
 from app.services.player_agency_service import PlayerAgencyService
 from app.services.player_lifecycle_service import PlayerLifecycleService
 from app.services.regen_market_service import RegenMarketService
+from app.services.regen_portrait_service import RegenPortraitService
 from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 
 _REGION_STRENGTH = {
@@ -1215,16 +1216,20 @@ class RegenEcosystemService:
         )
         self.session.add(origin)
         visual_profile = dict((generated_profile.metadata or {}).get("visual_profile") or {})
-        self.session.add(
-            RegenVisualProfile(
-                regen_profile_id=regen.id,
-                portrait_seed=str(visual_profile.get("portrait_seed") or generated_profile.regen_id),
-                skin_tone=str(visual_profile.get("skin_tone") or ""),
-                hair_profile=str(visual_profile.get("hair_profile") or ""),
-                accessory_profile_json=dict(visual_profile.get("accessory_profile") or {}),
-                kit_style=str(visual_profile.get("kit_style") or ""),
-                metadata_json={},
-            )
+        regen_visual_profile = RegenVisualProfile(
+            regen_profile_id=regen.id,
+            portrait_seed=str(visual_profile.get("portrait_seed") or generated_profile.regen_id),
+            skin_tone=str(visual_profile.get("skin_tone") or ""),
+            hair_profile=str(visual_profile.get("hair_profile") or ""),
+            accessory_profile_json=dict(visual_profile.get("accessory_profile") or {}),
+            kit_style=str(visual_profile.get("kit_style") or ""),
+            metadata_json={},
+        )
+        self.session.add(regen_visual_profile)
+        RegenPortraitService(self.session).ensure_player_portrait(
+            player,
+            regen=regen,
+            visual_profile=regen_visual_profile,
         )
         player_personality = self._ensure_player_personality(
             player=player, regen=regen, regen_personality=regen_personality, origin=origin

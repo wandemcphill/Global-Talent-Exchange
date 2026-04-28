@@ -44,6 +44,7 @@ from app.regen_universe.dna import (
     normalize_dna_profile,
 )
 from app.regen_universe.models import RegenAwardWinner, RegenPerformanceRecord, RegenSeason
+from app.services.regen_portrait_service import RegenPortraitService
 from app.services.regen_service import RegenClubContext, RegenGenerationEngine, resolve_country_naming_profile
 from app.story_feed_engine.service import StoryFeedService
 
@@ -2172,6 +2173,7 @@ class RegenUniverseExpansionService:
                         )
                         self.session.add(seed)
                         self.session.flush()
+                        RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
                         batch_counts[position] += 1
                         used_names.add(regen_view.display_name.casefold())
                         created.append(self._national_seed_view(seed))
@@ -2406,6 +2408,7 @@ class RegenUniverseExpansionService:
         return pattern[slot_index % len(pattern)]
 
     def _national_seed_view(self, seed: NationalRegenSeed) -> dict[str, Any]:
+        metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
         return {
             "id": seed.id,
             "seed_key": seed.seed_key,
@@ -2426,7 +2429,10 @@ class RegenUniverseExpansionService:
             "rarity_tier": seed.rarity_tier,
             "status": seed.status,
             "preseed_batch": seed.preseed_batch,
-            "metadata": dict(seed.metadata_json or {}),
+            "image_url": metadata.get("portraitUrl"),
+            "portrait_url": metadata.get("portraitUrl"),
+            "face_seed": metadata.get("faceSeed"),
+            "metadata": metadata,
             **market_access_payload(seed),
         }
 

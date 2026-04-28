@@ -9,8 +9,6 @@ import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
 import 'live_match_overview_provider.dart';
-import 'match_3d_route_screen.dart';
-import 'match_broadcast_screen.dart';
 import 'match_viewer_route_screen.dart';
 
 class GteLiveMatchHubRouteScreen extends ConsumerWidget {
@@ -58,7 +56,7 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Open the tactical 2D viewer, the broadcast package, or the Flutter 3D lane from one honest hub. Player trading, regen discovery, and transfer planning stay one tap away from the same surface.',
+                        'Open the tactical 2D viewer from one football hub. Player trading, scouting, and transfer planning stay one tap away from the same surface.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
@@ -75,11 +73,11 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                           ),
                           GteMetricChip(
                             label: 'Viewer lanes',
-                            value: '2D + Broadcast + 3D',
+                            value: '2D Matchday',
                           ),
                           const GteMetricChip(
-                            label: 'Wallet rail',
-                            value: 'GTEX Coin',
+                            label: 'Wallet',
+                            value: 'Transfer Balance',
                           ),
                           GteMetricChip(
                             label: 'Entries',
@@ -100,7 +98,7 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                                   dependencies: dependencies,
                                 ),
                             icon: const Icon(Icons.show_chart_outlined),
-                            label: const Text('Player market'),
+                            label: const Text('Transfer Market'),
                           ),
                           FilledButton.tonalIcon(
                             onPressed:
@@ -116,13 +114,14 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                                           dependencies: dependencies,
                                         ),
                             icon: const Icon(Icons.auto_awesome_outlined),
-                            label: const Text('Regen universe'),
+                            label: const Text('Scout Prospects'),
                           ),
                           FilledButton.tonalIcon(
                             onPressed:
                                 () => GteNavigationHelpers.pushRoute<void>(
                                   context,
-                                  route: const FootballTransferCenterRouteData(),
+                                  route:
+                                      const FootballTransferCenterRouteData(),
                                   dependencies: dependencies,
                                 ),
                             icon: const Icon(Icons.swap_horiz_outlined),
@@ -144,16 +143,6 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                             context,
                             MatchViewerRouteScreen(matchKey: entry.matchKey),
                           ),
-                      onOpenBroadcast:
-                          () => _openRouteScreen(
-                            context,
-                            MatchBroadcastScreen(matchKey: entry.matchKey),
-                          ),
-                      onOpenThreeD:
-                          () => _openRouteScreen(
-                            context,
-                            Match3dRouteScreen(matchKey: entry.matchKey),
-                          ),
                     ),
                   ),
                 ),
@@ -167,7 +156,7 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                   eyebrow: 'MATCHDAY HUB',
                   title: 'Loading matchday lanes',
                   message:
-                      'Checking the live broadcast desk before opening the routed 2D, broadcast, and Flutter 3D lanes.',
+                      'Checking live fixtures before opening the routed 2D matchday view.',
                   icon: Icons.stadium_outlined,
                   accentColor: GteShellTheme.accentArena,
                   isLoading: true,
@@ -189,7 +178,7 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'The shell stays usable by falling back to the routed match lanes directly. You can still enter 2D and Flutter 3D while the broadcast desk catches up.',
+                          'The shell stays usable by falling back to the routed 2D matchday lane directly.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
@@ -202,20 +191,6 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                         () => _openRouteScreen(
                           context,
                           const MatchViewerRouteScreen(
-                            matchKey: 'fallback-matchday-lane',
-                          ),
-                        ),
-                    onOpenBroadcast:
-                        () => _openRouteScreen(
-                          context,
-                          const MatchBroadcastScreen(
-                            matchKey: 'fallback-matchday-lane',
-                          ),
-                        ),
-                    onOpenThreeD:
-                        () => _openRouteScreen(
-                          context,
-                          const Match3dRouteScreen(
                             matchKey: 'fallback-matchday-lane',
                           ),
                         ),
@@ -252,7 +227,7 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
         matchKey: 'fallback-matchday-lane',
         title: '$resolvedClubName live matchday lane',
         subtitle:
-            'Fallback route that still opens the truthful 2D and Flutter 3D viewers while the live desk is syncing.',
+            'Fallback route that still opens the 2D matchday viewer while the live feed is syncing.',
         channelLabel: 'Fallback signal',
         isFeatured: true,
         isLive: false,
@@ -286,25 +261,16 @@ class _MatchLaneEntry {
 }
 
 class _MatchLaneCard extends StatelessWidget {
-  const _MatchLaneCard({
-    required this.entry,
-    required this.onOpenTwoD,
-    required this.onOpenBroadcast,
-    required this.onOpenThreeD,
-  });
+  const _MatchLaneCard({required this.entry, required this.onOpenTwoD});
 
   final _MatchLaneEntry entry;
   final VoidCallback onOpenTwoD;
-  final VoidCallback onOpenBroadcast;
-  final VoidCallback onOpenThreeD;
 
   @override
   Widget build(BuildContext context) {
     return GteSurfacePanel(
       accentColor:
-          entry.isFeatured
-              ? GteShellTheme.accentArena
-              : GteShellTheme.accent,
+          entry.isFeatured ? GteShellTheme.accentArena : GteShellTheme.accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -358,17 +324,7 @@ class _MatchLaneCard extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onOpenTwoD,
                 icon: const Icon(Icons.sports_soccer_outlined),
-                label: const Text('Open 2D'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: onOpenBroadcast,
-                icon: const Icon(Icons.live_tv_outlined),
-                label: const Text('Broadcast'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: onOpenThreeD,
-                icon: const Icon(Icons.view_in_ar_outlined),
-                label: const Text('Open 3D'),
+                label: const Text('Open Match'),
               ),
             ],
           ),
