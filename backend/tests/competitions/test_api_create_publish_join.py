@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+
+def _error_message(response) -> str:
+    payload = response.json()
+    return payload.get("message") or payload.get("detail")
+
+
 def test_create_patch_publish_join_leave_flow(client, competition_admin_headers, auth_user_factory) -> None:
-    entrant = auth_user_factory(suffix="create-publish-join-leave")
+    entrant = auth_user_factory(suffix="create-publish-join-leave", funded_credit="25.00")
     create_response = client.post(
         "/api/competitions",
         json={
@@ -129,10 +135,10 @@ def test_join_returns_conflict_before_publish(client, auth_user_factory) -> None
         json={"user_id": entrant["user_id"]},
     )
     assert join_response.status_code == 409
-    assert join_response.json() == {"detail": "competition_not_open"}
+    assert _error_message(join_response) == "competition_not_open"
 
 
-def test_creator_can_publish_and_auto_run_full_competition(client, auth_user_factory) -> None:
+def test_creator_can_publish_and_launch_full_competition(client, auth_user_factory) -> None:
     host = auth_user_factory(suffix="creator-host")
     challenger = auth_user_factory(suffix="creator-challenger")
 
@@ -189,21 +195,19 @@ def test_creator_can_publish_and_auto_run_full_competition(client, auth_user_fac
         },
     )
     assert challenger_join.status_code == 200
-    settled = challenger_join.json()
-    assert settled["status"] == "settled"
-    assert settled["participant_count"] == 2
+    launched = challenger_join.json()
+    assert launched["status"] == "live"
+    assert launched["participant_count"] == 2
 
     fixtures = client.get(f"/api/competitions/{competition_id}/fixtures")
     assert fixtures.status_code == 200
     fixture_payload = fixtures.json()
     assert len(fixture_payload) == 1
-    assert fixture_payload[0]["status"] == "completed"
+    assert fixture_payload[0]["status"] == "scheduled"
 
-    events = client.get(
-        f"/api/competitions/{competition_id}/matches/{fixture_payload[0]['id']}/events"
-    )
+    events = client.get(f"/api/competitions/{competition_id}/matches/{fixture_payload[0]['id']}/events")
     assert events.status_code == 200
-    assert len(events.json()) > 0
+    assert events.json() == []
 
 
 def test_non_owner_cannot_publish_someone_elses_competition(client, auth_user_factory) -> None:
@@ -237,6 +241,4 @@ def test_non_owner_cannot_publish_someone_elses_competition(client, auth_user_fa
         json={"open_for_join": True},
     )
     assert publish_response.status_code == 403
-    assert publish_response.json() == {
-        "detail": "Admin access is required for this action."
-    }
+    assert _error_message(publish_response) == "Admin access is required for this action."

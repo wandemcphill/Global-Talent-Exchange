@@ -32,14 +32,16 @@ def _create_competition(
             "capacity": capacity,
             "creator_id": f"host-{name}",
             "payout_structure": [{"place": 1, "percent": "1.00"}],
-            "scheduled_start_at": datetime(2026, 3, 20, tzinfo=timezone.utc).isoformat(),
+            "scheduled_start_at": datetime(2035, 3, 20, tzinfo=timezone.utc).isoformat(),
         },
     )
     assert response.status_code == 201
     return response.json()["id"]
 
 
-def _publish_and_join(client, competition_id: str, admin_headers: dict[str, str], entrants: list[dict[str, str]]) -> None:
+def _publish_and_join(
+    client, competition_id: str, admin_headers: dict[str, str], entrants: list[dict[str, str]]
+) -> None:
     publish = client.post(
         f"/api/competitions/{competition_id}/publish",
         headers=admin_headers,
@@ -251,19 +253,25 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
 
     with app_session_factory() as session:
         participant_count = session.scalar(
-            select(func.count()).select_from(CompetitionParticipant).where(
+            select(func.count())
+            .select_from(CompetitionParticipant)
+            .where(
                 CompetitionParticipant.competition_id == competition_id,
                 CompetitionParticipant.club_id == entrant["user_id"],
             )
         )
         entry_count = session.scalar(
-            select(func.count()).select_from(CompetitionEntry).where(
+            select(func.count())
+            .select_from(CompetitionEntry)
+            .where(
                 CompetitionEntry.competition_id == competition_id,
                 CompetitionEntry.club_id == entrant["user_id"],
             )
         )
         fee_collection_count = session.scalar(
-            select(func.count()).select_from(CompetitionWalletLedger).where(
+            select(func.count())
+            .select_from(CompetitionWalletLedger)
+            .where(
                 CompetitionWalletLedger.competition_id == competition_id,
                 CompetitionWalletLedger.entry_type == "entry_fee_collection",
                 CompetitionWalletLedger.reference_id == entrant["user_id"],
@@ -281,4 +289,4 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
     assert fee_collection_count == 1
     assert participant is not None
     assert participant.paid_at is not None
-    assert participant.paid_entry_fee_minor == 2500
+    assert participant.paid_entry_fee_minor == 250000

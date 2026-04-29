@@ -280,8 +280,9 @@ class WalletService:
         currency: LedgerUnit,
         available_balance: Decimal,
         reserved_balance: Decimal,
+        defer_until_commit: bool = False,
     ) -> None:
-        if self._session_has_pending_state(session):
+        if defer_until_commit or self._session_has_pending_state(session):
             defer_session_callback_until_commit(
                 session,
                 callback=lambda resolved_user_id=user_id, resolved_currency=currency, resolved_available=str(
@@ -306,6 +307,7 @@ class WalletService:
         session: Session,
         *,
         accounts: dict[str, LedgerAccount],
+        defer_until_commit: bool = False,
     ) -> None:
         impacted_pairs = {
             (account.owner_user_id, account.unit)
@@ -327,18 +329,31 @@ class WalletService:
                     LedgerAccount.kind == LedgerAccountKind.ESCROW,
                 )
             )
-            available_balance = (
-                self.get_balance(session, available_account) if available_account is not None else Decimal("0.0000")
-            )
-            reserved_balance = (
-                self.get_balance(session, escrow_account) if escrow_account is not None else Decimal("0.0000")
-            )
+            if defer_until_commit:
+                available_balance = (
+                    self._normalize_amount(self._get_or_build_balance_projection(session, available_account).balance)
+                    if available_account is not None
+                    else Decimal("0.0000")
+                )
+                reserved_balance = (
+                    self._normalize_amount(self._get_or_build_balance_projection(session, escrow_account).balance)
+                    if escrow_account is not None
+                    else Decimal("0.0000")
+                )
+            else:
+                available_balance = (
+                    self.get_balance(session, available_account) if available_account is not None else Decimal("0.0000")
+                )
+                reserved_balance = (
+                    self.get_balance(session, escrow_account) if escrow_account is not None else Decimal("0.0000")
+                )
             self._prime_wallet_summary_cache(
                 session,
                 user_id=owner_user_id,
                 currency=unit,
                 available_balance=available_balance,
                 reserved_balance=reserved_balance,
+                defer_until_commit=defer_until_commit,
             )
 
     def ensure_default_accounts(self, session: Session, user: User) -> dict[LedgerUnit, LedgerAccount]:
@@ -1508,7 +1523,7 @@ class WalletService:
                 "metadata": dict(transaction_record.metadata_json or {}),
             },
         )
-        self._prime_impacted_wallet_summary_caches(session, accounts=accounts_by_id)
+        self._prime_impacted_wallet_summary_caches(session, accounts=accounts_by_id, defer_until_commit=True)
         return entries
 
     def get_balance(self, session: Session, account: LedgerAccount) -> Decimal:

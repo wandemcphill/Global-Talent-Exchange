@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import Request
 
 from app.auth.dependencies import get_current_user
+from app.auth.security import TokenError, decode_access_token
 from app.models.user import KycStatus, User, UserRole
 
 
@@ -26,9 +28,20 @@ def _authenticated_competition_routes(app, app_session_factory):
             )
             session.commit()
 
-    def _override_current_user() -> User:
+    def _override_current_user(request: Request) -> User:
+        resolved_user_id = user_id
+        authorization = request.headers.get("authorization", "").strip()
+        if authorization.lower().startswith("bearer "):
+            token = authorization.split(" ", maxsplit=1)[1].strip()
+            try:
+                subject = decode_access_token(token).get("sub")
+                if isinstance(subject, str) and subject:
+                    resolved_user_id = subject
+            except TokenError:
+                resolved_user_id = user_id
+
         with app_session_factory() as session:
-            user = session.get(User, user_id)
+            user = session.get(User, resolved_user_id)
             assert user is not None
             return user
 

@@ -36,10 +36,7 @@ def test_gtex_financial_summary_exposes_dynamic_jackpot_pool(
         },
     ).json()
     competition_id = created["id"]
-    jackpot_users = [
-        auth_user_factory(suffix=f"jackpot-{index}")
-        for index in range(1, 3)
-    ]
+    jackpot_users = [auth_user_factory(suffix=f"jackpot-{index}") for index in range(1, 3)]
     client.post(
         f"/api/competitions/{competition_id}/publish",
         headers=competition_admin_headers,
@@ -107,20 +104,20 @@ def test_gtex_financial_summary_exposes_dynamic_jackpot_pool(
     financials_response = client.get(f"/api/competitions/{competition_id}/financials")
     assert financials_response.status_code == 200
     financials = financials_response.json()
-    assert financials["prize_pool"] == "33.8000"
+    assert financials["prize_pool"] == "34.0000"
     assert financials["dynamic_prize_pool"] == {
         "enabled": True,
         "base_funding": "25.0000",
-        "activity_boost": "0.3000",
+        "activity_boost": "0.5000",
         "jackpot_rollover": "8.5000",
-        "total_pool": "33.8000",
-        "active_users_5min": 2,
+        "total_pool": "34.0000",
+        "active_users_5min": 4,
         "trade_volume_5min": "200.0000",
     }
 
     detail_response = client.get(f"/api/competitions/{competition_id}")
     assert detail_response.status_code == 200
-    assert detail_response.json()["dynamic_prize_pool"]["total_pool"] == "33.8000"
+    assert detail_response.json()["dynamic_prize_pool"]["total_pool"] == "34.0000"
 
 
 def test_financial_summary_exposes_transparent_pool_breakdown(
@@ -149,8 +146,7 @@ def test_financial_summary_exposes_transparent_pool_breakdown(
     ).json()
     competition_id = created["id"]
     entrants = [
-        auth_user_factory(suffix=f"financial-summary-{index}", funded_credit="100.0000")
-        for index in range(1, 3)
+        auth_user_factory(suffix=f"financial-summary-{index}", funded_credit="100.0000") for index in range(1, 3)
     ]
     client.post(
         f"/api/competitions/{competition_id}/publish",

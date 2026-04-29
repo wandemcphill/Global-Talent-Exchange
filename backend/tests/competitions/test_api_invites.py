@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+
+def _error_message(response) -> str:
+    payload = response.json()
+    return payload.get("message") or payload.get("detail")
+
+
 def test_invite_generation_listing_and_join_flow(client, competition_admin_headers, auth_user_factory) -> None:
     blocked_user = auth_user_factory(suffix="invite-blocked")
     invited_user = auth_user_factory(suffix="invite-accepted", funded_credit="100.0000")
@@ -53,7 +59,7 @@ def test_invite_generation_listing_and_join_flow(client, competition_admin_heade
         json={"user_id": blocked_user["user_id"]},
     )
     assert blocked_join.status_code == 409
-    assert blocked_join.json() == {"detail": "invite_required"}
+    assert _error_message(blocked_join) == "invite_required"
 
     detail_response = client.get(
         f"/api/competitions/{competition_id}",
@@ -61,11 +67,9 @@ def test_invite_generation_listing_and_join_flow(client, competition_admin_heade
     )
     assert detail_response.status_code == 200
     detail = detail_response.json()
-    assert detail["join_eligibility"] == {
-        "eligible": True,
-        "reason": None,
-        "requires_invite": False,
-    }
+    assert detail["join_eligibility"]["eligible"] is True
+    assert detail["join_eligibility"]["requires_invite"] is False
+    assert detail["join_eligibility"].get("reason") is None
 
     join_response = client.post(
         f"/api/competitions/{competition_id}/join",
@@ -100,4 +104,4 @@ def test_only_creator_can_issue_invites(client) -> None:
         json={"issued_by": "host-23", "max_uses": 1},
     )
     assert forbidden_response.status_code == 403
-    assert forbidden_response.json() == {"detail": "invite_forbidden"}
+    assert _error_message(forbidden_response) == "invite_forbidden"

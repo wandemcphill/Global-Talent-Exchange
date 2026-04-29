@@ -38,7 +38,10 @@ from app.models.competition_rule_set import CompetitionRuleSet
 from app.models.competition_schedule_job import CompetitionScheduleJob
 from app.models.competition_seed_rule import CompetitionSeedRule
 from app.models.competition_visibility_rule import CompetitionVisibilityRule
-from app.schemas.competition_core import CompetitionCorePayload, CompetitionCreateRequest as CompetitionCoreCreateRequest
+from app.schemas.competition_core import (
+    CompetitionCorePayload,
+    CompetitionCreateRequest as CompetitionCoreCreateRequest,
+)
 from app.schemas.competition_financials import CompetitionFinancialsPayload
 from app.schemas.competition_lifecycle import (
     CompetitionAdvanceRequest,
@@ -101,6 +104,14 @@ _DISCOVERY_SKIP_REASONS = frozenset({"invalid_summary_state", "rules_missing"})
 _TWO_PLACES = Decimal("0.01")
 _FOUR_PLACES = Decimal("0.0001")
 _DYNAMIC_PRIZE_POOL_UNSET = object()
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 class CompetitionActionError(ValueError):
@@ -227,7 +238,10 @@ class CompetitionOrchestrator:
         if payload.rules_summary:
             competition.description = payload.rules_summary
         if payload.beginner_friendly is not None:
-            competition.metadata_json = {**(competition.metadata_json or {}), "beginner_friendly": payload.beginner_friendly}
+            competition.metadata_json = {
+                **(competition.metadata_json or {}),
+                "beginner_friendly": payload.beginner_friendly,
+            }
         if payload.creator_name:
             competition.metadata_json = {**(competition.metadata_json or {}), "creator_name": payload.creator_name}
         if payload.created_at:
@@ -336,7 +350,10 @@ class CompetitionOrchestrator:
         if payload.rules_summary is not None:
             competition.description = payload.rules_summary
         if payload.beginner_friendly is not None:
-            competition.metadata_json = {**(competition.metadata_json or {}), "beginner_friendly": payload.beginner_friendly}
+            competition.metadata_json = {
+                **(competition.metadata_json or {}),
+                "beginner_friendly": payload.beginner_friendly,
+            }
         if payload.scheduled_start_at is not None:
             competition.scheduled_start_at = payload.scheduled_start_at
         if payload.competition_type is not None:
@@ -400,7 +417,11 @@ class CompetitionOrchestrator:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
-        if CompetitionStatus(competition.status) in {CompetitionStatus.LIVE, CompetitionStatus.COMPLETED, CompetitionStatus.SETTLED}:
+        if CompetitionStatus(competition.status) in {
+            CompetitionStatus.LIVE,
+            CompetitionStatus.COMPLETED,
+            CompetitionStatus.SETTLED,
+        }:
             return self._to_summary(competition)
         competition.status = CompetitionStatus.OPEN.value
         competition.opened_at = datetime.now(timezone.utc)
@@ -421,13 +442,17 @@ class CompetitionOrchestrator:
         )
         return self._to_summary(competition)
 
-    def get(self, competition_id: str, *, user_id: str | None = None, invite_code: str | None = None) -> CompetitionSummaryView | None:
+    def get(
+        self, competition_id: str, *, user_id: str | None = None, invite_code: str | None = None
+    ) -> CompetitionSummaryView | None:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
         return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
 
-    def summary(self, competition_id: str, *, user_id: str | None = None, invite_code: str | None = None) -> CompetitionSummaryView | None:
+    def summary(
+        self, competition_id: str, *, user_id: str | None = None, invite_code: str | None = None
+    ) -> CompetitionSummaryView | None:
         return self.get(competition_id, user_id=user_id, invite_code=invite_code)
 
     def list(
@@ -464,9 +489,7 @@ class CompetitionOrchestrator:
         competitions = list(self.session.scalars(stmt).all())
         list_context = self._list_query_context(competitions)
         dynamic_prize_pool_service = (
-            DynamicPrizePoolService(self.session)
-            if list_context.dynamic_prize_pool_context is not None
-            else None
+            DynamicPrizePoolService(self.session) if list_context.dynamic_prize_pool_context is not None else None
         )
 
         items: list[CompetitionSummaryView] = []
@@ -551,7 +574,10 @@ class CompetitionOrchestrator:
             status="accepted",
             invite_id=invite_used.id if invite_used else None,
             responded_at=datetime.now(timezone.utc),
-            metadata_json={**({"user_name": user_name} if user_name else {}), **({"invite_code": invite_code} if invite_code else {})},
+            metadata_json={
+                **({"user_name": user_name} if user_name else {}),
+                **({"invite_code": invite_code} if invite_code else {}),
+            },
         )
         entry_savepoint = self.session.begin_nested()
         try:
@@ -682,10 +708,12 @@ class CompetitionOrchestrator:
                 "participant_user_id": user_id,
                 "entry_id": entry.id if entry is not None else None,
                 "participant_id": participant.id,
-                "refund_status": (entry.metadata_json or {}).get("entry_fee_refund_status") if entry is not None else None,
-                "refund_transaction_id": (entry.metadata_json or {}).get("entry_fee_refund_transaction_id")
-                if entry is not None
-                else None,
+                "refund_status": (
+                    (entry.metadata_json or {}).get("entry_fee_refund_status") if entry is not None else None
+                ),
+                "refund_transaction_id": (
+                    (entry.metadata_json or {}).get("entry_fee_refund_transaction_id") if entry is not None else None
+                ),
             },
         )
         self.session.commit()
@@ -749,7 +777,9 @@ class CompetitionOrchestrator:
                 .order_by(CompetitionInvite.created_at.desc())
             ).all()
         )
-        return CompetitionInvitesResponse(competition_id=competition_id, invites=tuple(self._invite_view(item) for item in invites))
+        return CompetitionInvitesResponse(
+            competition_id=competition_id, invites=tuple(self._invite_view(item) for item in invites)
+        )
 
     def accept_invite(
         self,
@@ -948,7 +978,9 @@ class CompetitionOrchestrator:
         )
         return tuple(self._match_view(match) for match in matches)
 
-    def standings(self, competition_id: str, *, group_key: str | None = None) -> tuple[CompetitionStandingView, ...] | None:
+    def standings(
+        self, competition_id: str, *, group_key: str | None = None
+    ) -> tuple[CompetitionStandingView, ...] | None:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
@@ -978,7 +1010,11 @@ class CompetitionOrchestrator:
                     goal_diff=participant.goal_diff,
                     points=participant.points,
                     rank=index,
-                    reward_amount=self.progression_service.minor_to_decimal(history.earnings_minor) if history is not None else Decimal("0.0000"),
+                    reward_amount=(
+                        self.progression_service.minor_to_decimal(history.earnings_minor)
+                        if history is not None
+                        else Decimal("0.0000")
+                    ),
                     reward_currency=history.currency if history is not None else None,
                     reward_status=history.reward_status if history is not None else None,
                     badge_code=history.badge_code if history is not None else None,
@@ -1000,7 +1036,11 @@ class CompetitionOrchestrator:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
-        if CompetitionStatus(competition.status) in {CompetitionStatus.LIVE, CompetitionStatus.COMPLETED, CompetitionStatus.SETTLED}:
+        if CompetitionStatus(competition.status) in {
+            CompetitionStatus.LIVE,
+            CompetitionStatus.COMPLETED,
+            CompetitionStatus.SETTLED,
+        }:
             return self._to_summary(competition)
         seed_rule = self._seed_rule(competition.id)
         if payload.seed_method is not None:
@@ -1014,7 +1054,11 @@ class CompetitionOrchestrator:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
-        if CompetitionStatus(competition.status) in {CompetitionStatus.LIVE, CompetitionStatus.COMPLETED, CompetitionStatus.SETTLED}:
+        if CompetitionStatus(competition.status) in {
+            CompetitionStatus.LIVE,
+            CompetitionStatus.COMPLETED,
+            CompetitionStatus.SETTLED,
+        }:
             return self._to_summary(competition)
         try:
             self.lifecycle_service.launch_competition(competition)
@@ -1025,7 +1069,9 @@ class CompetitionOrchestrator:
         self.session.refresh(competition)
         return self._to_summary(competition)
 
-    def advance_competition(self, competition_id: str, payload: CompetitionAdvanceRequest) -> CompetitionSummaryView | None:
+    def advance_competition(
+        self, competition_id: str, payload: CompetitionAdvanceRequest
+    ) -> CompetitionSummaryView | None:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
@@ -1036,7 +1082,9 @@ class CompetitionOrchestrator:
         self.session.refresh(competition)
         return self._to_summary(competition)
 
-    def finalize_competition(self, competition_id: str, payload: CompetitionFinalizeRequest) -> CompetitionSummaryView | None:
+    def finalize_competition(
+        self, competition_id: str, payload: CompetitionFinalizeRequest
+    ) -> CompetitionSummaryView | None:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
@@ -1107,7 +1155,9 @@ class CompetitionOrchestrator:
         self.session.refresh(job)
         return self._schedule_job_view(job)
 
-    def schedule_job_status(self, competition_id: str, *, job_id: str | None = None) -> CompetitionScheduleJobView | None:
+    def schedule_job_status(
+        self, competition_id: str, *, job_id: str | None = None
+    ) -> CompetitionScheduleJobView | None:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
@@ -1201,7 +1251,9 @@ class CompetitionOrchestrator:
         visibility_rules: Iterable[CompetitionVisibilityRule] | None = None,
         dynamic_prize_pool: object = _DYNAMIC_PRIZE_POOL_UNSET,
     ) -> CompetitionSummaryView:
-        participant_count = participant_count if participant_count is not None else self._participant_count(competition.id)
+        participant_count = (
+            participant_count if participant_count is not None else self._participant_count(competition.id)
+        )
         rule_set = rule_set or self._rule_set(competition.id)
         fees = self._fees_for(competition, participant_count=participant_count)
         resolved_dynamic_prize_pool = (
@@ -1209,7 +1261,9 @@ class CompetitionOrchestrator:
             if dynamic_prize_pool is _DYNAMIC_PRIZE_POOL_UNSET
             else dynamic_prize_pool
         )
-        prize_pool = resolved_dynamic_prize_pool.total_pool if resolved_dynamic_prize_pool is not None else fees.prize_pool
+        prize_pool = (
+            resolved_dynamic_prize_pool.total_pool if resolved_dynamic_prize_pool is not None else fees.prize_pool
+        )
         payout_structure = self._payout_breakdown(
             competition=competition,
             prize_pool=prize_pool,
@@ -1333,9 +1387,7 @@ class CompetitionOrchestrator:
 
     def _participant_count(self, competition_id: str) -> int:
         return int(
-            self.session.scalar(
-                select(func.count()).where(CompetitionParticipant.competition_id == competition_id)
-            )
+            self.session.scalar(select(func.count()).where(CompetitionParticipant.competition_id == competition_id))
             or 0
         )
 
@@ -1454,7 +1506,9 @@ class CompetitionOrchestrator:
         )
 
     def _rule_set(self, competition_id: str) -> CompetitionRuleSet:
-        rule_set = self.session.scalar(select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition_id))
+        rule_set = self.session.scalar(
+            select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition_id)
+        )
         if rule_set is None:
             raise CompetitionActionError("Competition rules are missing.", reason="rules_missing")
         return rule_set
@@ -1523,11 +1577,17 @@ class CompetitionOrchestrator:
         rule_set = rule_set or self._rule_set(competition.id)
         user_id = self._normalized_string(user_id)
         invite_code = self._normalized_string(invite_code)
-        participant_count = participant_count if participant_count is not None else self._participant_count(competition.id)
-        already_joined = already_joined if already_joined is not None else (
-            self._participant(competition.id, user_id) is not None if user_id else False
+        participant_count = (
+            participant_count if participant_count is not None else self._participant_count(competition.id)
         )
-        invite_valid = self._resolve_invite(competition.id, invite_code=invite_code, club_id=user_id, consume=False) is not None
+        already_joined = (
+            already_joined
+            if already_joined is not None
+            else (self._participant(competition.id, user_id) is not None if user_id else False)
+        )
+        invite_valid = (
+            self._resolve_invite(competition.id, invite_code=invite_code, club_id=user_id, consume=False) is not None
+        )
         join_decision = self.join_service.evaluate_join(
             status=self._coerce_enum(CompetitionStatus, competition.status, field_name="status"),
             visibility=self._coerce_enum(CompetitionVisibility, competition.visibility, field_name="visibility"),
@@ -1542,7 +1602,9 @@ class CompetitionOrchestrator:
                 if visibility_rules is not None
                 else list(
                     self.session.scalars(
-                        select(CompetitionVisibilityRule).where(CompetitionVisibilityRule.competition_id == competition.id)
+                        select(CompetitionVisibilityRule).where(
+                            CompetitionVisibilityRule.competition_id == competition.id
+                        )
                     ).all()
                 )
             )
@@ -1615,8 +1677,7 @@ class CompetitionOrchestrator:
             rule_sets=rule_sets,
             prize_rules=prize_rules,
             visibility_rules={
-                competition_id: tuple(items)
-                for competition_id, items in grouped_visibility_rules.items()
+                competition_id: tuple(items) for competition_id, items in grouped_visibility_rules.items()
             },
             dynamic_prize_pool_context=dynamic_prize_pool_context,
         )
@@ -1633,7 +1694,8 @@ class CompetitionOrchestrator:
             creator_id=self._required_identifier(competition.host_user_id, field_name="host_user_id"),
             viewer_user_id=self._normalized_string(user_id),
             invite_code=self._normalized_string(invite_code),
-            league_id=self._normalized_string(metadata.get("creator_league_config_id")) or self._normalized_string(competition.source_id),
+            league_id=self._normalized_string(metadata.get("creator_league_config_id"))
+            or self._normalized_string(competition.source_id),
             season_id=self._normalized_string(metadata.get("creator_league_season_id")),
         )
 
@@ -1660,7 +1722,9 @@ class CompetitionOrchestrator:
         try:
             return enum_type(value)
         except ValueError as exc:
-            raise CompetitionActionError(f"Competition {field_name} is invalid.", reason="invalid_summary_state") from exc
+            raise CompetitionActionError(
+                f"Competition {field_name} is invalid.", reason="invalid_summary_state"
+            ) from exc
 
     def _normalized_string(self, value: object) -> str | None:
         if not isinstance(value, str):
@@ -1685,7 +1749,8 @@ class CompetitionOrchestrator:
             invite = self.session.scalar(select(CompetitionInvite).where(CompetitionInvite.invite_code == invite_code))
         if invite is None or invite.competition_id != competition_id:
             return None
-        if invite.expires_at and datetime.now(timezone.utc) >= invite.expires_at:
+        expires_at = _as_utc(invite.expires_at)
+        if expires_at and datetime.now(timezone.utc) >= expires_at:
             return None
         if invite.club_id and club_id and invite.club_id != club_id:
             return None
@@ -1700,9 +1765,7 @@ class CompetitionOrchestrator:
     def _generate_invite_code(self) -> str:
         for _ in range(6):
             invite_code = token_hex(6)
-            exists = self.session.scalar(
-                select(CompetitionInvite).where(CompetitionInvite.invite_code == invite_code)
-            )
+            exists = self.session.scalar(select(CompetitionInvite).where(CompetitionInvite.invite_code == invite_code))
             if exists is None:
                 return invite_code
         raise CompetitionActionError("Failed to generate invite code.", reason="invite_code_unavailable")
@@ -1744,7 +1807,9 @@ class CompetitionOrchestrator:
                             snapshot=snapshot,
                         )
             return
-        participant_count = participant_count if participant_count is not None else self._participant_count(competition.id)
+        participant_count = (
+            participant_count if participant_count is not None else self._participant_count(competition.id)
+        )
         gross_pool = competition.entry_fee_minor * participant_count
         platform_fee_minor = gross_pool * competition.platform_fee_bps // 10_000
         host_fee_minor = gross_pool * competition.host_fee_bps // 10_000

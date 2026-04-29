@@ -3,7 +3,7 @@ from __future__ import annotations
 import hmac
 import json
 from decimal import Decimal
-from hashlib import sha256
+from hashlib import sha256, sha512
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +29,11 @@ from app.services.runtime_control_service import RuntimeControlService
 from app.treasury.service import TreasuryService
 from app.wallets.rail_service import WalletRailService
 from app.wallets.service import LedgerPosting, WalletService
+
+
+def _error_message(response) -> str:
+    payload = response.json()
+    return str(payload.get("message") or payload.get("detail") or "").lower()
 
 
 def _prepare_admin(client, app_session_factory) -> None:
@@ -268,25 +273,30 @@ def test_simulator_returns_30_day_projection(client, app_session_factory) -> Non
     assert payload["summary"]["inflation_risk"] in {"LOW", "MEDIUM", "HIGH"}
 
 
-def test_paystack_webhook_settles_purchase_order(client, app_session_factory) -> None:
+def test_paystack_webhook_settles_purchase_order(client, app_session_factory, monkeypatch) -> None:
     _prepare_admin(client, app_session_factory)
     order = _seed_paystack_order(app_session_factory)
+    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
+    payload = {
+        "event": "charge.success",
+        "data": {
+            "id": 9001,
+            "reference": "ps_live_ref_webhook",
+            "amount": 900000,
+            "currency": "NGN",
+            "status": "success",
+            "metadata": {
+                "purchase_order_reference": order.reference,
+            },
+        },
+    }
+    raw_body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    signature = hmac.new(b"paystack-secret", raw_body, sha512).hexdigest()
 
     response = client.post(
         "/integrations/payments/paystack/webhook",
-        json={
-            "event": "charge.success",
-            "data": {
-                "id": 9001,
-                "reference": "ps_live_ref_webhook",
-                "amount": 900000,
-                "currency": "NGN",
-                "status": "success",
-                "metadata": {
-                    "purchase_order_reference": order.reference,
-                },
-            },
-        },
+        headers={"content-type": "application/json", "x-paystack-signature": signature},
+        content=raw_body,
     )
 
     assert response.status_code == 200, response.text
@@ -435,7 +445,7 @@ def test_account_controls_can_freeze_login_and_ban_accounts(client, app_session_
 
     me_response = client.get("/api/auth/me", headers=user_headers)
     assert me_response.status_code == 423, me_response.text
-    assert "manual review" in me_response.json()["detail"].lower()
+    assert "manual review" in _error_message(me_response)
 
     clear_response = client.delete(f"/api/admin/finance/account-controls/{user_id}", headers=admin_headers)
     assert clear_response.status_code == 200, clear_response.text
@@ -458,7 +468,7 @@ def test_account_controls_can_freeze_login_and_ban_accounts(client, app_session_
 
     banned_me_response = client.get("/api/auth/me", headers=user_headers)
     assert banned_me_response.status_code == 401, banned_me_response.text
-    assert "could not be loaded" in banned_me_response.json()["detail"].lower()
+    assert "could not be loaded" in _error_message(banned_me_response)
 
     restore_response = client.delete(f"/api/admin/finance/account-controls/{user_id}", headers=admin_headers)
     assert restore_response.status_code == 200, restore_response.text
@@ -543,7 +553,7 @@ def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
     )
 
     assert response.status_code == 401, response.text
-    assert "signature is invalid" in response.json()["detail"].lower()
+    assert "signature is invalid" in _error_message(response)
 
 
 def test_korapay_webhook_verifies_signature_and_settles_purchase_order(
@@ -623,4 +633,4 @@ def test_korapay_webhook_rejects_invalid_signature_when_secret_is_configured(
     )
 
     assert response.status_code == 401, response.text
-    assert "signature is invalid" in response.json()["detail"].lower()
+    assert "signature is invalid" in _error_message(response)

@@ -29,6 +29,15 @@ os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_EMAIL", "admin@test.gtex.local")
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_PASSWORD", BOOTSTRAP_TEST_ADMIN_PASSWORD)
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_USERNAME", "gtex_test_admin")
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME", "GTEX Test Admin")
+os.environ.setdefault("GTE_COMPETITIVE_INTEGRITY_WORKER_ENABLED", "0")
+os.environ.setdefault("GTE_FEDERATION_WORKER_ENABLED", "0")
+os.environ.setdefault("GTE_HISTORY_ENGAGEMENT_WORKER_ENABLED", "0")
+os.environ.setdefault("GTE_OUTBOX_RELAY_ENABLED", "0")
+os.environ.setdefault("GTE_PROJECTION_WORKERS_ENABLED", "0")
+os.environ.setdefault("GTE_REAL_WORLD_SYNC_ENABLED", "0")
+os.environ.setdefault("GTE_RUN_STARTUP_SEEDING", "0")
+os.environ.setdefault("GTE_TASK_QUEUE_ENABLED", "0")
+os.environ.setdefault("GTE_VIRAL_RANKING_WORKER_ENABLED", "0")
 
 
 @pytest.fixture(scope="module")
@@ -117,11 +126,25 @@ def demo_auth_headers(client, demo_seed, demo_user_credentials):
 
 
 @pytest.fixture
-def bootstrap_admin_headers(client):
+def bootstrap_admin_headers(client, app_session_factory):
     startup_thread = getattr(client.app.state, "deferred_startup_thread", None)
     if startup_thread is not None and startup_thread.is_alive():
         startup_thread.join(timeout=30)
     assert startup_thread is None or not startup_thread.is_alive(), "Deferred startup did not finish in time."
+
+    from app.auth.service import AuthService
+    from app.models.user import UserRole
+
+    with app_session_factory() as session:
+        AuthService().ensure_admin_user(
+            session,
+            email=os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"],
+            password=os.environ["GTE_BOOTSTRAP_ADMIN_PASSWORD"],
+            username=os.environ["GTE_BOOTSTRAP_ADMIN_USERNAME"],
+            display_name=os.environ["GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME"],
+            role=UserRole.SUPER_ADMIN,
+        )
+        session.commit()
 
     response = client.post(
         "/auth/login",
@@ -136,23 +159,36 @@ def bootstrap_admin_headers(client):
 
 
 @pytest.fixture
-def competition_admin_headers(client, bootstrap_admin_headers):
+def competition_admin_headers(client, bootstrap_admin_headers, app_session_factory):
+    del bootstrap_admin_headers
     suffix = f"competition-admin-{uuid4().hex[:8]}"
     password = TEST_PASSWORD
     email = f"{suffix}@example.com"
     username = suffix.replace("-", "_")
-    response = client.post(
-        "/api/admin/access",
-        headers=bootstrap_admin_headers,
-        json={
-            "email": email,
-            "username": username,
-            "password": password,
-            "display_name": f"Scoped {suffix}",
-            "permissions": ["manage_competitions"],
-        },
-    )
-    assert response.status_code == 201, response.text
+
+    from app.admin_godmode.service import AdminGodModeService
+    from app.auth.service import AuthService
+    from app.models.user import UserRole
+    from app.wallets.service import WalletService
+
+    with app_session_factory() as session:
+        admin = AuthService().ensure_admin_user(
+            session,
+            email=email,
+            username=username,
+            password=password,
+            display_name=f"Scoped {suffix}",
+            role=UserRole.ADMIN,
+        )
+        AdminGodModeService(wallet_service=WalletService()).upsert_admin_assignment(
+            client.app,
+            session,
+            admin=admin,
+            role_name=None,
+            permissions=["manage_competitions"],
+            is_enabled=True,
+        )
+        session.commit()
 
     login = client.post(
         "/auth/login",

@@ -374,12 +374,20 @@ def test_wallet_transaction_service_rolls_back_unbalanced_transaction(session) -
 
     session.expire_all()
 
-    assert session.scalar(
-        select(func.count()).select_from(LedgerTransaction).where(LedgerTransaction.reference == "atomic-unbalanced")
-    ) == 0
-    assert session.scalar(
-        select(func.count()).select_from(LedgerEntry).where(LedgerEntry.reference == "atomic-unbalanced")
-    ) == 0
+    assert (
+        session.scalar(
+            select(func.count())
+            .select_from(LedgerTransaction)
+            .where(LedgerTransaction.reference == "atomic-unbalanced")
+        )
+        == 0
+    )
+    assert (
+        session.scalar(
+            select(func.count()).select_from(LedgerEntry).where(LedgerEntry.reference == "atomic-unbalanced")
+        )
+        == 0
+    )
 
 
 def test_wallet_transaction_service_reuses_idempotency_key_across_atomic_calls(session) -> None:
@@ -431,11 +439,14 @@ def test_wallet_transaction_service_reuses_idempotency_key_across_atomic_calls(s
 
     assert first.transaction_id == second.transaction_id
     assert service.get_balance(session, user_account) == Decimal("16.0000")
-    assert session.scalar(
-        select(func.count())
-        .select_from(LedgerTransaction)
-        .where(LedgerTransaction.idempotency_key == "wallet-atomic-idempotent")
-    ) == 1
+    assert (
+        session.scalar(
+            select(func.count())
+            .select_from(LedgerTransaction)
+            .where(LedgerTransaction.idempotency_key == "wallet-atomic-idempotent")
+        )
+        == 1
+    )
 
 
 def test_request_payout_holds_total_and_tracks_fee(session) -> None:
@@ -474,13 +485,19 @@ def test_request_payout_holds_total_and_tracks_fee(session) -> None:
     assert service.get_balance(session, user_account) == Decimal("78.0000")
     assert service.get_balance(session, escrow_account) == Decimal("22.0000")
     assert {entry.transaction_type for entry in hold_entries} == {LedgerTransactionType.WITHDRAWAL}
-    assert sum(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT) == Decimal("0.0000")
-    assert sum(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN) == Decimal("0.0000")
+    assert sum(
+        entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT
+    ) == Decimal("0.0000")
+    assert sum(
+        entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN
+    ) == Decimal("0.0000")
     assert sorted(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT) == [
         Decimal("-20.0000"),
         Decimal("20.0000"),
     ]
-    assert sorted(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN) == [
+    assert sorted(
+        entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN
+    ) == [
         Decimal("-2.0000"),
         Decimal("2.0000"),
     ]
@@ -518,11 +535,15 @@ def test_complete_payout_request_tags_only_fee_entries_as_fee_burn(session) -> N
         select(LedgerEntry).where(LedgerEntry.transaction_id == payout_request.settlement_transaction_id)
     ).all()
     assert {entry.transaction_type for entry in settlement_entries} == {LedgerTransactionType.WITHDRAWAL}
-    assert sorted(entry.amount for entry in settlement_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT) == [
+    assert sorted(
+        entry.amount for entry in settlement_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT
+    ) == [
         Decimal("-20.0000"),
         Decimal("20.0000"),
     ]
-    assert sorted(entry.amount for entry in settlement_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN) == [
+    assert sorted(
+        entry.amount for entry in settlement_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN
+    ) == [
         Decimal("-2.0000"),
         Decimal("2.0000"),
     ]
@@ -571,7 +592,10 @@ def test_request_payout_rejects_unknown_source_scope(session) -> None:
         reference="seed-scope",
         actor=user,
     )
-    with pytest.raises(LedgerError, match="Withdrawal source must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward"):
+    with pytest.raises(
+        LedgerError,
+        match="Withdrawal source must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward",
+    ):
         service.request_payout(
             session,
             user=user,

@@ -28,6 +28,14 @@ from app.services.competition_lifecycle_service import CompetitionLifecycleServi
 from app.services.match_timeline_service import MatchTimelineService
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 @dataclass(slots=True)
 class CompetitionAutoRunner:
     session: Session
@@ -42,7 +50,12 @@ class CompetitionAutoRunner:
         session_factory = create_session_factory(bind) if bind is not None else None
         self.team_factory = SyntheticSquadFactory(session_factory=session_factory)
 
-    def run_until_idle(self, competition: Competition) -> Competition:
+    def run_until_idle(
+        self,
+        competition: Competition,
+        *,
+        simulate_scheduled_matches: bool = False,
+    ) -> Competition:
         for _ in range(32):
             self.session.refresh(competition)
             status = CompetitionStatus(competition.status)
@@ -62,13 +75,13 @@ class CompetitionAutoRunner:
 
             matches = self._matches(competition.id)
             scheduled = [match for match in matches if match.status == MatchStatus.SCHEDULED.value]
-            if scheduled:
+            if scheduled and simulate_scheduled_matches:
                 for match in scheduled:
                     self._simulate_match(competition, match)
                 changed = True
                 matches = self._matches(competition.id)
 
-            if matches and self._all_matches_complete(matches):
+            if simulate_scheduled_matches and matches and self._all_matches_complete(matches):
                 if CompetitionFormat(competition.format) is CompetitionFormat.LEAGUE:
                     if CompetitionStatus(competition.status) is not CompetitionStatus.SETTLED:
                         self.lifecycle_service.finalize_competition(
@@ -111,7 +124,7 @@ class CompetitionAutoRunner:
         }:
             return False
 
-        scheduled_start = competition.scheduled_start_at
+        scheduled_start = _as_utc(competition.scheduled_start_at)
         now = datetime.now(timezone.utc)
         if scheduled_start is not None and scheduled_start > now:
             return False
@@ -141,7 +154,9 @@ class CompetitionAutoRunner:
             return match
 
         job = self._simulation_job(competition, match)
-        replay_payload = self.match_service.build_replay_payload(self.team_factory.build_request(job))
+        replay_payload = self.match_service.build_replay_payload(
+            self.team_factory.build_request(job, session=self.session)
+        )
         self._store_match_viewer_payload(match, replay_payload)
         self._store_match_events(match, replay_payload)
         return self.lifecycle_service.complete_match(

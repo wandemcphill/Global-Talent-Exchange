@@ -42,32 +42,17 @@ class SyntheticSquadFactory:
         default_factory=lambda: ClubIdentityService(InMemoryClubIdentityRepository())
     )
 
-    def build_request(self, job: MatchSimulationJob) -> MatchSimulationRequest:
+    def build_request(self, job: MatchSimulationJob, session: Session | None = None) -> MatchSimulationRequest:
         home_team: MatchTeamInput
         away_team: MatchTeamInput
-        if self.session_factory is not None:
-            session = self.session_factory()
+        if session is not None:
+            home_team, away_team = self._build_teams_from_session(job, session)
+        elif self.session_factory is not None:
+            managed_session = self.session_factory()
             try:
-                lifecycle_service = PlayerLifecycleService(session)
-                home_team = self.build_team(
-                    team_id=job.home_club_id or "home",
-                    team_name=job.home_club_name or job.home_club_id or "Home Club",
-                    base_overall=job.home_strength_rating or 75,
-                    match_date=job.match_date,
-                    lifecycle_service=lifecycle_service,
-                )
-                away_team = self.build_team(
-                    team_id=job.away_club_id or "away",
-                    team_name=job.away_club_name or job.away_club_id or "Away Club",
-                    base_overall=job.away_strength_rating or 75,
-                    match_date=job.match_date,
-                    lifecycle_service=lifecycle_service,
-                )
-                from app.regen_universe.expansion_service import RegenUniverseExpansionService
-
-                home_team, away_team = RegenUniverseExpansionService(session).apply_match_context(home_team, away_team)
+                home_team, away_team = self._build_teams_from_session(job, managed_session)
             finally:
-                session.close()
+                managed_session.close()
         else:
             home_team = self.build_team(
                 team_id=job.home_club_id or "home",
@@ -92,6 +77,30 @@ class SyntheticSquadFactory:
             home_team=home_team,
             away_team=away_team,
         )
+
+    def _build_teams_from_session(
+        self,
+        job: MatchSimulationJob,
+        session: Session,
+    ) -> tuple[MatchTeamInput, MatchTeamInput]:
+        lifecycle_service = PlayerLifecycleService(session)
+        home_team = self.build_team(
+            team_id=job.home_club_id or "home",
+            team_name=job.home_club_name or job.home_club_id or "Home Club",
+            base_overall=job.home_strength_rating or 75,
+            match_date=job.match_date,
+            lifecycle_service=lifecycle_service,
+        )
+        away_team = self.build_team(
+            team_id=job.away_club_id or "away",
+            team_name=job.away_club_name or job.away_club_id or "Away Club",
+            base_overall=job.away_strength_rating or 75,
+            match_date=job.match_date,
+            lifecycle_service=lifecycle_service,
+        )
+        from app.regen_universe.expansion_service import RegenUniverseExpansionService
+
+        return RegenUniverseExpansionService(session).apply_match_context(home_team, away_team)
 
     def build_team(
         self,
@@ -182,9 +191,7 @@ class SyntheticSquadFactory:
         eligible = [record.player for record in squad_status if record.available]
         if len(eligible) < 11:
             blocked = ", ".join(
-                f"{record.player.full_name} ({record.reason})"
-                for record in squad_status
-                if not record.available
+                f"{record.player.full_name} ({record.reason})" for record in squad_status if not record.available
             )
             raise PlayerLifecycleValidationError(
                 f"{team_name} cannot field an eligible squad on {match_date.isoformat()}: "
@@ -282,8 +289,14 @@ class SyntheticSquadFactory:
             return None
         return best
 
-    def _build_tactics(self, resolved_overall: int, manager_profile: dict[str, object] | None = None) -> TeamTacticalPlanInput:
-        style = TacticalStyle.ATTACKING if resolved_overall >= 84 else TacticalStyle.DEFENSIVE if resolved_overall <= 68 else TacticalStyle.BALANCED
+    def _build_tactics(
+        self, resolved_overall: int, manager_profile: dict[str, object] | None = None
+    ) -> TeamTacticalPlanInput:
+        style = (
+            TacticalStyle.ATTACKING
+            if resolved_overall >= 84
+            else TacticalStyle.DEFENSIVE if resolved_overall <= 68 else TacticalStyle.BALANCED
+        )
         pressing = self._clamp(resolved_overall - 15)
         tempo = self._clamp(resolved_overall - 12)
         aggression = self._clamp(42 + ((resolved_overall - 60) // 2))
@@ -292,34 +305,38 @@ class SyntheticSquadFactory:
         adaptability = self._clamp(52 + ((resolved_overall - 55) // 3))
         game_management = self._clamp(55 + ((resolved_overall - 55) // 3))
         if manager_profile is not None:
-            mentality = str(manager_profile.get('mentality', 'balanced'))
-            tactics = set(manager_profile.get('tactics') or [])
-            traits = set(manager_profile.get('traits') or [])
-            if mentality in {'attacking', 'pressing'} or 'high_press_attack' in tactics:
+            mentality = str(manager_profile.get("mentality", "balanced"))
+            tactics = set(manager_profile.get("tactics") or [])
+            traits = set(manager_profile.get("traits") or [])
+            if mentality in {"attacking", "pressing"} or "high_press_attack" in tactics:
                 style = TacticalStyle.ATTACKING
                 pressing = self._clamp(pressing + 10)
                 tempo = self._clamp(tempo + 8)
-            elif mentality in {'defensive', 'pragmatic'} or 'low_block_counter' in tactics or 'compact_midblock' in tactics:
+            elif (
+                mentality in {"defensive", "pragmatic"}
+                or "low_block_counter" in tactics
+                or "compact_midblock" in tactics
+            ):
                 style = TacticalStyle.DEFENSIVE
                 pressing = self._clamp(pressing - 6)
                 aggression = self._clamp(aggression - 3)
-            elif mentality in {'technical', 'possession'} or 'tiki_taka' in tactics or 'possession_control' in tactics:
+            elif mentality in {"technical", "possession"} or "tiki_taka" in tactics or "possession_control" in tactics:
                 style = TacticalStyle.BALANCED
                 tempo = self._clamp(tempo + 4)
-            if 'quick_substitution' in traits:
+            if "quick_substitution" in traits:
                 substitution_windows = (56, 67, 78)
                 adaptability = self._clamp(adaptability + 8)
                 game_management = self._clamp(game_management + 6)
-            elif 'late_substitution' in traits:
+            elif "late_substitution" in traits:
                 substitution_windows = (67, 78, 86)
                 adaptability = self._clamp(adaptability - 3)
-            if {'tactical_flexibility', 'in_game_adjustments'} & traits:
+            if {"tactical_flexibility", "in_game_adjustments"} & traits:
                 tactical_quality = self._clamp(tactical_quality + 8)
                 adaptability = self._clamp(adaptability + 10)
-            if {'defensive_organization', 'strict_structure'} & traits:
+            if {"defensive_organization", "strict_structure"} & traits:
                 tactical_quality = self._clamp(tactical_quality + 5)
                 game_management = self._clamp(game_management + 5)
-            if {'great motivator', 'great_motivator'} & traits:
+            if {"great motivator", "great_motivator"} & traits:
                 game_management = self._clamp(game_management + 4)
         return TeamTacticalPlanInput(
             style=style,
@@ -346,39 +363,54 @@ class SyntheticSquadFactory:
 
         club_profile = session.get(ClubProfile, team_id)
         assignment_user_id = club_profile.owner_user_id if club_profile is not None else team_id
-        assignment = session.scalar(select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == assignment_user_id))
+        assignment = session.scalar(
+            select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == assignment_user_id)
+        )
         if assignment is None or not assignment.main_manager_asset_id:
             return None
-        holding = session.scalar(select(ManagerHolding).where(ManagerHolding.asset_id == assignment.main_manager_asset_id))
+        holding = session.scalar(
+            select(ManagerHolding).where(ManagerHolding.asset_id == assignment.main_manager_asset_id)
+        )
         if holding is None:
             return None
-        manager = session.scalar(select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == holding.manager_id))
+        manager = session.scalar(
+            select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == holding.manager_id)
+        )
         if manager is None:
             return None
         return {
-            'display_name': manager.display_name,
-            'mentality': manager.mentality,
-            'tactics': list(manager.tactics or []),
-            'traits': list(manager.traits or []),
-            'rarity': manager.rarity,
-            'philosophy_summary': manager.philosophy_summary,
-            'substitution_tendency': manager.substitution_tendency,
+            "display_name": manager.display_name,
+            "mentality": manager.mentality,
+            "tactics": list(manager.tactics or []),
+            "traits": list(manager.traits or []),
+            "rarity": manager.rarity,
+            "philosophy_summary": manager.philosophy_summary,
+            "substitution_tendency": manager.substitution_tendency,
         }
 
     @staticmethod
     def _competition_type(job: MatchSimulationJob) -> MatchCompetitionType:
-        if job.competition_type in {
-            CompetitionType.CHAMPIONS_LEAGUE,
-            CompetitionType.WORLD_SUPER_CUP,
-            CompetitionType.FAST_CUP,
-        } or job.is_cup_match:
+        if (
+            job.competition_type
+            in {
+                CompetitionType.CHAMPIONS_LEAGUE,
+                CompetitionType.WORLD_SUPER_CUP,
+                CompetitionType.FAST_CUP,
+            }
+            or job.is_cup_match
+        ):
             return MatchCompetitionType.CUP
         return MatchCompetitionType.LEAGUE
 
     @staticmethod
     def _starter_roles(formation: str) -> list[PlayerRole]:
         lines = [int(part) for part in formation.split("-")]
-        return [PlayerRole.GOALKEEPER] + ([PlayerRole.DEFENDER] * lines[0]) + ([PlayerRole.MIDFIELDER] * sum(lines[1:-1])) + ([PlayerRole.FORWARD] * lines[-1])
+        return (
+            [PlayerRole.GOALKEEPER]
+            + ([PlayerRole.DEFENDER] * lines[0])
+            + ([PlayerRole.MIDFIELDER] * sum(lines[1:-1]))
+            + ([PlayerRole.FORWARD] * lines[-1])
+        )
 
     def _build_synthetic_player(
         self,
@@ -542,7 +574,16 @@ class SyntheticSquadFactory:
         discipline = self._clamp(70 - max(0, min(8, (personality_aggression - 55) // 5)))
         fitness = self._clamp(78 + max(0, min(5, (personality_consistency - 50) // 8)))
         recent_form = self._managed_recent_form(player)
-        morale_value = int(round((dynamics_snapshot.morale_by_player.get(player.id, player.morale) if dynamics_snapshot is not None else player.morale) or player.morale))
+        morale_value = int(
+            round(
+                (
+                    dynamics_snapshot.morale_by_player.get(player.id, player.morale)
+                    if dynamics_snapshot is not None
+                    else player.morale
+                )
+                or player.morale
+            )
+        )
         morale = self._clamp(morale_value + max(-6, min(8, (personality_confidence - 50) // 4)))
         motivation = self._clamp(
             int(
@@ -607,7 +648,9 @@ class SyntheticSquadFactory:
                 fitness=fitness,
                 shirt_number=self._normalize_shirt_number(player.shirt_number),
                 display_name=self._shirt_name(player.full_name),
-                position_archetype="ball_playing_defender" if "back" in (player.position or "").lower() else "center_back",
+                position_archetype=(
+                    "ball_playing_defender" if "back" in (player.position or "").lower() else "center_back"
+                ),
                 pace=self._clamp(overall - 1),
                 composure=self._clamp(overall + 1),
                 decision_making=self._clamp(overall + 2),
@@ -708,7 +751,10 @@ class SyntheticSquadFactory:
         return (
             self._estimate_player_overall(player, base_overall=75),
             float(player.market_value_eur or 0.0),
-            max((stat.average_rating or 0.0 for stat in player.season_stats if stat.average_rating is not None), default=0.0),
+            max(
+                (stat.average_rating or 0.0 for stat in player.season_stats if stat.average_rating is not None),
+                default=0.0,
+            ),
         )
 
     def _role_fit_score(self, player: Player, required_role: PlayerRole) -> int:
@@ -740,7 +786,9 @@ class SyntheticSquadFactory:
         return max(1, min(99, value))
 
     def _managed_recent_form(self, player: Player) -> int:
-        rating = max((stat.average_rating or 0.0 for stat in player.season_stats if stat.average_rating is not None), default=0.0)
+        rating = max(
+            (stat.average_rating or 0.0 for stat in player.season_stats if stat.average_rating is not None), default=0.0
+        )
         if rating <= 0:
             return 58
         return self._clamp(int(round(48 + (rating * 5.5))))
@@ -763,7 +811,9 @@ class SyntheticSquadFactory:
         manager_profile: dict[str, object] | None = None,
     ) -> MatchClubContextInput:
         traits = {str(item).strip().lower() for item in (manager_profile or {}).get("traits", [])}
-        chemistry = self._clamp(58 + ((resolved_overall - 55) // 2) + (4 if {"great motivator", "great_motivator"} & traits else 0))
+        chemistry = self._clamp(
+            58 + ((resolved_overall - 55) // 2) + (4 if {"great motivator", "great_motivator"} & traits else 0)
+        )
         return MatchClubContextInput(
             club_tier=self._clamp(resolved_overall),
             competition_tier=self._clamp(resolved_overall - 1),
@@ -823,15 +873,24 @@ class SyntheticSquadFactory:
         return MatchTeamIdentityInput(
             club_name=club_name,
             short_club_code=short_code,
-            badge_url=(club_profile.crest_asset_ref if club_profile is not None else None) or generated.badge_profile.badge_url,
+            badge_url=(club_profile.crest_asset_ref if club_profile is not None else None)
+            or generated.badge_profile.badge_url,
             badge_shape=generated.badge_profile.shape.value,
             badge_initials=generated.badge_profile.initials,
-            badge_primary_color=(club_profile.primary_color if club_profile is not None else generated.badge_profile.primary_color),
-            badge_secondary_color=(club_profile.secondary_color if club_profile is not None else generated.badge_profile.secondary_color),
-            badge_accent_color=(club_profile.accent_color if club_profile is not None else generated.badge_profile.accent_color),
+            badge_primary_color=(
+                club_profile.primary_color if club_profile is not None else generated.badge_profile.primary_color
+            ),
+            badge_secondary_color=(
+                club_profile.secondary_color if club_profile is not None else generated.badge_profile.secondary_color
+            ),
+            badge_accent_color=(
+                club_profile.accent_color if club_profile is not None else generated.badge_profile.accent_color
+            ),
             home_kit=self._map_kit_identity(jerseys.get("home"), generated.jersey_set.home, slot="home"),
             away_kit=self._map_kit_identity(jerseys.get("away"), generated.jersey_set.away, slot="away"),
-            goalkeeper_kit=self._map_kit_identity(jerseys.get("goalkeeper"), generated.jersey_set.goalkeeper, slot="goalkeeper"),
+            goalkeeper_kit=self._map_kit_identity(
+                jerseys.get("goalkeeper"), generated.jersey_set.goalkeeper, slot="goalkeeper"
+            ),
         )
 
     def _load_jerseys(self, session: Session | None, team_id: str) -> dict[str, ClubJerseyDesign]:
