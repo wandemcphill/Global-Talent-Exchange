@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from app.common.enums.club_brand_asset_type import ClubBrandAssetType
 from app.common.enums.club_identity_visibility import ClubIdentityVisibility
@@ -20,9 +20,13 @@ class ClubCreateRequest(CommonSchema):
     secondary_color: str = Field(min_length=3, max_length=16)
     accent_color: str = Field(min_length=3, max_length=16)
     home_venue_name: str | None = Field(default=None, max_length=120)
-    country_code: str | None = Field(default=None, max_length=8)
-    region_name: str | None = Field(default=None, max_length=120)
-    city_name: str | None = Field(default=None, max_length=120)
+    country_code: str | None = Field(default=None, max_length=8, validation_alias=AliasChoices("country_code", "country"))
+    region_name: str | None = Field(
+        default=None,
+        max_length=120,
+        validation_alias=AliasChoices("region_name", "state_name", "state"),
+    )
+    city_name: str | None = Field(default=None, max_length=120, validation_alias=AliasChoices("city_name", "city"))
     description: str | None = Field(default=None, max_length=1000)
     visibility: ClubIdentityVisibility = ClubIdentityVisibility.PUBLIC
     founded_at: date | None = None
@@ -36,9 +40,13 @@ class ClubUpdateRequest(CommonSchema):
     secondary_color: str | None = Field(default=None, min_length=3, max_length=16)
     accent_color: str | None = Field(default=None, min_length=3, max_length=16)
     home_venue_name: str | None = Field(default=None, max_length=120)
-    country_code: str | None = Field(default=None, max_length=8)
-    region_name: str | None = Field(default=None, max_length=120)
-    city_name: str | None = Field(default=None, max_length=120)
+    country_code: str | None = Field(default=None, max_length=8, validation_alias=AliasChoices("country_code", "country"))
+    region_name: str | None = Field(
+        default=None,
+        max_length=120,
+        validation_alias=AliasChoices("region_name", "state_name", "state"),
+    )
+    city_name: str | None = Field(default=None, max_length=120, validation_alias=AliasChoices("city_name", "city"))
     description: str | None = Field(default=None, max_length=1000)
     visibility: ClubIdentityVisibility | None = None
     founded_at: date | None = None

@@ -100,14 +100,18 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final PlayerCardMarketplaceSearchResult result = await _repository
-          .listMarketplaceSales(query);
+      final List<PlayerCardMarketplaceSearchResult> result = await Future.wait<
+        PlayerCardMarketplaceSearchResult
+      >(<Future<PlayerCardMarketplaceSearchResult>>[
+        _repository.listMarketplaceSales(query),
+        _repository.listMarketplaceLoans(query),
+      ]);
       if (!_marketplaceGate.isActive(requestId)) {
         return;
       }
-      marketplace = result;
-      marketplaceSales = result;
-      marketplaceLoans = const PlayerCardMarketplaceSearchResult.empty();
+      marketplace = result[0];
+      marketplaceSales = result[0];
+      marketplaceLoans = result[1];
       marketplaceSwaps = const PlayerCardMarketplaceSearchResult.empty();
     } catch (error) {
       if (_marketplaceGate.isActive(requestId)) {

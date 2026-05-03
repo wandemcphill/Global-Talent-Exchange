@@ -287,6 +287,7 @@ class PlayerCardWatchlistCreateRequest {
 String? _playerImageUrl(JsonMap raw) =>
     stringOrNullValue(raw['image_url']) ??
     stringOrNullValue(raw['portrait_url']) ??
+    stringOrNullValue(raw['portraitUrl']) ??
     stringOrNullValue(raw['photo_url']);
 
 class PlayerCardMarketplaceListing {
@@ -300,8 +301,16 @@ class PlayerCardMarketplaceListing {
     );
   }
 
-  String get listingId => stringValue(raw['listing_id']);
-  String get listingType => stringValue(raw['listing_type']);
+  String get listingId =>
+      stringOrNullValue(raw['listing_id']) ??
+      stringOrNullValue(raw['loan_listing_id']) ??
+      stringOrNullValue(raw['swap_listing_id']) ??
+      stringValue(raw['id']);
+  String get listingType =>
+      stringOrNullValue(raw['listing_type']) ??
+      (raw['loan_listing_id'] != null ? 'loan' : null) ??
+      (raw['swap_listing_id'] != null ? 'swap' : null) ??
+      'sale';
   String get playerCardId => stringValue(raw['player_card_id']);
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
@@ -315,7 +324,11 @@ class PlayerCardMarketplaceListing {
   String get tierName => stringValue(raw['tier_name']);
   int get rarityRank => intValue(raw['rarity_rank']);
   String get editionCode => stringValue(raw['edition_code']);
-  String get listingOwnerUserId => stringValue(raw['listing_owner_user_id']);
+  String get listingOwnerUserId =>
+      stringOrNullValue(raw['listing_owner_user_id']) ??
+      stringOrNullValue(raw['owner_user_id']) ??
+      stringOrNullValue(raw['seller_user_id']) ??
+      '';
   String get status => stringValue(raw['status']);
   String get availability => stringValue(raw['availability']);
   bool get isNegotiable => boolValue(raw['is_negotiable']);
@@ -323,10 +336,16 @@ class PlayerCardMarketplaceListing {
   bool get isRegenNewgen => boolValue(raw['is_regen_newgen']);
   bool get isCreatorLinked => boolValue(raw['is_creator_linked']);
   int? get quantity =>
-      raw['quantity'] == null ? null : intValue(raw['quantity']);
+      raw['quantity'] == null
+          ? raw['total_slots'] == null
+              ? null
+              : intValue(raw['total_slots'])
+          : intValue(raw['quantity']);
   int? get availableQuantity =>
       raw['available_quantity'] == null
-          ? null
+          ? raw['available_slots'] == null
+              ? null
+              : intValue(raw['available_slots'])
           : intValue(raw['available_quantity']);
   double? get salePriceCredits =>
       raw['sale_price_credits'] == null
@@ -341,9 +360,9 @@ class PlayerCardMarketplaceListing {
           ? null
           : numberValue(raw['loan_fee_credits']);
   int? get loanDurationDays =>
-      raw['loan_duration_days'] == null
+      raw['loan_duration_days'] == null && raw['duration_days'] == null
           ? null
-          : intValue(raw['loan_duration_days']);
+          : intValue(raw['loan_duration_days'] ?? raw['duration_days']);
   String? get requestedPlayerCardId =>
       stringOrNullValue(raw['requested_player_card_id']);
   String? get requestedPlayerId =>

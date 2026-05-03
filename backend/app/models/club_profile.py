@@ -40,3 +40,19 @@ class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=ClubIdentityVisibility.PUBLIC.value,
     )
     founded_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    @property
+    def state_name(self) -> str | None:
+        return self.region_name
+
+    @property
+    def club_address(self) -> str:
+        return ", ".join(
+            item
+            for item in (
+                self.country_code,
+                self.region_name,
+                self.city_name,
+            )
+            if item
+        )

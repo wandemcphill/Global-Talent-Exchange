@@ -27,7 +27,9 @@ class ClubProfileCore(_ClubOrmSchema):
     home_venue_name: str | None = None
     country_code: str | None = None
     region_name: str | None = None
+    state_name: str | None = None
     city_name: str | None = None
+    club_address: str = ""
     description: str | None = None
     visibility: ClubIdentityVisibility
     founded_at: date | None = None

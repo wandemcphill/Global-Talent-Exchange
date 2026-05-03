@@ -9,118 +9,149 @@ import 'package:gte_frontend/features/player_card_marketplace/presentation/playe
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets(
-    'transfer market shows launch actions for signed-in managers',
-    (WidgetTester tester) async {
-      _setLargeViewport(tester);
-      final PlayerCardMarketplaceController controller =
-          PlayerCardMarketplaceController(
-            repository: _FakePlayerCardMarketplaceRepository(
-              marketSales: PlayerCardMarketplaceSearchResult.fromJson(
-                <String, Object?>{
-                  'total': 1,
-                  'limit': 20,
-                  'offset': 0,
-                  'items': <Object?>[
-                    <String, Object?>{
-                      'listing_id': 'listing-sale-1',
-                      'listing_type': 'sale',
-                      'player_card_id': 'card-1',
-                      'player_id': 'player-1',
-                      'player_name': 'Victor Osimhen',
-                      'listing_owner_user_id': 'seller-1',
-                      'status': 'open',
-                      'availability': 'available',
-                      'is_negotiable': true,
-                      'asset_origin': 'real_player',
-                      'is_regen_newgen': false,
-                      'is_creator_linked': false,
-                      'available_quantity': 2,
-                      'sale_price_credits': 84,
-                      'average_rating': 86,
-                      'tier_code': 'ST',
-                      'tier_name': 'Elite Striker',
-                      'rarity_rank': 5,
-                      'edition_code': 'launch',
-                      'club_name': 'Galatasaray',
-                      'position': 'ST',
-                      'image_url': 'https://example.test/players/osimhen.png',
-                    },
-                  ],
-                },
-              ),
-              inventory: <PlayerCardHolding>[
-                PlayerCardHolding.fromJson(<String, Object?>{
-                  'holding_id': 'holding-1',
-                  'player_card_id': 'card-2',
-                  'player_id': 'player-2',
-                  'player_name': 'Bukayo Saka',
-                  'tier_code': 'RW',
-                  'tier_name': 'First Team',
-                  'edition_code': 'launch',
-                  'quantity_total': 2,
-                  'quantity_reserved': 0,
-                  'quantity_available': 2,
-                  'image_url': 'https://example.test/players/saka.png',
-                }),
-              ],
-              myListings: <PlayerCardListing>[
-                PlayerCardListing.fromJson(<String, Object?>{
-                  'listing_id': 'my-listing-1',
-                  'player_card_id': 'card-3',
-                  'player_id': 'player-3',
-                  'player_name': 'William Saliba',
-                  'tier_code': 'CB',
-                  'tier_name': 'First Team',
-                  'edition_code': 'launch',
-                  'seller_user_id': 'user-1',
-                  'quantity': 1,
-                  'price_per_card_credits': 96,
-                  'status': 'open',
-                  'image_url': 'https://example.test/players/saliba.png',
-                }),
-              ],
+  testWidgets('transfer market shows launch actions for signed-in managers', (
+    WidgetTester tester,
+  ) async {
+    _setLargeViewport(tester);
+    final PlayerCardMarketplaceController controller =
+        PlayerCardMarketplaceController(
+          repository: _FakePlayerCardMarketplaceRepository(
+            marketSales: PlayerCardMarketplaceSearchResult.fromJson(
+              <String, Object?>{
+                'total': 1,
+                'limit': 20,
+                'offset': 0,
+                'items': <Object?>[
+                  <String, Object?>{
+                    'listing_id': 'listing-sale-1',
+                    'listing_type': 'sale',
+                    'player_card_id': 'card-1',
+                    'player_id': 'player-1',
+                    'player_name': 'Victor Osimhen',
+                    'listing_owner_user_id': 'seller-1',
+                    'status': 'open',
+                    'availability': 'available',
+                    'is_negotiable': true,
+                    'asset_origin': 'real_player',
+                    'is_regen_newgen': false,
+                    'is_creator_linked': false,
+                    'available_quantity': 2,
+                    'sale_price_credits': 84,
+                    'average_rating': 86,
+                    'tier_code': 'ST',
+                    'tier_name': 'Elite Striker',
+                    'rarity_rank': 5,
+                    'edition_code': 'launch',
+                    'club_name': 'Galatasaray',
+                    'position': 'ST',
+                    'image_url': 'https://example.test/players/osimhen.png',
+                  },
+                ],
+              },
             ),
-          );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: GteShellTheme.build(),
-          home: PlayerCardMarketplaceScreen(
-            baseUrl: 'https://example.test',
-            backendMode: GteBackendMode.fixture,
-            accessToken: 'token-1',
-            currentUserId: 'user-1',
-            controller: controller,
+            marketLoans: PlayerCardMarketplaceSearchResult.fromJson(
+              <String, Object?>{
+                'total': 1,
+                'limit': 20,
+                'offset': 0,
+                'items': <Object?>[
+                  <String, Object?>{
+                    'loan_listing_id': 'loan-listing-1',
+                    'player_card_id': 'card-loan-1',
+                    'player_id': 'player-loan-1',
+                    'player_name': 'Amina Okoro',
+                    'owner_user_id': 'seller-2',
+                    'status': 'open',
+                    'is_negotiable': true,
+                    'total_slots': 1,
+                    'available_slots': 1,
+                    'loan_fee_credits': 18,
+                    'duration_days': 7,
+                    'tier_code': 'CM',
+                    'tier_name': 'Regen Prospect',
+                    'edition_code': 'launch',
+                    'position': 'CM',
+                    'portraitUrl': '/generated-media/regen.png',
+                  },
+                ],
+              },
+            ),
+            inventory: <PlayerCardHolding>[
+              PlayerCardHolding.fromJson(<String, Object?>{
+                'holding_id': 'holding-1',
+                'player_card_id': 'card-2',
+                'player_id': 'player-2',
+                'player_name': 'Bukayo Saka',
+                'tier_code': 'RW',
+                'tier_name': 'First Team',
+                'edition_code': 'launch',
+                'quantity_total': 2,
+                'quantity_reserved': 0,
+                'quantity_available': 2,
+                'image_url': 'https://example.test/players/saka.png',
+              }),
+            ],
+            myListings: <PlayerCardListing>[
+              PlayerCardListing.fromJson(<String, Object?>{
+                'listing_id': 'my-listing-1',
+                'player_card_id': 'card-3',
+                'player_id': 'player-3',
+                'player_name': 'William Saliba',
+                'tier_code': 'CB',
+                'tier_name': 'First Team',
+                'edition_code': 'launch',
+                'seller_user_id': 'user-1',
+                'quantity': 1,
+                'price_per_card_credits': 96,
+                'status': 'open',
+                'image_url': 'https://example.test/players/saliba.png',
+              }),
+            ],
           ),
+        );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: PlayerCardMarketplaceScreen(
+          baseUrl: 'https://example.test',
+          backendMode: GteBackendMode.fixture,
+          accessToken: 'token-1',
+          currentUserId: 'user-1',
+          controller: controller,
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Transfer Market'), findsWidgets);
-      expect(
-        find.text('Scout, sign, and list players for your club.'),
-        findsOneWidget,
-      );
-      expect(find.text('Victor Osimhen'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'View Player'), findsOneWidget);
-      expect(find.text('Buy Now'), findsOneWidget);
-      expect(find.text('Refresh market'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'Make Bid'), findsOneWidget);
-      expect(find.text('Loan contracts'), findsNothing);
-      expect(find.text('Watchlist is empty'), findsNothing);
+    expect(find.text('Transfer Market'), findsWidgets);
+    expect(
+      find.text('Scout, sign, and list players for your club.'),
+      findsOneWidget,
+    );
+    expect(find.text('Victor Osimhen'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'View Player'), findsOneWidget);
+    expect(find.text('Buy Now'), findsOneWidget);
+    expect(find.text('Refresh market'), findsOneWidget);
+    expect(find.text('Loan contracts'), findsNothing);
+    expect(find.text('Watchlist is empty'), findsNothing);
 
-      await tester.tap(find.text('Squad'));
-      await tester.pumpAndSettle();
-      expect(find.text('Bukayo Saka'), findsOneWidget);
-      expect(find.text('List for Transfer'), findsOneWidget);
+    await tester.tap(find.text('Loan Market'));
+    await tester.pumpAndSettle();
+    expect(find.text('Amina Okoro'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Make Bid'), findsOneWidget);
 
-      await tester.tap(find.text('My Listings'));
-      await tester.pumpAndSettle();
-      expect(find.text('William Saliba'), findsOneWidget);
-      expect(find.text('Remove Listing'), findsOneWidget);
-    },
-  );
+    await tester.tap(find.text('Squad'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bukayo Saka'), findsOneWidget);
+    expect(find.text('List for Transfer'), findsOneWidget);
+    expect(find.text('List for Loan'), findsOneWidget);
+
+    await tester.tap(find.text('My Listings'));
+    await tester.pumpAndSettle();
+    expect(find.text('William Saliba'), findsOneWidget);
+    expect(find.text('Remove Listing'), findsOneWidget);
+  });
 
   testWidgets(
     'transfer market preview keeps sign-in gates on squad and listing tabs',
@@ -209,12 +240,16 @@ class _FakePlayerCardMarketplaceRepository
     implements PlayerCardMarketplaceRepository {
   _FakePlayerCardMarketplaceRepository({
     PlayerCardMarketplaceSearchResult? marketSales,
+    PlayerCardMarketplaceSearchResult? marketLoans,
     List<PlayerCardPlayerSummary>? players,
     List<PlayerCardHolding>? inventory,
     List<PlayerCardListing>? listings,
     List<PlayerCardListing>? myListings,
     List<PlayerCardWatchlistItem>? watchlist,
-  }) : _marketSales = marketSales ?? const PlayerCardMarketplaceSearchResult.empty(),
+  }) : _marketSales =
+           marketSales ?? const PlayerCardMarketplaceSearchResult.empty(),
+       _marketLoans =
+           marketLoans ?? const PlayerCardMarketplaceSearchResult.empty(),
        _players = players ?? const <PlayerCardPlayerSummary>[],
        _inventory = inventory ?? const <PlayerCardHolding>[],
        _listings = listings ?? const <PlayerCardListing>[],
@@ -222,6 +257,7 @@ class _FakePlayerCardMarketplaceRepository
        _watchlist = watchlist ?? const <PlayerCardWatchlistItem>[];
 
   final PlayerCardMarketplaceSearchResult _marketSales;
+  final PlayerCardMarketplaceSearchResult _marketLoans;
   final List<PlayerCardPlayerSummary> _players;
   final List<PlayerCardHolding> _inventory;
   final List<PlayerCardListing> _listings;
@@ -399,7 +435,7 @@ class _FakePlayerCardMarketplaceRepository
   @override
   Future<PlayerCardMarketplaceSearchResult> listMarketplaceLoans(
     PlayerCardMarketplaceQuery query,
-  ) async => const PlayerCardMarketplaceSearchResult.empty();
+  ) async => _marketLoans;
 
   @override
   Future<PlayerCardMarketplaceSearchResult> listMarketplaceSales(
