@@ -124,6 +124,19 @@ def test_create_admin_assigns_scoped_role_without_god_mode_baseline(
     assert "view_audit_log" not in profile.permissions
 
 
+def test_permission_catalog_exposes_finance_and_god_mode_controls(admin_access_context) -> None:
+    client, *_ = admin_access_context
+
+    response = client.get("/api/admin/access/permissions")
+
+    assert response.status_code == 200, response.text
+    permissions = set(response.json()["permissions"])
+    assert "manage_payment_rails" in permissions
+    assert "manage_treasury_withdrawals" in permissions
+    assert "manage_liquidity_desk" in permissions
+    assert "manage_regen_universe" in permissions
+
+
 def test_god_mode_state_prefers_database_when_session_factory_exists(tmp_path: Path) -> None:
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",

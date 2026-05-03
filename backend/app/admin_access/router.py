@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import (
+    ALL_ADMIN_PERMISSIONS,
     AdminGodModeService,
     DEFAULT_ROLE_PERMISSIONS,
     GodModeError,
@@ -52,7 +53,7 @@ class AdminPermissionCatalogView(BaseModel):
 
 @router.get("/permissions", response_model=AdminPermissionCatalogView)
 def list_permission_catalog() -> AdminPermissionCatalogView:
-    permission_set: set[str] = set()
+    permission_set: set[str] = set(ALL_ADMIN_PERMISSIONS)
     for item in DEFAULT_ROLE_PERMISSIONS.values():
         permission_set.update(item)
     permission_set.update(
