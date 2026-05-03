@@ -109,7 +109,18 @@ class ManagerMarketService:
             non_legendary_count=after.non_legendary_count,
         )
 
-    def list_catalog(self, app: FastAPI, session: Session, *, search: str | None = None, tactic: str | None = None, trait: str | None = None, mentality: str | None = None, rarity: str | None = None, limit: int = 250) -> ManagerCatalogPage:
+    def list_catalog(
+        self,
+        app: FastAPI,
+        session: Session,
+        *,
+        search: str | None = None,
+        tactic: str | None = None,
+        trait: str | None = None,
+        mentality: str | None = None,
+        rarity: str | None = None,
+        limit: int = 250,
+    ) -> ManagerCatalogPage:
         self._bootstrap_db(app, session)
         stmt = select(ManagerCatalogEntry)
         if search:
@@ -149,9 +160,23 @@ class ManagerMarketService:
         ).all()
         assignment = self._assignment(session, user.id)
         assets = [self._asset_view(session, holding) for holding in holdings]
-        main = next((asset for asset in assets if asset.asset_id == (assignment.main_manager_asset_id if assignment else None)), None)
-        academy = next((asset for asset in assets if asset.asset_id == (assignment.academy_manager_asset_id if assignment else None)), None)
-        bench = [asset for asset in assets if asset.asset_id not in {(main.asset_id if main else None), (academy.asset_id if academy else None)}]
+        main = next(
+            (asset for asset in assets if asset.asset_id == (assignment.main_manager_asset_id if assignment else None)),
+            None,
+        )
+        academy = next(
+            (
+                asset
+                for asset in assets
+                if asset.asset_id == (assignment.academy_manager_asset_id if assignment else None)
+            ),
+            None,
+        )
+        bench = [
+            asset
+            for asset in assets
+            if asset.asset_id not in {(main.asset_id if main else None), (academy.asset_id if academy else None)}
+        ]
         return TeamManagersView(main_manager=main, academy_manager=academy, bench=bench, total_owned=len(assets))
 
     def recruit_manager(
@@ -258,7 +283,11 @@ class ManagerMarketService:
     def assign_manager(self, app: FastAPI, session: Session, user: User, asset_id: str, slot: str) -> TeamManagersView:
         self._bootstrap_db(app, session)
         self._owned_asset(session, user.id, asset_id)
-        open_listing = session.scalar(select(ManagerTradeListing).where(ManagerTradeListing.asset_id == asset_id, ManagerTradeListing.status == "open"))
+        open_listing = session.scalar(
+            select(ManagerTradeListing).where(
+                ManagerTradeListing.asset_id == asset_id, ManagerTradeListing.status == "open"
+            )
+        )
         if open_listing is not None:
             raise ManagerMarketError("Cancel the trade listing before assigning this manager.")
         self._assign_slot(session, user.id, asset_id, slot)
@@ -278,18 +307,30 @@ class ManagerMarketService:
         session.flush()
         return self.get_team(app, session, user)
 
-    def list_trade_listings(self, app: FastAPI, session: Session, seller_user_id: str | None = None) -> list[ManagerListingView]:
+    def list_trade_listings(
+        self, app: FastAPI, session: Session, seller_user_id: str | None = None
+    ) -> list[ManagerListingView]:
         self._bootstrap_db(app, session)
-        stmt = select(ManagerTradeListing).where(ManagerTradeListing.status == "open").order_by(ManagerTradeListing.created_at.desc())
+        stmt = (
+            select(ManagerTradeListing)
+            .where(ManagerTradeListing.status == "open")
+            .order_by(ManagerTradeListing.created_at.desc())
+        )
         if seller_user_id is not None:
             stmt = stmt.where(ManagerTradeListing.seller_user_id == seller_user_id)
         listings = session.scalars(stmt).all()
         return [self._listing_view(session, row) for row in listings]
 
-    def create_listing(self, app: FastAPI, session: Session, user: User, asset_id: str, asking_price_credits: Decimal) -> ManagerListingView:
+    def create_listing(
+        self, app: FastAPI, session: Session, user: User, asset_id: str, asking_price_credits: Decimal
+    ) -> ManagerListingView:
         self._bootstrap_db(app, session)
         asset = self._owned_asset(session, user.id, asset_id)
-        existing = session.scalar(select(ManagerTradeListing).where(ManagerTradeListing.asset_id == asset_id, ManagerTradeListing.status == "open"))
+        existing = session.scalar(
+            select(ManagerTradeListing).where(
+                ManagerTradeListing.asset_id == asset_id, ManagerTradeListing.status == "open"
+            )
+        )
         if existing is not None:
             raise ManagerMarketError("This manager already has an open trade listing.")
         self._unassign_asset(session, user.id, asset_id)
@@ -309,7 +350,11 @@ class ManagerMarketService:
 
     def cancel_listing(self, app: FastAPI, session: Session, user: User, listing_id: str) -> TeamManagersView:
         self._bootstrap_db(app, session)
-        listing = session.scalar(select(ManagerTradeListing).where(ManagerTradeListing.listing_id == listing_id, ManagerTradeListing.status == "open"))
+        listing = session.scalar(
+            select(ManagerTradeListing).where(
+                ManagerTradeListing.listing_id == listing_id, ManagerTradeListing.status == "open"
+            )
+        )
         if listing is None:
             raise ManagerMarketError("Trade listing was not found.")
         if listing.seller_user_id != user.id:
@@ -317,13 +362,19 @@ class ManagerMarketService:
         listing.status = "cancelled"
         asset = self._holding_by_asset_id(session, listing.asset_id)
         asset.status = "owned"
-        self._append_audit(session, "manager.listing.cancelled", user, {"listing_id": listing_id, "asset_id": asset.asset_id})
+        self._append_audit(
+            session, "manager.listing.cancelled", user, {"listing_id": listing_id, "asset_id": asset.asset_id}
+        )
         session.flush()
         return self.get_team(app, session, user)
 
     def buy_listing(self, app: FastAPI, session: Session, buyer: User, listing_id: str) -> ManagerTradeResultView:
         self._bootstrap_db(app, session)
-        listing = session.scalar(select(ManagerTradeListing).where(ManagerTradeListing.listing_id == listing_id, ManagerTradeListing.status == "open"))
+        listing = session.scalar(
+            select(ManagerTradeListing).where(
+                ManagerTradeListing.listing_id == listing_id, ManagerTradeListing.status == "open"
+            )
+        )
         if listing is None:
             raise ManagerMarketError("Trade listing was not found.")
         if listing.seller_user_id == buyer.id:
@@ -391,11 +442,30 @@ class ManagerMarketService:
             settled_by_user_id=buyer.id,
         )
         session.add_all([trade, settlement])
-        self._append_audit(session, "manager.trade.completed", buyer, {"trade_id": trade_id, "listing_id": listing_id, "gross": str(gross), "fee": str(fee), "settlement_reference": settlement_reference})
+        self._append_audit(
+            session,
+            "manager.trade.completed",
+            buyer,
+            {
+                "trade_id": trade_id,
+                "listing_id": listing_id,
+                "gross": str(gross),
+                "fee": str(fee),
+                "settlement_reference": settlement_reference,
+            },
+        )
         session.flush()
         return self._trade_result(trade)
 
-    def swap_trade(self, app: FastAPI, session: Session, user: User, proposer_asset_id: str, requested_asset_id: str, cash_adjustment_credits: Decimal) -> ManagerTradeResultView:
+    def swap_trade(
+        self,
+        app: FastAPI,
+        session: Session,
+        user: User,
+        proposer_asset_id: str,
+        requested_asset_id: str,
+        cash_adjustment_credits: Decimal,
+    ) -> ManagerTradeResultView:
         self._bootstrap_db(app, session)
         proposer_asset = self._owned_asset(session, user.id, proposer_asset_id)
         requested_asset = self._holding_by_asset_id(session, requested_asset_id)
@@ -408,7 +478,9 @@ class ManagerMarketService:
         self._ensure_trade_not_already_settled(session, settlement_reference)
 
         if cash_adjustment_credits > 0:
-            settlement = EconomyService(session=session, wallet_service=self.wallet_service).settle_marketplace_transaction(
+            settlement = EconomyService(
+                session=session, wallet_service=self.wallet_service
+            ).settle_marketplace_transaction(
                 buyer=user,
                 seller=requested_owner,
                 gross_amount=cash_adjustment_credits,
@@ -469,7 +541,19 @@ class ManagerMarketService:
             settled_by_user_id=user.id,
         )
         session.add_all([trade, settlement])
-        self._append_audit(session, "manager.swap.completed", user, {"trade_id": trade_id, "proposer_asset_id": proposer_asset_id, "requested_asset_id": requested_asset_id, "cash_adjustment": str(cash_adjustment_credits), "fee": str(fee), "settlement_reference": settlement_reference})
+        self._append_audit(
+            session,
+            "manager.swap.completed",
+            user,
+            {
+                "trade_id": trade_id,
+                "proposer_asset_id": proposer_asset_id,
+                "requested_asset_id": requested_asset_id,
+                "cash_adjustment": str(cash_adjustment_credits),
+                "fee": str(fee),
+                "settlement_reference": settlement_reference,
+            },
+        )
         session.flush()
         return self._trade_result(trade)
 
@@ -533,7 +617,9 @@ class ManagerMarketService:
             risk_flags=risk_flags,
         )
 
-    def compare_managers(self, app: FastAPI, session: Session, left_manager_id: str, right_manager_id: str) -> ManagerComparisonView:
+    def compare_managers(
+        self, app: FastAPI, session: Session, left_manager_id: str, right_manager_id: str
+    ) -> ManagerComparisonView:
         self._bootstrap_db(app, session)
         left = self._manager_by_id(session, left_manager_id)
         right = self._manager_by_id(session, right_manager_id)
@@ -559,7 +645,9 @@ class ManagerMarketService:
             verdict=verdict,
         )
 
-    def trade_history(self, app: FastAPI, session: Session, user: User | None = None, manager_id: str | None = None, limit: int = 50) -> list[ManagerHistoryEntryView]:
+    def trade_history(
+        self, app: FastAPI, session: Session, user: User | None = None, manager_id: str | None = None, limit: int = 50
+    ) -> list[ManagerHistoryEntryView]:
         self._bootstrap_db(app, session)
         stmt = select(ManagerTradeRecord).order_by(ManagerTradeRecord.created_at.desc()).limit(limit)
         rows = session.scalars(stmt).all()
@@ -569,7 +657,9 @@ class ManagerMarketService:
             history_manager_id = manager_id or "unknown"
             candidate_asset_id = row.requested_asset_id or row.proposer_asset_id
             if row.listing_id:
-                listing = session.scalar(select(ManagerTradeListing).where(ManagerTradeListing.listing_id == row.listing_id))
+                listing = session.scalar(
+                    select(ManagerTradeListing).where(ManagerTradeListing.listing_id == row.listing_id)
+                )
                 if listing is not None:
                     holding = self._holding_by_asset_id(session, listing.asset_id)
                     manager = self._manager_by_id(session, holding.manager_id)
@@ -586,34 +676,53 @@ class ManagerMarketService:
             if user is not None:
                 participant_ids = {r for r in [row.proposer_asset_id, row.requested_asset_id] if r}
                 if row.listing_id:
-                    listing = session.scalar(select(ManagerTradeListing).where(ManagerTradeListing.listing_id == row.listing_id))
+                    listing = session.scalar(
+                        select(ManagerTradeListing).where(ManagerTradeListing.listing_id == row.listing_id)
+                    )
                     if listing is not None and listing.seller_user_id != user.id:
                         holding = self._holding_by_asset_id(session, listing.asset_id)
                         if holding.owner_user_id != user.id:
                             continue
                 elif participant_ids:
-                    owners = {session.scalar(select(ManagerHolding.owner_user_id).where(ManagerHolding.asset_id == pid)) for pid in participant_ids}
+                    owners = {
+                        session.scalar(select(ManagerHolding.owner_user_id).where(ManagerHolding.asset_id == pid))
+                        for pid in participant_ids
+                    }
                     if user.id not in owners:
                         continue
-            history.append(ManagerHistoryEntryView(
-                trade_id=row.trade_id,
-                manager_id=history_manager_id,
-                display_name=display_name,
-                mode=row.mode,
-                gross_credits=Decimal(row.gross_credits),
-                fee_credits=Decimal(row.fee_credits),
-                seller_net_credits=Decimal(row.seller_net_credits),
-                settlement_status=row.settlement_status,
-                created_at=row.created_at,
-            ))
+            history.append(
+                ManagerHistoryEntryView(
+                    trade_id=row.trade_id,
+                    manager_id=history_manager_id,
+                    display_name=display_name,
+                    mode=row.mode,
+                    gross_credits=Decimal(row.gross_credits),
+                    fee_credits=Decimal(row.fee_credits),
+                    seller_net_credits=Decimal(row.seller_net_credits),
+                    settlement_status=row.settlement_status,
+                    created_at=row.created_at,
+                )
+            )
         return history
 
     def list_audit_log(self, app: FastAPI, session: Session, limit: int = 50) -> list[ManagerAuditEventView]:
         self._bootstrap_db(app, session)
         rows = session.scalars(select(ManagerAuditLog).order_by(ManagerAuditLog.created_at.desc()).limit(limit)).all()
-        return [ManagerAuditEventView(event_id=row.event_id, event_type=row.event_type, actor_user_id=row.actor_user_id, actor_email=row.actor_email, created_at=row.created_at, payload=row.payload or {}) for row in rows]
+        return [
+            ManagerAuditEventView(
+                event_id=row.event_id,
+                event_type=row.event_type,
+                actor_user_id=row.actor_user_id,
+                actor_email=row.actor_email,
+                created_at=row.created_at,
+                payload=row.payload or {},
+            )
+            for row in rows
+        ]
 
-    def preview_competition_runtime(self, app: FastAPI, session: Session, code: str, participants: int, region: str = "africa") -> CompetitionRuntimeView:
+    def preview_competition_runtime(
+        self, app: FastAPI, session: Session, code: str, participants: int, region: str = "africa"
+    ) -> CompetitionRuntimeView:
         self._bootstrap_db(app, session)
         config = session.scalar(select(ManagerCompetitionSetting).where(ManagerCompetitionSetting.code == code))
         if config is None:
@@ -627,7 +736,11 @@ class ManagerMarketService:
         if code == "fast_league":
             can_run = bool(config.enabled) and adaptive_pool >= 2
             bracket_size, byes = self._adaptive_bracket(adaptive_pool)
-            reason = "Fast League is live once two users are ready." if can_run else "Fast League is waiting for at least two participants or has been disabled."
+            reason = (
+                "Fast League is live once two users are ready."
+                if can_run
+                else "Fast League is waiting for at least two participants or has been disabled."
+            )
             return CompetitionRuntimeView(
                 code=code,
                 participants=participants,
@@ -643,7 +756,12 @@ class ManagerMarketService:
             )
 
         region_allowed = not qualified_regions or region in qualified_regions
-        if not region_allowed and config.allow_fallback_fill and (not fallback_regions or region in fallback_regions or region == 'africa') and adaptive_pool >= 2:
+        if (
+            not region_allowed
+            and config.allow_fallback_fill
+            and (not fallback_regions or region in fallback_regions or region == "africa")
+            and adaptive_pool >= 2
+        ):
             fallback_used = True
             region_allowed = True
 
@@ -672,14 +790,20 @@ class ManagerMarketService:
             adaptive_pool_size=adaptive_pool,
             bracket_size=bracket_size,
             byes=byes,
-            schedule_preview=self._build_schedule_preview(adaptive_pool if can_run else min(adaptive_pool, bracket_size or adaptive_pool)),
+            schedule_preview=self._build_schedule_preview(
+                adaptive_pool if can_run else min(adaptive_pool, bracket_size or adaptive_pool)
+            ),
         )
 
-    def orchestrate_competition(self, app: FastAPI, session: Session, code: str, participants: int, region: str = "africa") -> CompetitionOrchestrationView:
+    def orchestrate_competition(
+        self, app: FastAPI, session: Session, code: str, participants: int, region: str = "africa"
+    ) -> CompetitionOrchestrationView:
         runtime = self.preview_competition_runtime(app, session, code, participants, region)
         notes = [runtime.reason]
         if code == "world_super_cup" and runtime.can_run and region == "africa":
-            notes.append("African qualifiers can auto-fill GTEX World Super Cup slots while other continental pools remain gated.")
+            notes.append(
+                "African qualifiers can auto-fill GTEX World Super Cup slots while other continental pools remain gated."
+            )
         if runtime.byes:
             notes.append(f"Adaptive bracketing introduced {runtime.byes} bye slot(s) to keep the schedule clean.")
         if runtime.fallback_used:
@@ -702,9 +826,24 @@ class ManagerMarketService:
     def list_competitions(self, app: FastAPI, session: Session) -> list[CompetitionAdminView]:
         self._bootstrap_db(app, session)
         rows = session.scalars(select(ManagerCompetitionSetting).order_by(ManagerCompetitionSetting.code.asc())).all()
-        return [CompetitionAdminView(code=row.code, label=row.label, enabled=row.enabled, minimum_viable_participants=row.minimum_viable_participants, geo_locked_regions=row.geo_locked_regions or [], allow_fallback_fill=row.allow_fallback_fill, fallback_source_regions=row.fallback_source_regions or [], schedule_mode="adaptive", auto_seed_enabled=True) for row in rows]
+        return [
+            CompetitionAdminView(
+                code=row.code,
+                label=row.label,
+                enabled=row.enabled,
+                minimum_viable_participants=row.minimum_viable_participants,
+                geo_locked_regions=row.geo_locked_regions or [],
+                allow_fallback_fill=row.allow_fallback_fill,
+                fallback_source_regions=row.fallback_source_regions or [],
+                schedule_mode="adaptive",
+                auto_seed_enabled=True,
+            )
+            for row in rows
+        ]
 
-    def update_competition(self, app: FastAPI, session: Session, actor: User, code: str, payload: CompetitionAdminUpdateRequest) -> CompetitionAdminView:
+    def update_competition(
+        self, app: FastAPI, session: Session, actor: User, code: str, payload: CompetitionAdminUpdateRequest
+    ) -> CompetitionAdminView:
         self._bootstrap_db(app, session)
         row = session.scalar(select(ManagerCompetitionSetting).where(ManagerCompetitionSetting.code == code))
         if row is None:
@@ -716,19 +855,43 @@ class ManagerMarketService:
             setattr(row, key, value)
         self._append_audit(session, "competition.updated", actor, {"code": code, **updates})
         session.flush()
-        return CompetitionAdminView(code=row.code, label=row.label, enabled=row.enabled, minimum_viable_participants=row.minimum_viable_participants, geo_locked_regions=row.geo_locked_regions or [], allow_fallback_fill=row.allow_fallback_fill, fallback_source_regions=row.fallback_source_regions or [], schedule_mode="adaptive", auto_seed_enabled=True)
+        return CompetitionAdminView(
+            code=row.code,
+            label=row.label,
+            enabled=row.enabled,
+            minimum_viable_participants=row.minimum_viable_participants,
+            geo_locked_regions=row.geo_locked_regions or [],
+            allow_fallback_fill=row.allow_fallback_fill,
+            fallback_source_regions=row.fallback_source_regions or [],
+            schedule_mode="adaptive",
+            auto_seed_enabled=True,
+        )
 
-    def update_manager_supply(self, app: FastAPI, session: Session, actor: User, manager_id: str, payload: ManagerSupplyUpdateRequest) -> ManagerCatalogItem:
+    def update_manager_supply(
+        self, app: FastAPI, session: Session, actor: User, manager_id: str, payload: ManagerSupplyUpdateRequest
+    ) -> ManagerCatalogItem:
         self._bootstrap_db(app, session)
         manager = self._manager_by_id(session, manager_id)
         if payload.supply_total > 1:
             raise ManagerMarketError("Manager digital assets are unique; supply cannot be greater than one.")
-        active_owned = session.scalar(select(func.count()).select_from(ManagerHolding).where(ManagerHolding.manager_id == manager_id, ManagerHolding.status.in_(["owned", "listed"]))) or 0
+        active_owned = (
+            session.scalar(
+                select(func.count())
+                .select_from(ManagerHolding)
+                .where(ManagerHolding.manager_id == manager_id, ManagerHolding.status.in_(["owned", "listed"]))
+            )
+            or 0
+        )
         if payload.supply_total < int(active_owned):
             raise ManagerMarketError("New total supply cannot be lower than copies already held by users.")
         manager.supply_available += payload.supply_total - manager.supply_total
         manager.supply_total = payload.supply_total
-        self._append_audit(session, "manager.supply.updated", actor, {"manager_id": manager_id, "supply_total": payload.supply_total, "reason": payload.reason})
+        self._append_audit(
+            session,
+            "manager.supply.updated",
+            actor,
+            {"manager_id": manager_id, "supply_total": payload.supply_total, "reason": payload.reason},
+        )
         session.flush()
         return self._catalog_item(session, manager)
 
@@ -748,7 +911,11 @@ class ManagerMarketService:
         left = 0
         right = len(entrants) - 1
         while left < right:
-            schedule.append(CompetitionScheduleMatchView(seed=left + 1, slot=slot, home_label=entrants[left], away_label=entrants[right]))
+            schedule.append(
+                CompetitionScheduleMatchView(
+                    seed=left + 1, slot=slot, home_label=entrants[left], away_label=entrants[right]
+                )
+            )
             slot += 1
             left += 1
             right -= 1
@@ -866,16 +1033,40 @@ class ManagerMarketService:
     def _asset_view(self, session: Session, asset: ManagerHolding) -> ManagerAssetView:
         manager = self._manager_by_id(session, asset.manager_id)
         slot = None
-        assignment = session.scalar(select(ManagerTeamAssignment).where(or_(ManagerTeamAssignment.main_manager_asset_id == asset.asset_id, ManagerTeamAssignment.academy_manager_asset_id == asset.asset_id)))
+        assignment = session.scalar(
+            select(ManagerTeamAssignment).where(
+                or_(
+                    ManagerTeamAssignment.main_manager_asset_id == asset.asset_id,
+                    ManagerTeamAssignment.academy_manager_asset_id == asset.asset_id,
+                )
+            )
+        )
         if assignment is not None:
             if assignment.main_manager_asset_id == asset.asset_id:
                 slot = "main"
             elif assignment.academy_manager_asset_id == asset.asset_id:
                 slot = "academy"
-        return ManagerAssetView(asset_id=asset.asset_id, manager_id=manager.manager_id, display_name=manager.display_name, rarity=manager.rarity, tactics=list(manager.tactics or []), traits=list(manager.traits or []), mentality=manager.mentality, slot=slot, acquired_at=datetime.fromisoformat(asset.acquired_at))
+        return ManagerAssetView(
+            asset_id=asset.asset_id,
+            manager_id=manager.manager_id,
+            display_name=manager.display_name,
+            rarity=manager.rarity,
+            tactics=list(manager.tactics or []),
+            traits=list(manager.traits or []),
+            mentality=manager.mentality,
+            slot=slot,
+            acquired_at=datetime.fromisoformat(asset.acquired_at),
+        )
 
     def _assert_capacity(self, session: Session, user_id: str) -> None:
-        owned = session.scalar(select(func.count()).select_from(ManagerHolding).where(ManagerHolding.owner_user_id == user_id, ManagerHolding.status == "owned")) or 0
+        owned = (
+            session.scalar(
+                select(func.count())
+                .select_from(ManagerHolding)
+                .where(ManagerHolding.owner_user_id == user_id, ManagerHolding.status == "owned")
+            )
+            or 0
+        )
         if int(owned) >= 2:
             raise CapacityError("Each team can only hold two managers at a time.")
 
@@ -1112,10 +1303,22 @@ class ManagerMarketService:
         return manager
 
     def _append_audit(self, session: Session, event_type: str, actor: User, payload: dict[str, Any]) -> None:
-        session.add(ManagerAuditLog(event_id=generate_uuid(), event_type=event_type, actor_user_id=actor.id, actor_email=actor.email, payload=payload))
+        session.add(
+            ManagerAuditLog(
+                event_id=generate_uuid(),
+                event_type=event_type,
+                actor_user_id=actor.id,
+                actor_email=actor.email,
+                payload=payload,
+            )
+        )
 
     def _ensure_trade_not_already_settled(self, session: Session, settlement_reference: str) -> None:
-        existing = session.scalar(select(ManagerSettlementRecord).where(ManagerSettlementRecord.reference == settlement_reference, ManagerSettlementRecord.status == "settled"))
+        existing = session.scalar(
+            select(ManagerSettlementRecord).where(
+                ManagerSettlementRecord.reference == settlement_reference, ManagerSettlementRecord.status == "settled"
+            )
+        )
         if existing is not None:
             raise ManagerMarketError("This manager trade has already been settled and cannot be processed again.")
 
@@ -1153,21 +1356,70 @@ class ManagerMarketService:
 
     def _default_competitions(self) -> list[dict[str, Any]]:
         return [
-            {"code": "african_championship", "label": "African Championship", "enabled": True, "minimum_viable_participants": 2, "geo_locked_regions": ["africa"], "allow_fallback_fill": True, "fallback_source_regions": ["africa"]},
-            {"code": "world_super_cup", "label": "GTEX World Super Cup", "enabled": True, "minimum_viable_participants": 4, "geo_locked_regions": ["africa"], "allow_fallback_fill": True, "fallback_source_regions": ["africa"]},
-            {"code": "uefa_cup", "label": "UEFA Cup", "enabled": False, "minimum_viable_participants": 4, "geo_locked_regions": ["europe"], "allow_fallback_fill": False, "fallback_source_regions": []},
-            {"code": "asia_cup", "label": "Asia Cup", "enabled": False, "minimum_viable_participants": 4, "geo_locked_regions": ["asia"], "allow_fallback_fill": False, "fallback_source_regions": []},
-            {"code": "north_america_cup", "label": "North America Cup", "enabled": False, "minimum_viable_participants": 4, "geo_locked_regions": ["north_america"], "allow_fallback_fill": False, "fallback_source_regions": []},
-            {"code": "fast_league", "label": "Fast League", "enabled": True, "minimum_viable_participants": 2, "geo_locked_regions": ["africa"], "allow_fallback_fill": True, "fallback_source_regions": ["africa"]},
+            {
+                "code": "african_championship",
+                "label": "African Championship",
+                "enabled": True,
+                "minimum_viable_participants": 2,
+                "geo_locked_regions": ["africa"],
+                "allow_fallback_fill": True,
+                "fallback_source_regions": ["africa"],
+            },
+            {
+                "code": "world_super_cup",
+                "label": "GTEX World Super Cup",
+                "enabled": True,
+                "minimum_viable_participants": 4,
+                "geo_locked_regions": ["africa"],
+                "allow_fallback_fill": True,
+                "fallback_source_regions": ["africa"],
+            },
+            {
+                "code": "uefa_cup",
+                "label": "UEFA Cup",
+                "enabled": False,
+                "minimum_viable_participants": 4,
+                "geo_locked_regions": ["europe"],
+                "allow_fallback_fill": False,
+                "fallback_source_regions": [],
+            },
+            {
+                "code": "asia_cup",
+                "label": "Asia Cup",
+                "enabled": False,
+                "minimum_viable_participants": 4,
+                "geo_locked_regions": ["asia"],
+                "allow_fallback_fill": False,
+                "fallback_source_regions": [],
+            },
+            {
+                "code": "north_america_cup",
+                "label": "North America Cup",
+                "enabled": False,
+                "minimum_viable_participants": 4,
+                "geo_locked_regions": ["north_america"],
+                "allow_fallback_fill": False,
+                "fallback_source_regions": [],
+            },
+            {
+                "code": "fast_league",
+                "label": "Fast League",
+                "enabled": True,
+                "minimum_viable_participants": 2,
+                "geo_locked_regions": ["africa"],
+                "allow_fallback_fill": True,
+                "fallback_source_regions": ["africa"],
+            },
         ]
 
     def _catalog_counts(self, session: Session) -> ManagerCatalogCounts:
         total = session.scalar(select(func.count()).select_from(ManagerCatalogEntry)) or 0
-        legendary = session.scalar(
-            select(func.count())
-            .select_from(ManagerCatalogEntry)
-            .where(ManagerCatalogEntry.rarity == "legendary")
-        ) or 0
+        legendary = (
+            session.scalar(
+                select(func.count()).select_from(ManagerCatalogEntry).where(ManagerCatalogEntry.rarity == "legendary")
+            )
+            or 0
+        )
         total_count = int(total)
         legendary_count = int(legendary)
         return ManagerCatalogCounts(
@@ -1179,33 +1431,106 @@ class ManagerMarketService:
     def _import_legacy_state(self, session: Session, legacy_path: Path) -> None:
         legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
         for row in legacy.get("catalog", []):
-            session.add(ManagerCatalogEntry(
-                manager_id=row["manager_id"],
-                display_name=row["display_name"],
-                rarity=row["rarity"],
-                mentality=row["mentality"],
-                tactics=row.get("tactics", []),
-                traits=row.get("traits", []),
-                substitution_tendency=row.get("substitution_tendency", "balanced_substitution"),
-                philosophy_summary=row.get("philosophy_summary", ""),
-                club_associations=row.get("club_associations", []),
-                supply_total=int(row.get("supply_total", 0)),
-                supply_available=int(row.get("supply_available", 0)),
-            ))
+            session.add(
+                ManagerCatalogEntry(
+                    manager_id=row["manager_id"],
+                    display_name=row["display_name"],
+                    rarity=row["rarity"],
+                    mentality=row["mentality"],
+                    tactics=row.get("tactics", []),
+                    traits=row.get("traits", []),
+                    substitution_tendency=row.get("substitution_tendency", "balanced_substitution"),
+                    philosophy_summary=row.get("philosophy_summary", ""),
+                    club_associations=row.get("club_associations", []),
+                    supply_total=int(row.get("supply_total", 0)),
+                    supply_available=int(row.get("supply_available", 0)),
+                )
+            )
         for row in legacy.get("holdings", []):
-            session.add(ManagerHolding(asset_id=row["asset_id"], manager_id=row["manager_id"], owner_user_id=row["owner_user_id"], acquired_at=row["acquired_at"], status=row["status"]))
+            session.add(
+                ManagerHolding(
+                    asset_id=row["asset_id"],
+                    manager_id=row["manager_id"],
+                    owner_user_id=row["owner_user_id"],
+                    acquired_at=row["acquired_at"],
+                    status=row["status"],
+                )
+            )
         for row in legacy.get("listings", []):
-            session.add(ManagerTradeListing(listing_id=row["listing_id"], asset_id=row["asset_id"], seller_user_id=row["seller_user_id"], seller_name=row.get("seller_name") or row["seller_user_id"], asking_price_credits=row["asking_price_credits"], status=row["status"]))
+            session.add(
+                ManagerTradeListing(
+                    listing_id=row["listing_id"],
+                    asset_id=row["asset_id"],
+                    seller_user_id=row["seller_user_id"],
+                    seller_name=row.get("seller_name") or row["seller_user_id"],
+                    asking_price_credits=row["asking_price_credits"],
+                    status=row["status"],
+                )
+            )
         for user_id, assignment in (legacy.get("team_assignments") or {}).items():
-            session.add(ManagerTeamAssignment(user_id=user_id, main_manager_asset_id=assignment.get("main_manager_asset_id"), academy_manager_asset_id=assignment.get("academy_manager_asset_id")))
+            session.add(
+                ManagerTeamAssignment(
+                    user_id=user_id,
+                    main_manager_asset_id=assignment.get("main_manager_asset_id"),
+                    academy_manager_asset_id=assignment.get("academy_manager_asset_id"),
+                )
+            )
         for row in legacy.get("trade_history", []):
-            session.add(ManagerTradeRecord(trade_id=row["trade_id"], mode=row["mode"], listing_id=row.get("listing_id"), proposer_asset_id=row.get("proposer_asset_id"), requested_asset_id=row.get("requested_asset_id"), gross_credits=row.get("gross_credits", "0"), fee_credits=row.get("fee_credits", "0"), seller_net_credits=row.get("seller_net_credits", "0"), settlement_reference=row.get("settlement_reference") or f"legacy:{row['trade_id']}", settlement_status=row.get("settlement_status", "settled"), immediate_withdrawal_eligible=bool(row.get("immediate_withdrawal_eligible", True)), created_at=datetime.fromisoformat(row["created_at"])))
+            session.add(
+                ManagerTradeRecord(
+                    trade_id=row["trade_id"],
+                    mode=row["mode"],
+                    listing_id=row.get("listing_id"),
+                    proposer_asset_id=row.get("proposer_asset_id"),
+                    requested_asset_id=row.get("requested_asset_id"),
+                    gross_credits=row.get("gross_credits", "0"),
+                    fee_credits=row.get("fee_credits", "0"),
+                    seller_net_credits=row.get("seller_net_credits", "0"),
+                    settlement_reference=row.get("settlement_reference") or f"legacy:{row['trade_id']}",
+                    settlement_status=row.get("settlement_status", "settled"),
+                    immediate_withdrawal_eligible=bool(row.get("immediate_withdrawal_eligible", True)),
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                )
+            )
         for row in legacy.get("settlement_records", []):
-            session.add(ManagerSettlementRecord(reference=row["reference"], trade_id=row["trade_id"], listing_id=row.get("listing_id"), mode=row.get("mode", "cash"), status=row.get("status", "settled"), gross_credits=row.get("gross_credits", "0"), fee_credits=row.get("fee_credits", "0"), seller_net_credits=row.get("seller_net_credits", "0"), eligible_immediately=bool(row.get("eligible_immediately", True)), settled_by_user_id=row.get("settled_by_user_id"), created_at=datetime.fromisoformat(row["created_at"])))
+            session.add(
+                ManagerSettlementRecord(
+                    reference=row["reference"],
+                    trade_id=row["trade_id"],
+                    listing_id=row.get("listing_id"),
+                    mode=row.get("mode", "cash"),
+                    status=row.get("status", "settled"),
+                    gross_credits=row.get("gross_credits", "0"),
+                    fee_credits=row.get("fee_credits", "0"),
+                    seller_net_credits=row.get("seller_net_credits", "0"),
+                    eligible_immediately=bool(row.get("eligible_immediately", True)),
+                    settled_by_user_id=row.get("settled_by_user_id"),
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                )
+            )
         for row in legacy.get("competition_settings", []):
-            session.add(ManagerCompetitionSetting(code=row["code"], label=row["label"], enabled=bool(row.get("enabled", True)), minimum_viable_participants=int(row.get("minimum_viable_participants", 2)), geo_locked_regions=row.get("geo_locked_regions", []), allow_fallback_fill=bool(row.get("allow_fallback_fill", False)), fallback_source_regions=row.get("fallback_source_regions", [])))
+            session.add(
+                ManagerCompetitionSetting(
+                    code=row["code"],
+                    label=row["label"],
+                    enabled=bool(row.get("enabled", True)),
+                    minimum_viable_participants=int(row.get("minimum_viable_participants", 2)),
+                    geo_locked_regions=row.get("geo_locked_regions", []),
+                    allow_fallback_fill=bool(row.get("allow_fallback_fill", False)),
+                    fallback_source_regions=row.get("fallback_source_regions", []),
+                )
+            )
         for row in legacy.get("audit_log", []):
-            session.add(ManagerAuditLog(event_id=row["event_id"], event_type=row["event_type"], actor_user_id=row["actor_user_id"], actor_email=row["actor_email"], payload=row.get("payload", {}), created_at=datetime.fromisoformat(row["created_at"])))
+            session.add(
+                ManagerAuditLog(
+                    event_id=row["event_id"],
+                    event_type=row["event_type"],
+                    actor_user_id=row["actor_user_id"],
+                    actor_email=row["actor_email"],
+                    payload=row.get("payload", {}),
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                )
+            )
         session.flush()
 
     def _insert_catalog_entries(self, session: Session, rows: list[dict[str, Any]]) -> None:
@@ -1241,21 +1566,20 @@ class ManagerMarketService:
         dialect_name = session.get_bind().dialect.name
         if dialect_name == "sqlite":
             for start in range(0, len(rows), SEED_INSERT_BATCH_SIZE):
-                chunk = rows[start:start + SEED_INSERT_BATCH_SIZE]
+                chunk = rows[start : start + SEED_INSERT_BATCH_SIZE]
                 statement = sqlite_insert(model).values(chunk).on_conflict_do_nothing(index_elements=[conflict_column])
                 session.execute(statement)
             return
         if dialect_name == "postgresql":
             for start in range(0, len(rows), SEED_INSERT_BATCH_SIZE):
-                chunk = rows[start:start + SEED_INSERT_BATCH_SIZE]
-                statement = postgresql_insert(model).values(chunk).on_conflict_do_nothing(index_elements=[conflict_column])
+                chunk = rows[start : start + SEED_INSERT_BATCH_SIZE]
+                statement = (
+                    postgresql_insert(model).values(chunk).on_conflict_do_nothing(index_elements=[conflict_column])
+                )
                 session.execute(statement)
             return
 
-        existing_values = set(
-            session.scalars(select(getattr(model, conflict_column)))
-            .all()
-        )
+        existing_values = set(session.scalars(select(getattr(model, conflict_column))).all())
         for row in rows:
             if row[conflict_column] in existing_values:
                 continue

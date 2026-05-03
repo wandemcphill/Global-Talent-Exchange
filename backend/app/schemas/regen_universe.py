@@ -234,6 +234,7 @@ class RegenPlayerMarketAccessView(CommonSchema):
     buy_cta_allowed: bool = True
     is_preseeded_national_regen: bool = False
     national_pool_only: bool = False
+    admin_trade_enabled: bool = False
 
 
 class RegenPlayerView(CommonSchema):

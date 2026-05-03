@@ -210,7 +210,6 @@ class CompetitionRuntimeView(BaseModel):
     schedule_preview: list[CompetitionScheduleMatchView] = Field(default_factory=list)
 
 
-
 class ManagerFilterMetadataView(BaseModel):
     tactics: list[str] = Field(default_factory=list)
     traits: list[str] = Field(default_factory=list)

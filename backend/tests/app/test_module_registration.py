@@ -207,7 +207,7 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert leagues_response.status_code == 422
     assert champions_league_response.status_code == 422
     assert academy_response.status_code == 422
-    assert ai_manager_response.status_code == 422
+    assert ai_manager_response.status_code == 401
     assert match_engine_response.status_code == 422
     assert match_start_response.status_code == 422
     assert match_complete_response.status_code == 422

@@ -334,13 +334,17 @@ class JackpotService(GtexBaseService):
             platform_clearing = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
             if delta > Decimal("0.0000"):
                 postings = [
-                    LedgerPosting(account=platform_clearing, amount=-delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+                    LedgerPosting(
+                        account=platform_clearing, amount=-delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT
+                    ),
                     LedgerPosting(account=lottery_pool, amount=delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
                 ]
             else:
                 postings = [
                     LedgerPosting(account=lottery_pool, amount=delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
-                    LedgerPosting(account=platform_clearing, amount=-delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+                    LedgerPosting(
+                        account=platform_clearing, amount=-delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT
+                    ),
                 ]
             self.wallet_service.append_transaction(
                 session,

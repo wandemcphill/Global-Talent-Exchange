@@ -173,17 +173,16 @@ class RealtimeHub:
                 connections = list(self._connections.values())
             except RuntimeError:
                 connections = []
-            wallet_connections = sum(1 for item in connections if any(topic.startswith("wallet:") for topic in item.topics))
+            wallet_connections = sum(
+                1 for item in connections if any(topic.startswith("wallet:") for topic in item.topics)
+            )
             match_connections = sum(
-                1 for item in connections if any(topic.startswith("match:") or topic.startswith("commentary:") for topic in item.topics)
+                1
+                for item in connections
+                if any(topic.startswith("match:") or topic.startswith("commentary:") for topic in item.topics)
             )
             tracked_wallet_streams = len(
-                {
-                    topic
-                    for item in connections
-                    for topic in item.topics
-                    if topic.startswith("wallet:")
-                }
+                {topic for item in connections for topic in item.topics if topic.startswith("wallet:")}
             )
             tracked_match_streams = len(
                 {
@@ -329,18 +328,10 @@ class RealtimeHub:
             return dispatches
 
         if event.name in {"market.trade.executed", "TRADE_EXECUTED", "PLAYER_VALUE_UPDATED"}:
-            player_id = _optional_string(
-                payload.get("player_id")
-                or payload.get("asset_id")
-                or event.aggregate_id
-            )
+            player_id = _optional_string(payload.get("player_id") or payload.get("asset_id") or event.aggregate_id)
             if player_id is None:
                 return []
-            price = (
-                payload.get("current_price")
-                or payload.get("updated_share_price_coin")
-                or payload.get("price")
-            )
+            price = payload.get("current_price") or payload.get("updated_share_price_coin") or payload.get("price")
             return [
                 RealtimeDispatch(
                     type="market_price_update",
@@ -362,17 +353,12 @@ class RealtimeHub:
 
         if event.name == "match.events":
             match_id = _optional_string(
-                payload.get("match_id")
-                or payload.get("fixture_id")
-                or payload.get("resource_id")
-                or event.aggregate_id
+                payload.get("match_id") or payload.get("fixture_id") or payload.get("resource_id") or event.aggregate_id
             )
             if match_id is None:
                 return []
             commentary = _optional_string(
-                payload.get("commentary")
-                or payload.get("description")
-                or payload.get("source_commentary")
+                payload.get("commentary") or payload.get("description") or payload.get("source_commentary")
             )
             score_payload = {
                 "match_id": match_id,
@@ -419,10 +405,7 @@ class RealtimeHub:
 
         if event.name.startswith("competition.match."):
             match_id = _optional_string(
-                payload.get("fixture_id")
-                or payload.get("match_id")
-                or payload.get("resource_id")
-                or event.aggregate_id
+                payload.get("fixture_id") or payload.get("match_id") or payload.get("resource_id") or event.aggregate_id
             )
             competition_id = _optional_string(payload.get("competition_id"))
             dispatches: list[RealtimeDispatch] = []
@@ -459,9 +442,7 @@ class RealtimeHub:
 
         if event.name.startswith("competition.") or event.name in {"competition_created", "competition_updated"}:
             competition_id = _optional_string(
-                payload.get("competition_id")
-                or payload.get("resource_id")
-                or event.aggregate_id
+                payload.get("competition_id") or payload.get("resource_id") or event.aggregate_id
             )
             if competition_id is None:
                 return []

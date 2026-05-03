@@ -494,12 +494,17 @@ def test_card_supply_import_can_mint_preseeded_regen_with_national_seed_id(sessi
     assert job.imported_items == 1
     assert items[0].linked_player_id is not None
     assert items[0].linked_player_id != seed.id
-    assert session.scalar(
-        select(PlayerCardHolding).join(PlayerCard).where(
-            PlayerCard.player_id == items[0].linked_player_id,
-            PlayerCardHolding.owner_user_id == owner.id,
+    assert (
+        session.scalar(
+            select(PlayerCardHolding)
+            .join(PlayerCard)
+            .where(
+                PlayerCard.player_id == items[0].linked_player_id,
+                PlayerCardHolding.owner_user_id == owner.id,
+            )
         )
-    ) is not None
+        is not None
+    )
 
 
 def test_sale_listing_guardrails_reject_price_outside_reference_band(session) -> None:

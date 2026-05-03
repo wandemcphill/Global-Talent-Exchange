@@ -138,12 +138,16 @@ def test_create_listing_reserves_holdings(session):
     player = _create_player(session, player_id="player-1", name="Ayo Striker")
     tier = _create_tier(session)
     card = _create_card(session, player=player, tier=tier)
-    holding = PlayerCardHolding(player_card_id=card.id, owner_user_id=seller.id, quantity_total=5, quantity_reserved=0, metadata_json={})
+    holding = PlayerCardHolding(
+        player_card_id=card.id, owner_user_id=seller.id, quantity_total=5, quantity_reserved=0, metadata_json={}
+    )
     session.add(holding)
     session.flush()
 
     service = PlayerCardMarketService(session=session)
-    listing = service.create_listing(actor=seller, player_card_id=card.id, quantity=2, price_per_card_credits=Decimal("15"))
+    listing = service.create_listing(
+        actor=seller, player_card_id=card.id, quantity=2, price_per_card_credits=Decimal("15")
+    )
 
     refreshed = session.get(PlayerCardHolding, holding.id)
     assert refreshed.quantity_reserved == 2
@@ -167,7 +171,9 @@ def test_sale_execution_fee_and_owner_history(session):
     player = _create_player(session, player_id="player-3", name="Carlos Keeper")
     tier = _create_tier(session)
     card = _create_card(session, player=player, tier=tier)
-    holding = PlayerCardHolding(player_card_id=card.id, owner_user_id=seller.id, quantity_total=4, quantity_reserved=0, metadata_json={})
+    holding = PlayerCardHolding(
+        player_card_id=card.id, owner_user_id=seller.id, quantity_total=4, quantity_reserved=0, metadata_json={}
+    )
     session.add(holding)
     session.flush()
 
@@ -175,7 +181,9 @@ def test_sale_execution_fee_and_owner_history(session):
     _seed_credits(session, wallet, buyer, Decimal("100"))
 
     service = PlayerCardMarketService(session=session, wallet_service=wallet)
-    listing = service.create_listing(actor=seller, player_card_id=card.id, quantity=2, price_per_card_credits=Decimal("10"))
+    listing = service.create_listing(
+        actor=seller, player_card_id=card.id, quantity=2, price_per_card_credits=Decimal("10")
+    )
     sale = service.buy_listing(actor=buyer, listing_id=listing["listing_id"], quantity=2)
 
     seller_account = wallet.get_user_account(session, seller, LedgerUnit.COIN)
@@ -190,7 +198,9 @@ def test_sale_execution_fee_and_owner_history(session):
     assert buyer_balance == Decimal("80.0000")
     assert platform_balance == Decimal("4.0000")
 
-    history = session.scalar(select(PlayerCardOwnerHistory).where(PlayerCardOwnerHistory.reference_id == sale["sale_id"]))
+    history = session.scalar(
+        select(PlayerCardOwnerHistory).where(PlayerCardOwnerHistory.reference_id == sale["sale_id"])
+    )
     assert history is not None
 
 
@@ -211,7 +221,9 @@ def test_watchlist_add_remove(session):
 def test_import_validation(session):
     admin = _create_user(session, user_id="admin", email="admin@example.com", username="admin", role=UserRole.ADMIN)
     service = PlayerImportService(session)
-    job, items = service.create_card_supply_job(actor=admin, source_label="test", rows=[{"tier_code": "elite", "quantity": 5}], commit=False)
+    job, items = service.create_card_supply_job(
+        actor=admin, source_label="test", rows=[{"tier_code": "elite", "quantity": 5}], commit=False
+    )
     assert job.failed_items == 1
     assert items[0].status.value if hasattr(items[0].status, "value") else items[0].status == "invalid"
 
@@ -222,7 +234,9 @@ def test_suspicious_trade_signal_emission(session):
     player = _create_player(session, player_id="player-5", name="Efe Forward")
     tier = _create_tier(session)
     card = _create_card(session, player=player, tier=tier)
-    holding = PlayerCardHolding(player_card_id=card.id, owner_user_id=seller.id, quantity_total=6, quantity_reserved=0, metadata_json={})
+    holding = PlayerCardHolding(
+        player_card_id=card.id, owner_user_id=seller.id, quantity_total=6, quantity_reserved=0, metadata_json={}
+    )
     session.add(holding)
     session.flush()
 
@@ -231,7 +245,9 @@ def test_suspicious_trade_signal_emission(session):
 
     service = PlayerCardMarketService(session=session, wallet_service=wallet)
     for _ in range(3):
-        listing = service.create_listing(actor=seller, player_card_id=card.id, quantity=2, price_per_card_credits=Decimal("12"))
+        listing = service.create_listing(
+            actor=seller, player_card_id=card.id, quantity=2, price_per_card_credits=Decimal("12")
+        )
         service.buy_listing(actor=buyer, listing_id=listing["listing_id"], quantity=2)
 
     integrity = IntegrityEngineService(session)

@@ -19,10 +19,7 @@ def _catalog_by_id(client) -> dict[str, dict[str, object]]:
     response = client.get("/api/managers/catalog", params={"limit": 1000})
     assert response.status_code == 200
     payload = response.json()
-    return {
-        item["manager_id"]: item
-        for item in payload["items"]
-    }
+    return {item["manager_id"]: item for item in payload["items"]}
 
 
 def _response_text(response) -> str:
@@ -38,15 +35,9 @@ def test_manager_catalog_is_seeded_during_app_startup(app, client) -> None:
     with app.state.session_factory() as session:
         total = session.scalar(select(func.count()).select_from(ManagerCatalogEntry))
         ferguson = session.scalar(
-            select(ManagerCatalogEntry).where(
-                ManagerCatalogEntry.manager_id == "sir-alex-ferguson"
-            )
+            select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == "sir-alex-ferguson")
         )
-        pep = session.scalar(
-            select(ManagerCatalogEntry).where(
-                ManagerCatalogEntry.manager_id == "pep-guardiola"
-            )
-        )
+        pep = session.scalar(select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == "pep-guardiola"))
 
     assert total is not None and total > 0
     assert ferguson is not None

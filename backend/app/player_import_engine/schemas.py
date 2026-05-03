@@ -43,8 +43,8 @@ class PlayerCardSupplyJobCreateRequest(BaseModel):
 class YouthGenerationRequest(BaseModel):
     club_id: str | None = None
     count: int = Field(default=12, ge=1, le=100)
-    nationality_code: str = Field(default='NG', min_length=2, max_length=12)
-    region_label: str = Field(default='Local Academy', min_length=2, max_length=120)
+    nationality_code: str = Field(default="NG", min_length=2, max_length=12)
+    region_label: str = Field(default="Local Academy", min_length=2, max_length=120)
 
 
 class PlayerImportItemView(BaseModel):
