@@ -54,7 +54,7 @@ class JackpotWorker:
     consumer_name: str = field(default_factory=lambda: f"jackpot-{uuid4().hex[:8]}")
 
     def run_once(self) -> bool:
-        self.context.runtime.state_store.consume(
+        messages = self.context.runtime.state_store.consume(
             redis_keys.stream_jackpot(),
             group="gtex-jackpot",
             consumer=self.consumer_name,
@@ -67,6 +67,8 @@ class JackpotWorker:
             with self.context.database.session_factory() as session:
                 result = self.context.runtime.jackpot.process_due_round(session)
                 session.commit()
+                for message in messages:
+                    self.context.runtime.state_store.ack(message.stream, "gtex-jackpot", message.message_id)
                 return result is not None
 
 

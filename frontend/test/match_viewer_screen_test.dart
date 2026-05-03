@@ -6,6 +6,7 @@ import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
+import 'package:gte_frontend/services/match_commentary_engine.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 import 'package:gte_frontend/widgets/match_3d/native_match_3d_surface.dart';
@@ -75,6 +76,19 @@ void main() {
     expect(late.players.first.position.x, 78);
   });
 
+  test('commentary engine renders final-form live payloads', () {
+    final String line = MatchCommentaryEngine.lineForRaw(
+      eventType: 'goal',
+      player: 'John Doe',
+      team: 'Home FC',
+      score: '2-1',
+      minute: 67,
+    );
+
+    expect(line, contains('John Doe finds the net'));
+    expect(line, contains('Score: 2-1'));
+  });
+
   testWidgets('match viewer renders the minimal 2D matchday surface', (
     WidgetTester tester,
   ) async {
@@ -99,6 +113,13 @@ void main() {
 
     expect(find.byKey(const Key('match-2d-score-strip')), findsOneWidget);
     expect(find.byKey(const Key('match-2d-scoreline')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-pitch-stage')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-live-panel')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-tactical-summary')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-player-panels')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-event-feed')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-heat-overlay')), findsOneWidget);
+    expect(find.byKey(const Key('match-2d-formation-overlay')), findsOneWidget);
     expect(find.byKey(const Key('match-2d-commentary-bar')), findsOneWidget);
     expect(find.byKey(const Key('match-2d-controls')), findsOneWidget);
     expect(find.byType(MatchPitch2D), findsOneWidget);

@@ -170,6 +170,9 @@ class GteAuthedApi {
   }
 
   Future<AuthSession?> _readCurrentSession() async {
+    if (authSession != null) {
+      return authSession;
+    }
     for (final AuthSessionStore store in _sessionStores()) {
       try {
         final AuthSession? stored = await store.readSession();
@@ -181,7 +184,7 @@ class GteAuthedApi {
         // backend. In that case, fall back to the in-memory session.
       }
     }
-    return authSession;
+    return null;
   }
 
   Future<bool> _refreshSession(AuthSession? currentSession) async {
@@ -275,12 +278,6 @@ class GteAuthedApi {
 
     addStore(authSessionStore);
     addStore(fallbackAuthSessionStore);
-    final String resolvedAccessToken = (accessToken ?? '').trim();
-    if (resolvedAccessToken.isNotEmpty &&
-        authSessionStore == null &&
-        fallbackAuthSessionStore == null) {
-      addStore(SecureAuthSessionStore());
-    }
     return stores;
   }
 }

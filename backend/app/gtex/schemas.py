@@ -104,6 +104,11 @@ class JackpotAdminRuntimeUpdateRequest(BaseModel):
         return candidate
 
 
+class JackpotAdminBalanceUpdateRequest(BaseModel):
+    balance: Decimal = Field(ge=0)
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class JackpotAdminActionView(BaseModel):
     detail: str
     triggered_round_id: str

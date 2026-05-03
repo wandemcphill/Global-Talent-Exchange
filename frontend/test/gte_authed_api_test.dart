@@ -237,6 +237,49 @@ void main() {
       expect((await persistedStore.readSession())?.sessionId, 'session-new');
     },
   );
+
+  test(
+    'explicit auth session is preferred over stale persisted sessions',
+    () async {
+      final MemoryAuthSessionStore persistedStore = MemoryAuthSessionStore();
+      await persistedStore.writeSession(
+        const AuthSession(
+          userId: 'old-user',
+          accessToken: 'expired-token',
+          refreshToken: 'old-refresh',
+          sessionId: 'old-session',
+        ),
+      );
+      final _RecordingTransport transport = _RecordingTransport();
+      final GteAuthedApi client = GteAuthedApi(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        authSession: const AuthSession(
+          userId: 'fresh-user',
+          accessToken: 'fresh-token',
+          refreshToken: 'fresh-refresh',
+          sessionId: 'fresh-session',
+        ),
+        fallbackAuthSessionStore: persistedStore,
+        mode: GteBackendMode.live,
+      );
+
+      await client.getMap('/api/creators/me/summary');
+
+      expect(
+        transport.requests.single.headers['Authorization'],
+        'Bearer fresh-token',
+      );
+      expect(transport.requests.single.headers['X-User-Id'], 'fresh-user');
+      expect(
+        transport.requests.single.headers['X-Session-Id'],
+        'fresh-session',
+      );
+    },
+  );
 }
 
 String _jwtToken(Map<String, Object?> payload) {

@@ -64,16 +64,18 @@ class MatchGiftReceipt {
     required this.giftKey,
     required this.giftDisplayName,
     required this.grossAmount,
+    required this.ledgerUnit,
     required this.recipientLabel,
   });
 
   final String giftKey;
   final String giftDisplayName;
   final String grossAmount;
+  final String ledgerUnit;
   final String recipientLabel;
 
   String get confirmationMessage =>
-      '$giftDisplayName sent to $recipientLabel for $grossAmount Fan Coin.';
+      '$giftDisplayName sent to $recipientLabel for $grossAmount ${_unitLabelForLedger(ledgerUnit)}.';
 
   factory MatchGiftReceipt.fromResponse(
     Object? payload, {
@@ -90,6 +92,9 @@ class MatchGiftReceipt {
       giftKey: _stringValue(map['gift_key']),
       giftDisplayName: _stringOrNullValue(map['gift_display_name']) ?? 'Gift',
       grossAmount: _stringOrNullValue(map['gross_amount']) ?? '0.0000',
+      ledgerUnit:
+          _stringOrNullValue(map['ledger_unit']) ??
+          _ledgerUnitForScope(target.sourceScope),
       recipientLabel: target.recipientLabel,
     );
   }
@@ -126,4 +131,18 @@ String _stringValue(Object? value) {
 String? _stringOrNullValue(Object? value) {
   final String text = _stringValue(value);
   return text.isEmpty ? null : text;
+}
+
+String _ledgerUnitForScope(String sourceScope) {
+  final String normalized = sourceScope.trim().toLowerCase();
+  if (normalized == 'gtex' ||
+      normalized == 'gtex_platform' ||
+      normalized == 'gtex_competition') {
+    return 'coin';
+  }
+  return 'credit';
+}
+
+String _unitLabelForLedger(String ledgerUnit) {
+  return ledgerUnit.trim().toLowerCase() == 'coin' ? 'GTEX Coin' : 'Fan Coin';
 }

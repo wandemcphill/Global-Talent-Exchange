@@ -28,6 +28,7 @@ from app.gtex.schemas import (
     JackpotContributionRequest,
     JackpotContributionView,
     JackpotAdminActionView,
+    JackpotAdminBalanceUpdateRequest,
     JackpotAdminRuntimeUpdateRequest,
     JackpotAdminRuntimeView,
     JackpotHistoryItemView,
@@ -140,6 +141,27 @@ def update_admin_jackpot_runtime(
             resource_id="global",
             detail="Admin updated the live GTEX jackpot runtime settings.",
             metadata_json=payload.model_dump(mode="json"),
+        )
+        session.commit()
+    except GtexError as exc:
+        session.rollback()
+        raise_gtex_http_exception(exc)
+    return JackpotAdminRuntimeView.model_validate(runtime.jackpot.get_runtime_state(session))
+
+
+@router.patch("/admin/jackpot/balance", response_model=JackpotAdminRuntimeView)
+def update_admin_jackpot_balance(
+    payload: JackpotAdminBalanceUpdateRequest,
+    current_admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    runtime=Depends(get_runtime),
+) -> JackpotAdminRuntimeView:
+    try:
+        runtime.jackpot.set_current_balance(
+            session,
+            balance=payload.balance,
+            actor=current_admin,
+            reason=payload.reason,
         )
         session.commit()
     except GtexError as exc:

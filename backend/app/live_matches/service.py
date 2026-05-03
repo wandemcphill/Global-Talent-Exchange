@@ -993,6 +993,7 @@ class LiveMatchHub:
         if self.event_publisher is None:
             return
         for event in events:
+            commentary = str(event.commentary or event.metadata.get("description") or "").strip() or None
             payload = {
                 "match_id": match_id,
                 "event_id": event.event_id,
@@ -1017,6 +1018,8 @@ class LiveMatchHub:
                 "importance_score": event.importance_score,
                 "highlight_eligible": event.highlight_eligible,
                 "audio_stem_channels": list(event.audio_stem_channels),
+                "commentary": commentary,
+                "description": commentary,
                 "metadata": event.metadata,
             }
             self.event_publisher.publish(

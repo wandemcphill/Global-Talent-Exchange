@@ -16,6 +16,7 @@ from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_combo_rule import GiftComboRule
 from app.models.gift_transaction import GiftTransaction
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.models.notification_record import NotificationRecord
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.services.spending_control_service import SpendingControlService, SpendingControlViolation
@@ -131,10 +132,27 @@ class GiftEngineService:
             raise GiftEngineError('Users cannot send gifts to themselves.')
 
         normalized_scope = (source_scope or "user_hosted").strip().lower()
-        if normalized_scope in {"gtex", "gtex_platform", "gtex_competition"}:
+        if any(
+            token in normalized_scope
+            for token in {"gtex", "platform", "official", "national", "qualifier", "international"}
+        ):
             normalized_scope = "gtex_competition"
-        if normalized_scope not in {"user_hosted", "gtex_competition"}:
-            raise GiftEngineError("Gift source scope must be user_hosted or gtex_competition.")
+        elif normalized_scope in {
+            "user",
+            "creator",
+            "creator_hosted",
+            "hosted",
+            "hosted_competition",
+            "club_competition",
+            "area_competition",
+            "state_competition",
+            "community",
+            "competition",
+            "user_hosted",
+        }:
+            normalized_scope = "user_hosted"
+        else:
+            normalized_scope = "user_hosted"
         if normalized_scope == "gtex_competition":
             recent_pair_count = self._match_scope_gift_count(
                 sender_id=sender.id,
@@ -261,15 +279,55 @@ class GiftEngineService:
                 "combo_rule_key": combo_rule.rule_key if combo_rule is not None else None,
             },
         )
+        ledger_transaction_id = entries[0].transaction_id if entries else None
+        unit_label = "Fan Coin" if ledger_unit == LedgerUnit.CREDIT else "GTEX Coin"
+        notification_metadata = {
+            "gift_transaction_id": transaction.id,
+            "gift_key": gift.key,
+            "gift_display_name": gift.display_name,
+            "sender_user_id": sender.id,
+            "recipient_user_id": recipient.id,
+            "quantity": str(normalized_quantity),
+            "gross_amount": str(gross_amount),
+            "recipient_net_amount": str(recipient_net),
+            "ledger_unit": ledger_unit.value,
+            "unit_label": unit_label,
+            "source_scope": normalized_scope,
+            "ledger_transaction_id": ledger_transaction_id,
+        }
+        sender_label = sender.display_name or sender.username or "A supporter"
+        recipient_label = recipient.display_name or recipient.username or "recipient"
+        self.session.add(
+            NotificationRecord(
+                user_id=recipient.id,
+                topic="gift",
+                template_key="GIFT_RECEIVED",
+                resource_type="gift_transaction",
+                resource_id=transaction.id,
+                message=f"{sender_label} sent you {gift.display_name} worth {recipient_net} {unit_label}.",
+                metadata_json=notification_metadata,
+            )
+        )
+        self.session.add(
+            NotificationRecord(
+                user_id=sender.id,
+                topic="gift",
+                template_key="GIFT_SENT",
+                resource_type="gift_transaction",
+                resource_id=transaction.id,
+                message=f"Gift sent: {gift.display_name} to {recipient_label} for {gross_amount} {unit_label}.",
+                metadata_json=notification_metadata,
+            )
+        )
         if burn_amount > Decimal("0.0000"):
             burn_event = EconomyBurnEvent(
                 user_id=sender.id,
                 source_type="gift",
                 source_id=transaction.id,
                 amount=burn_amount,
-                unit=LedgerUnit.CREDIT,
+                unit=ledger_unit,
                 reason="gift_burn",
-                ledger_transaction_id=entries[0].transaction_id if entries else None,
+                ledger_transaction_id=ledger_transaction_id,
                 metadata_json={"rule_key": split.rule_key or "fallback"},
             )
             self.session.add(burn_event)

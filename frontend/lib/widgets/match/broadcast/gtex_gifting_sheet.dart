@@ -6,19 +6,25 @@ typedef MatchGiftSelectionHandler =
     Future<void> Function(MatchGiftCatalogItem gift);
 
 class GtexGiftingSheet extends StatelessWidget {
-  const GtexGiftingSheet({super.key, required this.onSelected});
+  const GtexGiftingSheet({
+    super.key,
+    required this.onSelected,
+    this.unitLabel = 'Fan Coin',
+  });
 
   final MatchGiftSelectionHandler onSelected;
+  final String unitLabel;
 
   static Future<void> show(
     BuildContext context, {
     required MatchGiftSelectionHandler onSelected,
+    String unitLabel = 'Fan Coin',
   }) {
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF0B1622),
       builder: (BuildContext context) {
-        return GtexGiftingSheet(onSelected: onSelected);
+        return GtexGiftingSheet(onSelected: onSelected, unitLabel: unitLabel);
       },
     );
   }
@@ -74,7 +80,7 @@ class GtexGiftingSheet extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${option.fanCoinAmount.toStringAsFixed(0)} Fan Coin',
+                            '${option.fanCoinAmount.toStringAsFixed(0)} $unitLabel',
                           ),
                         ],
                       ),

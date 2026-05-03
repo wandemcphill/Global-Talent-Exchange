@@ -52,7 +52,25 @@ class NotificationCenter:
         payload = event.payload
         created_at = event.occurred_at
         if event.name.startswith("wallet."):
-            return [self._build_notification(payload.get("user_id"), "wallet", event.name.replace(".", " "), payload, created_at)] if isinstance(payload.get("user_id"), str) else []
+            user_id = payload.get("user_id") or payload.get("owner_user_id")
+            return [self._build_notification(user_id, "wallet", event.name.replace(".", " "), payload, created_at)] if isinstance(user_id, str) else []
+        if event.name == "JACKPOT_TRIGGERED":
+            notifications: list[Notification] = []
+            for winner in payload.get("winners") or []:
+                if not isinstance(winner, dict):
+                    continue
+                user_id = winner.get("user_id")
+                if isinstance(user_id, str):
+                    notifications.append(
+                        self._build_notification(
+                            user_id,
+                            "jackpot",
+                            "jackpot dropped",
+                            payload,
+                            created_at,
+                        )
+                    )
+            return notifications
         if event.name.startswith("market."):
             notifications: list[Notification] = []
             for key in ("seller_user_id", "buyer_user_id", "user_id"):
