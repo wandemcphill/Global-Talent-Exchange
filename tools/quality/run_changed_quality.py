@@ -152,7 +152,7 @@ def main() -> int:
     )
     run_check(
         "Python lint",
-        [sys.executable, "-m", "ruff", "check"],
+        [sys.executable, "-m", "ruff", "check", "--no-cache"],
         python_files,
     )
     run_check(
