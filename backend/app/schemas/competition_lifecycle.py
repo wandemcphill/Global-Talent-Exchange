@@ -171,7 +171,8 @@ class CompetitionFinalizeRequest(CommonSchema):
 
 
 class CompetitionInviteAcceptRequest(CommonSchema):
-    club_id: str = Field(min_length=1, max_length=36)
+    club_name: str | None = Field(default=None, min_length=2, max_length=120)
+    club_id: str | None = Field(default=None, min_length=1, max_length=36)
     invite_code: str | None = Field(default=None, min_length=4, max_length=32)
     invite_id: str | None = Field(default=None, max_length=36)
     user_id: str | None = Field(default=None, max_length=36)

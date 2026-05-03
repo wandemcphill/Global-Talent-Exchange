@@ -93,9 +93,17 @@ DEFAULT_SERVICE_PRICING: tuple[dict[str, object], ...] = (
         "active": True,
     },
     {
+        "service_key": "manager-create",
+        "title": "Create Custom Manager",
+        "description": "Mint a user-created manager card for the manager market.",
+        "price_coin": Decimal("5.0000"),
+        "price_fancoin_equivalent": Decimal("0.0000"),
+        "active": True,
+    },
+    {
         "service_key": "fast-match-entry",
-        "title": "Fast Match Entry",
-        "description": "Jump into the casual fast-match lane with either GTex or Fan Coin parity.",
+        "title": "Quick Match",
+        "description": "Play free until you lose or reach 10 matches; loss charges settle in Fan Coin.",
         "price_coin": Decimal("0.5000"),
         "price_fancoin_equivalent": Decimal("50.0000"),
         "active": True,
@@ -190,7 +198,6 @@ class RevenueSplit:
     burn_amount: Decimal
 
 
-
 @dataclass(slots=True)
 class EconomyConfigService:
     session: Session
@@ -222,7 +229,9 @@ class EconomyConfigService:
         self.session.flush()
 
     def list_gifts(self, *, active_only: bool = True) -> list[GiftCatalogItem]:
-        statement = select(GiftCatalogItem).order_by(GiftCatalogItem.fancoin_price.asc(), GiftCatalogItem.display_name.asc())
+        statement = select(GiftCatalogItem).order_by(
+            GiftCatalogItem.fancoin_price.asc(), GiftCatalogItem.display_name.asc()
+        )
         if active_only:
             statement = statement.where(GiftCatalogItem.active.is_(True))
         return list(self.session.scalars(statement).all())
@@ -250,7 +259,9 @@ class EconomyConfigService:
         return item
 
     def upsert_service_pricing(self, *, actor: User, payload: ServicePricingRuleUpsertRequest) -> ServicePricingRule:
-        item = self.session.scalar(select(ServicePricingRule).where(ServicePricingRule.service_key == payload.service_key))
+        item = self.session.scalar(
+            select(ServicePricingRule).where(ServicePricingRule.service_key == payload.service_key)
+        )
         if item is None:
             item = ServicePricingRule(service_key=payload.service_key)
             self.session.add(item)

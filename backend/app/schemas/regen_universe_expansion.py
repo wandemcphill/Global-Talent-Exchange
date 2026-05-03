@@ -203,6 +203,7 @@ class NationalRegenSeedView(CommonSchema):
     buy_cta_allowed: bool = False
     is_preseeded_national_regen: bool = True
     national_pool_only: bool = True
+    admin_trade_enabled: bool = False
 
 
 class NationalRegenPreseedSummaryView(CommonSchema):

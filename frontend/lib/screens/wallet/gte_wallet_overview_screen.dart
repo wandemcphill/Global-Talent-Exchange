@@ -136,7 +136,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                   ? 'KYC is still required before withdrawals are enabled.'
                   : eligibility.requiresBankAccount
                   ? 'Add an active bank account before requesting withdrawals.'
-                  : overview.depositMode != 'gateway'
+                  : overview.depositMode != 'gateway' &&
+                      overview.depositMode != 'hybrid'
                   ? 'Instant funding is currently routed through manual bank transfer review.'
                   : 'Wallet compliance is ready for live funding and withdrawals.';
           final bool showRestrictionPanel =
@@ -144,7 +145,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
               eligibility.policyBlocked ||
               eligibility.requiresKyc ||
               eligibility.requiresBankAccount ||
-              overview.depositMode != 'gateway';
+              (overview.depositMode != 'gateway' &&
+                  overview.depositMode != 'hybrid');
 
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -163,7 +165,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Track deposits, transfer funds, prize rewards, and withdrawals.',
+                        'Track GTEX Coin for transfers and Fan Coin for gifting and user competitions.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
@@ -230,7 +232,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Deposited funds can be used for transfers, entry fees, prize rewards, and withdrawals.',
+                        'GTEX Coin powers transfers and withdrawals. Fan Coin powers gifting and user-hosted competition entries.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -541,6 +543,8 @@ String _railLabel(String mode) {
   switch (mode.trim().toLowerCase()) {
     case 'gateway':
       return 'Automatic gateway';
+    case 'hybrid':
+      return 'Gateway + bank transfer';
     case 'bank_transfer':
     default:
       return 'Bank transfer review';
@@ -565,9 +569,9 @@ String _providerStatusLabel(String? status) {
 String _walletUnitLabel(GteLedgerUnit unit) {
   switch (unit) {
     case GteLedgerUnit.credit:
-      return 'Club Credit';
+      return 'Fan Coin';
     case GteLedgerUnit.coin:
-      return 'Transfer Balance';
+      return 'GTEX Coin';
     case GteLedgerUnit.unknown:
       return 'Wallet Unit';
   }
@@ -576,9 +580,9 @@ String _walletUnitLabel(GteLedgerUnit unit) {
 String _walletUnitDetail(GteLedgerUnit unit) {
   switch (unit) {
     case GteLedgerUnit.credit:
-      return 'Club rewards and bonus balance';
+      return 'Gifting and user-hosted competition balance';
     case GteLedgerUnit.coin:
-      return 'Deposit, transfer, and withdrawal balance';
+      return 'Transfer, buy-now, and withdrawal balance';
     case GteLedgerUnit.unknown:
       return 'Wallet balance';
   }

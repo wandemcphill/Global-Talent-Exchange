@@ -201,7 +201,9 @@ class CompetitiveIntegrityService:
         self.session.flush()
         return self._manager_view(manager)
 
-    def update_manager_instructions(self, *, actor: User, manager_id: str, payload: ManagerUpdateInstructionsRequest) -> ManagerView:
+    def update_manager_instructions(
+        self, *, actor: User, manager_id: str, payload: ManagerUpdateInstructionsRequest
+    ) -> ManagerView:
         manager = self._manager_for_owner(manager_id, actor.id)
         manager.instructions = payload.instructions.model_dump(mode="json", exclude_none=True)
         if payload.tactical_profile is not None:
@@ -238,7 +240,9 @@ class CompetitiveIntegrityService:
     def get_match(self, *, actor: User, match_id: str) -> CompetitiveMatchView:
         return self._match_view(self._match_for_actor(match_id, actor))
 
-    def execute_match(self, *, actor: User, match_id: str, payload: CompetitiveMatchExecuteRequest) -> CompetitiveMatchExecutionView:
+    def execute_match(
+        self, *, actor: User, match_id: str, payload: CompetitiveMatchExecuteRequest
+    ) -> CompetitiveMatchExecutionView:
         match = self._match_for_actor(match_id, actor)
         self._enforce_human_only(
             competition_type=match.competition_type,
@@ -328,7 +332,7 @@ class CompetitiveIntegrityService:
             automation_detected=payload.automation_detected,
         )
         if payload.home_manager_id != run.manager_locked_id:
-            raise ManagerLockedError("Fast game manager changes are locked for the duration of the run.")
+            raise ManagerLockedError("Quick Match manager changes are locked for the duration of the run.")
         match = Match(
             competition_type=CompetitiveMatchCompetitionType.FAST_GAME,
             home_user_id=actor.id,
@@ -386,7 +390,9 @@ class CompetitiveIntegrityService:
     def get_run(self, *, actor: User, run_id: str) -> FastGameRunView:
         return self._run_view(self._owned_run_for_actor(run_id, actor))
 
-    def create_notification_event(self, *, actor: User, payload: NotificationEventRequest) -> CompetitiveNotificationView:
+    def create_notification_event(
+        self, *, actor: User, payload: NotificationEventRequest
+    ) -> CompetitiveNotificationView:
         self._authorize_actor_for_users(actor, payload.user_id)
         notification = self._queue_notification(
             user_id=payload.user_id,
@@ -433,10 +439,12 @@ class CompetitiveIntegrityService:
     def deliver_due_notifications(self) -> int:
         notifications = list(
             self.session.scalars(
-                select(Notification).where(
+                select(Notification)
+                .where(
                     Notification.status == CompetitiveNotificationStatus.PENDING,
                     Notification.scheduled_for <= utcnow(),
-                ).order_by(Notification.scheduled_for.asc(), Notification.created_at.asc())
+                )
+                .order_by(Notification.scheduled_for.asc(), Notification.created_at.asc())
             ).all()
         )
         delivered = 0
@@ -573,11 +581,15 @@ class CompetitiveIntegrityService:
                 "injury_auto_substitution": False,
             }
         )
-        return team.model_copy(update={"tactics": tactics, "manager_profile": {**(team.manager_profile or {}), "controller": "frozen"}})
+        return team.model_copy(
+            update={"tactics": tactics, "manager_profile": {**(team.manager_profile or {}), "controller": "frozen"}}
+        )
 
     def _enable_live_control(self, team: MatchTeamInput) -> MatchTeamInput:
         tactics = team.tactics.model_copy(update={"allow_substitutions": True, "allow_tactical_changes": True})
-        return team.model_copy(update={"tactics": tactics, "manager_profile": {**(team.manager_profile or {}), "controller": "user"}})
+        return team.model_copy(
+            update={"tactics": tactics, "manager_profile": {**(team.manager_profile or {}), "controller": "user"}}
+        )
 
     def _compile_manager_changes(self, *, manager: Manager, team: MatchTeamInput) -> list[MatchTacticalChangeInput]:
         instructions = manager.instructions or {}
@@ -657,7 +669,7 @@ class CompetitiveIntegrityService:
             treasury_share_bps=2000,
             reference=f"fast-game-run:{run.id}:entry",
             external_reference=f"fast-game-run:{run.id}:entry",
-            description="Fast game entry fee",
+            description="Quick Match loss charge",
             source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
             actor=actor,
             metadata={"fast_game_run_id": run.id},
@@ -673,13 +685,15 @@ class CompetitiveIntegrityService:
             self.session,
             postings=[
                 LedgerPosting(account=user_account, amount=amount, transaction_type=LedgerTransactionType.MATCH_REWARD),
-                LedgerPosting(account=platform_account, amount=-amount, transaction_type=LedgerTransactionType.MATCH_REWARD),
+                LedgerPosting(
+                    account=platform_account, amount=-amount, transaction_type=LedgerTransactionType.MATCH_REWARD
+                ),
             ],
             reason=LedgerEntryReason.COMPETITION_REWARD,
             source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
             reference=f"fast-game-run:{run.id}:reward",
             external_reference=f"fast-game-run:{run.id}:reward",
-            description="Fast game reward payout",
+            description="Quick Match reward payout",
             actor=actor,
             transaction_type=LedgerTransactionType.MATCH_REWARD,
         )
@@ -855,13 +869,15 @@ class CompetitiveIntegrityService:
         ai_detected: bool,
         automation_detected: bool,
     ) -> None:
-        if competition_type in {
-            CompetitiveMatchCompetitionType.GTEX_HOSTED,
-            CompetitiveMatchCompetitionType.FAST_GAME,
-        } and ai_detected:
-            raise AutomationRejectedError(
-                "AI participation is not permitted in GTEX hosted competitions or fast game."
-            )
+        if (
+            competition_type
+            in {
+                CompetitiveMatchCompetitionType.GTEX_HOSTED,
+                CompetitiveMatchCompetitionType.FAST_GAME,
+            }
+            and ai_detected
+        ):
+            raise AutomationRejectedError("AI participation is not permitted in GTEX hosted competitions or fast game.")
         if competition_type is CompetitiveMatchCompetitionType.FAST_GAME and automation_detected:
             raise AutomationRejectedError("Automation is not permitted in fast game.")
 
@@ -893,13 +909,13 @@ class CompetitiveIntegrityService:
     def _run_for_actor(self, run_id: str, actor: User) -> FastGameRun:
         run = self._owned_run_for_actor(run_id, actor)
         if not run.is_active:
-            raise CompetitiveIntegrityError("Fast game run is no longer active.")
+            raise CompetitiveIntegrityError("Quick Match run is no longer active.")
         return run
 
     def _owned_run_for_actor(self, run_id: str, actor: User) -> FastGameRun:
         run = self.session.get(FastGameRun, run_id)
         if run is None or run.user_id != actor.id:
-            raise CompetitiveIntegrityError("Fast game run not found.")
+            raise CompetitiveIntegrityError("Quick Match run not found.")
         return run
 
     @staticmethod

@@ -20,7 +20,7 @@ class CacheBackend(Protocol):
 
     def delete_many(self, keys: list[str]) -> None: ...
 
-    def increment(self, key: str, amount: int = 1) -> int: ...
+    def increment(self, key: str, amount: int = 1, ttl_seconds: int | None = None) -> int: ...
 
     def ping(self) -> bool: ...
 
@@ -37,8 +37,8 @@ class NullCacheBackend:
     def delete_many(self, keys: list[str]) -> None:
         return None
 
-    def increment(self, key: str, amount: int = 1) -> int:
-        del key, amount
+    def increment(self, key: str, amount: int = 1, ttl_seconds: int | None = None) -> int:
+        del key, amount, ttl_seconds
         return 0
 
     def ping(self) -> bool:
@@ -73,9 +73,12 @@ class RedisCacheBackend:
         except RedisError:
             logger.warning("cache.delete.failed", extra={"key_count": len(keys)})
 
-    def increment(self, key: str, amount: int = 1) -> int:
+    def increment(self, key: str, amount: int = 1, ttl_seconds: int | None = None) -> int:
         try:
-            return int(self.client.incrby(key, amount))
+            value = int(self.client.incrby(key, amount))
+            if ttl_seconds is not None:
+                self.client.expire(key, ttl_seconds)
+            return value
         except RedisError:
             logger.warning("cache.increment.failed", extra={"key": key, "amount": amount})
             return 0

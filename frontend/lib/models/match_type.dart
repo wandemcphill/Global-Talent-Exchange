@@ -14,7 +14,7 @@ extension MatchTypeX on MatchType {
       case MatchType.userHosted:
         return 'User hosted';
       case MatchType.fastMatch:
-        return 'Fast match';
+        return 'Quick Match';
     }
   }
 
@@ -25,7 +25,7 @@ extension MatchTypeX on MatchType {
       case MatchType.userHosted:
         return 'ENTRY FEE';
       case MatchType.fastMatch:
-        return 'FAST MATCH';
+        return 'QUICK MATCH';
     }
   }
 
@@ -35,7 +35,7 @@ extension MatchTypeX on MatchType {
         return 'Join Free';
       case MatchType.userHosted:
       case MatchType.fastMatch:
-        return 'Pay & Join';
+        return 'Play Quick Match';
     }
   }
 
@@ -46,7 +46,7 @@ extension MatchTypeX on MatchType {
       case MatchType.userHosted:
         return 'User-hosted matches require an entry fee before your place is confirmed.';
       case MatchType.fastMatch:
-        return 'Fast Match is always paid and uses your wallet balance immediately.';
+        return 'Play free until you lose or reach 10 matches. Fan Coin is charged only after a loss.';
     }
   }
 }

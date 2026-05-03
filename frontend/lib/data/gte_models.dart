@@ -1188,17 +1188,20 @@ class GteWalletTopUpInitiateRequest {
   const GteWalletTopUpInitiateRequest({
     required this.amount,
     this.provider = 'paystack',
+    this.unit = GteLedgerUnit.coin,
     this.callbackUrl,
   });
 
   final double amount;
   final String provider;
+  final GteLedgerUnit unit;
   final String? callbackUrl;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'amount': amount,
       'provider': provider,
+      'unit': unit.name,
       if (callbackUrl != null && callbackUrl!.trim().isNotEmpty)
         'callback_url': callbackUrl!.trim(),
     };

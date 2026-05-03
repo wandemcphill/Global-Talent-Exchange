@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from app.schemas.player_lifecycle import PlayerCareerSummaryView
 
 _PRESEEDED_TYPES = {"starter_bundle", "starter_regen", "preseeded"}
+_STARTER_REGEN_TYPES = {"starter_bundle", "starter_regen", "starter_rental"}
 _PEAK_AGE_BY_POSITION = {
     "GK": (28, 32),
     "CB": (27, 31),
@@ -516,6 +517,7 @@ class GlobalMemoryService:
             evolution.regen_type == "preseeded"
             and performance_score > evolution.performance_threshold
             and not evolution.is_tradable
+            and not self._is_starter_regen(regen, onboarding)
         ):
             evolution.is_tradable = True
             evolution.is_unique = True
@@ -832,6 +834,11 @@ class GlobalMemoryService:
         if onboarding_type in _PRESEEDED_TYPES or generation_source in _PRESEEDED_TYPES:
             return "preseeded"
         return "academy"
+
+    def _is_starter_regen(self, regen: RegenProfile, onboarding: RegenOnboardingFlag | None) -> bool:
+        onboarding_type = (onboarding.onboarding_type if onboarding is not None else "").lower()
+        generation_source = (regen.generation_source or "").lower()
+        return onboarding_type in _STARTER_REGEN_TYPES or generation_source in _STARTER_REGEN_TYPES
 
     def _resolve_scarcity_tier(self, evolution: GlobalRegenEvolution) -> str:
         gsi = int(evolution.current_gsi or 0)

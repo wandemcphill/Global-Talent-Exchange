@@ -915,6 +915,10 @@ class RegenUniverseService:
 
     def _prospect_market_access_payload(self, prospect: _UniverseProspect) -> dict[str, bool]:
         if prospect.source_type == "national_seed":
+            seed_id = prospect.lookup_id.removeprefix("seed:")
+            seed = self.session.get(NationalRegenSeed, seed_id)
+            if seed is not None:
+                return market_access_payload(seed)
             return market_access_payload(
                 {
                     "source_type": "national_seed",

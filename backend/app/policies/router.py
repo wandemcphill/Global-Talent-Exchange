@@ -140,7 +140,9 @@ def accept_policy_document(
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     session.commit()
-    version = acceptance.document_version or service.get_document(payload.document_key, version_label=payload.version_label)
+    version = acceptance.document_version or service.get_document(
+        payload.document_key, version_label=payload.version_label
+    )
     return PolicyAcceptanceResponse(
         acceptance_id=acceptance.id,
         document_key=version.document.document_key,
@@ -168,13 +170,16 @@ def list_my_policy_acceptances(
 
 
 @router.get("/country/{country_code}", response_model=CountryFeaturePolicyResponse)
-def get_country_feature_policy(country_code: str, session: Session = Depends(get_session)) -> CountryFeaturePolicyResponse:
+def get_country_feature_policy(
+    country_code: str, session: Session = Depends(get_session)
+) -> CountryFeaturePolicyResponse:
     service = PolicyService(session)
     try:
         policy = service.get_country_policy(country_code)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return CountryFeaturePolicyResponse.model_validate(policy, from_attributes=True)
+
 
 @router.get("/me/requirements", response_model=list[PolicyRequirementSummary])
 def list_my_policy_requirements(
@@ -248,11 +253,10 @@ def get_my_compliance_status(
             )
             for version in missing
         ],
-        can_deposit=country_policy.deposits_enabled and not missing,
+        can_deposit=country_policy.deposits_enabled,
         can_withdraw_platform_rewards=country_policy.platform_reward_withdrawals_enabled and not missing,
         can_trade_market=country_policy.market_trading_enabled and not missing,
     )
-
 
 
 @admin_router.post("/documents", response_model=PolicyDocumentDetail)
@@ -294,7 +298,10 @@ def admin_list_country_policies(
     session: Session = Depends(get_session),
 ) -> list[CountryFeaturePolicyAdminSummary]:
     service = PolicyService(session)
-    return [CountryFeaturePolicyAdminSummary.model_validate(item, from_attributes=True) for item in service.list_country_policies()]
+    return [
+        CountryFeaturePolicyAdminSummary.model_validate(item, from_attributes=True)
+        for item in service.list_country_policies()
+    ]
 
 
 @admin_router.post("/country-policies", response_model=CountryFeaturePolicyAdminSummary)

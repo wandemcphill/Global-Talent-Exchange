@@ -546,9 +546,14 @@ class AdminFinanceService:
 
     @staticmethod
     def _provider_secret(provider_key: str) -> str | None:
-        secret = os.getenv(f"GTE_{provider_key.strip().upper()}_WEBHOOK_SECRET")
-        if secret:
-            return secret.strip()
+        normalized_provider = provider_key.strip().upper()
+        for name in (
+            f"GTE_{normalized_provider}_WEBHOOK_SECRET",
+            f"{normalized_provider}_WEBHOOK_SECRET",
+        ):
+            secret = os.getenv(name)
+            if secret and secret.strip():
+                return secret.strip()
         return None
 
     @staticmethod

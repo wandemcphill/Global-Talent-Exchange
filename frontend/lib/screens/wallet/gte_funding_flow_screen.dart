@@ -40,6 +40,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   bool _isSubmittingManualDeposit = false;
   bool _awaitingInitialComplianceCheck = false;
   String _automaticProvider = 'paystack';
+  GteLedgerUnit _automaticUnit = GteLedgerUnit.coin;
   String? _error;
   GteWalletTopUpSession? _session;
   GteWalletTopUpVerificationResult? _verification;
@@ -232,6 +233,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
             GteWalletTopUpInitiateRequest(
               amount: amount,
               provider: _automaticProvider,
+              unit: _automaticUnit,
             ),
           );
       if (!mounted) {
@@ -474,10 +476,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     final GteWalletOverview? walletOverview = _walletOverview;
     final GteComplianceStatus? compliance = widget.controller.complianceStatus;
     final GteDepositRequest? activeDeposit = _activeManualDeposit;
-    final bool blocked =
-        compliance != null &&
-        (compliance.requiredPolicyAcceptancesMissing > 0 ||
-            !compliance.canDeposit);
+    final bool blocked = compliance != null && !compliance.canDeposit;
     final String blockedMessage =
         compliance == null
             ? 'Wallet deposit is currently unavailable.'
@@ -545,7 +544,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Instant checkout credits your transfer balance. Manual bank transfer stays visible when gateway deposits are paused.',
+                    'Instant checkout can buy GTEX Coin or Fan Coin. Manual bank transfer credits GTEX Coin after admin review.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
@@ -565,7 +564,8 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   Text(
                     walletOverview == null
                         ? 'Loading the live deposit rail and gateway availability.'
-                        : walletOverview.depositMode == 'gateway'
+                        : walletOverview.depositMode == 'gateway' ||
+                            walletOverview.depositMode == 'hybrid'
                         ? 'Automatic checkout supports Paystack and KoraPay deposits.'
                         : 'Instant checkout is currently unavailable because deposits are routed through manual bank transfer review.',
                   ),
@@ -600,6 +600,35 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                               }
                               setState(() {
                                 _automaticProvider = value;
+                              });
+                            },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<GteLedgerUnit>(
+                    value: _automaticUnit,
+                    decoration: const InputDecoration(
+                      labelText: 'Wallet',
+                      prefixIcon: Icon(Icons.sports_soccer_outlined),
+                    ),
+                    items: const <DropdownMenuItem<GteLedgerUnit>>[
+                      DropdownMenuItem<GteLedgerUnit>(
+                        value: GteLedgerUnit.coin,
+                        child: Text('GTEX Coin'),
+                      ),
+                      DropdownMenuItem<GteLedgerUnit>(
+                        value: GteLedgerUnit.credit,
+                        child: Text('Fan Coin'),
+                      ),
+                    ],
+                    onChanged:
+                        _isSubmitting || session != null
+                            ? null
+                            : (GteLedgerUnit? value) {
+                              if (value == null) {
+                                return;
+                              }
+                              setState(() {
+                                _automaticUnit = value;
                               });
                             },
                   ),
@@ -728,7 +757,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'New transfer balance: ${gteFormatCompetitionAmount(verification.wallet.balance, verification.wallet.currency)}',
+                      'Wallet balance: ${gteFormatCompetitionAmount(verification.wallet.balance, verification.wallet.currency)}',
                     ),
                     Text(
                       'Transaction status: ${_titleCase(verification.transaction.status)}',
@@ -749,7 +778,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Create a manual bank transfer request to receive admin payment details and the locked reference that credits your transfer balance after review.',
+                    'Create a manual bank transfer request to receive admin payment details and the locked reference that credits GTEX Coin after review.',
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -793,7 +822,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       'Amount: ${gteFormatFiat(activeDeposit.amountFiat, currency: activeDeposit.currencyCode)}',
                     ),
                     Text(
-                      'Transfer balance credited on approval: ${gteFormatCredits(activeDeposit.amountCoin)}',
+                      'GTEX Coin credited on approval: ${gteFormatCredits(activeDeposit.amountCoin)}',
                     ),
                     Text('Status: ${_titleCase(activeDeposit.status.name)}'),
                     const SizedBox(height: 10),
@@ -865,7 +894,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                           (GteDepositRequest deposit) => Padding(
                             padding: const EdgeInsets.only(bottom: 10),
                             child: Text(
-                              '${deposit.reference} • ${_titleCase(deposit.status.name)} • ${gteFormatFiat(deposit.amountFiat, currency: deposit.currencyCode)}',
+                              '${deposit.reference} - ${_titleCase(deposit.status.name)} - ${gteFormatFiat(deposit.amountFiat, currency: deposit.currencyCode)}',
                             ),
                           ),
                         ),

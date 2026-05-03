@@ -18,7 +18,7 @@ class AppFormatters {
   }
 
   static String fanCoin(num amount) {
-    return '${_trimmed(amount)} GTEX Coin';
+    return '${_trimmed(amount)} Fan Coin';
   }
 
   static String signedGtex(num amount) {

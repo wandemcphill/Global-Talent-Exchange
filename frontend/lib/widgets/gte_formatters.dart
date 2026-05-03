@@ -41,7 +41,7 @@ String gteFormatCompetitionAmount(double value, [String currency = 'credit']) {
 }
 
 String gteFormatFanCoins(double value) {
-  return _gteFormatUnitAmount(value, 'GTEX Coin');
+  return _gteFormatUnitAmount(value, 'Fan Coin');
 }
 
 String gteFormatFanCoin(double value) {
@@ -51,7 +51,7 @@ String gteFormatFanCoin(double value) {
 String gteFormatLedgerUnitName(GteLedgerUnit unit) {
   switch (unit) {
     case GteLedgerUnit.credit:
-      return 'GTEX Coin';
+      return 'Fan Coin';
     case GteLedgerUnit.coin:
       return 'GTEX Coin';
     case GteLedgerUnit.unknown:

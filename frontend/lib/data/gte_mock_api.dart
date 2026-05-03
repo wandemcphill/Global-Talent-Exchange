@@ -748,7 +748,7 @@ class GteMockApi implements GteApiRepository {
               ? 'https://mock.korapay.local/$reference'
               : 'https://mock.paystack.local/$reference',
       amount: request.amount,
-      currency: 'coin',
+      currency: request.unit.name,
       provider: provider,
       status: 'pending',
       mockMode: true,
