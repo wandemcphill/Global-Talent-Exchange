@@ -5,6 +5,7 @@ import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/services/match_commentary_engine.dart';
 import 'package:gte_frontend/services/reliability/reliable_event_queue.dart';
 import 'package:gte_frontend/services/reliability/reliable_websocket_manager.dart';
 
@@ -307,6 +308,8 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
     final Object? nested =
         raw['data'] is Map
             ? raw['data']
+            : raw['payload'] is Map
+            ? raw['payload']
             : raw['event'] is Map
             ? raw['event']
             : null;
@@ -322,11 +325,13 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
         _stringValue(payload, 'detail') ??
         _stringValue(payload, 'description') ??
         _stringValue(payload, 'commentary') ??
+        _stringValue(payload, 'text') ??
         '';
     final String eventTypeRaw =
         _stringValue(payload, 'event_type') ??
         _stringValue(payload, 'eventType') ??
         _stringValue(payload, 'type') ??
+        _stringValue(payload, 'event') ??
         '';
     final String normalizedEventType = eventTypeRaw.trim().toLowerCase();
     if (normalizedEventType == 'subscription_ack' ||
@@ -340,6 +345,12 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
         _stringValue(payload, 'teamName') ??
         _stringValue(payload, 'team') ??
         '';
+    final String player =
+        _stringValue(payload, 'player_name') ??
+        _stringValue(payload, 'playerName') ??
+        _stringValue(payload, 'player') ??
+        '';
+    final String score = _stringValue(payload, 'score') ?? '';
     final int minute =
         _intValue(payload, 'minute') ??
         _intValue(payload, 'clock_minute') ??
@@ -352,18 +363,33 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
     final String title =
         _stringValue(payload, 'title') ??
         _stringValue(payload, 'headline') ??
-        _defaultTitleFor(type: type, team: team);
+        _defaultTitleFor(type: type, team: team, player: player);
 
-    if (title.trim().isEmpty && detail.trim().isEmpty) {
+    final String resolvedDetail =
+        detail.trim().isNotEmpty
+            ? detail.trim()
+            : _detailFromFinalFormPayload(
+              type: type,
+              player: player,
+              team: team,
+              score: score,
+              eventTypeRaw: eventTypeRaw,
+              minute: minute,
+              title: title,
+            );
+
+    if (title.trim().isEmpty && resolvedDetail.trim().isEmpty) {
       return null;
     }
-    if (normalizedEventType == 'match_update' && detail.trim().isEmpty) {
+    if (normalizedEventType == 'match_update' &&
+        resolvedDetail.trim().isEmpty) {
       return null;
     }
     return LiveMatchEvent(
       minute: minute,
       title: title.trim().isEmpty ? 'Live commentary' : title.trim(),
-      detail: detail.trim().isEmpty ? title.trim() : detail.trim(),
+      detail:
+          resolvedDetail.trim().isEmpty ? title.trim() : resolvedDetail.trim(),
       team: team.trim(),
       type: type,
       isKeyMoment: isKeyMoment,
@@ -449,11 +475,13 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
   static String _defaultTitleFor({
     required LiveMatchEventType type,
     required String team,
+    String player = '',
   }) {
     final String prefix = team.trim().isEmpty ? '' : '$team ';
     switch (type) {
       case LiveMatchEventType.goal:
-        return '${prefix}goal'.trim();
+        final String scorer = player.trim();
+        return scorer.isEmpty ? '${prefix}goal'.trim() : '$scorer scores';
       case LiveMatchEventType.card:
         return '${prefix}card'.trim();
       case LiveMatchEventType.substitution:
@@ -461,6 +489,25 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
       case LiveMatchEventType.incident:
         return prefix.isEmpty ? 'Live commentary' : '${prefix}moment'.trim();
     }
+  }
+
+  static String _detailFromFinalFormPayload({
+    required LiveMatchEventType type,
+    required String player,
+    required String team,
+    required String score,
+    required String eventTypeRaw,
+    required int minute,
+    required String title,
+  }) {
+    return MatchCommentaryEngine.lineForRaw(
+      eventType: eventTypeRaw.trim().isEmpty ? type.name : eventTypeRaw,
+      player: player,
+      team: team,
+      score: score,
+      minute: minute,
+      title: title,
+    );
   }
 }
 

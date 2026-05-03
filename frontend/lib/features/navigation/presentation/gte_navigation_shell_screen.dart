@@ -453,6 +453,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildHomeDestination() {
+    if (widget.controller.isAuthenticated && _isAdminSession) {
+      final String? accessToken = widget.controller.accessToken;
+      if (accessToken != null && accessToken.trim().isNotEmpty) {
+        return AdminCommandCenterScreen(
+          key: const PageStorageKey<String>('admin-command-center-home'),
+          baseUrl: widget.apiBaseUrl,
+          accessToken: accessToken,
+          backendMode: widget.backendMode,
+        );
+      }
+    }
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
       if (!widget.controller.isAuthenticated) {
@@ -580,7 +591,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   bool get _isAdminSession {
     final String role =
         widget.controller.session?.user.role.trim().toLowerCase() ?? '';
-    return role == 'admin' || role == 'super_admin';
+    return <String>{
+      'admin',
+      'super_admin',
+      'god_mode',
+      'scoped_admin',
+    }.contains(role);
   }
 
   CompetitionController _buildCompetitionController() {
@@ -878,10 +894,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             (BuildContext context) => ManagerMarketScreen(
               baseUrl: widget.apiBaseUrl,
               accessToken: session.accessToken,
-              isAdmin: <String>{
-                'admin',
-                'super_admin',
-              }.contains(session.user.role.toLowerCase()),
+              isAdmin: _isAdminSession,
               onOpenAdmin: _openManagerAdmin,
             ),
       ),

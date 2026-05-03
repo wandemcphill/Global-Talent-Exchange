@@ -35,6 +35,11 @@ final Provider<HostedCompetitionApi> hostedCompetitionApiProvider =
       return HostedCompetitionApi.standard(
         baseUrl: ref.watch(apiBaseUrlProvider),
         accessToken: ref.watch(accessTokenProvider),
+        authSession: ref.watch(authProvider),
+        authSessionStore: ref.watch(authSessionStoreProvider),
+        onSessionChanged:
+            ref.read(appSessionControllerProvider.notifier).updateSession,
+        deviceId: ref.watch(deviceIdProvider),
         mode: ref.watch(criticalBackendModeProvider),
       );
     });

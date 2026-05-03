@@ -24,8 +24,8 @@ extension CompetitionFamilyRouteX on CompetitionFamilyRoute {
 
   String get label {
     return switch (this) {
-      CompetitionFamilyRoute.gtex => 'GTEX Hosted Football',
-      CompetitionFamilyRoute.hosted => 'User Hosted Football',
+      CompetitionFamilyRoute.gtex => 'GTEX Competitions',
+      CompetitionFamilyRoute.hosted => 'User Competitions',
       CompetitionFamilyRoute.streamer => 'E-Games',
     };
   }
@@ -58,9 +58,11 @@ class CompetitionHubData {
     required this.gtexCompetitions,
     required this.hostedCompetitions,
     required this.streamerTournaments,
+    this.userCompetitions = const <CompetitionSummary>[],
   });
 
   final List<CompetitionSummary> gtexCompetitions;
+  final List<CompetitionSummary> userCompetitions;
   final List<HostedCompetition> hostedCompetitions;
   final List<StreamerTournament> streamerTournaments;
 }
@@ -106,37 +108,22 @@ class StreamerTournamentDetailBundle {
 final FutureProvider<CompetitionHubData> competitionHubProvider =
     FutureProvider<CompetitionHubData>((Ref ref) async {
       final CompetitionApi competitionApi = ref.watch(competitionApiProvider);
-      final HostedCompetitionApi hostedApi = ref.watch(
-        hostedCompetitionApiProvider,
-      );
       final StreamerTournamentEngineRepository streamerApi = ref.watch(
         streamerTournamentRepositoryProvider,
       );
-      final bool isAuthenticated = ref.watch(isAuthenticatedProvider);
       final String? userId = ref.watch(currentUserIdProvider);
-      final CompetitionListResponse gtexList =
-          isAuthenticated
-              ? await competitionApi
-                  .fetchCompetitions(userId: userId)
-                  .then(
-                    (CompetitionListResponse value) => CompetitionListResponse(
-                      total: value.total,
-                      items: value.items
-                          .where((CompetitionSummary item) => item.isGtexHosted)
-                          .toList(growable: false),
-                    ),
-                  )
-              : const CompetitionListResponse(
-                total: 0,
-                items: <CompetitionSummary>[],
-              );
-      final List<HostedCompetition> hostedCompetitions =
-          await hostedApi.listCompetitions();
+      final CompetitionListResponse competitionList = await competitionApi
+          .fetchCompetitions(userId: userId);
       final StreamerTournamentList streamerTournaments =
           await streamerApi.listPublicTournaments();
       return CompetitionHubData(
-        gtexCompetitions: gtexList.items,
-        hostedCompetitions: hostedCompetitions,
+        gtexCompetitions: competitionList.items
+            .where((CompetitionSummary item) => item.isGtexHosted)
+            .toList(growable: false),
+        userCompetitions: competitionList.items
+            .where((CompetitionSummary item) => item.isUserHosted)
+            .toList(growable: false),
+        hostedCompetitions: const <HostedCompetition>[],
         streamerTournaments: streamerTournaments.tournaments,
       );
     });

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/widgets/match/formation_overlay_widget.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_telemetry.dart';
 
 class Pitch2dWidget extends StatelessWidget {
@@ -95,21 +96,41 @@ class MatchPitch2D extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Pitch2dTelemetryStyle telemetryStyle = describeTelemetryStyle(frame);
+    final FormationOverlayStyle formationStyle =
+        FormationOverlayWidget.describeStyle(frame, telemetryStyle);
     return AspectRatio(
       aspectRatio: aspectRatio,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: RepaintBoundary(
-          child: CustomPaint(
-            key: const Key('match-pitch-2d-canvas'),
-            painter: _MatchPitch2DPainter(
-              viewState: viewState,
-              frame: frame,
-              previousFrame: previousFrame,
-              activeEvent: activeEvent,
-              telemetryStyle: telemetryStyle,
-            ),
-            child: const SizedBox.expand(),
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              CustomPaint(
+                key: const Key('match-pitch-2d-canvas'),
+                painter: _MatchPitch2DPainter(
+                  viewState: viewState,
+                  frame: frame,
+                  previousFrame: previousFrame,
+                  activeEvent: activeEvent,
+                  telemetryStyle: telemetryStyle,
+                ),
+                child: const SizedBox.expand(),
+              ),
+              Pitch2dTelemetryOverlay(
+                key: const Key('match-2d-heat-overlay'),
+                frame: frame,
+                style: telemetryStyle,
+              ),
+              IgnorePointer(
+                child: FormationOverlayWidget(
+                  key: const Key('match-2d-formation-overlay'),
+                  frame: frame,
+                  players: frame.players,
+                  style: formationStyle,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -147,10 +168,10 @@ class _MatchPitch2DPainter extends CustomPainter {
     canvas.drawRect(
       pitch,
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: <Color>[Color(0xFF446F16), Color(0xFF6F9220)],
+          colors: telemetryStyle.fieldGradient,
         ).createShader(pitch),
     );
 
@@ -158,7 +179,9 @@ class _MatchPitch2DPainter extends CustomPainter {
     const int stripes = 14;
     for (int index = 0; index < stripes; index += 1) {
       stripePaint.color =
-          index.isEven ? const Color(0x12000000) : const Color(0x11FFFFFF);
+          index.isEven
+              ? Colors.black.withValues(alpha: telemetryStyle.stripeDarkAlpha)
+              : Colors.white.withValues(alpha: telemetryStyle.stripeLightAlpha);
       final double left = pitch.left + pitch.width * (index / stripes);
       canvas.drawRect(
         Rect.fromLTWH(left, pitch.top, pitch.width / stripes, pitch.height),

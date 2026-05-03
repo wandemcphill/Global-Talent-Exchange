@@ -55,6 +55,12 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   final TextEditingController _creditUserIdController = TextEditingController();
   final TextEditingController _creditAmountController = TextEditingController();
   final TextEditingController _creditNotesController = TextEditingController();
+  final TextEditingController _competitionTemplateController =
+      TextEditingController(text: 'user-hosted-cup-8');
+  final TextEditingController _competitionTitleController =
+      TextEditingController();
+  final TextEditingController _competitionPasscodeController =
+      TextEditingController();
 
   bool _loading = true;
   bool _savingTreasury = false;
@@ -63,6 +69,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   bool _creatingBankAccount = false;
   bool _previewingCredit = false;
   bool _runningCredit = false;
+  bool _creatingGtexCompetition = false;
   String? _error;
 
   GteTreasurySettings? _treasurySettings;
@@ -72,6 +79,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   AdminWithdrawalControls? _withdrawalControls;
   AdminMarketTopupQuote? _creditQuote;
   AdminMarketTopup? _lastCreditResult;
+  String? _lastCompetitionSummary;
 
   GtePaymentMode _depositMode = GtePaymentMode.manual;
   GtePaymentMode _withdrawalMode = GtePaymentMode.manual;
@@ -117,6 +125,9 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     _creditUserIdController.dispose();
     _creditAmountController.dispose();
     _creditNotesController.dispose();
+    _competitionTemplateController.dispose();
+    _competitionTitleController.dispose();
+    _competitionPasscodeController.dispose();
     super.dispose();
   }
 
@@ -211,6 +222,45 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   }
 
   double? _parseDouble(String raw) => double.tryParse(raw.trim());
+
+  Future<void> _createGtexHostedCompetition() async {
+    final String title = _competitionTitleController.text.trim();
+    final String templateKey = _competitionTemplateController.text.trim();
+    if (title.isEmpty || templateKey.isEmpty) {
+      AppFeedback.showError(
+        context,
+        'Add a competition title and template key before creating.',
+      );
+      return;
+    }
+    setState(() {
+      _creatingGtexCompetition = true;
+    });
+    try {
+      final String summary = await _api.createGtexHostedCompetition(
+        templateKey: templateKey,
+        title: title,
+        passcode: _competitionPasscodeController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lastCompetitionSummary = summary;
+      });
+      AppFeedback.showSuccess(context, summary);
+    } catch (error) {
+      if (mounted) {
+        AppFeedback.showError(context, error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _creatingGtexCompetition = false;
+        });
+      }
+    }
+  }
 
   String _paymentModeLabel(GtePaymentMode mode) {
     switch (mode) {
@@ -618,7 +668,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     try {
       final AdminMarketTopupQuote quote = await _api.quoteMarketTopup(
         amount: amount,
-        unit: 'credit',
+        unit: 'coin',
       );
       if (!mounted) {
         return;
@@ -656,7 +706,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       final AdminMarketTopup created = await _api.createMarketTopup(
         userId: userId,
         amount: amount,
-        unit: 'credit',
+        unit: 'coin',
         sourceScope: 'promotion',
         notes: _creditNotesController.text.trim(),
       );
@@ -674,7 +724,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       _creditUserIdController.clear();
       _creditAmountController.clear();
       _creditNotesController.clear();
-      AppFeedback.showSuccess(context, 'Wallet credit applied.');
+      AppFeedback.showSuccess(context, 'GTEX Coin credited.');
       await _load();
     } catch (error) {
       if (mounted) {
@@ -735,6 +785,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                       _buildOverviewPanel(context),
                       const SizedBox(height: 18),
                       _buildOperationsRoutesPanel(context),
+                      const SizedBox(height: 18),
+                      _buildCompetitionHostPanel(context),
                       const SizedBox(height: 18),
                       _buildTreasurySettingsPanel(context),
                       const SizedBox(height: 18),
@@ -930,6 +982,93 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompetitionHostPanel(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const _SectionHeader(
+            title: 'GTEX competition hosting',
+            subtitle:
+                'Create official GTEX hosted competitions from admin. These are free for users to join; user-created competitions use Fan Coin.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _competitionTitleController,
+            decoration: const InputDecoration(
+              labelText: 'Competition title',
+              hintText: 'Weekend Manager Cup',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _competitionTemplateController,
+            decoration: const InputDecoration(
+              labelText: 'Template key',
+              helperText: 'Use a seeded hosted template key.',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _competitionPasscodeController,
+            decoration: const InputDecoration(
+              labelText: 'Passcode (optional)',
+              helperText: 'Leave empty for open entry.',
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.icon(
+                onPressed:
+                    _creatingGtexCompetition
+                        ? null
+                        : _createGtexHostedCompetition,
+                icon: const Icon(Icons.emoji_events_outlined),
+                label: Text(
+                  _creatingGtexCompetition
+                      ? 'Creating...'
+                      : 'Create GTEX competition',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed:
+                    _creatingGtexCompetition
+                        ? null
+                        : () async {
+                          try {
+                            await _api.client.post(
+                              '/api/admin/hosted-competitions/seed',
+                            );
+                            if (context.mounted) {
+                              AppFeedback.showSuccess(
+                                context,
+                                'Competition templates seeded.',
+                              );
+                            }
+                          } catch (error) {
+                            if (context.mounted) {
+                              AppFeedback.showError(context, error);
+                            }
+                          }
+                        },
+                icon: const Icon(Icons.library_add_check_outlined),
+                label: const Text('Seed templates'),
+              ),
+            ],
+          ),
+          if (_lastCompetitionSummary != null) ...<Widget>[
+            const SizedBox(height: 12),
+            Text(_lastCompetitionSummary!),
+          ],
         ],
       ),
     );
@@ -1506,7 +1645,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                       Text('User ID: ${deposit.userId}'),
                       Text('Reference: ${deposit.reference}'),
                       Text(
-                        'Amount: ${gteFormatFiat(deposit.amountFiat, currency: deposit.currencyCode)} → ${gteFormatCompetitionAmount(deposit.amountCoin, 'credit')}',
+                        'Amount: ${gteFormatFiat(deposit.amountFiat, currency: deposit.currencyCode)} → ${gteFormatCompetitionAmount(deposit.amountCoin, 'coin')}',
                       ),
                       if (deposit.transferReference?.trim().isNotEmpty == true)
                         Text(

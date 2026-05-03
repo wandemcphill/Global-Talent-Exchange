@@ -66,7 +66,7 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
               value:
                   snapshot == null
                       ? '...'
-                      : '${snapshot.hostedCompetitions.length}',
+                      : '${snapshot.userCompetitions.length}',
               support: 'User-hosted football',
               tone: GtexSurfaceTone.info,
             ),
@@ -129,7 +129,7 @@ class LiveCompetitionDetailScreen extends ConsumerWidget {
       children: <Widget>[
         switch (family) {
           CompetitionFamilyRoute.gtex => _GtexDetail(id: competitionId),
-          CompetitionFamilyRoute.hosted => _HostedDetail(id: competitionId),
+          CompetitionFamilyRoute.hosted => _GtexDetail(id: competitionId),
           CompetitionFamilyRoute.streamer => _StreamerDetail(id: competitionId),
         },
       ],
@@ -149,13 +149,12 @@ class _FamilyOverview extends StatelessWidget {
         family: CompetitionFamilyRoute.gtex,
         count: hub.gtexCompetitions.length,
         description:
-            'Platform-run football competitions from /api/competitions.',
+            'Admin-hosted football competitions from /api/competitions.',
       ),
       _FamilyCardData(
         family: CompetitionFamilyRoute.hosted,
-        count: hub.hostedCompetitions.length,
-        description:
-            'Manager-hosted football competitions with fixtures and prize pools.',
+        count: hub.userCompetitions.length,
+        description: 'Manager-created competitions using Fan Coin entry rules.',
       ),
     ];
 
@@ -239,17 +238,14 @@ class _FamilyList extends StatelessWidget {
             ),
           )
           .toList(growable: false),
-      CompetitionFamilyRoute.hosted => hub.hostedCompetitions
+      CompetitionFamilyRoute.hosted => hub.userCompetitions
           .map(
-            (HostedCompetition item) => _competitionCard(
+            (CompetitionSummary item) => _competitionCard(
               context: context,
-              title: item.title,
+              title: item.name,
               subtitle:
-                  '${item.status} | host ${item.hostUserId} | cap ${item.maxParticipants}',
-              description:
-                  item.description.isEmpty
-                      ? 'Hosted football competition'
-                      : item.description,
+                  '${item.creatorLabel} | ${item.status.name} | ${item.participantCount}/${item.capacity}',
+              description: item.rulesSummary,
               path: '/competitions/${family.pathSegment}/${item.id}',
               tone: GtexSurfaceTone.info,
             ),
@@ -333,6 +329,11 @@ class _GtexDetail extends ConsumerWidget {
           metrics: <String>[
             'Status ${item.status.name}',
             'Participants ${item.participantCount}/${item.capacity}',
+            item.isGtexHosted
+                ? 'Entry Free'
+                : 'Entry ${item.entryFee.toStringAsFixed(0)} Fan Coin',
+            if (item.scheduledStartAt != null)
+              'Starts ${item.scheduledStartAt!.toLocal().toString().substring(0, 16)}',
             'Prize ${value.financials.prizePool.toStringAsFixed(0)} ${value.financials.currency.toUpperCase()}',
             'Standings ${value.standings.length}',
             'Fixtures ${value.fixtures.length}',
@@ -342,10 +343,22 @@ class _GtexDetail extends ConsumerWidget {
           actions: <Widget>[
             FilledButton(
               onPressed:
-                  userId == null || !item.joinEligibility.eligible
+                  userId == null ||
+                          (!item.joinEligibility.eligible &&
+                              !item.requiresPasscode)
                       ? null
                       : () async {
                         try {
+                          final String? passcode =
+                              item.requiresPasscode
+                                  ? await _promptForCompetitionPasscode(
+                                    context,
+                                    item.name,
+                                  )
+                                  : null;
+                          if (item.requiresPasscode && passcode == null) {
+                            return;
+                          }
                           await ref
                               .read(authedApiProvider)
                               .post(
@@ -355,6 +368,7 @@ class _GtexDetail extends ConsumerWidget {
                                   if (userName != null &&
                                       userName.trim().isNotEmpty)
                                     'user_name': userName.trim(),
+                                  if (passcode != null) 'passcode': passcode,
                                 },
                               );
                           ref.invalidate(competitionHubProvider);
@@ -449,6 +463,42 @@ class _GtexDetail extends ConsumerWidget {
   }
 }
 
+Future<String?> _promptForCompetitionPasscode(
+  BuildContext context,
+  String competitionName,
+) async {
+  final TextEditingController controller = TextEditingController();
+  final bool? submitted = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Join $competitionName'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Competition passcode'),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Join'),
+          ),
+        ],
+      );
+    },
+  );
+  if (submitted != true) {
+    return null;
+  }
+  final String value = controller.text.trim();
+  return value.isEmpty ? null : value;
+}
+
 class _HostedDetail extends ConsumerWidget {
   const _HostedDetail({required this.id});
 
@@ -514,7 +564,17 @@ class _HostedDetail extends ConsumerWidget {
                       ? null
                       : () async {
                         try {
-                          await api.joinCompetition(item.id);
+                          final String? passcode =
+                              item.requiresPasscode
+                                  ? await _promptForPasscode(context, item)
+                                  : null;
+                          if (item.requiresPasscode && passcode == null) {
+                            return;
+                          }
+                          await api.joinCompetition(
+                            item.id,
+                            passcode: passcode,
+                          );
                           ref.invalidate(competitionHubProvider);
                           ref.invalidate(
                             hostedCompetitionDetailProvider(item.id),
@@ -578,6 +638,43 @@ class _HostedDetail extends ConsumerWidget {
             accentColor: Theme.of(context).colorScheme.error,
           ),
     );
+  }
+
+  Future<String?> _promptForPasscode(
+    BuildContext context,
+    HostedCompetition competition,
+  ) async {
+    final TextEditingController controller = TextEditingController();
+    final bool? submitted = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Join ${competition.title}'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Competition passcode',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Join'),
+            ),
+          ],
+        );
+      },
+    );
+    if (submitted != true) {
+      return null;
+    }
+    return controller.text.trim();
   }
 
   Future<void> _inviteToHostedCompetition(

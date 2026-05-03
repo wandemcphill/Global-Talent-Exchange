@@ -13,6 +13,9 @@ const String adminPermissionViewAuditLog = 'view_audit_log';
 const String adminPermissionManageCompetitions = 'manage_competitions';
 const String adminPermissionManageManagerCatalog = 'manage_manager_catalog';
 const String adminPermissionManageManagerSupply = 'manage_manager_supply';
+const String adminPermissionManagePaymentRails = 'manage_payment_rails';
+const String adminPermissionManageTreasuryWithdrawals =
+    'manage_treasury_withdrawals';
 
 final Provider<AuthSessionStore> authSessionStoreProvider =
     Provider<AuthSessionStore>((Ref ref) => MemoryAuthSessionStore());
@@ -101,6 +104,20 @@ final Provider<bool> canManageManagerSupplyProvider = Provider<bool>(
   (Ref ref) => _hasAdminPermission(
     ref.watch(authProvider),
     adminPermissionManageManagerSupply,
+  ),
+);
+
+final Provider<bool> canManagePaymentRailsProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManagePaymentRails,
+  ),
+);
+
+final Provider<bool> canManageTreasuryWithdrawalsProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManageTreasuryWithdrawals,
   ),
 );
 

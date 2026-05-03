@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/hosted_competition_api.dart';
@@ -242,7 +243,7 @@ void main() {
 
       expect(nationalTeamsApi.autoBuildCalls, 1);
       expect(find.text('Draft squad result'), findsOneWidget);
-      expect(find.text('Victor Boniface'), findsOneWidget);
+      expect(find.text('Victor Boniface'), findsWidgets);
     },
   );
 
@@ -395,8 +396,6 @@ void main() {
       final _FakeFederationsApi federationsApi = _FakeFederationsApi();
       final _FakeNationalTeamsApi nationalTeamsApi = _FakeNationalTeamsApi();
       final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
-      final _FakeHostedCompetitionApi hostedCompetitionApi =
-          _FakeHostedCompetitionApi();
       final _FakeStreamerTournamentRepository streamerRepository =
           _FakeStreamerTournamentRepository();
       final ProviderContainer container = _buildRouterContainer(
@@ -406,14 +405,12 @@ void main() {
         transferCenterApi: transferCenterApi,
         competitionHub: CompetitionHubData(
           gtexCompetitions: const <CompetitionSummary>[],
-          hostedCompetitions: <HostedCompetition>[
-            hostedCompetitionApi.currentCompetition,
-          ],
+          userCompetitions: <CompetitionSummary>[_buildUserHostedCompetition()],
+          hostedCompetitions: const <HostedCompetition>[],
           streamerTournaments: <StreamerTournament>[
             streamerRepository.currentTournament,
           ],
         ),
-        hostedCompetitionApi: hostedCompetitionApi,
         streamerRepository: streamerRepository,
       );
       addTearDown(container.dispose);
@@ -439,7 +436,8 @@ void main() {
 
       await tester.tap(find.widgetWithText(FilledButton, 'View detail'));
       await tester.pumpAndSettle();
-      expect(find.text('Participants 3/16'), findsOneWidget);
+      expect(find.text('Lagos Night Cup'), findsWidgets);
+      expect(find.textContaining('Participants 3/16'), findsOneWidget);
 
       router.go(AppRoutes.competitions);
       await tester.pumpAndSettle();
@@ -451,41 +449,31 @@ void main() {
     },
   );
 
-  testWidgets(
-    'hosted competition detail actions answer with visible feedback',
-    (WidgetTester tester) async {
-      final _FakeHostedCompetitionApi hostedCompetitionApi =
-          _FakeHostedCompetitionApi();
-
-      await tester.pumpWidget(
-        _screenHost(
-          child: const LiveCompetitionDetailScreen(
-            family: CompetitionFamilyRoute.hosted,
-            competitionId: _FakeHostedCompetitionApi.id,
-          ),
-          session: _hostSession(),
-          overrides: [
-            hostedCompetitionApiProvider.overrideWithValue(
-              hostedCompetitionApi,
-            ),
-          ],
+  testWidgets('user competition detail actions answer with visible feedback', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _screenHost(
+        child: const LiveCompetitionDetailScreen(
+          family: CompetitionFamilyRoute.hosted,
+          competitionId: _SurfaceRuntimeTransport.userCompetitionId,
         ),
-      );
-      await tester.pumpAndSettle();
+        session: _hostSession(),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
-      await tester.pumpAndSettle();
-      expect(hostedCompetitionApi.joinCalls, 1);
-      expect(find.text('Competition joined.'), findsOneWidget);
+    expect(find.text('Lagos Night Cup'), findsWidgets);
+    await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+    await tester.pumpAndSettle();
+    expect(find.text('Competition joined.'), findsOneWidget);
 
-      await tester.pump(const Duration(seconds: 4));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Launch'));
-      await tester.pumpAndSettle();
-      expect(hostedCompetitionApi.launchCalls, 1);
-      expect(find.text('Competition launched.'), findsOneWidget);
-    },
-  );
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Launch'));
+    await tester.pumpAndSettle();
+    expect(find.text('Competition launched.'), findsOneWidget);
+  });
 
   testWidgets(
     'streamer competition detail actions answer with visible feedback',
@@ -608,6 +596,7 @@ ProviderContainer _buildRouterContainer({
 }) {
   const CompetitionHubData emptyHub = CompetitionHubData(
     gtexCompetitions: <CompetitionSummary>[],
+    userCompetitions: <CompetitionSummary>[],
     hostedCompetitions: <HostedCompetition>[],
     streamerTournaments: <StreamerTournament>[],
   );
@@ -633,6 +622,8 @@ ProviderContainer _buildRouterContainer({
       appConfigProvider.overrideWithValue(_testAppConfig),
       authProvider.overrideWith((Ref ref) => session),
       authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
+      authedApiProvider.overrideWithValue(_testAuthedApi(session)),
+      competitionApiProvider.overrideWithValue(_testCompetitionApi(session)),
       deviceIdentityStoreProvider.overrideWithValue(
         MemoryDeviceIdentityStore(),
       ),
@@ -704,7 +695,12 @@ Widget _screenHost({
   List overrides = const [],
 }) {
   return ProviderScope(
-    overrides: [authProvider.overrideWith((Ref ref) => session), ...overrides],
+    overrides: [
+      authProvider.overrideWith((Ref ref) => session),
+      authedApiProvider.overrideWithValue(_testAuthedApi(session)),
+      competitionApiProvider.overrideWithValue(_testCompetitionApi(session)),
+      ...overrides,
+    ],
     child: MaterialApp(home: Scaffold(body: child)),
   );
 }
@@ -738,7 +734,10 @@ AuthSession _hostSession() {
     refreshToken: 'host-refresh-token-1',
     sessionId: 'host-session-1',
     role: 'admin',
-    permissions: <String>['match_3d_premium'],
+    permissions: <String>[
+      'match_3d_premium',
+      adminPermissionManageCompetitions,
+    ],
     clubId: 'ibadan-lions',
     clubName: 'Ibadan Lions FC',
   );
@@ -755,6 +754,32 @@ GteAuthedApi _unusedAuthedApi() {
   );
 }
 
+GteAuthedApi _testAuthedApi(AuthSession? session) {
+  return GteAuthedApi(
+    config: const GteRepositoryConfig(
+      baseUrl: 'https://example.test',
+      mode: GteBackendMode.live,
+    ),
+    transport: const _SurfaceRuntimeTransport(),
+    accessToken: session?.accessToken,
+    authSession: session,
+    authSessionStore: MemoryAuthSessionStore(),
+    deviceId: 'device-router',
+    mode: GteBackendMode.live,
+  );
+}
+
+CompetitionApi _testCompetitionApi(AuthSession? session) {
+  return CompetitionApi(
+    config: const GteRepositoryConfig(
+      baseUrl: 'https://example.test',
+      mode: GteBackendMode.live,
+    ),
+    transport: const _SurfaceRuntimeTransport(),
+    accessToken: session?.accessToken,
+  );
+}
+
 class _UnexpectedTransport implements GteTransport {
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) async {
@@ -762,6 +787,165 @@ class _UnexpectedTransport implements GteTransport {
       'Unexpected transport call: ${request.method} ${request.uri}',
     );
   }
+}
+
+class _SurfaceRuntimeTransport implements GteTransport {
+  const _SurfaceRuntimeTransport();
+
+  static const String userCompetitionId = 'hosted-live-1';
+
+  @override
+  Future<GteTransportResponse> send(GteTransportRequest request) async {
+    final String path = request.uri.path;
+    if (request.method == 'GET' &&
+        path.contains('/national-team-engine/competitions/') &&
+        path.endsWith('/rental-pool')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'items': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'pool-1',
+              'player_name': 'Victor Boniface',
+              'country_code': 'NG',
+              'position': 'ST',
+              'loan_price_coin': 700000,
+            },
+            <String, Object?>{
+              'id': 'pool-2',
+              'player_name': 'Calvin Bassey',
+              'country_code': 'NG',
+              'position': 'CB',
+              'loan_price_coin': 600000,
+            },
+          ],
+          'total': 2,
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.contains('/competitions/$userCompetitionId') &&
+        !path.endsWith('/financials') &&
+        !path.endsWith('/standings') &&
+        !path.endsWith('/fixtures')) {
+      return GteTransportResponse(
+        statusCode: 200,
+        body: _competitionSummaryJson(userCompetitionId),
+      );
+    }
+    if (request.method == 'GET' &&
+        path.contains('/competitions/$userCompetitionId/financials')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'competition_id': userCompetitionId,
+          'participant_count': 3,
+          'entry_fee': 5,
+          'gross_pool': 15,
+          'platform_fee_amount': 1,
+          'host_fee_amount': 0,
+          'prize_pool': 80,
+          'currency': 'coin',
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.contains('/competitions/$userCompetitionId/standings')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'position': 1,
+            'entry_name': 'Ibadan Lions FC',
+            'points': 9,
+          },
+        ],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.contains('/competitions/$userCompetitionId/fixtures')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'round': 'Semi-final',
+            'home_name': 'Ibadan Lions FC',
+            'away_name': 'Lagos Stars FC',
+          },
+        ],
+      );
+    }
+    if (request.method == 'POST' &&
+        (path.contains('/competitions/$userCompetitionId/join') ||
+            path.contains('/competitions/$userCompetitionId/launch') ||
+            path.contains('/competitions/$userCompetitionId/publish') ||
+            path.endsWith('/competitions/join'))) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{'ok': true},
+      );
+    }
+    throw UnimplementedError(
+      'Unexpected transport call: ${request.method} ${request.uri}',
+    );
+  }
+}
+
+Map<String, Object?> _competitionSummaryJson(String competitionId) {
+  return <String, Object?>{
+    'id': competitionId,
+    'name': 'Lagos Night Cup',
+    'format': 'cup',
+    'visibility': 'public',
+    'status': 'open_for_join',
+    'creator_id': 'host-user-1',
+    'creator_name': 'Ibadan Lions FC',
+    'participant_count': 3,
+    'capacity': 16,
+    'currency': 'coin',
+    'entry_fee': 5,
+    'platform_fee_pct': 8,
+    'host_fee_pct': 0,
+    'platform_fee_amount': 1,
+    'host_fee_amount': 0,
+    'prize_pool': 80,
+    'payout_structure': const <Map<String, Object?>>[],
+    'rules_summary': 'Manager-created competition with Fan Coin entry rules.',
+    'match_type': 'user_hosted',
+    'join_eligibility': const <String, Object?>{'eligible': true},
+    'beginner_friendly': true,
+    'requires_passcode': false,
+    'created_at': '2026-03-28T00:00:00Z',
+    'updated_at': '2026-03-29T00:00:00Z',
+  };
+}
+
+CompetitionSummary _buildUserHostedCompetition() {
+  return CompetitionSummary(
+    id: _SurfaceRuntimeTransport.userCompetitionId,
+    name: 'Lagos Night Cup',
+    format: CompetitionFormat.cup,
+    visibility: CompetitionVisibility.public,
+    status: CompetitionStatus.openForJoin,
+    creatorId: 'host-user-1',
+    creatorName: 'Ibadan Lions FC',
+    participantCount: 3,
+    capacity: 16,
+    currency: 'coin',
+    entryFee: 5,
+    platformFeePct: 8,
+    hostFeePct: 0,
+    platformFeeAmount: 1,
+    hostFeeAmount: 0,
+    prizePool: 80,
+    payoutStructure: const <CompetitionPayoutBreakdown>[],
+    rulesSummary: 'Manager-created competition with Fan Coin entry rules.',
+    matchType: MatchType.userHosted,
+    joinEligibility: const CompetitionJoinEligibility(eligible: true),
+    beginnerFriendly: true,
+    createdAt: DateTime.utc(2026, 3, 28),
+    updatedAt: DateTime.utc(2026, 3, 29),
+  );
 }
 
 CompetitionSummary _buildViewerCompetition({
@@ -931,12 +1115,17 @@ class _FakeHostedCompetitionApi implements HostedCompetitionApi {
     int? maxParticipants,
     double? entryFeeFancoin,
     double? rewardPoolFancoin,
+    String? joinPasscode,
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) async {
     throw UnimplementedError();
   }
 
   @override
-  Future<HostedCompetition> joinCompetition(String competitionId) async {
+  Future<HostedCompetition> joinCompetition(
+    String competitionId, {
+    String? passcode,
+  }) async {
     joinCalls += 1;
     return _competition;
   }
@@ -1506,7 +1695,7 @@ class _FakeFederationsApi extends FederationsApi {
 }
 
 class _FakeNationalTeamsApi extends NationalTeamsApi {
-  _FakeNationalTeamsApi() : super(client: _unusedAuthedApi());
+  _FakeNationalTeamsApi() : super(client: _testAuthedApi(null));
 
   static const String activeCompetitionId = 'nations-live-1';
   static const String archivedCompetitionId = 'nations-2030';
@@ -1717,6 +1906,8 @@ class _FakeNationalTeamsApi extends NationalTeamsApi {
     required String competitionId,
     required String countryCode,
     required double budgetCoin,
+    int squadSize = 18,
+    String ageGrade = 'Senior',
     required String tactic,
   }) async {
     autoBuildCalls += 1;

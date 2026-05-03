@@ -170,7 +170,7 @@ class AdminCommandCenterApi {
   Future<AdminMarketTopupQuote> quoteMarketTopup({
     required double amount,
     int feeBps = 0,
-    String unit = 'credit',
+    String unit = 'coin',
   }) async {
     final Object? payload = await client.post(
       '/api/admin/wallets/market-topups/quote',
@@ -187,7 +187,7 @@ class AdminCommandCenterApi {
     required String userId,
     required double amount,
     int feeBps = 0,
-    String unit = 'credit',
+    String unit = 'coin',
     String sourceScope = 'promotion',
     String? notes,
   }) async {
@@ -218,6 +218,41 @@ class AdminCommandCenterApi {
       },
     );
     return AdminMarketTopup.fromJson(payload);
+  }
+
+  Future<String> createGtexHostedCompetition({
+    required String templateKey,
+    required String title,
+    String? passcode,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/admin/competitions',
+      body: <String, Object?>{
+        'name': title.trim(),
+        'format':
+            templateKey.trim().toLowerCase().contains('cup') ? 'cup' : 'league',
+        'visibility':
+            passcode != null && passcode.trim().isNotEmpty ? 'gated' : 'public',
+        'host_type': 'gtex_hosted',
+        'entry_fee': '0.00',
+        'buyInAmount': '0.00',
+        'capacity': 16,
+        'maxPlayers': 16,
+        'currency': 'coin',
+        'rules':
+            'Official GTEX competition. Free entry, published fixtures, standings, results, and prize pool.',
+        'specialRules': 'Official GTEX competition. Free entry.',
+        if (passcode != null && passcode.trim().isNotEmpty)
+          'passcode': passcode.trim(),
+      },
+    );
+    final Map<String, Object?> map =
+        payload is Map
+            ? Map<String, Object?>.from(payload)
+            : const <String, Object?>{};
+    return (map['dashboard_summary'] ??
+            '${map['name'] ?? title.trim()} created as a GTEX competition.')
+        .toString();
   }
 
   Map<String, Object?>? _notesPayload(String? notes) {
