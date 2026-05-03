@@ -168,6 +168,13 @@ def test_append_transaction_rejects_negative_balance_for_user_accounts(session) 
         )
 
 
+def test_quote_conversion_rejects_fan_coin_to_gtex_coin(session) -> None:
+    service = WalletService()
+
+    with pytest.raises(LedgerError, match="Fan Coin cannot be converted"):
+        service.quote_conversion(source_unit=LedgerUnit.CREDIT, amount=Decimal("100"))
+
+
 def test_append_transaction_creates_transaction_header_and_balance_projection(session) -> None:
     user = _create_user(session)
     service = WalletService()

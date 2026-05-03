@@ -358,7 +358,7 @@ class WalletService:
 
     def ensure_default_accounts(self, session: Session, user: User) -> dict[LedgerUnit, LedgerAccount]:
         accounts: dict[LedgerUnit, LedgerAccount] = {}
-        for unit, label in ((LedgerUnit.COIN, "Coins"), (LedgerUnit.CREDIT, "Credits")):
+        for unit, label in ((LedgerUnit.COIN, "GTEX Coin"), (LedgerUnit.CREDIT, "Fan Coin")):
             code = self._user_account_code(user.id, unit)
             account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
             if account is None:
@@ -766,9 +766,7 @@ class WalletService:
             target_amount = self._normalize_amount(normalized_amount * COIN_TO_CREDIT_RATE)
             rate = COIN_TO_CREDIT_RATE
         elif source_unit == LedgerUnit.CREDIT:
-            target_unit = LedgerUnit.COIN
-            target_amount = self._normalize_amount(normalized_amount / COIN_TO_CREDIT_RATE)
-            rate = self._normalize_amount(Decimal("1.0000") / COIN_TO_CREDIT_RATE)
+            raise LedgerError("Fan Coin cannot be converted into GTEX Coin.")
         else:
             raise LedgerError(f"Unsupported conversion source unit: {source_unit!s}")
         return WalletConversionQuote(

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.admin_finance.service import AdminFinanceService
 from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
-from app.admin_godmode.service import AdminGodModeService
+from app.admin_godmode.service import AdminGodModeService, DEFAULT_PAYMENT_RAILS
 from app.economy.governor_service import EconomyGovernorService
 from app.models.user import User
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
@@ -62,6 +62,7 @@ from app.wallets.funding_service import (
     WalletFundingError,
     WalletFundingService,
 )
+from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
 from app.wallets.service import LedgerError, WalletService
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
 from app.wallets.providers.registry import get_live_provider_adapter
@@ -269,8 +270,6 @@ def _build_withdrawal_quote(
     controls = _withdrawal_controls(request)
     if source_scope == WithdrawalSourceScope.COMPETITION and not bool(controls.get("egame_withdrawals_enabled", False)):
         blocked_reason = "E-game reward withdrawals are currently disabled by platform policy."
-    elif source_scope == WithdrawalSourceScope.TRADE and not bool(controls.get("trade_withdrawals_enabled", True)):
-        blocked_reason = "Trade withdrawals are currently disabled by platform policy."
     elif eligibility.requires_kyc:
         blocked_reason = "KYC is required before withdrawals can be requested."
     elif eligibility.requires_bank_account and payout_channel == "bank_transfer":
@@ -347,6 +346,28 @@ def _withdrawal_controls(request: Request | None) -> dict[str, object]:
     return dict((_load_admin_god_mode_state(request).get("withdrawal_controls") or {}))
 
 
+def _payment_rails(request: Request | None) -> list[dict[str, object]]:
+    rails = _load_admin_god_mode_state(request).get("payment_rails")
+    if not isinstance(rails, list) or not rails:
+        rails = DEFAULT_PAYMENT_RAILS
+    return [dict(rail) for rail in rails if isinstance(rail, dict)]
+
+
+def _payment_rail_deposits_enabled(request: Request | None, provider: str) -> bool:
+    normalized_provider = provider.strip().lower()
+    for rail in _payment_rails(request):
+        if str(rail.get("provider") or "").strip().lower() != normalized_provider:
+            continue
+        return bool(rail.get("is_live", True)) and bool(rail.get("deposits_enabled", True))
+    return False
+
+
+def _enabled_gateway_deposit_providers(request: Request | None) -> set[str]:
+    return {
+        provider for provider in SUPPORTED_TOP_UP_PROVIDER_KEYS if _payment_rail_deposits_enabled(request, provider)
+    }
+
+
 def _commission_settings(request: Request | None) -> dict[str, object]:
     return dict((_load_admin_god_mode_state(request).get("commissions") or {}))
 
@@ -386,6 +407,53 @@ def _selected_deposit_mode(policy: dict[str, object]) -> str:
     return "gateway"
 
 
+def _manual_deposit_enabled(
+    *,
+    request: Request | None,
+    settings: TreasurySettings,
+    policy: dict[str, object],
+) -> bool:
+    if settings.deposit_mode not in {PaymentMode.MANUAL, PaymentMode.HYBRID}:
+        return False
+    if bool(policy.get("policy_enforced", False)) and not bool(policy.get("deposits_via_bank_transfer", True)):
+        return False
+    return _payment_rail_deposits_enabled(request, "bank_transfer_manual")
+
+
+def _gateway_deposit_enabled(
+    *,
+    request: Request | None,
+    settings: TreasurySettings,
+    policy: dict[str, object],
+    provider_key: str | None = None,
+) -> bool:
+    if settings.deposit_mode not in {PaymentMode.AUTOMATIC, PaymentMode.HYBRID}:
+        return False
+    if bool(policy.get("policy_enforced", False)):
+        processor_mode = str(policy.get("processor_mode", "manual_bank_transfer"))
+        if processor_mode == "manual_bank_transfer" and settings.deposit_mode != PaymentMode.HYBRID:
+            return False
+    enabled_providers = _enabled_gateway_deposit_providers(request)
+    if provider_key is not None:
+        return provider_key.strip().lower() in enabled_providers
+    return bool(enabled_providers)
+
+
+def _resolved_deposit_mode(
+    *,
+    request: Request | None,
+    settings: TreasurySettings,
+    policy: dict[str, object],
+) -> str:
+    manual_enabled = _manual_deposit_enabled(request=request, settings=settings, policy=policy)
+    gateway_enabled = _gateway_deposit_enabled(request=request, settings=settings, policy=policy)
+    if manual_enabled and gateway_enabled:
+        return "hybrid"
+    if gateway_enabled:
+        return "gateway"
+    return "bank_transfer"
+
+
 def _selected_payout_mode(policy: dict[str, object]) -> str:
     processor_mode = str(policy.get("processor_mode", "manual_bank_transfer"))
     if processor_mode == "manual_bank_transfer" or bool(policy.get("payouts_via_bank_transfer", True)):
@@ -404,11 +472,6 @@ def _join_human_labels(labels: list[str]) -> str:
 
 
 def _policy_block_reason(*, compliance_policy: object, missing_policies: list[object]) -> str | None:
-    if missing_policies:
-        return (
-            f"Complete {len(missing_policies)} required policy acceptance(s) to unlock "
-            "funding, trading, and withdrawals."
-        )
     blocked_actions: list[str] = []
     if not bool(getattr(compliance_policy, "deposits_enabled", True)):
         blocked_actions.append("funding")
@@ -429,19 +492,30 @@ def _require_gateway_deposit(
     request: Request | None,
     session: Session,
     user: User,
+    provider_key: str | None = None,
 ) -> tuple[TreasurySettings, str, str]:
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
     policy = _build_withdrawal_policy_snapshot(request)
     policy_service = PolicyService(session)
     compliance_policy = policy_service.get_country_policy_for_user(user=user)
-    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
     if not compliance_policy.deposits_enabled:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Deposits are currently disabled for country policy '{compliance_policy.country_code}'.",
         )
-    if deposit_mode != "gateway":
+    if not _gateway_deposit_enabled(
+        request=request,
+        settings=settings,
+        policy=policy,
+        provider_key=provider_key,
+    ):
+        if provider_key is not None:
+            label = provider_key.strip()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"{label} deposits are disabled by the active treasury or payment-rail policy.",
+            )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Automatic gateway deposits are disabled. Admin has selected manual bank transfer as the active funding rail.",
@@ -485,6 +559,12 @@ def initiate_wallet_top_up(
     request: Request = None,
 ) -> WalletTopUpInitiateView:
     service = _build_wallet_funding_service(request)
+    _require_gateway_deposit(
+        request=request,
+        session=session,
+        user=current_user,
+        provider_key=payload.provider,
+    )
     try:
         with _wallet_transaction_lock(request, user=current_user, operation="wallet_top_up_initiate"):
             result = service.initiate_top_up(
@@ -492,6 +572,7 @@ def initiate_wallet_top_up(
                 current_user,
                 amount=payload.amount,
                 provider=payload.provider,
+                unit=payload.unit,
                 callback_url=payload.callback_url,
             )
             session.commit()
@@ -649,7 +730,7 @@ def get_wallet_adaptive_overview(
     policy_service = PolicyService(session)
     compliance_policy = policy_service.get_country_policy_for_user(user=current_user)
     missing_policies = policy_service.list_missing_acceptances(user_id=current_user.id)
-    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
+    deposit_mode = _resolved_deposit_mode(request=request, settings=settings, policy=policy)
     payout_mode = (
         "bank_transfer"
         if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
@@ -665,14 +746,20 @@ def get_wallet_adaptive_overview(
     )
     overview.update(policy)
     overview["country_code"] = compliance_policy.country_code
+    gateway_deposits_enabled = _gateway_deposit_enabled(request=request, settings=settings, policy=policy)
     overview["payment_provider_status"] = funding_service.payment_provider_status(
-        gateway_enabled=deposit_mode == "gateway" and policy_block_reason is None
+        gateway_enabled=gateway_deposits_enabled and compliance_policy.deposits_enabled,
+        enabled_providers=_enabled_gateway_deposit_providers(request),
     )
     insights = list(overview.get("insights") or [])
     insights.append(
         {
             "label": "Deposit rail",
-            "value": "Bank transfer" if deposit_mode == "bank_transfer" else "Automatic gateway",
+            "value": (
+                "Hybrid"
+                if deposit_mode == "hybrid"
+                else ("Bank transfer" if deposit_mode == "bank_transfer" else "Automatic gateway")
+            ),
             "tone": "info",
         }
     )
@@ -735,7 +822,7 @@ def get_wallet_overview(
         compliance_policy=compliance_policy,
         missing_policies=missing_policies,
     )
-    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
+    deposit_mode = _resolved_deposit_mode(request=request, settings=settings, policy=policy)
     withdrawal_mode = (
         "bank_transfer"
         if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
@@ -793,7 +880,9 @@ def get_wallet_overview(
         deposit_mode=deposit_mode,
         withdrawal_mode=withdrawal_mode,
         payment_provider_status=funding_service.payment_provider_status(
-            gateway_enabled=deposit_mode == "gateway" and policy_block_reason is None
+            gateway_enabled=_gateway_deposit_enabled(request=request, settings=settings, policy=policy)
+            and compliance_policy.deposits_enabled,
+            enabled_providers=_enabled_gateway_deposit_providers(request),
         ),
     )
 
@@ -869,7 +958,10 @@ def create_purchase_order_quote(
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     settings, processor_mode, payout_channel = _require_gateway_deposit(
-        request=request, session=session, user=current_user
+        request=request,
+        session=session,
+        user=current_user,
+        provider_key=payload.provider_key,
     )
     rail_service = _build_wallet_rail_service(request, session)
     try:
@@ -917,7 +1009,10 @@ def create_purchase_order(
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     settings, processor_mode, payout_channel = _require_gateway_deposit(
-        request=request, session=session, user=current_user
+        request=request,
+        session=session,
+        user=current_user,
+        provider_key=payload.provider_key,
     )
     rail_service = _build_wallet_rail_service(request, session)
     try:
@@ -1170,12 +1265,6 @@ def create_withdrawal_request(
             status_code=status.HTTP_409_CONFLICT,
             detail="E-game reward withdrawals are currently disabled by platform policy.",
         )
-    if payload.source_scope == WithdrawalSourceScope.TRADE and not bool(
-        controls.get("trade_withdrawals_enabled", True)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Trade withdrawals are currently disabled by platform policy."
-        )
     try:
         with _wallet_transaction_lock(request, user=current_user, operation="withdrawal_request"):
             withdrawal = service.create_withdrawal_request(
@@ -1427,22 +1516,12 @@ def create_payment_event(
     request: Request = None,
 ) -> PaymentEventView:
     service = _build_wallet_service(request)
-    policy = _build_withdrawal_policy_snapshot(request)
-    treasury = _build_treasury_service(request)
-    settings = treasury.ensure_settings(session)
-    policy_service = PolicyService(session)
-    compliance_policy = policy_service.get_country_policy_for_user(user=current_user)
-    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
-    if not compliance_policy.deposits_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Deposits are currently disabled for country policy '{compliance_policy.country_code}'.",
-        )
-    if deposit_mode != "gateway":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Automatic gateway deposits are disabled. Admin has selected manual bank transfer as the active funding rail.",
-        )
+    _require_gateway_deposit(
+        request=request,
+        session=session,
+        user=current_user,
+        provider_key=payload.provider,
+    )
     try:
         with _wallet_transaction_lock(request, user=current_user, operation="payment_event_create"):
             payment_event = service.create_payment_event(

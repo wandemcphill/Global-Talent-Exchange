@@ -15,7 +15,7 @@ from app.models.base import utcnow
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.risk_ops import RiskSeverity, SystemEventSeverity
-from app.models.treasury import PaymentMode, RateDirection, TreasurySettings
+from app.models.treasury import RateDirection, TreasurySettings
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.risk_ops_engine.service import RiskOpsService
@@ -143,7 +143,9 @@ class WalletRailService:
             payout_channel=payout_channel,
         )
         reference = self._generate_reference(prefix="PO", model=FancoinPurchaseOrder)
-        status = PurchaseOrderStatus.PROCESSING if processor_mode == "automatic_gateway" else PurchaseOrderStatus.REVIEWING
+        status = (
+            PurchaseOrderStatus.PROCESSING if processor_mode == "automatic_gateway" else PurchaseOrderStatus.REVIEWING
+        )
         order = FancoinPurchaseOrder(
             user_id=user.id,
             reference=reference,
@@ -190,8 +192,12 @@ class WalletRailService:
         user_account = self.wallet_service.get_user_account(self.session, user, order.unit)
         platform_account = self.wallet_service.ensure_deposit_clearing_account(self.session, order.unit)
         postings = [
-            LedgerPosting(account=user_account, amount=order.net_amount, transaction_type=LedgerTransactionType.DEPOSIT),
-            LedgerPosting(account=platform_account, amount=-order.gross_amount, transaction_type=LedgerTransactionType.DEPOSIT),
+            LedgerPosting(
+                account=user_account, amount=order.net_amount, transaction_type=LedgerTransactionType.DEPOSIT
+            ),
+            LedgerPosting(
+                account=platform_account, amount=-order.gross_amount, transaction_type=LedgerTransactionType.DEPOSIT
+            ),
         ]
         if order.fee_amount > Decimal("0.0000"):
             postings.append(
@@ -201,13 +207,17 @@ class WalletRailService:
                     transaction_type=LedgerTransactionType.DEPOSIT,
                 )
             )
+        unit_label = "Fan Coin" if order.unit == LedgerUnit.CREDIT else "GTEX Coin"
+        source_tag = (
+            LedgerSourceTag.FANCOIN_PURCHASE if order.unit == LedgerUnit.CREDIT else LedgerSourceTag.MARKET_TOPUP
+        )
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=postings,
             reason=LedgerEntryReason.DEPOSIT,
-            source_tag=LedgerSourceTag.FANCOIN_PURCHASE,
+            source_tag=source_tag,
             reference=order.reference,
-            description=f"FanCoin purchase via {order.provider_key}",
+            description=f"{unit_label} purchase via {order.provider_key}",
             external_reference=order.provider_reference,
             actor=actor or user,
             idempotency_key=f"purchase-order:{order.id}:settle",
@@ -240,7 +250,9 @@ class WalletRailService:
         )
         return order
 
-    def mark_purchase_order_failed(self, *, order: FancoinPurchaseOrder, status: PurchaseOrderStatus, notes: str | None = None) -> FancoinPurchaseOrder:
+    def mark_purchase_order_failed(
+        self, *, order: FancoinPurchaseOrder, status: PurchaseOrderStatus, notes: str | None = None
+    ) -> FancoinPurchaseOrder:
         order.status = status
         order.failed_at = utcnow()
         order.notes = notes or order.notes
@@ -255,7 +267,10 @@ class WalletRailService:
         actor: User | None = None,
         notes: str | None = None,
     ) -> FancoinPurchaseOrder:
-        if order.status in {PurchaseOrderStatus.REFUNDED, PurchaseOrderStatus.CHARGEBACK, PurchaseOrderStatus.REVERSED} and order.reversed_at:
+        if (
+            order.status in {PurchaseOrderStatus.REFUNDED, PurchaseOrderStatus.CHARGEBACK, PurchaseOrderStatus.REVERSED}
+            and order.reversed_at
+        ):
             return order
         if order.ledger_transaction_id is None:
             order.status = status
@@ -272,13 +287,19 @@ class WalletRailService:
             self.wallet_service.append_transaction(
                 self.session,
                 postings=[
-                    LedgerPosting(account=user_account, amount=-order.net_amount, transaction_type=LedgerTransactionType.DEPOSIT),
-                    LedgerPosting(account=platform_account, amount=order.net_amount, transaction_type=LedgerTransactionType.DEPOSIT),
+                    LedgerPosting(
+                        account=user_account, amount=-order.net_amount, transaction_type=LedgerTransactionType.DEPOSIT
+                    ),
+                    LedgerPosting(
+                        account=platform_account,
+                        amount=order.net_amount,
+                        transaction_type=LedgerTransactionType.DEPOSIT,
+                    ),
                 ],
                 reason=LedgerEntryReason.ADJUSTMENT,
                 source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
                 reference=f"purchase-reversal:{order.id}",
-                description=f"Reverse FanCoin purchase {order.reference}",
+                description=f"Reverse {'Fan Coin' if order.unit == LedgerUnit.CREDIT else 'GTEX Coin'} purchase {order.reference}",
                 external_reference=order.provider_reference,
                 actor=actor,
                 idempotency_key=f"purchase-order:{order.id}:reverse:{status.value}",
@@ -326,7 +347,12 @@ class WalletRailService:
             return self.settle_purchase_order(order=order, actor=actor)
         if status in {PurchaseOrderStatus.REFUNDED, PurchaseOrderStatus.CHARGEBACK, PurchaseOrderStatus.REVERSED}:
             return self.reverse_purchase_order(order=order, status=status, actor=actor, notes=notes)
-        if status in {PurchaseOrderStatus.FAILED, PurchaseOrderStatus.REJECTED, PurchaseOrderStatus.CANCELLED, PurchaseOrderStatus.EXPIRED}:
+        if status in {
+            PurchaseOrderStatus.FAILED,
+            PurchaseOrderStatus.REJECTED,
+            PurchaseOrderStatus.CANCELLED,
+            PurchaseOrderStatus.EXPIRED,
+        }:
             return self.mark_purchase_order_failed(order=order, status=status, notes=notes)
         order.status = status
         order.notes = notes or order.notes
@@ -423,12 +449,17 @@ class WalletRailService:
                     "event_id": event.event_id,
                 },
             )
-        if event.event_id and order.provider_event_id == event.event_id and order.status in {
-            PurchaseOrderStatus.SETTLED,
-            PurchaseOrderStatus.REFUNDED,
-            PurchaseOrderStatus.CHARGEBACK,
-            PurchaseOrderStatus.REVERSED,
-        }:
+        if (
+            event.event_id
+            and order.provider_event_id == event.event_id
+            and order.status
+            in {
+                PurchaseOrderStatus.SETTLED,
+                PurchaseOrderStatus.REFUNDED,
+                PurchaseOrderStatus.CHARGEBACK,
+                PurchaseOrderStatus.REVERSED,
+            }
+        ):
             return order
         if event.event_id:
             order.provider_event_id = event.event_id
@@ -457,7 +488,9 @@ class WalletRailService:
         target_status = self._map_provider_event(event.event_type)
         if target_status is None:
             return order
-        order = self.apply_purchase_order_status(order=order, status=target_status, actor=None, notes=f"Webhook {event.event_type.value}")
+        order = self.apply_purchase_order_status(
+            order=order, status=target_status, actor=None, notes=f"Webhook {event.event_type.value}"
+        )
         RiskOpsService(self.session).log_audit(
             actor_user_id=None,
             action_key="wallet.purchase_order.webhook",
@@ -605,8 +638,12 @@ class WalletRailService:
         user_account = self.wallet_service.get_user_account(self.session, user, topup.unit)
         platform_account = self.wallet_service.ensure_deposit_clearing_account(self.session, topup.unit)
         postings = [
-            LedgerPosting(account=user_account, amount=topup.net_amount, transaction_type=LedgerTransactionType.DEPOSIT),
-            LedgerPosting(account=platform_account, amount=-topup.gross_amount, transaction_type=LedgerTransactionType.DEPOSIT),
+            LedgerPosting(
+                account=user_account, amount=topup.net_amount, transaction_type=LedgerTransactionType.DEPOSIT
+            ),
+            LedgerPosting(
+                account=platform_account, amount=-topup.gross_amount, transaction_type=LedgerTransactionType.DEPOSIT
+            ),
         ]
         if topup.fee_amount > Decimal("0.0000"):
             postings.append(
@@ -763,7 +800,9 @@ class WalletRailService:
     def _recent_order_count(self, model, user_id: str) -> int:
         window_start = utcnow() - timedelta(hours=RISK_WINDOW_HOURS)
         count = self.session.scalar(
-            select(func.count()).select_from(model).where(
+            select(func.count())
+            .select_from(model)
+            .where(
                 model.user_id == user_id,
                 model.created_at >= window_start,
             )

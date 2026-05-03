@@ -129,6 +129,7 @@ class WalletFundingService:
         amount: Decimal,
         input_unit: str = "coin",
         provider: str = "paystack",
+        unit: LedgerUnit = LedgerUnit.COIN,
         callback_url: str | None = None,
     ) -> WalletTopUpSession:
         normalized_provider = provider.strip().lower()
@@ -154,7 +155,7 @@ class WalletFundingService:
                 input_unit=input_unit,
                 provider_key=normalized_provider,
                 source_scope="wallet",
-                unit=LedgerUnit.COIN,
+                unit=unit,
                 processor_mode="automatic_gateway",
                 payout_channel="gateway",
                 provider_reference=None,
@@ -201,7 +202,7 @@ class WalletFundingService:
             reference=transaction.reference,
             payment_link=str(payment_session.get("authorization_url") or payment_session.get("checkout_url") or ""),
             amount=transaction.amount,
-            currency=wallet.currency,
+            currency=order.unit.value,
             provider=normalized_provider,
             status=transaction.status,
             mock_mode=bool(payment_session.get("mock_mode", False)),
@@ -260,19 +261,30 @@ class WalletFundingService:
         wallet = self.sync_wallet_balance(session, user, wallet=wallet)
         return WalletTopUpVerificationResult(wallet=wallet, transaction=transaction)
 
-    def payment_provider_status(self, *, gateway_enabled: bool = True) -> dict[str, str]:
+    def payment_provider_status(
+        self,
+        *,
+        gateway_enabled: bool = True,
+        enabled_providers: set[str] | None = None,
+    ) -> dict[str, str]:
         if not gateway_enabled:
             return {
                 "paystack": "blocked",
                 "korapay": "blocked",
             }
         paystack_secret = self._paystack_secret()
-        return {
+        status_by_provider = {
             "paystack": (
                 "ready" if paystack_secret else ("unavailable" if self._is_production_environment() else "mock")
             ),
             "korapay": "ready" if self._korapay_secret() else "unavailable",
         }
+        if enabled_providers is not None:
+            normalized_enabled = {provider.strip().lower() for provider in enabled_providers}
+            for provider in status_by_provider:
+                if provider not in normalized_enabled:
+                    status_by_provider[provider] = "blocked"
+        return status_by_provider
 
     def _initialize_paystack_transaction(
         self,
@@ -636,7 +648,12 @@ class WalletFundingService:
 
     @staticmethod
     def _korapay_secret() -> str | None:
-        for name in ("GTE_KORAPAY_SECRET_KEY", "KORAPAY_SECRET_KEY"):
+        for name in (
+            "GTE_KORAPAY_SECRET_KEY",
+            "KORAPAY_SECRET_KEY",
+            "GTE_KORAPAY_PRIVATE_KEY",
+            "KORAPAY_PRIVATE_KEY",
+        ):
             secret = os.getenv(name)
             if secret and secret.strip():
                 return secret.strip()
