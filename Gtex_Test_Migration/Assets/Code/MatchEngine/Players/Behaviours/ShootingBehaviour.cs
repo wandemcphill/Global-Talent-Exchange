@@ -124,6 +124,10 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         }
 
         public override bool Behave(bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
             if (ball.HolderPlayer != Player) {
                 return false;
             }

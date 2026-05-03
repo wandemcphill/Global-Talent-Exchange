@@ -6,6 +6,10 @@ using FStudio.MatchEngine.Players.PlayerController;
 namespace FStudio.MatchEngine.Players.Behaviours {
     public class StrikerTacticalPositioningBehaviour : AbstractTacticalPositioning {
         public override bool Behave(bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
             var customTactic = teamBehaviour;
 
             if (customTactic != Tactics.TeamBehaviour.Attacking 
@@ -34,6 +38,12 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             } else if (goalNet.Direction.x < 0 && tacticalPosition.x > ballX) {
                 tacticalPosition.x = ballX;
             }
+
+            tacticalPosition = OriginalRuntimeRoleAwareness.DampShapeMovement(
+                Player,
+                Player.Position,
+                tacticalPosition,
+                ball.HolderPlayer?.GameTeam == Player.GameTeam);
 
             targetPosition = tacticalPosition;
 

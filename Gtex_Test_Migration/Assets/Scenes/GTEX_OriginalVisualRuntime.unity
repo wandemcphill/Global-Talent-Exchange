@@ -944,6 +944,7 @@ GameObject:
   - component: {fileID: 980000003}
   - component: {fileID: 980000004}
   - component: {fileID: 980000005}
+  - component: {fileID: 980000006}
   m_Layer: 0
   m_Name: GTEX Original Visual Runtime Bridge
   m_TagString: Untagged
@@ -976,8 +977,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 80d02e483deb455cbfa503b132f4167c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   originalSim: {fileID: 980000003}
   scoreBridge: {fileID: 980000005}
   autoConfigureOnEnable: 1
@@ -1022,6 +1023,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   forceOriginalVisualRuntimeFlag: 1
+--- !u!114 &980000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 980000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 649614671c31f084ba5c558052500c38, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  originalPitchPrefab: {fileID: 382649370641427324, guid: 6c567ca92b4329e47af1912e9d323550, type: 3}
+  preferOriginalPitchPrefab: 1
+  disableUnderlayWhenOriginalPitchIsActive: 1
+  createIfMissing: 1
+  pitchSize: {x: 105, y: 68}
+  fallbackGrassColor: {r: 0.1, g: 0.44, b: 0.12, a: 1}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

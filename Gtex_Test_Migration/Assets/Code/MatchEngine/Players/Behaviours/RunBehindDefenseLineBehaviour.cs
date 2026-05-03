@@ -18,6 +18,11 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         }
 
         public override bool Behave(bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                ForceBehaviour = false;
+                return false;
+            }
+
             if (ball.HolderPlayer == null || ball.HolderPlayer == Player || ball.HolderPlayer.GameTeam != Player.GameTeam) {
                 ForceBehaviour = false;
                 return false;

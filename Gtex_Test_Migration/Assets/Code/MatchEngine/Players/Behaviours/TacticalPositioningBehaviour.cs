@@ -6,6 +6,10 @@ using FStudio.MatchEngine.Players.PlayerController;
 namespace FStudio.MatchEngine.Players.Behaviours {
     public class TacticalPositioningBehaviour : AbstractTacticalPositioning {
         public override bool Behave (bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
             Player.CurrentAct = Acts.TacticalPositioning;
 
             var tacticalPosition = Player.GetFieldPosition(
@@ -18,6 +22,12 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                 in offsideLine,
                 goalNet,
                 targetGoalNet);
+
+            tacticalPosition = OriginalRuntimeRoleAwareness.DampShapeMovement(
+                Player,
+                Player.Position,
+                tacticalPosition,
+                ball.HolderPlayer?.GameTeam == Player.GameTeam);
 
             targetPosition = tacticalPosition;
 

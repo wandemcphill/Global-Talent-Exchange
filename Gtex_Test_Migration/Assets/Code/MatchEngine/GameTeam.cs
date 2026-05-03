@@ -249,6 +249,21 @@ namespace FStudio.MatchEngine {
             }
         }
 
+        public bool IsReadyForRuntimeLogic() {
+            if (Team == null || tacticManager == null || GamePlayers == null || GamePlayers.Length < 11) {
+                return false;
+            }
+
+            for (int i = 0; i < 11; i++) {
+                var player = GamePlayers[i];
+                if (player == null || player.PlayerController == null || player.PlayerController.UI == null) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public void Clear() {
             if (GamePlayers != null) {
                 foreach (PlayerBase player in GamePlayers) {
@@ -371,7 +386,7 @@ namespace FStudio.MatchEngine {
                         continue;
                     }
 
-                    if (MatchManager.Current != null && MatchManager.Current.ShouldBlockAutonomousBehaviours()) {
+                    if (MatchManager.Current != null && MatchManager.Current.ShouldBlockAutonomousBehaviours(GamePlayers[i])) {
                         if (!GamePlayers[i].IsHoldingBall) {
                             GamePlayers[i].Stop(deltaTime);
                         }

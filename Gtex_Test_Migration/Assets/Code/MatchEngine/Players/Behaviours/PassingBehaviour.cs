@@ -1,5 +1,6 @@
 ﻿
 using FStudio.MatchEngine.Enums;
+using FStudio.GTEX.Core;
 using UnityEngine;
 using System.Linq;
 using static FStudio.MatchEngine.Players.PlayerBase;
@@ -48,6 +49,10 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         }
 
         public override bool Behave (bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
             if (ball.HolderPlayer != Player) {
                 return false;
             }
@@ -66,6 +71,7 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                 var distanceToTargetGoalNet = Vector3.Distance(Player.Position, targetGoalNetPosition);
 
                 var targets = teammates.Where(x => 
+                    IsOriginalRuntimeReceiverCandidate(x) &&
                     (!onlyIfCloserToGoalNet || Vector3.Distance (x.Position, targetGoalNetPosition) < distanceToTargetGoalNet) &&
                     (!onlyIfFrontOfUs || Player.IsFrontOfMe(x.Position, frontXThreshold))).ToArray();
 
@@ -96,7 +102,12 @@ namespace FStudio.MatchEngine.Players.Behaviours {
 
                         var crossAddition = dir.normalized * add * target._PassPower;
 
-                        Player.Cross(target._Position + crossAddition);
+                        if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                            var drivenTarget = target._Position + crossAddition * 0.25f;
+                            Player.Pass(drivenTarget, Mathf.Clamp(speedMod * target._PassPower * 0.95f, 0.78f, 1.14f));
+                        } else {
+                            Player.Cross(target._Position + crossAddition);
+                        }
                     } else {
                         Player.Pass(target._Position, speedMod * target._PassPower);
                     }
@@ -106,6 +117,36 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             }
 
             return false;
+        }
+
+        private bool IsOriginalRuntimeReceiverCandidate(PlayerBase candidate) {
+            if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                return true;
+            }
+
+            if (candidate == null ||
+                candidate == Player ||
+                candidate.IsGK ||
+                candidate.PlayerController == null ||
+                !candidate.PlayerController.IsPhysicsEnabled ||
+                candidate.IsInOffside) {
+                return false;
+            }
+
+            var progressDrop = Player.PlayerFieldProgress - candidate.PlayerFieldProgress;
+            if (Player.PlayerFieldProgress > 0.35f && progressDrop > 0.18f) {
+                return false;
+            }
+
+            if ((candidate.Position.x < 2.5f ||
+                 candidate.Position.x > fieldEndX - 2.5f ||
+                 candidate.Position.z < 2.5f ||
+                 candidate.Position.z > fieldEndY - 2.5f) &&
+                Player.PlayerFieldProgress > 0.45f) {
+                return false;
+            }
+
+            return true;
         }
     }
 }

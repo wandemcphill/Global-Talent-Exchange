@@ -1,5 +1,6 @@
 ﻿
 using System.Linq;
+using FStudio.GTEX.Core;
 using UnityEngine;
 
 namespace FStudio.MatchEngine.Players.Behaviours {
@@ -41,7 +42,9 @@ namespace FStudio.MatchEngine.Players.Behaviours {
 
             if (!hitter) {
                 timer = time + BALL_HIT_DELAYER;
-                ball.Release();
+                if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                    ball.Release();
+                }
 
                 // we will force this behaviour,
                 // this will stop others, and keep this working.
@@ -60,6 +63,9 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                 }
 
                 if (target == null) {
+                    hitter = false;
+                    timer = 0;
+                    ForceBehaviour = false;
                     return false;
                 }
 
@@ -72,8 +78,19 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                     ForceBehaviour = false; // forcing disabled.
 
                     // hold the ball again (we cannot hit the ball without holding)
-                    ball.Hold(Player);
-                    Player.Cross(target.Position + dir * DEGAGE_SPEED_MOD);
+                    if (ball.HolderPlayer != Player) {
+                        ball.Hold(Player);
+                    }
+                    Player.PassingTarget = target;
+                    var leadDistance = GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() ? 0.2f : 0.75f;
+                    var speedMod = GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() ? 0.82f : 0.95f;
+                    if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                        Debug.Log(
+                            "[GTEX AI] Keeper distribution -> actor=" + Player +
+                            " target=" + target +
+                            " distance=" + Vector3.Distance(Player.Position, target.Position).ToString("0.0"));
+                    }
+                    Player.Pass(target.Position + dir * leadDistance, speedMod);
                     //
 
                     target = null;

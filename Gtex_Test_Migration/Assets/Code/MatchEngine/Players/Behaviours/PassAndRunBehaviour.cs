@@ -25,6 +25,11 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         }
 
         public override bool Behave(bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                Reset();
+                return false;
+            }
+
             if (!isAlreadyActive) { // this is a manual behaviour to trigger.
                 Reset();
                 return false;

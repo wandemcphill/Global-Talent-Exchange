@@ -15,6 +15,10 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         private const float LEAK_CLOSER_0_1 = 0.5f;
 
         public override bool Behave(bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
             Player.CurrentAct = Acts.DefensiveTacticalPositioningBehaviour;
 
             var ballPosition = ball.transform.position;
@@ -62,6 +66,12 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                     tacticalPosition.x = Mathf.Lerp(tacticalPosition.x, lineHolder.Position.x, 1);
                 }
             }
+
+            tacticalPosition = OriginalRuntimeRoleAwareness.DampShapeMovement(
+                Player,
+                Player.Position,
+                tacticalPosition,
+                ball.HolderPlayer?.GameTeam == Player.GameTeam);
 
             var movementMode = RequiredMovementType(Player.Position, tacticalPosition);
 

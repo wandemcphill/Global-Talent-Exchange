@@ -1,6 +1,7 @@
-﻿using FStudio.MatchEngine.Enums;
-using UnityEngine;
 using System.Linq;
+using FStudio.GTEX.Core;
+using FStudio.MatchEngine.Enums;
+using UnityEngine;
 
 namespace FStudio.MatchEngine.Players.Behaviours {
     public class CornerBehaviour : BaseBehaviour {
@@ -13,6 +14,7 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         private const float DIRECTION_MULTIPLIER = 7;
 
         private Vector3 target;
+        private PlayerBase targetPlayer;
 
         /// <summary>
         /// Player will try to find a target, closer to goal net and not marked.
@@ -32,12 +34,17 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                 penaltyPoint -= Player.GoalDirection * TO_PENALTY_BOX;
 
                 target = penaltyPoint + new Vector3(
-                    Random.Range(-cornerBox.x, cornerBox.x), 
+                    Random.Range(-cornerBox.x, cornerBox.x),
                     0,
                     Random.Range(-cornerBox.y, cornerBox.y)
                     );
 
                 var closest = teammates.OrderBy(x => Vector3.Distance(x.Position, target)).FirstOrDefault ();
+                if (closest == null) {
+                    return false;
+                }
+
+                targetPlayer = closest;
 
                 target = Vector3.Lerp(target, closest.Position, TO_TARGET) + DIRECTION_MULTIPLIER * (closest.Position - Player.Position).normalized;
 
@@ -45,17 +52,31 @@ namespace FStudio.MatchEngine.Players.Behaviours {
 
                 isAlreadyActive = true;
             }
-            
+
             if (isAlreadyActive) {
                 Player.CurrentAct = Acts.ThrowIn;
 
-                Player.Cross(target);
+                if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                    if (targetPlayer != null) {
+                        Player.PassingTarget = targetPlayer;
+                        target = targetPlayer.Position;
+                    }
+
+                    Player.Pass(target, 0.92f);
+                } else {
+                    Player.Cross(target);
+                }
 
                 // teammates chase the ball directly.
-                foreach (var e in Player.GameTeam.GamePlayers) {
-                    if (e.PlayerFieldProgress > 0.8f) {
-                        e.ActivateBehaviour("BallChasingWithoutCondition");
-                    }
+                var chasers = GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()
+                    ? Player.GameTeam.GamePlayers
+                        .Where(e => e == targetPlayer || (!e.IsGK && e.PlayerFieldProgress > 0.72f))
+                        .OrderBy(e => e == targetPlayer ? 0f : Vector3.Distance(e.Position, target))
+                        .Take(3)
+                    : Player.GameTeam.GamePlayers.Where(e => e.PlayerFieldProgress > 0.8f);
+
+                foreach (var e in chasers) {
+                    e.ActivateBehaviour("BallChasingWithoutCondition");
                 }
             }
 

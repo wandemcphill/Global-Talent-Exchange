@@ -1,5 +1,7 @@
 ﻿using FStudio.MatchEngine.Enums;
 using UnityEngine;
+using FStudio.GTEX.Core;
+using FStudio.GTEX.VisualBridge;
 using FStudio.Data;
 using System.Linq;
 using FStudio.MatchEngine.Players.PlayerController;
@@ -21,6 +23,10 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         });
 
         public override bool Behave(bool isAlreadyActive) {
+            if (GtexVisualAuthority.ShouldSuppressNonControlledAggression(Player)) {
+                return false;
+            }
+
             if (ball.HolderPlayer == null || 
                 ball.HolderPlayer.GameTeam == Player.GameTeam
                 ) {
@@ -32,6 +38,11 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             }
 
             if (ball.transform.position.y > MAX_BALL_HEIGHT) {
+                return false;
+            }
+
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                !OriginalRuntimeRoleAwareness.CanPress(Player, ball.HolderPlayer, teammates)) {
                 return false;
             }
 

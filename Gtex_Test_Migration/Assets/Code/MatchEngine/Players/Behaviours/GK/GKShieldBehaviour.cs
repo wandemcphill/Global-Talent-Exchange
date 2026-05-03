@@ -101,7 +101,9 @@ namespace FStudio.MatchEngine.Players.Behaviours {
 
             if (ball.Velocity.magnitude < MIN_VEL_TO_CHASE_INSTEAD_OF_KEEP) {
                 // pass. chase the ball.
-                bool isChasing = base.Behave(false);
+                bool isChasing =
+                    OriginalRuntimeRoleAwareness.CanGoalkeeperLeaveBoxForBall(Player, ball.transform.position, goalNet, fieldEndX, fieldEndY) &&
+                    base.Behave(false);
 
                 if (isChasing) {
                     return true;// chasing activated.
@@ -126,6 +128,7 @@ namespace FStudio.MatchEngine.Players.Behaviours {
 
             if (ballS2F.TryIntersect(goalLine2F, out var result, out var _, out var _)) {
                 goToPosition = result;
+                goToPosition = OriginalRuntimeRoleAwareness.ClampGoalkeeperPoint(goToPosition, goalNet, fieldEndX, fieldEndY, 6f);
                 // line intersected, we should catch the ball. (probably shooted)
                             // check dot product.
 
@@ -177,7 +180,8 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                 }
             } else {
                 // not shooted.
-                if (AmITheChaser().result != BallChasingResult.None) {
+                if (OriginalRuntimeRoleAwareness.CanGoalkeeperLeaveBoxForBall(Player, ball.transform.position, goalNet, fieldEndX, fieldEndY) &&
+                    AmITheChaser().result != BallChasingResult.None) {
                     base.Behave(isAlreadyActive); // base activation here. need to chase the ball.
                     return true;
                 } else {
@@ -195,6 +199,7 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             var distanceToBall = Vector3.Distance(ballPositionStart, Player.Position);
 
             goToPosition += Player.PositioningMistake * distanceToBall * POS_MISTAKE_BY_BALL_DIST * GK_POS_MISTAKE_MOD;
+            goToPosition = OriginalRuntimeRoleAwareness.ClampGoalkeeperPoint(goToPosition, goalNet, fieldEndX, fieldEndY);
 
             goToPosition.x = Mathf.Clamp(goToPosition.x, 0, fieldEndX);
 

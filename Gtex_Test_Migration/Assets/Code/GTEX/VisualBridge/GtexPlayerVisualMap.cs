@@ -20,12 +20,18 @@ namespace FStudio.GTEX.VisualBridge
         public void Clear()
         {
             playersByGtexId.Clear();
+            GtexVisualAuthority.ClearPlayerBindings();
         }
 
         public void RegisterPlayer(string gtexPlayerId, GtexOriginalPlayerVisualProxy proxy)
         {
-            var key = NormalizeKey(gtexPlayerId);
+            var key = NormalizePlayerUid(gtexPlayerId);
             if (string.IsNullOrWhiteSpace(key) || proxy == null)
+            {
+                return;
+            }
+
+            if (playersByGtexId.TryGetValue(key, out var existing) && existing != null && existing != proxy)
             {
                 return;
             }
@@ -48,7 +54,40 @@ namespace FStudio.GTEX.VisualBridge
 
         public bool TryGetProxy(string gtexPlayerId, out GtexOriginalPlayerVisualProxy proxy)
         {
-            return playersByGtexId.TryGetValue(NormalizeKey(gtexPlayerId), out proxy) && proxy != null;
+            return playersByGtexId.TryGetValue(NormalizePlayerUid(gtexPlayerId), out proxy) && proxy != null;
+        }
+
+        public bool TryGetCommandProxy(string playerUid, out GtexOriginalPlayerVisualProxy proxy, out string reason)
+        {
+            proxy = null;
+            var normalized = NormalizePlayerUid(playerUid);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                reason = "PlayerUid missing";
+                return false;
+            }
+
+            if (IsNumericOnlyPlayerUid(normalized))
+            {
+                reason = "numeric-only ids are not authoritative command ids";
+                return false;
+            }
+
+            if (!IsSideQualifiedPlayerUid(normalized))
+            {
+                reason = "side-qualified PlayerUid required";
+                return false;
+            }
+
+            if (!playersByGtexId.TryGetValue(normalized, out proxy) || proxy == null || proxy.Player == null)
+            {
+                reason = "unknown PlayerUid";
+                proxy = null;
+                return false;
+            }
+
+            reason = null;
+            return true;
         }
 
         public GtexOriginalPlayerVisualProxy ResolveProxy(string gtexPlayerId)
@@ -76,7 +115,8 @@ namespace FStudio.GTEX.VisualBridge
 
         public GtexOriginalPlayerVisualProxy FindGoalkeeper(string teamId)
         {
-            var normalizedTeam = NormalizeKey(teamId);
+            var normalizedTeam = NormalizePlayerUid(teamId);
+            var manager = MatchManager.Current;
             foreach (var entry in playersByGtexId.Values)
             {
                 if (entry == null || entry.Player == null || !entry.Player.IsGK)
@@ -90,10 +130,45 @@ namespace FStudio.GTEX.VisualBridge
                     continue;
                 }
 
+                if (string.Equals(normalizedTeam, "home", StringComparison.OrdinalIgnoreCase) &&
+                    manager != null &&
+                    team == manager.GameTeam1)
+                {
+                    return entry;
+                }
+
+                if (string.Equals(normalizedTeam, "away", StringComparison.OrdinalIgnoreCase) &&
+                    manager != null &&
+                    team == manager.GameTeam2)
+                {
+                    return entry;
+                }
+
                 if (string.IsNullOrWhiteSpace(normalizedTeam) ||
-                    NormalizeKey(team.TeamId.ToString()) == normalizedTeam ||
+                    NormalizePlayerUid(team.TeamId.ToString()) == normalizedTeam ||
                     (team.TeamId == 0 && normalizedTeam == "home") ||
                     (team.TeamId == 1 && normalizedTeam == "away"))
+                {
+                    return entry;
+                }
+            }
+
+            return null;
+        }
+
+        public GtexOriginalPlayerVisualProxy FindGoalkeeper(GameTeam targetTeam)
+        {
+            if (targetTeam == null)
+            {
+                return FindGoalkeeper(string.Empty);
+            }
+
+            foreach (var entry in playersByGtexId.Values)
+            {
+                if (entry != null &&
+                    entry.Player != null &&
+                    entry.Player.IsGK &&
+                    entry.Player.GameTeam == targetTeam)
                 {
                     return entry;
                 }
@@ -125,6 +200,7 @@ namespace FStudio.GTEX.VisualBridge
 
                 var primaryId = ResolvePrimaryId(player, teamSide, index, state);
                 proxy.Initialize(primaryId, player);
+                RegisterPlayer(primaryId, proxy);
 
                 foreach (var alias in ResolveAliases(player, team, teamSide, index, state))
                 {
@@ -136,17 +212,30 @@ namespace FStudio.GTEX.VisualBridge
         private static string ResolvePrimaryId(PlayerBase player, string teamSide, int index, MatchResponse state)
         {
             var statePlayer = ResolveStatePlayer(player, teamSide, state);
-            if (statePlayer != null && !string.IsNullOrWhiteSpace(statePlayer.playerId))
+            if (statePlayer != null)
             {
-                return statePlayer.playerId;
+                if (IsSideQualifiedPlayerUid(statePlayer.playerId))
+                {
+                    return NormalizePlayerUid(statePlayer.playerId);
+                }
+
+                if (statePlayer.shirtNumber > 0)
+                {
+                    return ComposePlayerUid(teamSide, statePlayer.shirtNumber);
+                }
+            }
+
+            if (player.MatchPlayer != null && player.MatchPlayer.Number > 0)
+            {
+                return ComposePlayerUid(teamSide, player.MatchPlayer.Number);
             }
 
             if (player.MatchPlayer != null && player.MatchPlayer.Player != null && player.MatchPlayer.Player.id != 0)
             {
-                return player.MatchPlayer.Player.id.ToString();
+                return ComposePlayerUid(teamSide, player.MatchPlayer.Player.id);
             }
 
-            return teamSide + "_" + index.ToString();
+            return ComposePlayerUid(teamSide, index + 1);
         }
 
         private static IEnumerable<string> ResolveAliases(PlayerBase player, GameTeam team, string teamSide, int index, MatchResponse state)
@@ -202,9 +291,54 @@ namespace FStudio.GTEX.VisualBridge
                   string.Equals(candidate.playerId, playerId, StringComparison.OrdinalIgnoreCase))));
         }
 
-        private static string NormalizeKey(string value)
+        public static string NormalizePlayerUid(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
+        }
+
+        public static bool IsSideQualifiedPlayerUid(string value)
+        {
+            var normalized = NormalizePlayerUid(value);
+            return normalized.StartsWith("home-", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.StartsWith("away-", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsNumericOnlyPlayerUid(string value)
+        {
+            var normalized = NormalizePlayerUid(value);
+            if (normalized.Length == 0)
+            {
+                return false;
+            }
+
+            return normalized.All(char.IsDigit);
+        }
+
+        public static string ResolveTeamSide(string playerUid)
+        {
+            var normalized = NormalizePlayerUid(playerUid);
+            if (normalized.StartsWith("home-", StringComparison.OrdinalIgnoreCase))
+            {
+                return "home";
+            }
+
+            if (normalized.StartsWith("away-", StringComparison.OrdinalIgnoreCase))
+            {
+                return "away";
+            }
+
+            return string.Empty;
+        }
+
+        private static string ComposePlayerUid(string teamSide, int slotOrShirt)
+        {
+            var side = NormalizePlayerUid(teamSide);
+            if (side != "home" && side != "away")
+            {
+                side = "home";
+            }
+
+            return side + "-" + Mathf.Max(1, slotOrShirt);
         }
     }
 }

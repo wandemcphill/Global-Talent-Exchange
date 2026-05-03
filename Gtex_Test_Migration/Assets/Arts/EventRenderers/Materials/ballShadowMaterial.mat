@@ -119,7 +119,7 @@ Material:
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _PlayerShadowPower: 1
-    - _Power: 0.4929995
+    - _Power: 0.48019585
     - _QueueControl: 0
     - _QueueOffset: 0
     - _ReceiveShadows: 1

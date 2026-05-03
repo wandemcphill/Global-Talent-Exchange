@@ -1,5 +1,6 @@
 ﻿
 using FStudio.MatchEngine.Enums;
+using FStudio.GTEX.Core;
 using FStudio.MatchEngine.FieldPositions;
 using FStudio.MatchEngine.Players.PlayerController;
 using System.Linq;
@@ -33,6 +34,10 @@ namespace FStudio.MatchEngine.Players.Behaviours {
        
 
         public override bool Behave (bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
             if (!ShouldIAttackWhenNotHoldingTheBall ()) {
                 return false;
             }
@@ -42,6 +47,11 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             }
 
             if (Player.GameTeam.BallProgress < MIN_BALL_PROGRESS) {
+                return false;
+            }
+
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                !OriginalRuntimeRoleAwareness.CanJoinAttack(Player, ball, teammates)) {
                 return false;
             }
 

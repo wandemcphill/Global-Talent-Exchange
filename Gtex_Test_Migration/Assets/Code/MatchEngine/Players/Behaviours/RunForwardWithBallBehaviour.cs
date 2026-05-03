@@ -3,6 +3,7 @@ using FStudio.MatchEngine.Enums;
 using System.Linq;
 using UnityEngine;
 using FStudio.MatchEngine.Players.PlayerController;
+using FStudio.GTEX.Core;
 
 namespace FStudio.MatchEngine.Players.Behaviours {
     public class RunForwardWithBallBehaviour : BaseBehaviour {
@@ -101,7 +102,15 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         }
 
         public override bool Behave(bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
             if (ball.HolderPlayer != Player) {
+                return false;
+            }
+
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() && Player.IsGK) {
                 return false;
             }
 
@@ -140,11 +149,18 @@ namespace FStudio.MatchEngine.Players.Behaviours {
 
             var targetPosition = Player.Position + runningDir * 5;
 
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                ShouldYieldNearBoundary(playerPosition, targetPosition)) {
+                return false;
+            }
+
             var avoided = targetPosition;
             Player.AvoidMarkers(opponents, ref avoided);
 
             if (Player.BoundCheck (0, avoided, new Vector2 (fieldEndX, fieldEndY))) {
                 targetPosition = avoided; // approve.
+            } else if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                return false;
             }
 
             Player.CurrentAct = Acts.RunningForward;
@@ -161,6 +177,24 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             }
 
             return true;
+        }
+
+        private bool ShouldYieldNearBoundary(Vector3 playerPosition, Vector3 targetPosition) {
+            const float boundaryDecisionDistance = 4.25f;
+            const float finalThirdProgress = 0.55f;
+
+            if (!IsPositionInField(in targetPosition, -0.25f)) {
+                return true;
+            }
+
+            var nearTouchline =
+                playerPosition.z <= boundaryDecisionDistance ||
+                playerPosition.z >= fieldEndY - boundaryDecisionDistance;
+            var nearGoalLine =
+                playerPosition.x <= boundaryDecisionDistance ||
+                playerPosition.x >= fieldEndX - boundaryDecisionDistance;
+
+            return (nearTouchline || nearGoalLine) && Player.PlayerFieldProgress >= finalThirdProgress;
         }
     }
 }

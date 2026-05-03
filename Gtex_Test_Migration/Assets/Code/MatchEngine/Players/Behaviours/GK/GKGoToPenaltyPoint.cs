@@ -40,7 +40,14 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                     new Vector3(
                         0,
                         0,
-                        Random.Range(PENALTY_BOX_RANDOM_MIN, PENALTY_BOX_RANDOM_MAX));
+                        Random.Range(-PENALTY_BOX_RANDOM_MIN, PENALTY_BOX_RANDOM_MAX));
+
+                targetPoint = OriginalRuntimeRoleAwareness.ClampGoalkeeperPoint(
+                    targetPoint.Value,
+                    goalNet,
+                    fieldEndX,
+                    fieldEndY,
+                    12f);
 
                 var randomValue = Random.Range(0, 100);
                 if (randomValue < 50) {

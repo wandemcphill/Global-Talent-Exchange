@@ -19,13 +19,16 @@ namespace FStudio.GTEX.VisualBridge
     public sealed class GtexOriginalSimAdapter : MonoBehaviour
     {
         private static readonly string[] PreferredCameraModes = { "Broadcast", "Gameplay", "Match", "Default", "Stadium" };
+        private static readonly string[] OriginalCameraNameHints = { "matchcamera", "match camera", "stadium", "broadcast" };
 
         [SerializeField] private Transform originalMatchRoot;
         [SerializeField] private Camera originalCamera;
         [SerializeField] private GtexPlayerVisualMap playerMap;
         [SerializeField] private GtexOriginalPitchVisualFallback pitchVisualFallback;
+        [SerializeField] private GtexCinemachineFootballCameraDirector cinemachineFootballCameraDirector;
         [SerializeField] private GtexOriginalActionCameraDriver actionCameraDriver;
         [SerializeField] private GtexOriginalFallbackFollowCamera fallbackFollowCamera;
+        [SerializeField] private bool preferCinemachineFootballCamera = true;
         [SerializeField] private bool createFallbackFollowCameraIfNeeded = true;
 
         private bool pitchReady;
@@ -39,6 +42,10 @@ namespace FStudio.GTEX.VisualBridge
         private string lastActionCameraBindingKey = string.Empty;
         private string currentBallOwnerId = string.Empty;
         private string currentCameraPassTargetId = string.Empty;
+        private Vector3 currentCameraWorldPassTarget;
+        private bool hasCurrentCameraWorldPassTarget;
+        private Vector3 lastResolvedShotTarget;
+        private bool hasLastResolvedShotTarget;
         private bool? lastCameraBallBoundState;
 
         public GtexPlayerVisualMap PlayerMap
@@ -95,6 +102,15 @@ namespace FStudio.GTEX.VisualBridge
 
         public string ActiveCameraMode => activeCameraMode;
 
+        public bool IsMatchActivelyPlaying
+        {
+            get
+            {
+                var manager = MatchManager.Current;
+                return manager != null && manager.MatchFlags == MatchStatus.Playing;
+            }
+        }
+
         private void LateUpdate()
         {
             if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime())
@@ -102,6 +118,7 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
+            SyncCurrentBallOwnerFromBall();
             MaintainGameplayCameraTarget();
         }
 
@@ -152,29 +169,29 @@ namespace FStudio.GTEX.VisualBridge
 
         public void GiveBallTo(string playerId)
         {
-            if (!PlayerMap.TryGetProxy(playerId, out var player))
+            if (!TryResolveCommandProxy(playerId, "actor", GtexVisualCommandType.AssignPossession, out var player))
             {
                 return;
             }
 
             PrepareForCommandAction();
             player.GiveBall();
-            UpdateCameraBallOwner(playerId);
+            UpdateCameraBallOwner(player.GtexPlayerId);
             ClearCameraPassTarget();
             FocusToBall();
-            Debug.Log("[GTEX VisualBridge] Possession -> " + playerId);
+            Debug.Log("[GTEX VisualBridge] Possession -> " + player.GtexPlayerId);
         }
 
         public void ExecuteCarry(string actorId, Vector3 targetPoint)
         {
-            if (!PlayerMap.TryGetProxy(actorId, out var actor))
+            if (!TryResolveCommandProxy(actorId, "actor", GtexVisualCommandType.CarryBall, out var actor))
             {
                 return;
             }
 
             PrepareForCommandAction();
             actor.DribbleToward(ResolveTarget(actor, targetPoint, 6f));
-            UpdateCameraBallOwner(actorId);
+            UpdateCameraBallOwner(actor.GtexPlayerId);
             ClearCameraPassTarget();
             FocusToBall();
         }
@@ -186,14 +203,13 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            var actor = PlayerMap.ResolveProxy(command.actorPlayerId);
-            if (actor == null)
+            if (!TryResolveCommandProxy(command.actorPlayerId, "actor", command.type, out var actor))
             {
                 return;
             }
 
-            PrepareForCommandAction();
-            actor.MoveToSupportPoint(ClampToPitch(command.targetWorldPosition), command.urgency, command.duration);
+            PrepareForCommandAction(false);
+            actor.MoveToSupportPoint(ClampToPitch(command.targetWorldPosition, 4f), command.urgency, command.duration);
             FocusToBall();
             Debug.Log("[GTEX VisualBridge] SupportRun -> " + command.actorPlayerId + " to " + command.targetWorldPosition);
         }
@@ -205,14 +221,13 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            var defender = PlayerMap.ResolveProxy(command.actorPlayerId);
-            var target = PlayerMap.ResolveProxy(command.targetPlayerId);
-            if (defender == null || target == null)
+            if (!TryResolveCommandProxy(command.actorPlayerId, "actor", command.type, out var defender) ||
+                !TryResolveCommandProxy(command.targetPlayerId, "target", command.type, out var target))
             {
                 return;
             }
 
-            PrepareForCommandAction();
+            PrepareForCommandAction(false);
             defender.MarkTarget(target, command.urgency, command.duration);
             FocusToBall();
             Debug.Log("[GTEX VisualBridge] MarkPlayer -> " + command.actorPlayerId + " marks " + command.targetPlayerId);
@@ -225,14 +240,13 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            var defender = PlayerMap.ResolveProxy(command.actorPlayerId);
-            var carrier = PlayerMap.ResolveProxy(command.targetPlayerId);
-            if (defender == null || carrier == null)
+            if (!TryResolveCommandProxy(command.actorPlayerId, "actor", command.type, out var defender) ||
+                !TryResolveCommandProxy(command.targetPlayerId, "target", command.type, out var carrier))
             {
                 return;
             }
 
-            PrepareForCommandAction();
+            PrepareForCommandAction(false);
             defender.PressTarget(carrier, command.urgency, command.duration);
             FocusToBall();
             Debug.Log("[GTEX VisualBridge] Press -> " + command.actorPlayerId + " presses " + command.targetPlayerId);
@@ -245,15 +259,14 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            var actor = PlayerMap.ResolveProxy(command.actorPlayerId);
-            if (actor == null)
+            if (!TryResolveCommandProxy(command.actorPlayerId, "actor", command.type, out var actor))
             {
                 return;
             }
 
-            PrepareForCommandAction();
+            PrepareForCommandAction(false);
             var targetPoint = command.targetWorldPosition.sqrMagnitude > 0.001f
-                ? ClampToPitch(command.targetWorldPosition)
+                ? ClampToPitch(command.targetWorldPosition, 4f)
                 : actor.Root.position;
             actor.HoldShape(targetPoint, command.duration);
         }
@@ -265,14 +278,13 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            var actor = PlayerMap.ResolveProxy(command.actorPlayerId);
-            if (actor == null)
+            if (!TryResolveCommandProxy(command.actorPlayerId, "actor", command.type, out var actor))
             {
                 return;
             }
 
-            PrepareForCommandAction();
-            actor.CoverSpace(ClampToPitch(command.targetWorldPosition), command.urgency, command.duration);
+            PrepareForCommandAction(false);
+            actor.CoverSpace(ClampToPitch(command.targetWorldPosition, 4f), command.urgency, command.duration);
             FocusToBall();
         }
 
@@ -320,22 +332,43 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            var actor = PlayerMap.ResolveProxy(command.actorPlayerId);
-            var receiver = PlayerMap.ResolveProxy(command.targetPlayerId);
-            if (actor == null)
+            if (!TryResolveCommandProxy(command.actorPlayerId, "actor", command.type, out var actor))
             {
                 Debug.LogWarning("[GTEX VisualBridge] Pass failed: actor=" + command.actorPlayerId + ", target=" + command.targetPlayerId);
                 return;
             }
 
-            PrepareForCommandAction();
-            UpdateCameraBallOwner(command.actorPlayerId);
+            var receiver = command.type == GtexVisualCommandType.ThroughPass &&
+                           string.IsNullOrWhiteSpace(command.targetPlayerId) &&
+                           command.targetWorldPosition.sqrMagnitude > 0.001f
+                ? null
+                : ResolvePassReceiver(actor, command.targetPlayerId);
 
-            var groundTarget = command.targetWorldPosition != Vector3.zero
-                ? ResolveTarget(actor, command.targetWorldPosition, 10f)
-                : receiver != null
-                    ? receiver.Root.position
-                    : ResolveTarget(actor, command.targetWorldPosition, 10f);
+            PrepareForCommandAction();
+            UpdateCameraBallOwner(actor.GtexPlayerId);
+
+            var groundTarget = ResolvePassTarget(actor, receiver, command);
+            if (command.passStyle == GtexVisualPassStyle.Ground &&
+                receiver != null &&
+                IsGroundPassTargetBehindPasser(actor, groundTarget))
+            {
+                Debug.LogWarning(
+                    "[GTEX PASS] rejected actor=" + actor.GtexPlayerId +
+                    " target=" + receiver.GtexPlayerId +
+                    " reason=behind-passer point=" + groundTarget.ToString("F2"));
+                return;
+            }
+
+            if (receiver != null &&
+                (command.passStyle == GtexVisualPassStyle.Ground || command.passStyle == GtexVisualPassStyle.ThroughGround))
+            {
+                var receiveUrgency = command.passStyle == GtexVisualPassStyle.ThroughGround ? 0.72f : 0.32f;
+                var receiveDuration = command.passStyle == GtexVisualPassStyle.ThroughGround ? 1.1f : 0.65f;
+                receiver.PrepareToReceive(
+                    groundTarget,
+                    receiveUrgency,
+                    receiveDuration);
+            }
 
             switch (command.passStyle)
             {
@@ -375,13 +408,21 @@ namespace FStudio.GTEX.VisualBridge
                         receiver.MoveToSupportPoint(groundTarget, 0.8f, 1f);
                     }
 
-                    actor.GroundPassToPoint(groundTarget);
+                    if (receiver != null)
+                    {
+                        actor.GroundPassTo(receiver, groundTarget);
+                    }
+                    else
+                    {
+                        actor.GroundPassToPoint(groundTarget);
+                    }
+
                     break;
                 case GtexVisualPassStyle.Ground:
                 default:
                     if (receiver != null)
                     {
-                        UpdateCameraPassTarget(command.targetPlayerId);
+                        UpdateCameraPassTarget(receiver.GtexPlayerId);
                     }
                     else
                     {
@@ -390,7 +431,7 @@ namespace FStudio.GTEX.VisualBridge
 
                     if (receiver != null)
                     {
-                        actor.GroundPassTo(receiver);
+                        actor.GroundPassTo(receiver, groundTarget);
                     }
                     else
                     {
@@ -411,66 +452,72 @@ namespace FStudio.GTEX.VisualBridge
             Debug.Log(
                 "[GTEX VisualBridge] " + passLabel + " visual -> style=" + command.passStyle +
                 ", actor=" + command.actorPlayerId +
-                ", target=" + command.targetPlayerId);
+                ", target=" + command.targetPlayerId +
+                ", receivePoint=" + groundTarget.ToString("F2"));
         }
 
         public void ExecuteShot(string actorId, Vector3 targetPoint, string outcome)
         {
-            if (!PlayerMap.TryGetProxy(actorId, out var actor))
+            if (!TryResolveCommandProxy(actorId, "actor", GtexVisualCommandType.Shoot, out var actor))
             {
                 return;
             }
 
             PrepareForCommandAction();
-            var shotTarget = ResolveShotTarget(actor, targetPoint);
+            var shotTarget = ResolveSafeShotTarget(actor, targetPoint, outcome);
+            lastResolvedShotTarget = shotTarget;
+            hasLastResolvedShotTarget = true;
             var cameraShotTarget = Vector3.Lerp(actor.Root.position, shotTarget, 0.58f);
             cameraShotTarget.y = actor.Root.position.y;
-            UpdateCameraBallOwner(actorId);
+            UpdateCameraBallOwner(actor.GtexPlayerId);
             UpdateCameraWorldPassTarget(cameraShotTarget, "shot");
             actor.ShootAt(shotTarget, outcome);
             QueuePassTargetClear(null, 0.8f);
             FocusToBall();
-            Debug.Log("[GTEX VisualBridge] Shot -> actor=" + actorId + ", outcome=" + outcome + ", target=" + shotTarget);
+            Debug.Log("[GTEX VisualBridge] Shot -> actor=" + actor.GtexPlayerId + ", outcome=" + outcome + ", target=" + shotTarget);
 
             if (!string.IsNullOrWhiteSpace(outcome) &&
                 outcome.ToLowerInvariant().Contains("save"))
             {
-                var keeper = PlayerMap.FindGoalkeeper(string.Empty);
-                keeper?.KeeperReactToShot(targetPoint);
+                var keeper = ResolveOpposingKeeper(actor);
+                keeper?.KeeperReactToShot(shotTarget);
             }
         }
 
         public void ExecuteKeeperSave(string keeperId, Vector3 shotTarget)
         {
-            if (!PlayerMap.TryGetProxy(keeperId, out var keeper))
+            if (!TryResolveCommandProxy(keeperId, "actor", GtexVisualCommandType.KeeperSave, out var keeper))
             {
-                keeper = PlayerMap.FindGoalkeeper(string.Empty);
+                return;
             }
 
             PrepareForCommandAction();
-            UpdateCameraBallOwner(keeperId);
-            ClearCameraPassTarget();
-            keeper?.KeeperReactToShot(shotTarget);
+            var resolvedShotTarget = hasLastResolvedShotTarget ? lastResolvedShotTarget : shotTarget;
+            UpdateCameraBallOwner(keeper.GtexPlayerId);
+            UpdateCameraWorldPassTarget(resolvedShotTarget, "keeper-save");
+            keeper?.KeeperReactToShot(resolvedShotTarget);
             FocusToBall();
         }
 
         public void ExecuteKeeperClaim(string keeperId)
         {
-            if (!PlayerMap.TryGetProxy(keeperId, out var keeper))
+            if (!TryResolveCommandProxy(keeperId, "actor", GtexVisualCommandType.KeeperClaim, out var keeper))
             {
-                keeper = PlayerMap.FindGoalkeeper(string.Empty);
+                return;
             }
 
             PrepareForCommandAction();
-            UpdateCameraBallOwner(keeperId);
+            UpdateCameraBallOwner(keeper.GtexPlayerId);
             ClearCameraPassTarget();
             keeper?.KeeperClaim();
+            hasLastResolvedShotTarget = false;
             FocusToBall();
         }
 
         public void PlayGoal(string teamId, string scorerId)
         {
-            if (PlayerMap.TryGetProxy(scorerId, out var scorer))
+            if (!string.IsNullOrWhiteSpace(scorerId) &&
+                TryResolveCommandProxy(scorerId, "actor", GtexVisualCommandType.Goal, out var scorer))
             {
                 scorer.PlayCelebration();
             }
@@ -487,6 +534,12 @@ namespace FStudio.GTEX.VisualBridge
             MatchManager.SetGlobalCommandDrivenVisualHold(true);
             manager.SetExternalPlayback(false);
             manager.MatchFlags = MatchStatus.WaitingForKickOff;
+
+            if (!CanPrepareKickoffState())
+            {
+                RefreshRuntimeVisualEssentials();
+                return;
+            }
 
             if (Ball.Current != null)
             {
@@ -554,7 +607,15 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             MatchManager.SetGlobalCommandDrivenVisualHold(true);
-            ResetKickoff();
+            if (CanPrepareKickoffState())
+            {
+                ResetKickoff();
+            }
+            else
+            {
+                RefreshRuntimeVisualEssentials();
+            }
+
             MatchManager.Current.MatchFlags = MatchStatus.WaitingForKickOff;
         }
 
@@ -609,6 +670,21 @@ namespace FStudio.GTEX.VisualBridge
             reason = null;
             IsRuntimeReady = true;
             return true;
+        }
+
+        private bool CanPrepareKickoffState()
+        {
+            var manager = MatchManager.Current;
+            if (manager == null ||
+                manager.GameTeam1 == null ||
+                manager.GameTeam2 == null ||
+                Ball.Current == null)
+            {
+                return false;
+            }
+
+            var counts = ResolvePlayerCounts();
+            return counts.total >= 22 && IsBallReady;
         }
 
         public (int home, int away, int total) ResolvePlayerCounts()
@@ -689,6 +765,14 @@ namespace FStudio.GTEX.VisualBridge
             return proxy.Root.forward;
         }
 
+        public float GetPlayerFieldProgress(string playerId)
+        {
+            var proxy = PlayerMap.ResolveProxy(playerId);
+            return proxy != null && proxy.Player != null
+                ? proxy.Player.PlayerFieldProgress
+                : 0f;
+        }
+
         public Vector3 GetBallPosition()
         {
             if (Ball.Current != null)
@@ -728,6 +812,186 @@ namespace FStudio.GTEX.VisualBridge
                 .Take(maxCount)
                 .Select(proxy => proxy.GtexPlayerId)
                 .ToList();
+        }
+
+        public bool IsPlayerHoldingBall(string playerId)
+        {
+            var proxy = PlayerMap.ResolveProxy(playerId);
+            return proxy != null && proxy.Player != null && Ball.Current != null && Ball.Current.HolderPlayer == proxy.Player;
+        }
+
+        public bool IsGoalkeeper(string playerId)
+        {
+            var proxy = PlayerMap.ResolveProxy(playerId);
+            return proxy != null && proxy.IsGoalkeeper;
+        }
+
+        public float GetNearestOpponentDistance(int possessionTeam, Vector3 origin)
+        {
+            var nearest = PlayerMap.Proxies
+                .Where(proxy =>
+                    proxy != null &&
+                    proxy.Player != null &&
+                    !proxy.IsGoalkeeper &&
+                    GetPlayerTeam(proxy.GtexPlayerId) != possessionTeam)
+                .Select(proxy => DistanceXZ(proxy.Root.position, origin))
+                .DefaultIfEmpty(-1f)
+                .Min();
+
+            return nearest;
+        }
+
+        public bool IsNearPitchBoundary(Vector3 point, float distance)
+        {
+            var manager = MatchManager.Current;
+            if (manager == null)
+            {
+                return false;
+            }
+
+            var maxX = manager.fieldEndX > 0f ? manager.fieldEndX : manager.SizeOfField.x;
+            var maxZ = manager.fieldEndY > 0f ? manager.fieldEndY : manager.SizeOfField.y;
+            return point.x <= distance ||
+                   point.z <= distance ||
+                   point.x >= maxX - distance ||
+                   point.z >= maxZ - distance;
+        }
+
+        public bool IsWideAttackingCrossPosition(string playerId, Vector3 point)
+        {
+            var manager = MatchManager.Current;
+            if (manager == null || GetPlayerFieldProgress(playerId) < 0.58f)
+            {
+                return false;
+            }
+
+            var maxZ = manager.fieldEndY > 0f ? manager.fieldEndY : manager.SizeOfField.y;
+            return point.z <= 12f || point.z >= maxZ - 12f;
+        }
+
+        public string FindBestIntentPassTarget(int possessionTeam, string ballOwnerId, Vector3 attackingGoal)
+        {
+            var owner = PlayerMap.ResolveProxy(ballOwnerId);
+            if (owner == null || owner.Player == null)
+            {
+                return string.Empty;
+            }
+
+            var ownerPosition = owner.Root.position;
+            var toGoal = attackingGoal - ownerPosition;
+            toGoal.y = 0f;
+            if (toGoal.sqrMagnitude <= 0.01f)
+            {
+                toGoal = GetPlayerForward(ballOwnerId);
+                toGoal.y = 0f;
+            }
+
+            if (toGoal.sqrMagnitude <= 0.01f)
+            {
+                toGoal = Vector3.right;
+            }
+
+            toGoal.Normalize();
+            var ownerProgress = GetPlayerFieldProgress(ballOwnerId);
+            var ownerIsGoalkeeper = owner.IsGoalkeeper;
+
+            return PlayerMap.Proxies
+                .Where(proxy =>
+                    proxy != null &&
+                    proxy != owner &&
+                    proxy.Player != null &&
+                    !proxy.IsGoalkeeper &&
+                    GetPlayerTeam(proxy.GtexPlayerId) == possessionTeam)
+                .Select(proxy => new
+                {
+                    proxy,
+                    score = ResolveIntentPassScore(proxy, ownerPosition, toGoal, ownerProgress, ownerIsGoalkeeper)
+                })
+                .OrderBy(item => item.score)
+                .Select(item => item.proxy.GtexPlayerId)
+                .FirstOrDefault() ?? string.Empty;
+        }
+
+        public string FindBestIntentCrossTarget(int possessionTeam, string ballOwnerId, Vector3 attackingGoal)
+        {
+            var owner = PlayerMap.ResolveProxy(ballOwnerId);
+            var manager = MatchManager.Current;
+            if (owner == null || owner.Player == null || manager == null)
+            {
+                return string.Empty;
+            }
+
+            var centerZ = (manager.fieldEndY > 0f ? manager.fieldEndY : manager.SizeOfField.y) * 0.5f;
+            var ownerProgress = GetPlayerFieldProgress(ballOwnerId);
+
+            return PlayerMap.Proxies
+                .Where(proxy =>
+                    proxy != null &&
+                    proxy != owner &&
+                    proxy.Player != null &&
+                    !proxy.IsGoalkeeper &&
+                    GetPlayerTeam(proxy.GtexPlayerId) == possessionTeam &&
+                    GetPlayerFieldProgress(proxy.GtexPlayerId) >= ownerProgress - 0.08f)
+                .OrderBy(proxy =>
+                {
+                    var distanceToGoal = DistanceXZ(proxy.Root.position, attackingGoal);
+                    var centrality = Mathf.Abs(proxy.Root.position.z - centerZ);
+                    var distanceFromCrosser = DistanceXZ(proxy.Root.position, owner.Root.position);
+                    var progress = GetPlayerFieldProgress(proxy.GtexPlayerId);
+                    return distanceToGoal * 0.48f +
+                           centrality * 0.22f +
+                           distanceFromCrosser * 0.05f -
+                           progress * 8f;
+                })
+                .Select(proxy => proxy.GtexPlayerId)
+                .FirstOrDefault() ?? string.Empty;
+        }
+
+        private float ResolveIntentPassScore(
+            GtexOriginalPlayerVisualProxy candidate,
+            Vector3 ownerPosition,
+            Vector3 toGoal,
+            float ownerProgress,
+            bool ownerIsGoalkeeper)
+        {
+            var offset = candidate.Root.position - ownerPosition;
+            offset.y = 0f;
+
+            var distance = offset.magnitude;
+            if (distance < 3.5f)
+            {
+                return 1000f + (3.5f - distance) * 20f;
+            }
+
+            var forwardScore = distance > 0.01f ? Vector3.Dot(toGoal, offset / distance) : 0f;
+            var receiverProgress = GetPlayerFieldProgress(candidate.GtexPlayerId);
+            var progressGain = receiverProgress - ownerProgress;
+            var boundaryPenalty = ResolveBoundaryPenalty(candidate.Root.position, 6f) * 4.5f;
+
+            if (ownerIsGoalkeeper)
+            {
+                var shortDistributionScore = Mathf.Abs(distance - 14f) * 0.72f;
+                var tooShortPenalty = distance < 7f ? (7f - distance) * 3f : 0f;
+                var keeperTooLongPenalty = distance > 22f ? (distance - 22f) * 4.5f : 0f;
+
+                return shortDistributionScore +
+                       tooShortPenalty +
+                       keeperTooLongPenalty +
+                       boundaryPenalty -
+                       forwardScore * 1.2f -
+                       Mathf.Max(0f, progressGain) * 2.2f;
+            }
+
+            var distanceScore = Mathf.Abs(distance - 13f) * 0.42f;
+            var tooLongPenalty = distance > 24f ? (distance - 24f) * 2.4f : 0f;
+            var backwardPenalty = progressGain < -0.08f ? Mathf.Abs(progressGain) * 9f : 0f;
+
+            return distanceScore +
+                   tooLongPenalty +
+                   boundaryPenalty +
+                   backwardPenalty -
+                   forwardScore * 3.8f -
+                   Mathf.Max(0f, progressGain) * 7f;
         }
 
         public string FindBestMarkTarget(string defenderId, List<string> attackers)
@@ -818,7 +1082,7 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             point.y = support.Root.position.y;
-            return ClampToPitch(point);
+            return ClampToPitch(point, 4f);
         }
 
         public bool HasShootingLane(string shooterId, Vector3 goalTarget)
@@ -841,7 +1105,7 @@ namespace FStudio.GTEX.VisualBridge
             return !IsOpponentBlockingShotLine(shooterId, start, end, 2.2f);
         }
 
-        public Vector3 ClampToPitch(Vector3 point)
+        public Vector3 ClampToPitch(Vector3 point, float margin = 0.5f)
         {
             var manager = MatchManager.Current;
             if (manager == null)
@@ -851,9 +1115,24 @@ namespace FStudio.GTEX.VisualBridge
 
             var maxX = manager.fieldEndX > 0f ? manager.fieldEndX : manager.SizeOfField.x;
             var maxZ = manager.fieldEndY > 0f ? manager.fieldEndY : manager.SizeOfField.y;
-            point.x = Mathf.Clamp(point.x, 0.5f, Mathf.Max(0.5f, maxX - 0.5f));
-            point.z = Mathf.Clamp(point.z, 0.5f, Mathf.Max(0.5f, maxZ - 0.5f));
+            var safeMargin = Mathf.Clamp(margin, 0.5f, Mathf.Min(maxX, maxZ) * 0.25f);
+            point.x = Mathf.Clamp(point.x, safeMargin, Mathf.Max(safeMargin, maxX - safeMargin));
+            point.z = Mathf.Clamp(point.z, safeMargin, Mathf.Max(safeMargin, maxZ - safeMargin));
             return point;
+        }
+
+        private static float ResolveBoundaryPenalty(Vector3 point, float safeMargin)
+        {
+            var manager = MatchManager.Current;
+            if (manager == null)
+            {
+                return 0f;
+            }
+
+            var maxX = manager.fieldEndX > 0f ? manager.fieldEndX : manager.SizeOfField.x;
+            var maxZ = manager.fieldEndY > 0f ? manager.fieldEndY : manager.SizeOfField.y;
+            var edgeDistance = Mathf.Min(point.x, point.z, maxX - point.x, maxZ - point.z);
+            return Mathf.Max(0f, safeMargin - edgeDistance);
         }
 
         private void EnsureHelpers()
@@ -864,6 +1143,15 @@ namespace FStudio.GTEX.VisualBridge
                 if (pitchVisualFallback == null)
                 {
                     pitchVisualFallback = gameObject.AddComponent<GtexOriginalPitchVisualFallback>();
+                }
+            }
+
+            if (cinemachineFootballCameraDirector == null)
+            {
+                cinemachineFootballCameraDirector = GetComponent<GtexCinemachineFootballCameraDirector>();
+                if (cinemachineFootballCameraDirector == null)
+                {
+                    cinemachineFootballCameraDirector = gameObject.AddComponent<GtexCinemachineFootballCameraDirector>();
                 }
             }
         }
@@ -953,7 +1241,7 @@ namespace FStudio.GTEX.VisualBridge
 
         private void EnsureActionCameraFollow()
         {
-            var camera = ResolveActiveCamera();
+            var camera = ResolveOriginalMatchCamera() ?? ResolveActiveCamera();
             if (camera == null)
             {
                 camera = FindFirstObjectByType<Camera>();
@@ -966,6 +1254,78 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             EnsureSingleGameplayCamera(camera);
+            originalCamera = camera;
+            DisableFallbackFollowCamera();
+            usingFallbackCamera = false;
+
+            var ballTransform = ResolveOriginalBallTransform();
+            var playerTransforms = ResolveAllPlayerTransforms();
+            var goalkeeperTransforms = ResolveGoalkeeperTransforms();
+
+            if (preferCinemachineFootballCamera &&
+                TryEnableCinemachineFootballCamera(camera, ballTransform, playerTransforms, goalkeeperTransforms))
+            {
+                UpdateActionCameraBindingLog(
+                    camera,
+                    ballTransform,
+                    playerTransforms.Count,
+                    cinemachineFootballCameraDirector != null ? cinemachineFootballCameraDirector.ModeName : "CinemachineFootball");
+                return;
+            }
+
+            EnsureLegacyActionCameraFollow(camera, ballTransform, playerTransforms, goalkeeperTransforms);
+        }
+
+        private bool TryEnableCinemachineFootballCamera(
+            Camera camera,
+            Transform ballTransform,
+            List<Transform> playerTransforms,
+            List<Transform> goalkeeperTransforms)
+        {
+            if (cinemachineFootballCameraDirector == null)
+            {
+                return false;
+            }
+
+            cinemachineFootballCameraDirector.Bind(
+                camera,
+                ballTransform,
+                playerTransforms,
+                ResolveOriginalBallTransform,
+                ResolveCurrentAttackingGoal,
+                goalkeeperTransforms);
+            cinemachineFootballCameraDirector.SetCameraActive(true);
+
+            SyncPrimaryActionCameraTargets();
+
+            if (!cinemachineFootballCameraDirector.HasBoundCamera)
+            {
+                return false;
+            }
+
+            if (CameraSystem.Current != null)
+            {
+                CameraSystem.Current.enabled = false;
+            }
+
+            DisableLegacyActionCameraDriver();
+            gameplayCameraReady = cinemachineFootballCameraDirector.HasValidFocus;
+            activeCameraMode = ResolveBaseCameraMode(camera) + "+" + cinemachineFootballCameraDirector.ModeName;
+            return true;
+        }
+
+        private void EnsureLegacyActionCameraFollow(
+            Camera camera,
+            Transform ballTransform,
+            List<Transform> playerTransforms,
+            List<Transform> goalkeeperTransforms)
+        {
+            cinemachineFootballCameraDirector?.SetCameraActive(false);
+
+            if (CameraSystem.Current != null)
+            {
+                CameraSystem.Current.enabled = true;
+            }
 
             if (actionCameraDriver == null || actionCameraDriver.gameObject != camera.gameObject)
             {
@@ -976,13 +1336,7 @@ namespace FStudio.GTEX.VisualBridge
                 }
             }
 
-            originalCamera = camera;
-            DisableFallbackFollowCamera();
-            usingFallbackCamera = false;
-
-            var ballTransform = ResolveOriginalBallTransform();
-            var playerTransforms = ResolveAllPlayerTransforms();
-            var goalkeeperTransforms = ResolveGoalkeeperTransforms();
+            actionCameraDriver.enabled = true;
             actionCameraDriver.Bind(
                 camera,
                 ballTransform,
@@ -991,29 +1345,53 @@ namespace FStudio.GTEX.VisualBridge
                 ResolveCurrentAttackingGoal,
                 goalkeeperTransforms);
 
+            SyncPrimaryActionCameraTargets();
+
+            gameplayCameraReady = actionCameraDriver.HasBoundCamera && actionCameraDriver.HasValidFocus;
+            activeCameraMode = ResolveBaseCameraMode(camera) + "+" + actionCameraDriver.ModeName;
+
+            UpdateActionCameraBindingLog(camera, ballTransform, playerTransforms.Count, actionCameraDriver.ModeName);
+        }
+
+        private void SyncPrimaryActionCameraTargets()
+        {
             if (Ball.Current != null && Ball.Current.HolderPlayer != null &&
                 PlayerMap.TryGetProxy(Ball.Current.HolderPlayer, out var holderProxy))
             {
                 UpdateCameraBallOwner(holderProxy.GtexPlayerId);
             }
+            else if (!string.IsNullOrWhiteSpace(currentBallOwnerId))
+            {
+                UpdateCameraBallOwner(currentBallOwnerId);
+            }
 
-            gameplayCameraReady = actionCameraDriver.HasBoundCamera && actionCameraDriver.HasValidFocus;
-            var baseMode = CameraSystem.Current != null && !string.IsNullOrWhiteSpace(CameraSystem.Current.CurrentCameraType)
-                ? CameraSystem.Current.CurrentCameraType
-                : camera.name;
-            activeCameraMode = baseMode + "+" + actionCameraDriver.ModeName;
+            if (!string.IsNullOrWhiteSpace(currentCameraPassTargetId))
+            {
+                if (hasCurrentCameraWorldPassTarget)
+                {
+                    UpdateCameraWorldPassTarget(currentCameraWorldPassTarget, currentCameraPassTargetId);
+                }
+                else
+                {
+                    UpdateCameraPassTarget(currentCameraPassTargetId);
+                }
+            }
+        }
 
+        private void UpdateActionCameraBindingLog(Camera camera, Transform ballTransform, int playerCount, string modeName)
+        {
             var bindingKey = camera.GetInstanceID() + ":" +
                              (ballTransform != null ? ballTransform.GetInstanceID() : 0) + ":" +
-                             playerTransforms.Count;
+                             playerCount + ":" + modeName;
             if (!string.Equals(lastActionCameraBindingKey, bindingKey))
             {
                 lastActionCameraBindingKey = bindingKey;
                 Debug.Log(
                     "[GTEX VisualBridge] Action camera follow enabled. " +
                     "camera=" + camera.name +
+                    ", mode=" + modeName +
                     ", ball=" + (ballTransform != null) +
-                    ", players=" + playerTransforms.Count);
+                    ", players=" + playerCount);
             }
 
             var ballBound = ballTransform != null;
@@ -1021,6 +1399,14 @@ namespace FStudio.GTEX.VisualBridge
             {
                 lastCameraBallBoundState = ballBound;
                 Debug.Log("[GTEX VisualBridge] Camera ball bound: " + ballBound);
+            }
+        }
+
+        private void DisableLegacyActionCameraDriver()
+        {
+            if (actionCameraDriver != null)
+            {
+                actionCameraDriver.enabled = false;
             }
         }
 
@@ -1046,6 +1432,8 @@ namespace FStudio.GTEX.VisualBridge
                 CameraSystem.Current.enabled = false;
             }
 
+            cinemachineFootballCameraDirector?.SetCameraActive(false);
+            DisableLegacyActionCameraDriver();
             if (fallbackFollowCamera == null || fallbackFollowCamera.gameObject != camera.gameObject)
             {
                 fallbackFollowCamera = camera.GetComponent<GtexOriginalFallbackFollowCamera>();
@@ -1081,6 +1469,25 @@ namespace FStudio.GTEX.VisualBridge
                     activeCameraMode = fallbackFollowCamera.ModeName;
                 }
 
+                return;
+            }
+
+            if (cinemachineFootballCameraDirector != null && cinemachineFootballCameraDirector.HasBoundCamera)
+            {
+                if (Ball.Current != null && Ball.Current.HolderPlayer != null &&
+                    PlayerMap.TryGetProxy(Ball.Current.HolderPlayer, out var holderProxy))
+                {
+                    UpdateCameraBallOwner(holderProxy.GtexPlayerId);
+                }
+
+                if (CameraSystem.Current != null)
+                {
+                    CameraSystem.Current.enabled = false;
+                }
+
+                DisableLegacyActionCameraDriver();
+                gameplayCameraReady = cinemachineFootballCameraDirector.HasValidFocus;
+                activeCameraMode = ResolveBaseCameraMode(originalCamera != null ? originalCamera : ResolveActiveCamera()) + "+" + cinemachineFootballCameraDirector.ModeName;
                 return;
             }
 
@@ -1189,39 +1596,77 @@ namespace FStudio.GTEX.VisualBridge
                 .ToList();
         }
 
-        private void UpdateCameraBallOwner(string playerId)
+        private void SyncCurrentBallOwnerFromBall()
         {
-            currentBallOwnerId = playerId ?? string.Empty;
-            if (actionCameraDriver == null)
+            if (Ball.Current == null)
+            {
+                if (!string.IsNullOrWhiteSpace(currentBallOwnerId))
+                {
+                    UpdateCameraBallOwner(string.Empty);
+                }
+
+                return;
+            }
+
+            if (Ball.Current.HolderPlayer != null &&
+                PlayerMap.TryGetProxy(Ball.Current.HolderPlayer, out var holderProxy))
+            {
+                if (!string.Equals(currentBallOwnerId, holderProxy.GtexPlayerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    UpdateCameraBallOwner(holderProxy.GtexPlayerId);
+                }
+
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(currentBallOwnerId))
             {
                 return;
             }
 
+            var currentOwner = PlayerMap.ResolveProxy(currentBallOwnerId);
+            if (currentOwner == null || currentOwner.Root == null ||
+                DistanceXZ(currentOwner.Root.position, Ball.Current.transform.position) > 2.4f)
+            {
+                UpdateCameraBallOwner(string.Empty);
+            }
+        }
+
+        private void UpdateCameraBallOwner(string playerId)
+        {
+            currentBallOwnerId = playerId ?? string.Empty;
+            Transform ownerTransform = null;
+            var ownerKey = string.Empty;
+
             if (string.IsNullOrWhiteSpace(playerId))
             {
-                actionCameraDriver.SetBallOwner(null, string.Empty);
+                cinemachineFootballCameraDirector?.SetBallOwner(null, string.Empty);
+                actionCameraDriver?.SetBallOwner(null, string.Empty);
                 return;
             }
 
             var proxy = PlayerMap.ResolveProxy(playerId);
             if (proxy != null)
             {
-                actionCameraDriver.SetBallOwner(proxy.Root, proxy.GtexPlayerId);
+                ownerTransform = proxy.Root;
+                ownerKey = proxy.GtexPlayerId;
+                currentBallOwnerId = ownerKey;
             }
+
+            cinemachineFootballCameraDirector?.SetBallOwner(ownerTransform, ownerKey);
+            actionCameraDriver?.SetBallOwner(ownerTransform, ownerKey);
         }
 
         private void UpdateCameraPassTarget(string targetPlayerId)
         {
-            if (actionCameraDriver == null)
-            {
-                return;
-            }
-
             var target = PlayerMap.ResolveProxy(targetPlayerId);
             if (target != null)
             {
                 currentCameraPassTargetId = target.GtexPlayerId;
-                actionCameraDriver.SetPassTarget(target.Root, target.GtexPlayerId);
+                currentCameraWorldPassTarget = Vector3.zero;
+                hasCurrentCameraWorldPassTarget = false;
+                cinemachineFootballCameraDirector?.SetPassTarget(target.Root, target.GtexPlayerId);
+                actionCameraDriver?.SetPassTarget(target.Root, target.GtexPlayerId);
             }
             else
             {
@@ -1231,22 +1676,20 @@ namespace FStudio.GTEX.VisualBridge
 
         private void UpdateCameraWorldPassTarget(Vector3 targetPoint, string targetId)
         {
-            if (actionCameraDriver == null)
-            {
-                return;
-            }
-
             currentCameraPassTargetId = targetId ?? string.Empty;
-            actionCameraDriver.SetWorldPassTarget(targetPoint, currentCameraPassTargetId);
+            currentCameraWorldPassTarget = targetPoint;
+            hasCurrentCameraWorldPassTarget = true;
+            cinemachineFootballCameraDirector?.SetWorldPassTarget(targetPoint, currentCameraPassTargetId);
+            actionCameraDriver?.SetWorldPassTarget(targetPoint, currentCameraPassTargetId);
         }
 
         private void ClearCameraPassTarget()
         {
             currentCameraPassTargetId = string.Empty;
-            if (actionCameraDriver != null)
-            {
-                actionCameraDriver.ClearPassTarget();
-            }
+            currentCameraWorldPassTarget = Vector3.zero;
+            hasCurrentCameraWorldPassTarget = false;
+            cinemachineFootballCameraDirector?.ClearPassTarget();
+            actionCameraDriver?.ClearPassTarget();
         }
 
         private void QueuePassTargetClear(GtexOriginalPlayerVisualProxy nextOwner, float delay)
@@ -1263,7 +1706,7 @@ namespace FStudio.GTEX.VisualBridge
         {
             yield return new WaitForSeconds(delay);
 
-            if (actionCameraDriver != null)
+            if (cinemachineFootballCameraDirector != null || actionCameraDriver != null)
             {
                 if (nextOwner != null)
                 {
@@ -1300,8 +1743,24 @@ namespace FStudio.GTEX.VisualBridge
             return count > 0 ? sum / count : Vector3.zero;
         }
 
+        private string ResolveBaseCameraMode(Camera camera)
+        {
+            if (CameraSystem.Current != null && !string.IsNullOrWhiteSpace(CameraSystem.Current.CurrentCameraType))
+            {
+                return CameraSystem.Current.CurrentCameraType;
+            }
+
+            return camera != null ? camera.name : "Camera";
+        }
+
         private Camera ResolveActiveCamera()
         {
+            var originalMatchCamera = ResolveOriginalMatchCamera();
+            if (originalMatchCamera != null)
+            {
+                return originalMatchCamera;
+            }
+
             if (CameraSystem.Current != null && CameraSystem.Current.camera != null)
             {
                 return CameraSystem.Current.camera;
@@ -1318,6 +1777,75 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             return FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None).FirstOrDefault();
+        }
+
+        private Camera ResolveOriginalMatchCamera()
+        {
+            if (IsOriginalGameplayCameraCandidate(originalCamera))
+            {
+                return originalCamera;
+            }
+
+            if (CameraSystem.Current != null && IsOriginalGameplayCameraCandidate(CameraSystem.Current.camera))
+            {
+                originalCamera = CameraSystem.Current.camera;
+                return originalCamera;
+            }
+
+            var cameraSystems = FindObjectsByType<CameraSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (var index = 0; index < cameraSystems.Length; index += 1)
+            {
+                var cameraSystem = cameraSystems[index];
+                if (cameraSystem == null || !IsOriginalGameplayCameraCandidate(cameraSystem.camera))
+                {
+                    continue;
+                }
+
+                originalCamera = cameraSystem.camera;
+                return originalCamera;
+            }
+
+            var cameras = FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Camera fallbackCandidate = null;
+            for (var index = 0; index < cameras.Length; index += 1)
+            {
+                var camera = cameras[index];
+                if (!IsOriginalGameplayCameraCandidate(camera))
+                {
+                    continue;
+                }
+
+                var lowerName = camera.gameObject.name.ToLowerInvariant();
+                if (OriginalCameraNameHints.Any(hint => lowerName.Contains(hint)))
+                {
+                    originalCamera = camera;
+                    return originalCamera;
+                }
+
+                if (fallbackCandidate == null)
+                {
+                    fallbackCandidate = camera;
+                }
+            }
+
+            originalCamera = fallbackCandidate;
+            return originalCamera;
+        }
+
+        private static bool IsOriginalGameplayCameraCandidate(Camera camera)
+        {
+            if (camera == null || camera.targetTexture != null)
+            {
+                return false;
+            }
+
+            var lowerName = (camera.gameObject.name ?? string.Empty).ToLowerInvariant();
+            if (lowerName.Contains("ui"))
+            {
+                return false;
+            }
+
+            return camera.GetComponentInParent<Canvas>() == null;
         }
 
         private Vector3? ResolveCurrentAttackingGoal()
@@ -1440,26 +1968,433 @@ namespace FStudio.GTEX.VisualBridge
                 : forward.normalized * fallbackDistance;
         }
 
-        private static Vector3 ResolveShotTarget(GtexOriginalPlayerVisualProxy actor, Vector3 requested)
+        private GtexOriginalPlayerVisualProxy ResolvePassReceiver(GtexOriginalPlayerVisualProxy actor, string requestedReceiverId)
         {
-            if (requested.sqrMagnitude > 0.001f)
+            GtexOriginalPlayerVisualProxy receiver = null;
+            if (!string.IsNullOrWhiteSpace(requestedReceiverId) &&
+                !PlayerMap.TryGetCommandProxy(requestedReceiverId, out receiver, out var reason))
             {
-                return requested;
+                Debug.LogWarning("[GTEX VisualBridge] Pass receiver skipped: " + requestedReceiverId + " (" + reason + ").");
             }
 
+            if (actor == null || actor.Player == null)
+            {
+                return receiver;
+            }
+
+            if (receiver != null &&
+                receiver != actor &&
+                receiver.Player != null &&
+                receiver.Player.GameTeam == actor.Player.GameTeam)
+            {
+                return receiver;
+            }
+
+            return ResolveSaferPassReceiver(actor);
+        }
+
+        private GtexOriginalPlayerVisualProxy ResolveSaferPassReceiver(GtexOriginalPlayerVisualProxy actor)
+        {
+            if (actor == null || actor.Player == null || actor.Player.GameTeam == null)
+            {
+                return null;
+            }
+
+            var attackDirection = actor.Player.GoalDirection;
+            attackDirection.y = 0f;
+            if (attackDirection.sqrMagnitude <= 0.01f)
+            {
+                attackDirection = actor.Root.forward;
+                attackDirection.y = 0f;
+            }
+
+            if (attackDirection.sqrMagnitude <= 0.01f)
+            {
+                attackDirection = Vector3.right;
+            }
+
+            var forward = attackDirection.normalized;
+            var actorFieldProgress = actor.Player.PlayerFieldProgress;
+            var candidates = PlayerMap.Proxies
+                .Where(proxy =>
+                    proxy != null &&
+                    proxy != actor &&
+                    proxy.Player != null &&
+                    !proxy.IsGoalkeeper &&
+                    proxy.Player.GameTeam == actor.Player.GameTeam)
+                .ToArray();
+            if (candidates.Length == 0)
+            {
+                return null;
+            }
+
+            var progressiveCandidates = candidates
+                .Where(proxy => proxy.Player.PlayerFieldProgress + 0.05f >= actorFieldProgress)
+                .ToArray();
+            var pool = progressiveCandidates.Length > 0 ? progressiveCandidates : candidates;
+
+            return pool
+                .OrderByDescending(proxy =>
+                {
+                    var offset = proxy.Root.position - actor.Root.position;
+                    offset.y = 0f;
+
+                    var distance = offset.magnitude;
+                    var directionScore = distance > 0.01f
+                        ? Vector3.Dot(forward, offset / distance)
+                        : 0f;
+
+                    return directionScore * 8f +
+                           proxy.Player.PlayerFieldProgress * 5f -
+                           distance * 0.65f;
+                })
+                .FirstOrDefault();
+        }
+
+        private bool TryResolveCommandProxy(
+            string playerUid,
+            string role,
+            GtexVisualCommandType commandType,
+            out GtexOriginalPlayerVisualProxy proxy)
+        {
+            if (PlayerMap.TryGetCommandProxy(playerUid, out proxy, out var reason))
+            {
+                return true;
+            }
+
+            Debug.LogWarning("[GTEX VisualBridge] " + commandType + " skipped: invalid " + role + " PlayerUid '" + playerUid + "' (" + reason + ").");
+            return false;
+        }
+
+        private Vector3 ResolvePassTarget(GtexOriginalPlayerVisualProxy actor, GtexOriginalPlayerVisualProxy receiver, GtexVisualCommand command)
+        {
+            var requestedTarget = command.targetWorldPosition != Vector3.zero
+                ? ResolveTarget(actor, command.targetWorldPosition, 10f)
+                : receiver != null
+                    ? receiver.Root.position
+                    : ResolveTarget(actor, command.targetWorldPosition, 10f);
+
+            if (receiver == null || receiver.Player == null || actor == null || actor.Player == null)
+            {
+                return requestedTarget;
+            }
+
+            var feetTarget = ResolveReceiverFeetTarget(actor, receiver);
+            if (command.passStyle == GtexVisualPassStyle.Ground)
+            {
+                return ClampToPitch(ResolveGroundPassFeetTarget(actor, receiver, feetTarget), 3.25f);
+            }
+
+            var predicted = PlayerBase.Predicter(actor.Player, receiver.Player);
+            predicted.y = receiver.Root.position.y;
+            var maxLeadDistance = command.passStyle == GtexVisualPassStyle.ThroughGround ? 3.2f : 0.75f;
+            var predictedOffset = predicted - receiver.Root.position;
+            predictedOffset.y = 0f;
+            if (predictedOffset.sqrMagnitude > maxLeadDistance * maxLeadDistance)
+            {
+                predicted = receiver.Root.position + predictedOffset.normalized * maxLeadDistance;
+                predicted.y = receiver.Root.position.y;
+            }
+
+            switch (command.passStyle)
+            {
+                case GtexVisualPassStyle.ThroughGround:
+                {
+                    var goalDirection = receiver.Player.GoalDirection;
+                    goalDirection.y = 0f;
+                    if (goalDirection.sqrMagnitude > 0.01f)
+                    {
+                        predicted += goalDirection.normalized * 1.35f;
+                    }
+
+                    var requestedOffset = requestedTarget - feetTarget;
+                    requestedOffset.y = 0f;
+                    if (requestedOffset.sqrMagnitude > 4.2f * 4.2f)
+                    {
+                        requestedTarget = feetTarget + requestedOffset.normalized * 4.2f;
+                        requestedTarget.y = feetTarget.y;
+                    }
+
+                    return ClampToPitch(Vector3.Lerp(feetTarget, Vector3.Lerp(requestedTarget, predicted, 0.45f), 0.72f), 3.25f);
+                }
+                default:
+                    return requestedTarget;
+            }
+        }
+
+        private Vector3 ResolveReceiverFeetTarget(GtexOriginalPlayerVisualProxy actor, GtexOriginalPlayerVisualProxy receiver)
+        {
+            var target = receiver.Root.position;
+            if (receiver.Player != null)
+            {
+                target.y = receiver.Player.Position.y;
+            }
+
+            return target;
+        }
+
+        private Vector3 ResolveGroundPassFeetTarget(
+            GtexOriginalPlayerVisualProxy actor,
+            GtexOriginalPlayerVisualProxy receiver,
+            Vector3 feetTarget)
+        {
+            if (actor == null || receiver == null || receiver.Player == null)
+            {
+                return feetTarget;
+            }
+
+            var receiverVelocity = receiver.Player.Velocity;
+            receiverVelocity.y = 0f;
+            if (receiverVelocity.sqrMagnitude < 0.2f * 0.2f)
+            {
+                return feetTarget;
+            }
+
+            var forward = receiver.Player.GoalDirection;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.01f)
+            {
+                return feetTarget;
+            }
+
+            forward.Normalize();
+            if (Vector3.Dot(receiverVelocity.normalized, forward) <= 0.35f)
+            {
+                return feetTarget;
+            }
+
+            var leadDistance = Mathf.Clamp(receiverVelocity.magnitude * 0.12f, 0f, 0.65f);
+            return feetTarget + forward * leadDistance;
+        }
+
+        private static bool IsGroundPassTargetBehindPasser(GtexOriginalPlayerVisualProxy actor, Vector3 target)
+        {
+            if (actor == null || actor.Player == null)
+            {
+                return false;
+            }
+
+            var toTarget = target - actor.Root.position;
+            toTarget.y = 0f;
+            if (toTarget.magnitude < 7.5f)
+            {
+                return false;
+            }
+
+            var forward = actor.Player.GoalDirection;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.01f)
+            {
+                forward = actor.Player.PlayerController != null ? actor.Player.PlayerController.Forward : Vector3.forward;
+                forward.y = 0f;
+            }
+
+            if (forward.sqrMagnitude < 0.01f)
+            {
+                return false;
+            }
+
+            return Vector3.Dot(toTarget.normalized, forward.normalized) < -0.35f;
+        }
+
+        private Vector3 ResolveSafeShotTarget(GtexOriginalPlayerVisualProxy actor, Vector3 requested, string outcome)
+        {
             var manager = MatchManager.Current;
             if (manager != null && actor != null && actor.Player != null)
             {
-                var opponentGoal = actor.Player.GameTeam == manager.GameTeam1
-                    ? manager.goalNet2
-                    : manager.goalNet1;
+                ResolveGoalsForActor(actor, out var ownGoal, out var opponentGoal);
                 if (opponentGoal != null)
                 {
-                    return opponentGoal.Position + Vector3.up * 1.2f;
+                    var normalizedOutcome = (outcome ?? string.Empty).ToLowerInvariant();
+                    if (normalizedOutcome.Contains("save"))
+                    {
+                        return ResolveKeeperInterceptionShotTarget(actor, opponentGoal);
+                    }
+
+                    var safeGoalTarget = opponentGoal.Position + Vector3.up * 1.2f;
+                    var shooterSide = Mathf.Sign(actor.Root.position.z - opponentGoal.Position.z);
+                    if (normalizedOutcome.Contains("goal"))
+                    {
+                        safeGoalTarget.z -= shooterSide * 2.2f;
+                    }
+                    else if (normalizedOutcome.Contains("save") || normalizedOutcome.Contains("on_target"))
+                    {
+                        safeGoalTarget.z -= shooterSide * 1.1f;
+                    }
+
+                    if (requested.sqrMagnitude <= 0.001f)
+                    {
+                        return safeGoalTarget;
+                    }
+
+                    var towardsGoal = opponentGoal.Position - actor.Root.position;
+                    towardsGoal.y = 0f;
+                    var towardsRequested = requested - actor.Root.position;
+                    towardsRequested.y = 0f;
+                    var pointsAwayFromGoal =
+                        towardsGoal.sqrMagnitude > 0.01f &&
+                        towardsRequested.sqrMagnitude > 0.01f &&
+                        Vector3.Dot(towardsGoal.normalized, towardsRequested.normalized) < 0.25f;
+                    var closerToOwnGoal =
+                        ownGoal != null &&
+                        Vector3.SqrMagnitude(requested - ownGoal.Position) < Vector3.SqrMagnitude(requested - opponentGoal.Position);
+                    if (pointsAwayFromGoal || closerToOwnGoal)
+                    {
+                        return safeGoalTarget;
+                    }
+
+                    safeGoalTarget.z = Mathf.Lerp(safeGoalTarget.z, requested.z, 0.35f);
+                    return safeGoalTarget;
                 }
             }
 
             return ResolveTarget(actor, requested, 22f) + Vector3.up * 1.2f;
+        }
+
+        private void ResolveGoalsForActor(GtexOriginalPlayerVisualProxy actor, out GoalNet ownGoal, out GoalNet opponentGoal)
+        {
+            ownGoal = null;
+            opponentGoal = null;
+
+            var manager = MatchManager.Current;
+            if (manager == null || actor == null)
+            {
+                return;
+            }
+
+            var reference = ResolveTeamDefensiveReference(actor);
+            if (manager.goalNet1 != null && manager.goalNet2 != null && reference.sqrMagnitude > 0.001f)
+            {
+                var goal1Distance = Vector3.SqrMagnitude(reference - manager.goalNet1.Position);
+                var goal2Distance = Vector3.SqrMagnitude(reference - manager.goalNet2.Position);
+                ownGoal = goal1Distance <= goal2Distance ? manager.goalNet1 : manager.goalNet2;
+                opponentGoal = ownGoal == manager.goalNet1 ? manager.goalNet2 : manager.goalNet1;
+                return;
+            }
+
+            if (actor.Player != null && actor.Player.GameTeam == manager.GameTeam1)
+            {
+                ownGoal = manager.goalNet1;
+                opponentGoal = manager.goalNet2;
+                return;
+            }
+
+            ownGoal = manager.goalNet2;
+            opponentGoal = manager.goalNet1;
+        }
+
+        private Vector3 ResolveTeamDefensiveReference(GtexOriginalPlayerVisualProxy actor)
+        {
+            if (actor == null || actor.Player == null || actor.Player.GameTeam == null)
+            {
+                return Vector3.zero;
+            }
+
+            var teamPlayers = PlayerMap.Proxies
+                .Where(proxy => proxy != null && proxy.Player != null && proxy.Player.GameTeam == actor.Player.GameTeam)
+                .ToArray();
+
+            var keeper = teamPlayers.FirstOrDefault(proxy => proxy.IsGoalkeeper);
+            if (keeper != null)
+            {
+                return keeper.Root.position;
+            }
+
+            if (teamPlayers.Length == 0)
+            {
+                return actor.Root.position;
+            }
+
+            var sum = Vector3.zero;
+            foreach (var proxy in teamPlayers)
+            {
+                sum += proxy.Root.position;
+            }
+
+            return sum / teamPlayers.Length;
+        }
+
+        private Vector3 ResolveKeeperInterceptionShotTarget(GtexOriginalPlayerVisualProxy actor, GoalNet opponentGoal)
+        {
+            if (actor == null || opponentGoal == null)
+            {
+                return Vector3.zero;
+            }
+
+            var fromGoalToShooter = actor.Root.position - opponentGoal.Position;
+            fromGoalToShooter.y = 0f;
+            if (fromGoalToShooter.sqrMagnitude <= 0.001f)
+            {
+                fromGoalToShooter = -opponentGoal.Direction;
+                fromGoalToShooter.y = 0f;
+            }
+
+            if (fromGoalToShooter.sqrMagnitude <= 0.001f)
+            {
+                fromGoalToShooter = Vector3.left;
+            }
+
+            fromGoalToShooter.Normalize();
+            var shooterSide = Mathf.Sign(actor.Root.position.z - opponentGoal.Position.z);
+            if (Mathf.Abs(shooterSide) < 0.01f)
+            {
+                shooterSide = 1f;
+            }
+
+            var baseTarget = opponentGoal.Position + fromGoalToShooter * 3.6f;
+            var offsets = new[] { shooterSide * 2.2f, -shooterSide * 2.2f, shooterSide * 1.2f, -shooterSide * 1.2f };
+            var start = actor.Root.position + Vector3.up * 0.45f;
+
+            var bestTarget = baseTarget;
+            var bestScore = float.MinValue;
+            for (var index = 0; index < offsets.Length; index += 1)
+            {
+                var candidate = baseTarget;
+                candidate.z = opponentGoal.Position.z + offsets[index];
+                candidate.y = actor.Root.position.y + 0.95f;
+                candidate = ClampToPitch(candidate);
+
+                var blocked = IsOpponentBlockingShotLine(actor.GtexPlayerId, start, candidate, 0.75f);
+                var score = blocked ? -100f : 20f;
+                score += Mathf.Abs(offsets[index]) * 0.35f;
+                score -= Vector3.Distance(actor.Root.position, candidate) * 0.02f;
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestTarget = candidate;
+                }
+            }
+
+            return bestTarget;
+        }
+
+        private GtexOriginalPlayerVisualProxy ResolveOpposingKeeper(GtexOriginalPlayerVisualProxy actor)
+        {
+            var manager = MatchManager.Current;
+            if (actor == null)
+            {
+                return PlayerMap.FindGoalkeeper(string.Empty);
+            }
+
+            var actorSide = GtexPlayerVisualMap.ResolveTeamSide(actor.GtexPlayerId);
+            if (string.Equals(actorSide, "home", StringComparison.OrdinalIgnoreCase))
+            {
+                return PlayerMap.FindGoalkeeper("away");
+            }
+
+            if (string.Equals(actorSide, "away", StringComparison.OrdinalIgnoreCase))
+            {
+                return PlayerMap.FindGoalkeeper("home");
+            }
+
+            if (manager == null || actor.Player == null || actor.Player.GameTeam == null)
+            {
+                return PlayerMap.FindGoalkeeper(string.Empty);
+            }
+
+            var opposingSide = actor.Player.GameTeam == manager.GameTeam1 ? "away" : "home";
+            return PlayerMap.FindGoalkeeper(opposingSide);
         }
 
         private Vector3 ResolveGoalCenter(int teamId, bool attacking)
@@ -1537,12 +2472,23 @@ namespace FStudio.GTEX.VisualBridge
             return Vector2.Distance(new Vector2(point.x, point.z), closest);
         }
 
-        private static void PrepareForCommandAction()
+        private static float DistanceXZ(Vector3 a, Vector3 b)
         {
-            MatchManager.SetGlobalCommandDrivenVisualHold(true);
+            a.y = 0f;
+            b.y = 0f;
+            return Vector3.Distance(a, b);
+        }
+
+        private static void PrepareForCommandAction(bool forcePlaying = true)
+        {
+            if (!forcePlaying)
+            {
+                return;
+            }
 
             if (MatchManager.Current != null)
             {
+                MatchManager.SetGlobalCommandDrivenVisualHold(true);
                 MatchManager.Current.MatchFlags = MatchStatus.Playing;
             }
         }

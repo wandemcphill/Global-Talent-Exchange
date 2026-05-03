@@ -252,8 +252,11 @@ namespace FStudio.MatchEngine.Players.PlayerController {
             bool isJumpHeader = specialHit && ballHeight > animSettings.BALL_HEIGHT_VOLLEY_END;
             bool isDefault = ballHeight < animSettings.BALL_HEIGHT_GROUND_HEADER_UNTIL;
 
-            if (isVolley && disableVolley) {
-                isJumpHeader = true;
+            if (disableVolley) {
+                isVolley = false;
+                isGroundHeader = false;
+                isJumpHeader = false;
+                isDefault = true;
             }
 
             if (!disableVolley && isVolley && animSettings.AnimSettings.Find (PlayerAnimatorVariable.Volley_R)) {

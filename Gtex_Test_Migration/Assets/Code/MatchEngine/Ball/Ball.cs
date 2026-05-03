@@ -1,5 +1,6 @@
 ﻿using FStudio.Animation;
 using FStudio.GTEX.Engine;
+using FStudio.GTEX.Core;
 using FStudio.MatchEngine.Players;
 using FStudio.Utilities;
 
@@ -16,6 +17,7 @@ using FStudio.Data;
 using FStudio.MatchEngine.Players.PlayerController;
 using FStudio.MatchEngine.Graphics.EventRenderer;
 using FStudio.MatchEngine.Utilities;
+using FStudio.GTEX.VisualBridge;
 
 namespace FStudio.MatchEngine.Balls {
     [ExecuteInEditMode]
@@ -76,6 +78,9 @@ namespace FStudio.MatchEngine.Balls {
         [SerializeField] private Material shadowMaterial;
 
         private float nextCollision;
+        private PlayerBase originalRuntimeIntendedReceiver;
+        private Vector3 originalRuntimeIntendedReceivePoint;
+        private float originalRuntimeReceiverUntil;
 
         private bool m_isOnCrossMode;
 
@@ -203,6 +208,8 @@ namespace FStudio.MatchEngine.Balls {
                 rigidbody.linearVelocity = ballVel;
             }
 
+            TryOriginalRuntimeReceiverTrap();
+
             if (ballShadow != null) {
                 ballShadow.position = ballPos;
             }
@@ -250,6 +257,11 @@ namespace FStudio.MatchEngine.Balls {
         /// </summary>
         /// <param name="basePlayer"></param>
         public void Hold(PlayerBase basePlayer) {
+            if (GtexVisualAuthority.ShouldBlockBallInteraction(basePlayer)) {
+                Debug.Log("[GTEX LOCK] Hold blocked: " + basePlayer);
+                return;
+            }
+
             if (HolderPlayer != null) {
                 Release();
             }
@@ -261,6 +273,7 @@ namespace FStudio.MatchEngine.Balls {
             Debug.LogFormat("[Ball] Hold by {0}", basePlayer);
 
             HolderPlayer = basePlayer;
+            ClearOriginalRuntimeReceiverTracking();
 
             holdedPosition = transform.position;
             externalPlaybackVelocity = Vector3.zero;
@@ -310,6 +323,39 @@ namespace FStudio.MatchEngine.Balls {
                 holdBlocker = null;
             });
             #endregion
+        }
+
+        public void StopDeadBallMotion() {
+            externalPlaybackVelocity = Vector3.zero;
+            if (rigidbody != null && !rigidbody.isKinematic) {
+                rigidbody.linearVelocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+            }
+        }
+
+        public void TrackOriginalRuntimeReceiver(PlayerBase receiver, Vector3 receivePoint, float duration) {
+            if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() || receiver == null || receiver.IsGK) {
+                return;
+            }
+
+            receivePoint.y = transform.position.y;
+            originalRuntimeIntendedReceiver = receiver;
+            originalRuntimeIntendedReceivePoint = receivePoint;
+            originalRuntimeReceiverUntil = Time.time + Mathf.Max(0.35f, duration);
+
+            Debug.Log(
+                "[GTEX AI] Ball receiver tracking -> receiver=" + receiver +
+                " point=" + receivePoint);
+        }
+
+        private void ClearOriginalRuntimeReceiverTracking() {
+            if (originalRuntimeIntendedReceiver != null) {
+                originalRuntimeIntendedReceiver.ClearOriginalRuntimeReceiveCommit();
+            }
+
+            originalRuntimeIntendedReceiver = null;
+            originalRuntimeIntendedReceivePoint = default;
+            originalRuntimeReceiverUntil = 0f;
         }
 
         public void SetExternalPlayback(bool value) {
@@ -661,6 +707,11 @@ namespace FStudio.MatchEngine.Balls {
 
             var distance = Vector3.Distance(transform.position, target);
 
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                GroundPassOriginalVisualRuntime(target, hitter, distance, speedMod, ignoreOffside);
+                return;
+            }
+
             var longBallPercentage = 
                 EngineSettings.Current.LongBallSkillPercentageAtDistance(distance);
 
@@ -693,6 +744,66 @@ namespace FStudio.MatchEngine.Balls {
             MatchManager.Current.DelayBehaviourSelectionByReactionSkill();
 
             Debug.LogFormat ("[Ball] Pass => {0} magniute", requiredVelocity.magnitude);
+        }
+
+        private void GroundPassOriginalVisualRuntime(
+            Vector3 target,
+            PlayerBase hitter,
+            float distance,
+            float speedMod,
+            bool ignoreOffside) {
+
+            var origin = transform.position;
+            var flatTarget = target;
+            flatTarget.y = origin.y;
+
+            var direction = flatTarget - origin;
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.01f) {
+                direction = hitter != null ? hitter.Direction : Vector3.forward;
+                direction.y = 0f;
+            }
+
+            if (direction.sqrMagnitude <= 0.01f) {
+                direction = Vector3.forward;
+            }
+
+            var groundDistance = Mathf.Max(0.5f, direction.magnitude);
+            var speed = Mathf.Lerp(7.25f, 15.25f, Mathf.InverseLerp(4f, 28f, groundDistance));
+            speed *= Mathf.Clamp(speedMod, 0.65f, 1.15f);
+
+            var requiredVelocity = direction.normalized * speed;
+            requiredVelocity.y = hitter != null && hitter.IsThrowHolder ? 0.16f : 0.02f;
+
+            if (hitter != null && !hitter.IsThrowHolder) {
+                EventManager.Trigger(new PlayerPassEvent(hitter, requiredVelocity.magnitude));
+            }
+
+            BallHit(hitter, requiredVelocity, ignoreOffside, true);
+            ClampOriginalRuntimeGroundPassVerticalVelocity(hitter);
+            MatchManager.Current.DelayBehaviourSelectionByReactionSkill();
+
+            Debug.LogFormat(
+                "[Ball] GTEX ground pass => {0}m requestedSpeed={1} requestedY={2}",
+                distance,
+                requiredVelocity.magnitude,
+                requiredVelocity.y);
+        }
+
+        private void ClampOriginalRuntimeGroundPassVerticalVelocity(PlayerBase hitter) {
+            if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() ||
+                hitter == null ||
+                hitter.IsThrowHolder) {
+                return;
+            }
+
+            if (CanWritePhysicsVelocity()) {
+                var velocity = rigidbody.linearVelocity;
+                velocity.y = Mathf.Clamp(velocity.y, -0.05f, 0.05f);
+                rigidbody.linearVelocity = velocity;
+            } else {
+                externalPlaybackVelocity.y = Mathf.Clamp(externalPlaybackVelocity.y, -0.05f, 0.05f);
+            }
         }
 
         public void Shoot (Vector3 velocity, PlayerBase hitter) {
@@ -760,7 +871,8 @@ namespace FStudio.MatchEngine.Balls {
         private void BallHit (
             PlayerBase hitter,
             Vector3 velocity, 
-            bool ignoreOffside = false) {
+            bool ignoreOffside = false,
+            bool clampGroundPassVerticalVelocity = false) {
 
             if (float.IsNaN(velocity.magnitude)) {
                 return;
@@ -775,6 +887,13 @@ namespace FStudio.MatchEngine.Balls {
 
             var heightVector = HeightRemovalByHeight();
             velocity -= heightVector;
+            if (clampGroundPassVerticalVelocity &&
+                GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                hitter != null) {
+                velocity.y = hitter.IsThrowHolder
+                    ? Mathf.Clamp(velocity.y, 0.06f, 0.18f)
+                    : Mathf.Clamp(velocity.y, -0.05f, 0.05f);
+            }
 
             AssignOffsides(hitter, ignoreOffside);
 
@@ -799,6 +918,65 @@ namespace FStudio.MatchEngine.Balls {
             OnBallHit?.Invoke(hitter.GameTeam);
         }
 
+        private void TryOriginalRuntimeReceiverTrap() {
+            if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() ||
+                originalRuntimeIntendedReceiver == null ||
+                HolderPlayer != null ||
+                MatchManager.Current == null ||
+                !MatchManager.Current.MatchFlags.HasFlag(Enums.MatchStatus.Playing)) {
+                return;
+            }
+
+            if (Time.time > originalRuntimeReceiverUntil) {
+                Debug.Log("[GTEX RECEIVE] trap failed -> loose ball");
+                ClearOriginalRuntimeReceiverTracking();
+                return;
+            }
+
+            if (originalRuntimeIntendedReceiver.CaughtInOffside ||
+                originalRuntimeIntendedReceiver.PlayerController == null ||
+                !originalRuntimeIntendedReceiver.PlayerController.IsPhysicsEnabled) {
+                ClearOriginalRuntimeReceiverTracking();
+                return;
+            }
+
+            var ballPosition = transform.position;
+            if ((IsOnCrossMode && ballPosition.y > 0.75f) || ballPosition.y > 1.1f) {
+                return;
+            }
+
+            var receiverPosition = originalRuntimeIntendedReceiver.Position;
+            receiverPosition.y = ballPosition.y;
+            var receivePoint = new Vector3(
+                originalRuntimeIntendedReceivePoint.x,
+                ballPosition.y,
+                originalRuntimeIntendedReceivePoint.z);
+            var distanceToReceiver = Vector3.Distance(receiverPosition, ballPosition);
+            var distanceToPoint = Vector3.Distance(receivePoint, ballPosition);
+            var trapRadius = Mathf.Lerp(1.05f, 1.65f, Mathf.InverseLerp(4f, 16f, Velocity.magnitude));
+
+            if (distanceToReceiver > trapRadius) {
+                return;
+            }
+
+            var receiver = originalRuntimeIntendedReceiver;
+            var receiveImpulse = Velocity.magnitude;
+            if (GtexVisualAuthority.ShouldBlockBallInteraction(receiver)) {
+                Debug.Log("[GTEX LOCK] Receiver trap blocked: " + receiver);
+                ClearOriginalRuntimeReceiverTracking();
+                return;
+            }
+
+            StopDeadBallMotion();
+            Hold(receiver);
+            EventManager.Trigger(new PlayerControlBallEvent(receiver, receiveImpulse));
+            ClearOriginalRuntimeReceiverTracking();
+            Debug.Log(
+                "[GTEX RECEIVE] trap success " + receiver +
+                " ballDistance=" + distanceToReceiver.ToString("0.00") +
+                " targetDistance=" + distanceToPoint.ToString("0.00"));
+        }
+
         private bool CheckPlayerTouch (Collision collision) {
             var player = collision.collider.GetComponent<IPlayerController>();
             if (!player.IsPhysicsEnabled) {
@@ -806,6 +984,12 @@ namespace FStudio.MatchEngine.Balls {
             }
 
             if (player.BasePlayer.CaughtInOffside) {
+                return false;
+            }
+
+            if (GtexVisualAuthority.ShouldBlockBallInteraction(player.BasePlayer)) {
+                Debug.Log("[GTEX LOCK] Ball touch blocked: " + player.BasePlayer);
+                IgnoreCollisionTemporary(player.BasePlayer);
                 return false;
             }
 			
@@ -818,6 +1002,11 @@ namespace FStudio.MatchEngine.Balls {
 
             if (angle > 180) { // not possible to hold.
                 return false;
+            }
+
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                TryOriginalRuntimeSoftTrap(player.BasePlayer, transform.position.y, impulse.magnitude, true)) {
+                return true;
             }
 
             if (player.BasePlayer.OnBallTouch (transform.position.y, impulse.magnitude, this)) {
@@ -836,13 +1025,62 @@ namespace FStudio.MatchEngine.Balls {
                 EventManager.Trigger(new KeeperHitTheBallButCouldNotControlEvent(player.BasePlayer, rigidbody.linearVelocity.magnitude));
             }
 
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                TryOriginalRuntimeSoftTrap(player.BasePlayer, transform.position.y, impulse.magnitude, false)) {
+                return true;
+            }
+
             // throw ball here.
             var playerPos = player.Position;
             playerPos.y = transform.position.y;
             var dir = transform.position - playerPos;
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                dir.y = 0f;
+                if (dir.sqrMagnitude < 0.001f) {
+                    dir = rigidbody.linearVelocity;
+                    dir.y = 0f;
+                }
+
+                if (dir.sqrMagnitude > 0.001f) {
+                    var deflection = dir.normalized * Mathf.Min(rigidbody.linearVelocity.magnitude * 0.24f + 0.55f, 3.8f);
+                    deflection.y = 0.015f;
+                    rigidbody.linearVelocity = deflection;
+                    return false;
+                }
+            }
+
             rigidbody.AddForce(dir * (rigidbody.linearVelocity.magnitude + 1));
 
             return false;
+        }
+
+        private bool TryOriginalRuntimeSoftTrap(PlayerBase player, float touchHeight, float planarImpulse, bool beforeDefaultControl)
+        {
+            if (player == null || player.IsGK || player.CaughtInOffside)
+            {
+                return false;
+            }
+
+            if (GtexVisualAuthority.ShouldBlockBallInteraction(player))
+            {
+                Debug.Log("[GTEX LOCK] Soft trap blocked: " + player);
+                return false;
+            }
+
+            if (IsOnCrossMode && touchHeight > 0.75f)
+            {
+                return false;
+            }
+
+            if (touchHeight > 1.35f || planarImpulse > 28f)
+            {
+                return false;
+            }
+
+            Hold(player);
+            EventManager.Trigger(new PlayerControlBallEvent(player, planarImpulse));
+            Debug.Log("[Ball] GTEX " + (beforeDefaultControl ? "pre-trap first touch" : "soft trap") + " => " + player + " impulse=" + planarImpulse.ToString("0.0") + " height=" + touchHeight.ToString("0.00"));
+            return true;
         }
 
         public void ResetBall (Vector3 target) {
@@ -1172,6 +1410,12 @@ namespace FStudio.MatchEngine.Balls {
             if (colliderLayer == LayerMask.NameToLayer (Tags.PLAYER_LAYER)) {
                 var playerController = collision.collider.gameObject.GetComponent<IPlayerController>();
                 if (playerController == null) {
+                    return;
+                }
+
+                if (GtexVisualAuthority.ShouldBlockBallInteraction(playerController.BasePlayer)) {
+                    Debug.Log("[GTEX LOCK] Collision touch ignored: " + playerController.BasePlayer);
+                    IgnoreCollisionTemporary(playerController.BasePlayer);
                     return;
                 }
 

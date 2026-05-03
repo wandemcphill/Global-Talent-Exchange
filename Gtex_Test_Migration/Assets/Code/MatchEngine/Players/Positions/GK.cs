@@ -81,7 +81,12 @@ namespace FStudio.MatchEngine.Players.Positions {
             in float offsideLine,
             GoalNet goalNet,
             GoalNet targetGoalNet) {
-            return goalNet.Position + goalNet.Direction;
+            return OriginalRuntimeRoleAwareness.ClampGoalkeeperPoint(
+                goalNet.Position + goalNet.Direction,
+                goalNet,
+                fieldEndX,
+                fieldEndY,
+                3.5f);
         }
 
         public override sealed void Behave(

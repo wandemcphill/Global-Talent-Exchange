@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using FStudio.Data;
 using FStudio.Database;
@@ -9,11 +11,15 @@ using FStudio.GTEX.Core;
 using FStudio.GTEX.Engine;
 using FStudio.GTEX.Simulation;
 using FStudio.MatchEngine;
+using FStudio.MatchEngine.Balls;
 using FStudio.MatchEngine.Enums;
 using FStudio.UI.MatchThemes.MatchEvents;
 using SharedMatchCreateRequest = Shared.Responses.MatchCreateRequest;
 using UnityEngine;
 using GtexEvent = FStudio.GTEX.Event;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace FStudio.GTEX.VisualBridge
 {
@@ -27,14 +33,22 @@ namespace FStudio.GTEX.VisualBridge
     {
         private const float SceneDependencyWaitTimeoutSeconds = 10f;
         private const float ReplayDelaySeconds = 1.25f;
+        private const float ReplayCaptureDelaySeconds = 0.72f;
         private const float RuntimeReadyTimeoutSeconds = 20f;
         private const float ScriptedReplayLaunchFallbackDelaySeconds = 8f;
+#if UNITY_EDITOR
+        internal const string EditorScriptedReplayAutostartSessionKey = "GTEX.Editor.ScriptedReplayAutostart";
+        internal const string EditorScriptedReplayQuitAfterSessionKey = "GTEX.Editor.ScriptedReplayQuitAfter";
+        internal const string EditorScriptedReplayCaptureFramesSessionKey = "GTEX.Editor.ScriptedReplayCaptureFrames";
+        internal const string EditorScriptedReplayCaptureOutputDirSessionKey = "GTEX.Editor.ScriptedReplayCaptureOutputDir";
+#endif
 
         private static GtexVisualMatchDirector activeDirector;
 
         [SerializeField] private GtexOriginalSimAdapter originalSim;
         [SerializeField] private GtexScoreVisualBridge scoreBridge;
         [SerializeField] private GtexVisualIntentDirector intentDirector;
+        [SerializeField] private GtexSequenceRunner sequenceRunner;
         [SerializeField] private bool allowStandaloneEditorAutoInitialize = false;
         [SerializeField] private bool subscribeToLiveState = true;
         [SerializeField] private bool preferBackendFeedWhenAvailable = true;
@@ -62,18 +76,79 @@ namespace FStudio.GTEX.VisualBridge
         private bool liveRefreshInFlight;
         private bool scriptedReplayRequestedFromLaunch;
         private bool quitAfterReplayRequestedFromLaunch;
+        private bool scriptedReplayCaptureEnabled;
         private bool scriptedReplayLaunchFallbackStarted;
         private float scriptedReplayLaunchRequestedAt;
+        private string scriptedReplaySequenceId = GtexVisualSequencePatternLibrary.CentralBuildupShot;
         private float lastLocalClockPublished = -1f;
         private int lastLocalHomeScore = -1;
         private int lastLocalAwayScore = -1;
         private string lastBallOwnerId = string.Empty;
+        private string scriptedReplayCaptureOutputRoot = string.Empty;
+        private string scriptedReplayCaptureSessionDirectory = string.Empty;
+        private string scriptedReplayCaptureManifestPath = string.Empty;
+        private int scriptedReplayCaptureIndex;
+        private readonly List<string> scriptedReplayCapturePaths = new List<string>();
         private bool scriptedReplayActive;
+        private Coroutine manualHomeAttackRoutine;
+        private bool manualHomeAttackActive;
 
         public bool IsRuntimeReady => runtimeReady;
         public bool IsScriptedReplayRunning => scriptedReplayActive;
+        public bool ShouldSuppressAmbientIntent =>
+            scriptedReplayActive ||
+            scriptedReplayRequestedFromLaunch ||
+            localReplayRoutine != null ||
+            launchReplayRoutine != null ||
+            manualHomeAttackActive ||
+            manualHomeAttackRoutine != null;
 
         public bool HasStartupRequest => initializationRequested || initialized;
+
+        public bool RequestAuthorityLease(string teamId, IEnumerable<string> playerUids, float durationSeconds, bool allowCrossTeam = false)
+        {
+            EnsureReferences();
+            return GtexVisualAuthority.RequestAuthorityLease(
+                teamId,
+                playerUids,
+                durationSeconds,
+                originalSim != null ? originalSim.PlayerMap : null,
+                allowCrossTeam);
+        }
+
+        public bool RefreshAuthorityLease(string teamId, IEnumerable<string> playerUids, float durationSeconds, bool allowCrossTeam = false)
+        {
+            EnsureReferences();
+            return GtexVisualAuthority.RefreshAuthorityLease(
+                teamId,
+                playerUids,
+                durationSeconds,
+                originalSim != null ? originalSim.PlayerMap : null,
+                allowCrossTeam);
+        }
+
+        public void ReleaseAuthority(string reason)
+        {
+            GtexVisualAuthority.ReleaseAuthority(reason);
+        }
+
+        public void ResolveCurrentVisualScore(out int homeScore, out int awayScore, out float matchMinute)
+        {
+            homeScore = Mathf.Max(0, lastLocalHomeScore);
+            awayScore = Mathf.Max(0, lastLocalAwayScore);
+            matchMinute = Mathf.Max(0f, lastLocalClockPublished);
+
+            if (localSimEngine == null)
+            {
+                return;
+            }
+
+            homeScore = Mathf.Max(0, localSimEngine.HomeScore);
+            awayScore = Mathf.Max(0, localSimEngine.AwayScore);
+            matchMinute = localSimEngine.Clock != null
+                ? Mathf.Max(0f, localSimEngine.Clock.CurrentMatchMinute)
+                : matchMinute;
+        }
 
         private void Awake()
         {
@@ -212,9 +287,17 @@ namespace FStudio.GTEX.VisualBridge
 
             EnsureReferences();
             ApplyDefaultPassStyle(command);
+            if (!ValidateCommand(command))
+            {
+                return;
+            }
+
+            GtexVisualAuthority.AllowCommandBallParticipants(command);
+
             var pointText = command.targetWorldPosition.sqrMagnitude > 0.001f
                 ? " point=" + command.targetWorldPosition.ToString("F2")
                 : string.Empty;
+            LogCommand(command, pointText);
             if (IsPassLike(command.type))
             {
                 Debug.Log(
@@ -296,6 +379,187 @@ namespace FStudio.GTEX.VisualBridge
             }
         }
 
+        private bool ValidateCommand(GtexVisualCommand command)
+        {
+            if (command == null)
+            {
+                return false;
+            }
+
+            GtexOriginalPlayerVisualProxy actor = null;
+            GtexOriginalPlayerVisualProxy target = null;
+
+            if (RequiresActor(command.type) || !string.IsNullOrWhiteSpace(command.actorPlayerId))
+            {
+                if (!TryValidateCommandPlayer(command.actorPlayerId, "actor", command.type, out actor))
+                {
+                    return false;
+                }
+            }
+
+            if (RequiresTarget(command) || !string.IsNullOrWhiteSpace(command.targetPlayerId))
+            {
+                if (!TryValidateCommandPlayer(command.targetPlayerId, "target", command.type, out target))
+                {
+                    return false;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(command.secondaryTargetPlayerId) &&
+                !TryValidateCommandPlayer(command.secondaryTargetPlayerId, "secondaryTarget", command.type, out _))
+            {
+                return false;
+            }
+
+            if (!ValidateCommandTeams(command, actor, target))
+            {
+                return false;
+            }
+
+            if (GtexVisualAuthority.IsLeaseActive && !GtexVisualAuthority.IsPassiveCommand(command.type))
+            {
+                if (actor != null && !GtexVisualAuthority.IsPlayerControlled(actor.GtexPlayerId))
+                {
+                    Debug.LogWarning("[GTEX Authority] Command skipped outside lease: " + command.type + " actor=" + actor.GtexPlayerId);
+                    return false;
+                }
+
+                if (target != null && RequiresControlledTarget(command.type) && !GtexVisualAuthority.IsPlayerControlled(target.GtexPlayerId))
+                {
+                    Debug.LogWarning("[GTEX Authority] Command skipped outside lease: " + command.type + " target=" + target.GtexPlayerId);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool TryValidateCommandPlayer(
+            string playerUid,
+            string role,
+            GtexVisualCommandType commandType,
+            out GtexOriginalPlayerVisualProxy proxy)
+        {
+            proxy = null;
+            if (originalSim == null || originalSim.PlayerMap == null)
+            {
+                Debug.LogWarning("[GTEX CMD] " + commandType + " skipped: player map missing.");
+                return false;
+            }
+
+            if (!originalSim.PlayerMap.TryGetCommandProxy(playerUid, out proxy, out var reason))
+            {
+                Debug.LogWarning("[GTEX CMD] " + commandType + " skipped: invalid " + role + " PlayerUid '" + playerUid + "' (" + reason + ").");
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool ValidateCommandTeams(
+            GtexVisualCommand command,
+            GtexOriginalPlayerVisualProxy actor,
+            GtexOriginalPlayerVisualProxy target)
+        {
+            if (actor == null || target == null)
+            {
+                return true;
+            }
+
+            var actorTeam = GtexPlayerVisualMap.ResolveTeamSide(actor.GtexPlayerId);
+            var targetTeam = GtexPlayerVisualMap.ResolveTeamSide(target.GtexPlayerId);
+            if (string.IsNullOrWhiteSpace(actorTeam) || string.IsNullOrWhiteSpace(targetTeam))
+            {
+                Debug.LogError("[GTEX CMD] " + command.type + " skipped: unable to resolve command teams.");
+                return false;
+            }
+
+            if ((command.type == GtexVisualCommandType.Pass ||
+                 command.type == GtexVisualCommandType.ThroughPass) &&
+                !string.Equals(actorTeam, targetTeam, StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.LogError("[GTEX CMD] " + command.type + " skipped: cross-team pass actor=" + actor.GtexPlayerId + " target=" + target.GtexPlayerId);
+                return false;
+            }
+
+            if ((command.type == GtexVisualCommandType.MarkPlayer ||
+                 command.type == GtexVisualCommandType.PressBallCarrier) &&
+                string.Equals(actorTeam, targetTeam, StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.LogError("[GTEX CMD] " + command.type + " skipped: defensive command requires opponent target actor=" + actor.GtexPlayerId + " target=" + target.GtexPlayerId);
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool RequiresActor(GtexVisualCommandType type)
+        {
+            switch (type)
+            {
+                case GtexVisualCommandType.AssignPossession:
+                case GtexVisualCommandType.CarryBall:
+                case GtexVisualCommandType.SupportRun:
+                case GtexVisualCommandType.MarkPlayer:
+                case GtexVisualCommandType.PressBallCarrier:
+                case GtexVisualCommandType.HoldShape:
+                case GtexVisualCommandType.CoverSpace:
+                case GtexVisualCommandType.Pass:
+                case GtexVisualCommandType.ThroughPass:
+                case GtexVisualCommandType.Cross:
+                case GtexVisualCommandType.Shoot:
+                case GtexVisualCommandType.KeeperSave:
+                case GtexVisualCommandType.KeeperClaim:
+                case GtexVisualCommandType.Goal:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool RequiresTarget(GtexVisualCommand command)
+        {
+            if (command == null)
+            {
+                return false;
+            }
+
+            switch (command.type)
+            {
+                case GtexVisualCommandType.MarkPlayer:
+                case GtexVisualCommandType.PressBallCarrier:
+                case GtexVisualCommandType.Pass:
+                    return true;
+                case GtexVisualCommandType.ThroughPass:
+                    return command.targetWorldPosition.sqrMagnitude <= 0.001f;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool RequiresControlledTarget(GtexVisualCommandType type)
+        {
+            switch (type)
+            {
+                case GtexVisualCommandType.Pass:
+                case GtexVisualCommandType.ThroughPass:
+                case GtexVisualCommandType.MarkPlayer:
+                case GtexVisualCommandType.PressBallCarrier:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static void LogCommand(GtexVisualCommand command, string pointText)
+        {
+            var targetText = string.IsNullOrWhiteSpace(command.targetPlayerId)
+                ? string.Empty
+                : " target=" + command.targetPlayerId;
+            var styleText = IsPassLike(command.type) ? " style=" + command.passStyle : string.Empty;
+            Debug.Log("[GTEX CMD] " + command.type + ": actor=" + command.actorPlayerId + targetText + styleText + pointText);
+        }
+
         [ContextMenu("GTEX/Run Scripted Visual Replay")]
         public void RunScriptedCommandReplay()
         {
@@ -309,6 +573,26 @@ namespace FStudio.GTEX.VisualBridge
 
             StopLocalReplayRoutine();
             localReplayRoutine = StartCoroutine(RunScriptedVisualReplayWhenReady());
+        }
+
+        [ContextMenu("GTEX/Trigger Test Sequence Home Attack")]
+        public void TriggerTestSequence_HomeAttack()
+        {
+            if (!runtimeReady)
+            {
+                Debug.LogWarning("[GTEX SEQ] Home Attack rejected: original visual runtime is not ready.");
+                return;
+            }
+
+            if (manualHomeAttackRoutine != null)
+            {
+                StopCoroutine(manualHomeAttackRoutine);
+                manualHomeAttackRoutine = null;
+                ReleaseAuthority("manual-home-attack-restart");
+            }
+
+            StopLocalReplayRoutine();
+            manualHomeAttackRoutine = StartCoroutine(RunManualHomeAttackSequence());
         }
 
         [ContextMenu("GTEX/Start Local Sim Feed")]
@@ -378,6 +662,7 @@ namespace FStudio.GTEX.VisualBridge
 
         private void Update()
         {
+            GtexVisualAuthority.Tick();
             if (localSimEngine == null || !localSimEngine.IsRunning)
             {
                 TryStartScriptedReplayLaunchFallback();
@@ -400,6 +685,13 @@ namespace FStudio.GTEX.VisualBridge
                 launchReplayRoutine = null;
             }
 
+            if (manualHomeAttackRoutine != null)
+            {
+                StopCoroutine(manualHomeAttackRoutine);
+                manualHomeAttackRoutine = null;
+                manualHomeAttackActive = false;
+            }
+
             initializationRequested = false;
             initialized = false;
             bootstrappingScene = false;
@@ -407,6 +699,7 @@ namespace FStudio.GTEX.VisualBridge
             runtimeReady = false;
             bootstrapFailed = false;
             MatchManager.SetGlobalCommandDrivenVisualHold(false);
+            ReleaseAuthority("director-disabled");
             GtexRuntimeState.ResetForSceneUnload();
         }
 
@@ -881,131 +1174,540 @@ namespace FStudio.GTEX.VisualBridge
             EnsureReferences();
             originalSim.ConfigureOriginalRuntime();
             originalSim.RebuildPlayerMap();
+            BeginScriptedReplayCaptureSession();
 
-            var attackers = ResolveTeamOutfieldPlayers(GtexSimTeamSide.Home);
-            var defenders = ResolveTeamOutfieldPlayers(GtexSimTeamSide.Away);
-            if (attackers.Length < 3 || defenders.Length < 3)
+            if (!TryResolveScriptedReplayParticipants(
+                    out var attackingSide,
+                    out var carrier,
+                    out var shortOption,
+                    out var runner,
+                    out var marker,
+                    out var presser,
+                    out var trackingDefender))
             {
                 Debug.LogWarning("[GTEX VisualBridge] Scripted replay needs at least three mapped outfield players per side.");
+                CompleteScriptedReplayCaptureSession(false, "participant_resolution_failed_before_reset");
                 yield break;
             }
 
-            var carrier = attackers[0];
-            var shortOption = attackers[1];
-            var runner = attackers[2];
-            var marker = defenders[0];
-            var presser = defenders[1];
-            var trackingDefender = defenders[2];
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand { type = GtexVisualCommandType.StartMatch },
+                "01_start_match",
+                0.4f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand { type = GtexVisualCommandType.ResetKickoff },
+                "02_reset_kickoff",
+                0.95f);
 
-            HandleCommand(new GtexVisualCommand { type = GtexVisualCommandType.StartMatch });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand { type = GtexVisualCommandType.ResetKickoff });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand { type = GtexVisualCommandType.AssignPossession, actorPlayerId = carrier.GtexPlayerId });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
+            if (!TryResolveScriptedReplayParticipants(
+                    out attackingSide,
+                    out carrier,
+                    out shortOption,
+                    out runner,
+                    out marker,
+                    out presser,
+                    out trackingDefender))
             {
-                type = GtexVisualCommandType.SupportRun,
-                actorPlayerId = shortOption.GtexPlayerId,
-                targetWorldPosition = originalSim.ResolveSupportPoint(shortOption.GtexPlayerId, carrier.GtexPlayerId, originalSim.GetAttackingGoalCenter(0), 0),
-                duration = 1.0f,
-                urgency = 0.9f
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
+                Debug.LogWarning("[GTEX VisualBridge] Scripted replay could not resolve kickoff participants after reset.");
+                CompleteScriptedReplayCaptureSession(false, "participant_resolution_failed_after_reset");
+                yield break;
+            }
+
+            var attackingTeamId = ResolveTeamId(attackingSide);
+            var attackingGoal = ResolveShotTarget(attackingSide, runner);
+            var carryTarget = originalSim.ClampToPitch(ResolveAdvanceTarget(carrier, attackingSide, 5.5f, 1.75f));
+            var shortSupportPoint = originalSim.ResolveSupportPoint(
+                shortOption.GtexPlayerId,
+                carrier.GtexPlayerId,
+                attackingGoal,
+                0);
+            var throughTarget = ResolveDangerousThroughTarget(shortOption, runner, attackingSide);
+            var shotCarryTarget = ResolveShotCarryTarget(runner, attackingSide);
+            var keeper = FindOpposingKeeper(attackingSide);
+            var controlledPlayers = new List<string>
             {
-                type = GtexVisualCommandType.MarkPlayer,
-                actorPlayerId = marker.GtexPlayerId,
-                targetPlayerId = shortOption.GtexPlayerId,
-                duration = 1.2f,
-                urgency = 0.75f
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
+                carrier.GtexPlayerId,
+                shortOption.GtexPlayerId,
+                runner.GtexPlayerId,
+                marker.GtexPlayerId,
+                presser.GtexPlayerId,
+                trackingDefender.GtexPlayerId
+            };
+            if (keeper != null)
             {
-                type = GtexVisualCommandType.PressBallCarrier,
-                actorPlayerId = presser.GtexPlayerId,
-                targetPlayerId = carrier.GtexPlayerId,
-                duration = 0.8f,
-                urgency = 1f
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
+                controlledPlayers.Add(keeper.GtexPlayerId);
+            }
+
+            Debug.Log(
+                "[GTEX VisualBridge] Scripted replay attack side=" + attackingTeamId +
+                " carrier=" + carrier.GtexPlayerId +
+                " short=" + shortOption.GtexPlayerId +
+                " runner=" + runner.GtexPlayerId +
+                " keeper=" + (keeper != null ? keeper.GtexPlayerId : "none"));
+
+            if (!RequestAuthorityLease(attackingTeamId, controlledPlayers, 6f, allowCrossTeam: true))
             {
-                type = GtexVisualCommandType.CarryBall,
-                actorPlayerId = carrier.GtexPlayerId,
-                targetWorldPosition = carrier.Root.position + Vector3.forward * 6f
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
+                CompleteScriptedReplayCaptureSession(false, "authority_lease_failed");
+                yield break;
+            }
+
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand { type = GtexVisualCommandType.AssignPossession, actorPlayerId = carrier.GtexPlayerId },
+                "03_assign_possession",
+                0.55f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.SupportRun,
+                    actorPlayerId = shortOption.GtexPlayerId,
+                    targetWorldPosition = shortSupportPoint,
+                    duration = 1.0f,
+                    urgency = 0.9f
+                },
+                "04_support_run_short",
+                0.72f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.MarkPlayer,
+                    actorPlayerId = marker.GtexPlayerId,
+                    targetPlayerId = shortOption.GtexPlayerId,
+                    duration = 1.2f,
+                    urgency = 0.75f
+                },
+                "05_mark_player_short",
+                0.78f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.PressBallCarrier,
+                    actorPlayerId = presser.GtexPlayerId,
+                    targetPlayerId = carrier.GtexPlayerId,
+                    duration = 0.8f,
+                    urgency = 1f
+                },
+                "06_press_ball_carrier",
+                0.68f);
+
+            if (!RequestAuthorityLease(attackingTeamId, controlledPlayers, 6f, allowCrossTeam: true))
             {
-                type = GtexVisualCommandType.Pass,
-                actorPlayerId = carrier.GtexPlayerId,
-                targetPlayerId = shortOption.GtexPlayerId,
-                isSuccessful = true,
-                passStyle = GtexVisualPassStyle.Ground
-            });
-            yield return WaitBriefly();
-            var attackingGoal = originalSim.GetAttackingGoalCenter(0);
-            var throughTarget = originalSim.ResolveSupportPoint(runner.GtexPlayerId, shortOption.GtexPlayerId, attackingGoal, 1);
-            HandleCommand(new GtexVisualCommand
+                CompleteScriptedReplayCaptureSession(false, "authority_lease_failed_before_carry");
+                yield break;
+            }
+
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.CarryBall,
+                    actorPlayerId = carrier.GtexPlayerId,
+                    targetWorldPosition = carryTarget
+                },
+                "07_carry_ball",
+                0.78f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.Pass,
+                    actorPlayerId = carrier.GtexPlayerId,
+                    targetPlayerId = shortOption.GtexPlayerId,
+                    isSuccessful = true,
+                    passStyle = GtexVisualPassStyle.Ground
+                },
+                "08_ground_pass_receive",
+                0.82f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.SupportRun,
+                    actorPlayerId = runner.GtexPlayerId,
+                    targetWorldPosition = throughTarget,
+                    duration = 1.0f,
+                    urgency = 0.8f
+                },
+                "09_support_run_box",
+                0.8f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.MarkPlayer,
+                    actorPlayerId = trackingDefender.GtexPlayerId,
+                    targetPlayerId = runner.GtexPlayerId,
+                    duration = 1.2f,
+                    urgency = 0.75f
+                },
+                "10_mark_runner",
+                0.78f);
+
+            if (!RequestAuthorityLease(attackingTeamId, controlledPlayers, 6f, allowCrossTeam: true))
             {
-                type = GtexVisualCommandType.SupportRun,
-                actorPlayerId = runner.GtexPlayerId,
-                targetWorldPosition = throughTarget,
-                duration = 1.0f,
-                urgency = 0.8f
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
-            {
-                type = GtexVisualCommandType.MarkPlayer,
-                actorPlayerId = trackingDefender.GtexPlayerId,
-                targetPlayerId = runner.GtexPlayerId,
-                duration = 1.2f,
-                urgency = 0.75f
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
-            {
-                type = GtexVisualCommandType.ThroughPass,
-                actorPlayerId = shortOption.GtexPlayerId,
-                targetPlayerId = runner.GtexPlayerId,
-                targetWorldPosition = throughTarget,
-                passStyle = GtexVisualPassStyle.ThroughGround
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
-            {
-                type = GtexVisualCommandType.Shoot,
-                actorPlayerId = runner.GtexPlayerId,
-                targetWorldPosition = attackingGoal,
-                outcome = "saved"
-            });
-            yield return WaitBriefly();
-            var keeper = originalSim.PlayerMap.FindGoalkeeper("away");
-            HandleCommand(new GtexVisualCommand
-            {
-                type = GtexVisualCommandType.KeeperSave,
-                actorPlayerId = keeper != null ? keeper.GtexPlayerId : string.Empty,
-                targetWorldPosition = attackingGoal
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand
-            {
-                type = GtexVisualCommandType.Goal,
-                actorPlayerId = runner.GtexPlayerId,
-                homeScore = 1,
-                awayScore = 0,
-                matchMinute = 12.4f
-            });
-            yield return WaitBriefly();
-            HandleCommand(new GtexVisualCommand { type = GtexVisualCommandType.ResetKickoff });
-            Debug.Log("[GTEX VisualBridge] Scripted replay complete.");
+                CompleteScriptedReplayCaptureSession(false, "authority_lease_failed_before_final_action");
+                yield break;
+            }
+
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.ThroughPass,
+                    actorPlayerId = shortOption.GtexPlayerId,
+                    targetPlayerId = runner.GtexPlayerId,
+                    targetWorldPosition = throughTarget,
+                    passStyle = GtexVisualPassStyle.ThroughGround
+                },
+                "11_through_pass_receive",
+                0.88f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.CarryBall,
+                    actorPlayerId = runner.GtexPlayerId,
+                    targetWorldPosition = shotCarryTarget
+                },
+                "12_attack_box_carry",
+                0.82f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.Shoot,
+                    actorPlayerId = runner.GtexPlayerId,
+                    targetWorldPosition = attackingGoal,
+                    outcome = "saved"
+                },
+                "13_shot",
+                0.82f);
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.KeeperSave,
+                    actorPlayerId = keeper != null ? keeper.GtexPlayerId : string.Empty,
+                    targetWorldPosition = attackingGoal
+                },
+                "14_keeper_save",
+                0.82f);
+            ReleaseAuthority("completed");
+            yield return ExecuteScriptedReplayStep(
+                new GtexVisualCommand { type = GtexVisualCommandType.ResetKickoff },
+                "15_reset_kickoff",
+                0.95f);
+            Debug.Log("[GTEX VisualBridge] Scripted replay complete with keeper-save ending.");
+            CompleteScriptedReplayCaptureSession(true, "scripted_replay_complete");
             if (quitAfterReplayRequestedFromLaunch)
             {
                 StartCoroutine(QuitAfterReplay());
             }
+        }
+
+        private IEnumerator RunManualHomeAttackSequence()
+        {
+            manualHomeAttackActive = true;
+            Debug.Log("[GTEX SEQ] Start Home Attack");
+
+            EnsureReferences();
+            originalSim.ConfigureOriginalRuntime();
+            originalSim.RebuildPlayerMap();
+
+            const string teamId = "home";
+            const string passerId = "home-7";
+            const string receiverId = "home-9";
+            const string supporterId = "home-10";
+
+            var controlledPlayers = new[] { passerId, receiverId, supporterId };
+            if (!TryResolveManualSequencePlayer(passerId, out var passer) ||
+                !TryResolveManualSequencePlayer(receiverId, out var receiver) ||
+                !TryResolveManualSequencePlayer(supporterId, out var supporter))
+            {
+                FailManualHomeAttack("failed to resolve home-7/home-9/home-10");
+                yield break;
+            }
+
+            if (!RequestManualHomeAttackLease(teamId, controlledPlayers))
+            {
+                FailManualHomeAttack("authority lease rejected");
+                yield break;
+            }
+
+            var supportPoint = originalSim.ClampToPitch(ResolveAdvanceTarget(supporter, GtexSimTeamSide.Home, 6f, 3.5f));
+            var throughPoint = originalSim.ClampToPitch(ResolveAdvanceTarget(receiver, GtexSimTeamSide.Home, 2.2f, 0f));
+            var shotTarget = ResolveShotTarget(GtexSimTeamSide.Home, receiver);
+            var score = GtexScoreAuthority.Current;
+
+            Debug.Log("[GTEX SEQ] Step 1: AssignPossession home-7");
+            HandleCommand(new GtexVisualCommand
+            {
+                type = GtexVisualCommandType.AssignPossession,
+                actorPlayerId = passerId
+            });
+
+            var stepComplete = false;
+            yield return WaitForSequenceCompletion(
+                "[GTEX SEQ] Waiting for AssignPossession completion home-7",
+                "[GTEX SEQ] AssignPossession complete",
+                () => IsPlayerHoldingBall(passer),
+                null,
+                1.5f,
+                value => stepComplete = value);
+            if (!stepComplete)
+            {
+                FailManualHomeAttack("AssignPossession did not complete");
+                yield break;
+            }
+
+            if (!RequestManualHomeAttackLease(teamId, controlledPlayers))
+            {
+                FailManualHomeAttack("authority lease rejected before SupportRun");
+                yield break;
+            }
+
+            Debug.Log("[GTEX SEQ] Step 2: SupportRun home-10");
+            HandleCommand(new GtexVisualCommand
+            {
+                type = GtexVisualCommandType.SupportRun,
+                actorPlayerId = supporterId,
+                targetWorldPosition = supportPoint,
+                duration = 1.2f,
+                urgency = 0.85f
+            });
+
+            stepComplete = false;
+            yield return WaitForSequenceCompletion(
+                "[GTEX SEQ] Waiting for SupportRun completion home-10",
+                "[GTEX SEQ] SupportRun complete",
+                () => DistanceXZ(originalSim.GetPlayerPosition(supporterId), supportPoint) <= 1.5f,
+                null,
+                3.2f,
+                value => stepComplete = value);
+            if (!stepComplete)
+            {
+                FailManualHomeAttack("SupportRun did not complete");
+                yield break;
+            }
+
+            if (!RequestManualHomeAttackLease(teamId, controlledPlayers))
+            {
+                FailManualHomeAttack("authority lease rejected before GroundPass");
+                yield break;
+            }
+
+            Debug.Log("[GTEX SEQ] Step 3: GroundPass home-7 -> home-9");
+            HandleCommand(new GtexVisualCommand
+            {
+                type = GtexVisualCommandType.Pass,
+                actorPlayerId = passerId,
+                targetPlayerId = receiverId,
+                passStyle = GtexVisualPassStyle.Ground,
+                isSuccessful = true
+            });
+
+            stepComplete = false;
+            yield return WaitForSequenceCompletion(
+                "[GTEX SEQ] Waiting for Pass completion (home-7 -> home-9)",
+                "[GTEX SEQ] Pass complete",
+                () => IsPlayerHoldingBall(receiver),
+                () => HasInterception(passer, receiver),
+                4f,
+                value => stepComplete = value);
+            if (!stepComplete)
+            {
+                FailManualHomeAttack("GroundPass did not complete");
+                yield break;
+            }
+
+            if (!RequestManualHomeAttackLease(teamId, controlledPlayers))
+            {
+                FailManualHomeAttack("authority lease rejected before ThroughPass");
+                yield break;
+            }
+
+            Debug.Log("[GTEX SEQ] Step 4: ThroughPass home-9");
+            HandleCommand(new GtexVisualCommand
+            {
+                type = GtexVisualCommandType.ThroughPass,
+                actorPlayerId = receiverId,
+                targetWorldPosition = throughPoint,
+                passStyle = GtexVisualPassStyle.ThroughGround,
+                isSuccessful = true
+            });
+
+            stepComplete = false;
+            yield return WaitForSequenceCompletion(
+                "[GTEX SEQ] Waiting for ThroughPass completion home-9",
+                "[GTEX SEQ] ThroughPass complete",
+                () => IsPlayerHoldingBall(receiver) ||
+                      DistanceXZ(originalSim.GetBallPosition(), originalSim.GetPlayerPosition(receiverId)) <= 2.1f ||
+                      DistanceXZ(originalSim.GetBallPosition(), throughPoint) <= 1.35f,
+                () => HasInterception(receiver, null),
+                3.2f,
+                value => stepComplete = value);
+            if (!stepComplete)
+            {
+                FailManualHomeAttack("ThroughPass did not complete");
+                yield break;
+            }
+
+            if (!RequestManualHomeAttackLease(teamId, controlledPlayers))
+            {
+                FailManualHomeAttack("authority lease rejected before Shoot");
+                yield break;
+            }
+
+            Debug.Log("[GTEX SEQ] Step 5: Shoot home-9");
+            HandleCommand(new GtexVisualCommand
+            {
+                type = GtexVisualCommandType.Shoot,
+                actorPlayerId = receiverId,
+                targetWorldPosition = shotTarget,
+                outcome = "goal"
+            });
+
+            stepComplete = false;
+            yield return WaitForSequenceCompletion(
+                "[GTEX SEQ] Waiting for Shoot completion home-9",
+                "[GTEX SEQ] Shoot complete",
+                () => HasShotLeftFoot(receiver),
+                () => HasInterception(receiver, null),
+                2.2f,
+                value => stepComplete = value);
+            if (!stepComplete)
+            {
+                FailManualHomeAttack("Shoot did not complete");
+                yield break;
+            }
+
+            Debug.Log("[GTEX SEQ] Step 6: Outcome Goal");
+            HandleCommand(new GtexVisualCommand
+            {
+                type = GtexVisualCommandType.Goal,
+                actorPlayerId = receiverId,
+                teamId = teamId,
+                homeScore = score.homeScore + 1,
+                awayScore = score.awayScore,
+                matchMinute = score.minute,
+                outcome = "manual_home_attack_goal"
+            });
+
+            Debug.Log("[GTEX SEQ] Release Authority");
+            ReleaseAuthority("manual-home-attack-complete");
+            manualHomeAttackActive = false;
+            manualHomeAttackRoutine = null;
+        }
+
+        private bool TryResolveManualSequencePlayer(string playerId, out GtexOriginalPlayerVisualProxy proxy)
+        {
+            proxy = null;
+            if (originalSim == null || originalSim.PlayerMap == null)
+            {
+                Debug.LogError("[GTEX SEQ] Player map missing for manual sequence.");
+                return false;
+            }
+
+            if (originalSim.PlayerMap.TryGetCommandProxy(playerId, out proxy, out var reason))
+            {
+                return true;
+            }
+
+            Debug.LogError("[GTEX SEQ] Missing manual sequence player " + playerId + ": " + reason);
+            return false;
+        }
+
+        private bool RequestManualHomeAttackLease(string teamId, IEnumerable<string> controlledPlayers)
+        {
+            return RequestAuthorityLease(teamId, controlledPlayers, 4f);
+        }
+
+        private IEnumerator WaitForSequenceCompletion(
+            string waitingLog,
+            string completeLog,
+            Func<bool> isComplete,
+            Func<bool> hasFailed,
+            float timeoutSeconds,
+            Action<bool> result)
+        {
+            Debug.Log(waitingLog);
+            var end = Time.time + Mathf.Max(0.1f, timeoutSeconds);
+            while (Time.time < end)
+            {
+                if (hasFailed != null && hasFailed())
+                {
+                    result(false);
+                    yield break;
+                }
+
+                if (isComplete != null && isComplete())
+                {
+                    Debug.Log(completeLog);
+                    Debug.Log("[GTEX SEQ] Executing next step");
+                    result(true);
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            Debug.LogError(waitingLog + " timed out.");
+            result(false);
+        }
+
+        private bool IsPlayerHoldingBall(GtexOriginalPlayerVisualProxy player)
+        {
+            return player != null &&
+                   Ball.Current != null &&
+                   Ball.Current.HolderPlayer == player.Player;
+        }
+
+        private bool HasInterception(
+            GtexOriginalPlayerVisualProxy expectedActor,
+            GtexOriginalPlayerVisualProxy expectedReceiver)
+        {
+            if (Ball.Current == null || Ball.Current.HolderPlayer == null)
+            {
+                return false;
+            }
+
+            var holder = Ball.Current.HolderPlayer;
+            if (expectedActor != null && holder == expectedActor.Player)
+            {
+                return false;
+            }
+
+            if (expectedReceiver != null && holder == expectedReceiver.Player)
+            {
+                return false;
+            }
+
+            Debug.LogError("[GTEX SEQ] Action failed: ball was taken by " + holder + ".");
+            return true;
+        }
+
+        private bool HasShotLeftFoot(GtexOriginalPlayerVisualProxy shooter)
+        {
+            if (shooter == null || Ball.Current == null)
+            {
+                return false;
+            }
+
+            if (Ball.Current.HolderPlayer == shooter.Player)
+            {
+                return false;
+            }
+
+            var ballVelocity = Ball.Current.Velocity;
+            var ballDistance = DistanceXZ(Ball.Current.transform.position, shooter.Root.position);
+            return ballVelocity.sqrMagnitude >= 1.5f * 1.5f || ballDistance >= 1.2f;
+        }
+
+        private void FailManualHomeAttack(string reason)
+        {
+            Debug.LogError("[GTEX SEQ] Home Attack failed: " + reason);
+            Debug.Log("[GTEX SEQ] Release Authority");
+            ReleaseAuthority("manual-home-attack-failed");
+            manualHomeAttackActive = false;
+            manualHomeAttackRoutine = null;
+        }
+
+        private static float DistanceXZ(Vector3 a, Vector3 b)
+        {
+            a.y = 0f;
+            b.y = 0f;
+            return Vector3.Distance(a, b);
         }
 
         private IEnumerator RunScriptedVisualReplayWhenReady()
@@ -1026,9 +1728,44 @@ namespace FStudio.GTEX.VisualBridge
 
             Debug.Log("[GTEX VisualBridge] Scripted replay starting.");
             scriptedReplayActive = true;
-            yield return ScriptedReplayRoutine();
+            yield return RunScriptedSequencePatternRoutine();
             scriptedReplayActive = false;
             localReplayRoutine = null;
+        }
+
+        private IEnumerator RunScriptedSequencePatternRoutine()
+        {
+            EnsureReferences();
+            originalSim.ConfigureOriginalRuntime();
+            originalSim.RebuildPlayerMap();
+            BeginScriptedReplayCaptureSession();
+
+            var sequenceId = string.IsNullOrWhiteSpace(scriptedReplaySequenceId)
+                ? GtexVisualSequencePatternLibrary.CentralBuildupShot
+                : scriptedReplaySequenceId;
+
+            if (!GtexVisualSequencePatternLibrary.TryBuild(
+                    sequenceId,
+                    "home",
+                    originalSim,
+                    out var sequence,
+                    out var reason))
+            {
+                Debug.LogError("[GTEX Sequence] Could not build sequence id=" + sequenceId + ": " + reason);
+                CompleteScriptedReplayCaptureSession(false, "sequence_build_failed");
+                yield break;
+            }
+
+            yield return sequenceRunner.RunSequence(sequence);
+            CompleteScriptedReplayCaptureSession(
+                sequenceRunner.LastRunSucceeded,
+                sequenceRunner.LastRunSucceeded
+                    ? "sequence_" + sequence.sequenceId + "_complete"
+                    : "sequence_" + sequence.sequenceId + "_failed_" + sequenceRunner.LastFailureReason);
+            if (quitAfterReplayRequestedFromLaunch)
+            {
+                StartCoroutine(QuitAfterReplay());
+            }
         }
 
         private IEnumerator RunLaunchScriptedReplayAfterReady()
@@ -1036,6 +1773,232 @@ namespace FStudio.GTEX.VisualBridge
             yield return new WaitForSeconds(1f);
             launchReplayRoutine = null;
             RunScriptedCommandReplay();
+        }
+
+        private IEnumerator ExecuteScriptedReplayStep(GtexVisualCommand command, string captureLabel, float captureDelaySeconds = ReplayCaptureDelaySeconds)
+        {
+            HandleCommand(command);
+
+            if (!scriptedReplayCaptureEnabled || string.IsNullOrWhiteSpace(scriptedReplayCaptureSessionDirectory))
+            {
+                yield return WaitBriefly();
+                yield break;
+            }
+
+            var captureDelay = Mathf.Clamp(captureDelaySeconds, 0f, ReplayDelaySeconds);
+            if (captureDelay > 0f)
+            {
+                yield return new WaitForSeconds(captureDelay);
+            }
+
+            yield return CaptureScriptedReplayFrame(captureLabel, command);
+
+            var remainingDelay = ReplayDelaySeconds - captureDelay;
+            if (remainingDelay > 0f)
+            {
+                yield return new WaitForSeconds(remainingDelay);
+            }
+        }
+
+        private void BeginScriptedReplayCaptureSession()
+        {
+            scriptedReplayCapturePaths.Clear();
+            scriptedReplayCaptureIndex = 0;
+            scriptedReplayCaptureSessionDirectory = string.Empty;
+            scriptedReplayCaptureManifestPath = string.Empty;
+
+            if (!scriptedReplayCaptureEnabled || Application.isBatchMode)
+            {
+                return;
+            }
+
+            var outputRoot = ResolveReplayCaptureOutputRoot();
+            if (string.IsNullOrWhiteSpace(outputRoot))
+            {
+                return;
+            }
+
+            try
+            {
+                var sessionStamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                scriptedReplayCaptureSessionDirectory = Path.Combine(
+                    outputRoot,
+                    "scripted-replay-" + sessionStamp);
+                Directory.CreateDirectory(scriptedReplayCaptureSessionDirectory);
+
+                scriptedReplayCaptureManifestPath = Path.Combine(
+                    scriptedReplayCaptureSessionDirectory,
+                    "manifest.txt");
+
+                var header = new StringBuilder();
+                header.AppendLine("session=scripted-replay");
+                header.AppendLine("status=started");
+                header.AppendLine("directory=" + scriptedReplayCaptureSessionDirectory);
+                header.AppendLine("startedAt=" + DateTime.Now.ToString("O"));
+                header.AppendLine("captureDelaySeconds=" + ReplayCaptureDelaySeconds.ToString("0.##"));
+                header.AppendLine("captures=");
+                File.WriteAllText(scriptedReplayCaptureManifestPath, header.ToString());
+
+                Debug.Log("[GTEX VisualBridge] ReplayCapture armed -> " + scriptedReplayCaptureSessionDirectory);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[GTEX VisualBridge] ReplayCapture disabled: " + exception.Message);
+                scriptedReplayCaptureSessionDirectory = string.Empty;
+                scriptedReplayCaptureManifestPath = string.Empty;
+            }
+        }
+
+        private IEnumerator CaptureScriptedReplayFrame(string captureLabel, GtexVisualCommand command)
+        {
+            if (!scriptedReplayCaptureEnabled ||
+                string.IsNullOrWhiteSpace(scriptedReplayCaptureSessionDirectory) ||
+                Application.isBatchMode)
+            {
+                yield break;
+            }
+
+            yield return new WaitForEndOfFrame();
+
+            var safeLabel = SanitizeCaptureLabel(captureLabel);
+            var capturePath = Path.Combine(
+                scriptedReplayCaptureSessionDirectory,
+                string.Format("{0:D2}_{1}.png", scriptedReplayCaptureIndex + 1, safeLabel));
+
+            Texture2D screenshotTexture = null;
+            try
+            {
+                screenshotTexture = ScreenCapture.CaptureScreenshotAsTexture();
+                if (screenshotTexture == null)
+                {
+                    AppendReplayCaptureManifestLine(
+                        "capture_failed|" +
+                        safeLabel +
+                        "|reason=null_texture");
+                    yield break;
+                }
+
+                var pngBytes = screenshotTexture.EncodeToPNG();
+                File.WriteAllBytes(capturePath, pngBytes);
+                scriptedReplayCaptureIndex += 1;
+                scriptedReplayCapturePaths.Add(capturePath);
+                AppendReplayCaptureManifestLine(
+                    "capture|" +
+                    scriptedReplayCaptureIndex.ToString("D2") +
+                    "|" + safeLabel +
+                    "|" + BuildReplayCaptureCommandSummary(command) +
+                    "|path=" + capturePath);
+                Debug.Log("[GTEX VisualBridge] ReplayCapture saved -> " + capturePath);
+            }
+            catch (Exception exception)
+            {
+                AppendReplayCaptureManifestLine(
+                    "capture_failed|" +
+                    safeLabel +
+                    "|reason=" + exception.Message.Replace(Environment.NewLine, " "));
+                Debug.LogWarning("[GTEX VisualBridge] ReplayCapture failed for " + safeLabel + ": " + exception.Message);
+            }
+            finally
+            {
+                if (screenshotTexture != null)
+                {
+                    Destroy(screenshotTexture);
+                }
+            }
+        }
+
+        private void CompleteScriptedReplayCaptureSession(bool completed, string note)
+        {
+            if (!scriptedReplayCaptureEnabled || string.IsNullOrWhiteSpace(scriptedReplayCaptureManifestPath))
+            {
+                return;
+            }
+
+            AppendReplayCaptureManifestLine("status=" + (completed ? "completed" : "incomplete"));
+            AppendReplayCaptureManifestLine("note=" + (string.IsNullOrWhiteSpace(note) ? "n/a" : note));
+            AppendReplayCaptureManifestLine("captureCount=" + scriptedReplayCapturePaths.Count);
+            AppendReplayCaptureManifestLine("endedAt=" + DateTime.Now.ToString("O"));
+
+            if (!string.IsNullOrWhiteSpace(scriptedReplayCaptureSessionDirectory))
+            {
+                Debug.Log(
+                    "[GTEX VisualBridge] ReplayCapture session " +
+                    (completed ? "complete" : "stopped") +
+                    " -> " + scriptedReplayCaptureSessionDirectory);
+            }
+        }
+
+        private static string BuildReplayCaptureCommandSummary(GtexVisualCommand command)
+        {
+            if (command == null)
+            {
+                return "type=None";
+            }
+
+            var builder = new StringBuilder();
+            builder.Append("type=").Append(command.type);
+            if (!string.IsNullOrWhiteSpace(command.actorPlayerId))
+            {
+                builder.Append("|actor=").Append(command.actorPlayerId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(command.targetPlayerId))
+            {
+                builder.Append("|target=").Append(command.targetPlayerId);
+            }
+
+            if (IsPassLike(command.type))
+            {
+                builder.Append("|style=").Append(command.passStyle);
+            }
+
+            if (!string.IsNullOrWhiteSpace(command.outcome))
+            {
+                builder.Append("|outcome=").Append(command.outcome);
+            }
+
+            if (command.targetWorldPosition.sqrMagnitude > 0.001f)
+            {
+                builder.Append("|point=").Append(command.targetWorldPosition.ToString("F2"));
+            }
+
+            return builder.ToString();
+        }
+
+        private static string SanitizeCaptureLabel(string captureLabel)
+        {
+            var source = string.IsNullOrWhiteSpace(captureLabel) ? "capture" : captureLabel.Trim();
+            var invalidCharacters = Path.GetInvalidFileNameChars();
+            var builder = new StringBuilder(source.Length);
+            for (var index = 0; index < source.Length; index += 1)
+            {
+                var character = char.ToLowerInvariant(source[index]);
+                if (invalidCharacters.Contains(character))
+                {
+                    continue;
+                }
+
+                builder.Append(char.IsWhiteSpace(character) ? '_' : character);
+            }
+
+            return builder.Length > 0 ? builder.ToString() : "capture";
+        }
+
+        private void AppendReplayCaptureManifestLine(string line)
+        {
+            if (string.IsNullOrWhiteSpace(scriptedReplayCaptureManifestPath))
+            {
+                return;
+            }
+
+            try
+            {
+                File.AppendAllText(scriptedReplayCaptureManifestPath, line + Environment.NewLine);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[GTEX VisualBridge] ReplayCapture manifest write failed: " + exception.Message);
+            }
         }
 
         private IEnumerator QuitAfterReplay()
@@ -1229,8 +2192,21 @@ namespace FStudio.GTEX.VisualBridge
         {
             scriptedReplayRequestedFromLaunch = ResolveBoolArg(false, "scriptedReplay", "scripted-replay", "gtex-scripted-replay");
             quitAfterReplayRequestedFromLaunch = ResolveBoolArg(false, "quitAfterReplay", "quit-after-replay", "gtex-quit-after-replay");
+            scriptedReplayCaptureEnabled = ResolveBoolArg(
+                scriptedReplayRequestedFromLaunch,
+                "captureReplayFrames",
+                "capture-replay-frames",
+                "replayCaptureFrames",
+                "gtex-capture-replay-frames");
+            scriptedReplayCaptureOutputRoot = ResolveReplayCaptureOutputRoot();
             scriptedReplayLaunchFallbackStarted = false;
             scriptedReplayLaunchRequestedAt = Time.realtimeSinceStartup;
+            scriptedReplaySequenceId = ResolveStringArg(
+                GtexVisualSequencePatternLibrary.CentralBuildupShot,
+                "sequence",
+                "gtex-sequence",
+                "scriptedReplaySequence",
+                "scripted-replay-sequence");
 
             if (!scriptedReplayRequestedFromLaunch)
             {
@@ -1240,7 +2216,10 @@ namespace FStudio.GTEX.VisualBridge
             ApplyCleanCaptureSettings();
             Debug.Log(
                 "[GTEX VisualBridge] Scripted replay launch flag detected. " +
-                "quitAfterReplay=" + quitAfterReplayRequestedFromLaunch + ".");
+                "quitAfterReplay=" + quitAfterReplayRequestedFromLaunch + " " +
+                "sequence=" + scriptedReplaySequenceId + " " +
+                "captureReplayFrames=" + scriptedReplayCaptureEnabled + " " +
+                "captureDir=" + scriptedReplayCaptureOutputRoot + ".");
         }
 
         private void TryStartScriptedReplayLaunchFallback()
@@ -1327,6 +2306,28 @@ namespace FStudio.GTEX.VisualBridge
             Screen.SetResolution(Mathf.Max(640, width), Mathf.Max(360, height), FullScreenMode.Windowed);
         }
 
+        private string ResolveReplayCaptureOutputRoot()
+        {
+            var explicitPath = ResolveStringArg(
+                null,
+                "replayCaptureOutputDir",
+                "replay-capture-output-dir",
+                "captureOutputDir",
+                "capture-output-dir",
+                "gtex-capture-output-dir");
+            if (!string.IsNullOrWhiteSpace(explicitPath))
+            {
+                return Path.GetFullPath(explicitPath.Trim());
+            }
+
+            if (Application.isEditor)
+            {
+                return Path.GetFullPath(Path.Combine(Application.dataPath, "..", "tmp", "original-visual-runtime-replay-captures"));
+            }
+
+            return Path.GetFullPath(Path.Combine(Application.dataPath, "..", "ReplayCaptures"));
+        }
+
         private static bool ResolveBoolArg(bool defaultValue, params string[] names)
         {
             var value = ResolveRawArgValue(names, out var found);
@@ -1361,6 +2362,17 @@ namespace FStudio.GTEX.VisualBridge
         {
             var value = ResolveRawArgValue(names, out var found);
             return found && int.TryParse(value, out var parsed) ? parsed : defaultValue;
+        }
+
+        private static string ResolveStringArg(string defaultValue, params string[] names)
+        {
+            var value = ResolveRawArgValue(names, out var found);
+            if (!found || string.IsNullOrWhiteSpace(value))
+            {
+                return defaultValue;
+            }
+
+            return value.Trim();
         }
 
         private static string ResolveRawArgValue(string[] names, out bool found)
@@ -1555,10 +2567,38 @@ namespace FStudio.GTEX.VisualBridge
         private bool TryResolveAttackPattern(GtexSimTeamSide teamSide, out GtexOriginalPlayerVisualProxy actor, out GtexOriginalPlayerVisualProxy support, out GtexOriginalPlayerVisualProxy wide)
         {
             var players = ResolveTeamOutfieldPlayers(teamSide);
-            actor = players.Length > 0 ? players[0] : null;
-            support = players.Length > 1 ? players[1] : null;
-            wide = players.Length > 2 ? players[2] : support;
-            return actor != null;
+            if (players.Length == 0)
+            {
+                actor = null;
+                support = null;
+                wide = null;
+                return false;
+            }
+
+            var ballPosition = originalSim != null ? originalSim.GetBallPosition() : Vector3.zero;
+            var advancedCandidates = players
+                .OrderByDescending(player => ResolveAttackProgress(teamSide, player))
+                .Take(Mathf.Min(5, players.Length))
+                .ToArray();
+
+            var resolvedActor = advancedCandidates
+                .OrderBy(player => Vector3.SqrMagnitude(player.Root.position - ballPosition))
+                .FirstOrDefault() ?? advancedCandidates[0];
+
+            var supportCandidates = advancedCandidates.Where(player => player != resolvedActor).ToArray();
+            var resolvedSupport = supportCandidates
+                .OrderBy(player => Vector3.SqrMagnitude(player.Root.position - resolvedActor.Root.position))
+                .FirstOrDefault() ?? players.FirstOrDefault(player => player != resolvedActor);
+
+            var resolvedWide = supportCandidates
+                .Where(player => player != resolvedSupport)
+                .OrderByDescending(player => Mathf.Abs(player.Root.position.z - resolvedActor.Root.position.z) + ResolveAttackProgress(teamSide, player) * 10f)
+                .FirstOrDefault() ?? resolvedSupport;
+
+            actor = resolvedActor;
+            support = resolvedSupport;
+            wide = resolvedWide;
+            return resolvedActor != null;
         }
 
         private GtexOriginalPlayerVisualProxy[] ResolveTeamOutfieldPlayers(GtexSimTeamSide teamSide)
@@ -1572,6 +2612,222 @@ namespace FStudio.GTEX.VisualBridge
                 .Where(proxy => proxy != null && proxy.Player != null && !proxy.IsGoalkeeper && proxy.Player.GameTeam != null && (teamId < 0 || proxy.Player.GameTeam.TeamId == teamId))
                 .OrderBy(proxy => proxy.Player.MatchPlayer != null ? proxy.Player.MatchPlayer.Number : int.MaxValue)
                 .ToArray();
+        }
+
+        private bool TryResolveScriptedReplayParticipants(
+            out GtexSimTeamSide attackingSide,
+            out GtexOriginalPlayerVisualProxy carrier,
+            out GtexOriginalPlayerVisualProxy shortOption,
+            out GtexOriginalPlayerVisualProxy runner,
+            out GtexOriginalPlayerVisualProxy marker,
+            out GtexOriginalPlayerVisualProxy presser,
+            out GtexOriginalPlayerVisualProxy trackingDefender)
+        {
+            attackingSide = GtexSimTeamSide.Home;
+            carrier = null;
+            shortOption = null;
+            runner = null;
+            marker = null;
+            presser = null;
+            trackingDefender = null;
+
+            var kickoffBallPosition = originalSim != null ? originalSim.GetBallPosition() : Vector3.zero;
+            var kickoffHolder = ResolveCurrentBallHolderProxy();
+            attackingSide = ResolveScriptedReplayAttackingSide(kickoffHolder, kickoffBallPosition);
+            var defendingSide = attackingSide == GtexSimTeamSide.Home
+                ? GtexSimTeamSide.Away
+                : GtexSimTeamSide.Home;
+
+            var attackers = ResolveTeamOutfieldPlayers(attackingSide);
+            var defenders = ResolveTeamOutfieldPlayers(defendingSide);
+
+            if (attackers.Length < 3 || defenders.Length < 3)
+            {
+                return false;
+            }
+
+            if (kickoffHolder != null &&
+                !kickoffHolder.IsGoalkeeper &&
+                TryResolveProxyTeamSide(kickoffHolder, out var kickoffHolderSide) &&
+                kickoffHolderSide == attackingSide)
+            {
+                carrier = kickoffHolder;
+            }
+
+            if (carrier == null)
+            {
+                carrier = attackers
+                    .OrderBy(proxy => Vector3.SqrMagnitude(proxy.Root.position - kickoffBallPosition))
+                    .FirstOrDefault();
+            }
+
+            var resolvedCarrier = carrier;
+            var resolvedAttackingSide = attackingSide;
+            shortOption = attackers
+                .Where(proxy => proxy != resolvedCarrier)
+                .OrderBy(proxy => Vector3.SqrMagnitude(proxy.Root.position - resolvedCarrier.Root.position))
+                .ThenByDescending(proxy => ResolveAttackProgress(resolvedAttackingSide, proxy))
+                .FirstOrDefault();
+
+            var resolvedShortOption = shortOption;
+            runner = attackers
+                .Where(proxy => proxy != resolvedCarrier && proxy != resolvedShortOption)
+                .OrderByDescending(proxy => ResolveAttackProgress(resolvedAttackingSide, proxy))
+                .ThenBy(proxy => Vector3.SqrMagnitude(proxy.Root.position - resolvedCarrier.Root.position))
+                .FirstOrDefault();
+
+            presser = ResolveNearestDistinct(defenders, carrier, null, null);
+            marker = ResolveNearestDistinct(defenders, shortOption, presser, null);
+            trackingDefender = ResolveNearestDistinct(defenders, runner, presser, marker);
+
+            return carrier != null &&
+                   shortOption != null &&
+                   runner != null &&
+                   marker != null &&
+                   presser != null &&
+                   trackingDefender != null;
+        }
+
+        private GtexOriginalPlayerVisualProxy ResolveCurrentBallHolderProxy()
+        {
+            var holder = Ball.Current != null ? Ball.Current.HolderPlayer : null;
+            if (holder == null || originalSim == null || originalSim.PlayerMap == null)
+            {
+                return null;
+            }
+
+            return originalSim.PlayerMap.Proxies.FirstOrDefault(proxy => proxy != null && proxy.Player == holder);
+        }
+
+        private GtexSimTeamSide ResolveScriptedReplayAttackingSide(
+            GtexOriginalPlayerVisualProxy kickoffHolder,
+            Vector3 kickoffBallPosition)
+        {
+            if (kickoffHolder != null &&
+                !kickoffHolder.IsGoalkeeper &&
+                TryResolveProxyTeamSide(kickoffHolder, out var holderSide))
+            {
+                return holderSide;
+            }
+
+            var home = ResolveNearestOutfieldPlayers(GtexSimTeamSide.Home, kickoffBallPosition, 1).FirstOrDefault();
+            var away = ResolveNearestOutfieldPlayers(GtexSimTeamSide.Away, kickoffBallPosition, 1).FirstOrDefault();
+            if (home == null && away == null)
+            {
+                return GtexSimTeamSide.Home;
+            }
+
+            if (home == null)
+            {
+                return GtexSimTeamSide.Away;
+            }
+
+            if (away == null)
+            {
+                return GtexSimTeamSide.Home;
+            }
+
+            return Vector3.SqrMagnitude(home.Root.position - kickoffBallPosition) <=
+                   Vector3.SqrMagnitude(away.Root.position - kickoffBallPosition)
+                ? GtexSimTeamSide.Home
+                : GtexSimTeamSide.Away;
+        }
+
+        private bool TryResolveProxyTeamSide(GtexOriginalPlayerVisualProxy proxy, out GtexSimTeamSide teamSide)
+        {
+            teamSide = GtexSimTeamSide.Home;
+            if (proxy == null)
+            {
+                return false;
+            }
+
+            var commandSide = GtexPlayerVisualMap.ResolveTeamSide(proxy.GtexPlayerId);
+            if (string.Equals(commandSide, "home", StringComparison.OrdinalIgnoreCase))
+            {
+                teamSide = GtexSimTeamSide.Home;
+                return true;
+            }
+
+            if (string.Equals(commandSide, "away", StringComparison.OrdinalIgnoreCase))
+            {
+                teamSide = GtexSimTeamSide.Away;
+                return true;
+            }
+
+            var manager = MatchManager.Current;
+            if (manager != null && proxy.Player != null)
+            {
+                if (proxy.Player.GameTeam == manager.GameTeam1)
+                {
+                    teamSide = GtexSimTeamSide.Home;
+                    return true;
+                }
+
+                if (proxy.Player.GameTeam == manager.GameTeam2)
+                {
+                    teamSide = GtexSimTeamSide.Away;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string ResolveTeamId(GtexSimTeamSide teamSide)
+        {
+            return teamSide == GtexSimTeamSide.Away ? "away" : "home";
+        }
+
+        private static GtexOriginalPlayerVisualProxy ResolveNearestDistinct(
+            IEnumerable<GtexOriginalPlayerVisualProxy> candidates,
+            GtexOriginalPlayerVisualProxy target,
+            GtexOriginalPlayerVisualProxy excludedA,
+            GtexOriginalPlayerVisualProxy excludedB)
+        {
+            if (target == null)
+            {
+                return null;
+            }
+
+            return candidates
+                .Where(proxy => proxy != null && proxy != excludedA && proxy != excludedB)
+                .OrderBy(proxy => Vector3.SqrMagnitude(proxy.Root.position - target.Root.position))
+                .FirstOrDefault();
+        }
+
+        private GtexOriginalPlayerVisualProxy[] ResolveNearestOutfieldPlayers(GtexSimTeamSide teamSide, Vector3 origin, int maxCount)
+        {
+            if (maxCount <= 0)
+            {
+                return Array.Empty<GtexOriginalPlayerVisualProxy>();
+            }
+
+            return ResolveTeamOutfieldPlayers(teamSide)
+                .Where(proxy => proxy != null && proxy.Player != null && !proxy.IsGoalkeeper)
+                .OrderBy(proxy => Vector3.SqrMagnitude(proxy.Root.position - origin))
+                .Take(maxCount)
+                .ToArray();
+        }
+
+        private float ResolveAttackProgress(GtexSimTeamSide teamSide, GtexOriginalPlayerVisualProxy player)
+        {
+            if (player == null)
+            {
+                return 0f;
+            }
+
+            var manager = MatchManager.Current;
+            var fieldLength = manager != null
+                ? (manager.fieldEndX > 0f ? manager.fieldEndX : manager.SizeOfField.x)
+                : 105f;
+            if (fieldLength <= 0.01f)
+            {
+                fieldLength = 105f;
+            }
+
+            return teamSide == GtexSimTeamSide.Home
+                ? Mathf.Clamp01(player.Root.position.x / fieldLength)
+                : Mathf.Clamp01((fieldLength - player.Root.position.x) / fieldLength);
         }
 
         private GtexOriginalPlayerVisualProxy FindOpposingKeeper(GtexSimTeamSide attackingSide)
@@ -1597,6 +2853,55 @@ namespace FStudio.GTEX.VisualBridge
             direction.Normalize();
             var lateral = Vector3.Cross(Vector3.up, direction).normalized * lateralDistance;
             return actor.Root.position + direction * forwardDistance + lateral;
+        }
+
+        private Vector3 ResolveDangerousThroughTarget(
+            GtexOriginalPlayerVisualProxy passer,
+            GtexOriginalPlayerVisualProxy runner,
+            GtexSimTeamSide teamSide)
+        {
+            var manager = MatchManager.Current;
+            var goal = ResolveOpposingGoal(teamSide, manager);
+            var source = passer != null ? passer.Root.position : runner != null ? runner.Root.position : Vector3.zero;
+            var direction = goal - source;
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.001f)
+            {
+                direction = teamSide == GtexSimTeamSide.Home ? Vector3.right : Vector3.left;
+            }
+
+            direction.Normalize();
+            var lateral = Vector3.Cross(Vector3.up, direction).normalized;
+            var lateralSign = runner != null && runner.Root.position.z < goal.z ? -1f : 1f;
+            var target = goal - direction * 16f + lateral * lateralSign * 3.2f;
+            if (runner != null)
+            {
+                target.y = runner.Root.position.y;
+            }
+
+            return originalSim != null ? originalSim.ClampToPitch(target) : target;
+        }
+
+        private Vector3 ResolveShotCarryTarget(GtexOriginalPlayerVisualProxy runner, GtexSimTeamSide teamSide)
+        {
+            if (runner == null)
+            {
+                return Vector3.zero;
+            }
+
+            var manager = MatchManager.Current;
+            var goal = ResolveOpposingGoal(teamSide, manager);
+            var direction = goal - runner.Root.position;
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.001f)
+            {
+                direction = teamSide == GtexSimTeamSide.Home ? Vector3.right : Vector3.left;
+            }
+
+            direction.Normalize();
+            var target = goal - direction * 12f;
+            target.y = runner.Root.position.y;
+            return originalSim != null ? originalSim.ClampToPitch(target) : target;
         }
 
         private Vector3 ResolveShotTarget(GtexSimTeamSide teamSide, GtexOriginalPlayerVisualProxy actor)
@@ -1791,7 +3096,17 @@ namespace FStudio.GTEX.VisualBridge
                 }
             }
 
+            if (sequenceRunner == null)
+            {
+                sequenceRunner = GetComponent<GtexSequenceRunner>();
+                if (sequenceRunner == null)
+                {
+                    sequenceRunner = gameObject.AddComponent<GtexSequenceRunner>();
+                }
+            }
+
             intentDirector.Bind(this, originalSim);
+            sequenceRunner.Bind(this, originalSim);
         }
 
         private void EnsurePersistentRuntimeHost()

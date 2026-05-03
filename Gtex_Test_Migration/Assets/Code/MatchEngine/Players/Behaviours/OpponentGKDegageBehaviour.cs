@@ -30,6 +30,12 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                 goalNet,
                 targetGoalNet);
 
+            tacticalPosition = OriginalRuntimeRoleAwareness.DampShapeMovement(
+                Player,
+                Player.Position,
+                tacticalPosition,
+                false);
+
             var distanceToTarget = (tacticalPosition - Player.Position).magnitude;
 
             var movement = (MovementType) Mathf.RoundToInt (movementCurve.Evaluate(distanceToTarget));

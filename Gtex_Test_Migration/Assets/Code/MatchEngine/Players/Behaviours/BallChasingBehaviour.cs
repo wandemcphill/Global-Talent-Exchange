@@ -2,6 +2,8 @@
 using FStudio.MatchEngine.Balls;
 using FStudio.MatchEngine.Enums;
 using FStudio.MatchEngine.Players.PlayerController;
+using FStudio.GTEX.Core;
+using FStudio.GTEX.VisualBridge;
 using FStudio.Players.Behaviours;
 using System.Collections.Generic;
 using System.Linq;
@@ -52,6 +54,14 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         public PlayerBase ActivePlayer => Player;
 
         public override bool Behave (bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
+            if (GtexVisualAuthority.ShouldSuppressNonControlledAggression(Player)) {
+                return false;
+            }
+
             if (ball.HolderPlayer != null) {
                 return false;
             }
@@ -82,7 +92,7 @@ namespace FStudio.MatchEngine.Players.Behaviours {
                     return false;
                 }
 
-                if (IsTheBallGoingOutside ()) {
+                if (IsTheBallGoingOutside () && !ShouldOriginalRuntimeSaveLooseBall()) {
                     Log(this, $"Ball is going outside, no need for chasing.");
                     return false;
                 }
@@ -136,6 +146,23 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             var debugger = Player.PlayerController.IsDebuggerEnabled;
 
             float relaxation = 0;
+
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                if (OriginalRuntimeRoleAwareness.TryGetLooseBallChaseRole(
+                    Player,
+                    teammates,
+                    goalNet,
+                    ball,
+                    fieldEndX,
+                    fieldEndY,
+                    out var originalRuntimeResult)) {
+                    ChasingDistance = BallChasingDistance(Player);
+                    return (originalRuntimeResult, relaxation);
+                }
+
+                ChasingDistance = -1;
+                return (BallChasingResult.None, relaxation);
+            }
 
             var chaserCount = Player.
                 GameTeam.
@@ -267,6 +294,30 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             }
 
             return true;
+        }
+
+        protected bool ShouldOriginalRuntimeSaveLooseBall() {
+            if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() ||
+                ball == null ||
+                ball.HolderPlayer != null ||
+                ball.transform.position.y > 0.85f) {
+                return false;
+            }
+
+            if (Player.IsGK &&
+                !OriginalRuntimeRoleAwareness.CanGoalkeeperLeaveBoxForBall(Player, ball.transform.position, goalNet, fieldEndX, fieldEndY)) {
+                return false;
+            }
+
+            return Vector3.Distance(Player.Position, ball.transform.position) <= 17f &&
+                OriginalRuntimeRoleAwareness.TryGetLooseBallChaseRole(
+                    Player,
+                    teammates,
+                    goalNet,
+                    ball,
+                    fieldEndX,
+                    fieldEndY,
+                    out _);
         }
     }
 }

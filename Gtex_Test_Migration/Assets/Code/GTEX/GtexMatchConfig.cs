@@ -132,7 +132,8 @@ namespace FStudio.GTEX
         public void EnsureDefaults()
         {
             var normalizedRuntimeMode = NormalizeRuntimeModeToken(runtimeMode);
-            if (!string.Equals(runtimeMode, normalizedRuntimeMode, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(runtimeMode, normalizedRuntimeMode, StringComparison.OrdinalIgnoreCase) &&
+                !IsRecognizedRuntimeModeToken(runtimeMode))
             {
                 Debug.LogWarning("[GTEX] runtimeMode was invalid. Defaulting to '" + normalizedRuntimeMode + "'.");
             }
@@ -362,6 +363,30 @@ namespace FStudio.GTEX
                 case "liveplayback":
                 default:
                     return "live";
+            }
+        }
+
+        private static bool IsRecognizedRuntimeModeToken(string value)
+        {
+            switch ((value ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "simulation":
+                case "sim":
+                case "local-simulation":
+                case "localsimulation":
+                case "original":
+                case "original-visual":
+                case "originalvisual":
+                case "original-visual-runtime":
+                case "originalvisualruntime":
+                case "visual-runtime":
+                case "visualruntime":
+                case "live":
+                case "live-playback":
+                case "liveplayback":
+                    return true;
+                default:
+                    return false;
             }
         }
 

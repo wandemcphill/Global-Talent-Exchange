@@ -1,4 +1,5 @@
 using System;
+using FStudio.GTEX;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -7,6 +8,8 @@ namespace FStudio.GTEX.Core
     public static class GtexOriginalVisualRuntimePolicy
     {
         public const string SceneName = GtexSceneLoader.OriginalVisualRuntimeSceneName;
+        private static bool configRuntimeModeResolved;
+        private static bool configRuntimeModeIsOriginal;
 
         public static bool AllowGtexDevBootstrap => !IsOriginalVisualRuntime();
 
@@ -36,14 +39,28 @@ namespace FStudio.GTEX.Core
                 return true;
             }
 
+            if (GtexRuntimeFlags.IsOriginalVisualRuntime)
+            {
+                return true;
+            }
+
+            if (configRuntimeModeResolved)
+            {
+                return configRuntimeModeIsOriginal;
+            }
+
             try
             {
                 var config = GtexMatchConfigLoader.Load(false);
-                return config != null &&
-                       config.ResolveRuntimeMode() == GtexRuntimeMode.OriginalVisualRuntime;
+                configRuntimeModeIsOriginal = config != null &&
+                    config.ResolveRuntimeMode() == GtexRuntimeMode.OriginalVisualRuntime;
+                configRuntimeModeResolved = true;
+                return configRuntimeModeIsOriginal;
             }
             catch
             {
+                configRuntimeModeResolved = true;
+                configRuntimeModeIsOriginal = false;
                 return false;
             }
         }

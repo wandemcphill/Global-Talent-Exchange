@@ -11,6 +11,10 @@ namespace FStudio.MatchEngine.Players.Behaviours {
         private PlayerBase targetPlayer;
 
         public override bool Behave(bool isAlreadyActive) {
+            if (!OriginalRuntimeRoleAwareness.CanUseOpenPlayBehaviour(matchStatus)) {
+                return false;
+            }
+
             if (Player.IsHoldingBall) {
                 return false;
             }

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using System.Reflection;
 using FStudio.MatchEngine;
 using FStudio.MatchEngine.Balls;
@@ -21,6 +22,8 @@ namespace FStudio.GTEX.VisualBridge
 
         private Coroutine movementRoutine;
         private Coroutine groundPassRoutine;
+        private Coroutine receiveTrapRoutine;
+        private Coroutine keeperSaveTrapRoutine;
 
         public string GtexPlayerId { get; private set; } = string.Empty;
 
@@ -36,6 +39,7 @@ namespace FStudio.GTEX.VisualBridge
         {
             GtexPlayerId = gtexPlayerId ?? string.Empty;
             Player = player;
+            GtexVisualAuthority.RegisterPlayer(player, GtexPlayerId);
             root = player != null && player.PlayerController != null
                 ? player.PlayerController.UnityObject.transform
                 : transform;
@@ -103,12 +107,18 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            if (!Player.IsHoldingBall)
+            if (!Player.IsHoldingBall && !TryTakeNearbyBallForCommand("CarryBall", 1.85f))
             {
-                GiveBall();
+                return;
             }
 
-            StartMoveRoutine(target, 2.75f, MovementType.Normal);
+            var flatTarget = target;
+            flatTarget.y = Player.Position.y;
+            var flatDistance = Vector3.Distance(Player.Position, flatTarget);
+            StartMoveRoutine(
+                flatTarget,
+                Mathf.Clamp(flatDistance / 3.6f, 0.65f, 2.25f),
+                flatDistance > 7.5f ? MovementType.BestHeCanDo : MovementType.Normal);
         }
 
         public void PassTo(GtexOriginalPlayerVisualProxy receiver)
@@ -133,34 +143,55 @@ namespace FStudio.GTEX.VisualBridge
                 Player.PassingTarget = receiver.Player;
             }
 
-            GroundPassToPointInternal(receiver.Root.position, receiver.Player);
+            GroundPassToPointInternal(ResolveReceiverFeetPoint(receiver), receiver.Player, receiver.GtexPlayerId);
+        }
+
+        public void GroundPassTo(GtexOriginalPlayerVisualProxy receiver, Vector3 receivePoint)
+        {
+            if (receiver == null)
+            {
+                GroundPassToPoint(receivePoint);
+                return;
+            }
+
+            if (Player != null)
+            {
+                Player.PassingTarget = receiver.Player;
+            }
+
+            GroundPassToPointInternal(receivePoint, receiver.Player, receiver.GtexPlayerId);
         }
 
         public void GroundPassToPoint(Vector3 point)
         {
-            GroundPassToPointInternal(point, Player != null ? Player.PassingTarget : null);
+            GroundPassToPointInternal(point, Player != null ? Player.PassingTarget : null, string.Empty);
         }
 
-        private void GroundPassToPointInternal(Vector3 point, PlayerBase receiver)
+        public void PrepareToReceive(Vector3 point, float urgency, float duration)
+        {
+            StartIntentRoutine(ReceiveRoutine(point, urgency, duration));
+        }
+
+        private void GroundPassToPointInternal(Vector3 point, PlayerBase receiver, string receiverUid)
         {
             if (Player == null)
             {
                 return;
             }
 
-            if (!Player.IsHoldingBall)
-            {
-                GiveBall();
-            }
-
-            var target = point;
-            target.y = Player.Position.y;
-            if (animator == null && TryCallOriginalGroundPass(target, receiver))
+            if (!Player.IsHoldingBall && !TryTakeNearbyBallForCommand("Pass", 1.65f))
             {
                 return;
             }
 
-            PassToPointFlat(target, receiver);
+            var target = point;
+            target.y = Player.Position.y;
+            if (animator == null && TryCallOriginalGroundPass(target, receiver, receiverUid))
+            {
+                return;
+            }
+
+            PassToPointFlat(target, receiver, receiverUid);
         }
 
         public void LoftPassTo(GtexOriginalPlayerVisualProxy receiver)
@@ -216,7 +247,9 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            MoveToSupportPoint(target);
+            FaceTarget(target);
+            StartIntentRoutine(MoveIntentRoutine(target, 1f, 1.1f, "KeeperSave"));
+            StartKeeperSaveTrapRoutine(target);
             if (animator != null)
             {
                 animator.SetTrigger("GKBallSave_Low");
@@ -342,6 +375,33 @@ namespace FStudio.GTEX.VisualBridge
             }
         }
 
+        private IEnumerator ReceiveRoutine(Vector3 point, float urgency, float duration)
+        {
+            var end = Time.time + Mathf.Max(0.2f, duration);
+            while (Time.time < end)
+            {
+                if (HasBall)
+                {
+                    yield break;
+                }
+
+                var flatDelta = point - Root.position;
+                flatDelta.y = 0f;
+                if (flatDelta.sqrMagnitude <= 0.2f * 0.2f)
+                {
+                    yield break;
+                }
+
+                MoveUsingOriginalController(point, Mathf.Clamp01(Mathf.Lerp(urgency, 0.35f, 0.35f)));
+                if (Ball.Current != null)
+                {
+                    FaceTarget(Ball.Current.transform.position);
+                }
+
+                yield return null;
+            }
+        }
+
         private void MoveUsingOriginalController(Vector3 point, float urgency)
         {
             if (TryCallOriginalMoveTo(point, urgency))
@@ -372,7 +432,7 @@ namespace FStudio.GTEX.VisualBridge
             return true;
         }
 
-        private bool TryCallOriginalGroundPass(Vector3 groundTarget, PlayerBase receiver)
+        private bool TryCallOriginalGroundPass(Vector3 groundTarget, PlayerBase receiver, string receiverUid)
         {
             if (Player == null)
             {
@@ -386,7 +446,7 @@ namespace FStudio.GTEX.VisualBridge
                 return false;
             }
 
-            StartGroundPassRoutine(groundTarget, receiver, groundPassReleaseDelay);
+            StartGroundPassRoutine(groundTarget, receiver, receiverUid, groundPassReleaseDelay);
             return true;
         }
 
@@ -397,9 +457,9 @@ namespace FStudio.GTEX.VisualBridge
                 return false;
             }
 
-            if (!Player.IsHoldingBall)
+            if (!Player.IsHoldingBall && !TryTakeNearbyBallForCommand("LoftPass", 1.65f))
             {
-                GiveBall();
+                return false;
             }
 
             var target = targetPoint;
@@ -415,9 +475,27 @@ namespace FStudio.GTEX.VisualBridge
                 return false;
             }
 
-            if (!Player.IsHoldingBall)
+            if (!Player.IsHoldingBall && !TryTakeNearbyBallForCommand("Shoot", 1.85f))
             {
-                GiveBall();
+                return false;
+            }
+
+            var normalizedOutcome = (outcome ?? string.Empty).ToLowerInvariant();
+            if (normalizedOutcome.Contains("save"))
+            {
+                Player.Shoot(ComputeDirectShotVelocity(targetPoint, 0.82f));
+                return Player.ballHitAnimationEvent == BallHitAnimationEvent.Shoot;
+            }
+
+            var opponentGoal = ResolveOpponentGoalNet();
+            if (opponentGoal != null)
+            {
+                var shootPoint = ResolveGoalShootPoint(opponentGoal, targetPoint, outcome);
+                if (shootPoint != null)
+                {
+                    Player.Shoot(opponentGoal.GetShootingVectorFromPoint(Player, shootPoint));
+                    return Player.ballHitAnimationEvent == BallHitAnimationEvent.Shoot;
+                }
             }
 
             var origin = Ball.Current != null ? Ball.Current.transform.position : Player.Position;
@@ -435,8 +513,7 @@ namespace FStudio.GTEX.VisualBridge
             var distance = Mathf.Clamp(toTarget.magnitude, 8f, 35f);
             var powerSkill = Player.MatchPlayer != null ? Player.MatchPlayer.ActualShootPower / 100f : 0.65f;
             var velocity = toTarget.normalized * Mathf.Lerp(18f, 34f, powerSkill) * Mathf.Clamp(distance / 22f, 0.75f, 1.25f);
-            if (!string.IsNullOrWhiteSpace(outcome) &&
-                outcome.ToLowerInvariant().Contains("on_target"))
+            if (normalizedOutcome.Contains("on_target"))
             {
                 velocity *= 1.05f;
             }
@@ -446,7 +523,31 @@ namespace FStudio.GTEX.VisualBridge
             return Player.ballHitAnimationEvent == BallHitAnimationEvent.Shoot;
         }
 
-        private void PassToPointFlat(Vector3 groundTarget, PlayerBase receiver)
+        private Vector3 ComputeDirectShotVelocity(Vector3 targetPoint, float powerScale)
+        {
+            var origin = Ball.Current != null ? Ball.Current.transform.position : Player.Position;
+            var toTarget = targetPoint - origin;
+            if (toTarget.sqrMagnitude < 0.01f)
+            {
+                toTarget = Player.PlayerController != null ? Player.PlayerController.Forward : Root.forward;
+            }
+
+            if (toTarget.sqrMagnitude < 0.01f)
+            {
+                toTarget = Vector3.forward;
+            }
+
+            var flat = toTarget;
+            flat.y = 0f;
+            var distance = Mathf.Clamp(flat.magnitude, 8f, 34f);
+            var skill = Player.MatchPlayer != null ? Mathf.Clamp01(Player.MatchPlayer.ActualShootPower / 100f) : 0.65f;
+            var speed = Mathf.Lerp(16f, 27f, skill) * Mathf.Clamp(distance / 22f, 0.8f, 1.18f) * Mathf.Clamp(powerScale, 0.5f, 1.2f);
+            var velocity = toTarget.normalized * speed;
+            velocity.y = Mathf.Clamp(toTarget.y * 0.75f + Mathf.Lerp(0.8f, 1.8f, skill), 0.7f, 2.4f);
+            return velocity;
+        }
+
+        private void PassToPointFlat(Vector3 groundTarget, PlayerBase receiver, string receiverUid)
         {
             if (Player == null)
             {
@@ -467,20 +568,20 @@ namespace FStudio.GTEX.VisualBridge
                 animator.SetTrigger("Pass");
             }
 
-            StartGroundPassRoutine(groundTarget, receiver, 0.05f);
+            StartGroundPassRoutine(groundTarget, receiver, receiverUid, 0.05f);
         }
 
-        private void StartGroundPassRoutine(Vector3 groundTarget, PlayerBase receiver, float delay)
+        private void StartGroundPassRoutine(Vector3 groundTarget, PlayerBase receiver, string receiverUid, float delay)
         {
             if (groundPassRoutine != null)
             {
                 StopCoroutine(groundPassRoutine);
             }
 
-            groundPassRoutine = StartCoroutine(ReleaseGroundPassRoutine(groundTarget, receiver, delay));
+            groundPassRoutine = StartCoroutine(ReleaseGroundPassRoutine(groundTarget, receiver, receiverUid, delay));
         }
 
-        private IEnumerator ReleaseGroundPassRoutine(Vector3 groundTarget, PlayerBase receiver, float delay)
+        private IEnumerator ReleaseGroundPassRoutine(Vector3 groundTarget, PlayerBase receiver, string receiverUid, float delay)
         {
             if (delay > 0f)
             {
@@ -502,20 +603,174 @@ namespace FStudio.GTEX.VisualBridge
                 yield break;
             }
 
-            var velocity = ComputeGroundPassVelocity(groundTarget, ball.transform.position);
+            var passOrigin = ball.transform.position;
+            var velocity = ComputeGroundPassVelocity(groundTarget, passOrigin, out var passDistance, out var passSpeed);
+            Debug.Log(
+                "[GTEX PASS] actor=" + GtexPlayerId +
+                " target=" + ResolveReceiverLogName(receiver, receiverUid) +
+                " dist=" + passDistance.ToString("0.0") + "m" +
+                " speed=" + passSpeed.ToString("0.0"));
+
+            if (receiver != null)
+            {
+                var receiveDuration = Mathf.Clamp(passDistance / Mathf.Max(passSpeed, 0.1f) + 0.85f, 1.05f, 2.4f);
+                receiver.CommitOriginalRuntimeReceive(Player, groundTarget, receiveDuration);
+                ball.TrackOriginalRuntimeReceiver(receiver, groundTarget, receiveDuration);
+                receiver.ActivateBehaviour("BallChasingWithoutCondition");
+                Debug.Log("[GTEX RECEIVE] receiver=" + ResolveReceiverLogName(receiver, receiverUid) + " moving to intercept");
+            }
+
             if (!TryInvokeBallHit(ball, Player, velocity))
             {
+                receiver?.ClearOriginalRuntimeReceiveCommit();
                 ClearPendingGroundPass(receiver);
                 groundPassRoutine = null;
                 yield break;
             }
 
             MatchManager.Current?.DelayBehaviourSelectionByReactionSkill();
+            StartReceiveTrapRoutine(receiver, groundTarget, passOrigin, receiverUid);
+            TryTriggerPassAndRun(receiver);
             ClearPendingGroundPass(receiver);
             groundPassRoutine = null;
         }
 
-        private Vector3 ComputeGroundPassVelocity(Vector3 groundTarget, Vector3 origin)
+        private void StartReceiveTrapRoutine(PlayerBase receiver, Vector3 groundTarget, Vector3 passOrigin, string receiverUid)
+        {
+            if (receiver == null)
+            {
+                return;
+            }
+
+            if (receiveTrapRoutine != null)
+            {
+                StopCoroutine(receiveTrapRoutine);
+            }
+
+            receiveTrapRoutine = StartCoroutine(ReceiveTrapRoutine(receiver, groundTarget, passOrigin, receiverUid));
+        }
+
+        private IEnumerator ReceiveTrapRoutine(PlayerBase receiver, Vector3 groundTarget, Vector3 passOrigin, string receiverUid)
+        {
+            var end = Time.time + 1.75f;
+            while (Time.time < end && receiver != null && Ball.Current != null)
+            {
+                var ball = Ball.Current;
+                if (ball.HolderPlayer == receiver)
+                {
+                    Debug.Log("[GTEX RECEIVE] trap success " + ResolveReceiverLogName(receiver, receiverUid));
+                    receiveTrapRoutine = null;
+                    yield break;
+                }
+
+                if (ball.HolderPlayer != null && ball.HolderPlayer != Player)
+                {
+                    receiver.ClearOriginalRuntimeReceiveCommit();
+                    Debug.Log("[GTEX RECEIVE] trap failed -> loose ball");
+                    receiveTrapRoutine = null;
+                    yield break;
+                }
+
+                var ballPosition = ball.transform.position;
+                var interceptPoint = ResolveReceiveInterceptPoint(receiver, ballPosition, passOrigin, groundTarget);
+                MoveReceiverTowardIntercept(receiver, interceptPoint, ballPosition);
+                var receiverPosition = receiver.Position;
+
+                var receiverDistance = DistanceXZ(ballPosition, receiverPosition);
+                var targetDistance = DistanceXZ(ballPosition, groundTarget);
+                if (receiverDistance <= 1.38f && targetDistance <= 1.9f)
+                {
+                    ball.StopDeadBallMotion();
+                    ball.Hold(receiver);
+                    Debug.Log("[GTEX RECEIVE] trap success " + ResolveReceiverLogName(receiver, receiverUid));
+                    receiveTrapRoutine = null;
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            receiver?.ClearOriginalRuntimeReceiveCommit();
+            Debug.Log("[GTEX RECEIVE] trap failed -> loose ball");
+            receiveTrapRoutine = null;
+        }
+
+        private void StartKeeperSaveTrapRoutine(Vector3 saveTarget)
+        {
+            if (Player == null || !Player.IsGK)
+            {
+                return;
+            }
+
+            if (keeperSaveTrapRoutine != null)
+            {
+                StopCoroutine(keeperSaveTrapRoutine);
+            }
+
+            keeperSaveTrapRoutine = StartCoroutine(KeeperSaveTrapRoutine(saveTarget));
+        }
+
+        private IEnumerator KeeperSaveTrapRoutine(Vector3 saveTarget)
+        {
+            var end = Time.time + 1.65f;
+            while (Time.time < end && Ball.Current != null && Player != null)
+            {
+                var ball = Ball.Current;
+                if (ball.HolderPlayer == Player)
+                {
+                    keeperSaveTrapRoutine = null;
+                    yield break;
+                }
+
+                if (ball.HolderPlayer != null && ball.HolderPlayer != Player)
+                {
+                    keeperSaveTrapRoutine = null;
+                    yield break;
+                }
+
+                var ballPosition = ball.transform.position;
+                var keeperDistance = DistanceXZ(ballPosition, Root.position);
+                var savePointDistance = DistanceXZ(ballPosition, saveTarget);
+                if (keeperDistance <= 2.35f || savePointDistance <= 1.95f)
+                {
+                    ball.Hold(Player);
+                    SettleKeeperAfterSave(saveTarget);
+                    keeperSaveTrapRoutine = null;
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            keeperSaveTrapRoutine = null;
+        }
+
+        private void SettleKeeperAfterSave(Vector3 faceTarget)
+        {
+            if (Player == null)
+            {
+                return;
+            }
+
+            Player.ResetBehaviours();
+            Player.InstantStop();
+            FaceTarget(faceTarget);
+            StartIntentRoutine(KeeperSettleRoutine(faceTarget, 3f));
+        }
+
+        private IEnumerator KeeperSettleRoutine(Vector3 faceTarget, float duration)
+        {
+            var end = Time.time + Mathf.Max(0.2f, duration);
+            while (Time.time < end && Player != null && HasBall)
+            {
+                Player.ResetBehaviours();
+                Player.InstantStop();
+                FaceTarget(faceTarget);
+                yield return null;
+            }
+        }
+
+        private Vector3 ComputeGroundPassVelocity(Vector3 groundTarget, Vector3 origin, out float distance, out float speed)
         {
             var flatDirection = groundTarget - origin;
             flatDirection.y = 0f;
@@ -532,12 +787,14 @@ namespace FStudio.GTEX.VisualBridge
                 flatDirection = Vector3.forward;
             }
 
-            var distance = flatDirection.magnitude;
+            distance = flatDirection.magnitude;
             var passingSkill = Player != null && Player.MatchPlayer != null
                 ? Mathf.Clamp01(Player.MatchPlayer.ActualPassing / 100f)
                 : 0.6f;
-            var speed = Mathf.Lerp(groundPassMinSpeed, groundPassMaxSpeed, passingSkill);
-            speed *= Mathf.Clamp(distance / 16f, 0.72f, 1.35f);
+            var skillSpeed = Mathf.Lerp(groundPassMinSpeed, groundPassMaxSpeed, passingSkill);
+            var distanceSpeed = Mathf.Lerp(6.75f, 14.75f, Mathf.InverseLerp(4f, 26f, distance));
+            speed = Mathf.Lerp(distanceSpeed, skillSpeed, 0.28f);
+            speed *= Mathf.Clamp(distance / 14f, 0.78f, 1.08f);
 
             var velocity = flatDirection.normalized * speed;
             velocity.y = groundPassVerticalVelocity;
@@ -557,6 +814,286 @@ namespace FStudio.GTEX.VisualBridge
             }
         }
 
+        private bool TryTakeNearbyBallForCommand(string commandName, float maxDistance)
+        {
+            if (Player == null || Ball.Current == null)
+            {
+                return false;
+            }
+
+            var ball = Ball.Current;
+            if (ball.HolderPlayer == Player)
+            {
+                return true;
+            }
+
+            if (ball.HolderPlayer != null && ball.HolderPlayer != Player)
+            {
+                Debug.LogWarning(
+                    "[GTEX VisualBridge] " + commandName +
+                    " skipped for " + GtexPlayerId +
+                    ": ball is held by another player.");
+                return false;
+            }
+
+            var distance = DistanceXZ(ball.transform.position, Root.position);
+            if (distance > maxDistance)
+            {
+                Debug.LogWarning(
+                    "[GTEX VisualBridge] " + commandName +
+                    " skipped for " + GtexPlayerId +
+                    ": ball too far to claim (" + distance.ToString("0.00") + "m).");
+                return false;
+            }
+
+            GiveBall();
+            return true;
+        }
+
+        private static Vector3 ResolveReceiverFeetPoint(GtexOriginalPlayerVisualProxy receiver)
+        {
+            if (receiver == null)
+            {
+                return Vector3.zero;
+            }
+
+            var target = receiver.Player != null ? receiver.Player.Position : receiver.Root.position;
+            target.y = receiver.Player != null ? receiver.Player.Position.y : receiver.Root.position.y;
+            return target;
+        }
+
+        private static string ResolveReceiverLogName(PlayerBase receiver, string receiverUid)
+        {
+            if (!string.IsNullOrWhiteSpace(receiverUid))
+            {
+                return receiverUid;
+            }
+
+            return receiver != null ? receiver.ToString() : "none";
+        }
+
+        private static Vector3 ResolveReceiveInterceptPoint(
+            PlayerBase receiver,
+            Vector3 ballPosition,
+            Vector3 passOrigin,
+            Vector3 groundTarget)
+        {
+            if (receiver == null)
+            {
+                return groundTarget;
+            }
+
+            var receiverPosition = receiver.Position;
+            var start = ballPosition;
+            var end = groundTarget;
+            var receiverFlat = receiverPosition;
+            start.y = 0f;
+            end.y = 0f;
+            receiverFlat.y = 0f;
+
+            var segment = end - start;
+            if (segment.sqrMagnitude < 0.01f)
+            {
+                end = groundTarget;
+                end.y = receiverPosition.y;
+                return end;
+            }
+
+            var t = Mathf.Clamp01(Vector3.Dot(receiverFlat - start, segment) / segment.sqrMagnitude);
+            var intercept = start + segment * t;
+
+            var originToTarget = groundTarget - passOrigin;
+            originToTarget.y = 0f;
+            if (originToTarget.sqrMagnitude > 0.01f)
+            {
+                var originFlat = passOrigin;
+                originFlat.y = 0f;
+                var progress = Mathf.Clamp01(Vector3.Dot(intercept - originFlat, originToTarget) / originToTarget.sqrMagnitude);
+                if (progress > 0.68f)
+                {
+                    var targetFlat = groundTarget;
+                    targetFlat.y = 0f;
+                    intercept = Vector3.Lerp(intercept, targetFlat, 0.42f);
+                }
+            }
+
+            intercept.y = receiverPosition.y;
+            return intercept;
+        }
+
+        private static void MoveReceiverTowardIntercept(PlayerBase receiver, Vector3 interceptPoint, Vector3 ballPosition)
+        {
+            if (receiver == null || receiver.PlayerController == null)
+            {
+                return;
+            }
+
+            var deltaTime = Time.deltaTime > 0f ? Time.deltaTime : 0.02f;
+            interceptPoint.y = receiver.Position.y;
+            receiver.MoveTo(in deltaTime, interceptPoint, true, MovementType.Normal);
+
+            var lookDirection = ballPosition - receiver.Position;
+            lookDirection.y = 0f;
+            if (lookDirection.sqrMagnitude > 0.01f)
+            {
+                receiver.LookTo(in deltaTime, lookDirection);
+            }
+        }
+
+        private static float DistanceXZ(Vector3 a, Vector3 b)
+        {
+            a.y = 0f;
+            b.y = 0f;
+            return Vector3.Distance(a, b);
+        }
+
+        private void TryTriggerPassAndRun(PlayerBase receiver)
+        {
+            if (Player == null || Player.IsGK || Player.GameTeam == null || Player.GameTeam.Team == null)
+            {
+                return;
+            }
+
+            if (receiver != null)
+            {
+                var toReceiver = receiver.Position - Player.Position;
+                toReceiver.y = 0f;
+                if (toReceiver.sqrMagnitude > 0.01f)
+                {
+                    var attackDirection = Player.GoalDirection;
+                    attackDirection.y = 0f;
+                    if (attackDirection.sqrMagnitude > 0.01f &&
+                        Vector3.Dot(attackDirection.normalized, toReceiver.normalized) < -0.1f)
+                    {
+                        return;
+                    }
+                }
+            }
+
+            if (Player.GameTeam.Team.TeamTactics.RollPassAndRunChance(Player.GameTeam.BallProgress))
+            {
+                Player.ActivateBehaviour("PassAndRunBehaviour");
+            }
+        }
+
+        private GoalNet ResolveOpponentGoalNet()
+        {
+            var manager = MatchManager.Current;
+            if (manager == null || Player == null || Player.GameTeam == null)
+            {
+                return null;
+            }
+
+            if (manager.goalNet1 != null && manager.goalNet2 != null)
+            {
+                var ownReference = ResolveTeamDefensiveReference();
+                if (ownReference.sqrMagnitude > 0.001f)
+                {
+                    var goal1Distance = Vector3.SqrMagnitude(ownReference - manager.goalNet1.Position);
+                    var goal2Distance = Vector3.SqrMagnitude(ownReference - manager.goalNet2.Position);
+                    return goal1Distance <= goal2Distance ? manager.goalNet2 : manager.goalNet1;
+                }
+            }
+
+            return Player.GameTeam == manager.GameTeam1
+                ? manager.goalNet2
+                : manager.goalNet1;
+        }
+
+        private Vector3 ResolveTeamDefensiveReference()
+        {
+            if (Player == null || Player.GameTeam == null)
+            {
+                return Vector3.zero;
+            }
+
+            var teamPlayers = Player.GameTeam.GamePlayers;
+            if (teamPlayers == null || teamPlayers.Length == 0)
+            {
+                return Root.position;
+            }
+
+            var keeper = teamPlayers.FirstOrDefault(candidate => candidate != null && candidate.IsGK);
+            if (keeper != null)
+            {
+                return keeper.Position;
+            }
+
+            var sum = Vector3.zero;
+            var count = 0;
+            for (var index = 0; index < teamPlayers.Length; index += 1)
+            {
+                var candidate = teamPlayers[index];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                sum += candidate.Position;
+                count += 1;
+            }
+
+            return count > 0 ? sum / count : Root.position;
+        }
+
+        private Transform ResolveGoalShootPoint(GoalNet goalNet, Vector3 requestedTarget, string outcome)
+        {
+            if (goalNet == null || goalNet.goalPoints == null || goalNet.goalPoints.Length == 0)
+            {
+                return null;
+            }
+
+            var goalPoints = goalNet.goalPoints.Where(point => point != null).ToArray();
+            if (goalPoints.Length == 0)
+            {
+                return null;
+            }
+
+            if (requestedTarget.sqrMagnitude > 0.001f)
+            {
+                return goalPoints
+                    .OrderBy(point => Vector3.SqrMagnitude(point.position - requestedTarget))
+                    .FirstOrDefault();
+            }
+
+            var suggested = goalNet.GetShootingVector(Player, ResolveOpponents()).shootPoint;
+            if (suggested != null)
+            {
+                return suggested;
+            }
+
+            var normalizedOutcome = (outcome ?? string.Empty).ToLowerInvariant();
+            if (normalizedOutcome.Contains("save"))
+            {
+                return goalPoints
+                    .OrderBy(point => Mathf.Abs(point.position.z - goalNet.Position.z))
+                    .FirstOrDefault();
+            }
+
+            return goalPoints
+                .OrderByDescending(point => Mathf.Abs(point.position.z - Player.Position.z))
+                .FirstOrDefault();
+        }
+
+        private PlayerBase[] ResolveOpponents()
+        {
+            var manager = MatchManager.Current;
+            if (manager == null || Player == null || Player.GameTeam == null)
+            {
+                return new PlayerBase[0];
+            }
+
+            var opponentTeam = Player.GameTeam == manager.GameTeam1
+                ? manager.GameTeam2
+                : manager.GameTeam1;
+
+            return opponentTeam != null && opponentTeam.GamePlayers != null
+                ? opponentTeam.GamePlayers
+                    .Where(opponent => opponent != null && opponent.PlayerController != null && opponent.PlayerController.IsPhysicsEnabled)
+                    .ToArray()
+                : new PlayerBase[0];
+        }
+
         private static bool TryInvokeBallHit(Ball ball, PlayerBase hitter, Vector3 velocity)
         {
             if (ball == null || hitter == null || BallHitMethod == null)
@@ -566,7 +1103,16 @@ namespace FStudio.GTEX.VisualBridge
 
             try
             {
-                BallHitMethod.Invoke(ball, new object[] { hitter, velocity, false });
+                var parameterCount = BallHitMethod.GetParameters().Length;
+                if (parameterCount == 4)
+                {
+                    BallHitMethod.Invoke(ball, new object[] { hitter, velocity, false, true });
+                }
+                else
+                {
+                    BallHitMethod.Invoke(ball, new object[] { hitter, velocity, false });
+                }
+
                 return true;
             }
             catch (TargetInvocationException exception)

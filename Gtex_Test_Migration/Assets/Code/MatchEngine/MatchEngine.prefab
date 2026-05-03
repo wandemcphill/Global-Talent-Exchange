@@ -420,7 +420,7 @@ MonoBehaviour:
   - {fileID: 1102900370650125870}
   goal1SpotCollider: {fileID: 3015554633036055274}
   goal2SpotCollider: {fileID: 3620078348537374839}
-  externalPlaybackFieldMaterial: {fileID: 2100000, guid: 5c5f7144ad578f64ebd1afa72f983082, type: 2}
+  externalPlaybackFieldMaterial: {fileID: 2100000, guid: 4546b54a0e376aa469cae5cbe945d3d0, type: 2}
   externalPlaybackFieldGrassTexture: {fileID: 2800000, guid: 3e9304fd3867c674981130f8459389f0, type: 3}
   externalPlaybackFieldLinesTexture: {fileID: 2800000, guid: 30978ba5288520b4ebf39d99ba9142e2, type: 3}
   externalPlaybackFieldLengthPadding: 6
@@ -497,7 +497,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1102900370305554458}
-  m_Enabled: 0
+  m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -1688,7 +1688,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1102900371738995746}
-  m_Enabled: 0
+  m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -1701,7 +1701,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 0}
+  - {fileID: 2100000, guid: 4546b54a0e376aa469cae5cbe945d3d0, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

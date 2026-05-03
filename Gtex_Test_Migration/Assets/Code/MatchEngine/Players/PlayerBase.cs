@@ -22,6 +22,7 @@ using FStudio.MatchEngine.Events;
 using FStudio.MatchEngine.Players.PlayerController;
 using FStudio.MatchEngine.Players.InputBehaviours;
 using FStudio.GTEX.Core;
+using FStudio.GTEX.VisualBridge;
 
 namespace FStudio.MatchEngine.Players {
 
@@ -67,6 +68,11 @@ namespace FStudio.MatchEngine.Players {
             new OpponentGKDegageBehaviour (),
 
             new IsInOffsideBehaviour (),
+
+            new OriginalRuntimeFootballDecisionBehaviour (),
+            new OriginalRuntimePressingBehaviour (),
+            new OriginalRuntimeDefensiveMarkingBehaviour (),
+            new BecomeAPassOptionBehaviour (),
 
             // Try chip shot if GK is away.
             new ChipShootingBehaviour (),
@@ -185,7 +191,17 @@ namespace FStudio.MatchEngine.Players {
         /// </summary>
         public PlayerBase PassingTarget;
 
+        private Vector3 originalRuntimeReceivePoint;
+        private float originalRuntimeReceiveUntil;
+        private PlayerBase originalRuntimeReceivePasser;
+
         public bool IsHoldingBall { private set; get; }
+
+        public bool IsExpectingBall =>
+            GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+            Time.time <= originalRuntimeReceiveUntil &&
+            !IsHoldingBall &&
+            !CaughtInOffside;
 
         private float ballHoldTime;
 
@@ -274,6 +290,10 @@ namespace FStudio.MatchEngine.Players {
                     return;
                 }
 
+                if (GtexVisualAuthority.ShouldProtectControlledPossession(this, otherPlayer)) {
+                    return;
+                }
+
                 if (otherPlayer.IsGK || IsGK) {
                     return;
                 }
@@ -345,8 +365,13 @@ namespace FStudio.MatchEngine.Players {
 
         public void ProcessBehaviours (in float time) {
             if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
-                GtexRuntimeState.ActiveMode == GtexRuntimeMode.OriginalVisualRuntime) {
-                ActiveBehaviour = null;
+                GtexRuntimeState.ActiveMode == GtexRuntimeMode.OriginalVisualRuntime &&
+                GtexVisualAuthority.ShouldSuppressAutonomousDecision(this)) {
+                if (ActiveBehaviour != null) {
+                    ActiveBehaviour = null;
+                }
+
+                NextBehaviour = 0;
                 return;
             }
 
@@ -356,6 +381,9 @@ namespace FStudio.MatchEngine.Players {
             }
 
             var skipRate = difficultySkipRate[GameTeam.Team.AILevel];
+            if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                skipRate = Mathf.Min(skipRate, 8f);
+            }
 
             if (Random.Range (0, 100) < skipRate) {
                 return;
@@ -620,13 +648,30 @@ namespace FStudio.MatchEngine.Players {
                 )).ToArray();
 
             //
+            var originalRuntime = GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime();
+
             var shortPasses = passOptionsInVision.Where(x => x.Item4.shortPassAvailable).
-                Select(x => (PassType.ShortPass, x.optionName, x.position, x.priority, x.actualTarget));
+                Select(x => (
+                    passType: PassType.ShortPass,
+                    optionName: x.optionName,
+                    position: originalRuntime ? ResolveOriginalRuntimeShortPassPoint(x.actualTarget) : x.position,
+                    priority: x.priority,
+                    actualTarget: x.actualTarget));
 
             var longPasses = passOptionsInVision.Where(x => x.Item4.longPassAvailable).
-                Select(x => (PassType.LongPass, x.optionName, x.position, x.priority, x.actualTarget));
+                Select(x => (
+                    passType: PassType.LongPass,
+                    optionName: x.optionName,
+                    position: x.position,
+                    priority: x.priority,
+                    actualTarget: x.actualTarget));
 
-            var finalOptions = shortPasses.Concat(longPasses);
+            var shortPassArray = shortPasses.ToArray();
+            var longPassArray = longPasses.ToArray();
+
+            var finalOptions = originalRuntime && shortPassArray.Length > 0
+                ? shortPassArray.AsEnumerable()
+                : shortPassArray.Concat(longPassArray);
 
             // only short passes for GKs.
             finalOptions = finalOptions.Where(x => 
@@ -676,6 +721,24 @@ namespace FStudio.MatchEngine.Players {
                 Select (x=>(x, priority (x.Item1, x.position, x.priority))).OrderByDescending (x=>x.Item2).ToArray ();
 
             return orderedOptions;
+        }
+
+        private Vector3 ResolveOriginalRuntimeShortPassPoint(PlayerBase actualTarget) {
+            if (actualTarget == null) {
+                return Position;
+            }
+
+            var target = actualTarget.Position + actualTarget.Velocity * 0.08f;
+            target.y = Position.y;
+
+            var manager = MatchManager.Current;
+            if (manager != null) {
+                const float margin = 2.25f;
+                target.x = Mathf.Clamp(target.x, margin, manager.SizeOfField.x - margin);
+                target.z = Mathf.Clamp(target.z, margin, manager.SizeOfField.y - margin);
+            }
+
+            return target;
         }
 
         private PassTarget BestPassTarget(
@@ -1111,8 +1174,23 @@ namespace FStudio.MatchEngine.Players {
             float impulse, 
             Ball ball) {
 
+            if (GtexVisualAuthority.ShouldBlockBallInteraction(this)) {
+                Debug.Log("[GTEX LOCK] Ball touch blocked: " + this);
+                return false;
+            }
+
             if (ball.HolderPlayer != this) {
                 Debug.Log("Ball control: impulse:" + impulse + ", height:" + touchHeight);
+
+                if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                    !IsGK &&
+                    !CaughtInOffside &&
+                    (!ball.IsOnCrossMode || touchHeight <= 0.75f) &&
+                    touchHeight <= 1.35f &&
+                    impulse <= 28f) {
+                    Debug.Log("[GTEX BallControl] Soft first touch accepted by " + this + " impulse=" + impulse.ToString("0.0") + " height=" + touchHeight.ToString("0.00"));
+                    return true;
+                }
 
                 impulse = Mathf.Min (impulse, EngineSettings.Current.BallControlMaxBallImpulse);
 
@@ -1207,6 +1285,15 @@ namespace FStudio.MatchEngine.Players {
 
             // trigger passing target if its not null.
             if (PassingTarget != null) {
+                if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                    Debug.Log(
+                        "[GTEX AI] Pass hit -> passer=" + this +
+                        " receiver=" + PassingTarget +
+                        " point=" + targetBallHitVector);
+                    PassingTarget.CommitOriginalRuntimeReceive(this, targetBallHitVector, 2.25f);
+                    Ball.Current.TrackOriginalRuntimeReceiver(PassingTarget, targetBallHitVector, 2.25f);
+                }
+
                 PassingTarget.ActivateBehaviour("BallChasingWithoutCondition");
                 PassingTarget = null;
             }
@@ -1257,7 +1344,12 @@ namespace FStudio.MatchEngine.Players {
                 return;
             }
 
-            if (!PlayBallHitAnimation (in targetVelocity, PlayerAnimatorVariable.Shoot_R)) {
+            var forceFootedShot =
+                GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
+                Ball.Current != null &&
+                (!Ball.Current.IsOnCrossMode || Ball.Current.transform.position.y <= 0.75f);
+
+            if (!PlayBallHitAnimation (in targetVelocity, PlayerAnimatorVariable.Shoot_R, forceFootedShot)) {
                 return;
             }
 
@@ -1387,6 +1479,7 @@ namespace FStudio.MatchEngine.Players {
 
         public virtual void OnBallHold () {
             IsHoldingBall = true;
+            ClearOriginalRuntimeReceiveCommit();
 
             ballHoldTime = Time.time;
 
@@ -1402,6 +1495,49 @@ namespace FStudio.MatchEngine.Players {
         }
 
         public virtual void OnBallRelease() { IsHoldingBall = false; }
+
+        public void CommitOriginalRuntimeReceive(PlayerBase passer, Vector3 receivePoint, float duration) {
+            if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                return;
+            }
+
+            receivePoint.y = Position.y;
+            var manager = MatchManager.Current;
+            if (manager != null) {
+                const float margin = 1.75f;
+                receivePoint.x = Mathf.Clamp(receivePoint.x, margin, manager.SizeOfField.x - margin);
+                receivePoint.z = Mathf.Clamp(receivePoint.z, margin, manager.SizeOfField.y - margin);
+            }
+
+            originalRuntimeReceivePasser = passer;
+            originalRuntimeReceivePoint = receivePoint;
+            originalRuntimeReceiveUntil = Time.time + Mathf.Max(0.35f, duration);
+
+            Debug.Log(
+                "[GTEX AI] Receiver commit -> receiver=" + this +
+                " passer=" + passer +
+                " point=" + receivePoint);
+        }
+
+        public bool TryGetOriginalRuntimeReceivePoint(out Vector3 receivePoint) {
+            if (!GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() ||
+                Time.time > originalRuntimeReceiveUntil ||
+                IsHoldingBall ||
+                CaughtInOffside) {
+                receivePoint = default;
+                return false;
+            }
+
+            receivePoint = originalRuntimeReceivePoint;
+            return true;
+        }
+
+        public void ClearOriginalRuntimeReceiveCommit() {
+            originalRuntimeReceiveUntil = 0f;
+            originalRuntimeReceivePoint = default;
+            originalRuntimeReceivePasser = null;
+        }
+
         public void Struggle () {
             ballHitAnimationEvent = BallHitAnimationEvent.None;
 

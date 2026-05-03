@@ -786,10 +786,16 @@ namespace FStudio.MatchEngine {
             }
         }
 
-        public bool ShouldBlockAutonomousBehaviours() {
-            return FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
-                   (GlobalCommandDrivenVisualHold ||
-                    FStudio.GTEX.Core.GtexRuntimeState.ActiveMode == FStudio.GTEX.Core.GtexRuntimeMode.OriginalVisualRuntime);
+        public bool ShouldBlockAutonomousBehaviours(PlayerBase player = null) {
+            if (!FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()) {
+                return false;
+            }
+
+            if (player != null) {
+                return FStudio.GTEX.VisualBridge.GtexVisualAuthority.ShouldSuppressAutonomousDecision(player);
+            }
+
+            return GlobalCommandDrivenVisualHold && !MatchFlags.HasFlag(MatchStatus.Playing);
         }
 
         public void ShowOriginalVisualRuntimeFieldVisual() {
@@ -1651,6 +1657,10 @@ namespace FStudio.MatchEngine {
             if (MatchFlags.HasFlag (MatchStatus.NotPlaying)) {
                 return;
             }
+
+            if (!IsRuntimeLogicReady()) {
+                return;
+            }
             
             if (!MatchFlags.HasFlag(MatchStatus.Freeze)) {
                 var midPoint = fieldEndX / 2f;
@@ -1803,6 +1813,10 @@ namespace FStudio.MatchEngine {
         /// <param name="offsideLine"></param>
         /// <param name="players"></param>
         private void CalculateOffsideLine (float midPointX, float ballPosX, Transform offsideLine, GoalNet goalNet, in PlayerBase[] players) {
+            if (offsideLine == null || goalNet == null || players == null || players.Length < 2) {
+                return;
+            }
+
             var goalNetX = goalNet.Position.x;
 
             if (players.Length < 2) {
@@ -1831,6 +1845,20 @@ namespace FStudio.MatchEngine {
             position.x = Mathf.Clamp(position.x, 0, fieldEndX);
 
             offsideLine.position = position;
+        }
+
+        private bool IsRuntimeLogicReady() {
+            return ball != null &&
+                   goalNet1 != null &&
+                   goalNet2 != null &&
+                   offsideLine1 != null &&
+                   offsideLine2 != null &&
+                   densityPoint1 != null &&
+                   densityPoint2 != null &&
+                   GameTeam1 != null &&
+                   GameTeam2 != null &&
+                   GameTeam1.IsReadyForRuntimeLogic() &&
+                   GameTeam2.IsReadyForRuntimeLogic();
         }
 
         public void AssignOffsides(GameTeam gameTeam, PlayerBase except) {
@@ -1873,6 +1901,7 @@ namespace FStudio.MatchEngine {
 
             Debug.Log($"[Foul] {foulType}");
             MatchFlags = MatchStatus.Freeze;
+            ball?.StopDeadBallMotion();
 
             if (foulType == FoulType.GoalKick) {
                 SetOutColliders(true);
@@ -2035,6 +2064,7 @@ namespace FStudio.MatchEngine {
             Debug.Log(cornerIndex);
 
             MatchFlags = MatchStatus.Freeze;
+            ball?.StopDeadBallMotion();
             ResetOffsides();
 
             SetOutColliders(true);
