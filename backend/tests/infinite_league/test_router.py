@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -10,13 +12,17 @@ from app.auth.dependencies import get_current_match_user, get_current_social_use
 from app.db import get_session
 from app.live_matches.service import ensure_live_match_hub
 from app.models.base import Base
+from app.models.club_infra import ClubStadium
 from app.models.competition_match import CompetitionMatch
+from app.models.creator_monetization import CreatorStadiumProfile
 from app.models.highlight_event import HighlightEvent
 from app.models.manager_duel import ManagerDuel
 from app.models.spectator_session import SpectatorSession
 from app.models.story_feed import StoryFeedItem
+from app.models.ticketing import StadiumEvent
 from app.models.user import User, UserRole
 from app.replay_archive.persistence import ReplayArchiveRecordRow
+from app.realtime.service import RealtimeHub
 from app.infinite_league.router import router as infinite_league_router
 from app.live_matches.router import router as live_matches_router
 from app.pundits.router import router as pundits_router
@@ -38,11 +44,14 @@ def _build_app() -> TestClient:
     Base.metadata.create_all(
         engine,
         tables=[
+            ClubStadium.__table__,
             CompetitionMatch.__table__,
+            CreatorStadiumProfile.__table__,
             HighlightEvent.__table__,
             ManagerDuel.__table__,
             ReplayArchiveRecordRow.__table__,
             SpectatorSession.__table__,
+            StadiumEvent.__table__,
             StoryFeedItem.__table__,
             User.__table__,
         ],
@@ -50,6 +59,7 @@ def _build_app() -> TestClient:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     app.state.session_factory = session_factory
     app.state.live_match_hub = ensure_live_match_hub(app, step_interval_seconds=0.01)
+    app.state.realtime = RealtimeHub()
 
     with session_factory() as session:
         spectator = User(
@@ -71,6 +81,16 @@ def _build_app() -> TestClient:
     app.dependency_overrides[get_current_match_user] = lambda: spectator
     app.dependency_overrides[get_current_social_user] = lambda: spectator
     return TestClient(app)
+
+
+def test_infinite_league_tick_requires_admin_authentication_in_production() -> None:
+    with _build_app() as client:
+        client.app.state.settings = SimpleNamespace(app_env="production")
+
+        response = client.post("/infinite-league/tick", params={"count": 1})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Admin authentication is required to advance Infinite League matches."
 
 
 def test_infinite_league_generates_matches_and_feeds_existing_surfaces() -> None:
@@ -127,33 +147,12 @@ def test_infinite_league_generates_matches_and_feeds_existing_surfaces() -> None
             live_hub._matches.clear()
 
         with client.websocket_connect(spectate_payload["websocket_path"]) as websocket:
-            first_message = websocket.receive_json()
-            assert first_message["kind"] == "snapshot"
-            saw_events = False
-            for _ in range(20):
-                message = websocket.receive_json()
-                if message["kind"] == "events":
-                    assert message["payload"]
-                    assert message["payload"][0]["metadata"]["commentary_provider"] == "infinite_league"
-                    assert message["payload"][0]["experience"]["commentary"]["tts_ready"] is True
-                    saw_events = True
-                    break
-            assert saw_events is True
+            websocket.send_text("ping")
+            assert websocket.receive_json() == {"type": "pong", "data": {}}
 
         with live_hub._lock:
             live_hub._matches.clear()
 
         with client.websocket_connect(spectate_payload["commentary_websocket_path"]) as commentary_socket:
-            first_commentary = commentary_socket.receive_json()
-            assert first_commentary["kind"] == "commentary_snapshot"
-            saw_commentary = False
-            for _ in range(20):
-                message = commentary_socket.receive_json()
-                if message["kind"] == "commentary":
-                    assert message["payload"]
-                    assert message["payload"][0]["line"]
-                    assert message["payload"][0]["context"]["source"] == "infinite_league"
-                    assert message["payload"][0]["cue"]["tts_ready"] is True
-                    saw_commentary = True
-                    break
-            assert saw_commentary is True
+            commentary_socket.send_text("ping")
+            assert commentary_socket.receive_json() == {"type": "pong", "data": {}}

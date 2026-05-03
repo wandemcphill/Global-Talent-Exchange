@@ -1,0 +1,42 @@
+{
+  "name": "@gtex/player-ingestion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GTEX Sportmonks player ingestion, image CDN, and regen worker service.",
+  "main": "src/index.js",
+  "scripts": {
+    "migrate": "node src/migrate.js",
+    "once": "node src/index.js once",
+    "backfill:market-images": "node src/backfillMarketplaceImages.js",
+    "import:top-europe": "node src/importTopEuropeanLeagues.js",
+    "import:launch-leagues": "node src/importLaunchLeagueBatch.js",
+    "import:named-players": "node src/importNamedPlayers.js",
+    "import:youth": "node src/importYouthPlayers.js",
+    "activate:launch-leagues": "node src/activateLaunchMarketForLeagues.js",
+    "seed:national-competitions": "node src/seedNationalCompetitions.js",
+    "competition:create": "node src/seasonCli.js competition:create",
+    "scout:create": "node src/seasonCli.js scout:create",
+    "scout:run": "node src/seasonCli.js scout:run",
+    "season:create": "node src/seasonCli.js create",
+    "season:end": "node src/seasonCli.js end",
+    "season:standings": "node src/seasonCli.js standings",
+    "season:tick": "node src/seasonCli.js tick",
+    "worker": "node src/index.js worker",
+    "scheduler": "node src/index.js scheduler",
+    "start": "node src/index.js all"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "@sentry/node": "^8.55.2",
+    "axios": "^1.7.9",
+    "bullmq": "^5.34.2",
+    "cloudinary": "^2.5.1",
+    "dotenv": "^16.4.7",
+    "ioredis": "^5.4.1",
+    "node-cron": "^4.2.1",
+    "pg": "^8.13.1"
+  }
+}

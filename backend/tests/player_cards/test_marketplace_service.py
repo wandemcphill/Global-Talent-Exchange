@@ -16,6 +16,7 @@ from app.ingestion.models import Player
 from app.models.integrity import IntegrityIncident
 from app.models.base import Base
 from app.models.card_access import CardSwapExecution
+from app.models.club_profile import ClubProfile
 from app.models.player_cards import (
     PlayerCard,
     PlayerCardHolding,
@@ -26,13 +27,16 @@ from app.models.player_cards import (
     PlayerMarketValueSnapshot,
     PlayerStatsSnapshot,
 )
+from app.models.regen import RegenOnboardingFlag, RegenProfile
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.real_world_football import PlayerDemandSignal, RealWorldFootballEvent, TrendingPlayerFlag
 from app.models.risk_ops import SystemEvent
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.market.player_eligibility_policy import market_access_payload
 from app.player_cards.marketplace_service import PlayerCardMarketplaceService
 from app.player_cards.service import PlayerCardMarketService, PlayerCardValidationError
+from app.player_import_engine.service import PlayerImportService
 from app.players.read_models import PlayerSummaryReadModel
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -181,8 +185,8 @@ def _create_real_world_event(session, *, player_id: str, event_id: str) -> RealW
 
 
 def _seed_wallet(session, wallet: WalletService, user: User, *, amount: Decimal) -> None:
-    account = wallet.get_user_account(session, user, LedgerUnit.CREDIT)
-    platform = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
+    account = wallet.get_user_account(session, user, LedgerUnit.COIN)
+    platform = wallet.ensure_platform_account(session, LedgerUnit.COIN)
     wallet.append_transaction(
         session,
         postings=[
@@ -215,7 +219,7 @@ def test_free_regen_loan_floor_and_settlement(session) -> None:
     wallet = WalletService()
     _seed_wallet(session, wallet, borrower, amount=Decimal("10.0000"))
     service = PlayerCardMarketplaceService(session=session, wallet_service=wallet)
-    platform_account = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
+    platform_account = wallet.ensure_platform_account(session, LedgerUnit.COIN)
     platform_balance_before = wallet.get_balance(session, platform_account)
 
     listing = service.create_loan_listing(
@@ -230,8 +234,8 @@ def test_free_regen_loan_floor_and_settlement(session) -> None:
     contract = service.accept_loan_negotiation(actor=lender, negotiation_id=negotiation["negotiation_id"])
     settled = service.settle_loan_contract(actor=borrower, contract_id=contract["loan_contract_id"])
 
-    lender_balance = wallet.get_balance(session, wallet.get_user_account(session, lender, LedgerUnit.CREDIT))
-    borrower_balance = wallet.get_balance(session, wallet.get_user_account(session, borrower, LedgerUnit.CREDIT))
+    lender_balance = wallet.get_balance(session, wallet.get_user_account(session, lender, LedgerUnit.COIN))
+    borrower_balance = wallet.get_balance(session, wallet.get_user_account(session, borrower, LedgerUnit.COIN))
     platform_balance = wallet.get_balance(session, platform_account)
 
     assert settled["fee_floor_applied"] is True
@@ -244,6 +248,77 @@ def test_free_regen_loan_floor_and_settlement(session) -> None:
 
     returned = service.return_loan_contract(actor=borrower, contract_id=contract["loan_contract_id"])
     assert returned["status"] == "returned"
+
+
+def test_starter_regen_card_cannot_enter_user_market(session) -> None:
+    owner = _create_user(session, user_id="starter-owner", email="starter-owner@example.com", username="starter-owner")
+    player = _create_player(session, player_id="player-starter-regen", name="Starter Regen", position="midfielder")
+    _create_summary(session, player=player, rating=6.8, value_credits=12.0)
+    tier = _create_tier(session, tier_id="tier-starter-regen", code="starter-regen")
+    card = _create_card(session, card_id="card-starter-regen", player=player, tier=tier, variant="regen_unique")
+    club = ClubProfile(
+        id="club-starter-regen",
+        owner_user_id=owner.id,
+        club_name="Starter FC",
+        slug="starter-fc",
+        primary_color="#111111",
+        secondary_color="#222222",
+        accent_color="#333333",
+        country_code="NG",
+        region_name="Lagos",
+        city_name="Ajah",
+    )
+    regen = RegenProfile(
+        id="regen-starter-profile",
+        regen_id="regen-starter-profile",
+        player_id=player.id,
+        linked_unique_card_id=card.id,
+        generated_for_club_id=club.id,
+        birth_country_code="NG",
+        primary_position="CM",
+        current_gsi=60,
+        current_ability_range_json={"minimum": 55, "maximum": 62},
+        potential_range_json={"minimum": 68, "maximum": 76},
+        scout_confidence="medium",
+        generation_source="new_club",
+        club_quality_score=50.0,
+        metadata_json={},
+    )
+    onboarding = RegenOnboardingFlag(
+        regen_id=regen.id,
+        club_id=club.id,
+        onboarding_type="starter_bundle",
+        squad_bucket="first_team",
+        is_non_tradable=True,
+        replacement_only=True,
+        metadata_json={},
+    )
+    session.add_all([club, regen, onboarding])
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id, owner_user_id=owner.id, quantity_total=1, quantity_reserved=0, metadata_json={}
+        )
+    )
+    session.flush()
+
+    service = PlayerCardMarketplaceService(session=session, wallet_service=WalletService())
+    with pytest.raises(PlayerCardValidationError, match="starter_regen_non_tradeable"):
+        service.create_sale_listing(
+            actor=owner,
+            player_card_id=card.id,
+            quantity=1,
+            price_per_card_credits=Decimal("10.0000"),
+        )
+    with pytest.raises(PlayerCardValidationError, match="starter_regen_non_tradeable"):
+        service.create_loan_listing(
+            actor=owner,
+            player_card_id=card.id,
+            total_slots=1,
+            duration_days=7,
+            loan_fee_credits=Decimal("1.0000"),
+        )
+    with pytest.raises(PlayerCardValidationError, match="starter_regen_non_tradeable"):
+        service.create_swap_listing(actor=owner, player_card_id=card.id)
 
 
 def test_preseeded_national_regens_cannot_be_card_minted(session) -> None:
@@ -285,6 +360,146 @@ def test_preseeded_national_regens_cannot_be_card_minted(session) -> None:
             source_type="admin_seed",
             source_reference="seed:card:block",
         )
+
+
+def test_admin_can_mint_preseeded_regen_card_and_owner_can_list_it(session) -> None:
+    admin = _create_user(
+        session,
+        user_id="card-admin-mint",
+        email="card-admin-mint@example.com",
+        username="card-admin-mint",
+        role=UserRole.ADMIN,
+    )
+    owner = _create_user(session, user_id="regen-owner", email="regen-owner@example.com", username="regen-owner")
+    _create_tier(session, tier_id="tier-preseed-mint", code="elite-preseed-mint")
+    seed = NationalRegenSeed(
+        seed_key="seed:card:mint",
+        display_name="Moussa Diop",
+        age=18,
+        age_band="u20",
+        country_code="SN",
+        country_name="Senegal",
+        seed_type="preseeded_national_pool",
+        primary_position="ST",
+        current_rating=72,
+        potential_rating=88,
+        growth_curve=0.78,
+        rarity_tier="elite",
+        status="available",
+        metadata_json={},
+    )
+    session.add(seed)
+    session.flush()
+
+    service = PlayerCardMarketService(session=session)
+    batch = service.apply_preseeded_national_regen_supply_batch(
+        actor=admin,
+        seed_id=seed.id,
+        tier_code="elite-preseed-mint",
+        quantity=2,
+        edition_code="preseeded_regen",
+        season_label="2026",
+        batch_key="batch:preseed:mint",
+        owner_user_id=owner.id,
+        source_reference=None,
+    )
+
+    player = session.get(Player, batch.player_id)
+    card = session.get(PlayerCard, batch.player_card_id)
+    holding = session.scalar(
+        select(PlayerCardHolding).where(
+            PlayerCardHolding.owner_user_id == owner.id,
+            PlayerCardHolding.player_card_id == batch.player_card_id,
+        )
+    )
+    access = market_access_payload(seed)
+    player_access = market_access_payload(player)
+
+    assert player is not None
+    assert player.id != seed.id
+    assert player.dna_profile["national_seed_id"] == seed.id
+    assert player.dna_profile["admin_trade_enabled"] is True
+    assert seed.metadata_json["minted_player_id"] == player.id
+    assert seed.metadata_json["national_pool_only"] is False
+    assert access["card_mint_eligible"] is True
+    assert access["tradable"] is True
+    assert access["national_pool_only"] is False
+    assert player_access["is_preseeded_national_regen"] is True
+    assert player_access["admin_trade_enabled"] is True
+    assert player_access["national_pool_only"] is False
+    assert card is not None
+    assert card.card_variant == "preseeded_regen"
+    assert holding is not None
+    assert holding.quantity_total == 2
+
+    listing = service.create_listing(
+        actor=owner,
+        player_card_id=batch.player_card_id,
+        quantity=1,
+        price_per_card_credits=Decimal("12.0000"),
+    )
+    assert listing["status"] == "open"
+
+
+def test_card_supply_import_can_mint_preseeded_regen_with_national_seed_id(session) -> None:
+    admin = _create_user(
+        session,
+        user_id="card-import-admin",
+        email="card-import-admin@example.com",
+        username="card-import-admin",
+        role=UserRole.ADMIN,
+    )
+    owner = _create_user(
+        session,
+        user_id="card-import-owner",
+        email="card-import-owner@example.com",
+        username="card-import-owner",
+    )
+    _create_tier(session, tier_id="tier-preseed-import", code="elite-preseed-import")
+    seed = NationalRegenSeed(
+        seed_key="seed:card:import",
+        display_name="Ibrahima Kane",
+        age=19,
+        age_band="u20",
+        country_code="SN",
+        country_name="Senegal",
+        seed_type="preseeded_national_pool",
+        primary_position="AM",
+        current_rating=71,
+        potential_rating=86,
+        growth_curve=0.75,
+        rarity_tier="rare",
+        status="available",
+        metadata_json={},
+    )
+    session.add(seed)
+    session.flush()
+
+    job, items = PlayerImportService(session).create_card_supply_job(
+        actor=admin,
+        source_label="preseed import",
+        rows=[
+            {
+                "national_seed_id": seed.id,
+                "tier_code": "elite-preseed-import",
+                "quantity": 1,
+                "edition_code": "preseeded_regen",
+                "owner_user_id": owner.id,
+                "batch_key": "batch:preseed:import",
+            }
+        ],
+        commit=True,
+    )
+
+    assert job.imported_items == 1
+    assert items[0].linked_player_id is not None
+    assert items[0].linked_player_id != seed.id
+    assert session.scalar(
+        select(PlayerCardHolding).join(PlayerCard).where(
+            PlayerCard.player_id == items[0].linked_player_id,
+            PlayerCardHolding.owner_user_id == owner.id,
+        )
+    ) is not None
 
 
 def test_sale_listing_guardrails_reject_price_outside_reference_band(session) -> None:

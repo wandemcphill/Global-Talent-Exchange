@@ -81,11 +81,14 @@ def create_app(
         engine=database_engine,
         session_factory=database_session_factory,
     )
+    production_like = str(resolved_settings.app_env or "").strip().lower() in {"production", "prod", "staging"}
 
     app = FastAPI(
         title=resolved_settings.app_name,
         version=resolved_settings.app_version,
-        docs_url="/docs",
+        docs_url=None if production_like else "/docs",
+        redoc_url=None if production_like else "/redoc",
+        openapi_url=None if production_like else "/openapi.json",
         lifespan=_app_lifespan,
     )
     app.state.settings = resolved_settings

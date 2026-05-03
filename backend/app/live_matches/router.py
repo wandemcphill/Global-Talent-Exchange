@@ -4,6 +4,7 @@ import asyncio
 from hashlib import md5
 import logging
 import os
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.encoders import jsonable_encoder
@@ -766,7 +767,38 @@ def _load_persisted_live_view_state(match_id: str, app) -> MatchViewStateView | 
     return None
 
 
-def build_unity_live_payload_for_app(app, match_id: str) -> dict[str, object]:
+def _bounded_live_event_limit(value: int | None) -> int:
+    if value is None:
+        return 24
+    return max(0, min(int(value), 120))
+
+
+def _recent_view_events(view_state: MatchViewStateView, *, active_event: Any, event_limit: int) -> list[Any]:
+    recent_events = list(view_state.events[-event_limit:]) if event_limit > 0 else []
+    if active_event is not None and all(event.event_id != active_event.event_id for event in recent_events):
+        recent_events.append(active_event)
+    return recent_events
+
+
+def _compact_view_state_payload(
+    view_state: MatchViewStateView,
+    *,
+    frame: MatchTimelineFrameView,
+    events: list[Any],
+) -> dict[str, object]:
+    payload = view_state.model_dump(mode="json", exclude={"frames", "events"})
+    payload["frames"] = [frame.model_dump(mode="json")]
+    payload["events"] = [event.model_dump(mode="json") for event in events]
+    return payload
+
+
+def build_unity_live_payload_for_app(
+    app,
+    match_id: str,
+    *,
+    include_full_timeline: bool = False,
+    event_limit: int | None = 24,
+) -> dict[str, object]:
     hub = ensure_live_match_hub(app)
     source = "live_match_hub"
     state = hub.get_state(match_id)
@@ -833,11 +865,22 @@ def build_unity_live_payload_for_app(app, match_id: str) -> dict[str, object]:
         frame = view_state.frames[-1]
     players_by_id = {player.player_id: player for player in frame.players}
     active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
-    view_state_payload = view_state.model_dump(mode="json")
+    bounded_event_limit = _bounded_live_event_limit(event_limit)
+    payload_events = (
+        list(view_state.events)
+        if include_full_timeline
+        else _recent_view_events(view_state, active_event=active_event, event_limit=bounded_event_limit)
+    )
+    view_state_payload = (
+        view_state.model_dump(mode="json")
+        if include_full_timeline
+        else _compact_view_state_payload(view_state, frame=frame, events=payload_events)
+    )
 
     return {
         "matchId": match_id,
         "source": view_state.source,
+        "payloadMode": "full" if include_full_timeline else "live_compact",
         "status": live_status if state is not None else "completed",
         "isLive": bool(state.is_live) if state is not None else False,
         "frameId": frame.frame_id,
@@ -853,7 +896,7 @@ def build_unity_live_payload_for_app(app, match_id: str) -> dict[str, object]:
         "score": {"home": int(frame.home_score), "away": int(frame.away_score)},
         "players": [_unity_player_payload(player) for player in frame.players],
         "ballPosition": _unity_ball_payload(frame, active_event, players_by_id),
-        "events": [_unity_event_payload(event) for event in view_state.events],
+        "events": [_unity_event_payload(event) for event in payload_events],
         "frames": view_state_payload["frames"],
         "timelineEvents": view_state_payload["events"],
         "viewer": view_state_payload,
@@ -861,7 +904,18 @@ def build_unity_live_payload_for_app(app, match_id: str) -> dict[str, object]:
 
 
 def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, object]:
-    return build_unity_live_payload_for_app(request.app, match_id)
+    full_timeline = str(request.query_params.get("include_full_timeline") or "").strip().lower()
+    include_full_timeline = full_timeline in {"1", "true", "yes", "full"}
+    try:
+        event_limit = int(request.query_params.get("event_limit") or 24)
+    except (TypeError, ValueError):
+        event_limit = 24
+    return build_unity_live_payload_for_app(
+        request.app,
+        match_id,
+        include_full_timeline=include_full_timeline,
+        event_limit=event_limit,
+    )
 
 
 def _extract_bearer_token(authorization: str | None) -> str:

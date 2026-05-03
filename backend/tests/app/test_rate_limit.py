@@ -4,7 +4,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.auth.security import create_access_token
-from app.core.rate_limit import RateLimitMiddleware
+from redis.exceptions import RedisError
+
+from app.core.config import reset_settings_cache
+from app.core.rate_limit import RateLimitMiddleware, RedisRateLimitStore
 
 
 def _auth_header(user_id: str) -> dict[str, str]:
@@ -16,6 +19,7 @@ def _auth_header(user_id: str) -> dict[str, str]:
 
 
 def _build_client() -> TestClient:
+    reset_settings_cache()
     app = FastAPI()
     app.add_middleware(RateLimitMiddleware)
 
@@ -45,7 +49,7 @@ def test_rate_limit_is_scoped_per_authenticated_user(monkeypatch) -> None:
     assert client.get("/feed", headers=first_user).status_code == 200
     blocked = client.get("/feed", headers=first_user)
     assert blocked.status_code == 429
-    assert blocked.json()["scope"] == "default"
+    assert blocked.headers["X-RateLimit-Scope"] == "default"
 
     assert client.get("/feed", headers=second_user).status_code == 200
 
@@ -61,11 +65,28 @@ def test_market_and_wallet_paths_use_stricter_limits(monkeypatch) -> None:
     assert client.get("/market/players", headers=headers).status_code == 200
     market_blocked = client.get("/market/players", headers=headers)
     assert market_blocked.status_code == 429
-    assert market_blocked.json()["scope"] == "market"
+    assert market_blocked.headers["X-RateLimit-Scope"] == "market"
 
     assert client.get("/wallets/summary", headers=headers).status_code == 200
     assert client.get("/wallets/summary", headers=headers).status_code == 200
     assert client.get("/wallets/summary", headers=headers).status_code == 200
     wallet_blocked = client.get("/wallets/summary", headers=headers)
     assert wallet_blocked.status_code == 429
-    assert wallet_blocked.json()["scope"] == "wallet"
+    assert wallet_blocked.headers["X-RateLimit-Scope"] == "wallet"
+
+
+def test_redis_rate_limit_store_uses_memory_fallback_on_increment_errors() -> None:
+    store = RedisRateLimitStore("redis://127.0.0.1:1/0")
+
+    def fail_increment(*, keys, args):
+        del keys, args
+        raise RedisError("redis unavailable")
+
+    store._script = fail_increment
+
+    first, _ = store.increment(key="test:bucket", window_seconds=60)
+    second, _ = store.increment(key="test:bucket", window_seconds=60)
+
+    assert first == 1
+    assert second == 2
+    assert store.snapshot()["redis_error_fallback"]["backend"] == "memory"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 import json
 from typing import Any
@@ -13,7 +13,7 @@ from app.admin_engine.service import AdminEngineService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.economy.economy_service import EconomyService
 from app.football_events_engine.service import RealWorldFootballEventService
-from app.ingestion.models import MarketSignal, Player
+from app.ingestion.models import Country, MarketSignal, Player
 from app.integrity_engine.service import IntegrityEngineService
 from app.market.player_eligibility_policy import is_card_mint_eligible, is_preseeded_national_regen
 from app.models.base import generate_uuid
@@ -405,7 +405,7 @@ class PlayerCardMarketService:
             buyer=actor,
             seller=seller,
             gross_amount=gross,
-            unit=LedgerUnit.CREDIT,
+            unit=LedgerUnit.COIN,
             reference=settlement_reference,
             external_reference=settlement_reference,
             description="Player card marketplace trade",
@@ -571,7 +571,7 @@ class PlayerCardMarketService:
     ) -> PlayerCardSupplyBatch:
         if quantity <= 0:
             raise PlayerCardValidationError("Supply quantity must be positive.")
-        player = self._get_player(player_id)
+        player = self._get_player(player_id, actor=actor)
         tier = self.session.scalar(select(PlayerCardTier).where(PlayerCardTier.code == tier_code))
         if tier is None:
             raise PlayerCardValidationError("Card tier was not found.")
@@ -641,6 +641,73 @@ class PlayerCardMarketService:
                 event_type="minted",
                 reference_id=batch_key,
             )
+        self.session.flush()
+        return batch
+
+    def apply_preseeded_national_regen_supply_batch(
+        self,
+        *,
+        actor: User,
+        seed_id: str,
+        tier_code: str,
+        quantity: int,
+        edition_code: str,
+        season_label: str | None,
+        batch_key: str | None,
+        owner_user_id: str | None,
+        source_reference: str | None,
+        metadata: dict[str, Any] | None = None,
+    ) -> PlayerCardSupplyBatch:
+        seed = self.session.get(NationalRegenSeed, seed_id)
+        if seed is None:
+            raise PlayerCardNotFoundError("Preseeded regen seed was not found.")
+        if not is_preseeded_national_regen(seed):
+            raise PlayerCardValidationError("Only preseeded national regen seeds can use this mint path.")
+
+        player = self._ensure_player_from_national_seed(seed, actor=actor)
+        resolved_batch_key = (batch_key or "").strip()
+        if not resolved_batch_key:
+            fingerprint = f"{seed.id}:{tier_code}:{edition_code}:{owner_user_id or 'unassigned'}:{quantity}"
+            resolved_batch_key = f"national-seed:{fingerprint}".lower()
+
+        metadata_payload = dict(metadata or {})
+        metadata_payload.update(
+            {
+                "national_seed_id": seed.id,
+                "national_seed_key": seed.seed_key,
+                "source_type": "national_seed",
+                "source_bucket": "preseeded",
+                "is_preseeded_national_regen": True,
+                "admin_trade_enabled": True,
+                "admin_mint_enabled": True,
+            }
+        )
+        batch = self.apply_supply_batch(
+            actor=actor,
+            player_id=player.id,
+            tier_code=tier_code,
+            quantity=quantity,
+            edition_code=edition_code,
+            season_label=season_label,
+            batch_key=resolved_batch_key,
+            owner_user_id=owner_user_id,
+            source_type="admin_preseeded_regen_mint",
+            source_reference=source_reference or seed.seed_key,
+            metadata=metadata_payload,
+        )
+
+        card = self.session.get(PlayerCard, batch.player_card_id)
+        if card is not None:
+            card.card_variant = "preseeded_regen"
+            card.metadata_json = {
+                **dict(card.metadata_json or {}),
+                "national_seed_id": seed.id,
+                "national_seed_key": seed.seed_key,
+                "source_type": "national_seed",
+                "source_bucket": "preseeded",
+                "is_preseeded_national_regen": True,
+                "admin_trade_enabled": True,
+            }
         self.session.flush()
         return batch
 
@@ -988,7 +1055,177 @@ class PlayerCardMarketService:
             raise PlayerCardNotFoundError("Player card tier was not found.")
         return tier
 
-    def _get_player(self, player_id: str) -> Player:
+    def _ensure_player_from_national_seed(self, seed: NationalRegenSeed, *, actor: User | None = None) -> Player:
+        provider = "gtex_national_seed"
+        player = self.session.scalar(
+            select(Player).where(Player.source_provider == provider, Player.provider_external_id == seed.id)
+        )
+        if player is None:
+            player = Player(
+                source_provider=provider,
+                provider_external_id=seed.id,
+                full_name=seed.display_name,
+                is_tradable=True,
+                is_real_player=False,
+            )
+            self.session.add(player)
+
+        first_name, last_name = self._split_display_name(seed.display_name)
+        country = self._country_for_national_seed(seed)
+        now = datetime.now(UTC)
+        player.full_name = seed.display_name
+        player.first_name = first_name
+        player.last_name = last_name
+        player.short_name = seed.display_name
+        player.position = seed.primary_position
+        player.normalized_position = self._normalize_position(seed.primary_position)
+        player.date_of_birth = self._birth_date_from_age(seed.age)
+        player.country_id = country.id if country is not None else player.country_id
+        player.market_value_eur = self._market_value_from_seed(seed)
+        player.current_market_reference_value = player.market_value_eur
+        player.market_reference_currency = "EUR"
+        player.profile_completeness_score = max(float(player.profile_completeness_score or 0), 0.95)
+        player.is_tradable = True
+        player.is_real_player = False
+        player.canonical_display_name = seed.display_name
+        player.identity_confidence_score = 0.98
+        player.source_last_refreshed_at = now
+        self.session.flush()
+
+        try:
+            portrait_metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
+        except RegenPortraitError:
+            portrait_metadata = dict(seed.metadata_json or {})
+
+        enabled_at = now.isoformat()
+        seed_metadata = dict(seed.metadata_json or {})
+        seed_metadata.update(
+            {
+                "national_pool_only": False,
+                "admin_trade_enabled": True,
+                "admin_mint_enabled": True,
+                "trade_enabled_by_admin": True,
+                "card_mint_eligible": True,
+                "transfer_market_eligible": True,
+                "share_market_eligible": True,
+                "market_eligible": True,
+                "buy_cta_allowed": True,
+                "buyable": True,
+                "tradable": True,
+                "minted_player_id": player.id,
+                "enabled_for_trade_by_user_id": actor.id if actor is not None else None,
+                "enabled_for_trade_at": enabled_at,
+            }
+        )
+        seed.metadata_json = seed_metadata
+
+        player.dna_profile = {
+            **dict(player.dna_profile or {}),
+            "source_type": "national_seed",
+            "source_bucket": "preseeded",
+            "is_regen": True,
+            "is_preseeded_national_regen": True,
+            "national_pool_only": False,
+            "admin_trade_enabled": True,
+            "admin_mint_enabled": True,
+            "trade_enabled_by_admin": True,
+            "card_mint_eligible": True,
+            "transfer_market_eligible": True,
+            "share_market_eligible": True,
+            "market_eligible": True,
+            "buy_cta_allowed": True,
+            "buyable": True,
+            "tradable": True,
+            "national_seed_id": seed.id,
+            "national_seed_key": seed.seed_key,
+            "country_code": seed.country_code,
+            "country_name": seed.country_name,
+            "current_rating": int(seed.current_rating),
+            "potential_rating": int(seed.potential_rating),
+            "growth_curve": float(seed.growth_curve),
+            "rarity_tier": seed.rarity_tier,
+            "portraitUrl": portrait_metadata.get("portraitUrl"),
+            "image_url": portrait_metadata.get("portraitUrl"),
+            "faceSeed": portrait_metadata.get("faceSeed"),
+            "enabled_for_trade_at": enabled_at,
+        }
+        self.session.flush()
+        try:
+            RegenPortraitService(self.session).ensure_player_portrait(player)
+        except RegenPortraitError:
+            pass
+        return player
+
+    def _country_for_national_seed(self, seed: NationalRegenSeed) -> Country | None:
+        code = (seed.country_code or "").strip().upper()
+        country_name = (seed.country_name or "").strip()
+        if not code and not country_name:
+            return None
+        filters = []
+        if code:
+            filters.extend(
+                [
+                    Country.alpha2_code == code,
+                    Country.alpha3_code == code,
+                    Country.fifa_code == code,
+                    Country.provider_external_id == code,
+                ]
+            )
+        if country_name:
+            filters.append(Country.name == country_name)
+        return self.session.scalar(select(Country).where(or_(*filters)).limit(1)) if filters else None
+
+    @staticmethod
+    def _split_display_name(display_name: str) -> tuple[str, str | None]:
+        parts = display_name.strip().split(" ", 1)
+        return parts[0], parts[1] if len(parts) > 1 else None
+
+    @staticmethod
+    def _birth_date_from_age(age: int | None) -> date | None:
+        if age is None or age <= 0:
+            return None
+        today = date.today()
+        return date(max(today.year - int(age), 1900), 1, 1)
+
+    @staticmethod
+    def _normalize_position(position: str | None) -> str | None:
+        value = (position or "").strip().upper()
+        if not value:
+            return None
+        aliases = {
+            "GK": "goalkeeper",
+            "CB": "defender",
+            "LB": "defender",
+            "RB": "defender",
+            "LWB": "defender",
+            "RWB": "defender",
+            "DM": "midfielder",
+            "CDM": "midfielder",
+            "CM": "midfielder",
+            "AM": "midfielder",
+            "CAM": "midfielder",
+            "LM": "midfielder",
+            "RM": "midfielder",
+            "LW": "forward",
+            "RW": "forward",
+            "ST": "forward",
+            "CF": "forward",
+        }
+        return aliases.get(value, value.lower())
+
+    @staticmethod
+    def _market_value_from_seed(seed: NationalRegenSeed) -> float:
+        rarity_multiplier = {
+            "common": 1.0,
+            "rare": 1.35,
+            "elite": 2.1,
+            "legendary": 3.25,
+        }.get(str(seed.rarity_tier or "common").lower(), 1.0)
+        rating_value = (int(seed.current_rating) * 1_800) + (int(seed.potential_rating) * 2_400)
+        growth_multiplier = 1.0 + (max(0.0, min(float(seed.growth_curve or 0.0), 1.0)) * 0.25)
+        return float(max(75_000, round(rating_value * rarity_multiplier * growth_multiplier, 2)))
+
+    def _get_player(self, player_id: str, *, actor: User | None = None) -> Player:
         player = self.session.get(Player, player_id)
         if player is not None:
             if not is_card_mint_eligible(player):
@@ -996,6 +1233,8 @@ class PlayerCardMarketService:
             return player
         seed = self.session.get(NationalRegenSeed, player_id)
         if seed is not None and is_preseeded_national_regen(seed):
+            if is_card_mint_eligible(seed):
+                return self._ensure_player_from_national_seed(seed, actor=actor)
             raise PlayerCardValidationError(
                 "Preseeded national regens are national-pool-only and cannot be card minted."
             )

@@ -80,6 +80,7 @@ return {current, ttl}
     def __init__(self, redis_url: str):
         self.client = Redis.from_url(redis_url, decode_responses=True)
         self._script = self.client.register_script(self._SCRIPT)
+        self._fallback = MemoryRateLimitStore()
 
     def increment(self, *, key: str, window_seconds: int) -> tuple[int, int]:
         try:
@@ -87,11 +88,15 @@ return {current, ttl}
             retry_after = max(1, int(ttl or window_seconds))
             return int(current), retry_after
         except RedisError:
-            logger.warning("rate_limit.increment_failed key=%s", key)
-            return 0, window_seconds
+            logger.warning("rate_limit.increment_failed_using_memory_fallback key=%s", key)
+            return self._fallback.increment(key=key, window_seconds=window_seconds)
 
     def snapshot(self) -> dict[str, Any]:
-        return {"backend": "redis"}
+        fallback_snapshot = self._fallback.snapshot()
+        return {
+            "backend": "redis",
+            "redis_error_fallback": fallback_snapshot,
+        }
 
 
 @dataclass(slots=True)

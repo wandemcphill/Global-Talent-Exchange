@@ -148,6 +148,21 @@ def test_admin_jackpot_runtime_update_and_manual_trigger(
     assert runtime.settings.jackpot_threshold_amount == Decimal("125.0000")
     assert runtime.settings.jackpot_contribution_rate == Decimal("0.1500")
 
+    balance_response = client.patch(
+        "/admin/jackpot/balance",
+        headers=bootstrap_admin_headers,
+        json={"balance": "25.0000", "reason": "seed launch jackpot display"},
+    )
+    assert balance_response.status_code == 200, balance_response.text
+    assert balance_response.json()["balance"] == "25.0000"
+    reset_balance_response = client.patch(
+        "/admin/jackpot/balance",
+        headers=bootstrap_admin_headers,
+        json={"balance": "0.0000", "reason": "reset for manual trigger assertion"},
+    )
+    assert reset_balance_response.status_code == 200, reset_balance_response.text
+    assert reset_balance_response.json()["balance"] == "0.0000"
+
     contribution_response = client.post(
         "/jackpot/contribute",
         headers=headers,
@@ -181,6 +196,22 @@ def test_admin_jackpot_runtime_update_and_manual_trigger(
     settled_round = next(item for item in history_payload if item["round_number"] == current_round_number)
     assert settled_round["trigger_mode"] == "manual"
     assert settled_round["payouts"][0]["payout_amount"] == "50.0000"
+
+    reset_runtime_response = client.post(
+        "/admin/jackpot/runtime",
+        headers=bootstrap_admin_headers,
+        json={
+            "threshold_amount": "500.0000",
+            "probability_limit": "1000.0000",
+            "probability_cap": "0.5000",
+            "failsafe_hours": 6,
+            "contribution_rate": "0.1000",
+            "distribution_mode": "single_winner",
+            "top_split_percent": "0.1000",
+            "min_activity_score": "1.0000",
+        },
+    )
+    assert reset_runtime_response.status_code == 200, reset_runtime_response.text
 
 
 def test_creator_market_buy_sell_and_trending(client, app_session_factory, app):

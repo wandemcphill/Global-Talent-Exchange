@@ -23,6 +23,7 @@ class PlayerImportJobCreateRequest(BaseModel):
 class PlayerCardSupplyRowRequest(BaseModel):
     player_id: str | None = None
     player_name: str | None = None
+    national_seed_id: str | None = None
     tier_code: str = Field(min_length=2, max_length=32)
     quantity: int = Field(default=1, ge=1)
     edition_code: str = Field(default="base", min_length=2, max_length=64)

@@ -149,9 +149,33 @@ def test_match_live_route_returns_frames_from_db_when_live_cache_is_empty() -> N
     assert body["isLive"] is False
     assert body["frames"]
     assert body["timelineEvents"]
+    assert body["payloadMode"] == "live_compact"
+    assert len(body["frames"]) == 1
+    assert len(body["timelineEvents"]) <= 24
+    assert len(body["viewer"]["frames"]) == 1
     assert body["viewer"]["match_id"] == replay_payload.match_id
     assert body["score"]["home"] == replay_payload.summary.home_score
     assert body["score"]["away"] == replay_payload.summary.away_score
+
+
+def test_match_live_route_can_opt_into_full_timeline_payload() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=35))
+    _insert_match(session_factory, replay_payload)
+    access_token = _issue_live_access_token(session_factory, replay_payload.match_id)
+
+    with TestClient(app) as client:
+        response = client.get(
+            f"/match/{replay_payload.match_id}/live",
+            params={"include_full_timeline": "true"},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["payloadMode"] == "full"
+    assert len(body["frames"]) > 1
+    assert len(body["viewer"]["frames"]) == len(body["frames"])
 
 
 def test_unity_live_refresh_route_issues_new_live_credentials() -> None:

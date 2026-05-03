@@ -49,8 +49,9 @@ class PlayerImportService:
         errors: list[str] = []
         player_id = str(row.get("player_id") or "").strip()
         player_name = str(row.get("player_name") or "").strip()
-        if not player_id and not player_name:
-            errors.append("player_id or player_name is required")
+        national_seed_id = str(row.get("national_seed_id") or "").strip()
+        if not player_id and not player_name and not national_seed_id:
+            errors.append("player_id, player_name, or national_seed_id is required")
         tier_code = str(row.get("tier_code") or "").strip()
         if len(tier_code) < 2:
             errors.append("tier_code is required")
@@ -277,21 +278,39 @@ class PlayerImportService:
     def _apply_card_supply(self, *, actor: User, payload: dict[str, object], source_label: str) -> "PlayerCardSupplyBatch":
         from app.player_cards.service import PlayerCardMarketService
 
-        player = self._resolve_player_from_supply_payload(payload)
-        if player is None:
-            raise PlayerImportError("Player was not found for this card supply row.")
         tier_code = str(payload.get("tier_code") or "").strip()
         quantity = int(payload.get("quantity") or 0)
         edition_code = str(payload.get("edition_code") or "base").strip()
         season_label = str(payload.get("season_label") or "").strip() or None
         owner_user_id = str(payload.get("owner_user_id") or "").strip() or None
         source_reference = str(payload.get("source_reference") or "").strip() or None
-        batch_key = str(payload.get("batch_key") or "").strip()
+        batch_key = str(payload.get("batch_key") or "").strip() or None
+        service = PlayerCardMarketService(session=self.session)
+        national_seed_id = str(payload.get("national_seed_id") or "").strip()
+        if national_seed_id:
+            try:
+                return service.apply_preseeded_national_regen_supply_batch(
+                    actor=actor,
+                    seed_id=national_seed_id,
+                    tier_code=tier_code,
+                    quantity=quantity,
+                    edition_code=edition_code,
+                    season_label=season_label,
+                    batch_key=batch_key,
+                    owner_user_id=owner_user_id,
+                    source_reference=source_reference or source_label,
+                    metadata=payload.get("metadata_json") or {},
+                )
+            except Exception as exc:
+                raise PlayerImportError(str(exc)) from exc
+
+        player = self._resolve_player_from_supply_payload(payload)
+        if player is None:
+            raise PlayerImportError("Player was not found for this card supply row.")
         if not batch_key:
             fingerprint = f"{player.id}:{tier_code}:{edition_code}:{owner_user_id or 'unassigned'}:{quantity}"
             batch_key = fingerprint.lower()
 
-        service = PlayerCardMarketService(session=self.session)
         return service.apply_supply_batch(
             actor=actor,
             player_id=player.id,

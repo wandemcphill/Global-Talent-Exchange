@@ -16,17 +16,28 @@ def _read_value(entity: Any, key: str) -> Any:
 def _metadata_payload(entity: Any) -> dict[str, Any]:
     if entity is None:
         return {}
+    payload: dict[str, Any] = {}
     if isinstance(entity, dict):
+        dna_profile = entity.get("dna_profile")
+        if isinstance(dna_profile, dict):
+            payload.update(dna_profile)
         metadata = entity.get("metadata")
         if isinstance(metadata, dict):
-            return metadata
+            payload.update(metadata)
         metadata_json = entity.get("metadata_json")
-        return metadata_json if isinstance(metadata_json, dict) else {}
+        if isinstance(metadata_json, dict):
+            payload.update(metadata_json)
+        return payload
+    dna_profile = getattr(entity, "dna_profile", None)
+    if isinstance(dna_profile, dict):
+        payload.update(dna_profile)
     metadata = getattr(entity, "metadata", None)
     if isinstance(metadata, dict):
-        return metadata
+        payload.update(metadata)
     metadata_json = getattr(entity, "metadata_json", None)
-    return metadata_json if isinstance(metadata_json, dict) else {}
+    if isinstance(metadata_json, dict):
+        payload.update(metadata_json)
+    return payload
 
 
 def _read_bool(entity: Any, *keys: str) -> bool | None:
@@ -71,8 +82,17 @@ def is_preseeded_national_regen(entity: Any) -> bool:
     return seed_type == "preseeded_national_pool"
 
 
+def is_admin_trade_enabled(entity: Any) -> bool:
+    explicit = _read_bool(entity, "admin_trade_enabled", "admin_mint_enabled", "trade_enabled_by_admin")
+    return explicit is True
+
+
+def _is_locked_preseeded_national_regen(entity: Any) -> bool:
+    return is_preseeded_national_regen(entity) and not is_admin_trade_enabled(entity)
+
+
 def is_share_market_eligible(entity: Any) -> bool:
-    if is_preseeded_national_regen(entity):
+    if _is_locked_preseeded_national_regen(entity):
         return False
     explicit = _read_bool(entity, "share_market_eligible", "market_eligible")
     if explicit is not None:
@@ -84,7 +104,7 @@ def is_share_market_eligible(entity: Any) -> bool:
 
 
 def is_transfer_market_eligible(entity: Any) -> bool:
-    if is_preseeded_national_regen(entity):
+    if _is_locked_preseeded_national_regen(entity):
         return False
     explicit = _read_bool(entity, "transfer_market_eligible", "transferable", "tradable")
     if explicit is not None:
@@ -96,7 +116,7 @@ def is_transfer_market_eligible(entity: Any) -> bool:
 
 
 def is_card_mint_eligible(entity: Any) -> bool:
-    if is_preseeded_national_regen(entity):
+    if _is_locked_preseeded_national_regen(entity):
         return False
     explicit = _read_bool(entity, "card_mint_eligible")
     if explicit is not None:
@@ -106,7 +126,7 @@ def is_card_mint_eligible(entity: Any) -> bool:
 
 def is_buy_cta_allowed(entity: Any, actor: Any = None) -> bool:
     del actor
-    if is_preseeded_national_regen(entity):
+    if _is_locked_preseeded_national_regen(entity):
         return False
     explicit = _read_bool(entity, "buy_cta_allowed", "buyable")
     if explicit is not None:
@@ -120,6 +140,7 @@ def market_access_payload(entity: Any, actor: Any = None) -> dict[str, bool]:
     card_mint_eligible = is_card_mint_eligible(entity)
     buy_cta_allowed = is_buy_cta_allowed(entity, actor=actor)
     preseeded_national_regen = is_preseeded_national_regen(entity)
+    admin_trade_enabled = is_admin_trade_enabled(entity)
     national_pool_only = _read_bool(entity, "national_pool_only")
     return {
         "market_eligible": share_market_eligible or transfer_market_eligible,
@@ -130,12 +151,14 @@ def market_access_payload(entity: Any, actor: Any = None) -> dict[str, bool]:
         "card_mint_eligible": card_mint_eligible,
         "buy_cta_allowed": buy_cta_allowed,
         "is_preseeded_national_regen": preseeded_national_regen,
-        "national_pool_only": bool(national_pool_only) or preseeded_national_regen,
+        "national_pool_only": bool(national_pool_only) or (preseeded_national_regen and not admin_trade_enabled),
+        "admin_trade_enabled": admin_trade_enabled,
     }
 
 
 __all__ = [
     "is_buy_cta_allowed",
+    "is_admin_trade_enabled",
     "is_card_mint_eligible",
     "is_preseeded_national_regen",
     "is_share_market_eligible",

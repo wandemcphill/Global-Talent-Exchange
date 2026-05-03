@@ -4,11 +4,13 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
+from app.auth.dependencies import get_optional_current_user
 from app.core.config import Settings, get_settings
 from app.core.database import DatabaseRuntime
+from app.models.user import User, UserRole
 
 router = APIRouter(tags=["health"])
 
@@ -82,7 +84,7 @@ class SystemStatusService:
 
     def build_readiness(self, request: Request, *, check_schema: bool = True) -> ReadinessResponse:
         database = request.app.state.context.database
-        checks = self._build_dependency_checks(request)
+        checks = self._build_dependency_checks(request, include_ingestion=True)
 
         if checks["database"].status == "ok" and check_schema and os.getenv("SKIP_SCHEMA_CHECK") != "true":
             checks["schema"] = self._schema_check(database)
@@ -111,7 +113,7 @@ class SystemStatusService:
         frontend_root = project_root / "frontend"
         backend_root = project_root / "backend"
         config_root = Path(settings.config_root)
-        dependency_checks = self._build_dependency_checks(request)
+        dependency_checks = self._build_dependency_checks(request, include_ingestion=True)
         runtime_mode, mode_reasons = self._runtime_mode_from_checks(dependency_checks)
         config_check_messages = {
             "player_universe_weighting.toml": "Missing backend config file player_universe_weighting.toml.",
@@ -177,14 +179,25 @@ class SystemStatusService:
             scaffolding_gaps=scaffolding_gaps,
         )
 
-    def _build_dependency_checks(self, request: Request) -> dict[str, ServiceCheck]:
+    def _build_dependency_checks(self, request: Request, *, include_ingestion: bool = False) -> dict[str, ServiceCheck]:
         database = request.app.state.context.database
-        return {
+        database_check = self._database_check(database)
+        checks = {
             "api": ServiceCheck(status="ok"),
-            "database": self._database_check(database),
+            "database": database_check,
             "redis": self._redis_check(request),
             "kafka": self._kafka_check(request),
         }
+        if include_ingestion:
+            checks["ingestion"] = (
+                self._ingestion_check(request)
+                if database_check.status == "ok"
+                else ServiceCheck(
+                    status="skipped",
+                    detail="Ingestion readiness check skipped because the database is unavailable.",
+                )
+            )
+        return checks
 
     @staticmethod
     def _runtime_mode_from_checks(checks: dict[str, ServiceCheck]) -> tuple[Literal["normal", "degraded"], list[str]]:
@@ -223,6 +236,91 @@ class SystemStatusService:
         return ServiceCheck(status="ok")
 
     @staticmethod
+    def _ingestion_check(request: Request) -> ServiceCheck:
+        settings = getattr(request.app.state, "settings", get_settings())
+        session_factory = getattr(request.app.state, "session_factory", None)
+        production_like = _is_protected_environment(settings)
+        ingestion_provider = str(settings.default_ingestion_provider or "").strip().lower()
+        if production_like and ingestion_provider == "mock":
+            return ServiceCheck(
+                status="error",
+                detail=(
+                    "Production launch readiness cannot use the mock ingestion provider. "
+                    "Set GTE_INGESTION_PROVIDER to the live Sportmonks-backed provider."
+                ),
+            )
+        if session_factory is None:
+            return ServiceCheck(
+                status="error",
+                detail="Database session factory is unavailable for ingestion readiness.",
+            )
+
+        try:
+            from sqlalchemy import func, select
+
+            from app.ingestion.models import Club, Competition, Player, ProviderSyncRun, SyncRunStatus
+            from app.ingestion.real_player_import_models import RealPlayerImportRun, RealPlayerImportRunStatus
+
+            with session_factory() as session:
+                player_count = session.execute(select(func.count()).select_from(Player)).scalar_one()
+                club_count = session.execute(select(func.count()).select_from(Club)).scalar_one()
+                competition_count = session.execute(select(func.count()).select_from(Competition)).scalar_one()
+                latest_sync_run = (
+                    session.execute(select(ProviderSyncRun).order_by(ProviderSyncRun.started_at.desc()))
+                    .scalars()
+                    .first()
+                )
+                latest_import_run = (
+                    session.execute(select(RealPlayerImportRun).order_by(RealPlayerImportRun.started_at.desc()))
+                    .scalars()
+                    .first()
+                )
+        except Exception as exc:
+            return ServiceCheck(status="error", detail=f"Ingestion readiness check failed: {exc}")
+
+        has_usable_data = player_count > 0 and club_count > 0
+        if has_usable_data:
+            detail = (
+                "Ingestion has usable last-known data: "
+                f"players={player_count}, clubs={club_count}, competitions={competition_count}."
+            )
+            return ServiceCheck(status="ok", detail=detail)
+
+        successful_sync_statuses = {SyncRunStatus.SUCCESS.value, SyncRunStatus.PARTIAL_SUCCESS.value}
+        successful_import_statuses = {
+            RealPlayerImportRunStatus.PARTIAL.value,
+            RealPlayerImportRunStatus.COMPLETED.value,
+            RealPlayerImportRunStatus.COMPLETED_WITH_ERRORS.value,
+        }
+        latest_sync_was_successful = latest_sync_run is not None and latest_sync_run.status in successful_sync_statuses
+        latest_import_was_successful = (
+            latest_import_run is not None and latest_import_run.status in successful_import_statuses
+        )
+
+        if production_like:
+            return ServiceCheck(
+                status="error",
+                detail=(
+                    "No usable ingestion data is available for launch readiness: "
+                    f"players={player_count}, clubs={club_count}, competitions={competition_count}."
+                ),
+            )
+
+        if latest_sync_was_successful or latest_import_was_successful:
+            return ServiceCheck(
+                status="skipped",
+                detail=(
+                    "Ingestion completed previously, but launch data is incomplete: "
+                    f"players={player_count}, clubs={club_count}, competitions={competition_count}."
+                ),
+            )
+
+        return ServiceCheck(
+            status="skipped",
+            detail="No ingestion data is available yet; launch data gate is relaxed outside production.",
+        )
+
+    @staticmethod
     def _redis_check(request: Request) -> ServiceCheck:
         settings = getattr(request.app.state, "settings", get_settings())
         if not settings.redis_url:
@@ -258,6 +356,23 @@ class SystemStatusService:
 
 def get_system_status_service() -> SystemStatusService:
     return SystemStatusService()
+
+
+def _is_protected_environment(settings: Settings) -> bool:
+    return str(settings.app_env or "").strip().lower() in {"production", "prod", "staging"}
+
+
+def require_internal_or_admin(
+    request: Request,
+    current_user: User | None = Depends(get_optional_current_user),
+) -> None:
+    settings = getattr(request.app.state, "settings", get_settings())
+    if not _is_protected_environment(settings):
+        return
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin authentication is required.")
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access is required.")
 
 
 @router.api_route("/", methods=["GET", "HEAD"], response_model=RootResponse, include_in_schema=False)
@@ -309,10 +424,14 @@ def read_version(
 def read_diagnostics(
     request: Request,
     service: SystemStatusService = Depends(get_system_status_service),
+    _: None = Depends(require_internal_or_admin),
 ) -> DiagnosticsResponse:
     return service.build_diagnostics(request)
 
 
 @router.get("/metrics", include_in_schema=False)
-def read_metrics(request: Request) -> Response:
+def read_metrics(
+    request: Request,
+    _: None = Depends(require_internal_or_admin),
+) -> Response:
     return request.app.state.metrics.metrics_response()

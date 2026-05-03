@@ -43,7 +43,7 @@ from app.models.player_cards import (
     PlayerCardTier,
     PlayerMoniker,
 )
-from app.models.regen import RegenProfile
+from app.models.regen import RegenOnboardingFlag, RegenProfile
 from app.models.real_world_football import PlayerDemandSignal, TrendingPlayerFlag
 from app.models.risk_ops import SystemEventSeverity
 from app.models.user import User, UserRole
@@ -359,7 +359,7 @@ class PlayerCardMarketplaceService:
             )
         )
 
-    def _get_card_context(self, player_card_id: str) -> dict[str, Any]:
+    def _get_card_context(self, player_card_id: str, *, include_image: bool = True) -> dict[str, Any]:
         row = self.session.execute(
             select(
                 PlayerCard,
@@ -406,11 +406,82 @@ class PlayerCardMarketplaceService:
                 player,
                 summary_payload=summary_payload if isinstance(summary_payload, dict) else None,
             ).model_dump(),
-            "image_url": self._image_url(
-                player,
-                summary_payload=summary_payload if isinstance(summary_payload, dict) else None,
+            "image_url": (
+                self._image_url(
+                    player,
+                    summary_payload=summary_payload if isinstance(summary_payload, dict) else None,
+                )
+                if include_image
+                else None
             ),
         }
+
+    def _ensure_card_is_tradeable(self, context: dict[str, Any], *, action: str) -> None:
+        card: PlayerCard = context["card"]
+        player: Player = context["player"]
+        card_metadata = dict(card.metadata_json or {})
+        variant = (card.card_variant or "").strip().lower()
+        edition = (card.edition_code or "").strip().lower()
+        starter_markers = {
+            "starter",
+            "starter_bundle",
+            "starter_regen",
+            "starter-rental",
+            "starter_rental",
+        }
+        if (
+            variant in starter_markers
+            or edition in starter_markers
+            or bool(card_metadata.get("starter_bundle"))
+            or bool(card_metadata.get("starter_regen"))
+            or bool(card_metadata.get("starter_rental"))
+        ):
+            self._audit(
+                listing_type=action,
+                action="blocked_non_tradeable_starter_regen",
+                actor_user_id=None,
+                player_card_id=card.id,
+                payload={"reason": "starter_regen_non_tradeable", "card_variant": variant, "edition_code": edition},
+            )
+            raise PlayerCardValidationError("starter_regen_non_tradeable")
+
+        onboarding = self.session.scalar(
+            select(RegenOnboardingFlag)
+            .join(RegenProfile, RegenOnboardingFlag.regen_id == RegenProfile.id)
+            .where(
+                RegenProfile.linked_unique_card_id == card.id,
+                RegenOnboardingFlag.is_non_tradable.is_(True),
+            )
+            .limit(1)
+        )
+        if onboarding is not None:
+            reason = (
+                "starter_regen_non_tradeable"
+                if (onboarding.onboarding_type or "").strip().lower() in {"starter_bundle", "starter_regen"}
+                else "regen_non_tradeable"
+            )
+            self._audit(
+                listing_type=action,
+                action="blocked_non_tradeable_regen",
+                actor_user_id=None,
+                player_card_id=card.id,
+                payload={
+                    "reason": reason,
+                    "onboarding_type": onboarding.onboarding_type,
+                    "squad_bucket": onboarding.squad_bucket,
+                },
+            )
+            raise PlayerCardValidationError(reason)
+
+        if not bool(player.is_tradable):
+            self._audit(
+                listing_type=action,
+                action="blocked_non_tradeable_player",
+                actor_user_id=None,
+                player_card_id=card.id,
+                payload={"reason": "player_non_tradeable", "player_id": player.id},
+            )
+            raise PlayerCardValidationError("player_non_tradeable")
 
     def _base_value_credits(self, context: dict[str, Any]) -> Decimal:
         summary = self.session.get(PlayerSummaryReadModel, context["player"].id)
@@ -1993,7 +2064,8 @@ class PlayerCardMarketplaceService:
         if price_per_card_credits <= Decimal("0"):
             raise PlayerCardValidationError("Listing price must be positive.")
 
-        context = self._get_card_context(player_card_id)
+        context = self._get_card_context(player_card_id, include_image=False)
+        self._ensure_card_is_tradeable(context, action="sale")
         holding = self._get_holding(actor.id, player_card_id)
         if self._available_holding_quantity(holding) < quantity:
             raise PlayerCardValidationError("Not enough unreserved card quantity is available to list for sale.")
@@ -2045,7 +2117,7 @@ class PlayerCardMarketplaceService:
         self.session.flush()
         self._record_market_snapshot(context["player"].id)
         self.session.flush()
-        return self._sale_listing_payload(listing, context)
+        return self._sale_listing_payload(listing, self._get_card_context(player_card_id))
 
     def cancel_sale_listing(self, *, actor: User, listing_id: str) -> dict[str, Any]:
         listing = self._get_sale_listing(listing_id)
@@ -2085,15 +2157,16 @@ class PlayerCardMarketplaceService:
             raise PlayerCardValidationError("Purchase quantity is invalid.")
 
         context = self._get_card_context(listing.player_card_id)
+        self._ensure_card_is_tradeable(context, action="sale")
         seller = self._get_user(listing.seller_user_id)
         gross = self._normalize_amount(Decimal(listing.price_per_card_credits) * Decimal(quantity))
         fee = self._normalize_amount(gross * Decimal(NORMAL_LOAN_PLATFORM_FEE_BPS) / Decimal(10_000))
         seller_net = self._normalize_amount(gross - fee)
         settlement_reference = f"player-card-marketplace-sale:{listing.listing_id}:{generate_uuid()}"
 
-        buyer_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.CREDIT)
-        seller_account = self.wallet_service.get_user_account(self.session, seller, LedgerUnit.CREDIT)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
+        buyer_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.COIN)
+        seller_account = self.wallet_service.get_user_account(self.session, seller, LedgerUnit.COIN)
+        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
         self.wallet_service.append_transaction(
             self.session,
             postings=[
@@ -2336,7 +2409,8 @@ class PlayerCardMarketplaceService:
         if loan_fee_credits < Decimal("0"):
             raise PlayerCardValidationError("Loan fee cannot be negative.")
 
-        context = self._get_card_context(player_card_id)
+        context = self._get_card_context(player_card_id, include_image=False)
+        self._ensure_card_is_tradeable(context, action="loan")
         holding = self._get_holding(actor.id, player_card_id)
         if self._available_holding_quantity(holding) < total_slots:
             raise PlayerCardValidationError("Not enough unreserved card quantity is available to list for loan.")
@@ -2349,7 +2423,7 @@ class PlayerCardMarketplaceService:
             available_slots=total_slots,
             duration_days=duration_days,
             loan_fee_credits=self._normalize_amount(loan_fee_credits),
-            currency=LedgerUnit.CREDIT.value,
+            currency=LedgerUnit.COIN.value,
             status="open",
             is_negotiable=is_negotiable,
             expires_at=expires_at,
@@ -2369,7 +2443,7 @@ class PlayerCardMarketplaceService:
             status_to="open",
         )
         self.session.flush()
-        return self._loan_listing_payload(listing, context)
+        return self._loan_listing_payload(listing, self._get_card_context(player_card_id))
 
     def cancel_loan_listing(self, *, actor: User, listing_id: str) -> dict[str, Any]:
         listing = self._get_loan_listing(listing_id)
@@ -2419,9 +2493,9 @@ class PlayerCardMarketplaceService:
         ):
             raise PlayerCardValidationError("This loan listing is not negotiable.")
 
-        self._ensure_borrower_has_no_player_version(
-            actor.id, self._get_card_context(listing.player_card_id)["player"].id
-        )
+        context = self._get_card_context(listing.player_card_id, include_image=False)
+        self._ensure_card_is_tradeable(context, action="loan")
+        self._ensure_borrower_has_no_player_version(actor.id, context["player"].id)
         negotiation = CardLoanNegotiation(
             listing_id=listing.id,
             player_card_id=listing.player_card_id,
@@ -2507,6 +2581,7 @@ class PlayerCardMarketplaceService:
         listing = self._get_loan_listing(negotiation.listing_id)
         self._ensure_loan_listing_available(listing)
         context = self._get_card_context(listing.player_card_id)
+        self._ensure_card_is_tradeable(context, action="loan")
         economics = self._loan_economics(context, negotiation.proposed_loan_fee_credits)
         accepted_at = datetime.now(UTC)
 
@@ -2526,7 +2601,7 @@ class PlayerCardMarketplaceService:
             platform_fee_bps=economics["platform_fee_bps"],
             fee_floor_applied=economics["fee_floor_applied"],
             loan_duration_days=negotiation.proposed_duration_days,
-            currency=LedgerUnit.CREDIT.value,
+            currency=LedgerUnit.COIN.value,
             status="accepted_pending_settlement",
             accepted_at=accepted_at,
             borrowed_at=accepted_at,
@@ -2565,6 +2640,8 @@ class PlayerCardMarketplaceService:
             raise PlayerCardPermissionError("Only the borrower can settle this loan contract.")
         borrower = self._get_user(contract.borrower_user_id)
         lender = self._get_user(contract.owner_user_id)
+        context = self._get_card_context(contract.player_card_id)
+        self._ensure_card_is_tradeable(context, action="loan")
         settlement_reference = f"player-card-loan:{contract.id}:{generate_uuid()}"
         effective_fee = self._normalize_amount(contract.loan_fee_credits)
         platform_fee = self._normalize_amount(contract.platform_fee_credits)
@@ -2573,17 +2650,17 @@ class PlayerCardMarketplaceService:
             self.session,
             postings=[
                 LedgerPosting(
-                    account=self.wallet_service.get_user_account(self.session, borrower, LedgerUnit.CREDIT),
+                    account=self.wallet_service.get_user_account(self.session, borrower, LedgerUnit.COIN),
                     amount=-effective_fee,
                     source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
                 ),
                 LedgerPosting(
-                    account=self.wallet_service.get_user_account(self.session, lender, LedgerUnit.CREDIT),
+                    account=self.wallet_service.get_user_account(self.session, lender, LedgerUnit.COIN),
                     amount=lender_net,
                     source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
                 ),
                 LedgerPosting(
-                    account=self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT),
+                    account=self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN),
                     amount=platform_fee,
                     source_tag=LedgerSourceTag.TRADING_FEE_BURN,
                 ),
@@ -2611,7 +2688,7 @@ class PlayerCardMarketplaceService:
             status_to="active",
         )
         self.session.flush()
-        return self._loan_contract_payload(contract, self._get_card_context(contract.player_card_id))
+        return self._loan_contract_payload(contract, context)
 
     def return_loan_contract(self, *, actor: User, contract_id: str) -> dict[str, Any]:
         contract = self._get_loan_contract(contract_id)
@@ -2766,7 +2843,8 @@ class PlayerCardMarketplaceService:
         expires_at: datetime | None = None,
     ) -> dict[str, Any]:
         self._ensure_market_actor(actor)
-        context = self._get_card_context(player_card_id)
+        context = self._get_card_context(player_card_id, include_image=False)
+        self._ensure_card_is_tradeable(context, action="swap")
         holding = self._get_holding(actor.id, player_card_id)
         if self._available_holding_quantity(holding) < 1:
             raise PlayerCardValidationError("No unreserved card quantity is available to list for swap.")
@@ -2798,7 +2876,7 @@ class PlayerCardMarketplaceService:
             status_to="open",
         )
         self.session.flush()
-        return self._swap_listing_payload(listing, context)
+        return self._swap_listing_payload(listing, self._get_card_context(player_card_id))
 
     def cancel_swap_listing(self, *, actor: User, listing_id: str) -> dict[str, Any]:
         listing = self._get_swap_listing(listing_id)
@@ -2836,7 +2914,10 @@ class PlayerCardMarketplaceService:
         if listing.owner_user_id == actor.id:
             raise PlayerCardValidationError("You cannot accept your own swap listing.")
 
-        requested_context = self._get_card_context(counterparty_player_card_id)
+        requested_context = self._get_card_context(counterparty_player_card_id, include_image=False)
+        listing_context = self._get_card_context(listing.player_card_id, include_image=False)
+        self._ensure_card_is_tradeable(listing_context, action="swap")
+        self._ensure_card_is_tradeable(requested_context, action="swap")
         if listing.requested_player_card_id and listing.requested_player_card_id != counterparty_player_card_id:
             raise PlayerCardValidationError("This swap listing requires a specific player card.")
         if listing.requested_player_id and listing.requested_player_id != requested_context["player"].id:

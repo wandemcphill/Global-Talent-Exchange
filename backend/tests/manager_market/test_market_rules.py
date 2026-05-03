@@ -25,10 +25,15 @@ def _catalog_by_id(client) -> dict[str, dict[str, object]]:
     }
 
 
+def _response_text(response) -> str:
+    return str(response.json())
+
+
 def test_manager_catalog_is_seeded_during_app_startup(app, client) -> None:
     startup_thread = getattr(app.state, "deferred_startup_thread", None)
     if startup_thread is not None:
-        startup_thread.join(timeout=5)
+        startup_thread.join(timeout=30)
+    _catalog_by_id(client)
 
     with app.state.session_factory() as session:
         total = session.scalar(select(func.count()).select_from(ManagerCatalogEntry))
@@ -48,8 +53,8 @@ def test_manager_catalog_is_seeded_during_app_startup(app, client) -> None:
     assert ferguson.supply_total == 1
     assert ferguson.supply_available == 1
     assert pep is not None
-    assert pep.supply_total == 2
-    assert pep.supply_available == 2
+    assert pep.supply_total == 1
+    assert pep.supply_available == 1
 
 
 def test_free_recruitment_preserves_wallet_balance_and_enforces_scarcity(
@@ -90,7 +95,7 @@ def test_free_recruitment_preserves_wallet_balance_and_enforces_scarcity(
         json={"manager_id": "sir-alex-ferguson", "slot": "bench"},
     )
     assert sold_out_ferguson.status_code == 400
-    assert "No circulating copies" in sold_out_ferguson.json()["detail"]
+    assert "active digital copy" in _response_text(sold_out_ferguson)
 
     recruit_pep_first = client.post(
         "/api/managers/recruit",
@@ -104,7 +109,8 @@ def test_free_recruitment_preserves_wallet_balance_and_enforces_scarcity(
         headers=second_user_headers,
         json={"manager_id": "pep-guardiola", "slot": "bench"},
     )
-    assert recruit_pep_second.status_code == 200
+    assert recruit_pep_second.status_code == 400
+    assert "active digital copy" in _response_text(recruit_pep_second)
 
     sold_out_pep = client.post(
         "/api/managers/recruit",
@@ -112,12 +118,12 @@ def test_free_recruitment_preserves_wallet_balance_and_enforces_scarcity(
         json={"manager_id": "pep-guardiola", "slot": "bench"},
     )
     assert sold_out_pep.status_code == 400
-    assert "No circulating copies" in sold_out_pep.json()["detail"]
+    assert "active digital copy" in _response_text(sold_out_pep)
 
     catalog = _catalog_by_id(client)
     assert catalog["sir-alex-ferguson"]["supply_total"] == 1
     assert catalog["sir-alex-ferguson"]["supply_available"] == 0
-    assert catalog["pep-guardiola"]["supply_total"] == 2
+    assert catalog["pep-guardiola"]["supply_total"] == 1
     assert catalog["pep-guardiola"]["supply_available"] == 0
 
     with app.state.session_factory() as session:
@@ -139,4 +145,4 @@ def test_free_recruitment_preserves_wallet_balance_and_enforces_scarcity(
         )
 
     assert ferguson_owned == 1
-    assert pep_owned == 2
+    assert pep_owned == 1

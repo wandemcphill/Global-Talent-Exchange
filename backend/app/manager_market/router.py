@@ -13,6 +13,7 @@ from .schemas import (
     CompetitionAdminView,
     CompetitionOrchestrationView,
     CompetitionRuntimeView,
+    CreateManagerRequest,
     ManagerAuditEventView,
     ManagerCatalogPage,
     ManagerComparisonView,
@@ -66,13 +67,31 @@ def get_team(request: Request, session: Session = Depends(get_session), current_
 @public_router.post("/recruit", response_model=TeamManagersView)
 def recruit_manager(payload: RecruitManagerRequest, request: Request, session: Session = Depends(get_session), current_user: User = Depends(get_current_user), service: ManagerMarketService = Depends(get_service)) -> TeamManagersView:
     try:
-        result = service.recruit_manager(request.app, session, current_user, payload.manager_id, payload.slot)
+        result = service.recruit_manager(
+            request.app,
+            session,
+            current_user,
+            payload.manager_id,
+            payload.slot,
+            salary_fancoin=payload.salary_fancoin,
+        )
         session.commit()
         return result
     except CapacityError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ManagerMarketError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@public_router.post("/create", response_model=TeamManagersView, status_code=status.HTTP_201_CREATED)
+def create_manager(payload: CreateManagerRequest, request: Request, session: Session = Depends(get_session), current_user: User = Depends(get_current_user), service: ManagerMarketService = Depends(get_service)) -> TeamManagersView:
+    try:
+        result = service.create_custom_manager(request.app, session, current_user, payload)
+        session.commit()
+        return result
+    except (ManagerMarketError, InsufficientBalanceError) as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

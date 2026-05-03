@@ -14,8 +14,10 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from app.economy.pricing_engine import PricingEngine
 from app.economy.economy_service import EconomyService
 from app.models.base import generate_uuid, utcnow
+from app.models.economy_config import ServicePricingRule
 from app.models.manager_market import (
     ManagerAuditLog,
     ManagerCatalogEntry,
@@ -28,8 +30,8 @@ from app.models.manager_market import (
 )
 from app.admin_engine.service import AdminEngineService
 from app.models.user import User
-from app.models.wallet import LedgerSourceTag, LedgerUnit
-from app.wallets.service import WalletService
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.wallets.service import LedgerPosting, WalletService
 
 from .schemas import (
     CompetitionAdminUpdateRequest,
@@ -37,6 +39,7 @@ from .schemas import (
     CompetitionOrchestrationView,
     CompetitionRuntimeView,
     CompetitionScheduleMatchView,
+    CreateManagerRequest,
     ManagerAssetView,
     ManagerAuditEventView,
     ManagerCatalogItem,
@@ -56,6 +59,9 @@ LEGACY_STATE_FILE = "manager_market_state.json"
 SEED_INSERT_BATCH_SIZE = 40
 BOOTSTRAP_COMPLETE_STATE_KEY = "manager_market_bootstrap_complete"
 BOOTSTRAP_LOCK_STATE_KEY = "manager_market_bootstrap_lock"
+CUSTOM_MANAGER_LIMIT = 2
+MANAGER_CREATE_SERVICE_KEY = "manager-create"
+AMOUNT_QUANTUM = Decimal("0.0001")
 
 
 class ManagerMarketError(ValueError):
@@ -118,7 +124,7 @@ class ManagerMarketService:
             stmt = stmt.where(ManagerCatalogEntry.rarity == rarity)
         items = session.scalars(stmt.order_by(ManagerCatalogEntry.display_name.asc()).limit(limit)).all()
         total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-        return ManagerCatalogPage(items=[self._catalog_item(row) for row in items], total=int(total))
+        return ManagerCatalogPage(items=[self._catalog_item(session, row) for row in items], total=int(total))
 
     def _active_trading_fee_bps(self, session: Session) -> int:
         rule = next(iter(AdminEngineService(session).list_reward_rules(active_only=True)), None)
@@ -148,12 +154,23 @@ class ManagerMarketService:
         bench = [asset for asset in assets if asset.asset_id not in {(main.asset_id if main else None), (academy.asset_id if academy else None)}]
         return TeamManagersView(main_manager=main, academy_manager=academy, bench=bench, total_owned=len(assets))
 
-    def recruit_manager(self, app: FastAPI, session: Session, user: User, manager_id: str, slot: str) -> TeamManagersView:
+    def recruit_manager(
+        self,
+        app: FastAPI,
+        session: Session,
+        user: User,
+        manager_id: str,
+        slot: str,
+        *,
+        salary_fancoin: Decimal | None = None,
+    ) -> TeamManagersView:
         self._bootstrap_db(app, session)
         self._assert_capacity(session, user.id)
         manager = self._manager_by_id(session, manager_id)
+        self._assert_single_active_copy_available(session, manager_id)
         if manager.supply_available <= 0:
             raise ManagerMarketError("No circulating copies are currently available for recruitment.")
+        salary_paid = self._collect_manager_salary(session, user, manager, salary_fancoin)
         asset = ManagerHolding(
             asset_id=generate_uuid(),
             manager_id=manager_id,
@@ -166,7 +183,75 @@ class ManagerMarketService:
         session.flush()
         if slot in {"main", "academy"}:
             self._assign_slot(session, user.id, asset.asset_id, slot)
-        self._append_audit(session, "manager.recruited", user, {"manager_id": manager_id, "asset_id": asset.asset_id, "slot": slot})
+        self._append_audit(
+            session,
+            "manager.recruited",
+            user,
+            {
+                "manager_id": manager_id,
+                "asset_id": asset.asset_id,
+                "slot": slot,
+                "salary_fancoin": str(salary_paid),
+            },
+        )
+        session.flush()
+        return self.get_team(app, session, user)
+
+    def create_custom_manager(
+        self,
+        app: FastAPI,
+        session: Session,
+        user: User,
+        payload: CreateManagerRequest,
+    ) -> TeamManagersView:
+        self._bootstrap_db(app, session)
+        self._assert_capacity(session, user.id)
+        created_count = self._custom_manager_count(session, user.id)
+        if created_count >= CUSTOM_MANAGER_LIMIT:
+            raise ManagerMarketError("Users can only create two managers.")
+        creation_fee = self._collect_custom_manager_creation_fee(session, user)
+        manager_id = self._custom_manager_id(session, user.id, payload.display_name)
+        manager = ManagerCatalogEntry(
+            manager_id=manager_id,
+            display_name=payload.display_name.strip(),
+            rarity="user_created",
+            mentality=payload.mentality.strip().lower(),
+            tactics=self._normalized_choices(payload.tactics, limit=6),
+            traits=self._normalized_choices([*payload.traits, "user_created_manager", "salary_exempt"], limit=8),
+            substitution_tendency=payload.substitution_tendency.strip().lower(),
+            philosophy_summary=(
+                payload.philosophy_summary.strip()
+                if payload.philosophy_summary
+                else "User-created manager with custom tactical identity."
+            ),
+            club_associations=["User Created"],
+            supply_total=1,
+            supply_available=0,
+        )
+        asset = ManagerHolding(
+            asset_id=generate_uuid(),
+            manager_id=manager_id,
+            owner_user_id=user.id,
+            acquired_at=utcnow().isoformat(),
+            status="owned",
+        )
+        session.add(manager)
+        session.add(asset)
+        session.flush()
+        if payload.slot in {"main", "academy"}:
+            self._assign_slot(session, user.id, asset.asset_id, payload.slot)
+        self._append_audit(
+            session,
+            "manager.created",
+            user,
+            {
+                "manager_id": manager_id,
+                "asset_id": asset.asset_id,
+                "slot": payload.slot,
+                "creation_fee_coin": str(creation_fee),
+                "salary_exempt": True,
+            },
+        )
         session.flush()
         return self.get_team(app, session, user)
 
@@ -187,7 +272,8 @@ class ManagerMarketService:
         self._unassign_asset(session, user.id, asset_id)
         asset.status = "released"
         manager = self._manager_by_id(session, asset.manager_id)
-        manager.supply_available += 1
+        manager.supply_total = 1 if manager.supply_total > 0 else manager.supply_total
+        manager.supply_available = 1 if manager.supply_total > 0 else 0
         self._append_audit(session, "manager.released", user, {"asset_id": asset_id})
         session.flush()
         return self.get_team(app, session, user)
@@ -635,6 +721,8 @@ class ManagerMarketService:
     def update_manager_supply(self, app: FastAPI, session: Session, actor: User, manager_id: str, payload: ManagerSupplyUpdateRequest) -> ManagerCatalogItem:
         self._bootstrap_db(app, session)
         manager = self._manager_by_id(session, manager_id)
+        if payload.supply_total > 1:
+            raise ManagerMarketError("Manager digital assets are unique; supply cannot be greater than one.")
         active_owned = session.scalar(select(func.count()).select_from(ManagerHolding).where(ManagerHolding.manager_id == manager_id, ManagerHolding.status.in_(["owned", "listed"]))) or 0
         if payload.supply_total < int(active_owned):
             raise ManagerMarketError("New total supply cannot be lower than copies already held by users.")
@@ -642,7 +730,7 @@ class ManagerMarketService:
         manager.supply_total = payload.supply_total
         self._append_audit(session, "manager.supply.updated", actor, {"manager_id": manager_id, "supply_total": payload.supply_total, "reason": payload.reason})
         session.flush()
-        return self._catalog_item(manager)
+        return self._catalog_item(session, manager)
 
     def run_fast_league(self, app: FastAPI, session: Session, participants: int) -> dict[str, Any]:
         runtime = self.preview_competition_runtime(app, session, code="fast_league", participants=participants)
@@ -730,7 +818,10 @@ class ManagerMarketService:
             score += 3
         return max(1, min(score, 99))
 
-    def _catalog_item(self, row: ManagerCatalogEntry) -> ManagerCatalogItem:
+    def _catalog_item(self, session: Session, row: ManagerCatalogEntry) -> ManagerCatalogItem:
+        active_copies = self._active_copy_count(session, row.manager_id)
+        supply_total = 1 if int(row.supply_total or 0) > 0 else 0
+        supply_available = max(0, supply_total - active_copies)
         return ManagerCatalogItem(
             manager_id=row.manager_id,
             display_name=row.display_name,
@@ -741,8 +832,8 @@ class ManagerMarketService:
             substitution_tendency=row.substitution_tendency,
             philosophy_summary=row.philosophy_summary,
             club_associations=list(row.club_associations or []),
-            supply_total=row.supply_total,
-            supply_available=row.supply_available,
+            supply_total=supply_total,
+            supply_available=supply_available,
         )
 
     def _listing_view(self, session: Session, listing: ManagerTradeListing) -> ManagerListingView:
@@ -787,6 +878,198 @@ class ManagerMarketService:
         owned = session.scalar(select(func.count()).select_from(ManagerHolding).where(ManagerHolding.owner_user_id == user_id, ManagerHolding.status == "owned")) or 0
         if int(owned) >= 2:
             raise CapacityError("Each team can only hold two managers at a time.")
+
+    def _assert_single_active_copy_available(self, session: Session, manager_id: str) -> None:
+        if self._active_copy_count(session, manager_id) > 0:
+            raise ManagerMarketError("This manager already has an active digital copy.")
+
+    def _active_copy_count(self, session: Session, manager_id: str) -> int:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(ManagerHolding)
+                .where(
+                    ManagerHolding.manager_id == manager_id,
+                    ManagerHolding.status.in_(["owned", "listed"]),
+                )
+            )
+            or 0
+        )
+
+    def _collect_manager_salary(
+        self,
+        session: Session,
+        user: User,
+        manager: ManagerCatalogEntry,
+        salary_fancoin: Decimal | None,
+    ) -> Decimal:
+        if self._is_user_created_manager(manager):
+            return Decimal("0.0000")
+        salary = self._normalize_amount(
+            salary_fancoin if salary_fancoin is not None else self._default_manager_salary(manager)
+        )
+        if salary <= Decimal("0.0000"):
+            raise ManagerMarketError("Manager salary negotiation must be greater than zero Fan Coin.")
+        user_account = self.wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
+        platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+        self.wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=user_account,
+                    amount=-salary,
+                    source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                ),
+                LedgerPosting(
+                    account=platform_account,
+                    amount=salary,
+                    source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+            transaction_type=LedgerTransactionType.ADJUSTMENT,
+            reference=f"manager-salary:{manager.manager_id}:{user.id}:{generate_uuid()}",
+            description=f"Manager salary negotiation for {manager.display_name}",
+            actor=user,
+            metadata={
+                "manager_salary": {
+                    "manager_id": manager.manager_id,
+                    "display_name": manager.display_name,
+                    "salary_fancoin": str(salary),
+                    "paid_once": True,
+                }
+            },
+        )
+        return salary
+
+    def _collect_custom_manager_creation_fee(self, session: Session, user: User) -> Decimal:
+        self._ensure_manager_create_pricing_rule(session)
+        quote = PricingEngine(session, wallet_service=self.wallet_service).quote_service(MANAGER_CREATE_SERVICE_KEY)
+        amount = self._normalize_amount(quote.amount_for_unit(LedgerUnit.COIN))
+        if amount <= Decimal("0.0000"):
+            return Decimal("0.0000")
+        user_account = self.wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+        platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+        self.wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=user_account,
+                    amount=-amount,
+                    source_tag=LedgerSourceTag.COSMETIC_SPEND,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                ),
+                LedgerPosting(
+                    account=platform_account,
+                    amount=amount,
+                    source_tag=LedgerSourceTag.COSMETIC_SPEND,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.COSMETIC_SPEND,
+            transaction_type=LedgerTransactionType.ADJUSTMENT,
+            reference=f"manager-create:{user.id}:{generate_uuid()}",
+            description="Create custom manager card",
+            actor=user,
+            metadata={
+                "manager_create": {
+                    "service_key": MANAGER_CREATE_SERVICE_KEY,
+                    "amount_coin": str(amount),
+                }
+            },
+        )
+        return amount
+
+    def _ensure_manager_create_pricing_rule(self, session: Session) -> None:
+        existing = session.scalar(
+            select(ServicePricingRule).where(ServicePricingRule.service_key == MANAGER_CREATE_SERVICE_KEY)
+        )
+        if existing is not None:
+            return
+        session.add(
+            ServicePricingRule(
+                service_key=MANAGER_CREATE_SERVICE_KEY,
+                title="Create Custom Manager",
+                description="Mint a user-created manager card for the manager market.",
+                price_coin=Decimal("5.0000"),
+                price_fancoin_equivalent=Decimal("0.0000"),
+                active=True,
+            )
+        )
+        session.flush()
+
+    def _custom_manager_count(self, session: Session, user_id: str) -> int:
+        prefix = self._custom_manager_prefix(user_id)
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(ManagerCatalogEntry)
+                .where(ManagerCatalogEntry.manager_id.like(f"{prefix}%"))
+            )
+            or 0
+        )
+
+    def _custom_manager_id(self, session: Session, user_id: str, display_name: str) -> str:
+        prefix = self._custom_manager_prefix(user_id)
+        slug = self._slug_fragment(display_name)
+        candidate = f"{prefix}{slug}"[:120]
+        suffix = 2
+        while session.scalar(select(ManagerCatalogEntry.manager_id).where(ManagerCatalogEntry.manager_id == candidate)):
+            base = f"{prefix}{slug}"[:116]
+            candidate = f"{base}-{suffix}"[:120]
+            suffix += 1
+        return candidate
+
+    @staticmethod
+    def _custom_manager_prefix(user_id: str) -> str:
+        return f"user-{user_id}-"
+
+    @staticmethod
+    def _normalized_choices(values: list[str], *, limit: int) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            item = "_".join(value.strip().lower().replace("-", "_").split())
+            if not item or item in seen:
+                continue
+            normalized.append(item)
+            seen.add(item)
+            if len(normalized) >= limit:
+                break
+        if not normalized:
+            raise ManagerMarketError("At least one manager tactic or trait is required.")
+        return normalized
+
+    @staticmethod
+    def _slug_fragment(value: str) -> str:
+        cleaned = "".join(ch.lower() if ch.isalnum() else "-" for ch in value.strip())
+        parts = [part for part in cleaned.split("-") if part]
+        return "-".join(parts) or "manager"
+
+    @staticmethod
+    def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
+        if value is None:
+            value = Decimal("0.0000")
+        return Decimal(str(value)).quantize(AMOUNT_QUANTUM)
+
+    @staticmethod
+    def _is_user_created_manager(manager: ManagerCatalogEntry) -> bool:
+        traits = set(manager.traits or [])
+        return manager.rarity == "user_created" or "user_created_manager" in traits
+
+    def _default_manager_salary(self, manager: ManagerCatalogEntry) -> Decimal:
+        if self._is_user_created_manager(manager):
+            return Decimal("0.0000")
+        return {
+            "legendary": Decimal("100.0000"),
+            "elite_active": Decimal("50.0000"),
+            "rare": Decimal("20.0000"),
+            "popular": Decimal("10.0000"),
+        }.get(str(manager.rarity or "").strip().lower(), Decimal("10.0000"))
 
     def _assignment(self, session: Session, user_id: str) -> ManagerTeamAssignment | None:
         return session.scalar(select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == user_id))

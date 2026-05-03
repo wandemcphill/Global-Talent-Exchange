@@ -50,6 +50,17 @@ class TeamManagersView(BaseModel):
 class RecruitManagerRequest(BaseModel):
     manager_id: str
     slot: Literal["main", "academy", "bench"] = "bench"
+    salary_fancoin: Decimal | None = Field(default=None, ge=0)
+
+
+class CreateManagerRequest(BaseModel):
+    display_name: str = Field(min_length=2, max_length=160)
+    mentality: str = Field(default="balanced", min_length=2, max_length=64)
+    tactics: list[str] = Field(min_length=1, max_length=6)
+    traits: list[str] = Field(min_length=1, max_length=8)
+    substitution_tendency: str = Field(default="balanced_substitution", min_length=2, max_length=64)
+    philosophy_summary: str | None = Field(default=None, max_length=500)
+    slot: Literal["main", "academy", "bench"] = "bench"
 
 
 class AssignManagerRequest(BaseModel):

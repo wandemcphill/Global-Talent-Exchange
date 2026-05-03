@@ -283,6 +283,51 @@ class RealtimeHub:
                 )
             ]
 
+        if event.name == "JACKPOT_TRIGGERED":
+            dispatches: list[RealtimeDispatch] = []
+            for winner in payload.get("winners") or []:
+                if not isinstance(winner, dict):
+                    continue
+                winner_user_id = _optional_string(winner.get("user_id"))
+                if winner_user_id is None:
+                    continue
+                amount = winner.get("amount")
+                dispatches.append(
+                    RealtimeDispatch(
+                        type="jackpot_triggered",
+                        topics=(wallet_topic(winner_user_id),),
+                        data={
+                            "user_id": winner_user_id,
+                            "round_id": payload.get("round_id") or event.aggregate_id,
+                            "round_number": payload.get("round_number"),
+                            "trigger_mode": payload.get("trigger_mode"),
+                            "amount": amount,
+                            "unit": "coin",
+                        },
+                    )
+                )
+                dispatches.append(
+                    RealtimeDispatch(
+                        type="notification",
+                        topics=(wallet_topic(winner_user_id),),
+                        data={
+                            "user_id": winner_user_id,
+                            "topic": "jackpot",
+                            "template_key": "JACKPOT_DROPPED",
+                            "resource_type": "jackpot_round",
+                            "resource_id": payload.get("round_id") or event.aggregate_id,
+                            "message": f"Jackpot dropped: {amount} GTEX Coin has been credited to your wallet.",
+                            "metadata": {
+                                "round_id": payload.get("round_id") or event.aggregate_id,
+                                "round_number": payload.get("round_number"),
+                                "trigger_mode": payload.get("trigger_mode"),
+                                "amount": amount,
+                            },
+                        },
+                    )
+                )
+            return dispatches
+
         if event.name in {"market.trade.executed", "TRADE_EXECUTED", "PLAYER_VALUE_UPDATED"}:
             player_id = _optional_string(
                 payload.get("player_id")
@@ -324,6 +369,11 @@ class RealtimeHub:
             )
             if match_id is None:
                 return []
+            commentary = _optional_string(
+                payload.get("commentary")
+                or payload.get("description")
+                or payload.get("source_commentary")
+            )
             score_payload = {
                 "match_id": match_id,
                 "event_id": payload.get("event_id"),
@@ -336,19 +386,25 @@ class RealtimeHub:
                 "clock": payload.get("clock"),
                 "team_id": payload.get("team_id"),
                 "team_name": payload.get("team") or payload.get("team_name"),
+                "player_id": payload.get("player_id"),
+                "player_name": payload.get("player") or payload.get("player_name"),
+                "secondary_player_id": payload.get("secondary_player_id"),
+                "secondary_player_name": payload.get("secondary_player") or payload.get("secondary_player_name"),
+                "commentary": commentary,
+                "description": commentary,
             }
             dispatches = [
                 RealtimeDispatch(
                     type="match_update",
                     topics=(match_topic(match_id),),
                     data=score_payload,
-                )
+                ),
+                RealtimeDispatch(
+                    type="match_event",
+                    topics=(match_topic(match_id),),
+                    data=score_payload,
+                ),
             ]
-            commentary = _optional_string(
-                payload.get("commentary")
-                or payload.get("description")
-                or payload.get("source_commentary")
-            )
             if commentary:
                 dispatches.append(
                     RealtimeDispatch(
@@ -356,11 +412,6 @@ class RealtimeHub:
                         topics=(commentary_topic(match_id),),
                         data={
                             **score_payload,
-                            "commentary": commentary,
-                            "player_id": payload.get("player_id"),
-                            "player_name": payload.get("player") or payload.get("player_name"),
-                            "secondary_player_id": payload.get("secondary_player_id"),
-                            "secondary_player_name": payload.get("secondary_player") or payload.get("secondary_player_name"),
                         },
                     )
                 )

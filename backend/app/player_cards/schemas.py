@@ -215,6 +215,29 @@ class PlayerCardSaleView(BaseModel):
     created_at: datetime
 
 
+class AdminPreseededRegenMintRequest(BaseModel):
+    seed_id: str = Field(min_length=2)
+    tier_code: str = Field(min_length=2, max_length=32)
+    quantity: int = Field(default=1, ge=1)
+    edition_code: str = Field(default="preseeded_regen", min_length=2, max_length=64)
+    season_label: str | None = None
+    owner_user_id: str | None = None
+    batch_key: str | None = None
+    source_reference: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminPreseededRegenMintResponse(BaseModel):
+    seed_id: str
+    player_id: str
+    player_card_id: str
+    batch_key: str
+    quantity: int
+    owner_user_id: str | None = None
+    status: str
+    trade_enabled: bool
+
+
 class PlayerCardWatchlistView(BaseModel):
     id: str
     player_id: str

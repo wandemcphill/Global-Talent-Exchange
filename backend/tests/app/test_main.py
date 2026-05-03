@@ -213,7 +213,10 @@ def test_app_startup_registers_core_routes_and_health_endpoints(app_and_engine) 
         assert hasattr(app.state, "settings")
         assert hasattr(app.state, "db_engine")
         assert hasattr(app.state, "session_factory")
-        assert app.state.outbox_relay is not None
+        if app.state.settings.outbox_relay_enabled:
+            assert app.state.outbox_relay is not None
+        else:
+            assert app.state.outbox_relay is None
         assert hasattr(app.state, "market_engine")
         assert hasattr(app.state, "ingestion_pipeline")
         assert hasattr(app.state, "value_engine_bridge")
@@ -273,6 +276,7 @@ def test_app_startup_registers_core_routes_and_health_endpoints(app_and_engine) 
         "status": "skipped",
         "detail": "Kafka brokers are not configured; event streaming is running in local fallback mode.",
     }
+    assert ready_payload["checks"]["ingestion"]["status"] in {"ok", "skipped"}
     assert ready_payload["checks"]["schema"] == {"status": "ok", "detail": None}
     assert ready_payload["runtime_mode"] == "degraded"
     assert version_response.status_code == 200
@@ -383,6 +387,10 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
         "status": "skipped",
         "detail": "Kafka brokers are not configured; event streaming is running in local fallback mode.",
     }
+    assert payload["checks"]["ingestion"] == {
+        "status": "skipped",
+        "detail": "Ingestion readiness check skipped because the database is unavailable.",
+    }
 
 
 def test_app_startup_fails_when_schema_smoke_fails_even_without_migration_upgrade(monkeypatch, tmp_path) -> None:
@@ -430,6 +438,7 @@ def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(app_and_engine
         "status": "skipped",
         "detail": "Kafka brokers are not configured; event streaming is running in local fallback mode.",
     }
+    assert payload["checks"]["ingestion"]["status"] in {"ok", "skipped"}
     assert "schema" not in payload["checks"]
 
 

@@ -3,10 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.core.app_state import get_optional_app_settings
 from app.models.user import User
 from app.player_cards.schemas import (
+    AdminPreseededRegenMintRequest,
+    AdminPreseededRegenMintResponse,
     PlayerCardHoldingView,
     PlayerCardLoanBorrowRequest,
     PlayerCardLoanContractView,
@@ -116,6 +118,16 @@ def raise_player_card_http(exc: PlayerCardMarketError) -> None:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
+def rollback_and_raise_player_card_http(session: Session, exc: PlayerCardMarketError) -> None:
+    session.rollback()
+    raise_player_card_http(exc)
+
+
+def rollback_and_raise_insufficient_balance(session: Session, exc: InsufficientBalanceError) -> None:
+    session.rollback()
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.get("/players", response_model=list[PlayerCardPlayerSummaryView])
 def list_players(
     search: str | None = Query(default=None),
@@ -136,6 +148,45 @@ def get_player_detail(
     except PlayerCardMarketError as exc:
         raise_player_card_http(exc)
     return PlayerCardPlayerDetailView.model_validate(detail)
+
+
+@router.post(
+    "/admin/preseeded-regens/mint",
+    response_model=AdminPreseededRegenMintResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def admin_mint_preseeded_regen(
+    payload: AdminPreseededRegenMintRequest,
+    current_admin: User = Depends(get_current_admin),
+    service: PlayerCardMarketService = Depends(get_service),
+    session: Session = Depends(get_session),
+) -> AdminPreseededRegenMintResponse:
+    try:
+        batch = service.apply_preseeded_national_regen_supply_batch(
+            actor=current_admin,
+            seed_id=payload.seed_id,
+            tier_code=payload.tier_code,
+            quantity=payload.quantity,
+            edition_code=payload.edition_code,
+            season_label=payload.season_label,
+            batch_key=payload.batch_key,
+            owner_user_id=payload.owner_user_id,
+            source_reference=payload.source_reference,
+            metadata=payload.metadata_json,
+        )
+    except PlayerCardMarketError as exc:
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
+    return AdminPreseededRegenMintResponse(
+        seed_id=payload.seed_id,
+        player_id=batch.player_id,
+        player_card_id=batch.player_card_id,
+        batch_key=batch.batch_key,
+        quantity=batch.quantity,
+        owner_user_id=batch.assigned_user_id,
+        status=batch.status,
+        trade_enabled=True,
+    )
 
 
 @router.get("/inventory", response_model=list[PlayerCardHoldingView])
@@ -190,6 +241,7 @@ def create_loan_listing(
     payload: PlayerCardLoanListingCreateRequest,
     current_user: User = Depends(get_current_user),
     service: CardLoanService = Depends(get_loan_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardLoanListingView:
     try:
         listing = service.create_listing(
@@ -202,7 +254,8 @@ def create_loan_listing(
             terms=payload.terms_json,
         )
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardLoanListingView.model_validate(listing)
 
 
@@ -212,6 +265,7 @@ def borrow_loan_listing(
     payload: PlayerCardLoanBorrowRequest,
     current_user: User = Depends(get_current_user),
     service: CardLoanService = Depends(get_loan_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardLoanContractView:
     try:
         contract = service.borrow_listing(
@@ -221,9 +275,10 @@ def borrow_loan_listing(
             squad_scope=payload.squad_scope,
         )
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
     except InsufficientBalanceError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        rollback_and_raise_insufficient_balance(session, exc)
+    session.commit()
     return PlayerCardLoanContractView.model_validate(contract)
 
 
@@ -232,11 +287,13 @@ def return_loan_listing(
     loan_contract_id: str,
     current_user: User = Depends(get_current_user),
     service: CardLoanService = Depends(get_loan_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardLoanContractView:
     try:
         contract = service.return_loan(actor=current_user, contract_id=loan_contract_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardLoanContractView.model_validate(contract)
 
 
@@ -245,6 +302,7 @@ def create_listing(
     payload: PlayerCardListingCreateRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketService = Depends(get_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardListingView:
     try:
         listing = service.create_listing(
@@ -254,7 +312,8 @@ def create_listing(
             price_per_card_credits=payload.price_per_card_credits,
         )
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardListingView.model_validate(listing)
 
 
@@ -263,11 +322,13 @@ def cancel_listing(
     listing_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketService = Depends(get_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardListingView:
     try:
         listing = service.cancel_listing(actor=current_user, listing_id=listing_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardListingView.model_validate(listing)
 
 
@@ -277,13 +338,15 @@ def buy_listing(
     payload: PlayerCardListingBuyRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketService = Depends(get_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardSaleView:
     try:
         sale = service.buy_listing(actor=current_user, listing_id=listing_id, quantity=payload.quantity)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
     except InsufficientBalanceError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        rollback_and_raise_insufficient_balance(session, exc)
+    session.commit()
     return PlayerCardSaleView.model_validate(sale)
 
 
@@ -472,6 +535,7 @@ def create_marketplace_sale_listing(
     payload: PlayerCardMarketplaceSaleListingCreateRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceListingView:
     try:
         listing = service.create_sale_listing(
@@ -483,7 +547,8 @@ def create_marketplace_sale_listing(
             expires_at=payload.expires_at,
         )
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceListingView.model_validate(listing)
 
 
@@ -492,11 +557,13 @@ def cancel_marketplace_sale_listing(
     listing_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceListingView:
     try:
         listing = service.cancel_sale_listing(actor=current_user, listing_id=listing_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceListingView.model_validate(listing)
 
 
@@ -506,13 +573,15 @@ def buy_marketplace_sale_listing(
     payload: PlayerCardMarketplaceSalePurchaseRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceSaleExecutionView:
     try:
         sale = service.buy_sale_listing(actor=current_user, listing_id=listing_id, quantity=payload.quantity)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
     except InsufficientBalanceError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        rollback_and_raise_insufficient_balance(session, exc)
+    session.commit()
     return PlayerCardMarketplaceSaleExecutionView.model_validate(sale)
 
 
@@ -523,11 +592,13 @@ def create_marketplace_loan_listing(
     payload: PlayerCardMarketplaceLoanListingCreateRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceLoanListingView:
     try:
         listing = service.create_loan_listing(actor=current_user, **payload.model_dump())
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceLoanListingView.model_validate(listing)
 
 
@@ -536,11 +607,13 @@ def cancel_marketplace_loan_listing(
     listing_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceLoanListingView:
     try:
         listing = service.cancel_loan_listing(actor=current_user, listing_id=listing_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceLoanListingView.model_validate(listing)
 
 
@@ -554,11 +627,13 @@ def create_marketplace_loan_negotiation(
     payload: PlayerCardMarketplaceLoanNegotiationCreateRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceLoanNegotiationView:
     try:
         negotiation = service.create_loan_negotiation(actor=current_user, listing_id=listing_id, **payload.model_dump())
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceLoanNegotiationView.model_validate(negotiation)
 
 
@@ -570,13 +645,15 @@ def counter_marketplace_loan_negotiation(
     payload: PlayerCardMarketplaceLoanNegotiationCreateRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceLoanNegotiationView:
     try:
         negotiation = service.counter_loan_negotiation(
             actor=current_user, negotiation_id=negotiation_id, **payload.model_dump()
         )
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceLoanNegotiationView.model_validate(negotiation)
 
 
@@ -587,11 +664,13 @@ def accept_marketplace_loan_negotiation(
     negotiation_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceLoanContractView:
     try:
         contract = service.accept_loan_negotiation(actor=current_user, negotiation_id=negotiation_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceLoanContractView.model_validate(contract)
 
 
@@ -614,13 +693,15 @@ def settle_marketplace_loan_contract(
     contract_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceLoanContractView:
     try:
         contract = service.settle_loan_contract(actor=current_user, contract_id=contract_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
     except InsufficientBalanceError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        rollback_and_raise_insufficient_balance(session, exc)
+    session.commit()
     return PlayerCardMarketplaceLoanContractView.model_validate(contract)
 
 
@@ -629,11 +710,13 @@ def return_marketplace_loan_contract(
     contract_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceLoanContractView:
     try:
         contract = service.return_loan_contract(actor=current_user, contract_id=contract_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceLoanContractView.model_validate(contract)
 
 
@@ -644,11 +727,13 @@ def create_marketplace_swap_listing(
     payload: PlayerCardMarketplaceSwapListingCreateRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceSwapListingView:
     try:
         listing = service.create_swap_listing(actor=current_user, **payload.model_dump())
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceSwapListingView.model_validate(listing)
 
 
@@ -657,11 +742,13 @@ def cancel_marketplace_swap_listing(
     listing_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceSwapListingView:
     try:
         listing = service.cancel_swap_listing(actor=current_user, listing_id=listing_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceSwapListingView.model_validate(listing)
 
 
@@ -671,13 +758,15 @@ def execute_marketplace_swap_listing(
     payload: PlayerCardMarketplaceSwapExecuteRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketplaceService = Depends(get_marketplace_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardMarketplaceSwapExecutionView:
     try:
         execution = service.execute_swap_listing(
             actor=current_user, listing_id=listing_id, counterparty_player_card_id=payload.counterparty_player_card_id
         )
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return PlayerCardMarketplaceSwapExecutionView.model_validate(execution)
 
 
@@ -703,6 +792,7 @@ def create_starter_rental(
     payload: StarterSquadRentalCreateRequest,
     current_user: User = Depends(get_current_user),
     service: StarterSquadRentalService = Depends(get_rental_service),
+    session: Session = Depends(get_session),
 ) -> StarterSquadRentalView:
     try:
         rental = service.create_rental(
@@ -715,9 +805,10 @@ def create_starter_rental(
             rental_fee_credits=payload.rental_fee_credits,
         )
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
     except InsufficientBalanceError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        rollback_and_raise_insufficient_balance(session, exc)
+    session.commit()
     return StarterSquadRentalView.model_validate(rental)
 
 
@@ -726,13 +817,16 @@ def add_watchlist(
     payload: PlayerCardWatchlistCreateRequest,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketService = Depends(get_service),
+    session: Session = Depends(get_session),
 ) -> PlayerCardWatchlistView:
     try:
         watch = service.add_watchlist(
             actor=current_user, player_id=payload.player_id, player_card_id=payload.player_card_id, notes=payload.notes
         )
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
+    session.refresh(watch)
     return PlayerCardWatchlistView.model_validate(watch)
 
 
@@ -741,11 +835,13 @@ def remove_watchlist(
     watchlist_id: str,
     current_user: User = Depends(get_current_user),
     service: PlayerCardMarketService = Depends(get_service),
+    session: Session = Depends(get_session),
 ) -> Response:
     try:
         service.remove_watchlist(actor=current_user, watchlist_id=watchlist_id)
     except PlayerCardMarketError as exc:
-        raise_player_card_http(exc)
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

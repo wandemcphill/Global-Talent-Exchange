@@ -118,8 +118,8 @@ def _create_summary(session, *, player: Player, value_credits: float = 20.0) -> 
 
 
 def _seed_credits(session, wallet: WalletService, user: User, amount: Decimal) -> None:
-    account = wallet.get_user_account(session, user, LedgerUnit.CREDIT)
-    platform = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
+    account = wallet.get_user_account(session, user, LedgerUnit.COIN)
+    platform = wallet.ensure_platform_account(session, LedgerUnit.COIN)
     wallet.append_transaction(
         session,
         postings=[
@@ -178,9 +178,9 @@ def test_sale_execution_fee_and_owner_history(session):
     listing = service.create_listing(actor=seller, player_card_id=card.id, quantity=2, price_per_card_credits=Decimal("10"))
     sale = service.buy_listing(actor=buyer, listing_id=listing["listing_id"], quantity=2)
 
-    seller_account = wallet.get_user_account(session, seller, LedgerUnit.CREDIT)
-    buyer_account = wallet.get_user_account(session, buyer, LedgerUnit.CREDIT)
-    platform_account = wallet.ensure_platform_burn_account(session, LedgerUnit.CREDIT)
+    seller_account = wallet.get_user_account(session, seller, LedgerUnit.COIN)
+    buyer_account = wallet.get_user_account(session, buyer, LedgerUnit.COIN)
+    platform_account = wallet.ensure_platform_burn_account(session, LedgerUnit.COIN)
 
     seller_balance = wallet.get_balance(session, seller_account)
     buyer_balance = wallet.get_balance(session, buyer_account)

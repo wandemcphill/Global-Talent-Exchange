@@ -22,7 +22,7 @@ from app.core.global_ids import global_match_id
 from app.gtex.config import AMOUNT_QUANTUM, GtexSettings
 from app.gtex import redis_keys
 from app.gtex.store import InMemoryStateStore, RedisStateStore
-from app.models.base import utcnow
+from app.models.base import generate_uuid, utcnow
 from app.models.gtex_economy import (
     GtexAIProfile,
     GtexAiProfileType,
@@ -51,6 +51,7 @@ from app.models.gtex_economy import (
     GtexRiskFlagStatus,
     GtexTradeSide,
 )
+from app.models.notification_record import NotificationRecord
 from app.models.risk_ops import RiskSignalType
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
@@ -313,6 +314,88 @@ class JackpotService(GtexBaseService):
         self._schedule_round_cache(session, current_round)
         return updated_settings
 
+    def set_current_balance(
+        self,
+        session: Session,
+        *,
+        balance: Decimal,
+        actor: User,
+        reason: str | None = None,
+        pool_key: str = "global",
+    ) -> GtexJackpotRound:
+        target_balance = self._amount(balance)
+        if target_balance < Decimal("0.0000"):
+            raise GtexValidationError("Jackpot balance cannot be negative.")
+        current_round = self.ensure_open_round(session, pool_key=pool_key)
+        previous_balance = self._amount(current_round.current_balance)
+        delta = self._amount(target_balance - previous_balance)
+        if delta != Decimal("0.0000"):
+            lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
+            platform_clearing = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+            if delta > Decimal("0.0000"):
+                postings = [
+                    LedgerPosting(account=platform_clearing, amount=-delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+                    LedgerPosting(account=lottery_pool, amount=delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+                ]
+            else:
+                postings = [
+                    LedgerPosting(account=lottery_pool, amount=delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+                    LedgerPosting(account=platform_clearing, amount=-delta, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+                ]
+            self.wallet_service.append_transaction(
+                session,
+                postings=postings,
+                reason=LedgerEntryReason.ADJUSTMENT,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                reference=f"gtex-jackpot-admin-balance:{current_round.id}:{generate_uuid()}",
+                description="Admin jackpot balance adjustment",
+                actor=actor,
+                metadata={
+                    "round_id": current_round.id,
+                    "previous_balance": str(previous_balance),
+                    "target_balance": str(target_balance),
+                    "delta": str(delta),
+                    "reason": reason,
+                },
+            )
+        metadata = dict(current_round.metadata_json or {})
+        metadata["admin_balance_override"] = {
+            "actor_user_id": actor.id,
+            "previous_balance": str(previous_balance),
+            "target_balance": str(target_balance),
+            "reason": reason,
+            "updated_at": utcnow().isoformat(),
+        }
+        current_round.current_balance = target_balance
+        current_round.metadata_json = metadata
+        self._audit_log(
+            session,
+            actor_user_id=actor.id,
+            action_key="gtex.jackpot.balance.updated",
+            resource_type="gtex_jackpot",
+            resource_id=current_round.id,
+            detail="Admin updated the live GTEX jackpot balance.",
+            metadata_json=metadata["admin_balance_override"],
+        )
+        self._schedule_round_cache(session, current_round)
+        self._stage_event(
+            session,
+            name="JACKPOT_BALANCE_UPDATED",
+            payload={
+                "round_id": current_round.id,
+                "round_number": current_round.round_number,
+                "previous_balance": str(previous_balance),
+                "balance": str(target_balance),
+                "delta": str(delta),
+            },
+            aggregate_id=current_round.id,
+            aggregate_type="jackpot_round",
+            partition_key=current_round.id,
+            realtime_topic="jackpot.balance",
+        )
+        session.flush()
+        return current_round
+
     def manual_trigger(
         self,
         session: Session,
@@ -507,9 +590,12 @@ class JackpotService(GtexBaseService):
                 func.sum(GtexJackpotContribution.contribution_amount),
                 func.max(GtexJackpotContribution.eligibility_score),
             )
+            .select_from(GtexJackpotContribution)
+            .join(User, User.id == GtexJackpotContribution.participant_user_id)
             .where(
                 GtexJackpotContribution.round_id == round_record.id,
                 GtexJackpotContribution.participant_user_id.is_not(None),
+                User.is_active.is_(True),
             )
             .group_by(GtexJackpotContribution.participant_user_id)
         ).all()
@@ -570,14 +656,33 @@ class JackpotService(GtexBaseService):
         round_record.settled_at = utcnow()
         round_record.winning_user_id = payouts[0]["user_id"]
         for index, payout in enumerate(payouts, start=1):
+            payout_amount = self._amount(payout["amount"])
             session.add(
                 GtexJackpotPayout(
                     round_id=round_record.id,
                     user_id=payout["user_id"],
                     rank=index,
-                    payout_amount=self._amount(payout["amount"]),
+                    payout_amount=payout_amount,
                     payout_ratio=self._amount(payout["ratio"]),
                     eligibility_weight=self._amount(payout["weight"]),
+                )
+            )
+            session.add(
+                NotificationRecord(
+                    user_id=payout["user_id"],
+                    topic="jackpot",
+                    template_key="GTEX_JACKPOT_WON",
+                    resource_type="gtex_jackpot_round",
+                    resource_id=round_record.id,
+                    message=f"Jackpot dropped: {payout_amount} GTEX Coin has been credited to your wallet.",
+                    metadata_json={
+                        "round_id": round_record.id,
+                        "round_number": round_record.round_number,
+                        "trigger_mode": trigger_mode.value,
+                        "amount": str(payout_amount),
+                        "payout_rank": index,
+                        "payout_ratio": str(self._amount(payout["ratio"])),
+                    },
                 )
             )
         next_round = self._roll_round(session, round_record=round_record, carryover_balance=Decimal("0.0000"))
