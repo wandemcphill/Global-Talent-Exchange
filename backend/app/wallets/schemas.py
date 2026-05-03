@@ -68,8 +68,8 @@ class PaymentEventCreate(WalletRequestModel):
         title="PaymentEventCreate",
         json_schema_extra={
             "example": {
-                "provider": "monnify",
-                "provider_reference": "monnify-ref-001",
+                "provider": "paystack",
+                "provider_reference": "paystack-ref-001",
                 "amount": "50.0000",
                 "pack_code": "starter-50",
             }
@@ -264,6 +264,13 @@ class WithdrawalRequestCreate(WalletRequestModel):
             raise ValueError("Withdrawal amount must be positive.")
         return value
 
+    @field_validator("unit")
+    @classmethod
+    def validate_withdrawal_unit(cls, value: LedgerUnit) -> LedgerUnit:
+        if value != LedgerUnit.COIN:
+            raise ValueError("Fan Coin is not withdrawable.")
+        return value
+
     @field_validator("source_scope")
     @classmethod
     def normalize_scope(cls, value: str) -> str:
@@ -300,8 +307,8 @@ class PaymentEventView(BaseModel):
         json_schema_extra={
             "example": {
                 "id": "pay-123",
-                "provider": "monnify",
-                "provider_reference": "monnify-ref-001",
+                "provider": "paystack",
+                "provider_reference": "paystack-ref-001",
                 "pack_code": "starter-50",
                 "amount": "50.0000",
                 "unit": "credit",
@@ -576,6 +583,7 @@ class WalletTransactionRecordView(BaseModel):
 class WalletTopUpInitiateRequest(BaseModel):
     amount: Decimal
     provider: str = Field(default="paystack", min_length=3, max_length=32)
+    unit: LedgerUnit = LedgerUnit.COIN
     callback_url: str | None = Field(default=None, max_length=2048)
 
     @field_validator("amount")

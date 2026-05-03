@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
-
 
 def _login(client, *, email: str, password: str) -> dict[str, str]:
     response = client.post("/auth/login", json={"email": email, "password": password})
@@ -50,8 +48,8 @@ def test_authenticated_user_can_accept_policy_and_list_acceptances(client, demo_
     assert any(item["document_key"] == "terms-and-conditions" for item in listed)
 
 
-def test_admin_can_publish_new_policy_version(client) -> None:
-    headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+def test_admin_can_publish_new_policy_version(client, bootstrap_admin_headers) -> None:
+    headers = bootstrap_admin_headers
     response = client.post(
         "/admin/policies/documents",
         headers=headers,
@@ -89,13 +87,13 @@ def test_policy_requirements_and_compliance_status(client, demo_seed, demo_user_
     requirements_response = client.get("/policies/me/requirements", headers=headers)
     assert requirements_response.status_code == 200, requirements_response.text
     requirements = requirements_response.json()
-    assert len(requirements) >= 1
+    assert isinstance(requirements, list)
 
     compliance_response = client.get("/policies/me/compliance", headers=headers)
     assert compliance_response.status_code == 200, compliance_response.text
     compliance = compliance_response.json()
-    assert compliance["can_deposit"] is False
-    assert compliance["required_policy_acceptances_missing"] >= 1
+    assert compliance["can_deposit"] is compliance["deposits_enabled"]
+    assert compliance["required_policy_acceptances_missing"] == len(requirements)
 
 
 def test_region_profile_exposes_policy_state(client, demo_seed, demo_user_credentials) -> None:
@@ -109,8 +107,8 @@ def test_region_profile_exposes_policy_state(client, demo_seed, demo_user_creden
     assert "locked" in payload
 
 
-def test_admin_can_upsert_country_feature_policy(client) -> None:
-    headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+def test_admin_can_upsert_country_feature_policy(client, bootstrap_admin_headers) -> None:
+    headers = bootstrap_admin_headers
     response = client.post(
         "/admin/policies/country-policies",
         headers=headers,

@@ -20,7 +20,7 @@ from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.ingestion.models import Player
-from app.models.policy import CountryFeaturePolicy
+from app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord
 from app.models.base import Base
 from app.models.treasury import PaymentMode
 from app.policies.service import PolicyService
@@ -120,6 +120,12 @@ def _seed_policy_defaults(session, current_user) -> None:
 def _enable_automatic_deposits(session) -> None:
     settings = TreasuryService().ensure_settings(session)
     settings.deposit_mode = PaymentMode.AUTOMATIC
+    session.commit()
+
+
+def _enable_hybrid_deposits(session) -> None:
+    settings = TreasuryService().ensure_settings(session)
+    settings.deposit_mode = PaymentMode.HYBRID
     session.commit()
 
 
@@ -255,8 +261,8 @@ def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
     payment_event_response = client.post(
         "/api/wallets/payment-events",
         json={
-            "provider": "monnify",
-            "provider_reference": "monnify-ref-001",
+            "provider": "paystack",
+            "provider_reference": "paystack-ref-001",
             "amount": "50.0000",
             "pack_code": "starter-50",
         },
@@ -291,7 +297,7 @@ def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
         "processed_at",
         "ledger_transaction_id",
     }
-    assert payment_payload["provider"] == "monnify"
+    assert payment_payload["provider"] == "paystack"
     assert payment_payload["status"] == "pending"
 
 
@@ -308,8 +314,8 @@ def test_payment_event_rejects_when_wallet_transaction_lock_exists(api_context) 
     response = client.post(
         "/api/wallets/payment-events",
         json={
-            "provider": "monnify",
-            "provider_reference": "monnify-ref-locked",
+            "provider": "paystack",
+            "provider_reference": "paystack-ref-locked",
             "amount": "50.0000",
             "pack_code": "starter-50",
         },
@@ -453,6 +459,49 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     assert payload["withdrawal_mode"] == "bank_transfer"
     assert payload["payment_provider_status"]["paystack"] == "mock"
     assert payload["payment_provider_status"]["korapay"] == "unavailable"
+
+
+def test_wallet_overview_supports_hybrid_bank_transfer_and_korapay(api_context, monkeypatch) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
+    _enable_hybrid_deposits(session)
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "sk_test_launch")
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"manual_bank_transfer","deposits_via_bank_transfer":true,"payouts_via_bank_transfer":true}}',
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/wallets/overview")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["deposit_mode"] == "hybrid"
+    assert payload["payment_provider_status"]["paystack"] == "mock"
+    assert payload["payment_provider_status"]["korapay"] == "ready"
+
+
+def test_manual_deposit_request_is_not_blocked_by_missing_policy_acceptance(api_context) -> None:
+    client, session, current_user = api_context
+    session.execute(delete(PolicyAcceptanceRecord).where(PolicyAcceptanceRecord.user_id == current_user.id))
+    session.commit()
+
+    response = client.post(
+        "/api/wallets/deposits",
+        json={
+            "amount": "4500.0000",
+            "input_unit": "fiat",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["status"] == "awaiting_payment"
+    assert Decimal(str(payload["amount_coin"])) == Decimal("5.0000")
 
 
 def test_wallet_overview_marks_missing_paystack_secret_unavailable_in_production(api_context, monkeypatch) -> None:

@@ -119,8 +119,8 @@ def test_create_payment_event_route_returns_pending_event(session) -> None:
 
     payload = create_payment_event(
         PaymentEventCreate(
-            provider="monnify",
-            provider_reference="monnify-ref-001",
+            provider="paystack",
+            provider_reference="paystack-ref-001",
             amount=Decimal("50"),
             pack_code="starter-50",
         ),
@@ -183,6 +183,7 @@ def test_create_wallet_conversion_route_moves_balance(session) -> None:
 def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> None:
     current_user = _register_and_load_user(session)
     _seed_global_policy(session)
+    _enable_automatic_deposits(session)
 
     initiated = initiate_wallet_top_up(
         WalletTopUpInitiateRequest(amount=Decimal("250")),
@@ -218,9 +219,36 @@ def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> 
     assert stored_transaction.status == "verified"
 
 
+def test_wallet_top_up_can_credit_fan_coin_balance(session) -> None:
+    current_user = _register_and_load_user(session)
+    _seed_global_policy(session)
+    _enable_automatic_deposits(session)
+
+    initiated = initiate_wallet_top_up(
+        WalletTopUpInitiateRequest(amount=Decimal("250"), unit=LedgerUnit.CREDIT),
+        session=session,
+        current_user=current_user,
+    )
+
+    assert initiated.currency == "credit"
+    verified = verify_wallet_top_up(
+        WalletTopUpVerifyRequest(reference=initiated.reference),
+        session=session,
+        current_user=current_user,
+    )
+    wallet_service = WalletService()
+    fan_account = wallet_service.get_user_account(session, current_user, LedgerUnit.CREDIT)
+    coin_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+
+    assert verified.transaction.status == "verified"
+    assert wallet_service.get_balance(session, fan_account) == Decimal("246.2500")
+    assert wallet_service.get_balance(session, coin_account) == Decimal("0.0000")
+
+
 def test_wallet_top_up_rejects_missing_paystack_secret_in_production(session, monkeypatch) -> None:
     current_user = _register_and_load_user(session)
     _seed_global_policy(session)
+    _enable_automatic_deposits(session)
     monkeypatch.setenv("GTE_APP_ENV", "production")
     monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)

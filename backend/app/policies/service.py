@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import os
+
 from sqlalchemy import Select, desc, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -68,6 +70,7 @@ DEFAULT_COUNTRY_POLICIES: tuple[dict[str, object], ...] = (
 )
 
 REGION_CHANGE_LOCK_DAYS = 365
+_DEFAULTS_SESSION_FLAG = "policy_defaults_seeded"
 
 
 def _coerce_utc(value: datetime | None) -> datetime | None:
@@ -81,6 +84,12 @@ def _coerce_utc(value: datetime | None) -> datetime | None:
 @dataclass(slots=True)
 class PolicyService:
     session: Session
+
+    def _ensure_defaults_seeded(self) -> None:
+        if self.session.info.get(_DEFAULTS_SESSION_FLAG):
+            return
+        self.seed_defaults()
+        self.session.info[_DEFAULTS_SESSION_FLAG] = True
 
     def seed_defaults(self) -> None:
         for document_key, title, is_mandatory in DEFAULT_POLICY_DOCUMENTS:
@@ -113,8 +122,7 @@ class PolicyService:
             )
 
         existing_country_pairs = {
-            (item.country_code, item.bucket_type)
-            for item in self.session.scalars(select(CountryFeaturePolicy)).all()
+            (item.country_code, item.bucket_type) for item in self.session.scalars(select(CountryFeaturePolicy)).all()
         }
         for item in DEFAULT_COUNTRY_POLICIES:
             key = (str(item["country_code"]), str(item["bucket_type"]))
@@ -125,6 +133,7 @@ class PolicyService:
         self.session.flush()
 
     def list_documents(self, *, mandatory_only: bool = False) -> list[PolicyDocument]:
+        self._ensure_defaults_seeded()
         statement = (
             select(PolicyDocument)
             .options(selectinload(PolicyDocument.versions))
@@ -135,7 +144,10 @@ class PolicyService:
             statement = statement.where(PolicyDocument.is_mandatory.is_(True))
         return list(self.session.scalars(statement).all())
 
-    def get_document(self, document_key: str, *, version_label: str | None = None, include_unpublished: bool = False) -> PolicyDocumentVersion:
+    def get_document(
+        self, document_key: str, *, version_label: str | None = None, include_unpublished: bool = False
+    ) -> PolicyDocumentVersion:
+        self._ensure_defaults_seeded()
         statement: Select[tuple[PolicyDocumentVersion]] = (
             select(PolicyDocumentVersion)
             .join(PolicyDocument)
@@ -190,15 +202,15 @@ class PolicyService:
             .join(PolicyDocumentVersion)
             .join(PolicyDocument)
             .where(PolicyAcceptanceRecord.user_id == user_id)
-            .options(
-                selectinload(PolicyAcceptanceRecord.document_version).selectinload(PolicyDocumentVersion.document)
-            )
+            .options(selectinload(PolicyAcceptanceRecord.document_version).selectinload(PolicyDocumentVersion.document))
             .order_by(desc(PolicyAcceptanceRecord.accepted_at))
         )
         return list(self.session.scalars(statement).all())
 
     def upsert_document_version(self, *, payload) -> PolicyDocumentVersion:
-        document = self.session.scalar(select(PolicyDocument).where(PolicyDocument.document_key == payload.document_key))
+        document = self.session.scalar(
+            select(PolicyDocument).where(PolicyDocument.document_key == payload.document_key)
+        )
         if document is None:
             document = PolicyDocument(
                 document_key=payload.document_key,
@@ -249,6 +261,7 @@ class PolicyService:
         return version
 
     def list_country_policies(self) -> list[CountryFeaturePolicy]:
+        self._ensure_defaults_seeded()
         statement = select(CountryFeaturePolicy).order_by(
             CountryFeaturePolicy.country_code.asc(),
             CountryFeaturePolicy.bucket_type.asc(),
@@ -315,6 +328,7 @@ class PolicyService:
         return policy
 
     def get_country_policy(self, country_code: str) -> CountryFeaturePolicy:
+        self._ensure_defaults_seeded()
         normalized = self.normalize_country_code(country_code)
         policy = self._get_active_country_policy_record(normalized)
         if policy is not None:
@@ -324,8 +338,8 @@ class PolicyService:
             return fallback
         return self._build_default_country_policy(normalized)
 
-
     def list_missing_acceptances(self, *, user_id: str) -> list[PolicyDocumentVersion]:
+        self._ensure_defaults_seeded()
         documents = self.list_documents(mandatory_only=True)
         accepted_version_ids = {
             row.policy_document_version_id
@@ -444,7 +458,9 @@ class PolicyService:
         candidate = None
         if profile is not None:
             candidate = profile.country
-        return self.normalize_country_code(candidate)
+        if candidate:
+            return self.normalize_country_code(candidate)
+        return self.normalize_country_code(os.getenv("GTE_DEFAULT_USER_COUNTRY_CODE", "NG"))
 
     def get_country_policy_for_user(self, *, user) -> CountryFeaturePolicy:
         return self.get_country_policy(self.resolve_country_code_for_user(user=user))
