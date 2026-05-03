@@ -63,12 +63,14 @@ class NationalTeamCompetitionDetailData {
     required this.competition,
     required this.lifecycle,
     required this.presentation,
+    required this.rentalPool,
     required this.history,
   });
 
   final NationalTeamCompetition competition;
   final JsonMap lifecycle;
   final JsonMap presentation;
+  final JsonMap rentalPool;
   final NationalTeamUserHistory? history;
 }
 
@@ -122,6 +124,82 @@ class NationalTeamsApi {
     );
   }
 
+  Future<JsonMap> fetchRentalPoolPreview(String competitionId) {
+    return client.getMap(
+      '/api/national-team-engine/competitions/$competitionId/rental-pool',
+      auth: false,
+      query: <String, Object?>{'limit': 12, 'preseeded_only': true},
+    );
+  }
+
+  Future<NationalTeamEntry> createRentalEntry({
+    required String competitionId,
+    required String countryCode,
+    required String countryName,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/national-team-engine/competitions/$competitionId/rental-entry',
+      body: <String, Object?>{
+        'country_code': countryCode,
+        'country_name': countryName,
+        'metadata_json': <String, Object?>{
+          'created_from': 'national_teams_screen',
+        },
+      },
+    );
+    return NationalTeamEntry.fromJson(payload);
+  }
+
+  Future<void> claimFreePlayers({required String entryId}) async {
+    await client.post(
+      '/api/national-team-engine/entries/$entryId/free-players/claim',
+    );
+  }
+
+  Future<void> rentPlayer({
+    required String entryId,
+    required String playerId,
+  }) async {
+    await client.post(
+      '/api/national-team-engine/entries/$entryId/rentals',
+      body: <String, Object?>{'player_id': playerId},
+    );
+  }
+
+  Future<void> submitBuiltSquad({
+    required String competitionId,
+    required String countryCode,
+    required String countryName,
+    required List<JsonMap> players,
+  }) async {
+    await client.post(
+      '/api/national-team-engine/competitions/$competitionId/entries',
+      body: <String, Object?>{
+        'country_code': countryCode,
+        'country_name': countryName,
+        'squad': players
+            .map(
+              (JsonMap player) => <String, Object?>{
+                'player_id': stringOrNullValue(player['player_id']),
+                'player_name': stringValue(
+                  player['player_name'],
+                  fallback: 'Player',
+                ),
+                'age': _optionalInt(player['age']),
+                'overall_rating': _optionalInt(player['overall_rating']),
+                'position': stringOrNullValue(player['primary_position']),
+                'metadata_json': <String, Object?>{
+                  'source_bucket': stringOrNullValue(player['source_bucket']),
+                  'loan_price_coin': player['loan_price_coin'],
+                  'assigned_slot': stringOrNullValue(player['assigned_slot']),
+                },
+              },
+            )
+            .toList(growable: false),
+      },
+    );
+  }
+
   Future<NationalTeamUserHistory> fetchUserHistory() async {
     final JsonMap payload = await client.getMap(
       '/api/national-team-engine/me/history',
@@ -155,6 +233,8 @@ class NationalTeamsApi {
     required String competitionId,
     required String countryCode,
     required double budgetCoin,
+    int squadSize = 18,
+    String ageGrade = 'Senior',
     required String tactic,
   }) async {
     final Object? payload = await client.post(
@@ -163,10 +243,30 @@ class NationalTeamsApi {
       body: <String, Object?>{
         'country_code': countryCode,
         'budget_coin': budgetCoin,
+        'squadSize': squadSize,
+        'ageGrade': ageGrade,
         'tactic': tactic,
       },
     );
     return jsonMap(payload, label: 'national team auto build');
+  }
+
+  Future<JsonMap?> fetchPreviousRoster({
+    required String countryCode,
+    required String ageGrade,
+  }) async {
+    final Object? payload = await client.request(
+      'GET',
+      '/api/national-team-engine/me/previous-roster',
+      query: <String, Object?>{
+        'country_code': countryCode,
+        'age_grade': ageGrade,
+      },
+    );
+    if (payload == null) {
+      return null;
+    }
+    return jsonMap(payload, label: 'previous national roster');
   }
 }
 
@@ -201,6 +301,13 @@ final FutureProvider<NationalTeamsHubData> nationalTeamsHubProvider =
       );
     });
 
+int? _optionalInt(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  return intValue(value);
+}
+
 final dynamic nationalTeamCompetitionDetailProvider =
     FutureProvider.family<NationalTeamCompetitionDetailData, String>((
       Ref ref,
@@ -222,10 +329,14 @@ final dynamic nationalTeamCompetitionDetailProvider =
       final Future<JsonMap> presentationFuture = api.fetchPresentation(
         competitionId,
       );
+      final Future<JsonMap> rentalPoolFuture = api.fetchRentalPoolPreview(
+        competitionId,
+      );
       return NationalTeamCompetitionDetailData(
         competition: competition,
         lifecycle: await lifecycleFuture,
         presentation: await presentationFuture,
+        rentalPool: await rentalPoolFuture,
         history: hub.history,
       );
     });

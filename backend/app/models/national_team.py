@@ -48,17 +48,27 @@ class NationalTeamCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class NationalTeamEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "national_team_entries"
-    __table_args__ = (UniqueConstraint("competition_id", "country_code", name="uq_national_team_entries_competition_country"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "competition_id",
+            "country_code",
+            "entry_owner_user_id",
+            name="uq_national_team_entries_competition_country_owner",
+        ),
+        Index("ix_national_team_entries_entry_owner_user_id", "entry_owner_user_id"),
+    )
 
     competition_id: Mapped[str] = mapped_column(String(36), ForeignKey("national_team_competitions.id", ondelete="CASCADE"), nullable=False, index=True)
     country_code: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
     country_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    entry_owner_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     manager_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     squad_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     competition: Mapped["NationalTeamCompetition"] = relationship(back_populates="entries")
-    manager_user: Mapped["User | None"] = relationship()
+    entry_owner_user: Mapped["User | None"] = relationship(foreign_keys=[entry_owner_user_id])
+    manager_user: Mapped["User | None"] = relationship(foreign_keys=[manager_user_id])
     squad_members: Mapped[list["NationalTeamSquadMember"]] = relationship(back_populates="entry", cascade="all, delete-orphan")
     manager_history: Mapped[list["NationalTeamManagerHistory"]] = relationship(back_populates="entry", cascade="all, delete-orphan")
 

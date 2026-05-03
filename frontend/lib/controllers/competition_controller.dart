@@ -306,6 +306,21 @@ class CompetitionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateDraftScheduledStart(DateTime? value) {
+    draft = draft.copyWith(scheduledStartAt: value);
+    notifyListeners();
+  }
+
+  void updateDraftPasscode(String value) {
+    draft = draft.copyWith(passcode: value.trim().isEmpty ? null : value);
+    notifyListeners();
+  }
+
+  void updateDraftSpecialRules(String value) {
+    draft = draft.copyWith(specialRules: value.trim().isEmpty ? null : value);
+    notifyListeners();
+  }
+
   void updateDraftPlatformFee(double value) {
     draft = draft.copyWith(platformFeePct: value);
     notifyListeners();
@@ -369,6 +384,7 @@ class CompetitionController extends ChangeNotifier {
 
   Future<CompetitionSummary?> joinSelectedCompetition({
     String? inviteCode,
+    String? passcode,
   }) async {
     final CompetitionSummary? current = selectedCompetition;
     if (current == null) {
@@ -383,6 +399,7 @@ class CompetitionController extends ChangeNotifier {
         userId: _currentUserId,
         userName: _currentUserName,
         inviteCode: inviteCode,
+        passcode: passcode,
       );
       selectedCompetition = joined;
       selectedFinancials = await _api.fetchFinancials(
@@ -446,6 +463,10 @@ class CompetitionController extends ChangeNotifier {
         return 'This competition has reached capacity.';
       case 'invite_required':
         return 'An invite code is required before you can join this competition.';
+      case 'passcode_required':
+        return 'A competition passcode is required before you can join.';
+      case 'competition_started':
+        return 'This competition has already started.';
       default:
         return 'Review the published rules and contest status before joining.';
     }

@@ -70,11 +70,13 @@ class CompetitionJoinEligibility {
     required this.eligible,
     this.reason,
     this.requiresInvite = false,
+    this.requiresPasscode = false,
   });
 
   final bool eligible;
   final String? reason;
   final bool requiresInvite;
+  final bool requiresPasscode;
 
   factory CompetitionJoinEligibility.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -88,6 +90,10 @@ class CompetitionJoinEligibility {
         'requires_invite',
         'requiresInvite',
       ], fallback: false),
+      requiresPasscode: GteJson.boolean(json, <String>[
+        'requires_passcode',
+        'requiresPasscode',
+      ], fallback: false),
     );
   }
 
@@ -95,11 +101,13 @@ class CompetitionJoinEligibility {
     bool? eligible,
     String? reason,
     bool? requiresInvite,
+    bool? requiresPasscode,
   }) {
     return CompetitionJoinEligibility(
       eligible: eligible ?? this.eligible,
       reason: reason ?? this.reason,
       requiresInvite: requiresInvite ?? this.requiresInvite,
+      requiresPasscode: requiresPasscode ?? this.requiresPasscode,
     );
   }
 }
@@ -204,6 +212,9 @@ class CompetitionSummary {
     required this.createdAt,
     required this.updatedAt,
     this.dynamicPrizePool,
+    this.requiresPasscode = false,
+    this.scheduledStartAt,
+    this.specialRules,
   });
 
   final String id;
@@ -228,6 +239,9 @@ class CompetitionSummary {
   final CompetitionJoinEligibility joinEligibility;
   final CompetitionDynamicPrizePool? dynamicPrizePool;
   final bool? beginnerFriendly;
+  final bool requiresPasscode;
+  final DateTime? scheduledStartAt;
+  final String? specialRules;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -264,7 +278,7 @@ class CompetitionSummary {
       case MatchType.userHosted:
         return '$safeFormatLabel - Hosted by $creatorLabel';
       case MatchType.fastMatch:
-        return '$safeFormatLabel - Fast match lane';
+        return '$safeFormatLabel - Quick Match lane';
     }
   }
 
@@ -275,9 +289,9 @@ class CompetitionSummary {
       case MatchType.gtexHosted:
         return 'GTEX competitions are free to join. Win real money on verified results.';
       case MatchType.userHosted:
-        return 'User-hosted matches require entry fees. Review the published payout before you join.';
+        return 'User competitions use Fan Coin for buy-ins, entries, and prize pools.';
       case MatchType.fastMatch:
-        return 'Fast Match is always paid. Your wallet is charged before the match slot locks.';
+        return 'Play free until you lose or reach 10 matches. Fan Coin is charged only after a loss.';
     }
   }
 
@@ -421,6 +435,19 @@ class CompetitionSummary {
         <Map<String, Object?>>[json],
         <String>['beginner_friendly', 'beginnerFriendly'],
       ),
+      requiresPasscode: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['requires_passcode', 'requiresPasscode'],
+        fallback: false,
+      ),
+      scheduledStartAt: _dateFrom(
+        <Map<String, Object?>>[json],
+        <String>['scheduled_start_at', 'scheduledStartAt', 'startDateTime'],
+      ),
+      specialRules: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['special_rules', 'specialRules'],
+      ),
       createdAt:
           _dateFrom(
             <Map<String, Object?>>[json],
@@ -459,6 +486,9 @@ class CompetitionSummary {
     CompetitionJoinEligibility? joinEligibility,
     CompetitionDynamicPrizePool? dynamicPrizePool,
     bool? beginnerFriendly,
+    bool? requiresPasscode,
+    DateTime? scheduledStartAt,
+    String? specialRules,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -485,6 +515,9 @@ class CompetitionSummary {
       joinEligibility: joinEligibility ?? this.joinEligibility,
       dynamicPrizePool: dynamicPrizePool ?? this.dynamicPrizePool,
       beginnerFriendly: beginnerFriendly ?? this.beginnerFriendly,
+      requiresPasscode: requiresPasscode ?? this.requiresPasscode,
+      scheduledStartAt: scheduledStartAt ?? this.scheduledStartAt,
+      specialRules: specialRules ?? this.specialRules,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -947,6 +980,14 @@ bool? _boolOrNullFrom(
     return false;
   }
   return null;
+}
+
+bool _boolFrom(
+  Iterable<Map<String, Object?>> sources,
+  List<String> keys, {
+  bool fallback = false,
+}) {
+  return _boolOrNullFrom(sources, keys) ?? fallback;
 }
 
 Map<String, Object?> _mapOrEmpty(Object? value) {

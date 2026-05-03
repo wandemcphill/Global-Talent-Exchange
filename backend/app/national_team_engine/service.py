@@ -86,6 +86,7 @@ class NationalTeamEngineService:
             select(NationalTeamEntry).where(
                 NationalTeamEntry.competition_id == competition_id,
                 NationalTeamEntry.country_code == country_code,
+                NationalTeamEntry.entry_owner_user_id.is_(None),
             )
         )
         is_new = entry is None
@@ -94,6 +95,7 @@ class NationalTeamEngineService:
                 competition_id=competition_id,
                 country_code=country_code,
                 country_name=payload.country_name.strip(),
+                entry_owner_user_id=None,
                 manager_user_id=payload.manager_user_id,
                 metadata_json=payload.metadata_json,
             )
@@ -140,7 +142,90 @@ class NationalTeamEngineService:
                             "country_code": entry.country_code,
                         },
                     )
+            )
+        return entry
+
+    def upsert_user_entry(self, *, competition_id: str, payload, actor: User) -> NationalTeamEntry:
+        competition = self.session.get(NationalTeamCompetition, competition_id)
+        if competition is None:
+            raise NationalTeamEngineError("National team competition was not found.")
+        self._ensure_entries_mutable(competition)
+        country_code = payload.country_code.strip().upper()
+        entry = self.session.scalar(
+            select(NationalTeamEntry).where(
+                NationalTeamEntry.competition_id == competition_id,
+                NationalTeamEntry.country_code == country_code,
+                NationalTeamEntry.entry_owner_user_id == actor.id,
+            )
+        )
+        is_new = entry is None
+        manager_field_set = "manager_user_id" in getattr(payload, "model_fields_set", set())
+        selected_manager_user_id = (
+            payload.manager_user_id
+            if manager_field_set
+            else actor.id
+            if entry is None
+            else entry.manager_user_id
+        )
+        if selected_manager_user_id is not None:
+            selected_manager = self.session.get(User, selected_manager_user_id)
+            if selected_manager is None or not selected_manager.is_active:
+                raise NationalTeamEngineError("Selected manager was not found or is inactive.")
+        if entry is None:
+            entry = NationalTeamEntry(
+                competition_id=competition_id,
+                country_code=country_code,
+                country_name=payload.country_name.strip(),
+                entry_owner_user_id=actor.id,
+                manager_user_id=selected_manager_user_id,
+                metadata_json={
+                    **dict(payload.metadata_json or {}),
+                    "created_from": "user_national_team_flow",
+                    "entry_owner_user_id": actor.id,
+                },
+            )
+            self.session.add(entry)
+        else:
+            entry.country_name = payload.country_name.strip()
+            entry.manager_user_id = selected_manager_user_id
+            entry.metadata_json = {
+                **dict(entry.metadata_json or {}),
+                **dict(payload.metadata_json or {}),
+                "created_from": "user_national_team_flow",
+                "entry_owner_user_id": actor.id,
+            }
+        self.session.flush()
+        if is_new or manager_field_set:
+            action_type = "removed" if selected_manager_user_id is None else "appointed" if is_new else "updated"
+            note = (
+                f"Manager removed for {entry.country_name} in {competition.title}."
+                if selected_manager_user_id is None
+                else f"Manager selected for {entry.country_name} in {competition.title}."
+            )
+            self.session.add(
+                NationalTeamManagerHistory(
+                    entry_id=entry.id,
+                    user_id=selected_manager_user_id,
+                    action_type=action_type,
+                    note=note,
                 )
+            )
+        self.session.flush()
+        if is_new:
+            StoryFeedService(self.session).publish(
+                story_type="national_team_entry",
+                title=f"{entry.country_name} opened a squad room",
+                body=f"{entry.country_name} can now build a national squad for {competition.title}.",
+                subject_type="national_team_entry",
+                subject_id=entry.id,
+                country_code=entry.country_code,
+                metadata_json={
+                    "competition_key": competition.key,
+                    "country_code": entry.country_code,
+                    "entry_owner_user_id": actor.id,
+                },
+                published_by_user_id=actor.id,
+            )
         return entry
 
     def upsert_squad(self, *, entry_id: str, members: list, actor: User) -> NationalTeamEntry:
@@ -217,7 +302,18 @@ class NationalTeamEngineService:
         )
 
     def user_history(self, *, user: User) -> dict[str, list]:
-        managed_entries = list(self.session.scalars(select(NationalTeamEntry).where(NationalTeamEntry.manager_user_id == user.id).order_by(NationalTeamEntry.updated_at.desc())).all())
+        managed_entries = list(
+            self.session.scalars(
+                select(NationalTeamEntry)
+                .where(
+                    or_(
+                        NationalTeamEntry.entry_owner_user_id == user.id,
+                        NationalTeamEntry.manager_user_id == user.id,
+                    )
+                )
+                .order_by(NationalTeamEntry.updated_at.desc())
+            ).all()
+        )
         squad_memberships = list(self.session.scalars(select(NationalTeamSquadMember).where(NationalTeamSquadMember.user_id == user.id).order_by(NationalTeamSquadMember.updated_at.desc())).all())
         return {"managed_entries": managed_entries, "squad_memberships": squad_memberships}
 

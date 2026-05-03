@@ -109,7 +109,9 @@ class SimulationMatchmakingService:
         if not exact_matches and payload.include_bots:
             exact_matches = self._bot_fallback_candidates(requester, payload)
         if not exact_matches:
-            raise MatchmakingUnavailableError("No suitable quick-game opponent was available in the current search window.")
+            raise MatchmakingUnavailableError(
+                "No suitable Quick Match opponent was available in the current search window."
+            )
 
         ranked = sorted(
             (
@@ -132,7 +134,9 @@ class SimulationMatchmakingService:
             opponent=best.profile,
             match_context=MatchContextView(
                 type=context_type,
-                expected_difficulty=self._expected_difficulty(requester, best.profile, tactical_contrast=best.tactical_contrast),
+                expected_difficulty=self._expected_difficulty(
+                    requester, best.profile, tactical_contrast=best.tactical_contrast
+                ),
                 tactical_story=self._describe_tactical_story(requester, best.profile, context_type=context_type),
                 tactical_compatibility_score=best.tactical_contrast,
                 rating_delta=best.profile.manager_rating - requester.manager_rating,
@@ -155,6 +159,10 @@ class SimulationMatchmakingService:
                     requires_winner=False,
                 ),
             ),
+            free_matches_remaining=10,
+            charge_on_loss=True,
+            entry_currency="credit",
+            rules_copy="Play free until you lose or reach 10 matches.",
         )
 
     def create_quick_tournament(self, payload: QuickTournamentRequest) -> QuickTournamentResponse:
@@ -179,7 +187,9 @@ class SimulationMatchmakingService:
                 storybeat=self._describe_tactical_story(
                     home,
                     away,
-                    context_type=self._match_context_type(self._tactical_contrast_score(home, away), queue_source="player"),
+                    context_type=self._match_context_type(
+                        self._tactical_contrast_score(home, away), queue_source="player"
+                    ),
                 ),
                 simulation_mode=payload.preferences.preferred_execution_mode,
                 match_engine_request=self._build_match_engine_request(
@@ -242,7 +252,9 @@ class SimulationMatchmakingService:
             regions=payload.eligibility.regions,
         )
         if len(entrants) < target_count:
-            raise MatchmakingUnavailableError("Not enough qualified clubs were available for the hosted competition preview.")
+            raise MatchmakingUnavailableError(
+                "Not enough qualified clubs were available for the hosted competition preview."
+            )
 
         title = payload.title or self._default_competition_title(host, payload.competition_type, styles=eligible_styles)
         return HostedCompetitionPreviewResponse(
@@ -275,7 +287,8 @@ class SimulationMatchmakingService:
         return humans + [
             profile
             for profile in self.bot_profiles
-            if profile.availability is AvailabilityStatus.ONLINE and SimulationMatchType.QUICK in profile.preferred_match_type
+            if profile.availability is AvailabilityStatus.ONLINE
+            and SimulationMatchType.QUICK in profile.preferred_match_type
         ]
 
     def _bot_fallback_candidates(
@@ -359,7 +372,11 @@ class SimulationMatchmakingService:
 
         if allow_bots:
             ranked_bots = sorted(
-                (profile for profile in self.bot_profiles if SimulationMatchType.TOURNAMENT in profile.preferred_match_type),
+                (
+                    profile
+                    for profile in self.bot_profiles
+                    if SimulationMatchType.TOURNAMENT in profile.preferred_match_type
+                ),
                 key=lambda profile: (
                     self._region_bucket(profile.region) != self._region_bucket(organizer.region),
                     abs(profile.manager_rating - organizer.manager_rating),
@@ -402,7 +419,11 @@ class SimulationMatchmakingService:
         avoid_same_style_early: bool,
     ) -> float:
         tactical = self._tactical_contrast_score(favorite, candidate)
-        diversity_bonus = 24.0 if avoid_same_style_early and favorite.tactical_profile.style != candidate.tactical_profile.style else 0.0
+        diversity_bonus = (
+            24.0
+            if avoid_same_style_early and favorite.tactical_profile.style != candidate.tactical_profile.style
+            else 0.0
+        )
         seed_gap = min(40.0, abs(self._tournament_seed_score(favorite) - self._tournament_seed_score(candidate)) / 8.0)
         region_bonus = 12.0 if self._region_bucket(favorite.region) == self._region_bucket(candidate.region) else 0.0
         return tactical + diversity_bonus + seed_gap + region_bonus
@@ -428,8 +449,15 @@ class SimulationMatchmakingService:
         def _eligible(profile: SimulationGameProfileView) -> bool:
             if profile.availability is not AvailabilityStatus.ONLINE:
                 return False
-            required_type = SimulationMatchType.HOSTED if competition_type is HostedCompetitionType.LEAGUE_MODE else SimulationMatchType.TOURNAMENT
-            if required_type not in profile.preferred_match_type and SimulationMatchType.HOSTED not in profile.preferred_match_type:
+            required_type = (
+                SimulationMatchType.HOSTED
+                if competition_type is HostedCompetitionType.LEAGUE_MODE
+                else SimulationMatchType.TOURNAMENT
+            )
+            if (
+                required_type not in profile.preferred_match_type
+                and SimulationMatchType.HOSTED not in profile.preferred_match_type
+            ):
                 return False
             if allowed_styles and profile.tactical_profile.style not in allowed_styles:
                 return False
@@ -753,7 +781,9 @@ class SimulationMatchmakingService:
         *,
         tactical_contrast: int,
     ) -> str:
-        edge = (opponent.manager_rating - requester.manager_rating) + ((opponent.squad_strength - requester.squad_strength) * 8)
+        edge = (opponent.manager_rating - requester.manager_rating) + (
+            (opponent.squad_strength - requester.squad_strength) * 8
+        )
         if edge >= 45 or tactical_contrast >= 92 or opponent.bot_profile is BotClubProfile.ELITE_TACTICAL:
             return "high"
         if edge <= -45 or opponent.bot_profile is BotClubProfile.BEGINNER:
@@ -768,7 +798,9 @@ class SimulationMatchmakingService:
         context_type: str,
     ) -> str:
         if context_type == "fallback_bot":
-            return f"{left.club_name} receives an instant bot fallback against {right.club_name} to keep the queue moving."
+            return (
+                f"{left.club_name} receives an instant bot fallback against {right.club_name} to keep the queue moving."
+            )
         if context_type == "tactical_clash":
             return (
                 f"{left.club_name} want {self._tactical_phrase(left.tactical_profile)}, while "
@@ -784,7 +816,9 @@ class SimulationMatchmakingService:
 
     def _tournament_narrative(self, entrants: list[SimulationGameProfileView]) -> str:
         distinct_styles = {profile.tactical_profile.style for profile in entrants}
-        rating_spread = max(profile.manager_rating for profile in entrants) - min(profile.manager_rating for profile in entrants)
+        rating_spread = max(profile.manager_rating for profile in entrants) - min(
+            profile.manager_rating for profile in entrants
+        )
         if len(distinct_styles) >= max(3, len(entrants) // 3):
             return "Clash of styles tournament"
         if rating_spread >= 180:
@@ -818,7 +852,9 @@ class SimulationMatchmakingService:
         styles: list[TacticalStyleProfile],
     ) -> str:
         if competition_type is HostedCompetitionType.LEAGUE_MODE:
-            return f"{len(entrants)} clubs enter a round-robin ladder built for stable scouting signal and table pressure."
+            return (
+                f"{len(entrants)} clubs enter a round-robin ladder built for stable scouting signal and table pressure."
+            )
         if competition_type is HostedCompetitionType.TACTICAL_CUP:
             if styles:
                 return f"A style-locked cup where {self._style_text(styles[0]).lower()} teams collide without mirror-match bloat."
@@ -915,7 +951,12 @@ class SimulationMatchmakingService:
 
     def _starter_roles(self, formation: str) -> list[PlayerRole]:
         lines = [int(part) for part in formation.split("-")]
-        return [PlayerRole.GOALKEEPER] + ([PlayerRole.DEFENDER] * lines[0]) + ([PlayerRole.MIDFIELDER] * sum(lines[1:-1])) + ([PlayerRole.FORWARD] * lines[-1])
+        return (
+            [PlayerRole.GOALKEEPER]
+            + ([PlayerRole.DEFENDER] * lines[0])
+            + ([PlayerRole.MIDFIELDER] * sum(lines[1:-1]))
+            + ([PlayerRole.FORWARD] * lines[-1])
+        )
 
     def _tactical_phrase(self, profile: TacticalProfileInput) -> str:
         return f"{self._style_text(profile.style).lower()} with {profile.pressing.value} pressing and a {profile.tempo.value} tempo"
@@ -946,7 +987,11 @@ class SimulationMatchmakingService:
                 ),
                 squad_strength=73,
                 squad_depth=61,
-                preferred_match_type=[SimulationMatchType.QUICK, SimulationMatchType.TOURNAMENT, SimulationMatchType.HOSTED],
+                preferred_match_type=[
+                    SimulationMatchType.QUICK,
+                    SimulationMatchType.TOURNAMENT,
+                    SimulationMatchType.HOSTED,
+                ],
                 connection_quality=ConnectionQuality.GOOD,
                 region="AF-WEST",
                 availability=AvailabilityStatus.ONLINE,
@@ -965,7 +1010,11 @@ class SimulationMatchmakingService:
                 ),
                 squad_strength=79,
                 squad_depth=68,
-                preferred_match_type=[SimulationMatchType.QUICK, SimulationMatchType.TOURNAMENT, SimulationMatchType.HOSTED],
+                preferred_match_type=[
+                    SimulationMatchType.QUICK,
+                    SimulationMatchType.TOURNAMENT,
+                    SimulationMatchType.HOSTED,
+                ],
                 connection_quality=ConnectionQuality.GOOD,
                 region="AF-WEST",
                 availability=AvailabilityStatus.ONLINE,
@@ -984,7 +1033,11 @@ class SimulationMatchmakingService:
                 ),
                 squad_strength=84,
                 squad_depth=76,
-                preferred_match_type=[SimulationMatchType.QUICK, SimulationMatchType.TOURNAMENT, SimulationMatchType.HOSTED],
+                preferred_match_type=[
+                    SimulationMatchType.QUICK,
+                    SimulationMatchType.TOURNAMENT,
+                    SimulationMatchType.HOSTED,
+                ],
                 connection_quality=ConnectionQuality.EXCELLENT,
                 region="AF-WEST",
                 availability=AvailabilityStatus.ONLINE,

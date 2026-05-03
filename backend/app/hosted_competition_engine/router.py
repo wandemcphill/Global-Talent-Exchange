@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.hosted_competition_engine.schemas import (
+    AdminHostedCompetitionCreateRequest,
     CompetitionTemplateView,
     HostedCompetitionCreateRequest,
     HostedCompetitionCreateResponse,
@@ -17,6 +18,7 @@ from app.hosted_competition_engine.schemas import (
     HostedCompetitionInviteCreateRequest,
     HostedCompetitionInviteCreateResponse,
     HostedCompetitionInviteView,
+    HostedCompetitionJoinRequest,
     HostedCompetitionJoinResponse,
     HostedCompetitionLaunchResponse,
     HostedCompetitionListResponse,
@@ -115,7 +117,7 @@ def create_competition(
         competition=_competition_view(competition),
         template=_template_view(template),
         host_participation_created=host_participation_created,
-        dashboard_summary=f"{competition.title} opened with reward pool {competition.reward_pool_fancoin} FanCoin.",
+        dashboard_summary=f"{competition.title} opened with reward pool {competition.reward_pool_fancoin} Fan Coin.",
     )
 
 
@@ -180,11 +182,18 @@ def create_competition_invites(
 
 @router.post("/{competition_id}/join", response_model=HostedCompetitionJoinResponse)
 def join_competition(
-    competition_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_session)
+    competition_id: str,
+    payload: HostedCompetitionJoinRequest | None = Body(default=None),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> HostedCompetitionJoinResponse:
     service = HostedCompetitionService(session)
     try:
-        competition, participant = service.join_competition(user=user, competition_id=competition_id)
+        competition, participant = service.join_competition(
+            user=user,
+            competition_id=competition_id,
+            passcode=payload.passcode if payload is not None else None,
+        )
         session.commit()
         session.refresh(participant)
         current_participants = len(service.participants_for_competition(competition.id))
@@ -276,6 +285,52 @@ def seed_templates(
     service.seed_defaults()
     session.commit()
     return [_template_view(item) for item in service.list_templates()]
+
+
+@admin_router.post("", response_model=HostedCompetitionCreateResponse)
+def create_admin_competition(
+    payload: AdminHostedCompetitionCreateRequest,
+    admin_user: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> HostedCompetitionCreateResponse:
+    service = HostedCompetitionService(session)
+    try:
+        competition, template, host_participation_created = service.create_admin_competition(
+            admin=admin_user, payload=payload
+        )
+        session.commit()
+        session.refresh(competition)
+    except HostedCompetitionError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    host_label = "GTEX" if bool((competition.metadata_json or {}).get("gtex_hosted")) else "user-hosted"
+    return HostedCompetitionCreateResponse(
+        competition=_competition_view(competition),
+        template=_template_view(template),
+        host_participation_created=host_participation_created,
+        dashboard_summary=f"{competition.title} opened as a {host_label} competition.",
+    )
+
+
+@admin_router.post("/{competition_id}/launch", response_model=HostedCompetitionLaunchResponse)
+def admin_launch_competition(
+    competition_id: str,
+    admin_user: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> HostedCompetitionLaunchResponse:
+    service = HostedCompetitionService(session)
+    try:
+        competition = service.launch_competition(actor=admin_user, competition_id=competition_id)
+        session.commit()
+    except HostedCompetitionError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    standings = service.standings_for_competition(competition_id)
+    return HostedCompetitionLaunchResponse(
+        competition=_competition_view(competition),
+        standings=[_standing_view(item) for item in standings],
+        dashboard_summary=f"{competition.title} is now live with {len(standings)} seeded participants.",
+    )
 
 
 @admin_router.post("/{competition_id}/finalize", response_model=HostedCompetitionFinalizeResponse)

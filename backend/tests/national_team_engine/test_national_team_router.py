@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from decimal import Decimal
 from uuid import uuid4
+
+import pytest
 
 from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
 from app.ingestion.models import Country, Player
@@ -26,9 +28,33 @@ def _login(client, *, email: str, password: str) -> dict[str, str]:
     return headers
 
 
+def _error_message(response) -> str:
+    body = response.json()
+    return str(body.get("detail") or body.get("message") or body.get("code") or "")
+
+
+@pytest.fixture(scope="module")
+def national_admin_headers(client, app_session_factory) -> dict[str, str]:
+    from app.auth.service import AuthService
+    from app.models.user import UserRole
+
+    email = "vidvimedialtd@gmail.com"
+    with app_session_factory() as session:
+        AuthService().ensure_admin_user(
+            session,
+            email=email,
+            password=DASHBOARD_TEST_ADMIN_PASSWORD,
+            username="vidvimedialtd",
+            display_name="GTEX National Team Admin",
+            role=UserRole.SUPER_ADMIN,
+        )
+        session.commit()
+    return _login(client, email=email, password=DASHBOARD_TEST_ADMIN_PASSWORD)
+
+
 def _create_competition(client, admin_headers: dict[str, str], *, key_prefix: str) -> dict:
     response = client.post(
-        "/admin/national-team-engine/competitions",
+        "/api/admin/national-team-engine/competitions",
         headers=admin_headers,
         json={
             "key": f"{key_prefix}-{uuid4().hex[:8]}",
@@ -54,7 +80,7 @@ def _create_entry(
     country_name: str,
 ) -> dict:
     response = client.post(
-        f"/admin/national-team-engine/competitions/{competition_id}/entries",
+        f"/api/admin/national-team-engine/competitions/{competition_id}/entries",
         headers=admin_headers,
         json={
             "country_code": country_code,
@@ -161,10 +187,10 @@ def _seed_national_pool(
     return player_ids
 
 
-def test_admin_can_create_national_team_competition_and_entry(client, demo_seed) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+def test_admin_can_create_national_team_competition_and_entry(client, demo_seed, national_admin_headers) -> None:
+    admin_headers = national_admin_headers
     response = client.post(
-        "/admin/national-team-engine/competitions",
+        "/api/admin/national-team-engine/competitions",
         headers=admin_headers,
         json={
             "key": "gtex-world-cup-2030",
@@ -181,7 +207,7 @@ def test_admin_can_create_national_team_competition_and_entry(client, demo_seed)
 
     manager_user = demo_seed.demo_users[0]
     entry_response = client.post(
-        f"/admin/national-team-engine/competitions/{competition['id']}/entries",
+        f"/api/admin/national-team-engine/competitions/{competition['id']}/entries",
         headers=admin_headers,
         json={
             "country_code": "NG",
@@ -195,17 +221,61 @@ def test_admin_can_create_national_team_competition_and_entry(client, demo_seed)
     assert entry["country_code"] == "NG"
     assert entry["manager_user_id"] == manager_user.user_id
 
-    list_response = client.get("/national-team-engine/competitions")
+    list_response = client.get("/api/national-team-engine/competitions")
     assert list_response.status_code == 200
     assert any(item["key"] == "gtex-world-cup-2030" for item in list_response.json())
 
 
-def test_admin_can_upsert_squad_and_user_can_view_history(client, demo_seed) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+def test_multiple_users_can_rent_same_national_team(client, demo_seed, national_admin_headers) -> None:
+    competition_response = client.post(
+        "/api/admin/national-team-engine/competitions",
+        headers=national_admin_headers,
+        json={
+            "key": f"same-country-rental-{uuid4().hex[:8]}",
+            "title": "Same Country Rental Cup",
+            "season_label": "2030",
+            "region_type": "global",
+            "age_band": "senior",
+            "format_type": "cup",
+            "status": "published",
+            "metadata_json": {"minimum_squad_size": 3, "maximum_squad_size": 5},
+        },
+    )
+    assert competition_response.status_code == 200, competition_response.text
+    competition = competition_response.json()
+    primary = demo_seed.demo_users[0]
+    secondary = demo_seed.demo_users[1]
+    primary_headers = _login(client, email=primary.email, password=primary.password)
+    secondary_headers = _login(client, email=secondary.email, password=secondary.password)
+
+    first_entry = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-entry",
+        headers=primary_headers,
+        json={"country_code": "NG", "country_name": "Nigeria"},
+    )
+    assert first_entry.status_code == 200, first_entry.text
+
+    second_entry = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-entry",
+        headers=secondary_headers,
+        json={"country_code": "NG", "country_name": "Nigeria"},
+    )
+    assert second_entry.status_code == 200, second_entry.text
+
+    first_payload = first_entry.json()
+    second_payload = second_entry.json()
+    assert first_payload["id"] != second_payload["id"]
+    assert first_payload["country_code"] == second_payload["country_code"] == "NG"
+    assert first_payload["entry_owner_user_id"] == primary.user_id
+    assert second_payload["entry_owner_user_id"] == secondary.user_id
+
+
+def test_admin_can_upsert_squad_and_user_can_view_history(client, demo_seed, national_admin_headers) -> None:
+    admin_headers = national_admin_headers
     user_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
-    competition_id = client.get("/national-team-engine/competitions").json()[0]["id"]
+    competition_id = client.get("/api/national-team-engine/competitions").json()[0]["id"]
     entry_response = client.post(
-        f"/admin/national-team-engine/competitions/{competition_id}/entries",
+        f"/api/admin/national-team-engine/competitions/{competition_id}/entries",
         headers=admin_headers,
         json={
             "country_code": "GH",
@@ -218,7 +288,7 @@ def test_admin_can_upsert_squad_and_user_can_view_history(client, demo_seed) -> 
     entry = entry_response.json()
 
     squad_response = client.post(
-        f"/admin/national-team-engine/entries/{entry['id']}/squad",
+        f"/api/admin/national-team-engine/entries/{entry['id']}/squad",
         headers=admin_headers,
         json={
             "members": [
@@ -244,15 +314,15 @@ def test_admin_can_upsert_squad_and_user_can_view_history(client, demo_seed) -> 
     assert detail["squad_size"] == 2
     assert len(detail["squad_members"]) == 2
 
-    history_response = client.get("/national-team-engine/me/history", headers=user_headers)
+    history_response = client.get("/api/national-team-engine/me/history", headers=user_headers)
     assert history_response.status_code == 200, history_response.text
     history = history_response.json()
     assert len(history["managed_entries"]) >= 1
     assert len(history["squad_memberships"]) >= 1
 
 
-def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competition_admin_headers) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+def test_live_linked_competition_blocks_new_rentals(client, demo_seed, national_admin_headers) -> None:
+    admin_headers = national_admin_headers
     manager = demo_seed.demo_users[0]
     manager_headers = _login(client, email=manager.email, password=manager.password)
     second_manager = demo_seed.demo_users[1]
@@ -270,7 +340,7 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competiti
             "capacity": 2,
             "creator_id": "lock-host",
             "payout_structure": [{"place": 1, "percent": "1.00"}],
-            "scheduled_start_at": datetime(2026, 3, 20, tzinfo=timezone.utc).isoformat(),
+            "scheduled_start_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
         },
     )
     assert competition_response.status_code == 201, competition_response.text
@@ -278,7 +348,7 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competiti
 
     publish = client.post(
         f"/api/competitions/{linked_competition_id}/publish",
-        headers=competition_admin_headers,
+        headers=admin_headers,
         json={"open_for_join": True},
     )
     assert publish.status_code == 200, publish.text
@@ -294,17 +364,21 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competiti
         json={"user_id": second_manager.user_id},
     )
     assert joined.status_code == 200, joined.text
-    seed = client.post(f"/api/competitions/{linked_competition_id}/seed", json={"seed_method": "random"})
+    seed = client.post(
+        f"/api/competitions/{linked_competition_id}/seed",
+        headers=admin_headers,
+        json={"seed_method": "random"},
+    )
     assert seed.status_code == 200, seed.text
     launch = client.post(
         f"/api/competitions/{linked_competition_id}/launch",
-        headers=competition_admin_headers,
+        headers=admin_headers,
     )
     assert launch.status_code == 200, launch.text
     assert launch.json()["status"] == "live"
 
     competition = client.post(
-        "/admin/national-team-engine/competitions",
+        "/api/admin/national-team-engine/competitions",
         headers=admin_headers,
         json={
             "key": "gtex-world-cup-live-lock",
@@ -321,7 +395,7 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competiti
     national_team_competition = competition.json()
 
     entry_response = client.post(
-        f"/admin/national-team-engine/competitions/{national_team_competition['id']}/entries",
+        f"/api/admin/national-team-engine/competitions/{national_team_competition['id']}/entries",
         headers=admin_headers,
         json={
             "country_code": "NG",
@@ -334,25 +408,25 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competiti
     entry = entry_response.json()
 
     rental_pool = client.get(
-        f"/national-team-engine/competitions/{national_team_competition['id']}/rental-pool",
+        f"/api/national-team-engine/competitions/{national_team_competition['id']}/rental-pool",
         headers=manager_headers,
     )
     assert rental_pool.status_code == 200, rental_pool.text
     player_id = rental_pool.json()["items"][0]["player_id"]
 
     rent_response = client.post(
-        f"/national-team-engine/entries/{entry['id']}/rentals",
+        f"/api/national-team-engine/entries/{entry['id']}/rentals",
         headers=manager_headers,
         json={"player_id": player_id},
     )
     assert rent_response.status_code == 409, rent_response.text
-    assert rent_response.json()["detail"] == "competition_already_live"
+    assert _error_message(rent_response) == "competition_already_live"
 
 
 def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(
-    client, demo_seed, app_session_factory
+    client, demo_seed, app_session_factory, national_admin_headers
 ) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+    admin_headers = national_admin_headers
     competition = _create_competition(client, admin_headers, key_prefix="pool-filter")
     home_code = "NP1"
     home_name = "Nation Prime One"
@@ -369,7 +443,7 @@ def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(
     )
 
     filtered_response = client.get(
-        f"/national-team-engine/competitions/{competition['id']}/rental-pool",
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-pool",
         params=[("country_code", home_code), ("source_bucket", "preseeded")],
     )
     assert filtered_response.status_code == 200, filtered_response.text
@@ -380,7 +454,7 @@ def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(
     assert all(item["supply_mode"] == "infinite" for item in filtered_payload["items"])
 
     all_response = client.get(
-        f"/national-team-engine/competitions/{competition['id']}/rental-pool",
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-pool",
         params={"country_code": home_code},
     )
     assert all_response.status_code == 200, all_response.text
@@ -396,9 +470,9 @@ def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(
 
 
 def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad(
-    client, demo_seed, app_session_factory
+    client, demo_seed, app_session_factory, national_admin_headers
 ) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+    admin_headers = national_admin_headers
     manager_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
     competition = _create_competition(client, admin_headers, key_prefix="pool-rent")
     home_code = "NP2"
@@ -424,15 +498,15 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     )
 
     reject_response = client.post(
-        f"/national-team-engine/entries/{entry['id']}/rentals",
+        f"/api/national-team-engine/entries/{entry['id']}/rentals",
         headers=manager_headers,
         json={"player_id": player_ids["away-st"]},
     )
     assert reject_response.status_code == 409, reject_response.text
-    assert reject_response.json()["detail"] == "player_not_eligible"
+    assert _error_message(reject_response) == "player_not_eligible"
 
     success_response = client.post(
-        f"/national-team-engine/entries/{entry['id']}/rentals",
+        f"/api/national-team-engine/entries/{entry['id']}/rentals",
         headers=manager_headers,
         json={"player_id": player_ids["home-st"]},
     )
@@ -445,7 +519,7 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     assert rented_member["metadata_json"]["supply_mode"] == "infinite"
 
     repriced_pool = client.get(
-        f"/national-team-engine/competitions/{competition['id']}/rental-pool",
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-pool",
         params={"country_code": home_code},
     )
     assert repriced_pool.status_code == 200, repriced_pool.text
@@ -454,7 +528,7 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     assert Decimal(str(repriced_player["loan_price_coin"])) > Decimal("80.0000")
 
     auto_build_response = client.post(
-        f"/national-team-engine/competitions/{competition['id']}/auto-build-squad",
+        f"/api/national-team-engine/competitions/{competition['id']}/auto-build-squad",
         json={
             "country_code": home_code,
             "budget_coin": "700.0000",
@@ -473,9 +547,9 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
 
 
 def test_claim_free_players_grants_starter_pack_shape_from_national_pool(
-    client, demo_seed, app_session_factory
+    client, demo_seed, app_session_factory, national_admin_headers
 ) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+    admin_headers = national_admin_headers
     manager_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
     competition = _create_competition(client, admin_headers, key_prefix="pool-free")
     home_code = "NP3"
@@ -501,7 +575,7 @@ def test_claim_free_players_grants_starter_pack_shape_from_national_pool(
     )
 
     claim_response = client.post(
-        f"/national-team-engine/entries/{entry['id']}/free-players/claim",
+        f"/api/national-team-engine/entries/{entry['id']}/free-players/claim",
         headers=manager_headers,
     )
     assert claim_response.status_code == 200, claim_response.text
@@ -515,15 +589,17 @@ def test_claim_free_players_grants_starter_pack_shape_from_national_pool(
     assert assigned_slots.count("MIDFIELDER") == 2
 
 
-def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(client, demo_seed) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(
+    client, demo_seed, national_admin_headers
+) -> None:
+    admin_headers = national_admin_headers
     primary_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
     secondary_headers = _login(client, email=demo_seed.demo_users[1].email, password=demo_seed.demo_users[1].password)
     third_user = demo_seed.demo_users[2]
     third_headers = _login(client, email=third_user.email, password=third_user.password)
 
     competition_response = client.post(
-        "/admin/national-team-engine/competitions",
+        "/api/admin/national-team-engine/competitions",
         headers=admin_headers,
         json={
             "key": f"ranking-lock-{uuid4().hex[:8]}",
@@ -544,7 +620,7 @@ def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(client, 
     competition = competition_response.json()
 
     first_entry = client.post(
-        f"/national-team-engine/competitions/{competition['id']}/entries",
+        f"/api/national-team-engine/competitions/{competition['id']}/entries",
         headers=primary_headers,
         json={
             "country_code": "NG",
@@ -555,7 +631,7 @@ def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(client, 
     assert first_entry.status_code == 200, first_entry.text
 
     second_entry = client.post(
-        f"/national-team-engine/competitions/{competition['id']}/entries",
+        f"/api/national-team-engine/competitions/{competition['id']}/entries",
         headers=secondary_headers,
         json={
             "country_code": "GH",
@@ -566,14 +642,14 @@ def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(client, 
     assert second_entry.status_code == 200, second_entry.text
 
     lock_response = client.post(
-        f"/admin/national-team-engine/competitions/{competition['id']}/entries/lock",
+        f"/api/admin/national-team-engine/competitions/{competition['id']}/entries/lock",
         headers=admin_headers,
     )
     assert lock_response.status_code == 200, lock_response.text
     assert lock_response.json()["current_stage"] == "tournament"
 
     locked_user_response = client.post(
-        f"/national-team-engine/competitions/{competition['id']}/entries",
+        f"/api/national-team-engine/competitions/{competition['id']}/entries",
         headers=third_headers,
         json={
             "country_code": "SN",
@@ -582,10 +658,10 @@ def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(client, 
         },
     )
     assert locked_user_response.status_code == 409, locked_user_response.text
-    assert locked_user_response.json()["detail"] == "entry_locked"
+    assert _error_message(locked_user_response) == "entry_locked"
 
     locked_admin_response = client.post(
-        f"/admin/national-team-engine/competitions/{competition['id']}/entries",
+        f"/api/admin/national-team-engine/competitions/{competition['id']}/entries",
         headers=admin_headers,
         json={
             "country_code": "CI",
@@ -595,16 +671,16 @@ def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(client, 
         },
     )
     assert locked_admin_response.status_code == 409, locked_admin_response.text
-    assert "locked" in locked_admin_response.json()["detail"].lower()
+    assert "locked" in _error_message(locked_admin_response).lower()
 
     advance_response = client.post(
-        f"/admin/national-team-engine/competitions/{competition['id']}/lifecycle/advance",
+        f"/api/admin/national-team-engine/competitions/{competition['id']}/lifecycle/advance",
         headers=admin_headers,
     )
     assert advance_response.status_code == 200, advance_response.text
     assert advance_response.json()["current_stage"] == "completed"
 
-    rankings_response = client.get("/national-team-engine/rankings")
+    rankings_response = client.get("/api/national-team-engine/rankings")
     assert rankings_response.status_code == 200, rankings_response.text
     rankings_by_country = {item["country_code"]: item for item in rankings_response.json()}
     assert {"NG", "GH"}.issubset(rankings_by_country)

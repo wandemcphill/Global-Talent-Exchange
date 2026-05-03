@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.competitions.creator_league_router import router as creator_league_router
 from app.common.enums.competition_format import CompetitionFormat
 from app.models.user import User, UserRole
@@ -28,6 +29,7 @@ from app.schemas.competition_lifecycle import (
 )
 from app.schemas.competition_requests import (
     CompetitionCreateRequest,
+    CompetitionHostType,
     CompetitionInviteCreateRequest,
     CompetitionJoinActionRequest,
     CompetitionJoinRequest,
@@ -49,9 +51,11 @@ from app.services.competition_orchestrator import (
     CompetitionOrchestrator,
     get_competition_orchestrator,
 )
+from app.services.competition_reminder_service import CompetitionReminderService
 from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/api/competitions", tags=["competitions"])
+admin_router = APIRouter(prefix="/api/admin/competitions", tags=["admin-competitions"])
 router.include_router(creator_league_router)
 
 
@@ -104,15 +108,60 @@ def _require_manage_competitions_or_creator(
     _require_manage_competitions_permission(request, actor)
 
 
+def _display_name_for(actor: User) -> str:
+    return actor.display_name or actor.username or actor.email or actor.id
+
+
+def _user_competition_payload(payload: CompetitionCreateRequest, actor: User) -> CompetitionCreateRequest:
+    return payload.model_copy(
+        update={
+            "creator_id": actor.id,
+            "creator_name": payload.creator_name or _display_name_for(actor),
+            "host_type": CompetitionHostType.USER_HOSTED,
+            "source_type": CompetitionHostType.USER_HOSTED.value,
+            "type": CompetitionHostType.USER_HOSTED.value,
+            "currency": "credit",
+        }
+    )
+
+
+def _admin_competition_payload(payload: CompetitionCreateRequest, actor: User) -> CompetitionCreateRequest:
+    host_type = payload.host_type or CompetitionHostType.GTEX_HOSTED
+    if host_type is CompetitionHostType.GTEX_HOSTED:
+        return payload.model_copy(
+            update={
+                "creator_id": actor.id,
+                "creator_name": payload.creator_name or "GTEX",
+                "host_type": CompetitionHostType.GTEX_HOSTED,
+                "source_type": CompetitionHostType.GTEX_HOSTED.value,
+                "type": CompetitionHostType.GTEX_HOSTED.value,
+                "entry_fee": Decimal("0"),
+                "buy_in_amount": Decimal("0"),
+                "currency": "coin",
+            }
+        )
+    return payload.model_copy(
+        update={
+            "creator_id": payload.creator_id or actor.id,
+            "creator_name": payload.creator_name or _display_name_for(actor),
+            "host_type": CompetitionHostType.USER_HOSTED,
+            "source_type": CompetitionHostType.USER_HOSTED.value,
+            "type": CompetitionHostType.USER_HOSTED.value,
+            "currency": "credit",
+        }
+    )
+
+
 @router.post(
     "", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED
 )
 def create_competition(
     payload: CompetitionCreateRequest,
-    _: User = Depends(get_current_user),
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    return _handle_competition_errors(lambda: orchestrator.create(payload))
+    resolved = _user_competition_payload(payload, actor)
+    return _handle_competition_errors(lambda: orchestrator.create(resolved))
 
 
 @router.post(
@@ -123,10 +172,36 @@ def create_competition(
 )
 def create_competition_alias(
     payload: CompetitionCreateRequest,
-    _: User = Depends(get_current_user),
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    return _handle_competition_errors(lambda: orchestrator.create(payload))
+    resolved = _user_competition_payload(payload, actor)
+    return _handle_competition_errors(lambda: orchestrator.create(resolved))
+
+
+@admin_router.post(
+    "", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED
+)
+def admin_create_competition(
+    payload: CompetitionCreateRequest,
+    request: Request,
+    actor: User = Depends(get_current_admin),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    _require_manage_competitions_permission(request, actor)
+    resolved = _admin_competition_payload(payload, actor)
+    return _handle_competition_errors(lambda: orchestrator.create(resolved))
+
+
+@admin_router.post("/reminders/dispatch")
+def admin_dispatch_competition_reminders(
+    request: Request,
+    actor: User = Depends(get_current_admin),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> dict[str, int]:
+    _require_manage_competitions_permission(request, actor)
+    created = CompetitionReminderService(orchestrator.session).dispatch_due_reminders()
+    return {"created": created}
 
 
 @router.patch("/{competition_id}", response_model=CompetitionSummaryView, response_model_exclude_none=True)
@@ -257,7 +332,9 @@ def _join_competition_response(
             competition_id,
             user_id=resolved_user_id,
             user_name=resolved_user_name,
+            club_name=payload.club_name,
             invite_code=payload.invite_code,
+            passcode=payload.passcode,
         )
     )
     if result is None:
@@ -320,10 +397,17 @@ def list_competition_invites(
 def accept_competition_invite(
     competition_id: str,
     payload: CompetitionInviteAcceptRequest,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    result = _handle_competition_errors(lambda: orchestrator.accept_invite(competition_id, payload))
+    if payload.user_id is not None and payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authenticated user does not match competition invite payload.",
+        )
+    result = _handle_competition_errors(
+        lambda: orchestrator.accept_invite(competition_id, payload, actor_user_id=current_user.id)
+    )
     if result is None:
         raise _not_found(competition_id)
     return result

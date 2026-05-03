@@ -115,6 +115,49 @@ class HostedCompetitionService:
             return
         raise HostedCompetitionError("Only the host or an admin can manage hosted competition invites.")
 
+    def _metadata_with_join_rules(self, *, payload, visibility: str, gtex_hosted: bool = False) -> dict[str, object]:
+        metadata = dict(getattr(payload, "metadata_json", {}) or {})
+        passcode = str(getattr(payload, "join_passcode", "") or "").strip()
+        if passcode:
+            metadata["join_passcode"] = passcode
+            metadata["join_passcode_required"] = True
+            if visibility == "public":
+                visibility = "passcode"
+        else:
+            metadata.pop("join_passcode", None)
+            metadata.setdefault("join_passcode_required", False)
+        if gtex_hosted:
+            metadata["host_type"] = "gtex_hosted"
+            metadata["gtex_hosted"] = True
+        else:
+            metadata.setdefault("host_type", "user_hosted")
+        return metadata
+
+    def _requires_passcode(self, competition: UserHostedCompetition) -> bool:
+        metadata = competition.metadata_json or {}
+        if str(metadata.get("join_passcode") or "").strip():
+            return True
+        if bool(metadata.get("join_passcode_required")):
+            return True
+        return competition.visibility.strip().lower() in {"passcode", "password"}
+
+    def _assert_passcode_allowed(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        user: User,
+        passcode: str | None,
+        invite_required_bypass: bool,
+    ) -> None:
+        if not self._requires_passcode(competition):
+            return
+        if competition.host_user_id == user.id or self._is_admin_user(user) or invite_required_bypass:
+            return
+        expected = str((competition.metadata_json or {}).get("join_passcode") or "").strip()
+        supplied = str(passcode or "").strip()
+        if not expected or supplied != expected:
+            raise HostedCompetitionError("A valid competition passcode is required to join.")
+
     def _invite_rows(self, competition: UserHostedCompetition) -> list[dict[str, object]]:
         rows = (competition.metadata_json or {}).get("invites")
         if not isinstance(rows, list):
@@ -297,7 +340,14 @@ class HostedCompetitionService:
         }
         self.session.flush()
 
-    def create_competition(self, *, host: User, payload) -> tuple[UserHostedCompetition, CompetitionTemplate, bool]:
+    def create_competition(
+        self,
+        *,
+        host: User,
+        payload,
+        created_by_admin: User | None = None,
+        gtex_hosted: bool = False,
+    ) -> tuple[UserHostedCompetition, CompetitionTemplate, bool]:
         template = self.get_template_by_key(payload.template_key)
         if template is None or not template.is_user_hostable:
             raise HostedCompetitionError("Competition template was not found or is not hostable.")
@@ -307,6 +357,8 @@ class HostedCompetitionService:
         entry_fee = Decimal(
             str(payload.entry_fee_fancoin if payload.entry_fee_fancoin is not None else template.entry_fee_fancoin)
         ).quantize(Decimal("0.0001"))
+        if gtex_hosted:
+            entry_fee = Decimal("0.0000")
         if entry_fee < Decimal("0.0000"):
             raise HostedCompetitionError("Entry fee cannot be negative.")
         max_participants = int(payload.max_participants or template.participants)
@@ -315,25 +367,45 @@ class HostedCompetitionService:
         platform_fee_amount = (capacity_revenue * Decimal(platform_fee_bps) / Decimal(10_000)).quantize(
             Decimal("0.0001")
         )
-        reward_pool = max(Decimal("0.0000"), (capacity_revenue - platform_fee_amount).quantize(Decimal("0.0001")))
+        default_reward_pool = max(
+            Decimal("0.0000"), (capacity_revenue - platform_fee_amount).quantize(Decimal("0.0001"))
+        )
+        reward_pool = Decimal(
+            str(
+                payload.reward_pool_fancoin
+                if getattr(payload, "reward_pool_fancoin", None) is not None
+                else default_reward_pool
+            )
+        ).quantize(Decimal("0.0001"))
+        if reward_pool < Decimal("0.0000"):
+            raise HostedCompetitionError("Reward pool cannot be negative.")
+        visibility = str(payload.visibility or "public").strip().lower()
+        metadata = self._metadata_with_join_rules(payload=payload, visibility=visibility, gtex_hosted=gtex_hosted)
+        if metadata.get("join_passcode_required") is True and visibility == "public":
+            visibility = "passcode"
         competition = UserHostedCompetition(
             template_id=template.id,
             host_user_id=host.id,
             title=payload.title,
             slug=slug,
             description=payload.description,
-            visibility=payload.visibility,
+            visibility=visibility,
             starts_at=payload.starts_at,
             lock_at=payload.lock_at,
             max_participants=max_participants,
             entry_fee_fancoin=entry_fee,
             reward_pool_fancoin=reward_pool,
             platform_fee_amount=platform_fee_amount,
-            metadata_json=dict(payload.metadata_json),
+            metadata_json={
+                **metadata,
+                "created_by_user_id": created_by_admin.id if created_by_admin is not None else host.id,
+            },
             status=HostedCompetitionStatus.OPEN,
         )
         self.session.add(competition)
         self.session.flush()
+        if gtex_hosted:
+            return competition, template, False
         participant = self._create_entry_participant(competition=competition, user=host, role="host")
         try:
             self._collect_entry_fee(competition=competition, participant=participant, user=host)
@@ -341,10 +413,30 @@ class HostedCompetitionService:
             raise HostedCompetitionError(str(exc)) from exc
         return competition, template, True
 
+    def create_admin_competition(
+        self, *, admin: User, payload
+    ) -> tuple[UserHostedCompetition, CompetitionTemplate, bool]:
+        if not self._is_admin_user(admin):
+            raise HostedCompetitionError("Only admins can create GTEX hosted competitions.")
+        host = admin
+        host_user_id = str(getattr(payload, "host_user_id", "") or "").strip()
+        gtex_hosted = bool(getattr(payload, "gtex_hosted", True))
+        if host_user_id:
+            resolved_host = self.session.get(User, host_user_id)
+            if resolved_host is None:
+                raise HostedCompetitionError("Host user was not found.")
+            host = resolved_host
+        return self.create_competition(
+            host=host,
+            payload=payload,
+            created_by_admin=admin,
+            gtex_hosted=gtex_hosted,
+        )
+
     def list_public_competitions(self) -> list[UserHostedCompetition]:
         stmt = (
             select(UserHostedCompetition)
-            .where(UserHostedCompetition.visibility == "public")
+            .where(UserHostedCompetition.visibility.in_(("public", "passcode")))
             .order_by(UserHostedCompetition.created_at.desc())
         )
         return list(self.session.scalars(stmt).all())
@@ -523,7 +615,7 @@ class HostedCompetitionService:
             or 0
         )
         return {
-            "currency": "credits",
+            "currency": "fan_coin",
             "participant_count": len(participants),
             "entry_fee_fancoin": self._normalize_amount(competition.entry_fee_fancoin),
             "gross_collected": self._normalize_amount(competition.entry_fee_fancoin * Decimal(len(participants))),
@@ -540,6 +632,7 @@ class HostedCompetitionService:
         *,
         user: User,
         competition_id: str,
+        passcode: str | None = None,
         invite_required_bypass: bool = False,
     ) -> tuple[UserHostedCompetition, UserHostedCompetitionParticipant]:
         competition = self.get_competition(competition_id)
@@ -548,6 +641,12 @@ class HostedCompetitionService:
         if competition.status not in {HostedCompetitionStatus.OPEN, HostedCompetitionStatus.DRAFT}:
             raise HostedCompetitionError("Hosted competition is not open for joining.")
         invite = self._find_join_invite(competition=competition, user=user)
+        self._assert_passcode_allowed(
+            competition=competition,
+            user=user,
+            passcode=passcode,
+            invite_required_bypass=invite_required_bypass or invite is not None,
+        )
         if (
             competition.visibility in {"private", "invite_only"}
             and competition.host_user_id != user.id

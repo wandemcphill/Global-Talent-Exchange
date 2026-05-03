@@ -139,7 +139,7 @@ def test_quick_game_prefers_tactical_clash_when_requested(client: TestClient, pr
 
 
 @pytest.mark.parametrize("prefix", ["/simulation-matchmaking", "/api/simulation-matchmaking"])
-def test_quick_game_requires_human_opponent_when_queue_empty(client: TestClient, prefix: str) -> None:
+def test_quick_game_falls_back_to_ai_when_queue_empty(client: TestClient, prefix: str) -> None:
     _register_profiles(
         client,
         prefix,
@@ -168,12 +168,17 @@ def test_quick_game_requires_human_opponent_when_queue_empty(client: TestClient,
         },
     )
 
-    assert response.status_code == 409
-    assert "No suitable quick-game opponent" in response.json()["detail"]
+    assert response.status_code == 200
+    body = response.json()
+    assert body["opponent"]["is_bot"] is True
+    assert body["match_context"]["queue_source"] == "bot"
+    assert body["charge_on_loss"] is True
+    assert body["entry_currency"] == "credit"
+    assert body["rules_copy"] == "Play free until you lose or reach 10 matches."
 
 
 @pytest.mark.parametrize("prefix", ["/simulation-matchmaking", "/api/simulation-matchmaking"])
-def test_quick_game_rejects_ai_or_bot_opponents(client: TestClient, prefix: str) -> None:
+def test_quick_game_allows_explicit_ai_fallback(client: TestClient, prefix: str) -> None:
     _register_profiles(
         client,
         prefix,
@@ -203,8 +208,10 @@ def test_quick_game_rejects_ai_or_bot_opponents(client: TestClient, prefix: str)
         },
     )
 
-    assert response.status_code == 422
-    assert "human-only" in response.text
+    assert response.status_code == 200
+    body = response.json()
+    assert body["opponent"]["is_bot"] is True
+    assert body["match_context"]["queue_source"] == "bot"
 
 
 @pytest.mark.parametrize("prefix", ["/simulation-matchmaking", "/api/simulation-matchmaking"])

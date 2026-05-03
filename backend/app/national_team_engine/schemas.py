@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class NationalTeamCompetitionCreateRequest(BaseModel):
@@ -56,6 +56,7 @@ class NationalTeamEntryResponse(BaseModel):
     competition_id: str
     country_code: str
     country_name: str
+    entry_owner_user_id: str | None = None
     manager_user_id: str | None
     squad_size: int
     metadata_json: dict[str, Any]
@@ -137,6 +138,7 @@ class NationalTeamRentalPlayerView(BaseModel):
     card_mint_eligible: bool = True
     buy_cta_allowed: bool = True
     national_pool_only: bool = False
+    admin_trade_enabled: bool = False
     supply_mode: str = "infinite"
     demand_multiplier: Decimal = Field(default=Decimal("1.0000"))
 
@@ -154,6 +156,18 @@ class NationalTeamRentalCreateRequest(BaseModel):
 class NationalTeamAutoBuildRequest(BaseModel):
     country_code: str = Field(min_length=2, max_length=8)
     budget_coin: Decimal = Field(gt=0)
+    squad_size: int | None = Field(
+        default=None,
+        ge=11,
+        le=30,
+        validation_alias=AliasChoices("squad_size", "squadSize"),
+    )
+    age_grade: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=16,
+        validation_alias=AliasChoices("age_grade", "ageGrade"),
+    )
     tactic: str = Field(default="balanced", min_length=2, max_length=32)
     real_only: bool = False
     preseeded_only: bool = False
@@ -171,6 +185,8 @@ class NationalTeamAutoBuildResponse(BaseModel):
     country_code: str
     tactic: str
     formation: str
+    squad_size: int
+    age_grade: str | None = None
     requested_budget_coin: Decimal
     total_cost_coin: Decimal
     remaining_budget_coin: Decimal

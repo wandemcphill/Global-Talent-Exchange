@@ -18,7 +18,7 @@ from app.models.club_profile import ClubProfile
 from app.models.club_social import ClubIdentityMetrics, RivalryProfile
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
-from app.models.national_team import NationalTeamCompetition, NationalTeamEntry
+from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry, NationalTeamEntry
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.national_team_tournament import (
     FreePlayerTier,
@@ -50,7 +50,7 @@ DEFAULT_FREE_PLAYER_DISTRIBUTION = {
     FreePlayerTier.MID.value: 2,
     FreePlayerTier.LOW.value: 2,
 }
-DEFAULT_RENTAL_DURATION_DAYS = 30
+DEFAULT_RENTAL_DURATION_DAYS = 2
 RENTAL_EXPIRING_WARNING_HOURS = 24
 INFINITE_SUPPLY_MODE = "infinite"
 SOURCE_BUCKET_REAL = "real"
@@ -254,9 +254,12 @@ class NationalTeamTournamentService:
 
     def _require_managed_entry(self, entry_id: str, actor: User) -> NationalTeamEntry:
         entry = self._require_entry(entry_id)
-        if entry.manager_user_id != actor.id:
+        allowed_user_ids = {entry.manager_user_id}
+        if entry.entry_owner_user_id is not None:
+            allowed_user_ids.add(entry.entry_owner_user_id)
+        if actor.id not in allowed_user_ids:
             raise NationalTeamTournamentError(
-                "Only the assigned manager can manage this entry.", reason="entry_manager_required"
+                "Only the entry owner or assigned manager can manage this entry.", reason="entry_manager_required"
             )
         return entry
 
@@ -288,15 +291,7 @@ class NationalTeamTournamentService:
 
     def _contract_window(self, competition: NationalTeamCompetition) -> tuple[Any, Any]:
         now = utcnow()
-        end_date = (
-            competition.completed_at
-            or competition.kickoff_at
-            or competition.entry_closes_at
-            or (now + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS))
-        )
-        if end_date <= now:
-            end_date = now + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
-        return now, end_date
+        return now, now + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
 
     def _player_name(self, player: Player) -> str:
         return (
@@ -1047,12 +1042,36 @@ class NationalTeamTournamentService:
             return normalized_tactic, normalized_tactic
         return normalized_tactic, TACTIC_TO_FORMATION.get(normalized_tactic, TACTIC_TO_FORMATION["balanced"])
 
+    def _auto_build_slots(self, formation: str, squad_size: int | None) -> tuple[str, ...]:
+        starters = tuple(AUTO_BUILD_FORMATIONS[formation])
+        target_size = max(len(starters), min(int(squad_size or len(starters)), DEFAULT_MAXIMUM_SQUAD_SIZE))
+        bench_pattern = ("GK", "CB", "RB", "LB", "DM", "CM", "WINGER", "AM", "ST")
+        slots = list(starters)
+        while len(slots) < target_size:
+            slots.append(bench_pattern[(len(slots) - len(starters)) % len(bench_pattern)])
+        return tuple(slots)
+
+    def _age_grade_allows(self, item: dict[str, Any], age_grade: str | None) -> bool:
+        normalized = self._normalize_token(age_grade)
+        if normalized in {None, "", "senior"}:
+            return True
+        age = item.get("age")
+        if age is None:
+            return False
+        if normalized in {"u17", "under17", "under_17"}:
+            return int(age) <= 17
+        if normalized in {"u20", "under20", "under_20"}:
+            return int(age) <= 20
+        return True
+
     def auto_build_squad(
         self,
         *,
         competition_id: str,
         country_code: str,
         budget_coin: Decimal,
+        squad_size: int | None = None,
+        age_grade: str | None = None,
         tactic: str | None = None,
         real_only: bool = False,
         preseeded_only: bool = False,
@@ -1084,10 +1103,12 @@ class NationalTeamTournamentService:
         pool = [
             self._priced_pool_item(item)
             for item in self._national_pool(filters=filters, competition=competition, limit=1500)
+            if self._age_grade_allows(item, age_grade)
         ]
+        slots = self._auto_build_slots(formation, squad_size)
         selection = self._pick_mixed_auto_build(
             pool=pool,
-            slots=AUTO_BUILD_FORMATIONS[formation],
+            slots=slots,
             budget_coin=requested_budget,
         )
         total_cost_coin = self._normalize_amount(selection["total_cost_coin"])
@@ -1099,20 +1120,59 @@ class NationalTeamTournamentService:
             "country_code": normalized_country,
             "tactic": tactic_label,
             "formation": formation,
+            "squad_size": len(slots),
+            "age_grade": self._normalize_token(age_grade),
             "requested_budget_coin": requested_budget,
             "total_cost_coin": total_cost_coin,
             "remaining_budget_coin": remaining_budget_coin,
             "selected_count": len(selected_players),
-            "complete": not selection["unfilled_slots"]
-            and len(selected_players) == len(AUTO_BUILD_FORMATIONS[formation]),
+            "complete": not selection["unfilled_slots"] and len(selected_players) == len(slots),
             "mix_applied": bool(selection.get("mix_applied")),
             "source_mix": source_mix,
             "unfilled_slots": list(selection["unfilled_slots"]),
             "players": selected_players,
         }
 
+    def previous_roster(
+        self,
+        *,
+        user_id: str,
+        country_code: str,
+        age_grade: str | None = None,
+    ) -> dict[str, Any] | None:
+        normalized_country = self._normalize_token(country_code, upper=True)
+        normalized_age_grade = self._normalize_token(age_grade)
+        if normalized_country is None:
+            raise NationalTeamTournamentError(
+                "Country code is required for previous roster lookup.",
+                reason="country_code_required",
+            )
+        stmt = (
+            select(NationalTeamCompetitionEntry)
+            .join(NationalTeamCompetition)
+            .where(
+                NationalTeamCompetitionEntry.user_id == user_id,
+                NationalTeamCompetitionEntry.country_code == normalized_country,
+            )
+            .order_by(NationalTeamCompetitionEntry.updated_at.desc())
+        )
+        if normalized_age_grade:
+            stmt = stmt.where(NationalTeamCompetition.age_band == normalized_age_grade)
+        entry = self.session.scalar(stmt)
+        if entry is None:
+            return None
+        return {
+            "entry_id": entry.id,
+            "competition_id": entry.competition_id,
+            "country_code": entry.country_code,
+            "country_name": entry.country_name,
+            "age_grade": entry.competition.age_band if entry.competition is not None else normalized_age_grade,
+            "squad": list(entry.squad_json or []),
+            "updated_at": entry.updated_at,
+        }
+
     def _entry_rental_contracts(self, entry_id: str) -> list[RentalContract]:
-        return list(
+        contracts = list(
             self.session.scalars(
                 select(RentalContract)
                 .where(
@@ -1122,6 +1182,36 @@ class NationalTeamTournamentService:
                 .order_by(RentalContract.created_at.asc())
             ).all()
         )
+        for contract in contracts:
+            self._extend_contract_for_finalist(contract)
+        return contracts
+
+    def _extend_contract_for_finalist(self, contract: RentalContract) -> None:
+        competition = self.session.get(NationalTeamCompetition, contract.tournament_id)
+        if competition is None or competition.completed_at is None:
+            return
+        base_end_date = contract.start_date + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
+        if competition.completed_at <= base_end_date or contract.end_date >= competition.completed_at:
+            return
+        finalist = self.session.scalar(
+            select(NationalTeamCompetitionEntry).where(
+                NationalTeamCompetitionEntry.competition_id == competition.id,
+                NationalTeamCompetitionEntry.user_id == contract.user_id,
+                (
+                    (NationalTeamCompetitionEntry.qualified.is_(True))
+                    | (NationalTeamCompetitionEntry.status.in_(("finalist", "final", "winner", "qualified")))
+                ),
+            )
+        )
+        if finalist is None:
+            return
+        contract.end_date = competition.completed_at
+        contract.metadata_json = {
+            **dict(contract.metadata_json or {}),
+            "extended_until": competition.completed_at.isoformat(),
+            "extension_reason": "gtex_national_finalist",
+        }
+        self.session.flush()
 
     def _entry_rental_members(self, entry_id: str) -> list[NationalTeamRentalSquadMember]:
         return list(
@@ -1183,6 +1273,7 @@ class NationalTeamTournamentService:
             "competition_id": entry.competition_id,
             "country_code": entry.country_code,
             "country_name": entry.country_name,
+            "entry_owner_user_id": entry.entry_owner_user_id,
             "manager_user_id": entry.manager_user_id,
             "squad_size": entry.squad_size,
             "metadata_json": dict(entry.metadata_json or {}),
@@ -1357,6 +1448,8 @@ class NationalTeamTournamentService:
             status=RentalContractStatus.ACTIVE,
             metadata_json={
                 "entry_country_code": entry.country_code,
+                "base_end_date": end_date.isoformat(),
+                "rental_duration_hours": DEFAULT_RENTAL_DURATION_DAYS * 24,
                 "player_name": player_name,
                 "overall_rating": overall_rating,
                 "primary_position": primary_position,
@@ -1664,7 +1757,7 @@ class NationalTeamTournamentService:
         return self._theme_payload(theme)
 
     def _competition_manager_ids(self, competition_id: str) -> set[str]:
-        return {
+        manager_ids = {
             manager_id
             for manager_id in self.session.scalars(
                 select(NationalTeamEntry.manager_user_id).where(
@@ -1674,6 +1767,17 @@ class NationalTeamTournamentService:
             ).all()
             if manager_id
         }
+        owner_ids = {
+            owner_id
+            for owner_id in self.session.scalars(
+                select(NationalTeamEntry.entry_owner_user_id).where(
+                    NationalTeamEntry.competition_id == competition_id,
+                    NationalTeamEntry.entry_owner_user_id.is_not(None),
+                )
+            ).all()
+            if owner_id
+        }
+        return manager_ids | owner_ids
 
     def _announce_theme_live_if_needed(self, competition: NationalTeamCompetition, theme: TournamentTheme) -> None:
         metadata = dict(theme.metadata_json or {})

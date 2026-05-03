@@ -55,7 +55,7 @@ class CompetitionApi {
     return _withFallback<CompetitionListResponse>(() async {
       final Object? payload = await _sendBest('GET', const <String>[
         '/api/competitions',
-      ], auth: true);
+      ]);
       return CompetitionListResponse.fromJson(payload);
     }, () async => _fixtureStore.list(userId: userId));
   }
@@ -138,6 +138,7 @@ class CompetitionApi {
     required String userId,
     String? userName,
     String? inviteCode,
+    String? passcode,
   }) {
     return _withFallback<CompetitionSummary>(
       () async {
@@ -154,6 +155,8 @@ class CompetitionApi {
               'user_name': userName.trim(),
             if (inviteCode != null && inviteCode.trim().isNotEmpty)
               'invite_code': inviteCode.trim(),
+            if (passcode != null && passcode.trim().isNotEmpty)
+              'passcode': passcode.trim(),
           },
           auth: true,
         );
@@ -164,6 +167,7 @@ class CompetitionApi {
         userId: userId,
         userName: userName,
         inviteCode: inviteCode,
+        passcode: passcode,
       ),
     );
   }
@@ -479,12 +483,14 @@ class _CompetitionFixtureStore {
     required String userId,
     String? userName,
     String? inviteCode,
+    String? passcode,
   }) {
     final _CompetitionRecord record = _requireRecord(competitionId);
     final CompetitionJoinEligibility eligibility = _eligibilityFor(
       record,
       userId: userId,
       inviteCode: inviteCode,
+      passcode: passcode,
     );
     if (!eligibility.eligible) {
       return record.summary.copyWith(joinEligibility: eligibility);
@@ -541,12 +547,14 @@ class _CompetitionFixtureStore {
     _CompetitionRecord record, {
     String? userId,
     String? inviteCode,
+    String? passcode,
   }) {
     return record.summary.copyWith(
       joinEligibility: _eligibilityFor(
         record,
         userId: userId,
         inviteCode: inviteCode,
+        passcode: passcode,
       ),
     );
   }
@@ -555,6 +563,7 @@ class _CompetitionFixtureStore {
     _CompetitionRecord record, {
     String? userId,
     String? inviteCode,
+    String? passcode,
   }) {
     final CompetitionSummary summary = record.summary;
     if (userId != null && record.participantIds.contains(userId)) {
@@ -589,6 +598,14 @@ class _CompetitionFixtureStore {
           requiresInvite: true,
         );
       }
+    }
+    if (summary.requiresPasscode &&
+        (passcode == null || passcode.trim().isEmpty)) {
+      return const CompetitionJoinEligibility(
+        eligible: false,
+        reason: 'passcode_required',
+        requiresPasscode: true,
+      );
     }
     return const CompetitionJoinEligibility(eligible: true);
   }

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from app.common.enums.competition_format import CompetitionFormat
 from app.common.enums.competition_visibility import CompetitionVisibility
@@ -12,6 +13,12 @@ from app.config.competition_constants import CUP_ALLOWED_PARTICIPANT_SIZES, USER
 from app.schemas.competition_lifecycle import CompetitionStructureRequest, CompetitionVisibilityRuleRequest
 
 _ONE_HUNDRED = Decimal("1")
+_PAYOUT_LABEL_TO_PLACE = {"first": 1, "second": 2, "third": 3}
+
+
+class CompetitionHostType(StrEnum):
+    GTEX_HOSTED = "gtex_hosted"
+    USER_HOSTED = "user_hosted"
 
 
 class PayoutRuleRequest(CommonSchema):
@@ -24,35 +31,86 @@ class CompetitionCreateRequest(CommonSchema):
     format: CompetitionFormat
     visibility: CompetitionVisibility = CompetitionVisibility.PUBLIC
     type: str | None = Field(default=None, max_length=48)
+    host_type: CompetitionHostType | None = Field(
+        default=None,
+        validation_alias=AliasChoices("host_type", "hostType"),
+    )
     entry_fee: Decimal = Field(default=Decimal("0.00"), ge=0)
+    buy_in_amount: Decimal | None = Field(
+        default=None,
+        ge=0,
+        validation_alias=AliasChoices("buy_in_amount", "buyInAmount"),
+    )
     currency: str = Field(default="credit", min_length=1, max_length=12)
     capacity: int = Field(default=20, ge=2, le=USER_COMPETITION_MAX_PARTICIPANTS)
-    max_players: int | None = Field(default=None, ge=2, le=USER_COMPETITION_MAX_PARTICIPANTS)
-    creator_id: str = Field(min_length=1, max_length=36)
+    max_players: int | None = Field(
+        default=None,
+        ge=2,
+        le=USER_COMPETITION_MAX_PARTICIPANTS,
+        validation_alias=AliasChoices("max_players", "maxPlayers"),
+    )
+    creator_id: str | None = Field(default=None, min_length=1, max_length=36)
     creator_name: str | None = Field(default=None, min_length=1, max_length=120)
     competition_type: str | None = Field(default=None, max_length=32)
     source_type: str | None = Field(default=None, max_length=48)
     source_id: str | None = Field(default=None, max_length=36)
     payout_structure: tuple[PayoutRuleRequest, ...] | None = None
+    prize_distribution: dict[str, Decimal] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("prize_distribution", "prizeDistribution"),
+    )
     platform_fee_pct: Decimal | None = Field(default=None, ge=0, le=_ONE_HUNDRED)
     host_fee_pct: Decimal | None = Field(default=None, ge=0, le=_ONE_HUNDRED)
     rules: str | None = Field(default=None, max_length=280)
     rules_summary: str | None = Field(default=None, max_length=280)
+    special_rules: str | None = Field(
+        default=None,
+        max_length=500,
+        validation_alias=AliasChoices("special_rules", "specialRules"),
+    )
     beginner_friendly: bool | None = None
-    scheduled_start_at: datetime | None = None
+    scheduled_start_at: datetime | None = Field(
+        default=None,
+        validation_alias=AliasChoices("scheduled_start_at", "startDateTime", "start_date_time"),
+    )
+    passcode: str | None = Field(default=None, min_length=3, max_length=64)
     seed_method: str | None = Field(default=None, max_length=24)
     structure: CompetitionStructureRequest | None = None
     visibility_rules: tuple[CompetitionVisibilityRuleRequest, ...] | None = None
     created_at: datetime | None = None
 
+    @field_validator("host_type", mode="before")
+    @classmethod
+    def normalize_host_type(cls, value: object) -> object:
+        if value is None or isinstance(value, CompetitionHostType):
+            return value
+        normalized = str(value).strip().lower()
+        if normalized in {"gtex", "gtex_hosted", "gtex-hosted", "official", "platform"}:
+            return CompetitionHostType.GTEX_HOSTED
+        if normalized in {"user", "user_hosted", "user-hosted", "creator", "creator_hosted"}:
+            return CompetitionHostType.USER_HOSTED
+        return value
+
     @model_validator(mode="after")
     def validate_competition(self) -> "CompetitionCreateRequest":
         if self.type and self.source_type is None:
             self.source_type = self.type
+        if self.host_type is None and self.source_type is not None:
+            self.host_type = _host_type_from_source(self.source_type)
+        if self.host_type is not None:
+            self.source_type = self.host_type.value
+            if self.type is None:
+                self.type = self.host_type.value
+        if self.buy_in_amount is not None:
+            self.entry_fee = self.buy_in_amount
         if self.max_players is not None:
             self.capacity = self.max_players
+        if self.prize_distribution and not self.payout_structure:
+            self.payout_structure = _payout_rules_from_distribution(self.prize_distribution)
         if self.rules and self.rules_summary is None:
             self.rules_summary = self.rules
+        if self.special_rules and self.rules_summary is None:
+            self.rules_summary = self.special_rules[:280]
         _validate_fee_shares(
             platform_fee_pct=self.platform_fee_pct,
             host_fee_pct=self.host_fee_pct,
@@ -95,7 +153,9 @@ class CompetitionPublishRequest(CommonSchema):
 class CompetitionJoinRequest(CommonSchema):
     user_id: str = Field(min_length=1, max_length=36)
     user_name: str | None = Field(default=None, min_length=1, max_length=120)
+    club_name: str | None = Field(default=None, min_length=2, max_length=120)
     invite_code: str | None = Field(default=None, min_length=4, max_length=32)
+    passcode: str | None = Field(default=None, min_length=3, max_length=64)
 
 
 class CompetitionJoinActionRequest(CompetitionJoinRequest):
@@ -141,6 +201,45 @@ def _validate_fee_shares(
         scaled = (rule.percent * Decimal("100")).normalize()
         if scaled != scaled.to_integral_value():
             raise ValueError("Payout percentages must use whole percentage points.")
+
+
+def _host_type_from_source(value: str) -> CompetitionHostType | None:
+    normalized = value.strip().lower()
+    if normalized in {"gtex", "platform", "gtex_platform", "gtex_competition", "gtex_hosted"}:
+        return CompetitionHostType.GTEX_HOSTED
+    if normalized in {"user", "user_hosted", "creator", "creator_hosted"}:
+        return CompetitionHostType.USER_HOSTED
+    return None
+
+
+def _payout_rules_from_distribution(distribution: dict[str, Decimal]) -> tuple[PayoutRuleRequest, ...]:
+    raw_rules: list[tuple[int, Decimal]] = []
+    for key, value in distribution.items():
+        normalized_key = str(key).strip().lower()
+        place = _PAYOUT_LABEL_TO_PLACE.get(normalized_key)
+        if place is None and normalized_key.isdigit():
+            place = int(normalized_key)
+        if place is None:
+            continue
+        raw_rules.append((place, Decimal(value)))
+    if not raw_rules:
+        raise ValueError("Prize distribution must include first, second, third, or numeric places.")
+    total = sum(value for _, value in raw_rules)
+    if total <= 0:
+        raise ValueError("Prize distribution must allocate a positive share.")
+    if total > _ONE_HUNDRED:
+        raw_rules = [(place, value / Decimal("100")) for place, value in raw_rules]
+    normalized_total = sum(value for _, value in raw_rules)
+    if normalized_total != _ONE_HUNDRED:
+        raw_rules = [(place, (value / normalized_total).quantize(Decimal("0.01"))) for place, value in raw_rules]
+        correction = _ONE_HUNDRED - sum(value for _, value in raw_rules)
+        if raw_rules:
+            first_place, first_value = raw_rules[0]
+            raw_rules[0] = (first_place, first_value + correction)
+    return tuple(
+        PayoutRuleRequest(place=place, percent=percent)
+        for place, percent in sorted(raw_rules, key=lambda item: item[0])
+    )
 
 
 def _validate_format_capacity(format_value: CompetitionFormat, capacity: int) -> None:

@@ -118,14 +118,8 @@ class QuickGamePreferences(CommonSchema):
 class QuickGameRequest(CommonSchema):
     mode: Literal["quick_game"] = "quick_game"
     user_id: str = Field(min_length=1)
-    include_bots: bool = False
+    include_bots: bool = True
     preferences: QuickGamePreferences = Field(default_factory=QuickGamePreferences)
-
-    @model_validator(mode="after")
-    def validate_human_only(self) -> "QuickGameRequest":
-        if self.include_bots:
-            raise ValueError("Fast game is human-only. AI and bot opponents are not permitted.")
-        return self
 
 
 class MatchContextView(CommonSchema):
@@ -153,6 +147,10 @@ class QuickGameResponse(CommonSchema):
     opponent: SimulationGameProfileView
     match_context: MatchContextView
     simulation_bridge: MatchSimulationBridgeView
+    free_matches_remaining: int = Field(default=10, ge=0, le=10)
+    charge_on_loss: bool = True
+    entry_currency: str = "credit"
+    rules_copy: str = "Play free until you lose or reach 10 matches."
 
 
 class QuickTournamentPreferences(CommonSchema):

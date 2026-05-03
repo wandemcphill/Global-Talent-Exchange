@@ -30,6 +30,7 @@ class JoinEligibilityView(CommonSchema):
     eligible: bool
     reason: str | None = None
     requires_invite: bool = False
+    requires_passcode: bool = False
 
 
 class DynamicPrizePoolView(CommonSchema):
@@ -50,6 +51,7 @@ class CompetitionSummaryView(CommonSchema):
     status: CompetitionStatus
     match_type: str
     type: str
+    host_type: str
     creator_id: str
     creator_name: str | None = None
     participant_count: int = Field(ge=0)
@@ -66,6 +68,9 @@ class CompetitionSummaryView(CommonSchema):
     join_eligibility: JoinEligibilityView
     dynamic_prize_pool: DynamicPrizePoolView | None = None
     beginner_friendly: bool | None = None
+    requires_passcode: bool = False
+    scheduled_start_at: datetime | None = None
+    special_rules: str | None = None
     created_at: datetime
     updated_at: datetime
 

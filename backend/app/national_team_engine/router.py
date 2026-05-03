@@ -53,7 +53,9 @@ def _tournament_service(session: Session = Depends(get_session)) -> NationalTeam
     return NationalTeamTournamentService(session)
 
 
-def _lifecycle_service(request: Request, session: Session = Depends(get_session)) -> NationalCompetitionLifecycleService:
+def _lifecycle_service(
+    request: Request, session: Session = Depends(get_session)
+) -> NationalCompetitionLifecycleService:
     return NationalCompetitionLifecycleService(
         session,
         event_publisher=getattr(request.app.state, "event_publisher", None),
@@ -74,7 +76,7 @@ def _raise_engine_http(exc: NationalTeamEngineError) -> None:
     detail = str(exc)
     if "not found" in detail.lower():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from exc
-    if "locked" in detail.lower():
+    if "locked" in detail.lower() or "already has a manager" in detail.lower():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
 
@@ -123,7 +125,10 @@ def _raise_lifecycle_http(exc: NationalCompetitionLifecycleError) -> None:
 
 @router.get("/competitions", response_model=list[NationalTeamCompetitionResponse])
 def list_competitions(service: NationalTeamEngineService = Depends(_engine_service)):
-    return [NationalTeamCompetitionResponse.model_validate(item, from_attributes=True) for item in service.list_competitions()]
+    return [
+        NationalTeamCompetitionResponse.model_validate(item, from_attributes=True)
+        for item in service.list_competitions()
+    ]
 
 
 @router.get("/competitions/{competition_id}", response_model=NationalTeamCompetitionResponse)
@@ -139,7 +144,9 @@ def list_country_rankings(
     limit: int = Query(default=50, ge=1, le=200),
     service: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
 ):
-    return [NationalTeamCountryRankingResponse.model_validate(item) for item in service.list_country_rankings(limit=limit)]
+    return [
+        NationalTeamCountryRankingResponse.model_validate(item) for item in service.list_country_rankings(limit=limit)
+    ]
 
 
 @router.get("/competitions/{competition_id}/lifecycle", response_model=NationalTeamCompetitionLifecycleResponse)
@@ -175,7 +182,11 @@ def submit_competition_entry(
 
 
 @router.get("/entries/{entry_id}", response_model=NationalTeamEntryDetailResponse)
-def get_entry(entry_id: str, session: Session = Depends(get_session), service: NationalTeamTournamentService = Depends(_tournament_service)):
+def get_entry(
+    entry_id: str,
+    session: Session = Depends(get_session),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
     try:
         payload = service.build_entry_detail_payload(entry_id)
         session.commit()
@@ -189,9 +200,49 @@ def get_entry(entry_id: str, session: Session = Depends(get_session), service: N
 def get_my_history(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     history = NationalTeamEngineService(session).user_history(user=current_user)
     return NationalTeamUserHistoryResponse(
-        managed_entries=[NationalTeamEntryResponse.model_validate(item, from_attributes=True) for item in history["managed_entries"]],
-        squad_memberships=[NationalTeamSquadMemberResponse.model_validate(item, from_attributes=True) for item in history["squad_memberships"]],
+        managed_entries=[
+            NationalTeamEntryResponse.model_validate(item, from_attributes=True) for item in history["managed_entries"]
+        ],
+        squad_memberships=[
+            NationalTeamSquadMemberResponse.model_validate(item, from_attributes=True)
+            for item in history["squad_memberships"]
+        ],
     )
+
+
+@router.get("/me/previous-roster")
+def get_previous_roster(
+    country_code: str = Query(min_length=2, max_length=8),
+    age_grade: str | None = Query(default=None, min_length=2, max_length=16),
+    current_user: User = Depends(get_current_user),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+) -> dict[str, object] | None:
+    try:
+        return service.previous_roster(
+            user_id=current_user.id,
+            country_code=country_code,
+            age_grade=age_grade,
+        )
+    except NationalTeamTournamentError as exc:
+        _raise_tournament_http(exc)
+
+
+@router.post("/competitions/{competition_id}/rental-entry", response_model=NationalTeamEntryResponse)
+def create_my_rental_entry(
+    competition_id: str,
+    payload: NationalTeamEntryUpsertRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    service = NationalTeamEngineService(session)
+    try:
+        entry = service.upsert_user_entry(competition_id=competition_id, payload=payload, actor=current_user)
+        session.commit()
+    except NationalTeamEngineError as exc:
+        session.rollback()
+        _raise_engine_http(exc)
+    session.refresh(entry)
+    return NationalTeamEntryResponse.model_validate(entry, from_attributes=True)
 
 
 @router.get("/competitions/{competition_id}/rental-pool", response_model=NationalTeamRentalPlayerCollectionResponse)
@@ -233,6 +284,8 @@ def auto_build_squad(
             competition_id=competition_id,
             country_code=payload.country_code,
             budget_coin=payload.budget_coin,
+            squad_size=payload.squad_size,
+            age_grade=payload.age_grade,
             tactic=payload.tactic,
             real_only=payload.real_only,
             preseeded_only=payload.preseeded_only,
@@ -270,7 +323,9 @@ def rent_player(
     service: NationalTeamTournamentService = Depends(_tournament_service),
 ):
     try:
-        body = service.rent_player(entry_id=entry_id, actor=current_user, player_id=payload.player_id, shirt_number=payload.shirt_number)
+        body = service.rent_player(
+            entry_id=entry_id, actor=current_user, player_id=payload.player_id, shirt_number=payload.shirt_number
+        )
         session.commit()
     except NationalTeamTournamentError as exc:
         session.rollback()
@@ -282,7 +337,11 @@ def rent_player(
 
 
 @router.get("/entries/{entry_id}/rental-status", response_model=NationalTeamRentalStatusResponse)
-def get_rental_status(entry_id: str, session: Session = Depends(get_session), service: NationalTeamTournamentService = Depends(_tournament_service)):
+def get_rental_status(
+    entry_id: str,
+    session: Session = Depends(get_session),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
     try:
         payload = service.build_rental_status_payload(entry_id=entry_id)
         session.commit()
@@ -359,7 +418,11 @@ def send_tournament_gift(
 
 
 @admin_router.post("/competitions", response_model=NationalTeamCompetitionResponse)
-def create_competition(payload: NationalTeamCompetitionCreateRequest, session: Session = Depends(get_session), current_admin: User = Depends(get_current_admin)):
+def create_competition(
+    payload: NationalTeamCompetitionCreateRequest,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+):
     service = NationalTeamEngineService(session)
     try:
         competition = service.create_competition(payload=payload, actor=current_admin)
@@ -386,7 +449,9 @@ def seed_default_competitions(
     return [NationalTeamCompetitionResponse.model_validate(item) for item in payload]
 
 
-@admin_router.post("/competitions/{competition_id}/entries/lock", response_model=NationalTeamCompetitionLifecycleResponse)
+@admin_router.post(
+    "/competitions/{competition_id}/entries/lock", response_model=NationalTeamCompetitionLifecycleResponse
+)
 def lock_competition_entries(
     competition_id: str,
     session: Session = Depends(get_session),
@@ -402,7 +467,9 @@ def lock_competition_entries(
     return _lifecycle_detail(payload)
 
 
-@admin_router.post("/competitions/{competition_id}/lifecycle/advance", response_model=NationalTeamCompetitionLifecycleResponse)
+@admin_router.post(
+    "/competitions/{competition_id}/lifecycle/advance", response_model=NationalTeamCompetitionLifecycleResponse
+)
 def advance_competition_lifecycle(
     competition_id: str,
     session: Session = Depends(get_session),
@@ -419,7 +486,12 @@ def advance_competition_lifecycle(
 
 
 @admin_router.post("/competitions/{competition_id}/entries", response_model=NationalTeamEntryResponse)
-def upsert_entry(competition_id: str, payload: NationalTeamEntryUpsertRequest, session: Session = Depends(get_session), current_admin: User = Depends(get_current_admin)):
+def upsert_entry(
+    competition_id: str,
+    payload: NationalTeamEntryUpsertRequest,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+):
     service = NationalTeamEngineService(session)
     try:
         entry = service.upsert_entry(competition_id=competition_id, payload=payload, actor=current_admin)
@@ -432,7 +504,12 @@ def upsert_entry(competition_id: str, payload: NationalTeamEntryUpsertRequest, s
 
 
 @admin_router.post("/entries/{entry_id}/squad", response_model=NationalTeamEntryDetailResponse)
-def upsert_squad(entry_id: str, payload: NationalTeamSquadUpsertRequest, session: Session = Depends(get_session), current_admin: User = Depends(get_current_admin)):
+def upsert_squad(
+    entry_id: str,
+    payload: NationalTeamSquadUpsertRequest,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+):
     service = NationalTeamEngineService(session)
     try:
         service.upsert_squad(entry_id=entry_id, members=payload.members, actor=current_admin)
@@ -462,7 +539,11 @@ def upsert_theme(
 
 
 @admin_router.get("/competitions/{competition_id}/ads", response_model=list[StadiumAdResponse])
-def list_competition_ads(competition_id: str, service: NationalTeamTournamentService = Depends(_tournament_service), _admin: User = Depends(get_current_admin)):
+def list_competition_ads(
+    competition_id: str,
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+    _admin: User = Depends(get_current_admin),
+):
     try:
         payload = service.list_ads(competition_id=competition_id)
     except NationalTeamTournamentError as exc:
@@ -470,7 +551,9 @@ def list_competition_ads(competition_id: str, service: NationalTeamTournamentSer
     return [StadiumAdResponse.model_validate(item) for item in payload]
 
 
-@admin_router.post("/competitions/{competition_id}/ads", response_model=StadiumAdResponse, status_code=status.HTTP_201_CREATED)
+@admin_router.post(
+    "/competitions/{competition_id}/ads", response_model=StadiumAdResponse, status_code=status.HTTP_201_CREATED
+)
 def create_competition_ad(
     competition_id: str,
     payload: StadiumAdUpsertRequest,

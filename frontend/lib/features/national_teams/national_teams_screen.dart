@@ -11,6 +11,7 @@ import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
 import '../../widgets/gte_state_panel.dart';
+import '../../models/national_team_models.dart';
 import '../../models/regen_universe_models.dart';
 import '../shared/data/feature_telemetry.dart';
 import '../shared/data/gte_feature_support.dart';
@@ -299,6 +300,14 @@ class _NationalTeamCompetitionDetailScreenState
               detail.presentation['story_events'],
               label: 'story events',
             );
+            final List<JsonMap> rentalPool = jsonMapList(
+              detail.rentalPool['items'],
+              label: 'national rental pool',
+            );
+            final int rentalPoolTotal = intValue(
+              detail.rentalPool['total'],
+              fallback: rentalPool.length,
+            );
             final List<JsonMap> activeAds = jsonMapList(
               detail.presentation['active_ads'],
               label: 'active ads',
@@ -306,13 +315,15 @@ class _NationalTeamCompetitionDetailScreenState
             final JsonMap? activeTheme = jsonMapOrNull(
               detail.presentation['active_theme'],
             );
-            final List<dynamic> myEntries =
+            final List<NationalTeamEntry> myEntries =
                 detail.history?.managedEntries
                     .where(
                       (entry) => entry.competitionId == widget.competitionId,
                     )
                     .toList(growable: false) ??
-                const <dynamic>[];
+                const <NationalTeamEntry>[];
+            final NationalTeamEntry? activeEntry =
+                myEntries.isEmpty ? null : myEntries.first;
             return Column(
               children: <Widget>[
                 GtexHeroPanel(
@@ -351,11 +362,62 @@ class _NationalTeamCompetitionDetailScreenState
                     ),
                   ],
                   actions: <Widget>[
+                    OutlinedButton(
+                      onPressed: () => _createRentalEntry(context),
+                      child: const Text('Create entry'),
+                    ),
                     FilledButton(
                       onPressed: () => _runAutoBuild(context),
                       child: const Text('Build draft squad'),
                     ),
                   ],
+                ),
+                const SizedBox(height: spacingMD),
+                _SectionCard(
+                  title: 'Rental pool',
+                  subtitle:
+                      '$rentalPoolTotal national-pool players are available for this competition before you submit a squad.',
+                  child:
+                      rentalPool.isEmpty
+                          ? const _EmptyState(
+                            message:
+                                'No rental players are available for this competition yet.',
+                          )
+                          : Column(
+                            children: rentalPool
+                                .map(
+                                  (JsonMap player) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: stringValue(
+                                        player['player_name'],
+                                        fallback: 'Player',
+                                      ),
+                                      subtitle:
+                                          '${stringValue(player['country_code'], fallback: 'Country')} | ${stringValue(player['primary_position'], fallback: 'Position')} | OVR ${intValue(player['overall_rating'])} | Loan ${numberValue(player['loan_price_coin']).toStringAsFixed(0)} GTEX Coin',
+                                      leadingIcon:
+                                          Icons.person_pin_circle_rounded,
+                                      tone: GtexSurfaceTone.warning,
+                                      trailing:
+                                          activeEntry == null
+                                              ? null
+                                              : FilledButton(
+                                                onPressed:
+                                                    () => _rentPoolPlayer(
+                                                      entryId: activeEntry.id,
+                                                      playerId: stringValue(
+                                                        player['player_id'],
+                                                      ),
+                                                    ),
+                                                child: const Text('Rent'),
+                                              ),
+                                    ),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
                 ),
                 const SizedBox(height: spacingMD),
                 if (myEntries.isNotEmpty) ...<Widget>[
@@ -366,14 +428,20 @@ class _NationalTeamCompetitionDetailScreenState
                     child: Column(
                       children: myEntries
                           .map(
-                            (dynamic entry) => Padding(
+                            (NationalTeamEntry entry) => Padding(
                               padding: const EdgeInsets.only(bottom: spacingSM),
                               child: GtexListTile(
-                                title: entry.countryName as String,
+                                title: entry.countryName,
                                 subtitle:
                                     'Squad ${entry.squadSize} | Updated ${entry.updatedAt}',
                                 leadingIcon: Icons.groups_rounded,
                                 tone: GtexSurfaceTone.success,
+                                trailing: FilledButton(
+                                  onPressed:
+                                      () =>
+                                          _claimFreePlayers(entryId: entry.id),
+                                  child: const Text('Claim free core'),
+                                ),
                               ),
                             ),
                           )
@@ -541,12 +609,20 @@ class _NationalTeamCompetitionDetailScreenState
     final TextEditingController budgetController = TextEditingController(
       text: '2500000',
     );
+    final TextEditingController squadSizeController = TextEditingController(
+      text: '18',
+    );
+    final TextEditingController ageGradeController = TextEditingController(
+      text: 'Senior',
+    );
     final TextEditingController tacticController = TextEditingController(
       text: 'balanced',
     );
     final Listenable formListenable = Listenable.merge(<Listenable>[
       countryController,
       budgetController,
+      squadSizeController,
+      ageGradeController,
       tacticController,
     ]);
     try {
@@ -559,10 +635,15 @@ class _NationalTeamCompetitionDetailScreenState
               final double? budget = double.tryParse(
                 budgetController.text.trim(),
               );
+              final int? squadSize = int.tryParse(
+                squadSizeController.text.trim(),
+              );
               final bool canRun =
                   countryController.text.trim().isNotEmpty &&
                   budget != null &&
-                  budget > 0;
+                  budget > 0 &&
+                  squadSize != null &&
+                  squadSize >= 11;
               return GtexActionDialog(
                 eyebrow: 'NATIONAL TEAMS',
                 title: 'Build draft squad',
@@ -598,6 +679,23 @@ class _NationalTeamCompetitionDetailScreenState
                         helperText: 'Leave blank to fall back to balanced.',
                       ),
                     ),
+                    const SizedBox(height: spacingSM),
+                    TextField(
+                      controller: squadSizeController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Squad size',
+                        helperText: 'Pick 11-30 players for the draft.',
+                      ),
+                    ),
+                    const SizedBox(height: spacingSM),
+                    TextField(
+                      controller: ageGradeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Age grade',
+                        helperText: 'U17, U20, or Senior.',
+                      ),
+                    ),
                   ],
                 ),
                 actions: <Widget>[
@@ -621,6 +719,11 @@ class _NationalTeamCompetitionDetailScreenState
       }
       final String countryCode = countryController.text.trim().toUpperCase();
       final double? budget = double.tryParse(budgetController.text.trim());
+      final int? squadSize = int.tryParse(squadSizeController.text.trim());
+      final String ageGrade =
+          ageGradeController.text.trim().isEmpty
+              ? 'Senior'
+              : ageGradeController.text.trim();
       final String resolvedTactic =
           tacticController.text.trim().isEmpty
               ? 'balanced'
@@ -645,12 +748,63 @@ class _NationalTeamCompetitionDetailScreenState
         );
         return;
       }
+      if (squadSize == null || squadSize < 11 || squadSize > 30) {
+        if (!mounted) {
+          return;
+        }
+        AppFeedback.showError(
+          this.context,
+          'Enter a squad size between 11 and 30.',
+        );
+        return;
+      }
+      final NationalTeamsApi api = ref.read(nationalTeamsApiProvider);
+      try {
+        final JsonMap? previousRoster = await api.fetchPreviousRoster(
+          countryCode: countryCode,
+          ageGrade: ageGrade,
+        );
+        if (previousRoster != null && mounted) {
+          final bool? reuse = await showDialog<bool>(
+            context: this.context,
+            builder:
+                (BuildContext context) => AlertDialog(
+                  title: const Text('Use your previous roster?'),
+                  content: Text(
+                    'A saved $ageGrade roster for $countryCode is available. You can reuse it or build a fresh draft.',
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Build fresh'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Use previous'),
+                    ),
+                  ],
+                ),
+          );
+          if (reuse == true) {
+            if (!mounted) {
+              return;
+            }
+            AppFeedback.showSuccess(
+              this.context,
+              'Previous roster selected. You can edit it before submission.',
+            );
+            return;
+          }
+        }
+      } catch (_) {}
       final JsonMap result = await ref
           .read(nationalTeamsApiProvider)
           .buildAutoSquad(
             competitionId: widget.competitionId,
             countryCode: countryCode,
             budgetCoin: budget,
+            squadSize: squadSize,
+            ageGrade: ageGrade,
             tactic: resolvedTactic,
           );
       trackFeatureEvent(
@@ -659,6 +813,8 @@ class _NationalTeamCompetitionDetailScreenState
         payload: <String, Object?>{
           'competition_id': widget.competitionId,
           'country_code': countryCode,
+          'age_grade': ageGrade,
+          'squad_size': squadSize,
         },
       );
       if (!mounted) {
@@ -697,6 +853,11 @@ class _NationalTeamCompetitionDetailScreenState
                       icon: Icons.tune_rounded,
                       tone: GtexSurfaceTone.info,
                     ),
+                    GtexPill(
+                      label: '$ageGrade roster',
+                      icon: Icons.groups_rounded,
+                      tone: GtexSurfaceTone.success,
+                    ),
                   ],
                 ),
                 const SizedBox(height: spacingMD),
@@ -713,6 +874,12 @@ class _NationalTeamCompetitionDetailScreenState
                       label: 'Selected',
                       value: '${intValue(result['selected_count'])}',
                       tone: GtexSurfaceTone.info,
+                    ),
+                    _MetricChip(
+                      label: 'Squad',
+                      value:
+                          '${intValue(result['squad_size'], fallback: squadSize)}',
+                      tone: GtexSurfaceTone.success,
                     ),
                     _MetricChip(
                       label: 'Budget',
@@ -758,9 +925,176 @@ class _NationalTeamCompetitionDetailScreenState
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('Close'),
               ),
+              FilledButton(
+                onPressed:
+                    players.isEmpty
+                        ? null
+                        : () async {
+                          Navigator.of(context).pop();
+                          await ref
+                              .read(nationalTeamsApiProvider)
+                              .submitBuiltSquad(
+                                competitionId: widget.competitionId,
+                                countryCode: countryCode,
+                                countryName: countryCode,
+                                players: players,
+                              );
+                          ref.invalidate(nationalTeamsHubProvider);
+                          ref.invalidate(
+                            nationalTeamCompetitionDetailProvider(
+                              widget.competitionId,
+                            ),
+                          );
+                          if (!mounted) {
+                            return;
+                          }
+                          AppFeedback.showSuccess(
+                            this.context,
+                            '$countryCode squad submitted.',
+                          );
+                        },
+                child: const Text('Submit squad'),
+              ),
             ],
           );
         },
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showError(this.context, error);
+    }
+  }
+
+  Future<void> _claimFreePlayers({required String entryId}) async {
+    try {
+      await ref
+          .read(nationalTeamsApiProvider)
+          .claimFreePlayers(entryId: entryId);
+      ref.invalidate(nationalTeamsHubProvider);
+      ref.invalidate(
+        nationalTeamCompetitionDetailProvider(widget.competitionId),
+      );
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showSuccess(context, 'Free national squad core claimed.');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showError(context, error);
+    }
+  }
+
+  Future<void> _rentPoolPlayer({
+    required String entryId,
+    required String playerId,
+  }) async {
+    try {
+      await ref
+          .read(nationalTeamsApiProvider)
+          .rentPlayer(entryId: entryId, playerId: playerId);
+      ref.invalidate(nationalTeamsHubProvider);
+      ref.invalidate(
+        nationalTeamCompetitionDetailProvider(widget.competitionId),
+      );
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showSuccess(context, 'Player rented into your squad.');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showError(context, error);
+    }
+  }
+
+  Future<void> _createRentalEntry(BuildContext context) async {
+    final TextEditingController countryController = TextEditingController(
+      text: 'NG',
+    );
+    final TextEditingController nameController = TextEditingController(
+      text: 'Nigeria',
+    );
+    try {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return GtexActionDialog(
+            eyebrow: 'NATIONAL TEAMS',
+            title: 'Create national entry',
+            description:
+                'Open a country squad room so you can claim free players, rent national-pool players, and submit a squad.',
+            leadingIcon: Icons.flag_circle_rounded,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TextField(
+                  controller: countryController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Country code',
+                    helperText: 'Use the federation country code.',
+                  ),
+                ),
+                const SizedBox(height: spacingSM),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Country name',
+                    helperText: 'Shown on your national squad entry.',
+                  ),
+                ),
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) {
+        return;
+      }
+      final String countryCode = countryController.text.trim().toUpperCase();
+      final String countryName = nameController.text.trim();
+      if (countryCode.length < 2 || countryName.length < 2) {
+        if (!mounted) {
+          return;
+        }
+        AppFeedback.showError(
+          this.context,
+          'Enter a valid country code and country name.',
+        );
+        return;
+      }
+      final NationalTeamEntry entry = await ref
+          .read(nationalTeamsApiProvider)
+          .createRentalEntry(
+            competitionId: widget.competitionId,
+            countryCode: countryCode,
+            countryName: countryName,
+          );
+      ref.invalidate(nationalTeamsHubProvider);
+      ref.invalidate(
+        nationalTeamCompetitionDetailProvider(widget.competitionId),
+      );
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showSuccess(
+        this.context,
+        '${entry.countryName} entry is ready. You can now build and submit a squad.',
       );
     } catch (error) {
       if (!mounted) {

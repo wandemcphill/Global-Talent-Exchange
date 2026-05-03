@@ -149,6 +149,58 @@ void main() {
       '/api/v1/admin/hosted-competitions/seed',
     );
   });
+
+  test('join and admin create send launch competition fields', () async {
+    final _RecordingTransport transport = _RecordingTransport(
+      <GteTransportResponse>[
+        GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{'competition': _competitionJson('comp-1')},
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{
+            'competition': _competitionJson(
+              'comp-2',
+              metadata: const <String, Object?>{
+                'gtex_hosted': true,
+                'host_type': 'gtex_hosted',
+              },
+            ),
+          },
+        ),
+      ],
+    );
+    final HostedCompetitionApi api = HostedCompetitionApi.standard(
+      baseUrl: 'https://example.test',
+      accessToken: 'admin-token',
+      mode: GteBackendMode.live,
+      transport: transport,
+    );
+
+    await api.joinCompetition('comp-1', passcode: 'cup-123');
+    await api.adminCreateCompetition(
+      templateKey: 'user-hosted-cup-8',
+      title: 'GTEX Weekend Cup',
+      gtexHosted: true,
+      entryFeeFancoin: 0,
+      joinPasscode: 'vip',
+    );
+
+    expect(
+      transport.requests.first.uri.path,
+      '/api/v1/hosted-competitions/comp-1/join',
+    );
+    expect(transport.requests.first.body, <String, Object?>{
+      'passcode': 'cup-123',
+    });
+    expect(
+      transport.requests.last.uri.path,
+      '/api/v1/admin/hosted-competitions',
+    );
+    expect(transport.requests.last.body, containsPair('gtex_hosted', true));
+    expect(transport.requests.last.body, containsPair('join_passcode', 'vip'));
+  });
 }
 
 class _RecordingTransport implements GteTransport {
@@ -189,7 +241,10 @@ Map<String, Object?> _templateJson(String id) => <String, Object?>{
   'active': true,
 };
 
-Map<String, Object?> _competitionJson(String id) => <String, Object?>{
+Map<String, Object?> _competitionJson(
+  String id, {
+  Map<String, Object?> metadata = const <String, Object?>{},
+}) => <String, Object?>{
   'id': id,
   'template_id': 'tpl-1',
   'host_user_id': 'user-1',
@@ -202,7 +257,7 @@ Map<String, Object?> _competitionJson(String id) => <String, Object?>{
   'entry_fee_fancoin': 5,
   'reward_pool_fancoin': 80,
   'platform_fee_amount': 6,
-  'metadata_json': const <String, Object?>{},
+  'metadata_json': metadata,
   'created_at': '2026-03-10T12:00:00Z',
   'updated_at': '2026-03-10T12:00:00Z',
 };

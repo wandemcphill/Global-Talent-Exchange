@@ -19,10 +19,12 @@ class CompetitionJoinScreen extends StatefulWidget {
 class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
   bool _agreed = false;
   final TextEditingController _inviteCodeController = TextEditingController();
+  final TextEditingController _passcodeController = TextEditingController();
 
   @override
   void dispose() {
     _inviteCodeController.dispose();
+    _passcodeController.dispose();
     super.dispose();
   }
 
@@ -60,8 +62,8 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                         competition.isGtexHosted
                             ? 'GTEX is funding this competition, so entry is free. Review the rules before you lock your place.'
                             : competition.isFastMatch
-                            ? 'Fast Match is a paid lane. Review the wallet charge and rules before you lock your slot.'
-                            : 'Review entry fee, rules, and contest status before you confirm your place in this hosted competition.',
+                            ? 'Quick Match is free until you lose or reach 10 matches. AI fallback keeps the lane open.'
+                            : 'Review Fan Coin entry fee, rules, and start time before you confirm your place.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       if (competition
@@ -73,6 +75,20 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                           decoration: const InputDecoration(
                             labelText: 'Invite code',
                             hintText: 'Enter creator invite code',
+                          ),
+                        ),
+                      ],
+                      if (competition.requiresPasscode ||
+                          competition
+                              .joinEligibility
+                              .requiresPasscode) ...<Widget>[
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _passcodeController,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Competition passcode',
+                            hintText: 'Enter passcode to join',
                           ),
                         ),
                       ],
@@ -169,8 +185,8 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                       competition.isGtexHosted
                           ? 'I understand this GTEX-hosted competition is free to join and the payout follows the published rules and verified results.'
                           : competition.isFastMatch
-                          ? 'I understand this fast-match entry is paid from my wallet and the payout follows the published rules and verified results.'
-                          : 'I understand that entry fees are held in secure escrow and the transparent payout follows the published rules and verified results.',
+                          ? 'I understand Quick Match is free until my first loss or 10 matches, then Fan Coin rules apply.'
+                          : 'I understand Fan Coin entry fees are held in secure escrow and the transparent payout follows the published rules and verified results.',
                     ),
                   ),
                 ),
@@ -209,6 +225,10 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
               _inviteCodeController.text.trim().isEmpty
                   ? null
                   : _inviteCodeController.text.trim(),
+          passcode:
+              _passcodeController.text.trim().isEmpty
+                  ? null
+                  : _passcodeController.text.trim(),
         );
     if (!mounted || joined == null) {
       return;

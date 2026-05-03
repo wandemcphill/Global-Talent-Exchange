@@ -135,7 +135,18 @@ class HostedCompetitionCreateRequest(BaseModel):
     lock_at: datetime | None = None
     max_participants: int | None = None
     entry_fee_fancoin: Decimal | None = None
+    reward_pool_fancoin: Decimal | None = None
+    join_passcode: str | None = Field(default=None, max_length=64)
     metadata_json: dict[str, object] = Field(default_factory=dict)
+
+
+class AdminHostedCompetitionCreateRequest(HostedCompetitionCreateRequest):
+    gtex_hosted: bool = True
+    host_user_id: str | None = None
+
+
+class HostedCompetitionJoinRequest(BaseModel):
+    passcode: str | None = Field(default=None, max_length=64)
 
 
 class HostedCompetitionPlacementRequest(BaseModel):

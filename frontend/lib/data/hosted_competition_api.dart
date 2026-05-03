@@ -3,6 +3,8 @@ import 'dart:math';
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
+import '../shared/auth/auth_identity_store.dart';
+import '../shared/models/auth_session.dart';
 import '../models/hosted_competition_models.dart';
 
 class HostedCompetitionApi {
@@ -14,6 +16,11 @@ class HostedCompetitionApi {
   factory HostedCompetitionApi.standard({
     required String baseUrl,
     required String? accessToken,
+    AuthSession? authSession,
+    AuthSessionStore? authSessionStore,
+    AuthSessionStore? fallbackAuthSessionStore,
+    Future<void> Function(AuthSession? session)? onSessionChanged,
+    String? deviceId,
     GteBackendMode mode = GteBackendMode.live,
     GteTransport? transport,
   }) {
@@ -24,6 +31,11 @@ class HostedCompetitionApi {
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: resolvedTransport,
         accessToken: accessToken,
+        authSession: authSession,
+        authSessionStore: authSessionStore,
+        fallbackAuthSessionStore: fallbackAuthSessionStore,
+        onSessionChanged: onSessionChanged,
+        deviceId: deviceId,
         mode: resolvedMode,
       ),
       fixtures: _HostedCompetitionFixtures.seed(),
@@ -102,6 +114,8 @@ class HostedCompetitionApi {
     int? maxParticipants,
     double? entryFeeFancoin,
     double? rewardPoolFancoin,
+    String? joinPasscode,
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     return client.withFallback<HostedCompetition>(
       () async {
@@ -117,7 +131,9 @@ class HostedCompetitionApi {
             if (entryFeeFancoin != null) 'entry_fee_fancoin': entryFeeFancoin,
             if (rewardPoolFancoin != null)
               'reward_pool_fancoin': rewardPoolFancoin,
-            'metadata_json': <String, Object?>{},
+            if (joinPasscode != null && joinPasscode.trim().isNotEmpty)
+              'join_passcode': joinPasscode.trim(),
+            'metadata_json': metadata,
           },
         );
         final Map<String, dynamic> map =
@@ -129,16 +145,67 @@ class HostedCompetitionApi {
     );
   }
 
-  Future<HostedCompetition> joinCompetition(String competitionId) {
+  Future<HostedCompetition> joinCompetition(
+    String competitionId, {
+    String? passcode,
+  }) {
     return client.withFallback<HostedCompetition>(() async {
       final Object? payload = await client.request(
         'POST',
         '/api/hosted-competitions/$competitionId/join',
+        body:
+            passcode == null || passcode.trim().isEmpty
+                ? const <String, Object?>{}
+                : <String, Object?>{'passcode': passcode.trim()},
       );
       final Map<String, dynamic> map =
           payload as Map<String, dynamic>? ?? <String, dynamic>{};
       return HostedCompetition.fromJson(map['competition'] ?? map);
     }, () async => fixtures.joinCompetition(competitionId));
+  }
+
+  Future<HostedCompetition> adminCreateCompetition({
+    required String templateKey,
+    required String title,
+    String description = '',
+    String visibility = 'public',
+    int? maxParticipants,
+    double? entryFeeFancoin,
+    double? rewardPoolFancoin,
+    String? joinPasscode,
+    bool gtexHosted = true,
+    String? hostUserId,
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) {
+    return client.withFallback<HostedCompetition>(
+      () async {
+        final Object? payload = await client.request(
+          'POST',
+          '/api/admin/hosted-competitions',
+          body: <String, Object?>{
+            'template_key': templateKey,
+            'title': title,
+            'description': description,
+            'visibility': visibility,
+            'gtex_hosted': gtexHosted,
+            if (hostUserId != null && hostUserId.trim().isNotEmpty)
+              'host_user_id': hostUserId.trim(),
+            if (maxParticipants != null) 'max_participants': maxParticipants,
+            if (entryFeeFancoin != null) 'entry_fee_fancoin': entryFeeFancoin,
+            if (rewardPoolFancoin != null)
+              'reward_pool_fancoin': rewardPoolFancoin,
+            if (joinPasscode != null && joinPasscode.trim().isNotEmpty)
+              'join_passcode': joinPasscode.trim(),
+            'metadata_json': metadata,
+          },
+        );
+        final Map<String, dynamic> map =
+            payload as Map<String, dynamic>? ?? <String, dynamic>{};
+        return HostedCompetition.fromJson(map['competition'] ?? map);
+      },
+      () async =>
+          fixtures.createCompetition(title: title, templateKey: templateKey),
+    );
   }
 
   Future<List<HostedCompetitionInvite>> listInvites(String competitionId) {

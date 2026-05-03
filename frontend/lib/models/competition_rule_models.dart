@@ -128,6 +128,9 @@ class CompetitionDraft {
     required this.rules,
     required this.beginnerFriendly,
     this.competitionId,
+    this.scheduledStartAt,
+    this.passcode,
+    this.specialRules,
   });
 
   final String? competitionId;
@@ -144,6 +147,9 @@ class CompetitionDraft {
   final double hostFeePct;
   final CompetitionRuleSet rules;
   final bool beginnerFriendly;
+  final DateTime? scheduledStartAt;
+  final String? passcode;
+  final String? specialRules;
 
   factory CompetitionDraft.initial({
     required String creatorId,
@@ -194,11 +200,14 @@ class CompetitionDraft {
     if (name.trim().length < 3) {
       errors.add('Name must be at least 3 characters.');
     }
+    if (name.trim().toLowerCase().contains('gtex')) {
+      errors.add('User competitions cannot use GTEX in the competition name.');
+    }
     if (capacity < 2 || capacity > 500) {
       errors.add('Capacity must stay between 2 and 500 players.');
     }
     if (entryFee < 0 || entryFee > 10000) {
-      errors.add('Entry fee must stay between 0 and 10,000 GTEX Coin.');
+      errors.add('Entry fee must stay between 0 and 10,000 Fan Coin.');
     }
     if (platformFeePct < 0 || platformFeePct > 0.20) {
       errors.add('Platform service fee must stay between 0% and 20%.');
@@ -236,6 +245,9 @@ class CompetitionDraft {
     double? hostFeePct,
     CompetitionRuleSet? rules,
     bool? beginnerFriendly,
+    DateTime? scheduledStartAt,
+    String? passcode,
+    String? specialRules,
   }) {
     final CompetitionFormat nextFormat = format ?? this.format;
     return CompetitionDraft(
@@ -257,6 +269,9 @@ class CompetitionDraft {
       hostFeePct: _clampDouble(hostFeePct ?? this.hostFeePct, 0, 0.15),
       rules: rules ?? this.rules,
       beginnerFriendly: beginnerFriendly ?? this.beginnerFriendly,
+      scheduledStartAt: scheduledStartAt ?? this.scheduledStartAt,
+      passcode: passcode ?? this.passcode,
+      specialRules: specialRules ?? this.specialRules,
     );
   }
 
@@ -272,6 +287,12 @@ class CompetitionDraft {
       'max_players': capacity,
       'creator_id': creatorId,
       'source_type': 'user_hosted',
+      if (scheduledStartAt != null)
+        'scheduled_start_at': scheduledStartAt!.toUtc().toIso8601String(),
+      if (passcode != null && passcode!.trim().isNotEmpty)
+        'passcode': passcode!.trim(),
+      if (specialRules != null && specialRules!.trim().isNotEmpty)
+        'special_rules': specialRules!.trim(),
       if (creatorName != null && creatorName!.trim().isNotEmpty)
         'creator_name': creatorName!.trim(),
       'payout_structure': payoutRules

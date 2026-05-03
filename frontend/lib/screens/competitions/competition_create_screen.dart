@@ -35,18 +35,34 @@ class CompetitionCreateScreen extends StatefulWidget {
 
 class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
   late final TextEditingController _nameController;
+  late final TextEditingController _passcodeController;
+  late final TextEditingController _specialRulesController;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.controller.draft.name);
+    _passcodeController = TextEditingController(
+      text: widget.controller.draft.passcode ?? '',
+    );
+    _specialRulesController = TextEditingController(
+      text: widget.controller.draft.specialRules ?? '',
+    );
     _nameController.addListener(_handleNameChanged);
+    _passcodeController.addListener(_handlePasscodeChanged);
+    _specialRulesController.addListener(_handleSpecialRulesChanged);
   }
 
   @override
   void dispose() {
     _nameController
       ..removeListener(_handleNameChanged)
+      ..dispose();
+    _passcodeController
+      ..removeListener(_handlePasscodeChanged)
+      ..dispose();
+    _specialRulesController
+      ..removeListener(_handleSpecialRulesChanged)
       ..dispose();
     super.dispose();
   }
@@ -154,6 +170,40 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                         'Mark this competition as approachable for first-time players.',
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Start date and time'),
+                      subtitle: Text(
+                        draft.scheduledStartAt == null
+                            ? 'Managers can join until the competition starts.'
+                            : draft.scheduledStartAt!
+                                .toLocal()
+                                .toString()
+                                .substring(0, 16),
+                      ),
+                      trailing: FilledButton.tonal(
+                        onPressed: _pickStartTime,
+                        child: const Text('Set'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _passcodeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Passcode (optional)',
+                        hintText: 'Leave empty for open entry',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _specialRulesController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Special rules',
+                        hintText: 'Example: U20 squads only, knockout format',
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -168,7 +218,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'User-hosted competition stakes settle from the club wallet so entry fees, prize pools, and transfers stay easy to track.',
+                      'User competition buy-ins and prize pools settle in Fan Coin.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -374,6 +424,40 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
 
   void _handleNameChanged() {
     widget.controller.updateDraftName(_nameController.text);
+  }
+
+  void _handlePasscodeChanged() {
+    widget.controller.updateDraftPasscode(_passcodeController.text);
+  }
+
+  void _handleSpecialRulesChanged() {
+    widget.controller.updateDraftSpecialRules(_specialRulesController.text);
+  }
+
+  Future<void> _pickStartTime() async {
+    final DateTime now = DateTime.now();
+    final DateTime initial =
+        widget.controller.draft.scheduledStartAt?.toLocal() ??
+        now.add(const Duration(hours: 2));
+    final DateTime? date = await showDatePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      initialDate: initial,
+    );
+    if (date == null || !mounted) {
+      return;
+    }
+    final TimeOfDay? time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null) {
+      return;
+    }
+    widget.controller.updateDraftScheduledStart(
+      DateTime(date.year, date.month, date.day, time.hour, time.minute),
+    );
   }
 
   Future<void> _openRuleBuilder() async {

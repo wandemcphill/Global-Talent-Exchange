@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
+from hashlib import sha256
 from secrets import token_hex
 from typing import Any, Iterable
 
@@ -38,6 +39,7 @@ from app.models.competition_rule_set import CompetitionRuleSet
 from app.models.competition_schedule_job import CompetitionScheduleJob
 from app.models.competition_seed_rule import CompetitionSeedRule
 from app.models.competition_visibility_rule import CompetitionVisibilityRule
+from app.models.club_profile import ClubProfile
 from app.schemas.competition_core import (
     CompetitionCorePayload,
     CompetitionCreateRequest as CompetitionCoreCreateRequest,
@@ -63,6 +65,7 @@ from app.schemas.competition_lifecycle import (
 )
 from app.schemas.competition_requests import (
     CompetitionCreateRequest,
+    CompetitionHostType,
     CompetitionUpdateRequest,
     validate_format_capacity_for_update,
 )
@@ -87,6 +90,7 @@ from app.services.competition_fee_service import CompetitionFeeService
 from app.services.competition_join_service import CompetitionJoinService, JoinDecision
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
 from app.services.competition_progression_service import CompetitionProgressionService
+from app.services.competition_reminder_service import CompetitionReminderService
 from app.services.competition_rules_engine import CompetitionRulesEngine
 from app.services.competition_auto_runner import CompetitionAutoRunner
 from app.services.competition_validation_service import CompetitionValidationService
@@ -104,6 +108,8 @@ _DISCOVERY_SKIP_REASONS = frozenset({"invalid_summary_state", "rules_missing"})
 _TWO_PLACES = Decimal("0.01")
 _FOUR_PLACES = Decimal("0.0001")
 _DYNAMIC_PRIZE_POOL_UNSET = object()
+_PASSCODE_METADATA_KEY = "join_passcode_hash"
+_REQUIRES_PASSCODE_METADATA_KEY = "requires_passcode"
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -217,7 +223,19 @@ class CompetitionOrchestrator:
 
     def create(self, payload: CompetitionCreateRequest) -> CompetitionSummaryView:
         self._validate_against_thread_a_domain(payload)
-        is_platform_competition = self._is_platform_competition(payload.source_type)
+        host_type = self._host_type_for_payload(payload)
+        if payload.creator_id is None:
+            raise CompetitionActionError("Authenticated creator is required.", reason="creator_required")
+        if host_type is CompetitionHostType.USER_HOSTED and "gtex" in payload.name.lower():
+            raise CompetitionActionError(
+                "User-hosted competitions cannot use GTEX in the competition name.",
+                reason="reserved_gtex_name",
+            )
+        payload.source_type = host_type.value
+        payload.type = host_type.value
+        if host_type is CompetitionHostType.USER_HOSTED:
+            payload.currency = "credit"
+        is_platform_competition = host_type is CompetitionHostType.GTEX_HOSTED
         domain_payload = backend_competition_create_request(
             payload,
             default_platform_fee_pct=self.fee_service.default_platform_fee_pct,
@@ -242,6 +260,13 @@ class CompetitionOrchestrator:
                 **(competition.metadata_json or {}),
                 "beginner_friendly": payload.beginner_friendly,
             }
+        competition.metadata_json = {
+            **(competition.metadata_json or {}),
+            "host_type": host_type.value,
+            "special_rules": payload.special_rules,
+            _REQUIRES_PASSCODE_METADATA_KEY: bool(payload.passcode),
+            **({_PASSCODE_METADATA_KEY: self._hash_passcode(payload.passcode)} if payload.passcode else {}),
+        }
         if payload.creator_name:
             competition.metadata_json = {**(competition.metadata_json or {}), "creator_name": payload.creator_name}
         if payload.created_at:
@@ -540,20 +565,28 @@ class CompetitionOrchestrator:
         user_id: str,
         user_name: str | None,
         invite_code: str | None,
+        club_name: str | None = None,
+        passcode: str | None = None,
     ) -> CompetitionSummaryView | None:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
 
         rule_set = self._rule_set(competition.id)
-        participant = self._participant(competition.id, user_id)
+        club = self._resolve_join_club(competition, user_id=user_id, club_name=club_name)
+        participant_key = club.id if club is not None else user_id
+        club_identity = self._club_identity_payload(club) if club is not None else {}
+        participant = self._participant(competition.id, participant_key)
         participant_count = self._participant_count(competition.id)
         join_decision = self._join_decision_for(
             competition,
             user_id=user_id,
+            club_id=participant_key,
             invite_code=invite_code,
+            passcode=passcode,
             participant_count=participant_count,
             already_joined=participant is not None,
+            visibility_context=club_identity,
         )
         if not join_decision.eligible:
             return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
@@ -562,13 +595,18 @@ class CompetitionOrchestrator:
 
         invite_used = None
         if invite_code:
-            invite_used = self._resolve_invite(competition.id, invite_code=invite_code, club_id=user_id, consume=False)
+            invite_used = self._resolve_invite(
+                competition.id,
+                invite_code=invite_code,
+                club_id=participant_key,
+                consume=False,
+            )
             if invite_used is None and join_decision.requires_invite:
                 return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
 
         entry = CompetitionEntry(
             competition_id=competition.id,
-            club_id=user_id,
+            club_id=participant_key,
             user_id=user_id,
             entry_type="invite" if invite_used else "direct",
             status="accepted",
@@ -576,7 +614,9 @@ class CompetitionOrchestrator:
             responded_at=datetime.now(timezone.utc),
             metadata_json={
                 **({"user_name": user_name} if user_name else {}),
+                **club_identity,
                 **({"invite_code": invite_code} if invite_code else {}),
+                **({"passcode_verified": True} if passcode and self._passcode_matches(competition, passcode) else {}),
             },
         )
         entry_savepoint = self.session.begin_nested()
@@ -590,7 +630,7 @@ class CompetitionOrchestrator:
             entry_savepoint.commit()
         participant = CompetitionParticipant(
             competition_id=competition.id,
-            club_id=user_id,
+            club_id=participant_key,
             entry_id=entry.id,
             status="joined",
             paid_entry_fee_minor=competition.entry_fee_minor,
@@ -635,6 +675,7 @@ class CompetitionOrchestrator:
             detail="Competition join completed.",
             metadata_json={
                 "participant_user_id": user_id,
+                **club_identity,
                 "entry_id": entry.id,
                 "participant_id": participant.id,
                 "entry_type": entry.entry_type,
@@ -644,6 +685,7 @@ class CompetitionOrchestrator:
             },
         )
         self._refresh_financials(competition, rule_set, participant_count=participant_count + 1)
+        CompetitionReminderService(self.session).dispatch_due_reminders()
         self.session.commit()
         self.session.refresh(competition)
         self.auto_runner.run_until_idle(competition)
@@ -652,7 +694,7 @@ class CompetitionOrchestrator:
         self._publish_competition_update(
             event_name="competition.joined",
             competition=competition,
-            extra={"user_id": user_id},
+            extra={"user_id": user_id, **club_identity},
         )
         return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
 
@@ -661,7 +703,7 @@ class CompetitionOrchestrator:
         if competition is None:
             return None
         rule_set = self._rule_set(competition.id)
-        participant = self._participant(competition.id, user_id)
+        participant = self._participant_for_user(competition, user_id=user_id)
         if participant is None:
             return self._to_summary(competition, user_id=user_id)
         if CompetitionStatus(competition.status) in {
@@ -785,16 +827,27 @@ class CompetitionOrchestrator:
         self,
         competition_id: str,
         payload: CompetitionInviteAcceptRequest,
+        *,
+        actor_user_id: str | None = None,
     ) -> CompetitionSummaryView | None:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
         rule_set = self._rule_set(competition.id)
-        club_id = payload.club_id
+        resolved_user_id = actor_user_id or payload.user_id
+        if resolved_user_id is None:
+            raise CompetitionActionError("Authenticated user is required.", reason="user_required")
+        club = self._resolve_join_club(competition, user_id=resolved_user_id, club_name=payload.club_name)
+        club_id = club.id if club is not None else self._normalized_string(payload.club_id)
+        if not club_id:
+            raise CompetitionActionError("A club is required to accept this competition invite.", reason="club_required")
+        if payload.club_id and club is not None and payload.club_id != club.id:
+            raise CompetitionActionError("Invite club does not belong to the authenticated user.", reason="club_owner_required")
+        club_identity = self._club_identity_payload(club) if club is not None else {}
         participant_count = self._participant_count(competition.id)
         participant = self._participant(competition.id, club_id)
         if participant is not None:
-            return self._to_summary(competition, user_id=club_id, invite_code=payload.invite_code)
+            return self._to_summary(competition, user_id=resolved_user_id, invite_code=payload.invite_code)
         invite = self._resolve_invite(
             competition.id,
             invite_code=payload.invite_code,
@@ -807,12 +860,12 @@ class CompetitionOrchestrator:
         entry = CompetitionEntry(
             competition_id=competition.id,
             club_id=club_id,
-            user_id=payload.user_id or club_id,
+            user_id=resolved_user_id,
             entry_type="invite",
             status="accepted",
             invite_id=invite.id,
             responded_at=datetime.now(timezone.utc),
-            metadata_json={"invite_code": invite.invite_code},
+            metadata_json={"invite_code": invite.invite_code, **club_identity},
         )
         entry_savepoint = self.session.begin_nested()
         try:
@@ -842,7 +895,7 @@ class CompetitionOrchestrator:
         try:
             fee_result = self.competition_wallet_service.collect_entry_fee(
                 competition=competition,
-                participant_user_id=club_id,
+                participant_user_id=resolved_user_id,
             )
         except InsufficientBalanceError as exc:
             raise CompetitionActionError(
@@ -863,13 +916,14 @@ class CompetitionOrchestrator:
         }
         participant.paid_at = datetime.now(timezone.utc) if fee_result.status == "settled" else None
         self._audit_competition_action(
-            actor_user_id=payload.user_id or club_id,
+            actor_user_id=resolved_user_id,
             action_key="competition.invite.accepted",
             competition=competition,
             detail="Competition invite accepted.",
             metadata_json={
-                "participant_user_id": payload.user_id or club_id,
+                "participant_user_id": resolved_user_id,
                 "club_id": club_id,
+                **club_identity,
                 "entry_id": entry.id,
                 "participant_id": participant.id,
                 "invite_id": invite.id,
@@ -884,7 +938,7 @@ class CompetitionOrchestrator:
         self.auto_runner.run_until_idle(competition)
         self.session.commit()
         self.session.refresh(competition)
-        return self._to_summary(competition, user_id=club_id, invite_code=invite.invite_code)
+        return self._to_summary(competition, user_id=resolved_user_id, invite_code=invite.invite_code)
 
     def financials(self, competition_id: str) -> CompetitionFinancialSummaryView | None:
         competition = self.session.get(Competition, competition_id)
@@ -1285,6 +1339,7 @@ class CompetitionOrchestrator:
             rule_set=rule_set,
             visibility_rules=visibility_rules,
         )
+        host_type = self._host_type_for_competition(competition)
         return CompetitionSummaryView(
             id=competition.id,
             name=competition.name,
@@ -1293,6 +1348,7 @@ class CompetitionOrchestrator:
             status=self._coerce_enum(CompetitionStatus, competition.status, field_name="status"),
             match_type=self._match_type_for(competition),
             type=self._match_type_for(competition),
+            host_type=host_type.value,
             creator_id=context.creator_id,
             creator_name=metadata.get("creator_name"),
             participant_count=participant_count,
@@ -1310,9 +1366,13 @@ class CompetitionOrchestrator:
                 eligible=join_decision.eligible,
                 reason=join_decision.reason,
                 requires_invite=join_decision.requires_invite,
+                requires_passcode=join_decision.requires_passcode or self._requires_passcode(competition),
             ),
             dynamic_prize_pool=self._dynamic_prize_pool_view(resolved_dynamic_prize_pool),
             beginner_friendly=metadata.get("beginner_friendly"),
+            requires_passcode=self._requires_passcode(competition),
+            scheduled_start_at=competition.scheduled_start_at,
+            special_rules=self._normalized_string(metadata.get("special_rules")),
             created_at=competition.created_at,
             updated_at=competition.updated_at,
         )
@@ -1568,25 +1628,37 @@ class CompetitionOrchestrator:
         competition: Competition,
         *,
         user_id: str | None = None,
+        club_id: str | None = None,
         invite_code: str | None = None,
+        passcode: str | None = None,
         participant_count: int | None = None,
         already_joined: bool | None = None,
         rule_set: CompetitionRuleSet | None = None,
         visibility_rules: Iterable[CompetitionVisibilityRule] | None = None,
+        visibility_context: dict[str, Any] | None = None,
     ) -> JoinDecision:
         rule_set = rule_set or self._rule_set(competition.id)
         user_id = self._normalized_string(user_id)
+        club_id = self._normalized_string(club_id)
         invite_code = self._normalized_string(invite_code)
+        if user_id and self._requires_club_entry(competition) and not club_id:
+            try:
+                resolved_club = self._resolve_join_club(competition, user_id=user_id)
+            except CompetitionActionError:
+                return JoinDecision(eligible=False, reason="club_required")
+            club_id = resolved_club.id if resolved_club is not None else None
+            visibility_context = self._club_identity_payload(resolved_club) if resolved_club is not None else visibility_context
         participant_count = (
             participant_count if participant_count is not None else self._participant_count(competition.id)
         )
         already_joined = (
             already_joined
             if already_joined is not None
-            else (self._participant(competition.id, user_id) is not None if user_id else False)
+            else (self._participant(competition.id, club_id or user_id) is not None if (club_id or user_id) else False)
         )
         invite_valid = (
-            self._resolve_invite(competition.id, invite_code=invite_code, club_id=user_id, consume=False) is not None
+            self._resolve_invite(competition.id, invite_code=invite_code, club_id=club_id or user_id, consume=False)
+            is not None
         )
         join_decision = self.join_service.evaluate_join(
             status=self._coerce_enum(CompetitionStatus, competition.status, field_name="status"),
@@ -1595,7 +1667,20 @@ class CompetitionOrchestrator:
             capacity=self._summary_capacity(rule_set),
             already_joined=already_joined,
             invite_valid=invite_valid,
+            scheduled_start_at=competition.scheduled_start_at,
         )
+        if (
+            join_decision.eligible
+            and not already_joined
+            and self._requires_passcode(competition)
+            and not self._passcode_matches(competition, passcode)
+        ):
+            return JoinDecision(
+                eligible=False,
+                reason="passcode_required",
+                requires_invite=False,
+                requires_passcode=True,
+            )
         if join_decision.eligible and not already_joined:
             rules = (
                 list(visibility_rules)
@@ -1610,10 +1695,10 @@ class CompetitionOrchestrator:
             )
             visibility_decision = self.visibility_service.evaluate(
                 competition,
-                club_id=user_id or "anonymous",
+                club_id=club_id or user_id or "anonymous",
                 invite_valid=invite_valid,
                 rules=rules,
-                context={},
+                context=visibility_context or {},
             )
             if not visibility_decision.allowed:
                 return JoinDecision(
@@ -1725,6 +1810,93 @@ class CompetitionOrchestrator:
             raise CompetitionActionError(
                 f"Competition {field_name} is invalid.", reason="invalid_summary_state"
             ) from exc
+
+    def _requires_club_entry(self, competition: Competition) -> bool:
+        metadata = competition.metadata_json if isinstance(competition.metadata_json, dict) else {}
+        markers = {
+            self._normalized_string(competition.competition_type),
+            self._normalized_string(competition.source_type),
+            self._normalized_string(metadata.get("competition_scope")),
+        }
+        normalized = " ".join(sorted(item.lower() for item in markers if item))
+        if any(token in normalized for token in ("national", "nation", "country_team", "international")):
+            return False
+        return True
+
+    def _resolve_join_club(
+        self,
+        competition: Competition,
+        *,
+        user_id: str,
+        club_name: str | None = None,
+    ) -> ClubProfile | None:
+        if not self._requires_club_entry(competition):
+            return None
+        normalized_name = self._normalized_string(club_name)
+        stmt = select(ClubProfile).where(ClubProfile.owner_user_id == user_id)
+        if normalized_name:
+            stmt = stmt.where(func.lower(ClubProfile.club_name) == normalized_name.lower())
+        clubs = list(self.session.scalars(stmt.order_by(ClubProfile.created_at.asc())).all())
+        if not clubs:
+            raise CompetitionActionError(
+                "You need a club before entering club competitions.",
+                reason="club_required",
+            )
+        if normalized_name is None and len(clubs) > 1:
+            raise CompetitionActionError(
+                "Choose the club name you want to enter with.",
+                reason="club_name_required",
+            )
+        return clubs[0]
+
+    def _club_identity_payload(self, club: ClubProfile | None) -> dict[str, Any]:
+        if club is None:
+            return {}
+        country_code = self._normalized_string(club.country_code)
+        state_name = self._normalized_string(club.region_name)
+        city_name = self._normalized_string(club.city_name)
+        address_parts = [part for part in (country_code, state_name, city_name) if part]
+        flag = self._country_flag(country_code)
+        display_name = f"{flag} {club.club_name}" if flag else club.club_name
+        return {
+            "club_id": club.id,
+            "club_name": club.club_name,
+            "club_display_name": display_name,
+            "club_country_flag": flag,
+            "club_country": country_code,
+            "club_state": state_name,
+            "club_city": city_name,
+            "club_address": ", ".join(address_parts),
+            "country": country_code,
+            "state": state_name,
+            "city": city_name,
+            "region": state_name or country_code,
+        }
+
+    def _participant_for_user(self, competition: Competition, *, user_id: str) -> CompetitionParticipant | None:
+        participant = self._participant(competition.id, user_id)
+        if participant is not None or not self._requires_club_entry(competition):
+            return participant
+        club_ids = tuple(
+            self.session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == user_id)).all()
+        )
+        if not club_ids:
+            return None
+        return self.session.scalar(
+            select(CompetitionParticipant).where(
+                CompetitionParticipant.competition_id == competition.id,
+                CompetitionParticipant.club_id.in_(club_ids),
+            )
+        )
+
+    @staticmethod
+    def _country_flag(country_code: str | None) -> str:
+        if not country_code:
+            return ""
+        code = country_code.strip().upper()
+        if len(code) != 2 or not code.isalpha():
+            return ""
+        return "".join(chr(ord(char) - ord("A") + 0x1F1E6) for char in code)
 
     def _normalized_string(self, value: object) -> str | None:
         if not isinstance(value, str):
@@ -1906,13 +2078,53 @@ class CompetitionOrchestrator:
         normalized = source_type.strip().lower()
         return normalized in {"gtex", "platform", "gtex_platform", "gtex_competition", "gtex_hosted"}
 
-    def _match_type_for(self, competition: Competition) -> str:
+    def _host_type_for_payload(self, payload: CompetitionCreateRequest) -> CompetitionHostType:
+        if payload.host_type is not None:
+            return payload.host_type
+        if self._is_platform_competition(payload.source_type):
+            return CompetitionHostType.GTEX_HOSTED
+        return CompetitionHostType.USER_HOSTED
+
+    def _host_type_for_competition(self, competition: Competition) -> CompetitionHostType:
+        metadata = competition.metadata_json if isinstance(competition.metadata_json, dict) else {}
+        metadata_host_type = self._normalized_string(metadata.get("host_type"))
+        if metadata_host_type:
+            normalized = metadata_host_type.lower()
+            if normalized in {"gtex", "gtex_hosted", "official", "platform"}:
+                return CompetitionHostType.GTEX_HOSTED
+            if normalized in {"user", "user_hosted", "creator", "creator_hosted"}:
+                return CompetitionHostType.USER_HOSTED
         if self._is_platform_competition(competition.source_type):
+            return CompetitionHostType.GTEX_HOSTED
+        return CompetitionHostType.USER_HOSTED
+
+    def _match_type_for(self, competition: Competition) -> str:
+        if self._host_type_for_competition(competition) is CompetitionHostType.GTEX_HOSTED:
             return "gtex_hosted"
         normalized = self._normalized_string(competition.source_type)
         if normalized in {"fast_match", "fastmatch", "fast"}:
             return "fast_match"
         return "user_hosted"
+
+    @staticmethod
+    def _hash_passcode(passcode: str) -> str:
+        return sha256(passcode.strip().encode("utf-8")).hexdigest()
+
+    def _requires_passcode(self, competition: Competition) -> bool:
+        metadata = competition.metadata_json if isinstance(competition.metadata_json, dict) else {}
+        return bool(metadata.get(_REQUIRES_PASSCODE_METADATA_KEY) or metadata.get(_PASSCODE_METADATA_KEY))
+
+    def _passcode_matches(self, competition: Competition, passcode: str | None) -> bool:
+        if not self._requires_passcode(competition):
+            return True
+        candidate = self._normalized_string(passcode)
+        if candidate is None:
+            return False
+        metadata = competition.metadata_json if isinstance(competition.metadata_json, dict) else {}
+        stored_hash = self._normalized_string(metadata.get(_PASSCODE_METADATA_KEY))
+        if stored_hash is None:
+            return False
+        return stored_hash == self._hash_passcode(candidate)
 
 
 def backend_competition_create_request(

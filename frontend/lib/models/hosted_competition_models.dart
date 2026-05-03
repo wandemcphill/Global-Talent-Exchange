@@ -151,6 +151,25 @@ class HostedCompetition {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  bool get isGtexHosted {
+    final Object? hostType = metadata['host_type'];
+    return GteJson.boolean(metadata, <String>[
+          'gtex_hosted',
+          'gtexHosted',
+        ], fallback: false) ||
+        hostType?.toString().trim().toLowerCase() == 'gtex_hosted';
+  }
+
+  bool get requiresPasscode {
+    if (GteJson.boolean(metadata, <String>[
+      'join_passcode_required',
+      'requires_passcode',
+    ], fallback: false)) {
+      return true;
+    }
+    return visibility.trim().toLowerCase() == 'passcode';
+  }
+
   factory HostedCompetition.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
       value,

@@ -19,7 +19,8 @@ def test_gtex_financial_summary_exposes_dynamic_jackpot_pool(
         session.commit()
 
     created = client.post(
-        "/api/competitions",
+        "/api/admin/competitions",
+        headers=competition_admin_headers,
         json={
             "name": "GTEX Jackpot Cup",
             "format": "cup",
@@ -50,7 +51,8 @@ def test_gtex_financial_summary_exposes_dynamic_jackpot_pool(
         )
 
     rollover = client.post(
-        "/api/competitions",
+        "/api/admin/competitions",
+        headers=competition_admin_headers,
         json={
             "name": "GTEX Rollover Cup",
             "format": "cup",
