@@ -531,6 +531,20 @@ DOMAIN_MODULES = (
         router_path="app.story_feed_engine.router:admin_router",
         api_only=True,
     ),
+    _module(
+        "ai_reporter",
+        router_path="app.ai_reporter.router:router",
+        api_only=True,
+        on_startup=("app.ai_reporter.worker:bind_ai_reporter_scheduler",),
+        on_shutdown=("app.ai_reporter.worker:shutdown_ai_reporter_scheduler",),
+    ),
+    _module(
+        "gtex_news_engine",
+        router_path="app.news_engine.router:router",
+        api_only=True,
+        on_startup=("app.news_engine.worker:bind_gtex_news_scheduler",),
+        on_shutdown=("app.news_engine.worker:shutdown_gtex_news_scheduler",),
+    ),
     _module("legend_layer", router_path="app.legend_layer.router:router"),
     _module(
         "viral",
