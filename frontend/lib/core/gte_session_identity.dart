@@ -16,7 +16,7 @@ class GteSessionIdentity {
 
   static GteSessionIdentity fromExchangeController(
     GteExchangeController controller, {
-    String guestUserId = 'guest-user',
+    String guestUserId = 'unauthenticated-user',
   }) {
     final GteAuthSession? session = controller.session;
     final String? trimmedSessionUserId = controller.session?.user.id.trim();
@@ -99,15 +99,12 @@ class GteSessionIdentity {
   static _ResolvedClub? _activeOrganizationCandidate(
     Map<String, Object?> source,
   ) {
-    final String? organizationType = _firstString(
-      source,
-      const <String>[
-        'active_organization_type',
-        'activeOrganizationType',
-        'organization_type',
-        'organizationType',
-      ],
-    );
+    final String? organizationType = _firstString(source, const <String>[
+      'active_organization_type',
+      'activeOrganizationType',
+      'organization_type',
+      'organizationType',
+    ]);
     if (organizationType != null &&
         organizationType.trim().toLowerCase() != 'club') {
       return null;
@@ -232,10 +229,11 @@ class GteSessionIdentity {
     if (entry == null) {
       return null;
     }
-    final String? organizationType = _firstString(
-      entry,
-      const <String>['organization_type', 'organizationType', 'type'],
-    );
+    final String? organizationType = _firstString(entry, const <String>[
+      'organization_type',
+      'organizationType',
+      'type',
+    ]);
     if (organizationType != null &&
         organizationType.trim().toLowerCase() != 'club') {
       return null;
@@ -282,19 +280,22 @@ class GteSessionIdentity {
     if (source == null) {
       return null;
     }
-    final String? id = _firstString(
-      source,
-      const <String>['id', 'club_id', 'clubId'],
-    );
+    final String? id = _firstString(source, const <String>[
+      'id',
+      'club_id',
+      'clubId',
+    ]);
     if (id == null) {
       return null;
     }
     return _ResolvedClub(
       id: id,
-      name: _firstString(
-        source,
-        const <String>['name', 'club_name', 'clubName', 'display_name'],
-      ),
+      name: _firstString(source, const <String>[
+        'name',
+        'club_name',
+        'clubName',
+        'display_name',
+      ]),
       slug: _firstString(source, const <String>['slug', 'club_slug']),
     );
   }
@@ -304,8 +305,10 @@ class GteSessionIdentity {
     _ResolvedClub? secondary, [
     _ResolvedClub? tertiary,
   ]) {
-    final _ResolvedClub? mergedPrimarySecondary =
-        _mergeTwoClubCandidates(primary, secondary);
+    final _ResolvedClub? mergedPrimarySecondary = _mergeTwoClubCandidates(
+      primary,
+      secondary,
+    );
     return _mergeTwoClubCandidates(mergedPrimarySecondary, tertiary);
   }
 
@@ -351,13 +354,12 @@ class GteSessionIdentity {
     return false;
   }
 
-  static Map<String, Object?>? _mapValue(
-    Object? value,
-    List<String> keys,
-  ) {
+  static Map<String, Object?>? _mapValue(Object? value, List<String> keys) {
     if (keys.isNotEmpty) {
       value = GteJson.value(
-          GteJson.map(value, fallback: const <String, Object?>{}), keys);
+        GteJson.map(value, fallback: const <String, Object?>{}),
+        keys,
+      );
     }
     if (value is Map<String, Object?>) {
       return value;
@@ -381,10 +383,7 @@ class GteSessionIdentity {
     return const <Object?>[];
   }
 
-  static String? _firstString(
-    Map<String, Object?> source,
-    List<String> keys,
-  ) {
+  static String? _firstString(Map<String, Object?> source, List<String> keys) {
     final String? value = GteJson.stringOrNull(source, keys);
     if (value == null || value.isEmpty) {
       return null;
@@ -394,11 +393,7 @@ class GteSessionIdentity {
 }
 
 class _ResolvedClub {
-  const _ResolvedClub({
-    required this.id,
-    this.name,
-    this.slug,
-  });
+  const _ResolvedClub({required this.id, this.name, this.slug});
 
   final String id;
   final String? name;

@@ -17,6 +17,8 @@ from app.commentary.schemas import CommentaryStreamResponse
 from app.commentary.service import CommentaryService
 from app.live_matches.highlights import SmartHighlightService
 from app.live_matches.schemas import (
+    ActiveLiveMatchView,
+    ActiveLiveMatchesResponseView,
     MatchHighlightResponseView,
     MatchHighlightShareItemView,
     MatchHighlightSharePackageView,
@@ -1161,6 +1163,38 @@ def _issue_unity_live_access_view(
         websocket_path=f"/api/v1/ws/match/{match_id}?format=unity",
         refresh_path=f"/match/{match_id}/unity-access/refresh",
     )
+
+
+def _build_active_live_match_view(request: Request, match_id: str) -> ActiveLiveMatchView:
+    hub = ensure_live_match_hub(request.app)
+    state = hub.get_state(match_id)
+    playback_context = hub.get_playback_context(match_id)
+    viewer_state = None if playback_context is None else playback_context.viewer_state
+    return ActiveLiveMatchView(
+        match_id=match_id,
+        home_team_name=None if viewer_state is None else viewer_state.home_team.team_name,
+        away_team_name=None if viewer_state is None else viewer_state.away_team.team_name,
+        current_minute=0 if state is None else int(state.snapshot.current_minute),
+        status="live" if state is None else str(state.snapshot.status),
+        spectator_count=0 if state is None else int(state.spectator_count),
+        live_path=f"/match/{match_id}/live",
+        websocket_path=f"/api/v1/ws/match/{match_id}?format=unity",
+        commentary_websocket_path=f"/api/matches/{match_id}/commentary/stream",
+    )
+
+
+@legacy_router.get("/live/active", response_model=ActiveLiveMatchesResponseView)
+@api_router.get("/live/active", response_model=ActiveLiveMatchesResponseView)
+@match_router.get("/live/active", response_model=ActiveLiveMatchesResponseView)
+@api_match_router.get("/live/active", response_model=ActiveLiveMatchesResponseView)
+def list_active_live_matches(
+    request: Request,
+    _current_user: User = Depends(get_current_match_user),
+) -> ActiveLiveMatchesResponseView:
+    hub = ensure_live_match_hub(request.app)
+    match_ids = hub.list_active_matches()
+    items = [_build_active_live_match_view(request, match_id) for match_id in match_ids]
+    return ActiveLiveMatchesResponseView(total=len(items), items=items)
 
 
 @legacy_router.post("/{match_id}/spectate", response_model=SpectatorSessionView)

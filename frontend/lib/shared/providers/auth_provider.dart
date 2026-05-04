@@ -62,7 +62,7 @@ final Provider<String?> currentUserNameProvider = Provider<String?>((Ref ref) {
 });
 
 final Provider<String> currentUserRoleProvider = Provider<String>(
-  (Ref ref) => ref.watch(authProvider)?.role ?? 'guest',
+  (Ref ref) => ref.watch(authProvider)?.role ?? 'unauthenticated',
 );
 
 final Provider<List<String>> currentUserPermissionsProvider =
@@ -234,11 +234,11 @@ final Provider<AuthPresentation> authPresentationProvider =
     Provider<AuthPresentation>((Ref ref) {
       final AuthSession? session = ref.watch(authProvider);
       return AuthPresentation(
-        userName: session?.resolvedUserName ?? 'Guest',
-        role: session?.role ?? 'Guest',
+        userName: session?.resolvedUserName ?? 'Not signed in',
+        role: session?.role ?? 'Unauthenticated',
         clubName:
             session == null || !session.isAuthenticated
-                ? 'Sign in to continue'
+                ? 'Sign in to access club features'
                 : (session.clubName ?? 'Syncing club context'),
         avatarAsset: 'assets/branding/gtex_icon.png',
         notifications: 0,

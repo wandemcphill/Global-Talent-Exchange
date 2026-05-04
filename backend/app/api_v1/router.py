@@ -31,6 +31,7 @@ from .schemas import (
 from .service import (
     GlobalApiV1Error,
     GlobalApiV1NotFoundError,
+    GlobalApiV1RuntimeUnavailableError,
     GlobalApiV1Service,
     GlobalApiV1ValidationError,
 )
@@ -135,6 +136,8 @@ def _raise_global_api_http_error(exc: GlobalApiV1Error) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if isinstance(exc, GlobalApiV1ValidationError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if isinstance(exc, GlobalApiV1RuntimeUnavailableError):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
@@ -146,6 +149,7 @@ def _error_code_for_status(status_code: int) -> str:
         404: "not_found",
         409: "conflict",
         422: "validation_error",
+        503: "unavailable",
     }
     return mapping.get(status_code, f"http_{status_code}")
 

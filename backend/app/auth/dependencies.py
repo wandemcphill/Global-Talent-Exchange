@@ -16,6 +16,7 @@ from app.services.runtime_control_service import RuntimeControlService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 logger = logging.getLogger(__name__)
+_AUTH_SESSION_TOUCH_INTERVAL_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -106,7 +107,8 @@ def _resolve_authenticated_user(
             detail="Authenticated session has expired.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    auth_session.last_used_at = _utcnow()
+    if _should_touch_auth_session(auth_session):
+        auth_session.last_used_at = _utcnow()
 
     from app.access_control.service import AccessControlService
 
@@ -244,6 +246,11 @@ def _raise_missing_identity() -> None:
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Missing identity context",
     )
+
+
+def _should_touch_auth_session(auth_session: AuthSession) -> bool:
+    last_used_at = _as_utc_datetime(auth_session.last_used_at)
+    return (_utcnow() - last_used_at).total_seconds() >= _AUTH_SESSION_TOUCH_INTERVAL_SECONDS
 
 
 def _resolve_identity_context(

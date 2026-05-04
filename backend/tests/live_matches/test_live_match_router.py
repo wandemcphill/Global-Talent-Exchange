@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import reset_settings_cache
 from app.auth.dependencies import get_current_match_user
 from app.live_matches.router import router as live_matches_router
+from app.live_matches.service import LiveMatchHub
 from app.live_matches.unity_access import issue_unity_live_access_token, issue_unity_live_refresh_token
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.models.base import Base
@@ -128,6 +129,31 @@ def test_match_live_route_requires_unity_access_token() -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Unity live access token is required."
+
+
+def test_active_live_matches_route_lists_current_live_matches() -> None:
+    app, _session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=35))
+    hub = LiveMatchHub(step_interval_seconds=0.01)
+    app.state.live_match_hub = hub
+    hub.start_stream(replay_payload.match_id, replay_payload)
+    app.dependency_overrides[get_current_match_user] = lambda: User(
+        id="viewer-user-001",
+        email="viewer@example.com",
+        username="viewer",
+        password_hash="hashed-password",  # pragma: allowlist secret
+        is_active=True,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/matches/live/active")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["match_id"] == replay_payload.match_id
+    assert body["items"][0]["home_team_name"] == replay_payload.summary.home_stats.team_name
+    assert body["items"][0]["away_team_name"] == replay_payload.summary.away_stats.team_name
 
 
 def test_match_live_route_returns_frames_from_db_when_live_cache_is_empty() -> None:

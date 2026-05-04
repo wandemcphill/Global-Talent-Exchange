@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 from fastapi.testclient import TestClient
 import pytest
@@ -68,6 +69,40 @@ def test_api_v1_requires_auth_and_wraps_success_envelopes(app_client) -> None:
     assert "code" not in payload
     assert payload["data"]["club"]["name"] == "Lagos Titans"
     assert payload["data"]["live_matches"][0]["match_id"] == "m1"
+
+
+def test_api_v1_protected_environment_does_not_serve_demo_dashboard(app_client) -> None:
+    app, client = app_client
+    app.state.settings = replace(app.state.settings, app_env="production")
+    _user_id, token = _create_authenticated_user(app)
+
+    response = client.get(
+        "/api/v1/home/dashboard",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()["data"]
+    assert payload["club"]["name"] == "V1 Fan"
+    assert payload["live_matches"] == []
+    assert payload["stories"] == []
+    assert payload["transfer_alerts"] == []
+
+
+def test_api_v1_protected_environment_rejects_demo_mutations(app_client) -> None:
+    app, client = app_client
+    app.state.settings = replace(app.state.settings, app_env="production")
+    _user_id, token = _create_authenticated_user(app)
+
+    response = client.post(
+        "/api/v1/market/bid",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"listing_id": "l1", "amount": 550000},
+    )
+
+    assert response.status_code == 503, response.text
+    payload = response.json()
+    assert payload["code"] in {"unavailable", "service_unavailable"}
 
 
 def test_api_v1_http_facade_preserves_mutations_between_requests(app_client) -> None:

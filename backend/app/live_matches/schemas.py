@@ -50,6 +50,23 @@ class LiveMatchSpeedModeView(CommonSchema):
     target_duration_seconds: int = Field(ge=1)
 
 
+class ActiveLiveMatchView(CommonSchema):
+    match_id: str
+    home_team_name: str | None = None
+    away_team_name: str | None = None
+    current_minute: int = Field(default=0, ge=0, le=120)
+    status: str = "live"
+    spectator_count: int = Field(default=0, ge=0)
+    live_path: str
+    websocket_path: str
+    commentary_websocket_path: str
+
+
+class ActiveLiveMatchesResponseView(CommonSchema):
+    total: int = Field(default=0, ge=0)
+    items: list[ActiveLiveMatchView] = Field(default_factory=list)
+
+
 class LiveMatchStreamEventView(CommonSchema):
     match_id: str | None = None
     event_id: str | None = None

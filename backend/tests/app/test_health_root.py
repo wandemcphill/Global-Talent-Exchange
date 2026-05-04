@@ -24,6 +24,7 @@ def test_root_route_returns_service_metadata_and_is_hidden_from_schema() -> None
         "status": "ok",
         "app_name": "GTEX API",
         "docs_url": "/docs",
+        "openapi_url": "/openapi.json",
         "health_url": "/health",
         "ready_url": "/ready",
         "version_url": "/version",
@@ -48,3 +49,16 @@ def test_diagnostics_and_metrics_require_admin_in_production() -> None:
 
     assert diagnostics.status_code == 401
     assert metrics.status_code == 401
+
+
+def test_root_route_hides_docs_links_when_docs_are_disabled() -> None:
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.settings = SimpleNamespace(app_name="GTEX API", app_env="production")
+    app.include_router(health_router)
+
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.json()["docs_url"] is None
+    assert response.json()["openapi_url"] is None

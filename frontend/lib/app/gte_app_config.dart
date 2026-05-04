@@ -23,7 +23,10 @@ class GteAppConfig {
       // visible without requiring a local launch flag override.
       defaultValue: 'live',
     );
-    final GteBackendMode backendMode = _parseBackendMode(rawMode);
+    final GteBackendMode backendMode = _parseBackendMode(
+      rawMode,
+      allowFixtureMode: isFlutterTestRuntime,
+    );
     return GteAppConfig(
       apiBaseUrl: resolveGteApiBaseUrl(
         rawBaseUrl: rawBaseUrl,
@@ -39,7 +42,10 @@ class GteAppConfig {
       'GTE_BACKEND_MODE',
       defaultValue: 'live',
     );
-    final GteBackendMode backendMode = _parseBackendMode(rawMode);
+    final GteBackendMode backendMode = _parseBackendMode(
+      rawMode,
+      allowFixtureMode: isFlutterTestRuntime,
+    );
     return GteAppConfig(
       apiBaseUrl: resolveGteApiBaseUrlForRuntimeEnvironment(
         rawBaseUrl: rawBaseUrl,
@@ -75,7 +81,10 @@ String resolveGteApiBaseUrlFromEnvironment({
 }) {
   return resolveGteApiBaseUrl(
     rawBaseUrl: rawBaseUrl,
-    backendMode: _parseBackendMode(rawMode),
+    backendMode: _parseBackendMode(
+      rawMode,
+      allowFixtureMode: isFlutterTestRuntime,
+    ),
   );
 }
 
@@ -90,7 +99,10 @@ String resolveGteApiBaseUrlForRuntimeEnvironment({
   if (baseUrl.isNotEmpty) {
     return baseUrl;
   }
-  final GteBackendMode backendMode = _parseBackendMode(rawMode);
+  final GteBackendMode backendMode = _parseBackendMode(
+    rawMode,
+    allowFixtureMode: isFlutterTestRuntime,
+  );
   if (backendMode == GteBackendMode.fixture) {
     return gteFixtureApiBaseUrl;
   }
@@ -102,10 +114,13 @@ String resolveGteApiBaseUrlForRuntimeEnvironment({
   return resolveGteApiBaseUrl(rawBaseUrl: rawBaseUrl, backendMode: backendMode);
 }
 
-GteBackendMode _parseBackendMode(String rawMode) {
+GteBackendMode _parseBackendMode(
+  String rawMode, {
+  bool allowFixtureMode = false,
+}) {
   switch (rawMode.trim().toLowerCase()) {
     case 'fixture':
-      return GteBackendMode.fixture;
+      return allowFixtureMode ? GteBackendMode.fixture : GteBackendMode.live;
     case 'live':
       return GteBackendMode.live;
     case 'livethenfixture':

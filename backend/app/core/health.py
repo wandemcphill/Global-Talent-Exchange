@@ -63,7 +63,8 @@ class DiagnosticsResponse(BaseModel):
 class RootResponse(BaseModel):
     status: Literal["ok"]
     app_name: str
-    docs_url: str
+    docs_url: str | None = None
+    openapi_url: str | None = None
     health_url: str
     ready_url: str
     version_url: str
@@ -378,10 +379,13 @@ def require_internal_or_admin(
 @router.api_route("/", methods=["GET", "HEAD"], response_model=RootResponse, include_in_schema=False)
 def read_root(request: Request) -> RootResponse:
     settings = getattr(request.app.state, "settings", get_settings())
+    docs_route = "/docs" if getattr(request.app, "docs_url", None) else None
+    openapi_route = "/openapi.json" if getattr(request.app, "openapi_url", None) else None
     return RootResponse(
         status="ok",
         app_name=settings.app_name,
-        docs_url="/docs",
+        docs_url=docs_route,
+        openapi_url=openapi_route,
         health_url="/health",
         ready_url="/ready",
         version_url="/version",

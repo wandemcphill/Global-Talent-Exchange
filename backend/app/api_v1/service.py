@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+import os
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -20,6 +21,10 @@ class GlobalApiV1NotFoundError(GlobalApiV1Error):
 
 
 class GlobalApiV1ValidationError(GlobalApiV1Error):
+    pass
+
+
+class GlobalApiV1RuntimeUnavailableError(GlobalApiV1Error):
     pass
 
 
@@ -226,13 +231,18 @@ def _default_state() -> GlobalApiV1State:
 
 class GlobalApiV1Service:
     def __init__(self, app: FastAPI):
+        self.app = app
+        self._protected_environment = _is_protected_environment(app)
+        self._demo_fixtures_enabled = _demo_fixtures_enabled(app)
         state = getattr(app.state, "global_api_v1_state", None)
         if state is None:
-            state = _default_state()
+            state = _default_state() if self._demo_fixtures_enabled else GlobalApiV1State()
             app.state.global_api_v1_state = state
         self.state: GlobalApiV1State = state
 
     def build_dashboard(self, user: User) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return self._build_runtime_dashboard(user)
         self._ensure_profile(user)
         club = self._copy(self.state.clubs["club_1"])
         bids = self.state.market_bids.get("l1", [])
@@ -272,9 +282,13 @@ class GlobalApiV1Service:
         }
 
     def get_match_state(self, match_id: str) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return self._build_runtime_match_state(match_id)
         return self._copy(self._get_match(match_id))
 
     def build_match_commentary_event(self, match_id: str) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return self._build_runtime_match_commentary_event(match_id)
         match = self._get_match(match_id)
         return {
             "type": "commentary",
@@ -283,6 +297,8 @@ class GlobalApiV1Service:
         }
 
     def list_market_listings(self, *, page: int, rating_min: int | None, position: str | None) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {"page": page, "total": 0, "listings": []}
         listings = [self._decorate_listing(item) for item in self.state.market_listings.values()]
         if rating_min is not None:
             listings = [item for item in listings if int(item["rating"]) >= rating_min]
@@ -298,6 +314,7 @@ class GlobalApiV1Service:
         }
 
     def place_bid(self, user: User, *, listing_id: str, amount: int) -> dict[str, Any]:
+        self._require_demo_fixture_support("market bidding")
         listing = self._get_listing(listing_id)
         if amount <= 0:
             raise GlobalApiV1ValidationError("Bid amount must be greater than zero.")
@@ -324,6 +341,7 @@ class GlobalApiV1Service:
         }
 
     def get_market_bid_event(self, listing_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("market bid streaming")
         self._get_listing(listing_id)
         bids = self.state.market_bids.get(listing_id, [])
         if bids:
@@ -341,12 +359,18 @@ class GlobalApiV1Service:
         }
 
     def list_regens(self) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {"players": []}
         return {"players": self._copy(self.state.regens)}
 
     def list_competitions(self) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {"competitions": []}
         return {"competitions": self._copy(self.state.competitions)}
 
     def list_history_records(self) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {"records": []}
         return {"records": self._copy(self.state.history_records)}
 
     def list_federations(self) -> dict[str, Any]:
@@ -361,6 +385,7 @@ class GlobalApiV1Service:
         }
 
     def get_player(self, player_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("player facade")
         player = next((item for item in self.state.regens if item["id"] == player_id), None)
         if player is None:
             raise GlobalApiV1NotFoundError(f"Player '{player_id}' was not found.")
@@ -380,6 +405,7 @@ class GlobalApiV1Service:
         }
 
     def get_club(self, club_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("club facade")
         club = self._get_club(club_id)
         return {
             "id": club["id"],
@@ -392,18 +418,22 @@ class GlobalApiV1Service:
         }
 
     def get_club_squad(self, club_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("club squad facade")
         club = self._get_club(club_id)
         return {"club_id": club_id, "players": self._copy(club["squad"])}
 
     def get_club_finances(self, club_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("club finance facade")
         club = self._get_club(club_id)
         return {"club_id": club_id, **self._copy(club["finances"])}
 
     def get_club_fans(self, club_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("club fan facade")
         club = self._get_club(club_id)
         return {"club_id": club_id, **self._copy(club["fans"])}
 
     def get_tournament(self, tournament_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("tournament facade")
         tournament = self._get_tournament(tournament_id)
         return {
             "id": tournament["id"],
@@ -415,6 +445,7 @@ class GlobalApiV1Service:
         }
 
     def join_tournament(self, user: User, tournament_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("tournament joins")
         tournament = self._get_tournament(tournament_id)
         with self.state.lock:
             tournament["participants"].add(user.id)
@@ -434,6 +465,7 @@ class GlobalApiV1Service:
         }
 
     def rent_player(self, user: User, *, tournament_id: str, player_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("tournament rentals")
         tournament = self._get_tournament(tournament_id)
         player = self.get_player(player_id)
         rental = {
@@ -458,6 +490,7 @@ class GlobalApiV1Service:
         }
 
     def submit_squad(self, user: User, *, tournament_id: str, player_ids: list[str]) -> dict[str, Any]:
+        self._require_demo_fixture_support("tournament squad submissions")
         tournament = self._get_tournament(tournament_id)
         with self.state.lock:
             tournament["submitted_squads"][user.id] = list(player_ids)
@@ -469,6 +502,7 @@ class GlobalApiV1Service:
         }
 
     def get_broadcast(self, user: User, match_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("broadcast facade")
         match = self._get_match(match_id)
         return {
             "match_id": match_id,
@@ -479,6 +513,7 @@ class GlobalApiV1Service:
         }
 
     def pay_to_watch(self, user: User, *, match_id: str, amount: int | None) -> dict[str, Any]:
+        self._require_demo_fixture_support("broadcast payments")
         self._get_match(match_id)
         with self.state.lock:
             self.state.broadcast_payments.add((user.id, match_id))
@@ -496,6 +531,7 @@ class GlobalApiV1Service:
         }
 
     def list_club_for_sale(self, user: User, *, club_id: str, asking_price: int | None, note: str | None) -> dict[str, Any]:
+        self._require_demo_fixture_support("club sale listings")
         club = self._get_club(club_id)
         listing = {
             "listing_id": f"club_listing_{uuid4().hex[:8]}",
@@ -511,6 +547,8 @@ class GlobalApiV1Service:
         return {"listing": self._copy(listing)}
 
     def get_club_marketplace(self) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {"listings": []}
         listings = []
         for listing_id, item in self.state.club_marketplace.items():
             listing = self._copy(item)
@@ -519,6 +557,7 @@ class GlobalApiV1Service:
         return {"listings": listings}
 
     def make_club_offer(self, user: User, *, listing_id: str, amount: int) -> dict[str, Any]:
+        self._require_demo_fixture_support("club sale offers")
         listing = self.state.club_marketplace.get(listing_id)
         if listing is None:
             raise GlobalApiV1NotFoundError(f"Club listing '{listing_id}' was not found.")
@@ -533,6 +572,7 @@ class GlobalApiV1Service:
         return {"offer": self._copy(offer)}
 
     def get_user_profile(self, current_user: User, user_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("social profiles")
         if user_id == current_user.id:
             profile = self._ensure_profile(current_user)
         else:
@@ -550,6 +590,7 @@ class GlobalApiV1Service:
         }
 
     def follow_user(self, current_user: User, user_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("social follows")
         if user_id == current_user.id:
             raise GlobalApiV1ValidationError("Users cannot follow themselves.")
         self._get_or_create_synthetic_profile(user_id)
@@ -562,6 +603,8 @@ class GlobalApiV1Service:
         }
 
     def get_feed(self, current_user: User) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {"items": []}
         followed_ids = self.state.follows.get(current_user.id, set())
         items = self._copy(self.state.feed_items)
         if followed_ids:
@@ -577,6 +620,8 @@ class GlobalApiV1Service:
         return {"items": items[:20]}
 
     def list_tasks(self, user: User) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {"tasks": []}
         claimed = self.state.task_claims.get(user.id, set())
         return {
             "tasks": [
@@ -589,6 +634,7 @@ class GlobalApiV1Service:
         }
 
     def claim_task(self, user: User, task_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("task claiming")
         task = next((item for item in self.state.tasks if item["id"] == task_id), None)
         if task is None:
             raise GlobalApiV1NotFoundError(f"Task '{task_id}' was not found.")
@@ -604,9 +650,12 @@ class GlobalApiV1Service:
         }
 
     def get_stories(self) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {"stories": []}
         return {"stories": self._copy(self.state.stories)}
 
     def generate_story(self, user: User, *, title: str | None, story_type: str, subject_id: str | None) -> dict[str, Any]:
+        self._require_demo_fixture_support("story generation")
         story = {
             "id": f"s_{uuid4().hex[:8]}",
             "title": title or "Dynamic Storyline Triggered",
@@ -636,6 +685,7 @@ class GlobalApiV1Service:
         return {"story": self._copy(story)}
 
     def create_federation(self, user: User, *, name: str, region: str | None) -> dict[str, Any]:
+        self._require_demo_fixture_support("federation creation")
         federation_id = f"fed_{uuid4().hex[:8]}"
         federation = {
             "id": federation_id,
@@ -654,6 +704,7 @@ class GlobalApiV1Service:
         }
 
     def join_federation(self, user: User, federation_id: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("federation joins")
         self._get_federation(federation_id)
         with self.state.lock:
             members = self.state.federation_members.setdefault(federation_id, set())
@@ -666,6 +717,7 @@ class GlobalApiV1Service:
         }
 
     def vote_federation(self, user: User, *, federation_id: str | None, proposal_id: str, vote: str) -> dict[str, Any]:
+        self._require_demo_fixture_support("federation voting")
         resolved_federation_id = federation_id or next(iter(self.state.federations), None)
         if resolved_federation_id is None:
             raise GlobalApiV1NotFoundError("No federations are available for voting.")
@@ -682,6 +734,11 @@ class GlobalApiV1Service:
         return {"vote": self._copy(ballot)}
 
     def get_notification_event(self, user_id: str) -> dict[str, Any]:
+        if not self._demo_fixtures_enabled:
+            return {
+                "type": "notification",
+                "title": "No new notifications.",
+            }
         items = self.state.notifications.get(user_id, [])
         if items:
             return self._copy(items[-1])
@@ -696,6 +753,111 @@ class GlobalApiV1Service:
         if match is None:
             raise GlobalApiV1NotFoundError(f"Match '{match_id}' was not found.")
         return match
+
+    def _build_runtime_dashboard(self, user: User) -> dict[str, Any]:
+        live_matches = []
+        hub = getattr(self.app.state, "live_match_hub", None)
+        if hub is not None:
+            for match_id in hub.list_active_matches()[:10]:
+                try:
+                    state = hub.get_state(match_id)
+                    playback = hub.get_playback_context(match_id)
+                except Exception:
+                    continue
+                if state is None:
+                    continue
+                home_name = (
+                    playback.viewer_state.home_team.team_name
+                    if playback is not None and playback.viewer_state is not None
+                    else "Home"
+                )
+                away_name = (
+                    playback.viewer_state.away_team.team_name
+                    if playback is not None and playback.viewer_state is not None
+                    else "Away"
+                )
+                live_matches.append(
+                    {
+                        "match_id": match_id,
+                        "teams": [home_name, away_name],
+                        "score": f"{state.snapshot.score.home}-{state.snapshot.score.away}",
+                        "time": state.snapshot.current_minute,
+                    }
+                )
+        return {
+            "club": {
+                "id": getattr(user, "active_organization_id", None) or user.id,
+                "name": getattr(user, "active_organization_name", None) or self._club_name_for_user(user),
+                "logo": None,
+                "fan_sentiment": None,
+                "league_position": None,
+            },
+            "quick_actions": [],
+            "live_matches": live_matches,
+            "stories": [],
+            "tasks": [],
+            "transfer_alerts": [],
+            "trending_regens": [],
+        }
+
+    def _build_runtime_match_state(self, match_id: str) -> dict[str, Any]:
+        hub = getattr(self.app.state, "live_match_hub", None)
+        if hub is None:
+            raise GlobalApiV1NotFoundError(f"Match '{match_id}' was not found.")
+        state = hub.get_state(match_id)
+        playback = hub.get_playback_context(match_id)
+        if state is None:
+            raise GlobalApiV1NotFoundError(f"Match '{match_id}' was not found.")
+        home_name = (
+            playback.viewer_state.home_team.team_name
+            if playback is not None and playback.viewer_state is not None
+            else "Home"
+        )
+        away_name = (
+            playback.viewer_state.away_team.team_name
+            if playback is not None and playback.viewer_state is not None
+            else "Away"
+        )
+        return {
+            "match_id": match_id,
+            "status": state.snapshot.status,
+            "teams": [home_name, away_name],
+            "score": f"{state.snapshot.score.home}-{state.snapshot.score.away}",
+            "time": state.snapshot.current_minute,
+            "possession": [state.snapshot.possession_estimate.home, state.snapshot.possession_estimate.away],
+            "stats": {
+                "spectator_count": state.spectator_count,
+                "event_count": state.event_count,
+            },
+        }
+
+    def _build_runtime_match_commentary_event(self, match_id: str) -> dict[str, Any]:
+        hub = getattr(self.app.state, "live_match_hub", None)
+        if hub is None:
+            raise GlobalApiV1NotFoundError(f"Match '{match_id}' was not found.")
+        events, _cursor = hub.get_events_since(match_id, 0)
+        if not events:
+            state = hub.get_state(match_id)
+            if state is None:
+                raise GlobalApiV1NotFoundError(f"Match '{match_id}' was not found.")
+            return {
+                "type": "commentary",
+                "text": f"Live coverage ready at minute {state.snapshot.current_minute}.",
+                "timestamp": state.snapshot.current_minute,
+            }
+        latest = events[-1]
+        return {
+            "type": "commentary",
+            "text": latest.commentary or latest.event_type.replace("_", " ").title(),
+            "timestamp": latest.minute,
+        }
+
+    def _require_demo_fixture_support(self, operation: str) -> None:
+        if self._demo_fixtures_enabled:
+            return
+        raise GlobalApiV1RuntimeUnavailableError(
+            f"{operation.capitalize()} is unavailable because the protected-environment API v1 demo fixtures are disabled."
+        )
 
     def _get_listing(self, listing_id: str) -> dict[str, Any]:
         listing = self.state.market_listings.get(listing_id)
@@ -766,3 +928,15 @@ class GlobalApiV1Service:
     @staticmethod
     def _copy(payload: Any) -> Any:
         return deepcopy(payload)
+
+
+def _is_protected_environment(app: FastAPI) -> bool:
+    settings = getattr(app.state, "settings", None)
+    environment = str(getattr(settings, "app_env", "") or "").strip().lower()
+    return environment in {"production", "prod", "staging"}
+
+
+def _demo_fixtures_enabled(app: FastAPI) -> bool:
+    if not _is_protected_environment(app):
+        return True
+    return str(os.getenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", "")).strip().lower() in {"1", "true", "yes", "on"}

@@ -416,26 +416,6 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                 ),
                               ],
                               const SizedBox(height: 18),
-                              Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(18),
-                                  color: Colors.white.withValues(alpha: 0.04),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.08),
-                                  ),
-                                ),
-                                child: const Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text('Guest preview'),
-                                    SizedBox(height: 8),
-                                    Text(
-                                      'You can explore the shell before login, but live moves, club editing, and protected creator or admin tools stay locked until authentication succeeds.',
-                                    ),
-                                  ],
-                                ),
-                              ),
                               const SizedBox(height: 20),
                               SizedBox(
                                 width: double.infinity,
