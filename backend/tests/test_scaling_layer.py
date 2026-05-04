@@ -218,6 +218,7 @@ def test_sensitive_rate_limit_override_returns_standard_429(monkeypatch: pytest.
         auth_rate_limit_per_minute=100,
         market_rate_limit_per_minute=100,
         wallet_rate_limit_per_minute=100,
+        wallet_read_rate_limit_per_minute=100,
         sensitive_rate_limit_per_minute=1,
     )
     monkeypatch.setattr(rate_limit_module, "extract_access_token_subject", lambda _request: "user-1")
@@ -245,6 +246,54 @@ def test_sensitive_rate_limit_override_returns_standard_429(monkeypatch: pytest.
     assert second.json()["error"] is True
     assert second.json()["code"] == "rate_limit_exceeded"
     assert regular.status_code == 200, regular.text
+
+
+def test_wallet_read_rate_limit_is_separate_from_wallet_writes(
+    monkeypatch: pytest.MonkeyPatch,
+    test_settings,
+) -> None:
+    import app.core.rate_limit as rate_limit_module
+
+    settings = replace(
+        test_settings,
+        distributed_rate_limit_enabled=True,
+        redis_url=None,
+        api_rate_limit_per_minute=100,
+        auth_rate_limit_per_minute=100,
+        market_rate_limit_per_minute=100,
+        wallet_rate_limit_per_minute=1,
+        wallet_read_rate_limit_per_minute=2,
+        sensitive_rate_limit_per_minute=100,
+    )
+    monkeypatch.setattr(rate_limit_module, "extract_access_token_subject", lambda _request: "user-1")
+
+    app = FastAPI()
+    app.state.settings = settings
+    install_api_contracts(app)
+    app.add_middleware(RateLimitMiddleware)
+
+    @app.get("/api/wallets/overview")
+    def wallet_overview() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.post("/api/wallets/convert")
+    def wallet_convert() -> dict[str, bool]:
+        return {"ok": True}
+
+    with TestClient(app) as isolated_client:
+        first_read = isolated_client.get("/api/wallets/overview")
+        second_read = isolated_client.get("/api/wallets/overview")
+        third_read = isolated_client.get("/api/wallets/overview")
+        first_write = isolated_client.post("/api/wallets/convert")
+        second_write = isolated_client.post("/api/wallets/convert")
+
+    assert first_read.status_code == 200, first_read.text
+    assert second_read.status_code == 200, second_read.text
+    assert third_read.status_code == 429, third_read.text
+    assert third_read.headers["X-RateLimit-Scope"] == "wallet_read"
+    assert first_write.status_code == 200, first_write.text
+    assert second_write.status_code == 429, second_write.text
+    assert second_write.headers["X-RateLimit-Scope"] == "wallet"
 
 
 def test_memory_rate_limit_store_resets_after_window(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -74,6 +74,10 @@ class SettingsSource(BaseModel):
     auth_rate_limit_per_minute: int = Field(default=10, validation_alias="GTE_AUTH_RATE_LIMIT_PER_MINUTE")
     market_rate_limit_per_minute: int = Field(default=40, validation_alias="GTE_MARKET_RATE_LIMIT_PER_MINUTE")
     wallet_rate_limit_per_minute: int = Field(default=50, validation_alias="GTE_WALLET_RATE_LIMIT_PER_MINUTE")
+    wallet_read_rate_limit_per_minute: int = Field(
+        default=120,
+        validation_alias="GTE_WALLET_READ_RATE_LIMIT_PER_MINUTE",
+    )
     sensitive_rate_limit_per_minute: int = Field(
         default=5,
         validation_alias="GTE_SENSITIVE_RATE_LIMIT_PER_MINUTE",
@@ -757,6 +761,7 @@ class Settings:
     auth_rate_limit_per_minute: int
     market_rate_limit_per_minute: int
     wallet_rate_limit_per_minute: int
+    wallet_read_rate_limit_per_minute: int
     sensitive_rate_limit_per_minute: int
     task_queue_enabled: bool
     task_queue_name: str
@@ -2028,6 +2033,7 @@ def load_settings(
         auth_rate_limit_per_minute=max(1, source.auth_rate_limit_per_minute),
         market_rate_limit_per_minute=max(1, source.market_rate_limit_per_minute),
         wallet_rate_limit_per_minute=max(1, source.wallet_rate_limit_per_minute),
+        wallet_read_rate_limit_per_minute=max(1, source.wallet_read_rate_limit_per_minute),
         sensitive_rate_limit_per_minute=max(1, source.sensitive_rate_limit_per_minute),
         task_queue_enabled=source.task_queue_enabled,
         task_queue_name=(source.task_queue_name.strip() or "gtex-jobs"),

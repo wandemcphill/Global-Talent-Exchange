@@ -107,6 +107,7 @@ class ApiRateLimiter:
     _throttled_events: int = 0
 
     EXEMPT_PREFIXES = ("/health", "/ready", "/version", "/docs", "/redoc", "/openapi.json")
+    _WALLET_PREFIXES = ("/api/wallets", "/wallets", "/wallet")
 
     def check_request(self, request: Request) -> RateLimitDecision | None:
         if request.method.upper() == "OPTIONS":
@@ -159,6 +160,7 @@ class ApiRateLimiter:
 
     def _rule_for_request(self, request: Request) -> RateLimitRule:
         path = (request.url.path or "/").lower()
+        method = request.method.upper()
         if path in {"/auth/login", "/api/auth/login"}:
             return self._rules()[0]
         if path in {
@@ -178,15 +180,18 @@ class ApiRateLimiter:
             return self._rules()[1]
         if self._matches_prefix(path, "/api/market", "/market", "/api/gtex/market", "/gtex/market"):
             return self._rules()[2]
-        if self._matches_prefix(path, "/api/wallets", "/wallets", "/wallet"):
-            return self._rules()[3]
-        return self._rules()[4]
+        if self._matches_prefix(path, *self._WALLET_PREFIXES):
+            if method in {"GET", "HEAD"}:
+                return self._rules()[3]
+            return self._rules()[4]
+        return self._rules()[5]
 
     def _rules(self) -> tuple[RateLimitRule, ...]:
         return (
             RateLimitRule("auth", limit=self.settings.auth_rate_limit_per_minute, window_seconds=60),
             RateLimitRule("sensitive", limit=self.settings.sensitive_rate_limit_per_minute, window_seconds=60),
             RateLimitRule("market", limit=self.settings.market_rate_limit_per_minute, window_seconds=60),
+            RateLimitRule("wallet_read", limit=self.settings.wallet_read_rate_limit_per_minute, window_seconds=60),
             RateLimitRule("wallet", limit=self.settings.wallet_rate_limit_per_minute, window_seconds=60),
             RateLimitRule("default", limit=self.settings.api_rate_limit_per_minute, window_seconds=60),
         )
