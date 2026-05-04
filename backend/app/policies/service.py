@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import os
 
-from sqlalchemy import Select, desc, select
+from sqlalchemy import Select, desc, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.policy import (
@@ -71,6 +71,7 @@ DEFAULT_COUNTRY_POLICIES: tuple[dict[str, object], ...] = (
 
 REGION_CHANGE_LOCK_DAYS = 365
 _DEFAULTS_SESSION_FLAG = "policy_defaults_seeded"
+_DEFAULTS_EXISTENCE_CHECKED_FLAG = "policy_defaults_existence_checked"
 
 
 def _coerce_utc(value: datetime | None) -> datetime | None:
@@ -88,7 +89,18 @@ class PolicyService:
     def _ensure_defaults_seeded(self) -> None:
         if self.session.info.get(_DEFAULTS_SESSION_FLAG):
             return
+        if self.session.info.get(_DEFAULTS_EXISTENCE_CHECKED_FLAG):
+            self.session.info[_DEFAULTS_SESSION_FLAG] = True
+            return
+        required_document_count = len(DEFAULT_POLICY_DOCUMENTS)
+        document_count = int(self.session.scalar(select(func.count()).select_from(PolicyDocument)) or 0)
+        country_policy_count = int(self.session.scalar(select(func.count()).select_from(CountryFeaturePolicy)) or 0)
+        if document_count >= required_document_count and country_policy_count >= len(DEFAULT_COUNTRY_POLICIES):
+            self.session.info[_DEFAULTS_EXISTENCE_CHECKED_FLAG] = True
+            self.session.info[_DEFAULTS_SESSION_FLAG] = True
+            return
         self.seed_defaults()
+        self.session.info[_DEFAULTS_EXISTENCE_CHECKED_FLAG] = True
         self.session.info[_DEFAULTS_SESSION_FLAG] = True
 
     def seed_defaults(self) -> None:
@@ -445,10 +457,6 @@ class PolicyService:
 
     def resolve_country_code_for_user(self, *, user) -> str:
         from app.models.treasury import KycProfile
-
-        region_profile = self.session.scalar(select(UserRegionProfile).where(UserRegionProfile.user_id == user.id))
-        if region_profile is not None:
-            return self.normalize_country_code(region_profile.region_code)
 
         region_profile = self.session.scalar(select(UserRegionProfile).where(UserRegionProfile.user_id == user.id))
         if region_profile is not None:

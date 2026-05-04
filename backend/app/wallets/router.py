@@ -1183,7 +1183,6 @@ def get_withdrawal_eligibility(
 ) -> WithdrawalEligibilityView:
     service = _build_treasury_service(request)
     eligibility = service.get_withdrawal_eligibility(session, current_user)
-    service.track_event(session, "withdrawal_started", user=current_user, metadata={})
     return WithdrawalEligibilityView(
         available_balance=eligibility.available_balance,
         withdrawable_now=eligibility.withdrawable_now,

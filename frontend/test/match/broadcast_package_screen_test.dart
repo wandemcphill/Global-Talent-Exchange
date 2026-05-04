@@ -99,6 +99,7 @@ class _FakeMatchGiftClient implements MatchGiftClient {
       giftDisplayName: gift.label,
       grossAmount: gift.fanCoinAmount.toStringAsFixed(4),
       recipientLabel: target.recipientLabel,
+      ledgerUnit: "Fan Coin",
     );
   }
 }
