@@ -187,8 +187,18 @@ def _default_state() -> GlobalApiV1State:
         }
     }
     state.stories = [
-        {"id": "s1", "title": "Underdog Shock", "image": "https://cdn.example.com/stories/underdog.png", "type": "giant_killing"},
-        {"id": "s2", "title": "Teenage Star Explodes", "image": "https://cdn.example.com/stories/teen-star.png", "type": "breakout"},
+        {
+            "id": "s1",
+            "title": "Underdog Shock",
+            "image": "https://cdn.example.com/stories/underdog.png",
+            "type": "giant_killing",
+        },
+        {
+            "id": "s2",
+            "title": "Teenage Star Explodes",
+            "image": "https://cdn.example.com/stories/teen-star.png",
+            "type": "breakout",
+        },
     ]
     state.tasks = [
         {"id": "task_daily_login", "title": "Daily Login", "reward": 100, "streak_target": 1},
@@ -203,8 +213,18 @@ def _default_state() -> GlobalApiV1State:
         }
     }
     state.feed_items = [
-        {"id": "feed_1", "type": "story", "title": "Underdog Shock", "summary": "Lagos Titans stunned the league leaders."},
-        {"id": "feed_2", "type": "market", "title": "Wonderkid interest rising", "summary": "Three clubs are circling Adeyemi Jr."},
+        {
+            "id": "feed_1",
+            "type": "story",
+            "title": "Underdog Shock",
+            "summary": "Lagos Titans stunned the league leaders.",
+        },
+        {
+            "id": "feed_2",
+            "type": "market",
+            "title": "Wonderkid interest rising",
+            "summary": "Three clubs are circling Adeyemi Jr.",
+        },
     ]
     state.federations = {
         "fed_1": {
@@ -530,7 +550,9 @@ class GlobalApiV1Service:
             "amount": amount if amount is not None else 1000,
         }
 
-    def list_club_for_sale(self, user: User, *, club_id: str, asking_price: int | None, note: str | None) -> dict[str, Any]:
+    def list_club_for_sale(
+        self, user: User, *, club_id: str, asking_price: int | None, note: str | None
+    ) -> dict[str, Any]:
         self._require_demo_fixture_support("club sale listings")
         club = self._get_club(club_id)
         listing = {
@@ -654,7 +676,9 @@ class GlobalApiV1Service:
             return {"stories": []}
         return {"stories": self._copy(self.state.stories)}
 
-    def generate_story(self, user: User, *, title: str | None, story_type: str, subject_id: str | None) -> dict[str, Any]:
+    def generate_story(
+        self, user: User, *, title: str | None, story_type: str, subject_id: str | None
+    ) -> dict[str, Any]:
         self._require_demo_fixture_support("story generation")
         story = {
             "id": f"s_{uuid4().hex[:8]}",
