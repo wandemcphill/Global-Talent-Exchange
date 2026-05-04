@@ -494,9 +494,20 @@ class TreasuryService:
             return (fiat_limit / rate_value).quantize(AMOUNT_QUANTUM)
         return (fiat_limit * rate_value).quantize(AMOUNT_QUANTUM)
 
-    def get_withdrawal_eligibility(self, session: Session, user: User) -> WithdrawalEligibility:
-        settings = self.ensure_settings(session)
-        summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+    def get_withdrawal_eligibility(
+        self,
+        session: Session,
+        user: User,
+        *,
+        settings: TreasurySettings | None = None,
+        summary=None,
+        country_code: str | None = None,
+        country_withdrawals_enabled: bool | None = None,
+        missing_required_policies: tuple[str, ...] | None = None,
+        has_active_bank_account: bool | None = None,
+    ) -> WithdrawalEligibility:
+        settings = settings or self.ensure_settings(session)
+        summary = summary or self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
         available = Decimal(summary.available_balance)
         kyc_status = user.kyc_status
         kyc_tier = self.resolve_kyc_tier(kyc_status)
@@ -505,11 +516,16 @@ class TreasuryService:
             settings=settings,
             fiat_limit=per_request_limit_fiat,
         )
-        country_code, country_withdrawals_enabled, missing_required_policies = self._resolve_user_policy_state(
-            session, user
-        )
+        if country_code is None or country_withdrawals_enabled is None or missing_required_policies is None:
+            country_code, country_withdrawals_enabled, missing_required_policies = self._resolve_user_policy_state(
+                session, user
+            )
         requires_kyc = kyc_status in {KycStatus.UNVERIFIED, KycStatus.PENDING, KycStatus.REJECTED}
-        requires_bank = self.ensure_user_bank_account(session, user) is None
+        requires_bank = (
+            self.ensure_user_bank_account(session, user) is None
+            if has_active_bank_account is None
+            else not has_active_bank_account
+        )
         pending_withdrawals = self._pending_withdrawal_amount(session, user)
         policy_blocked = (not country_withdrawals_enabled) or bool(missing_required_policies)
         policy_block_reason = (

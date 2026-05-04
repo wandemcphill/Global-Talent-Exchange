@@ -72,6 +72,8 @@ DEFAULT_COUNTRY_POLICIES: tuple[dict[str, object], ...] = (
 REGION_CHANGE_LOCK_DAYS = 365
 _DEFAULTS_SESSION_FLAG = "policy_defaults_seeded"
 _DEFAULTS_EXISTENCE_CHECKED_FLAG = "policy_defaults_existence_checked"
+_MISSING_ACCEPTANCES_CACHE_KEY = "policy_missing_acceptances"
+_COUNTRY_POLICY_CACHE_KEY = "policy_country_policy"
 
 
 def _coerce_utc(value: datetime | None) -> datetime | None:
@@ -85,6 +87,40 @@ def _coerce_utc(value: datetime | None) -> datetime | None:
 @dataclass(slots=True)
 class PolicyService:
     session: Session
+
+    def _missing_acceptances_cache(self) -> dict[str, list[PolicyDocumentVersion]]:
+        cache = self.session.info.get(_MISSING_ACCEPTANCES_CACHE_KEY)
+        if isinstance(cache, dict):
+            return cache
+        cache = {}
+        self.session.info[_MISSING_ACCEPTANCES_CACHE_KEY] = cache
+        return cache
+
+    def _country_policy_cache(self) -> dict[str, CountryFeaturePolicy]:
+        cache = self.session.info.get(_COUNTRY_POLICY_CACHE_KEY)
+        if isinstance(cache, dict):
+            return cache
+        cache = {}
+        self.session.info[_COUNTRY_POLICY_CACHE_KEY] = cache
+        return cache
+
+    def _clear_missing_acceptances_cache(self, *, user_id: str | None = None) -> None:
+        cache = self.session.info.get(_MISSING_ACCEPTANCES_CACHE_KEY)
+        if not isinstance(cache, dict):
+            return
+        if user_id is None:
+            cache.clear()
+            return
+        cache.pop(user_id, None)
+
+    def _clear_country_policy_cache(self, *, country_code: str | None = None) -> None:
+        cache = self.session.info.get(_COUNTRY_POLICY_CACHE_KEY)
+        if not isinstance(cache, dict):
+            return
+        if country_code is None:
+            cache.clear()
+            return
+        cache.pop(self.normalize_country_code(country_code), None)
 
     def _ensure_defaults_seeded(self) -> None:
         if self.session.info.get(_DEFAULTS_SESSION_FLAG):
@@ -104,6 +140,8 @@ class PolicyService:
         self.session.info[_DEFAULTS_SESSION_FLAG] = True
 
     def seed_defaults(self) -> None:
+        self._clear_country_policy_cache()
+        self._clear_missing_acceptances_cache()
         for document_key, title, is_mandatory in DEFAULT_POLICY_DOCUMENTS:
             document = self.session.scalar(select(PolicyDocument).where(PolicyDocument.document_key == document_key))
             if document is None:
@@ -206,6 +244,7 @@ class PolicyService:
         )
         self.session.add(acceptance)
         self.session.flush()
+        self._clear_missing_acceptances_cache(user_id=user_id)
         return acceptance
 
     def list_acceptances(self, *, user_id: str) -> list[PolicyAcceptanceRecord]:
@@ -270,6 +309,7 @@ class PolicyService:
             ).all():
                 other.is_published = False
         self.session.flush()
+        self._clear_missing_acceptances_cache()
         return version
 
     def list_country_policies(self) -> list[CountryFeaturePolicy]:
@@ -337,21 +377,35 @@ class PolicyService:
         policy.one_time_region_change_after_days = payload.one_time_region_change_after_days
         policy.active = payload.active
         self.session.flush()
+        self._clear_country_policy_cache(country_code=normalized_country_code)
+        self._clear_country_policy_cache(country_code="GLOBAL")
         return policy
 
     def get_country_policy(self, country_code: str) -> CountryFeaturePolicy:
         self._ensure_defaults_seeded()
         normalized = self.normalize_country_code(country_code)
+        cache = self._country_policy_cache()
+        cached = cache.get(normalized)
+        if cached is not None:
+            return cached
         policy = self._get_active_country_policy_record(normalized)
         if policy is not None:
+            cache[normalized] = policy
             return policy
         fallback = self._get_active_country_policy_record("GLOBAL")
         if fallback is not None:
+            cache[normalized] = fallback
             return fallback
-        return self._build_default_country_policy(normalized)
+        fallback = self._build_default_country_policy(normalized)
+        cache[normalized] = fallback
+        return fallback
 
     def list_missing_acceptances(self, *, user_id: str) -> list[PolicyDocumentVersion]:
         self._ensure_defaults_seeded()
+        cache = self._missing_acceptances_cache()
+        cached = cache.get(user_id)
+        if cached is not None:
+            return list(cached)
         documents = self.list_documents(mandatory_only=True)
         accepted_version_ids = {
             row.policy_document_version_id
@@ -374,6 +428,7 @@ class PolicyService:
                 continue
             if latest_version.id not in accepted_version_ids:
                 missing.append(latest_version)
+        cache[user_id] = list(missing)
         return missing
 
     def has_user_accepted_required_documents(self, *, user_id: str) -> bool:

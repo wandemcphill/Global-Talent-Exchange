@@ -96,6 +96,8 @@ wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])
 public_wallet_router = APIRouter(prefix="/wallet", tags=["wallet"])
 api_router = APIRouter(prefix="/api")
 admin_router = APIRouter(prefix="/api/admin/wallets", tags=["admin-wallets"])
+_ADMIN_GODMODE_STATE_CACHE_KEY = "_wallet_admin_godmode_state"
+_POLICY_CONTEXT_CACHE_PREFIX = "_wallet_policy_context:"
 
 
 def _api_operation_id(route: APIRoute) -> str:
@@ -326,9 +328,13 @@ def _build_withdrawal_quote(
 def _load_admin_god_mode_state(request: Request | None) -> dict[str, object]:
     if request is None or not hasattr(request.app.state, "settings"):
         return {}
+    request_state = getattr(request, "state", None)
+    cached = None if request_state is None else getattr(request_state, _ADMIN_GODMODE_STATE_CACHE_KEY, None)
+    if isinstance(cached, dict):
+        return dict(cached)
     try:
         service = AdminGodModeService(wallet_service=_build_wallet_service(request))
-        return service._load_state(request.app)
+        state = service._load_state(request.app)
     except Exception:
         config_root = getattr(request.app.state.settings, "config_root", None)
         if config_root is None:
@@ -337,9 +343,12 @@ def _load_admin_god_mode_state(request: Request | None) -> dict[str, object]:
         if not path.exists():
             return {}
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            state = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return {}
+    if request_state is not None:
+        setattr(request_state, _ADMIN_GODMODE_STATE_CACHE_KEY, dict(state))
+    return dict(state)
 
 
 def _withdrawal_controls(request: Request | None) -> dict[str, object]:
@@ -485,6 +494,34 @@ def _policy_block_reason(*, compliance_policy: object, missing_policies: list[ob
     verb = "is" if len(blocked_actions) == 1 else "are"
     country_code = getattr(compliance_policy, "country_code", "GLOBAL")
     return f"{action_text.capitalize()} {verb} currently restricted for country policy '{country_code}'."
+
+
+def _policy_context_cache_key(user_id: str) -> str:
+    return f"{_POLICY_CONTEXT_CACHE_PREFIX}{user_id}"
+
+
+def _resolve_wallet_policy_context(
+    *,
+    session: Session,
+    current_user: User,
+    request: Request | None,
+) -> tuple[object, list[object], str | None]:
+    if request is not None and hasattr(request, "state"):
+        cache_key = _policy_context_cache_key(current_user.id)
+        cached = getattr(request.state, cache_key, None)
+        if isinstance(cached, tuple) and len(cached) == 3:
+            return cached
+    policy_service = PolicyService(session)
+    compliance_policy = policy_service.get_country_policy_for_user(user=current_user)
+    missing_policies = policy_service.list_missing_acceptances(user_id=current_user.id)
+    policy_block_reason = _policy_block_reason(
+        compliance_policy=compliance_policy,
+        missing_policies=missing_policies,
+    )
+    resolved = (compliance_policy, missing_policies, policy_block_reason)
+    if request is not None and hasattr(request, "state"):
+        setattr(request.state, cache_key, resolved)
+    return resolved
 
 
 def _require_gateway_deposit(
@@ -727,18 +764,16 @@ def get_wallet_adaptive_overview(
     policy = _build_withdrawal_policy_snapshot(request)
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
-    policy_service = PolicyService(session)
-    compliance_policy = policy_service.get_country_policy_for_user(user=current_user)
-    missing_policies = policy_service.list_missing_acceptances(user_id=current_user.id)
+    compliance_policy, missing_policies, policy_block_reason = _resolve_wallet_policy_context(
+        session=session,
+        current_user=current_user,
+        request=request,
+    )
     deposit_mode = _resolved_deposit_mode(request=request, settings=settings, policy=policy)
     payout_mode = (
         "bank_transfer"
         if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
         else _selected_payout_mode(policy)
-    )
-    policy_block_reason = _policy_block_reason(
-        compliance_policy=compliance_policy,
-        missing_policies=missing_policies,
     )
     overview["competition_reward_balance"] = service.competition_reward_balance(session, current_user)
     overview["competition_reward_withdrawable_balance"] = service.competition_reward_withdrawable_balance(
@@ -815,12 +850,10 @@ def get_wallet_overview(
     treasury_service = _build_treasury_service(request)
     settings = treasury_service.ensure_settings(session)
     policy = _build_withdrawal_policy_snapshot(request)
-    policy_service = PolicyService(session)
-    compliance_policy = policy_service.get_country_policy_for_user(user=current_user)
-    missing_policies = policy_service.list_missing_acceptances(user_id=current_user.id)
-    policy_block_reason = _policy_block_reason(
-        compliance_policy=compliance_policy,
-        missing_policies=missing_policies,
+    compliance_policy, missing_policies, policy_block_reason = _resolve_wallet_policy_context(
+        session=session,
+        current_user=current_user,
+        request=request,
     )
     deposit_mode = _resolved_deposit_mode(request=request, settings=settings, policy=policy)
     withdrawal_mode = (
@@ -864,7 +897,18 @@ def get_wallet_overview(
             ),
         )
     )
-    eligibility = treasury_service.get_withdrawal_eligibility(session, current_user)
+    eligibility = treasury_service.get_withdrawal_eligibility(
+        session,
+        current_user,
+        settings=settings,
+        summary=summary,
+        country_code=str(compliance_policy.country_code),
+        country_withdrawals_enabled=bool(compliance_policy.platform_reward_withdrawals_enabled),
+        missing_required_policies=tuple(
+            str(item.document.document_key) for item in missing_policies if getattr(item, "document", None) is not None
+        ),
+        has_active_bank_account=treasury_service.ensure_user_bank_account(session, current_user) is not None,
+    )
     return WalletOverviewView(
         available_balance=summary.available_balance,
         pending_deposits=Decimal(pending_deposits or 0),
