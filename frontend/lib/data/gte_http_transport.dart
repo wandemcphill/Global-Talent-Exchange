@@ -7,11 +7,9 @@ import 'gte_api_repository.dart';
 typedef GteHttpClientFactory = http.Client Function();
 
 class GteHttpTransport implements GteTransport {
-  GteHttpTransport({
-    Duration? connectionTimeout,
-    http.Client? client,
-  })  : connectionTimeout = connectionTimeout ?? const Duration(seconds: 5),
-        _client = client;
+  GteHttpTransport({Duration? connectionTimeout, http.Client? client})
+    : connectionTimeout = connectionTimeout ?? const Duration(seconds: 15),
+      _client = client;
 
   final Duration connectionTimeout;
   final http.Client? _client;
@@ -28,8 +26,9 @@ class GteHttpTransport implements GteTransport {
       if (request.body != null) {
         httpRequest.body = jsonEncode(request.body);
       }
-      final http.StreamedResponse response =
-          await client.send(httpRequest).timeout(connectionTimeout);
+      final http.StreamedResponse response = await client
+          .send(httpRequest)
+          .timeout(connectionTimeout);
       final String text = await response.stream.bytesToString();
       final Object? decodedBody =
           text.trim().isEmpty ? null : _decodeBody(text);

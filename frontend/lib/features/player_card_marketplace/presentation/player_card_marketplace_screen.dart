@@ -115,7 +115,7 @@ class _PlayerCardMarketplaceScreenState
           child: Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
-              title: const Text('Transfer Market'),
+              title: const Text('Transfer desk'),
               actions: <Widget>[
                 IconButton(onPressed: _reload, icon: const Icon(Icons.refresh)),
               ],
@@ -126,22 +126,22 @@ class _PlayerCardMarketplaceScreenState
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
                 children: <Widget>[
                   GtexHeroBanner(
-                    eyebrow: 'TRANSFER MARKET',
-                    title: 'Scout, sign, and list players for your club.',
+                    eyebrow: 'PLAYER UNIVERSE',
+                    title: 'Trade live player cards and move squad capital.',
                     description:
-                        'Use a simple football manager flow: View Player, Buy Now, Make Bid, List for Transfer, or Remove Listing.',
+                        'This desk keeps live sales, loans, squad inventory, and move execution in one football trading surface instead of scattering the action.',
                     accent: const Color(0xFF91C9FF),
                     chips: <Widget>[
                       GteMetricChip(
-                        label: 'Listed',
+                        label: 'Sale board',
                         value: _controller.marketplaceSales.total.toString(),
                       ),
                       GteMetricChip(
-                        label: 'Loans',
+                        label: 'Loan board',
                         value: _controller.marketplaceLoans.total.toString(),
                       ),
                       GteMetricChip(
-                        label: 'Players',
+                        label: 'Scouted',
                         value: _controller.players.length.toString(),
                       ),
                       GteMetricChip(
@@ -158,7 +158,7 @@ class _PlayerCardMarketplaceScreenState
                       FilledButton.tonalIcon(
                         onPressed: _reload,
                         icon: const Icon(Icons.refresh),
-                        label: const Text('Refresh market'),
+                        label: const Text('Refresh desk'),
                       ),
                       if (!_hasAuth && widget.onOpenLogin != null)
                         FilledButton.icon(
@@ -172,8 +172,8 @@ class _PlayerCardMarketplaceScreenState
                         TextField(
                           controller: _searchController,
                           decoration: const InputDecoration(
-                            labelText: 'Scout players',
-                            hintText: 'player, club, position',
+                            labelText: 'Scout the board',
+                            hintText: 'player, club, position, nationality',
                           ),
                           onSubmitted: (_) => _reload(),
                         ),
@@ -240,7 +240,7 @@ class _PlayerCardMarketplaceScreenState
         _controller.marketplaceSales.items;
     if (_controller.marketplaceError != null && items.isEmpty) {
       return GteStatePanel(
-        title: 'Transfer Market unavailable',
+        title: 'Transfer desk unavailable',
         message: _controller.marketplaceError!,
         actionLabel: 'Retry',
         onAction: _reload,
@@ -249,7 +249,7 @@ class _PlayerCardMarketplaceScreenState
     }
     if (_controller.isLoadingMarketplace && items.isEmpty) {
       return const GteStatePanel(
-        title: 'Loading Transfer Market',
+        title: 'Loading transfer desk',
         message: 'Players, prices, and availability are loading.',
         icon: Icons.storefront_outlined,
         isLoading: true,
