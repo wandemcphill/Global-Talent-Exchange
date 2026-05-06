@@ -38,5 +38,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r backend/requirements.txt black ruff detect-secrets
       - run: python tools/check_python_runtime_alignment.py
+      - run: python tools/audit/generate_api_contract_bindings.py
+      - run: python tools/audit/check_api_contract_violations.py
       - run: python tools/quality/run_changed_quality.py --base "$QUALITY_BASE_SHA" --head "$QUALITY_HEAD_SHA"
         shell: bash

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../shared/auth/auth_identity_store.dart';
 import '../shared/models/auth_session.dart';
+import 'gte_api_contract.dart';
 import 'gte_models.dart';
 
 enum GteBackendMode { live, fixture, liveThenFixture }
@@ -115,7 +116,7 @@ class GteRepositoryConfig {
     String path, [
     Map<String, Object?> queryParameters = const <String, Object?>{},
   ]) {
-    final String resolvedPath = gteVersionedApiPath(path);
+    final String resolvedPath = gteCanonicalApiPath(path);
     final Uri baseUri = Uri.parse(
       baseUrl.endsWith('/') ? baseUrl : '$baseUrl/',
     );
@@ -1755,7 +1756,9 @@ class GteModeAwareApiRepository implements GteApiRepository {
     final http.Client client = http.Client();
     try {
       final http.MultipartRequest request = http.MultipartRequest('POST', uri)
-        ..headers['Accept'] = 'application/json';
+        ..headers.addAll(
+          gteVersionedApiHeaders(<String, String>{'Accept': 'application/json'}),
+        );
       final String? token = await tokenStore.readToken();
       if (token != null && token.isNotEmpty) {
         request.headers['Authorization'] = 'Bearer $token';
@@ -1865,7 +1868,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
         GteTransportRequest(
           method: 'POST',
           uri: config.uriFor('/auth/refresh'),
-          headers: headers,
+          headers: gteVersionedApiHeaders(headers),
           body: <String, Object?>{'refresh_token': session.refreshToken},
         ),
       );
@@ -1921,7 +1924,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
         GteTransportRequest(
           method: method,
           uri: config.uriFor(path, query),
-          headers: headers,
+          headers: gteVersionedApiHeaders(headers),
           body: body,
         ),
       );
@@ -2118,32 +2121,6 @@ String gteApiErrorMessage(Object? payload, {required String fallback}) {
   return _extractApiErrorMessage(payload) ?? fallback;
 }
 
-String gteVersionedApiPath(String path) {
-  final String trimmed = path.trim();
-  if (trimmed.isEmpty) {
-    return '/api/v1';
-  }
-  if (_hasUriScheme(trimmed)) {
-    return trimmed;
-  }
-  if (trimmed.startsWith('/api/v1')) {
-    return trimmed;
-  }
-  if (trimmed == '/api') {
-    return '/api/v1';
-  }
-  if (trimmed.startsWith('/api/')) {
-    return '/api/v1${trimmed.substring(4)}';
-  }
-  if (_shouldSkipVersioning(trimmed)) {
-    return trimmed;
-  }
-  if (trimmed.startsWith('/')) {
-    return '/api/v1$trimmed';
-  }
-  return '/api/v1/$trimmed';
-}
-
 Object? gteApiSuccessPayload(Object? payload) {
   if (!_isApiEnvelope(payload)) {
     return payload;
@@ -2209,25 +2186,6 @@ String? _extractApiErrorMessage(Object? payload) {
   }
 
   return null;
-}
-
-bool _hasUriScheme(String path) {
-  return path.startsWith('http://') ||
-      path.startsWith('https://') ||
-      path.startsWith('ws://') ||
-      path.startsWith('wss://');
-}
-
-bool _shouldSkipVersioning(String path) {
-  return path == '/docs' ||
-      path.startsWith('/docs/') ||
-      path == '/openapi.json' ||
-      path == '/redoc' ||
-      path.startsWith('/tts') ||
-      path == '/health' ||
-      path == '/ready' ||
-      path == '/version' ||
-      path == '/metrics';
 }
 
 bool _isApiEnvelope(Object? payload) {

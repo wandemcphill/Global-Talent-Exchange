@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'gte_api_contract.dart';
 import 'gte_api_repository.dart';
 
 typedef GteHttpClientFactory = http.Client Function();
@@ -22,7 +23,11 @@ class GteHttpTransport implements GteTransport {
     final bool ownsClient = _client == null;
     try {
       final http.Request httpRequest = http.Request(request.method, request.uri)
-        ..headers.addAll(request.headers);
+        ..headers.addAll(
+          request.uri.path.startsWith('/api/v2')
+              ? gteVersionedApiHeaders(request.headers)
+              : request.headers,
+        );
       if (request.body != null) {
         httpRequest.body = jsonEncode(request.body);
       }

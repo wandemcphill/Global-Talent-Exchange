@@ -485,11 +485,11 @@ class _FeatureFixtureTransport implements GteTransport {
   }
 
   String _normalizePath(String path) {
-    if (path == '/api/v1') {
+    if (path == '/api/v2') {
       return '/api';
     }
-    if (path.startsWith('/api/v1/')) {
-      return '/api${path.substring('/api/v1'.length)}';
+    if (path.startsWith('/api/v2/')) {
+      return '/api${path.substring('/api/v2'.length)}';
     }
     return path;
   }
@@ -752,3 +752,4 @@ class _FeatureFixtureTransport implements GteTransport {
     };
   }
 }
+

@@ -1160,7 +1160,7 @@ def _issue_unity_live_access_view(
         expires_in=int(token_bundle["access_expires_in"]),
         refresh_expires_in=int(token_bundle["refresh_expires_in"]),
         live_path=f"/match/{match_id}/live",
-        websocket_path=f"/api/v1/ws/match/{match_id}?format=unity",
+        websocket_path=f"/api/v2/ws/match/{match_id}?format=unity",
         refresh_path=f"/match/{match_id}/unity-access/refresh",
     )
 
@@ -1178,7 +1178,7 @@ def _build_active_live_match_view(request: Request, match_id: str) -> ActiveLive
         status="live" if state is None else str(state.snapshot.status),
         spectator_count=0 if state is None else int(state.spectator_count),
         live_path=f"/match/{match_id}/live",
-        websocket_path=f"/api/v1/ws/match/{match_id}?format=unity",
+        websocket_path=f"/api/v2/ws/match/{match_id}?format=unity",
         commentary_websocket_path=f"/api/matches/{match_id}/commentary/stream",
     )
 
@@ -1572,3 +1572,4 @@ async def _stream_realtime_topics(
 
 
 __all__ = ["router"]
+

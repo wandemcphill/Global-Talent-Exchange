@@ -11,7 +11,7 @@ from app.models.hosted_competition import HostedCompetitionStatus, UserHostedCom
 def test_hosted_discovery_api_route_bypasses_lazy_module_hydration(app, client) -> None:
     assert app.state.modules_hydrated is False
 
-    response = client.get("/api/v1/hosted-competitions")
+    response = client.get("/api/v2/hosted-competitions")
 
     assert response.status_code == 200
     assert response.json() == {"success": True, "data": {"competitions": []}}
@@ -59,3 +59,4 @@ def test_hosted_discovery_query_budget_stays_single_pass(app_session_factory) ->
 
     assert [competition.title for competition in competitions] == ["Hosted Queue Cup"]
     assert query_count <= 1
+

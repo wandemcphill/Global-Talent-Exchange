@@ -5,6 +5,8 @@ import json
 import logging
 import re
 from copy import deepcopy
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Iterable
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -28,7 +30,11 @@ from app.core.errors import (
 
 logger = logging.getLogger(__name__)
 
-API_VERSION_PREFIX = "/api/v1"
+API_VERSION_PREFIX = "/api/v2"
+LEGACY_API_VERSION_PREFIX = "/api/v1"
+API_VERSION_HEADER_NAME = "X-API-Version"
+API_VERSION_HEADER_VALUE = "2"
+API_CONTRACT_PATH = Path(__file__).resolve().parents[3] / "shared" / "api_contract.json"
 _ALIAS_EXCLUDED_PREFIXES = (
     "/docs",
     "/openapi.json",
@@ -59,6 +65,7 @@ def install_api_contracts(app: FastAPI) -> None:
         return
     app.state.api_contract_alias_priorities = {}
     app.state.api_contract_alias_routes = {}
+    _install_contract_guard_middleware(app)
     _install_exception_handlers(app)
     _install_envelope_middleware(app)
     _install_openapi_transform(app)
@@ -261,6 +268,60 @@ def _install_envelope_middleware(app: FastAPI) -> None:
     app.state.api_contract_envelope_middleware_installed = True
 
 
+class ApiContractGuardMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if _is_contract_exempt_path(path):
+            return await call_next(request)
+
+        if path.startswith(LEGACY_API_VERSION_PREFIX):
+            _log_rejected_request(request, route=path, reason="legacy_version")
+            return _error_response(
+                status.HTTP_410_GONE,
+                message="This endpoint is no longer supported. Use the latest API.",
+                code="DEPRECATED_ROUTE",
+            )
+
+        contract = load_api_contract()
+        canonical_path = resolve_contract_path(path)
+        if canonical_path is None:
+            if _is_contract_managed_path(path):
+                _log_rejected_request(request, route=path, reason="not_in_contract")
+                return _error_response(
+                    status.HTTP_410_GONE,
+                    message="This endpoint is no longer supported. Use the latest API.",
+                    code="DEPRECATED_ROUTE",
+                )
+            return await call_next(request)
+
+        if path != canonical_path:
+            _log_rejected_request(request, route=path, reason="non_canonical_alias")
+            return _error_response(
+                status.HTTP_410_GONE,
+                message="This endpoint is no longer supported. Use the latest API.",
+                code="DEPRECATED_ROUTE",
+            )
+
+        if path.startswith(API_VERSION_PREFIX):
+            header_value = str(request.headers.get(API_VERSION_HEADER_NAME, "")).strip()
+            if header_value != str(contract["version_header"]["value"]).strip():
+                _log_rejected_request(request, route=path, reason="missing_version_header")
+                return _error_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    message="Requests to the canonical API must include X-API-Version: 2.",
+                    code="API_VERSION_REQUIRED",
+                )
+
+        return await call_next(request)
+
+
+def _install_contract_guard_middleware(app: FastAPI) -> None:
+    if getattr(app.state, "api_contract_guard_middleware_installed", False):
+        return
+    app.add_middleware(ApiContractGuardMiddleware)
+    app.state.api_contract_guard_middleware_installed = True
+
+
 async def _read_response_body(response: Response) -> bytes:
     body = getattr(response, "body", None)
     if isinstance(body, bytes):
@@ -433,6 +494,85 @@ def _reserved_versioned_fingerprints() -> set[tuple[str, tuple[str, ...]]]:
 
 def _path_matches_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(f"{prefix}/")
+
+
+@lru_cache
+def load_api_contract() -> dict[str, Any]:
+    return json.loads(API_CONTRACT_PATH.read_text(encoding="utf-8"))
+
+
+@lru_cache
+def _contract_alias_patterns() -> tuple[tuple[re.Pattern[str], str], ...]:
+    contract = load_api_contract()
+    patterns: list[tuple[re.Pattern[str], str]] = []
+    seen: set[tuple[str, str]] = set()
+    for alias, canonical in _flatten_contract_aliases(contract).items():
+        signature = (alias, canonical)
+        if signature in seen:
+            continue
+        seen.add(signature)
+        patterns.append((_path_pattern(alias), canonical))
+    return tuple(patterns)
+
+
+def resolve_contract_path(path: str) -> str | None:
+    normalized = path if path.startswith("/") else f"/{path}"
+    for pattern, canonical in _contract_alias_patterns():
+        if pattern.fullmatch(normalized):
+            return canonical
+    return None
+
+
+def _flatten_contract_aliases(contract: dict[str, Any]) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for route_entries in (contract.get("routes") or {}).values():
+        for entry in route_entries.values():
+            canonical = str(entry["canonical_path"])
+            aliases[canonical] = canonical
+            for alias in entry.get("aliases", ()):
+                aliases[str(alias)] = canonical
+    for entry in (contract.get("websockets") or {}).values():
+        canonical = str(entry["canonical_path"])
+        aliases[canonical] = canonical
+        for alias in entry.get("aliases", ()):
+            aliases[str(alias)] = canonical
+    for alias, canonical in (contract.get("deprecated_aliases") or {}).items():
+        aliases[str(alias)] = str(canonical)
+    return aliases
+
+
+def _path_pattern(path: str) -> re.Pattern[str]:
+    escaped = re.escape(path)
+    pattern = re.sub(r"\\\{[^}]+\\\}", r"[^/]+", escaped)
+    return re.compile(pattern)
+
+
+def _is_contract_exempt_path(path: str) -> bool:
+    contract = load_api_contract()
+    if path in set(contract.get("public_exempt_paths") or ()):
+        return True
+    for prefix in contract.get("public_exempt_prefixes") or ():
+        if _path_matches_prefix(path, str(prefix)):
+            return True
+    return False
+
+
+def _is_contract_managed_path(path: str) -> bool:
+    managed_prefixes = ("/api", "/auth", "/ws")
+    return any(_path_matches_prefix(path, prefix) for prefix in managed_prefixes)
+
+
+def _log_rejected_request(request: Request, *, route: str, reason: str) -> None:
+    logger.warning(
+        "api_contract.rejected route=%s reason=%s method=%s source=%s at=%s",
+        route,
+        reason,
+        request.method,
+        request.headers.get("X-Client-Platform")
+        or request.headers.get("X-App-Platform")
+        or request.headers.get("user-agent", "unknown"),
+        request.headers.get("X-Request-Started-At", "unknown"),
+    )
 
 
 def _is_versioned_request(request: Request) -> bool:
