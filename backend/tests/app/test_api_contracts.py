@@ -109,8 +109,8 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
 
     error_schema_ref = list_orders["responses"]["401"]["content"]["application/json"]["schema"]["$ref"]
     error_component = openapi["components"]["schemas"][error_schema_ref.rsplit("/", 1)[-1]]
-    assert error_component["required"] == ["success", "error", "code"]
-    assert error_component["properties"]["success"]["enum"] == [False]
+    assert error_component["required"] == ["error", "message", "code"]
+    assert error_component["properties"]["error"]["enum"] == [True]
 
     place_order = openapi["paths"]["/api/v2/orders"]["post"]
     assert "requestBody" in place_order
@@ -138,3 +138,16 @@ def test_versioned_aliases_wrap_legacy_handlers_in_standard_success_envelope(con
     assert "error" not in payload
     assert "code" not in payload
     assert "access_token" in payload["data"]
+
+
+def test_contract_guard_does_not_turn_valid_or_unknown_routes_into_gone(contract_app) -> None:
+    _app, client = contract_app
+
+    valid_response = client.get("/world-super-cup/countdown")
+    assert valid_response.status_code == 200, valid_response.text
+
+    unknown_response = client.get("/api/not-a-real-route")
+    assert unknown_response.status_code == 404, unknown_response.text
+
+    legacy_unknown_response = client.get("/api/v1/not-a-real-route")
+    assert legacy_unknown_response.status_code == 404, legacy_unknown_response.text

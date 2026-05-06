@@ -7,6 +7,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/match/live_match_viewer_route_support.dart';
+import 'package:gte_frontend/features/profile/profile_admin_screen.dart';
 import 'package:gte_frontend/features/profile/live_profile_provider.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
@@ -74,8 +75,9 @@ void main() {
 
       router.go(AppRoutes.profileAdmin);
       await tester.pumpAndSettle();
-      expect(find.text('Profile > Admin'), findsOneWidget);
-      expect(find.text('Open Admin Controls'), findsOneWidget);
+      expect(find.byType(ProfileAdminScreen), findsOneWidget);
+      expect(find.text('Admin command center'), findsOneWidget);
+      expect(find.text('Open command center'), findsOneWidget);
       expect(find.text('Regenerate Portrait'), findsOneWidget);
     },
   );
@@ -229,16 +231,15 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
 }
 
 MatchViewState _routeQualifiedViewState(String matchKey, MatchViewState state) {
-  final int lastFrameSecond =
-      state.frames.isEmpty ? 0 : state.frames.last.timeSeconds.ceil();
-  final int segmentEndSeconds =
-      state.segmentEndSeconds < lastFrameSecond
-          ? lastFrameSecond
-          : state.segmentEndSeconds;
-  final int durationSeconds =
-      state.durationSeconds < segmentEndSeconds
-          ? segmentEndSeconds
-          : state.durationSeconds;
+  final int lastFrameSecond = state.frames.isEmpty
+      ? 0
+      : state.frames.last.timeSeconds.ceil();
+  final int segmentEndSeconds = state.segmentEndSeconds < lastFrameSecond
+      ? lastFrameSecond
+      : state.segmentEndSeconds;
+  final int durationSeconds = state.durationSeconds < segmentEndSeconds
+      ? segmentEndSeconds
+      : state.durationSeconds;
   return MatchViewState(
     matchId: matchKey,
     source: state.source,

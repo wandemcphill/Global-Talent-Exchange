@@ -274,8 +274,8 @@ class ApiContractGuardMiddleware(BaseHTTPMiddleware):
         if _is_contract_exempt_path(path):
             return await call_next(request)
 
-        if path.startswith(LEGACY_API_VERSION_PREFIX):
-            _log_rejected_request(request, route=path, reason="legacy_version")
+        if is_explicitly_deprecated_route(path):
+            _log_rejected_request(request, route=path, reason="explicit_deprecated")
             return _error_response(
                 status.HTTP_410_GONE,
                 message="This endpoint is no longer supported. Use the latest API.",
@@ -286,31 +286,22 @@ class ApiContractGuardMiddleware(BaseHTTPMiddleware):
         canonical_path = resolve_contract_path(path)
         if canonical_path is None:
             if _is_contract_managed_path(path):
-                _log_rejected_request(request, route=path, reason="not_in_contract")
-                return _error_response(
-                    status.HTTP_410_GONE,
-                    message="This endpoint is no longer supported. Use the latest API.",
-                    code="DEPRECATED_ROUTE",
-                )
+                _log_contract_observation(request, route=path, reason="not_in_contract")
             return await call_next(request)
 
         if path != canonical_path:
-            _log_rejected_request(request, route=path, reason="non_canonical_alias")
-            return _error_response(
-                status.HTTP_410_GONE,
-                message="This endpoint is no longer supported. Use the latest API.",
-                code="DEPRECATED_ROUTE",
+            _log_contract_observation(
+                request,
+                route=path,
+                reason="non_canonical_alias",
+                canonical_route=canonical_path,
             )
+            return await call_next(request)
 
         if path.startswith(API_VERSION_PREFIX):
             header_value = str(request.headers.get(API_VERSION_HEADER_NAME, "")).strip()
             if header_value != str(contract["version_header"]["value"]).strip():
-                _log_rejected_request(request, route=path, reason="missing_version_header")
-                return _error_response(
-                    status.HTTP_400_BAD_REQUEST,
-                    message="Requests to the canonical API must include X-API-Version: 2.",
-                    code="API_VERSION_REQUIRED",
-                )
+                _log_contract_observation(request, route=path, reason="missing_version_header")
 
         return await call_next(request)
 
@@ -562,10 +553,42 @@ def _is_contract_managed_path(path: str) -> bool:
     return any(_path_matches_prefix(path, prefix) for prefix in managed_prefixes)
 
 
+@lru_cache
+def _explicit_deprecated_route_patterns() -> tuple[re.Pattern[str], ...]:
+    contract = load_api_contract()
+    explicit_paths = contract.get("explicit_deprecated_paths") or contract.get("deprecated_routes") or ()
+    return tuple(_path_pattern(str(path)) for path in explicit_paths)
+
+
+def is_explicitly_deprecated_route(path: str) -> bool:
+    normalized = path if path.startswith("/") else f"/{path}"
+    return any(pattern.fullmatch(normalized) for pattern in _explicit_deprecated_route_patterns())
+
+
 def _log_rejected_request(request: Request, *, route: str, reason: str) -> None:
     logger.warning(
         "api_contract.rejected route=%s reason=%s method=%s source=%s at=%s",
         route,
+        reason,
+        request.method,
+        request.headers.get("X-Client-Platform")
+        or request.headers.get("X-App-Platform")
+        or request.headers.get("user-agent", "unknown"),
+        request.headers.get("X-Request-Started-At", "unknown"),
+    )
+
+
+def _log_contract_observation(
+    request: Request,
+    *,
+    route: str,
+    reason: str,
+    canonical_route: str | None = None,
+) -> None:
+    logger.warning(
+        "api_contract.observed route=%s canonical_route=%s reason=%s method=%s source=%s at=%s",
+        route,
+        canonical_route,
         reason,
         request.method,
         request.headers.get("X-Client-Platform")

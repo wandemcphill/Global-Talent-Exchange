@@ -517,13 +517,13 @@ async def stream_match_commentary(websocket: WebSocket, match_id: str) -> None:
 
     user = _resolve_websocket_user(websocket)
     if user is None:
-        await websocket.close(code=4401)
+        await websocket.close(code=4401, reason="unauthorized")
         return
     service = GlobalApiV1Service(websocket.scope["app"])
     try:
         payload = service.build_match_commentary_event(match_id)
     except GlobalApiV1Error:
-        await websocket.close(code=4404)
+        await websocket.close(code=4404, reason="not_found")
         return
     await websocket.accept()
     await websocket.send_json(payload)
@@ -673,13 +673,13 @@ def _unity_payload_signature(payload: dict[str, Any]) -> tuple[object, ...]:
 async def stream_market_bids(websocket: WebSocket, listing_id: str) -> None:
     user = _resolve_websocket_user(websocket)
     if user is None:
-        await websocket.close(code=4401)
+        await websocket.close(code=4401, reason="unauthorized")
         return
     service = GlobalApiV1Service(websocket.scope["app"])
     try:
         payload = service.get_market_bid_event(listing_id)
     except GlobalApiV1Error:
-        await websocket.close(code=4404)
+        await websocket.close(code=4404, reason="not_found")
         return
     await websocket.accept()
     await websocket.send_json(payload)
@@ -694,7 +694,7 @@ async def stream_market_bids(websocket: WebSocket, listing_id: str) -> None:
 async def stream_notifications(websocket: WebSocket) -> None:
     user = _resolve_websocket_user(websocket)
     if user is None:
-        await websocket.close(code=4401)
+        await websocket.close(code=4401, reason="unauthorized")
         return
     service = GlobalApiV1Service(websocket.scope["app"])
     await websocket.accept()
