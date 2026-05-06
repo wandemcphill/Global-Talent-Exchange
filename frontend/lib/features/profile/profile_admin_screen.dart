@@ -59,9 +59,9 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
             : DataSourceStatus.live;
 
     return AppPageLayout(
-      title: 'Profile > Admin',
+      title: 'Admin command center',
       subtitle:
-          'Launch controls for deposits, withdrawals, competitions, player catalog, and squad supply.',
+          'Deposits, withdrawals, competitions, market supply, and platform controls in one admin surface.',
       trailing: DataSourceBadge(status: status),
       children: <Widget>[
         if (!authenticated)
@@ -120,7 +120,7 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
             actions: <Widget>[
               FilledButton(
                 onPressed: _busy ? null : _openAdminCommandCenter,
-                child: const Text('Open Admin Controls'),
+                child: const Text('Open command center'),
               ),
               if (canManageCompetitions)
                 OutlinedButton(
