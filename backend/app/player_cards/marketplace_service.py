@@ -505,6 +505,24 @@ class PlayerCardMarketplaceService:
             return self._normalize_amount(context["tier"].base_mint_price_credits)
         return Decimal("1.0000")
 
+    def _latest_market_value_snapshot(self, player_id: str) -> PlayerMarketValueSnapshot | None:
+        return self.session.scalar(
+            select(PlayerMarketValueSnapshot)
+            .where(PlayerMarketValueSnapshot.player_id == player_id)
+            .order_by(PlayerMarketValueSnapshot.as_of.desc())
+            .limit(1)
+        )
+
+    def _runtime_base_value_credits(self, context: dict[str, Any]) -> Decimal:
+        player = context["player"]
+        summary = self.session.get(PlayerSummaryReadModel, player.id)
+        latest_snapshot = self._latest_market_value_snapshot(player.id)
+        return self._resolve_engine_base_value(
+            player=player,
+            summary=summary,
+            latest_snapshot=latest_snapshot,
+        )
+
     @staticmethod
     def _stringify_amount(value: Decimal | None) -> str | None:
         if value is None:
@@ -558,12 +576,7 @@ class PlayerCardMarketplaceService:
         if average_trade_price is not None and sale_count >= config.minimum_reference_sales:
             return average_trade_price, "recent_player_trades", sale_count
 
-        snapshot = self.session.scalar(
-            select(PlayerMarketValueSnapshot)
-            .where(PlayerMarketValueSnapshot.player_id == context["player"].id)
-            .order_by(PlayerMarketValueSnapshot.as_of.desc())
-            .limit(1)
-        )
+        snapshot = self._latest_market_value_snapshot(context["player"].id)
         if snapshot is not None:
             for field_name in (
                 "avg_trade_price_credits",
@@ -582,7 +595,7 @@ class PlayerCardMarketplaceService:
         ):
             return self._normalize_amount(summary.current_value_credits), "player_summary.current_value", sale_count
 
-        return self._base_value_credits(context), "tier_or_value_fallback", sale_count
+        return self._runtime_base_value_credits(context), "runtime_value_fallback", sale_count
 
     @staticmethod
     def _coerce_float(value: Any) -> float | None:
@@ -1295,7 +1308,7 @@ class PlayerCardMarketplaceService:
 
     def _loan_economics(self, context: dict[str, Any], requested_fee_credits: Decimal) -> dict[str, Any]:
         normalized_requested_fee = self._normalize_amount(requested_fee_credits)
-        base_value = self._base_value_credits(context)
+        base_value = self._runtime_base_value_credits(context)
         effective_fee = normalized_requested_fee
         fee_floor_applied = False
         if normalized_requested_fee == Decimal("0.0000"):
@@ -2024,7 +2037,7 @@ class PlayerCardMarketplaceService:
             "quantity": listing.quantity,
             "available_quantity": listing.quantity if listing.status == "open" else 0,
             "sale_price_credits": self._normalize_amount(listing.price_per_card_credits),
-            "latest_value_credits": float(self._base_value_credits(context)),
+            "latest_value_credits": float(self._runtime_base_value_credits(context)),
             "created_at": listing.created_at,
             "expires_at": listing.expires_at,
             "requested_filters_json": {},
