@@ -17,17 +17,17 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.home:
         return 'Home';
       case GtePrimaryDestination.competitions:
-        return 'Competitions';
+        return 'Matchday';
       case GtePrimaryDestination.market:
-        return 'Scouting';
+        return 'Market';
       case GtePrimaryDestination.hub:
-        return 'Community';
+        return 'Studio';
       case GtePrimaryDestination.community:
-        return 'Community';
+        return 'Social';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
-        return 'Funds';
+        return 'Wallet';
     }
   }
 

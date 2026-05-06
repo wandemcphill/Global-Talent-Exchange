@@ -186,20 +186,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _HomeHeroPanel(
+                _HomeHeroPanelV2(
                   clubName: clubName,
                   userLabel: _displayUserLabel(),
-                  title: '$clubName matchday lobby',
-                  subtitle:
-                      widget.exchangeController.isAuthenticated
-                          ? 'Your club, budget, and next football story all live in one place.'
-                          : 'Preview the football world first, then sign in to build your club, scout talent, and manage your badge.',
+                  title: snapshot.heroTitle,
+                  subtitle: snapshot.heroSubtitle,
                   capitalLabel: _capitalMetricLabel(),
                   liveLabel: _livePulseLabel(snapshot),
                   isAuthenticated: widget.exchangeController.isAuthenticated,
                   onOpenClub: () => _openTarget(_HomeLinkTarget.club),
                   onOpenCompetitions:
                       () => _openTarget(_HomeLinkTarget.competitions),
+                  onOpenMarket: widget.onOpenMarketTab,
                   onOpenWallet: widget.onOpenWalletTab,
                   onOpenLogin: widget.onOpenLogin,
                   chips: <Widget>[
@@ -222,6 +220,27 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                HomeFeaturedEventBanner(
+                  label: snapshot.featuredBanner.label,
+                  title: snapshot.featuredBanner.title,
+                  summary: snapshot.featuredBanner.summary,
+                  body: snapshot.featuredBanner.body,
+                  icon: snapshot.featuredBanner.icon,
+                  gradientColors: snapshot.featuredBanner.gradientColors,
+                  stats: snapshot.featuredBanner.stats,
+                  actionLabel: snapshot.featuredBanner.actionLabel,
+                  onPressed: () => _openTarget(snapshot.featuredBanner.target),
+                ),
+                const SizedBox(height: 20),
+                _HomeQuickActionsStrip(
+                  isAuthenticated: widget.exchangeController.isAuthenticated,
+                  onOpenMarket: widget.onOpenMarketTab,
+                  onOpenCompetitions:
+                      () => _openTarget(_HomeLinkTarget.competitions),
+                  onOpenReplays: () => _openTarget(_HomeLinkTarget.replays),
+                  onOpenLogin: widget.onOpenLogin,
+                ),
+                const SizedBox(height: 20),
                 _HomeRuntimeSignalPanel(
                   backendMode: widget.backendMode,
                   apiHostLabel: _apiHostLabel(),
@@ -260,23 +279,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                 ],
                 const SizedBox(height: 20),
-                HomeFeaturedEventBanner(
-                  label: snapshot.featuredBanner.label,
-                  title: snapshot.featuredBanner.title,
-                  summary: snapshot.featuredBanner.summary,
-                  body: snapshot.featuredBanner.body,
-                  icon: snapshot.featuredBanner.icon,
-                  gradientColors: snapshot.featuredBanner.gradientColors,
-                  stats: snapshot.featuredBanner.stats,
-                  actionLabel: snapshot.featuredBanner.actionLabel,
-                  onPressed: () => _openTarget(snapshot.featuredBanner.target),
-                ),
-                const SizedBox(height: 20),
                 _HomeSectionHeading(
-                  eyebrow: 'RIGHT NOW',
-                  title: 'The next best move stays in plain sight.',
+                  eyebrow: 'LIVE BOARD',
+                  title:
+                      'Matchday, market moves, and club pressure in one board.',
                   detail:
-                      'Top cards show the biggest live story first. Quieter signals sit lower so Home stays clear, not crowded.',
+                      'GTEX works best when the biggest football decision is obvious at a glance. These panels surface the live board first and tuck slower admin work underneath.',
                 ),
                 const SizedBox(height: 14),
                 LayoutBuilder(
@@ -323,15 +331,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
-                _HomeQuickActionsStrip(
-                  isAuthenticated: widget.exchangeController.isAuthenticated,
-                  onOpenMarket: widget.onOpenMarketTab,
-                  onOpenCompetitions:
-                      () => _openTarget(_HomeLinkTarget.competitions),
-                  onOpenReplays: () => _openTarget(_HomeLinkTarget.replays),
-                  onOpenLogin: widget.onOpenLogin,
-                ),
-                const SizedBox(height: 16),
                 _HomeJourneyPanel(
                   isAuthenticated: widget.exchangeController.isAuthenticated,
                   clubName: clubName,
@@ -1147,6 +1146,7 @@ class _HomeHeroPanel extends StatelessWidget {
     required this.isAuthenticated,
     required this.onOpenClub,
     required this.onOpenCompetitions,
+    this.onOpenMarket,
     this.onOpenWallet,
     this.onOpenLogin,
   });
@@ -1161,6 +1161,7 @@ class _HomeHeroPanel extends StatelessWidget {
   final bool isAuthenticated;
   final VoidCallback onOpenClub;
   final VoidCallback onOpenCompetitions;
+  final VoidCallback? onOpenMarket;
   final VoidCallback? onOpenWallet;
   final VoidCallback? onOpenLogin;
 
@@ -1225,6 +1226,287 @@ class _HomeHeroPanel extends StatelessWidget {
   }
 }
 
+class _HomeHeroPanelV2 extends StatelessWidget {
+  const _HomeHeroPanelV2({
+    required this.clubName,
+    required this.userLabel,
+    required this.title,
+    required this.subtitle,
+    required this.capitalLabel,
+    required this.liveLabel,
+    required this.chips,
+    required this.isAuthenticated,
+    required this.onOpenClub,
+    required this.onOpenCompetitions,
+    this.onOpenMarket,
+    this.onOpenWallet,
+    this.onOpenLogin,
+  });
+
+  final String clubName;
+  final String userLabel;
+  final String title;
+  final String subtitle;
+  final String capitalLabel;
+  final String liveLabel;
+  final List<Widget> chips;
+  final bool isAuthenticated;
+  final VoidCallback onOpenClub;
+  final VoidCallback onOpenCompetitions;
+  final VoidCallback? onOpenMarket;
+  final VoidCallback? onOpenWallet;
+  final VoidCallback? onOpenLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final tokens = GteShellTheme.tokensOf(context);
+    return GteSurfacePanel(
+      emphasized: true,
+      padding: EdgeInsets.zero,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(tokens.radiusLarge),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              tokens.panelStrong,
+              tokens.panel,
+              tokens.backgroundSoft,
+            ],
+          ),
+        ),
+        child: Stack(
+          children: <Widget>[
+            Positioned(
+              top: -24,
+              right: -10,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: 0.1,
+                  child: Image.asset(
+                    'assets/branding/gtex_logo.png',
+                    width: 210,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final bool wide = constraints.maxWidth >= 900;
+                  final Widget narrative = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: <Widget>[
+                          const _HomeStatusPill(
+                            label: 'Live board',
+                            color: GteShellTheme.accent,
+                          ),
+                          _HomeStatusPill(
+                            label: liveLabel,
+                            color: GteShellTheme.accentArena,
+                          ),
+                          _HomeStatusPill(
+                            label: capitalLabel,
+                            color: GteShellTheme.accentCapital,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        '$clubName | $userLabel',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: GteShellTheme.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(title, style: theme.textTheme.displaySmall),
+                      const SizedBox(height: 12),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: wide ? 620 : constraints.maxWidth,
+                        ),
+                        child: Text(
+                          subtitle,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: GteShellTheme.textPrimary.withValues(
+                              alpha: 0.88,
+                            ),
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Wrap(spacing: 12, runSpacing: 12, children: chips),
+                      const SizedBox(height: 22),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: <Widget>[
+                          FilledButton.icon(
+                            onPressed: onOpenClub,
+                            icon: const Icon(Icons.shield_outlined),
+                            label: const Text('Club HQ'),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: onOpenCompetitions,
+                            icon: const Icon(Icons.stadium_outlined),
+                            label: const Text('Watch matchday'),
+                          ),
+                          if (onOpenMarket != null)
+                            FilledButton.tonalIcon(
+                              onPressed: onOpenMarket,
+                              icon: const Icon(Icons.show_chart_rounded),
+                              label: const Text('Open market'),
+                            ),
+                          if (onOpenWallet != null)
+                            FilledButton.tonalIcon(
+                              onPressed: onOpenWallet,
+                              icon: const Icon(
+                                Icons.account_balance_wallet_outlined,
+                              ),
+                              label: const Text('Wallet'),
+                            ),
+                          if (!isAuthenticated && onOpenLogin != null)
+                            OutlinedButton.icon(
+                              onPressed: onOpenLogin,
+                              icon: const Icon(Icons.login_rounded),
+                              label: const Text('Sign in'),
+                            ),
+                        ],
+                      ),
+                    ],
+                  );
+                  if (!wide) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        narrative,
+                        const SizedBox(height: 18),
+                        _HomeHeroVisual(
+                          liveLabel: liveLabel,
+                          capitalLabel: capitalLabel,
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(flex: 7, child: narrative),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        flex: 4,
+                        child: _HomeHeroVisual(
+                          liveLabel: liveLabel,
+                          capitalLabel: capitalLabel,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeHeroVisual extends StatelessWidget {
+  const _HomeHeroVisual({required this.liveLabel, required this.capitalLabel});
+
+  final String liveLabel;
+  final String capitalLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final tokens = GteShellTheme.tokensOf(context);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(tokens.radiusMedium),
+        color: Colors.black.withValues(alpha: 0.18),
+        border: Border.all(color: tokens.stroke),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'GTEX LIVE DESK',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: GteShellTheme.accentArena,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const _HomeSignalCard(
+            label: 'Match pulse',
+            value: 'Fixtures hot',
+            accent: GteShellTheme.accentArena,
+          ),
+          const SizedBox(height: 12),
+          _HomeSignalCard(
+            label: 'Trading power',
+            value: capitalLabel,
+            accent: GteShellTheme.accentCapital,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List<Widget>.generate(5, (int index) {
+              final double height = <double>[20, 34, 28, 44, 52][index];
+              final Color color = switch (index) {
+                0 || 2 => GteShellTheme.accent.withValues(alpha: 0.75),
+                1 => GteShellTheme.accentCapital.withValues(alpha: 0.82),
+                3 || 4 => GteShellTheme.accentArena.withValues(
+                  alpha: 0.88 - ((index - 3) * 0.14),
+                ),
+                _ => GteShellTheme.accent,
+              };
+              return Expanded(
+                child: Container(
+                  height: height,
+                  margin: EdgeInsets.only(right: index == 4 ? 0 : 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: color,
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Momentum is easier to read when live fixtures, coin pressure, and transfer appetite sit in one premium board.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: GteShellTheme.textPrimary.withValues(alpha: 0.8),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Signal: $liveLabel',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: GteShellTheme.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HomeRuntimeSignalPanel extends StatelessWidget {
   const _HomeRuntimeSignalPanel({
     required this.backendMode,
@@ -1255,7 +1537,7 @@ class _HomeRuntimeSignalPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'LIVE RUNTIME SIGNAL',
+            'MARKET PULSE',
             style: Theme.of(
               context,
             ).textTheme.labelLarge?.copyWith(color: accent, letterSpacing: 1.1),
@@ -1263,8 +1545,8 @@ class _HomeRuntimeSignalPanel extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             liveMode
-                ? 'This shell is riding the live GTEX stack.'
-                : 'This shell is running a non-live runtime path.',
+                ? 'Your football world is connected to the live GTEX stack.'
+                : 'This shell is running a softer non-live runtime path.',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),

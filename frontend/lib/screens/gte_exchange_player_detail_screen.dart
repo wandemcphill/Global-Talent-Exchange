@@ -224,6 +224,24 @@ class _GteExchangePlayerDetailScreenState
     final GtePortfolioHolding? holding = _holdingFor(widget.playerId);
     final GteMarketPlayerMarketProfile marketProfile =
         snapshot.detail.marketProfile;
+    final Color movementColor =
+        value.movementPct >= 0
+            ? GteShellTheme.positive
+            : GteShellTheme.negative;
+    final String momentumLabel =
+        trend.trendScore >= 7
+            ? 'Breakout'
+            : trend.trendScore >= 4
+            ? 'Building'
+            : 'Quiet';
+    final String trustLabel =
+        marketProfile.tradeTrustScore != null &&
+                marketProfile.tradeTrustScore! >= 7
+            ? 'Trusted'
+            : marketProfile.tradeTrustScore != null &&
+                marketProfile.tradeTrustScore! >= 4
+            ? 'Watch'
+            : 'Thin';
     final List<String> identityLine = <String>[
       if (identity.currentClubName != null) identity.currentClubName!,
       if (identity.nationality != null) identity.nationality!,
@@ -236,6 +254,28 @@ class _GteExchangePlayerDetailScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _DetailSignalChip(
+                label: 'Momentum',
+                value: momentumLabel,
+                accent: movementColor,
+              ),
+              _DetailSignalChip(
+                label: 'Trust',
+                value: trustLabel,
+                accent: GteShellTheme.accentWarm,
+              ),
+              _DetailSignalChip(
+                label: 'Liquidity',
+                value: (marketProfile.liquidityBand ?? 'forming').toUpperCase(),
+                accent: GteShellTheme.accentCapital,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -269,18 +309,63 @@ class _GteExchangePlayerDetailScreenState
                 ),
               ),
               const SizedBox(width: 16),
-              FilledButton(
-                onPressed:
-                    widget.controller.isAuthenticated
-                        ? () {
-                          _openTicket();
-                        }
-                        : widget.onRequireLogin,
-                child: Text(
-                  widget.controller.isAuthenticated
-                      ? 'Place order'
-                      : 'Sign in to trade',
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      color: Colors.white.withValues(alpha: 0.04),
+                      border: Border.all(
+                        color: movementColor.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        Text(
+                          'LIVE QUOTE',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: GteShellTheme.textMuted,
+                            letterSpacing: 0.8,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          gteFormatCredits(value.currentValueCredits),
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          gteFormatMovement(value.movementPct),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: movementColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed:
+                        widget.controller.isAuthenticated
+                            ? () {
+                              _openTicket();
+                            }
+                            : widget.onRequireLogin,
+                    child: Text(
+                      widget.controller.isAuthenticated
+                          ? 'Place order'
+                          : 'Sign in to trade',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -289,10 +374,6 @@ class _GteExchangePlayerDetailScreenState
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              GteMetricChip(
-                label: 'Current value',
-                value: gteFormatCredits(value.currentValueCredits),
-              ),
               GteMetricChip(
                 label: 'Movement',
                 value: gteFormatMovement(value.movementPct),
@@ -336,6 +417,30 @@ class _GteExchangePlayerDetailScreenState
             ],
           ),
           const SizedBox(height: 16),
+          Row(
+            children: List<Widget>.generate(
+              5,
+              (int index) => Expanded(
+                child: Container(
+                  height: 6,
+                  margin: EdgeInsets.only(right: index == 4 ? 0 : 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color:
+                        index <
+                                ((trend.marketInterestScore / 20)
+                                    .clamp(1, 5)
+                                    .toInt())
+                            ? movementColor.withValues(
+                              alpha: 0.92 - (index * 0.1),
+                            )
+                            : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -377,8 +482,8 @@ class _GteExchangePlayerDetailScreenState
           Text(
             order == null
                 ? (widget.controller.isAuthenticated
-                    ? 'No active order for this player yet. Use the ticket when the pricing stack and visible depth line up with your conviction.'
-                    : 'Sign in to place, track, and cancel orders once the pricing stack looks good enough to trust.')
+                    ? 'No active order yet. Use the ticket when the football story, the quote, and the visible depth all line up with your conviction.'
+                    : 'Sign in to place, track, and cancel orders once the football story and quote quality are strong enough to trust.')
                 : 'Latest order is ${gteFormatOrderStatus(order.status.name)} for ${order.quantity.toStringAsFixed(2)} units, with the execution story preserved below.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -1002,7 +1107,14 @@ class _DetailSignalChip extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: accent,
+              letterSpacing: 0.8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             value,
@@ -1037,6 +1149,27 @@ class _MarketEdgeCard extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(body, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
+          Row(
+            children: List<Widget>.generate(
+              4,
+              (int index) => Expanded(
+                child: Container(
+                  height: 5,
+                  margin: EdgeInsets.only(right: index == 3 ? 0 : 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color:
+                        index < 3
+                            ? GteShellTheme.accent.withValues(
+                              alpha: 0.82 - (index * 0.16),
+                            )
+                            : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           Wrap(spacing: 10, runSpacing: 10, children: pills),
         ],
