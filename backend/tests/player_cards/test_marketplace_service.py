@@ -250,6 +250,103 @@ def test_free_regen_loan_floor_and_settlement(session) -> None:
     assert returned["status"] == "returned"
 
 
+def test_real_player_sale_can_settle_with_runtime_value_fallback(session) -> None:
+    seller = _create_user(
+        session, user_id="real-sale-seller", email="real-sale-seller@example.com", username="real-sale-seller"
+    )
+    buyer = _create_user(
+        session, user_id="real-sale-buyer", email="real-sale-buyer@example.com", username="real-sale-buyer"
+    )
+    player = _create_player(
+        session,
+        player_id="real-sale-player",
+        name="Real Sale Player",
+        position="forward",
+        value_eur=25_000_000,
+    )
+    player.is_real_player = True
+    tier = _create_tier(session, tier_id="tier-real-sale", code="elite-real-sale")
+    card = _create_card(session, card_id="card-real-sale", player=player, tier=tier)
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id,
+            owner_user_id=seller.id,
+            quantity_total=1,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
+    session.flush()
+
+    wallet = WalletService()
+    _seed_wallet(session, wallet, buyer, amount=Decimal("100.0000"))
+    service = PlayerCardMarketplaceService(session=session, wallet_service=wallet)
+
+    listing = service.create_sale_listing(
+        actor=seller,
+        player_card_id=card.id,
+        quantity=1,
+        price_per_card_credits=Decimal("20.0000"),
+    )
+    sale = service.buy_sale_listing(actor=buyer, listing_id=listing["listing_id"])
+
+    assert listing["latest_value_credits"] > 0
+    assert sale["status"] == "settled"
+    assert sale["price_per_card_credits"] == Decimal("20.0000")
+
+
+def test_real_player_loan_accepts_with_runtime_value_fallback(session) -> None:
+    lender = _create_user(
+        session, user_id="real-loan-lender", email="real-loan-lender@example.com", username="real-loan-lender"
+    )
+    borrower = _create_user(
+        session,
+        user_id="real-loan-borrower",
+        email="real-loan-borrower@example.com",
+        username="real-loan-borrower",
+    )
+    player = _create_player(
+        session,
+        player_id="real-loan-player",
+        name="Real Loan Player",
+        position="midfielder",
+        value_eur=25_000_000,
+    )
+    player.is_real_player = True
+    tier = _create_tier(session, tier_id="tier-real-loan", code="elite-real-loan")
+    card = _create_card(session, card_id="card-real-loan", player=player, tier=tier)
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id,
+            owner_user_id=lender.id,
+            quantity_total=1,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
+    session.flush()
+
+    service = PlayerCardMarketplaceService(session=session, wallet_service=WalletService())
+    listing = service.create_loan_listing(
+        actor=lender,
+        player_card_id=card.id,
+        total_slots=1,
+        duration_days=7,
+        loan_fee_credits=Decimal("0.0000"),
+    )
+    negotiation = service.create_loan_negotiation(
+        actor=borrower,
+        listing_id=listing["listing_id"],
+        proposed_duration_days=7,
+        proposed_loan_fee_credits=Decimal("0.0000"),
+    )
+    contract = service.accept_loan_negotiation(actor=lender, negotiation_id=negotiation["negotiation_id"])
+
+    assert contract["status"] == "accepted_pending_settlement"
+    assert contract["effective_loan_fee_credits"] > Decimal("0.0000")
+    assert contract["fee_floor_applied"] is True
+
+
 def test_starter_regen_card_cannot_enter_user_market(session) -> None:
     owner = _create_user(session, user_id="starter-owner", email="starter-owner@example.com", username="starter-owner")
     player = _create_player(session, player_id="player-starter-regen", name="Starter Regen", position="midfielder")
