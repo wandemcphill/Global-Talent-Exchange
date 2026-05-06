@@ -39,13 +39,17 @@ void main() {
         initialPath: '/app/club',
       ),
     );
-    await _pumpUntilFound(tester, find.text('Club hub'));
-    expect(find.text('Club hub'), findsOneWidget);
-    expect(find.text('World context'), findsOneWidget);
+    await _pumpUntilFound(tester, find.text('Club command'));
+    expect(find.text('Club command'), findsWidgets);
+    expect(find.text('World context'), findsWidgets);
     expect(find.text('Owner offer inbox'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('World context'));
-    await tester.tap(find.text('World context'));
+    final Finder worldContextButton = find.widgetWithText(
+      FilledButton,
+      'World context',
+    );
+    await tester.ensureVisible(worldContextButton);
+    await tester.tap(worldContextButton);
     await _pumpUntilFound(
       tester,
       find.textContaining('canonical football-world simulation'),
