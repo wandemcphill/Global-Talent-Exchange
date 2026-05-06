@@ -108,22 +108,58 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<PlayerCardMarketplaceSearchResult> result = await Future.wait<
-        PlayerCardMarketplaceSearchResult
-      >(<Future<PlayerCardMarketplaceSearchResult>>[
+      final Future<_SupportLoadResult<PlayerCardMarketplaceSearchResult>>
+      salesFuture = _captureSupport<PlayerCardMarketplaceSearchResult>(
         _repository.listMarketplaceSales(query),
+      );
+      final Future<_SupportLoadResult<PlayerCardMarketplaceSearchResult>>
+      loansFuture = _captureSupport<PlayerCardMarketplaceSearchResult>(
         _repository.listMarketplaceLoans(query),
-      ]);
+      );
+      final _SupportLoadResult<PlayerCardMarketplaceSearchResult> salesResult =
+          await salesFuture;
+      final _SupportLoadResult<PlayerCardMarketplaceSearchResult> loansResult =
+          await loansFuture;
       if (!_marketplaceGate.isActive(requestId)) {
         return;
       }
-      marketplace = result[0];
-      marketplaceSales = result[0];
-      marketplaceLoans = result[1];
+
+      final PlayerCardMarketplaceSearchResult resolvedSales =
+          salesResult.value ?? const PlayerCardMarketplaceSearchResult.empty();
+      final PlayerCardMarketplaceSearchResult resolvedLoans =
+          loansResult.value ?? const PlayerCardMarketplaceSearchResult.empty();
+      marketplaceSales = resolvedSales;
+      marketplaceLoans = resolvedLoans;
       marketplaceSwaps = const PlayerCardMarketplaceSearchResult.empty();
-    } catch (error) {
-      if (_marketplaceGate.isActive(requestId)) {
-        marketplaceError = AppFeedback.messageFor(error);
+
+      final int combinedTotal = resolvedSales.total + resolvedLoans.total;
+      final List<PlayerCardMarketplaceListing> combinedItems =
+          <PlayerCardMarketplaceListing>[
+            ...resolvedSales.items,
+            ...resolvedLoans.items,
+          ];
+      marketplace = PlayerCardMarketplaceSearchResult(
+        total: combinedTotal,
+        limit: combinedItems.length,
+        offset: 0,
+        items: combinedItems,
+      );
+
+      final List<String> failures = <String>[
+        if (salesResult.error != null) salesResult.error!,
+        if (loansResult.error != null) loansResult.error!,
+      ];
+      marketplaceError =
+          (salesResult.value != null || loansResult.value != null) ||
+                  failures.isEmpty
+              ? null
+              : failures.first;
+      if (salesResult.value != null && loansResult.error != null) {
+        marketplaceError =
+            'Loan board lagging. The live sale board is still visible.';
+      } else if (loansResult.value != null && salesResult.error != null) {
+        marketplaceError =
+            'Sale board lagging. The live loan board is still visible.';
       }
     } finally {
       if (_marketplaceGate.isActive(requestId)) {
