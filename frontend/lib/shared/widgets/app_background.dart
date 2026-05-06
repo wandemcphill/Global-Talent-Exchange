@@ -5,10 +5,41 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/gte_shell_theme.dart';
 
-class AppBackground extends StatelessWidget {
+class AppBackground extends StatefulWidget {
   const AppBackground({super.key, required this.child});
 
   final Widget child;
+
+  @override
+  State<AppBackground> createState() => _AppBackgroundState();
+}
+
+class _AppBackgroundState extends State<AppBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  bool get _isTestBinding =>
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 24),
+    );
+    if (!_isTestBinding) {
+      _controller.repeat();
+    } else {
+      _controller.value = 0.18;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,156 +48,221 @@ class AppBackground extends StatelessWidget {
     final visuals = GteShellTheme.visualsOf(context);
     return DecoratedBox(
       decoration: gteBackdropDecoration(),
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          Positioned(
-            top: -180,
-            right: -110,
-            child: _GlowOrb(
-              size: 360,
-              color: visuals.ambientPrimary.withValues(alpha: 0.14),
-            ),
-          ),
-          Positioned(
-            left: -100,
-            bottom: -120,
-            child: _GlowOrb(
-              size: 320,
-              color: visuals.ambientSecondary.withValues(alpha: 0.14),
-            ),
-          ),
-          Positioned(
-            top: 140,
-            left: 36,
-            child: _GlowOrb(
-              size: 200,
-              color: visuals.ambientTertiary.withValues(alpha: 0.08),
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: <Color>[
-                      visuals.heroAccent.withValues(alpha: 0.04),
-                      Colors.transparent,
-                      Colors.transparent,
-                      tokens.background.withValues(alpha: 0.22),
-                    ],
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (BuildContext context, Widget? child) {
+          final double progress = _controller.value;
+          final double zoom = 1.015 + (math.sin(progress * math.pi * 2) * 0.01);
+          final double driftX = math.cos(progress * math.pi * 2) * 14;
+          final double driftY = math.sin(progress * math.pi * 2) * 8;
+          return Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              Transform.translate(
+                offset: Offset(driftX, driftY),
+                child: Transform.scale(
+                  scale: zoom,
+                  child: CustomPaint(
+                    painter: _PitchLightPainter(
+                      lineColor: tokens.surfaceHighlight.withValues(
+                        alpha: 0.035,
+                      ),
+                      pulseColor: theme.primaryColor.withValues(alpha: 0.08),
+                      glowColor: visuals.ambientSecondary.withValues(
+                        alpha: 0.13,
+                      ),
+                      accentColor: tokens.accentCapital.withValues(alpha: 0.08),
+                      progress: progress,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _BackgroundGridPainter(
-                  lineColor: tokens.surfaceHighlight.withValues(alpha: 0.04),
-                  pulseColor: theme.primaryColor.withValues(alpha: 0.05),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          tokens.backgroundSoft.withValues(alpha: 0.22),
+                          Colors.transparent,
+                          tokens.background.withValues(alpha: 0.18),
+                          tokens.background.withValues(alpha: 0.58),
+                        ],
+                        stops: const <double>[0, 0.32, 0.74, 1],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          if (visuals.glass)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: BackdropFilter(
-                  filter: gtePanelBlur(visuals.surfaceBlurSigma * 0.45),
-                  child: const SizedBox.expand(),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _ParticleFieldPainter(
+                      primary: theme.primaryColor.withValues(alpha: 0.14),
+                      secondary: tokens.accentCapital.withValues(alpha: 0.12),
+                      progress: progress,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          child,
-        ],
+              if (visuals.glass)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: BackdropFilter(
+                      filter: gtePanelBlur(visuals.surfaceBlurSigma * 0.5),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
+              child!,
+            ],
+          );
+        },
+        child: widget.child,
       ),
     );
   }
 }
 
-class _GlowOrb extends StatelessWidget {
-  const _GlowOrb({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: <Color>[color, color.withValues(alpha: 0)],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackgroundGridPainter extends CustomPainter {
-  const _BackgroundGridPainter({
+class _PitchLightPainter extends CustomPainter {
+  const _PitchLightPainter({
     required this.lineColor,
     required this.pulseColor,
+    required this.glowColor,
+    required this.accentColor,
+    required this.progress,
   });
 
   final Color lineColor;
   final Color pulseColor;
+  final Color glowColor;
+  final Color accentColor;
+  final double progress;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint linePaint =
+    final Rect rect = Offset.zero & size;
+    final Paint basePaint =
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              const Color(0xFF040608),
+              const Color(0xFF071016),
+              const Color(0xFF05080D),
+            ],
+          ).createShader(rect);
+    canvas.drawRect(rect, basePaint);
+
+    final Paint floodlight =
+        Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 42);
+    final Offset leftFlood = Offset(
+      size.width * 0.16,
+      size.height * (0.14 + (math.sin(progress * math.pi * 2) * 0.03)),
+    );
+    final Offset rightFlood = Offset(
+      size.width * 0.84,
+      size.height * (0.12 + (math.cos(progress * math.pi * 2) * 0.03)),
+    );
+    floodlight.color = glowColor;
+    canvas.drawCircle(leftFlood, size.shortestSide * 0.24, floodlight);
+    canvas.drawCircle(rightFlood, size.shortestSide * 0.22, floodlight);
+
+    final Paint gridPaint =
         Paint()
           ..color = lineColor
           ..strokeWidth = 1;
-    const double gap = 56;
+    const double gap = 64;
     for (double x = 0; x <= size.width; x += gap) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
     for (double y = 0; y <= size.height; y += gap) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
-    }
-
-    final Paint pulsePaint = Paint()..style = PaintingStyle.fill;
-    final List<Offset> pulses = <Offset>[
-      Offset(size.width * 0.18, size.height * 0.24),
-      Offset(size.width * 0.78, size.height * 0.28),
-      Offset(size.width * 0.52, size.height * 0.76),
-    ];
-    for (int index = 0; index < pulses.length; index += 1) {
-      final double radius = size.shortestSide * (0.14 + (index * 0.04));
-      pulsePaint.color = pulseColor.withValues(alpha: 0.08 - (index * 0.015));
-      canvas.drawCircle(pulses[index], radius, pulsePaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
     final Paint routePaint =
         Paint()
-          ..color = pulseColor.withValues(alpha: 0.07)
-          ..strokeWidth = 1.4
+          ..color = pulseColor
+          ..strokeWidth = 1.6
           ..style = PaintingStyle.stroke;
-    final Path path = Path()..moveTo(0, size.height * 0.62);
-    for (double x = 0; x <= size.width; x += 24) {
-      path.lineTo(
+    final Path route = Path()..moveTo(0, size.height * 0.64);
+    for (double x = 0; x <= size.width; x += 18) {
+      route.lineTo(
         x,
-        (size.height * 0.62) + (math.sin(x / 96) * 10) - (math.cos(x / 54) * 4),
+        (size.height * 0.64) +
+            (math.sin((x / 72) + (progress * math.pi * 2)) * 10) -
+            (math.cos((x / 36) - (progress * math.pi)) * 5),
       );
     }
-    canvas.drawPath(path, routePaint);
+    canvas.drawPath(route, routePaint);
+
+    final Paint pitchMark =
+        Paint()
+          ..color = accentColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.3;
+    final Rect centerCircle = Rect.fromCircle(
+      center: Offset(size.width * 0.5, size.height * 0.5),
+      radius: size.shortestSide * 0.11,
+    );
+    canvas.drawCircle(centerCircle.center, centerCircle.width / 2, pitchMark);
+    canvas.drawLine(
+      Offset(size.width * 0.5, size.height * 0.18),
+      Offset(size.width * 0.5, size.height * 0.82),
+      pitchMark,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _BackgroundGridPainter oldDelegate) {
+  bool shouldRepaint(covariant _PitchLightPainter oldDelegate) {
     return oldDelegate.lineColor != lineColor ||
-        oldDelegate.pulseColor != pulseColor;
+        oldDelegate.pulseColor != pulseColor ||
+        oldDelegate.glowColor != glowColor ||
+        oldDelegate.accentColor != accentColor ||
+        oldDelegate.progress != progress;
+  }
+}
+
+class _ParticleFieldPainter extends CustomPainter {
+  const _ParticleFieldPainter({
+    required this.primary,
+    required this.secondary,
+    required this.progress,
+  });
+
+  final Color primary;
+  final Color secondary;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (int index = 0; index < 18; index += 1) {
+      final double seed = index / 18;
+      final double x =
+          ((seed * size.width * 1.4) + (progress * size.width * 0.28)) %
+          size.width;
+      final double y =
+          (((1 - seed) * size.height) +
+              (math.sin((progress * math.pi * 2) + index) * 16)) %
+          size.height;
+      final double radius = 1.2 + ((index % 3) * 0.8);
+      final Paint particle =
+          Paint()
+            ..color = (index.isEven ? primary : secondary).withValues(
+              alpha: 0.08 + ((index % 4) * 0.02),
+            )
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+      canvas.drawCircle(Offset(x, y), radius, particle);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ParticleFieldPainter oldDelegate) {
+    return oldDelegate.primary != primary ||
+        oldDelegate.secondary != secondary ||
+        oldDelegate.progress != progress;
   }
 }

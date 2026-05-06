@@ -97,6 +97,18 @@ class WorldScreen extends ConsumerWidget {
             ),
           ],
         ),
+        GtexLiveTickerBar(
+          items: <String>[
+            if (snapshot == null)
+              'World scouts are sweeping every federation for live signals',
+            if (snapshot != null)
+              '${snapshot.risingStars.length} rising regen storylines are active right now',
+            if (snapshot != null)
+              '${snapshot.scoutingFeed.length} scouting notes are circulating through the world desk',
+            if (snapshot != null)
+              '${snapshot.federations.length} federations are mounted into the world map',
+          ],
+        ),
         _WorldSurfaceDisclosure(surface: worldSurface),
         worldValue.when(
           data:

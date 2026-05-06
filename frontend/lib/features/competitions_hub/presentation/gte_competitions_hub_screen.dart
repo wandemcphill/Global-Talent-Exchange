@@ -17,6 +17,7 @@ import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 import 'package:gte_frontend/widgets/gtex_branding.dart';
+import 'package:gte_frontend/shared/widgets/gtex_premium_panels.dart';
 
 class GteCompetitionsHubScreen extends StatefulWidget {
   const GteCompetitionsHubScreen({
@@ -186,6 +187,20 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 20),
+              GtexLiveTickerBar(
+                accentColor: Colors.deepPurpleAccent,
+                items: <String>[
+                  if (competitions.isEmpty)
+                    'Arena schedulers are scanning the next competition cycle',
+                  if (competitions.isNotEmpty)
+                    '${competitions.where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress).length} live arenas are broadcasting now',
+                  if (openCount > 0)
+                    '$openCount competitions are currently open for entry',
+                  if (worldSuperCupWatchlist.isNotEmpty)
+                    '${worldSuperCupWatchlist.length} global watchlist routes are heating up',
+                ],
               ),
               const SizedBox(height: 20),
               GtexSignalStrip(
@@ -422,7 +437,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     return <Widget>[
       const _ArenaSectionHeader(
         eyebrow: 'COMPETITIONS',
-        title: 'Competitions Hub',
+        title: 'Arena control',
         description:
             'Official fixtures, manager-hosted cups, standings, results, and prize pools share one launch surface.',
       ),
@@ -437,7 +452,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              'Every destination resolves to a stable route so home shortcuts and future router wiring can target the same hub paths.',
+              'Every destination resolves to a stable route so home shortcuts and future router wiring can target the same arena paths.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 18),
@@ -920,7 +935,7 @@ class _ArenaRoutePanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'These routes open national-team, world, and transfer views without disturbing the competitions hub tabs.',
+            'These routes open national-team, world, and transfer views without disturbing the arena tabs.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -1149,7 +1164,7 @@ class _CompetitionCard extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onOpen,
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('Open arena'),
+                label: const Text('Open family'),
               ),
               const Spacer(),
               Text(

@@ -746,4 +746,3 @@ LIVE_BROADCAST_AND_MATCH_VIEWER_HYDRATION_ROUTE_CASES = [
     ("/api/broadcast/home", 200),
     ("/api/match-viewer/nonexistent", 404),
 ]
-

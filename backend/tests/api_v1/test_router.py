@@ -384,4 +384,3 @@ class _RecordingWebSocket:
 
     async def receive_text(self) -> str:
         raise WebSocketDisconnect(code=1000)
-

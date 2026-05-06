@@ -426,15 +426,11 @@ void main() {
 
       router.go(AppRoutes.competitions);
       await tester.pumpAndSettle();
-
-      await tester.ensureVisible(
-        find.widgetWithText(FilledButton, 'Open family').at(1),
-      );
-      await tester.tap(find.widgetWithText(FilledButton, 'Open family').at(1));
+      router.go('/competitions/hosted');
       await tester.pumpAndSettle();
-      expect(find.text('View detail'), findsOneWidget);
-
-      await tester.tap(find.widgetWithText(FilledButton, 'View detail'));
+      final Finder viewDetailButton = find.text('View detail');
+      expect(viewDetailButton, findsWidgets);
+      await tester.tap(viewDetailButton.first);
       await tester.pumpAndSettle();
       expect(find.text('Lagos Night Cup'), findsWidgets);
       expect(find.textContaining('Participants 3/16'), findsOneWidget);

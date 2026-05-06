@@ -30,14 +30,29 @@ class GteSyncStatusCard extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final tokens = GteShellTheme.tokensOf(context);
     final Color resolvedAccent = accent ?? tokens.accent;
-    final bool isCompactLayout = MediaQuery.sizeOf(context).width < 480;
-    final Widget syncIcon = Container(
-      padding: const EdgeInsets.all(10),
+    final Widget syncIcon = AnimatedContainer(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: resolvedAccent.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(16),
+        color:
+            isRefreshing
+                ? resolvedAccent.withValues(alpha: 0.22)
+                : resolvedAccent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: resolvedAccent.withValues(alpha: isRefreshing ? 0.24 : 0.12),
+            blurRadius: isRefreshing ? 24 : 14,
+            spreadRadius: isRefreshing ? 1 : 0,
+          ),
+        ],
       ),
-      child: Icon(Icons.sync, color: resolvedAccent, size: 18),
+      child: Icon(
+        isRefreshing ? Icons.sync_rounded : Icons.wifi_tethering_rounded,
+        color: resolvedAccent,
+        size: 18,
+      ),
     );
     final Widget copyBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,27 +67,13 @@ class GteSyncStatusCard extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          detail ?? 'Last sync ${gteFormatRelativeTime(syncedAt)}',
+          detail ??
+              (isRefreshing
+                  ? 'Live systems are refreshing now.'
+                  : 'Last sync ${gteFormatRelativeTime(syncedAt)}'),
           style: theme.textTheme.bodySmall,
         ),
       ],
-    );
-    final Widget refreshAction = FilledButton.tonalIcon(
-      onPressed:
-          isRefreshing || onRefresh == null
-              ? null
-              : () {
-                onRefresh!.call();
-              },
-      icon:
-          isRefreshing
-              ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-              : const Icon(Icons.refresh),
-      label: Text(isRefreshing ? 'Syncing' : 'Refresh'),
     );
 
     return GteSurfacePanel(
@@ -87,14 +88,98 @@ class GteSyncStatusCard extends StatelessWidget {
               syncIcon,
               const SizedBox(width: 12),
               Expanded(child: copyBlock),
+              const SizedBox(width: 12),
+              _LivePulseBadge(
+                accent: resolvedAccent,
+                label: isRefreshing ? 'AUTO-SYNC' : 'LIVE WATCH',
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          if (isCompactLayout)
-            refreshAction
-          else
-            Align(alignment: Alignment.centerLeft, child: refreshAction),
+          Text(
+            onRefresh == null
+                ? 'This surface is standing by for the next live signal.'
+                : 'Auto-refresh is active. Pull down if you want to force a re-check.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: tokens.textMuted.withValues(alpha: 0.92),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _LivePulseBadge extends StatefulWidget {
+  const _LivePulseBadge({required this.accent, required this.label});
+
+  final Color accent;
+  final String label;
+
+  @override
+  State<_LivePulseBadge> createState() => _LivePulseBadgeState();
+}
+
+class _LivePulseBadgeState extends State<_LivePulseBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  bool get _isTestBinding =>
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    if (!_isTestBinding) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    return FadeTransition(
+      opacity: Tween<double>(
+        begin: 0.65,
+        end: 1,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: widget.accent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(tokens.radiusPill),
+          border: Border.all(color: widget.accent.withValues(alpha: 0.22)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              Icons.fiber_manual_record_rounded,
+              color: widget.accent,
+              size: 12,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              widget.label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: widget.accent,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

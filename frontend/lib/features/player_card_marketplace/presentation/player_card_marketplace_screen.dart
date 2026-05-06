@@ -9,6 +9,7 @@ import '../../../widgets/gte_shell_theme.dart';
 import '../../../widgets/gte_state_panel.dart';
 import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/gtex_branding.dart';
+import '../../../shared/widgets/gtex_premium_panels.dart';
 import '../../../widgets/football_player_card.dart';
 import '../../../widgets/player_card_avatar.dart';
 import '../data/player_card_marketplace_models.dart';
@@ -49,6 +50,25 @@ class _PlayerCardMarketplaceScreenState
   late final TextEditingController _negotiationIdController;
 
   bool get _hasAuth => widget.accessToken?.trim().isNotEmpty == true;
+
+  List<String> _deskTickerItems() {
+    if (_controller.marketplaceSales.items.isEmpty &&
+        _controller.marketplaceLoans.items.isEmpty) {
+      return const <String>[
+        'Transfer brokers are recalibrating liquidity',
+        'Loan desks are scanning for the next active route',
+        'Squad intelligence is updating behind the board',
+      ];
+    }
+    return <String>[
+      if (_controller.marketplaceSales.items.isNotEmpty)
+        '${_controller.marketplaceSales.items.length} live sale cards are moving across the desk',
+      if (_controller.marketplaceLoans.items.isNotEmpty)
+        '${_controller.marketplaceLoans.items.length} loan offers are circulating in the market',
+      if (_controller.inventory.isNotEmpty)
+        'Your club inventory is holding ${_controller.inventory.length} active assets',
+    ];
+  }
 
   @override
   void initState() {
@@ -136,12 +156,7 @@ class _PlayerCardMarketplaceScreenState
           decoration: gteBackdropDecoration(),
           child: Scaffold(
             backgroundColor: Colors.transparent,
-            appBar: AppBar(
-              title: const Text('Transfer desk'),
-              actions: <Widget>[
-                IconButton(onPressed: _reload, icon: const Icon(Icons.refresh)),
-              ],
-            ),
+            appBar: AppBar(title: const Text('Transfer desk')),
             body: RefreshIndicator(
               onRefresh: _reload,
               child: ListView(
@@ -177,11 +192,6 @@ class _PlayerCardMarketplaceScreenState
                       ),
                     ],
                     actions: <Widget>[
-                      FilledButton.tonalIcon(
-                        onPressed: _reload,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Refresh desk'),
-                      ),
                       if (!_hasAuth && widget.onOpenLogin != null)
                         FilledButton.icon(
                           onPressed: widget.onOpenLogin,
@@ -207,6 +217,11 @@ class _PlayerCardMarketplaceScreenState
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 18),
+                  GtexLiveTickerBar(
+                    accentColor: const Color(0xFF91C9FF),
+                    items: _deskTickerItems(),
                   ),
                   if (_controller.actionError != null) ...<Widget>[
                     const SizedBox(height: 16),
@@ -279,8 +294,9 @@ class _PlayerCardMarketplaceScreenState
     }
     if (items.isEmpty) {
       return const GteStatePanel(
-        title: 'No players listed right now',
-        message: 'Try a new search or check back when the next listings drop.',
+        title: 'Market warming up',
+        message:
+            'Scouts and brokers are opening the next sale wave. The desk will populate as soon as liquidity lands.',
         icon: Icons.search_off_outlined,
       );
     }
@@ -331,8 +347,9 @@ class _PlayerCardMarketplaceScreenState
     }
     if (items.isEmpty) {
       return const GteStatePanel(
-        title: 'No loan listings right now',
-        message: 'List a squad player for loan or scout the market again.',
+        title: 'Loan desk is quiet',
+        message:
+            'Loan brokers are still matching appetite with availability. Fresh offers surface here automatically.',
         icon: Icons.search_off_outlined,
       );
     }

@@ -506,4 +506,3 @@ async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and
             assert snapshot.previous_credits == first_run[snapshot.player_id].target_credits
     assert job_summary.status == "success"
     assert len(app.state.value_engine_bridge.last_run_snapshots) >= 1
-

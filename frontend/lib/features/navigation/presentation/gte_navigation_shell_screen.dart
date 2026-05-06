@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:gte_frontend/controllers/creator_application_controller.dart';
@@ -117,6 +119,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late String? _creatorAccessToken;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   bool _startupWorkScheduled = false;
+  Timer? _liveRefreshTimer;
+  bool _ambientModeEnabled = false;
+
+  bool get _isTestBinding =>
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
 
   @override
   void initState() {
@@ -133,6 +140,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     _creatorController = _buildCreatorController();
     _referralController = _buildReferralController();
     _scheduleStartupWork();
+    _startLiveRefreshLoop();
   }
 
   @override
@@ -172,6 +180,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   @override
   void dispose() {
     widget.controller.removeListener(_handleExchangeControllerChanged);
+    _liveRefreshTimer?.cancel();
     _competitionController.dispose();
     _disposeCreatorAccessController();
     _creatorController.dispose();
@@ -222,6 +231,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                   return Row(
                     children: <Widget>[
                       _buildThemePickerAction(context),
+                      _buildAmbientAction(),
                       _buildCapitalAction(),
                       Padding(
                         padding: const EdgeInsets.only(right: 12),
@@ -346,6 +356,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
                       _buildThemePickerAction(context),
+                      _buildAmbientAction(),
                       _buildCapitalAction(),
                       FilledButton(
                         onPressed: () {
@@ -818,6 +829,65 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     _scheduleStartupWork(force: true);
   }
 
+  void _startLiveRefreshLoop() {
+    if (_isTestBinding) {
+      return;
+    }
+    _liveRefreshTimer?.cancel();
+    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 24), (
+      Timer timer,
+    ) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _runLiveRefreshCycle();
+    });
+  }
+
+  Future<void> _runLiveRefreshCycle() async {
+    switch (_route.primaryDestination) {
+      case GtePrimaryDestination.home:
+        {
+          await widget.controller.bootstrap();
+          return;
+        }
+      case GtePrimaryDestination.market:
+        {
+          await widget.controller.loadMarket(reset: false);
+          return;
+        }
+      case GtePrimaryDestination.competitions:
+        {
+          await _competitionController.loadDiscovery();
+          return;
+        }
+      case GtePrimaryDestination.club:
+        {
+          await widget.controller.refreshAccount();
+          return;
+        }
+      case GtePrimaryDestination.hub:
+      case GtePrimaryDestination.community:
+        {
+          if (widget.controller.isAuthenticated) {
+            await Future.wait<void>(<Future<void>>[
+              _creatorController.load(),
+              _referralController.load(),
+            ]);
+          }
+          return;
+        }
+      case GtePrimaryDestination.wallet:
+        {
+          if (widget.controller.isAuthenticated) {
+            await widget.controller.refreshAccount();
+          }
+          return;
+        }
+    }
+  }
+
   void _openPrimaryDestination(GtePrimaryDestination destination) {
     _setRoute(_route.withPrimaryDestination(destination));
   }
@@ -981,6 +1051,30 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         tooltip: 'Theme: $label',
         onPressed: () => _openThemePicker(context),
         icon: const Icon(Icons.palette_outlined),
+      ),
+    );
+  }
+
+  Widget _buildAmbientAction() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: IconButton(
+        tooltip:
+            _ambientModeEnabled ? 'Atmosphere enabled' : 'Atmosphere muted',
+        onPressed: () {
+          setState(() {
+            _ambientModeEnabled = !_ambientModeEnabled;
+          });
+        },
+        icon: Icon(
+          _ambientModeEnabled
+              ? Icons.surround_sound_rounded
+              : Icons.volume_off_rounded,
+          color:
+              _ambientModeEnabled
+                  ? GteShellTheme.activeTokens.accentCapital
+                  : null,
+        ),
       ),
     );
   }

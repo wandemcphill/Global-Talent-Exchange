@@ -6,7 +6,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCS_DIR = REPO_ROOT / "docs"
 SHARED_DIR = REPO_ROOT / "shared"
@@ -56,11 +55,7 @@ def _build_contract(
     for route in route_map.get("routes", []):
         method = str(route.get("method") or "").upper()
         legacy_path = str(route.get("path") or "").strip()
-        effective_paths = [
-            str(path).strip()
-            for path in (route.get("effective_paths") or [])
-            if str(path).strip()
-        ]
+        effective_paths = [str(path).strip() for path in (route.get("effective_paths") or []) if str(path).strip()]
         if not method or not legacy_path:
             continue
         route_inventory[(method, legacy_path)] = route
@@ -218,4 +213,3 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

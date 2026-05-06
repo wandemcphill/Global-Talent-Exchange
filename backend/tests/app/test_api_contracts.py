@@ -39,7 +39,10 @@ def test_target_api_contracts_are_documented_with_stable_operation_ids(contract_
         ("/api/orders/{order_id}", "get"): "api_get_order_detail_api_orders_order_id_get",
         ("/api/orders/{order_id}/cancel", "post"): "api_cancel_order_api_orders_order_id_cancel_post",
         ("/api/market/ticker/{player_id}", "get"): "get_market_ticker_api_market_ticker__player_id__get",
-        ("/api/market/players/{player_id}/candles", "get"): "get_market_player_candles_api_market_players__player_id__candles_get",
+        (
+            "/api/market/players/{player_id}/candles",
+            "get",
+        ): "get_market_player_candles_api_market_players__player_id__candles_get",
         ("/api/market/movers", "get"): "get_market_movers_api_market_movers_get",
         ("/api/portfolio", "get"): "api_get_portfolio_api_portfolio_get",
         ("/api/portfolio/snapshot", "get"): "api_get_portfolio_snapshot_api_portfolio_snapshot_get",
@@ -135,4 +138,3 @@ def test_versioned_aliases_wrap_legacy_handlers_in_standard_success_envelope(con
     assert "error" not in payload
     assert "code" not in payload
     assert "access_token" in payload["data"]
-

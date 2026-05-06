@@ -6,7 +6,6 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_APP = REPO_ROOT / "backend" / "app"
 FRONTEND_LIB = REPO_ROOT / "frontend" / "lib"
@@ -45,14 +44,10 @@ MODULE_ENTRY_RE = re.compile(
 ROUTER_PATH_RE = re.compile(r"router_path\s*=\s*['\"](?P<router_path>[^'\"]+)['\"]")
 API_ALIAS_RE = re.compile(r"with_api_alias\s*=\s*True")
 API_ONLY_RE = re.compile(r"api_only\s*=\s*True")
-STRING_PATH_RE = re.compile(
-    r"['\"](?P<path>/(?:api|auth|tts|generated-media|realtime|ws)[^'\"]*)['\"]"
-)
+STRING_PATH_RE = re.compile(r"['\"](?P<path>/(?:api|auth|tts|generated-media|realtime|ws)[^'\"]*)['\"]")
 HARDCODED_URL_RE = re.compile(r"['\"](?P<url>(?:https?|wss?)://[^'\"]+)['\"]")
 METHOD_CONTEXT_RE = re.compile(r"['\"](?P<method>GET|POST|PUT|PATCH|DELETE)['\"]")
-CALL_CONTEXT_RE = re.compile(
-    r"(?P<call>_request|request|resolveUri|uriFor|client\.request)\s*\($"
-)
+CALL_CONTEXT_RE = re.compile(r"(?P<call>_request|request|resolveUri|uriFor|client\.request)\s*\($")
 
 
 @dataclass(frozen=True)
@@ -124,9 +119,7 @@ def _scan_backend_routes() -> tuple[list[dict], list[ModuleMount]]:
         router_prefixes: dict[str, str] = {}
         for match in ROUTER_DECLARATION_RE.finditer(text):
             prefix_match = PREFIX_RE.search(match.group("args"))
-            router_prefixes[match.group("name")] = _normalize_path(
-                prefix_match.group("prefix") if prefix_match else ""
-            )
+            router_prefixes[match.group("name")] = _normalize_path(prefix_match.group("prefix") if prefix_match else "")
         parent_routers: dict[str, list[str]] = defaultdict(list)
         for match in INCLUDE_ROUTER_RE.finditer(text):
             parent_routers[match.group("child")].append(match.group("parent"))
@@ -159,9 +152,9 @@ def _scan_backend_routes() -> tuple[list[dict], list[ModuleMount]]:
                         "module_mounts": [mount.name for mount in mounts],
                         "request_shape": request_shape,
                         "response_shape": {
-                            "response_model": response_model_match.group("model").strip()
-                            if response_model_match
-                            else None,
+                            "response_model": (
+                                response_model_match.group("model").strip() if response_model_match else None
+                            ),
                             "returns": returns,
                         },
                         "version": _infer_version(module_path, effective_paths),
@@ -543,9 +536,7 @@ def _render_pre_deletion_validation(mismatches: list[dict], deprecations: list[d
 def _render_env_audit(frontend_calls: list[dict]) -> str:
     render_text = RENDER_FILE.read_text(encoding="utf-8", errors="ignore")
     config_text = APP_CONFIG_FILE.read_text(encoding="utf-8", errors="ignore")
-    hardcoded_count = sum(
-        1 for call in frontend_calls if call["base_url_source"] == "hardcoded_localhost"
-    )
+    hardcoded_count = sum(1 for call in frontend_calls if call["base_url_source"] == "hardcoded_localhost")
     return "\n".join(
         [
             "# Environment and Deployment Audit",
@@ -763,4 +754,3 @@ def _write_markdown(path: Path, content: str) -> None:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
