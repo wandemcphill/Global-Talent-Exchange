@@ -90,6 +90,14 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
   String? loanContractsError;
   String? actionError;
 
+  Future<_SupportLoadResult<T>> _captureSupport<T>(Future<T> future) async {
+    try {
+      return _SupportLoadResult<T>(value: await future);
+    } catch (error) {
+      return _SupportLoadResult<T>(error: AppFeedback.messageFor(error));
+    }
+  }
+
   Future<void> loadMarketplace({
     PlayerCardMarketplaceQuery query = const PlayerCardMarketplaceQuery(),
   }) async {
@@ -141,29 +149,79 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<Object?> payload =
-          await Future.wait<Object?>(<Future<Object?>>[
-            _repository.listPlayers(playersQuery),
+      final Future<_SupportLoadResult<List<PlayerCardPlayerSummary>>>
+      playersFuture = _captureSupport<List<PlayerCardPlayerSummary>>(
+        _repository.listPlayers(playersQuery),
+      );
+      final Future<_SupportLoadResult<List<PlayerCardListing>>> listingsFuture =
+          _captureSupport<List<PlayerCardListing>>(
             _repository.listListings(listingsQuery),
-            if (includeAuthed) _repository.listInventory(),
-            if (includeAuthed) _repository.listMyListings(),
-            if (includeAuthed) _repository.listWatchlist(),
-          ]);
+          );
+      final Future<_SupportLoadResult<List<PlayerCardHolding>>>?
+      inventoryFuture =
+          includeAuthed
+              ? _captureSupport<List<PlayerCardHolding>>(
+                _repository.listInventory(),
+              )
+              : null;
+      final Future<_SupportLoadResult<List<PlayerCardListing>>>?
+      myListingsFuture =
+          includeAuthed
+              ? _captureSupport<List<PlayerCardListing>>(
+                _repository.listMyListings(),
+              )
+              : null;
+      final Future<_SupportLoadResult<List<PlayerCardWatchlistItem>>>?
+      watchlistFuture =
+          includeAuthed
+              ? _captureSupport<List<PlayerCardWatchlistItem>>(
+                _repository.listWatchlist(),
+              )
+              : null;
+
+      final _SupportLoadResult<List<PlayerCardPlayerSummary>> playersResult =
+          await playersFuture;
+      final _SupportLoadResult<List<PlayerCardListing>> listingsResult =
+          await listingsFuture;
+      final _SupportLoadResult<List<PlayerCardHolding>>? inventoryResult =
+          inventoryFuture == null ? null : await inventoryFuture;
+      final _SupportLoadResult<List<PlayerCardListing>>? myListingsResult =
+          myListingsFuture == null ? null : await myListingsFuture;
+      final _SupportLoadResult<List<PlayerCardWatchlistItem>>? watchlistResult =
+          watchlistFuture == null ? null : await watchlistFuture;
+
       if (!_supportGate.isActive(requestId)) {
         return;
       }
-      players = payload[0] as List<PlayerCardPlayerSummary>;
-      listings = payload[1] as List<PlayerCardListing>;
+
+      final List<String> failures = <String>[
+        if (playersResult.error != null) playersResult.error!,
+        if (listingsResult.error != null) listingsResult.error!,
+        if (inventoryResult?.error != null) inventoryResult!.error!,
+        if (myListingsResult?.error != null) myListingsResult!.error!,
+        if (watchlistResult?.error != null) watchlistResult!.error!,
+      ];
+      final bool hasCoreSuccess =
+          playersResult.value != null || listingsResult.value != null;
+
+      if (playersResult.value != null) {
+        players = playersResult.value!;
+      }
+      if (listingsResult.value != null) {
+        listings = listingsResult.value!;
+      }
       loanSupportListings = const <PlayerCardLoanSupportListing>[];
       if (includeAuthed) {
-        inventory = payload[2] as List<PlayerCardHolding>;
-        myListings = payload[3] as List<PlayerCardListing>;
-        watchlist = payload[4] as List<PlayerCardWatchlistItem>;
+        inventory = inventoryResult?.value ?? const <PlayerCardHolding>[];
+        myListings = myListingsResult?.value ?? const <PlayerCardListing>[];
+        watchlist = watchlistResult?.value ?? const <PlayerCardWatchlistItem>[];
+      } else {
+        inventory = const <PlayerCardHolding>[];
+        myListings = const <PlayerCardListing>[];
+        watchlist = const <PlayerCardWatchlistItem>[];
       }
-    } catch (error) {
-      if (_supportGate.isActive(requestId)) {
-        supportError = AppFeedback.messageFor(error);
-      }
+
+      supportError = hasCoreSuccess || failures.isEmpty ? null : failures.first;
     } finally {
       if (_supportGate.isActive(requestId)) {
         isLoadingSupport = false;
@@ -608,4 +666,11 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+
+class _SupportLoadResult<T> {
+  const _SupportLoadResult({this.value, this.error});
+
+  final T? value;
+  final String? error;
 }

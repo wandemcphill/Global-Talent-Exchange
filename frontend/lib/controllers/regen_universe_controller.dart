@@ -4,6 +4,33 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/regen_universe_api.dart';
 import 'package:gte_frontend/models/regen_universe_models.dart';
 
+class _RegenControllerLoadResult<T> {
+  const _RegenControllerLoadResult({this.value, this.error});
+
+  final T? value;
+  final Object? error;
+}
+
+Future<_RegenControllerLoadResult<T>> _safeRegenControllerLoad<T>(
+  Future<T> future,
+) async {
+  try {
+    return _RegenControllerLoadResult<T>(value: await future);
+  } catch (error) {
+    return _RegenControllerLoadResult<T>(error: error);
+  }
+}
+
+const RegenGenerationTracking _emptyRegenControllerTracking =
+    RegenGenerationTracking(
+      totalSeededPlayers: 0,
+      seedTypes: <RegenGenerationTrackingEntry>[],
+      rarityBreakdown: <RegenGenerationTrackingEntry>[],
+      countryDistribution: <RegenGenerationTrackingEntry>[],
+      globalPeakRating: 0,
+      trackedAchievements: <String>[],
+    );
+
 class RegenUniverseController extends ChangeNotifier {
   RegenUniverseController({required RegenUniverseApi api}) : _api = api;
 
@@ -49,16 +76,52 @@ class RegenUniverseController extends ChangeNotifier {
     notifyListeners();
     final Future<void> task = () async {
       try {
-        final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
-          _api.listRisingStars(),
-          _api.listScoutingFeed(),
-          _api.listNationalRegens(),
-          _api.fetchTracking(),
-        ]);
-        risingStars = payload[0] as List<RegenRisingStar>;
-        scoutingFeed = payload[1] as List<RegenScoutingFeedItem>;
-        nationalRegens = payload[2] as List<NationalRegenSeed>;
-        tracking = payload[3] as RegenGenerationTracking;
+        final List<Object?> payload =
+            await Future.wait<Object?>(<Future<Object?>>[
+              _safeRegenControllerLoad<List<RegenRisingStar>>(
+                _api.listRisingStars(),
+              ),
+              _safeRegenControllerLoad<List<RegenScoutingFeedItem>>(
+                _api.listScoutingFeed(),
+              ),
+              _safeRegenControllerLoad<List<NationalRegenSeed>>(
+                _api.listNationalRegens(),
+              ),
+              _safeRegenControllerLoad<RegenGenerationTracking>(
+                _api.fetchTracking(),
+              ),
+            ]);
+        final _RegenControllerLoadResult<List<RegenRisingStar>>
+        risingStarsResult =
+            payload[0] as _RegenControllerLoadResult<List<RegenRisingStar>>;
+        final _RegenControllerLoadResult<List<RegenScoutingFeedItem>>
+        scoutingFeedResult =
+            payload[1]
+                as _RegenControllerLoadResult<List<RegenScoutingFeedItem>>;
+        final _RegenControllerLoadResult<List<NationalRegenSeed>>
+        nationalRegensResult =
+            payload[2] as _RegenControllerLoadResult<List<NationalRegenSeed>>;
+        final _RegenControllerLoadResult<RegenGenerationTracking>
+        trackingResult =
+            payload[3] as _RegenControllerLoadResult<RegenGenerationTracking>;
+        final bool hasAnyData =
+            risingStarsResult.value != null ||
+            scoutingFeedResult.value != null ||
+            nationalRegensResult.value != null ||
+            trackingResult.value != null;
+        if (!hasAnyData) {
+          throw trackingResult.error ??
+              risingStarsResult.error ??
+              scoutingFeedResult.error ??
+              nationalRegensResult.error ??
+              StateError('Unable to load the regen universe.');
+        }
+        risingStars = risingStarsResult.value ?? const <RegenRisingStar>[];
+        scoutingFeed =
+            scoutingFeedResult.value ?? const <RegenScoutingFeedItem>[];
+        nationalRegens =
+            nationalRegensResult.value ?? const <NationalRegenSeed>[];
+        tracking = trackingResult.value ?? _emptyRegenControllerTracking;
         syncedAt = DateTime.now().toUtc();
       } catch (error) {
         errorMessage = AppFeedback.messageFor(

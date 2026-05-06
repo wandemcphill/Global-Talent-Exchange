@@ -595,7 +595,7 @@ def list_national_regens(
 
     def build() -> NationalRegenSeedPageView:
         service = RegenUniverseExpansionService(session)
-        total_stmt = select(NationalRegenSeed).order_by(NationalRegenSeed.id.asc())
+        total_stmt = select(func.count()).select_from(NationalRegenSeed)
         if country_code:
             total_stmt = total_stmt.where(NationalRegenSeed.country_code == country_code.strip().upper())
         if seed_type:
@@ -604,20 +604,11 @@ def list_national_regens(
             total_stmt = total_stmt.where(NationalRegenSeed.preseed_batch == preseed_batch.strip())
         if age_band:
             total_stmt = total_stmt.where(NationalRegenSeed.age_band == age_band.strip().lower())
-        seeds = list(session.scalars(total_stmt).all())
-        if age_min is not None or age_max is not None:
-            filtered: list[NationalRegenSeed] = []
-            for seed in seeds:
-                age = service._national_seed_age(seed)
-                if age is None:
-                    continue
-                if age_min is not None and age < age_min:
-                    continue
-                if age_max is not None and age > age_max:
-                    continue
-                filtered.append(seed)
-            seeds = filtered
-        total = len(seeds)
+        if age_min is not None:
+            total_stmt = total_stmt.where(NationalRegenSeed.age >= age_min)
+        if age_max is not None:
+            total_stmt = total_stmt.where(NationalRegenSeed.age <= age_max)
+        total = int(session.scalar(total_stmt) or 0)
         items = [
             NationalRegenSeedView.model_validate(item)
             for item in service.list_preseeded_national_regens(

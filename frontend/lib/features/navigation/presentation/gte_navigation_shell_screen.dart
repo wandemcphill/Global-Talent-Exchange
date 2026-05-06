@@ -472,7 +472,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             eyebrow: 'CLUB SCOPE',
             title: 'Sign in to open Club HQ',
             message:
-                'Guest access does not expose a canonical club yet. Sign in to continue with a real badge, club funds, scouting lane, and world state.',
+                'Preview mode does not expose a canonical club yet. Sign in to continue with a real badge, club funds, scouting lane, and world state.',
             icon: Icons.login_outlined,
             accentColor: _routeAccentFor(context, GtePrimaryDestination.home),
             actionLabel: 'Sign in',
@@ -1000,7 +1000,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     if (widget.controller.isAuthenticated) {
       return widget.controller.session?.user.username ?? 'Signed in';
     }
-    return 'Guest access';
+    return 'Preview mode';
   }
 
   GteSyncStatusCard _buildModeSyncCard(BuildContext context) {
@@ -1155,7 +1155,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   String _runtimeAudienceLabel() {
     final bool hasClubScope = (_canonicalClubId()?.trim().isNotEmpty ?? false);
     final String accessLabel =
-        widget.controller.isAuthenticated ? 'signed-in access' : 'guest access';
+        widget.controller.isAuthenticated
+            ? 'signed-in access'
+            : 'preview access';
     final String clubLabel =
         hasClubScope ? 'club scope ready' : 'club scope pending';
     return '$accessLabel, $clubLabel';

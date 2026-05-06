@@ -902,10 +902,62 @@ class GteModeAwareApiRepository implements GteApiRepository {
         ),
         label: 'wallet transactions',
       );
-      return payload
+      final List<GteWalletTransactionRecord> transactions = payload
           .map(GteWalletTransactionRecord.fromJson)
           .toList(growable: false);
+      if (transactions.isNotEmpty) {
+        return transactions;
+      }
+      return _listWalletLedgerTransactions(limit: limit);
     }, () => fixtures.listWalletTransactions(limit: limit));
+  }
+
+  Future<List<GteWalletTransactionRecord>> _listWalletLedgerTransactions({
+    required int limit,
+  }) async {
+    final Map<String, Object?> payload = await requestJson(
+      'GET',
+      '/api/wallets/ledger',
+      query: <String, Object?>{'page': 1, 'page_size': limit},
+      requiresAuth: true,
+    );
+    final AuthSession? session = await _readPersistedSession();
+    final String userId = session?.userId.trim() ?? '';
+    return GteJson.typedList<GteWalletTransactionRecord>(
+      payload,
+      <String>['items'],
+      (Object? value) =>
+          _walletTransactionFromLedgerJson(value, userId: userId),
+    );
+  }
+
+  GteWalletTransactionRecord _walletTransactionFromLedgerJson(
+    Object? value, {
+    required String userId,
+  }) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet ledger transaction projection',
+    );
+    final double signedAmount = GteJson.number(json, <String>['amount']);
+    final String type = signedAmount >= 0 ? 'credit' : 'debit';
+    final String reference =
+        GteJson.stringOrNull(json, <String>['reference']) ??
+        GteJson.stringOrNull(json, <String>['external_reference']) ??
+        GteJson.stringOrNull(json, <String>['transaction_id']) ??
+        GteJson.string(json, <String>['id']);
+    return GteWalletTransactionRecord(
+      id: GteJson.string(json, <String>['id']),
+      userId: userId,
+      type: type,
+      amount: signedAmount.abs(),
+      status: 'posted',
+      reference: reference,
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+    );
   }
 
   @override

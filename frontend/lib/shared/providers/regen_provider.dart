@@ -35,6 +35,30 @@ class RegenUniverseHubData {
       .toList(growable: false);
 }
 
+class _RegenLoadResult<T> {
+  const _RegenLoadResult({this.value, this.error});
+
+  final T? value;
+  final Object? error;
+}
+
+Future<_RegenLoadResult<T>> _safeRegenLoad<T>(Future<T> future) async {
+  try {
+    return _RegenLoadResult<T>(value: await future);
+  } catch (error) {
+    return _RegenLoadResult<T>(error: error);
+  }
+}
+
+const RegenGenerationTracking _emptyRegenTracking = RegenGenerationTracking(
+  totalSeededPlayers: 0,
+  seedTypes: <RegenGenerationTrackingEntry>[],
+  rarityBreakdown: <RegenGenerationTrackingEntry>[],
+  countryDistribution: <RegenGenerationTrackingEntry>[],
+  globalPeakRating: 0,
+  trackedAchievements: <String>[],
+);
+
 final Provider<RegenUniverseApi> regenUniverseApiProvider =
     Provider<RegenUniverseApi>((Ref ref) {
       return RegenUniverseApi.standard(
@@ -51,32 +75,74 @@ final Provider<RegenCreationApi> regenCreationApiProvider =
       );
     });
 
-final FutureProvider<RegenUniverseHubData> regenUniverseHubProvider =
-    FutureProvider<RegenUniverseHubData>((Ref ref) async {
-      final RegenUniverseApi universeApi = ref.watch(regenUniverseApiProvider);
-      final RegenCreationApi creationApi = ref.watch(regenCreationApiProvider);
-      final bool authenticated = ref.watch(isAuthenticatedProvider);
-      final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
-        universeApi.listRisingStars(limit: 8),
-        universeApi.listAwards(limit: 8),
-        universeApi.listNationalRegens(limit: 12, ageMax: 20),
-        universeApi.listScoutingFeed(limit: 8),
-        universeApi.fetchTracking(),
-        authenticated
-            ? creationApi.listCreationOrders(limit: 12)
-            : Future<RegenCreationOrderList>.value(
-              const RegenCreationOrderList(items: <RegenCreationOrder>[]),
-            ),
-      ]);
-      return RegenUniverseHubData(
-        risingStars: payload[0] as List<RegenRisingStar>,
-        awards: payload[1] as List<RegenAwardResult>,
-        nationalRegens: payload[2] as List<NationalRegenSeed>,
-        scoutingFeed: payload[3] as List<RegenScoutingFeedItem>,
-        tracking: payload[4] as RegenGenerationTracking,
-        creationOrders: (payload[5] as RegenCreationOrderList).items,
-      );
-    });
+final FutureProvider<RegenUniverseHubData>
+regenUniverseHubProvider = FutureProvider<RegenUniverseHubData>((
+  Ref ref,
+) async {
+  final RegenUniverseApi universeApi = ref.watch(regenUniverseApiProvider);
+  final RegenCreationApi creationApi = ref.watch(regenCreationApiProvider);
+  final bool authenticated = ref.watch(isAuthenticatedProvider);
+  final List<Object?> payload = await Future.wait<Object?>(<Future<Object?>>[
+    _safeRegenLoad<List<RegenRisingStar>>(
+      universeApi.listRisingStars(limit: 8),
+    ),
+    _safeRegenLoad<List<RegenAwardResult>>(universeApi.listAwards(limit: 8)),
+    _safeRegenLoad<List<NationalRegenSeed>>(
+      universeApi.listNationalRegens(limit: 12, ageMax: 20),
+    ),
+    _safeRegenLoad<List<RegenScoutingFeedItem>>(
+      universeApi.listScoutingFeed(limit: 8),
+    ),
+    _safeRegenLoad<RegenGenerationTracking>(universeApi.fetchTracking()),
+    authenticated
+        ? _safeRegenLoad<RegenCreationOrderList>(
+          creationApi.listCreationOrders(limit: 12),
+        )
+        : Future<_RegenLoadResult<RegenCreationOrderList>>.value(
+          const _RegenLoadResult<RegenCreationOrderList>(
+            value: RegenCreationOrderList(items: <RegenCreationOrder>[]),
+          ),
+        ),
+  ]);
+  final _RegenLoadResult<List<RegenRisingStar>> risingStarsResult =
+      payload[0] as _RegenLoadResult<List<RegenRisingStar>>;
+  final _RegenLoadResult<List<RegenAwardResult>> awardsResult =
+      payload[1] as _RegenLoadResult<List<RegenAwardResult>>;
+  final _RegenLoadResult<List<NationalRegenSeed>> nationalRegensResult =
+      payload[2] as _RegenLoadResult<List<NationalRegenSeed>>;
+  final _RegenLoadResult<List<RegenScoutingFeedItem>> scoutingFeedResult =
+      payload[3] as _RegenLoadResult<List<RegenScoutingFeedItem>>;
+  final _RegenLoadResult<RegenGenerationTracking> trackingResult =
+      payload[4] as _RegenLoadResult<RegenGenerationTracking>;
+  final _RegenLoadResult<RegenCreationOrderList> creationOrdersResult =
+      payload[5] as _RegenLoadResult<RegenCreationOrderList>;
+
+  final bool hasAnyData =
+      risingStarsResult.value != null ||
+      awardsResult.value != null ||
+      nationalRegensResult.value != null ||
+      scoutingFeedResult.value != null ||
+      trackingResult.value != null ||
+      creationOrdersResult.value != null;
+  if (!hasAnyData) {
+    throw trackingResult.error ??
+        risingStarsResult.error ??
+        scoutingFeedResult.error ??
+        awardsResult.error ??
+        nationalRegensResult.error ??
+        creationOrdersResult.error ??
+        StateError('Unable to load the regen universe.');
+  }
+  return RegenUniverseHubData(
+    risingStars: risingStarsResult.value ?? const <RegenRisingStar>[],
+    awards: awardsResult.value ?? const <RegenAwardResult>[],
+    nationalRegens: nationalRegensResult.value ?? const <NationalRegenSeed>[],
+    scoutingFeed: scoutingFeedResult.value ?? const <RegenScoutingFeedItem>[],
+    tracking: trackingResult.value ?? _emptyRegenTracking,
+    creationOrders:
+        creationOrdersResult.value?.items ?? const <RegenCreationOrder>[],
+  );
+});
 
 final Provider<List<Player>> regenProvider = Provider<List<Player>>((Ref ref) {
   final RegenUniverseHubData? hub =

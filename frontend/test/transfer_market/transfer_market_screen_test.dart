@@ -154,6 +154,69 @@ void main() {
   });
 
   testWidgets(
+    'transfer market still renders public listings when authed support calls fail',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+      final PlayerCardMarketplaceController controller =
+          PlayerCardMarketplaceController(
+            repository: _FakePlayerCardMarketplaceRepository(
+              inventoryError: StateError('Inventory timed out.'),
+              marketSales: PlayerCardMarketplaceSearchResult.fromJson(
+                <String, Object?>{
+                  'total': 1,
+                  'limit': 20,
+                  'offset': 0,
+                  'items': <Object?>[
+                    <String, Object?>{
+                      'listing_id': 'listing-sale-3',
+                      'listing_type': 'sale',
+                      'player_card_id': 'card-6',
+                      'player_id': 'player-6',
+                      'player_name': 'Victor Boniface',
+                      'listing_owner_user_id': 'seller-8',
+                      'status': 'open',
+                      'availability': 'available',
+                      'is_negotiable': true,
+                      'asset_origin': 'real_player',
+                      'is_regen_newgen': false,
+                      'is_creator_linked': false,
+                      'available_quantity': 1,
+                      'sale_price_credits': 72,
+                      'average_rating': 82,
+                      'tier_code': 'ST',
+                      'tier_name': 'First Team',
+                      'rarity_rank': 4,
+                      'edition_code': 'launch',
+                      'club_name': 'Leverkusen',
+                      'position': 'ST',
+                    },
+                  ],
+                },
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: PlayerCardMarketplaceScreen(
+            baseUrl: 'https://example.test',
+            backendMode: GteBackendMode.fixture,
+            accessToken: 'token-1',
+            currentUserId: 'user-1',
+            controller: controller,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Victor Boniface'), findsOneWidget);
+      expect(find.text('Buy Now'), findsOneWidget);
+      expect(find.textContaining('Inventory timed out'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'transfer market preview keeps sign-in gates on squad and listing tabs',
     (WidgetTester tester) async {
       _setLargeViewport(tester);
@@ -246,6 +309,7 @@ class _FakePlayerCardMarketplaceRepository
     List<PlayerCardListing>? listings,
     List<PlayerCardListing>? myListings,
     List<PlayerCardWatchlistItem>? watchlist,
+    this.inventoryError,
   }) : _marketSales =
            marketSales ?? const PlayerCardMarketplaceSearchResult.empty(),
        _marketLoans =
@@ -263,6 +327,7 @@ class _FakePlayerCardMarketplaceRepository
   final List<PlayerCardListing> _listings;
   final List<PlayerCardListing> _myListings;
   final List<PlayerCardWatchlistItem> _watchlist;
+  final Object? inventoryError;
 
   @override
   Future<PlayerCardWatchlistItem> addWatchlist(
@@ -420,7 +485,12 @@ class _FakePlayerCardMarketplaceRepository
   }
 
   @override
-  Future<List<PlayerCardHolding>> listInventory() async => _inventory;
+  Future<List<PlayerCardHolding>> listInventory() async {
+    if (inventoryError != null) {
+      throw inventoryError!;
+    }
+    return _inventory;
+  }
 
   @override
   Future<List<PlayerCardListing>> listListings(

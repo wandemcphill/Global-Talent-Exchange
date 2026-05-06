@@ -18,7 +18,9 @@ class RegenUniverseApi {
     return RegenUniverseApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: GteHttpTransport(
+          connectionTimeout: const Duration(seconds: 20),
+        ),
         mode: resolvedMode,
       ),
       fixtures: _RegenUniverseFixtures.seed(),
@@ -32,7 +34,9 @@ class RegenUniverseApi {
           baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.fixture,
         ),
-        transport: GteHttpTransport(),
+        transport: GteHttpTransport(
+          connectionTimeout: const Duration(seconds: 20),
+        ),
         mode: GteBackendMode.fixture,
       ),
       fixtures: _RegenUniverseFixtures.seed(),

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.core.app_state import get_optional_app_settings
+from app.core.pagination import build_pagination_meta, resolve_pagination
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.user import User
 from app.player_cards.schemas import (
     AdminPreseededRegenMintRequest,
@@ -51,6 +54,8 @@ from app.player_cards.service import (
     PlayerCardPermissionError,
     PlayerCardValidationError,
 )
+from app.regen_universe.expansion_service import RegenUniverseExpansionService
+from app.schemas.regen_universe_expansion import NationalRegenSeedPageView, NationalRegenSeedView
 from app.wallets.service import InsufficientBalanceError, WalletService
 from app.core.events import InMemoryEventPublisher
 
@@ -186,6 +191,55 @@ def admin_mint_preseeded_regen(
         owner_user_id=batch.assigned_user_id,
         status=batch.status,
         trade_enabled=True,
+    )
+
+
+@router.get("/admin/preseeded-regens", response_model=NationalRegenSeedPageView)
+def list_admin_preseeded_regens(
+    country_code: str | None = Query(default=None),
+    seed_type: str | None = Query(default=None),
+    preseed_batch: str | None = Query(default=None),
+    age_band: str | None = Query(default=None),
+    age_min: int | None = Query(default=None, ge=0, le=99),
+    age_max: int | None = Query(default=None, ge=0, le=99),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
+    limit: int | None = Query(default=None, ge=1, le=100, deprecated=True),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
+    _: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> NationalRegenSeedPageView:
+    params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
+    total_stmt = select(func.count()).select_from(NationalRegenSeed)
+    if country_code:
+        total_stmt = total_stmt.where(NationalRegenSeed.country_code == country_code.strip().upper())
+    if seed_type:
+        total_stmt = total_stmt.where(NationalRegenSeed.seed_type == seed_type.strip().lower())
+    if preseed_batch:
+        total_stmt = total_stmt.where(NationalRegenSeed.preseed_batch == preseed_batch.strip())
+    if age_band:
+        total_stmt = total_stmt.where(NationalRegenSeed.age_band == age_band.strip().lower())
+    if age_min is not None:
+        total_stmt = total_stmt.where(NationalRegenSeed.age >= age_min)
+    if age_max is not None:
+        total_stmt = total_stmt.where(NationalRegenSeed.age <= age_max)
+    service = RegenUniverseExpansionService(session)
+    items = [
+        NationalRegenSeedView.model_validate(item)
+        for item in service.list_preseeded_national_regens(
+            country_code=country_code,
+            seed_type=seed_type,
+            preseed_batch=preseed_batch,
+            age_band=age_band,
+            age_min=age_min,
+            age_max=age_max,
+            limit=params.per_page,
+            offset=params.offset,
+        )
+    ]
+    return NationalRegenSeedPageView(
+        items=items,
+        pagination=build_pagination_meta(params=params, total=int(session.scalar(total_stmt) or 0)),
     )
 
 

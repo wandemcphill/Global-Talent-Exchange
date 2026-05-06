@@ -2212,20 +2212,13 @@ class RegenUniverseExpansionService:
         normalized_age_band = self._normalized_age_band(age_band)
         if normalized_age_band:
             stmt = stmt.where(NationalRegenSeed.age_band == normalized_age_band)
+        if age_min is not None:
+            stmt = stmt.where(NationalRegenSeed.age >= age_min)
+        if age_max is not None:
+            stmt = stmt.where(NationalRegenSeed.age <= age_max)
+        stmt = stmt.offset(offset).limit(limit)
         seeds = list(self.session.scalars(stmt).all())
-        if age_min is not None or age_max is not None:
-            filtered: list[NationalRegenSeed] = []
-            for seed in seeds:
-                age = self._national_seed_age(seed)
-                if age is None:
-                    continue
-                if age_min is not None and age < age_min:
-                    continue
-                if age_max is not None and age > age_max:
-                    continue
-                filtered.append(seed)
-            seeds = filtered
-        return [self._national_seed_view(item) for item in seeds[offset : offset + limit]]
+        return [self._national_seed_view(item) for item in seeds]
 
     def build_regen_tracking(self) -> dict[str, Any]:
         seeds = list(self.session.scalars(select(NationalRegenSeed)).all())

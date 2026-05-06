@@ -239,7 +239,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   status:
                       widget.exchangeController.isAuthenticated
                           ? 'Matchday, scouting, club, and creator tools stay connected in one clear shell.'
-                          : 'Guest access is live. Sign in to unlock your club, scouting actions, and editable spaces.',
+                          : 'Preview mode is live. Sign in to unlock your club, scouting actions, and editable spaces.',
                   syncedAt: widget.exchangeController.marketSyncedAt,
                   accent: GteShellTheme.accent,
                   isRefreshing:
@@ -787,7 +787,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (username.isNotEmpty) {
       return username;
     }
-    return 'Guest user';
+    return 'Visitor';
   }
 
   String _apiHostLabel() {
@@ -818,7 +818,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final String accessLabel =
         widget.exchangeController.isAuthenticated
             ? 'signed-in account'
-            : 'guest access';
+            : 'preview access';
     final String clubLabel =
         hasClubScope ? 'club routes open' : 'club setup next';
     return '${_backendModeLabel()} is wired to ${_apiHostLabel()} for this session, with $accessLabel and $clubLabel.';
