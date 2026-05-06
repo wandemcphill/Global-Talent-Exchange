@@ -103,8 +103,8 @@ void main() {
 
     expect(find.text('World'), findsOneWidget);
     expect(find.text('World Preview'), findsNothing);
-    expect(find.text('Fixtures'), findsOneWidget);
-    expect(find.text('Competitions'), findsOneWidget);
+    expect(find.text('Matchday'), findsOneWidget);
+    expect(find.text('Arena'), findsOneWidget);
   });
 
   testWidgets('world route presents live route truth without preview badges', (
@@ -121,7 +121,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Preview'), findsNothing);
-    expect(find.text('World route'), findsOneWidget);
+    expect(find.text('World desk'), findsOneWidget);
   });
 
   testWidgets('native 3D route is labeled as coming soon', (

@@ -24,7 +24,7 @@ class ProfileScreen extends ConsumerWidget {
     return AppPageLayout(
       title: 'Profile',
       subtitle:
-          'Premium identity and account hub for live session truth, permissions, club context, and shell settings.',
+          'Identity desk for live session truth, permissions, club context, and shell settings.',
       trailing: DataSourceBadge(
         status:
             profileValue.hasError
@@ -68,9 +68,9 @@ class _GuestProfile extends StatelessWidget {
       children: <Widget>[
         GtexHeroPanel(
           eyebrow: 'GUEST IDENTITY',
-          title: 'This session is not signed in.',
+          title: 'This session is still in visitor mode.',
           description:
-              'Protected user, wallet, admin, and club actions unlock after authentication succeeds.',
+              'Sign in to unlock club ownership, wallet actions, admin tools, and live account controls.',
           metrics: <Widget>[
             GtexStatTile(
               label: 'Shell',
@@ -123,10 +123,10 @@ class _AuthenticatedProfile extends ConsumerWidget {
     return Column(
       children: <Widget>[
         GtexHeroPanel(
-          eyebrow: 'IDENTITY HUB',
+          eyebrow: 'IDENTITY DESK',
           title: identityLabel,
           description:
-              'Live session identity, permissions, and club context are rendered directly from backend-backed session state.',
+              'Live identity, permissions, and club context stay grounded in backend-backed session truth.',
           metrics: <Widget>[
             GtexStatTile(
               label: 'Role',
@@ -166,7 +166,7 @@ class _AuthenticatedProfile extends ConsumerWidget {
             if (isAdmin)
               FilledButton(
                 onPressed: () => context.push(AppRoutes.profileAdmin),
-                child: const Text('Open Admin'),
+                child: const Text('Open command center'),
               ),
             OutlinedButton(
               onPressed: () => _signOut(context, ref),

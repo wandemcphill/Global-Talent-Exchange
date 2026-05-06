@@ -25,9 +25,9 @@ class WorldScreen extends ConsumerWidget {
     final WorldAggregateData? snapshot = worldValue.asData?.value;
     final AppRouteSurface worldSurface = appRouteSurfaceFor(AppRoutes.world)!;
     return AppPageLayout(
-      title: 'World',
+      title: 'World desk',
       subtitle:
-          'Football-universe dashboard for standings, scouting, history, federations, and routed competition families.',
+          'Live football world desk for scouting, federations, history, and routed arena families.',
       trailing: Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -43,10 +43,10 @@ class WorldScreen extends ConsumerWidget {
       ),
       children: <Widget>[
         GtexHeroPanel(
-          eyebrow: 'WORLD OPS',
-          title: 'Operate the football universe like a premium broadcast desk.',
+          eyebrow: 'WORLD DESK',
+          title: 'Track the football world like a live operations board.',
           description:
-              'World now behaves like a live discovery layer with routed federation and competition entry points rather than a flat placeholder list.',
+              'Scouting, federations, regen storylines, and arena entry points stay connected here instead of living in disconnected side pages.',
           metrics: <Widget>[
             GtexStatTile(
               label: 'Rising stars',
@@ -83,12 +83,12 @@ class WorldScreen extends ConsumerWidget {
             FilledButton.icon(
               onPressed: () => context.push(AppRoutes.federations),
               icon: const Icon(Icons.account_tree_rounded),
-              label: const Text('Open federations hub'),
+              label: const Text('Open federations'),
             ),
             OutlinedButton.icon(
               onPressed: () => context.push(AppRoutes.regens),
               icon: const Icon(Icons.auto_awesome_rounded),
-              label: const Text('Open regen universe'),
+              label: const Text('Open regen desk'),
             ),
             OutlinedButton.icon(
               onPressed: () => context.push(AppRoutes.nationalTeams),
@@ -103,10 +103,10 @@ class WorldScreen extends ConsumerWidget {
               (WorldAggregateData world) => Column(
                 children: <Widget>[
                   GtexSectionPanel(
-                    eyebrow: 'COMPETITION FAMILIES',
-                    title: 'Competition families',
+                    eyebrow: 'ARENA FAMILIES',
+                    title: 'Arena families',
                     subtitle:
-                        'World is now a live discovery layer. Full lifecycle actions move into routed competition screens.',
+                        'World discovery hands real match lifecycle work off to dedicated arena routes.',
                     child: Wrap(
                       spacing: 12,
                       runSpacing: 12,

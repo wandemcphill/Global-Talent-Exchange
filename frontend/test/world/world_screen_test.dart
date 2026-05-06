@@ -74,11 +74,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('World route'), findsOneWidget);
-    expect(find.text('Competition families'), findsOneWidget);
+    expect(find.text('World desk'), findsOneWidget);
+    expect(find.text('Arena families'), findsOneWidget);
     expect(find.text('Rising stars'), findsOneWidget);
     expect(find.text('Federations'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Open federations hub'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Open federations'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Ayo Akin'),

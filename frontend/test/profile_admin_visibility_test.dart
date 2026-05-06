@@ -47,7 +47,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Open Admin'), findsOneWidget);
+    expect(find.text('Open command center'), findsOneWidget);
   });
 
   testWidgets('non-admin users do not see the active-shell admin entry', (
@@ -87,7 +87,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Open Admin'), findsNothing);
+    expect(find.text('Open command center'), findsNothing);
   });
 
   testWidgets(
@@ -117,7 +117,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await _scrollTo(tester, find.text('Regenerate Portrait'));
-      expect(find.text('Open Admin Controls'), findsOneWidget);
+      expect(find.text('Open command center'), findsOneWidget);
       expect(find.text('Regenerate Portrait'), findsOneWidget);
       expect(find.text('Upload/Override Portrait'), findsOneWidget);
       expect(find.text('Ban Bad Portrait'), findsOneWidget);

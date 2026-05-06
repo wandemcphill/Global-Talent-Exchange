@@ -29,11 +29,11 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
     );
     final CompetitionHubData? snapshot = hubValue.asData?.value;
     return AppPageLayout(
-      title: family?.label ?? 'Competitions',
+      title: family?.label ?? 'Arena',
       subtitle:
           family == null
-              ? 'Create, join, and manage football competitions.'
-              : 'Fixtures, standings, results, and prize pools stay on dedicated competition screens.',
+              ? 'Live arena for cups, leagues, hosted competitions, and prize boards.'
+              : 'Fixtures, standings, results, and prize pools stay in dedicated arena routes.',
       trailing: DataSourceBadge(
         status:
             hubValue.hasError
@@ -42,14 +42,14 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
       ),
       children: <Widget>[
         GtexHeroPanel(
-          eyebrow: family == null ? 'COMPETITIONS' : 'COMPETITION',
+          eyebrow: family == null ? 'ARENA' : 'ARENA DETAIL',
           title:
               family == null
-                  ? 'Build your club schedule with leagues, cups, and hosted competitions.'
-                  : '${family!.label} competitions are ready for matchday.',
+                  ? 'Build your football calendar with leagues, cups, and hosted showpieces.'
+                  : '${family!.label} arena routes are ready for matchday.',
           description:
               family == null
-                  ? 'Create competitions, join live fixtures, track standings, and chase prize pools from one football hub.'
+                  ? 'Create competitions, join live fixtures, track standings, and chase prize pools from one arena desk.'
                   : 'Join, manage, view fixtures, check standings, and review results when your session allows it.',
           metrics: <Widget>[
             GtexStatTile(
@@ -78,7 +78,7 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
                       onPressed:
                           () => context.push(AppRoutes.competitionsCreate),
                       icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('Create Competition'),
+                      label: const Text('Create arena'),
                     ),
                   ]
                   : const <Widget>[],
@@ -124,7 +124,7 @@ class LiveCompetitionDetailScreen extends ConsumerWidget {
     return AppPageLayout(
       title: family.label,
       subtitle:
-          'Live actions are only enabled when the session and backend route genuinely allow them.',
+          'Live arena actions are only enabled when the session and backend route genuinely allow them.',
       trailing: const DataSourceBadge(status: DataSourceStatus.live),
       children: <Widget>[
         switch (family) {
@@ -148,8 +148,7 @@ class _FamilyOverview extends StatelessWidget {
       _FamilyCardData(
         family: CompetitionFamilyRoute.gtex,
         count: hub.gtexCompetitions.length,
-        description:
-            'Admin-hosted football competitions from /api/competitions.',
+        description: 'Admin-hosted football competitions from /api/competitions.',
       ),
       _FamilyCardData(
         family: CompetitionFamilyRoute.hosted,
@@ -187,13 +186,13 @@ class _FamilyOverview extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: <Widget>[
-                        FilledButton.icon(
+                    FilledButton.icon(
                           onPressed:
                               () => context.push(
                                 '/competitions/${card.family.pathSegment}',
                               ),
                           icon: const Icon(Icons.open_in_new_rounded),
-                          label: const Text('Open family'),
+                          label: const Text('Open arena'),
                         ),
                       ],
                     ),
