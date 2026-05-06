@@ -114,9 +114,9 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             children: <Widget>[
               GtexHeroBanner(
                 eyebrow: 'COMPETITIONS HUB',
-                title: 'All competitions live here.',
+                title: 'Every arena, bracket, and prize race lives here.',
                 description:
-                    'Browse leagues, cups, fast cups, and user-created competitions from one hub.',
+                    'Browse leagues, cups, fast cups, and user-created competitions from one live arena desk built for football tension, not flat listings.',
                 accent: Colors.deepPurpleAccent,
                 chips: <Widget>[
                   GteMetricChip(
@@ -175,7 +175,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        'Why this matters',
+                        'Why fans stay here',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
@@ -1034,6 +1034,23 @@ class _CompetitionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              CompetitionVisibilityChip(visibility: competition.visibility),
+              Material(
+                color: Colors.transparent,
+                child: Chip(label: Text(competition.safeFormatLabel)),
+              ),
+              if (competition.beginnerFriendly == true)
+                const Material(
+                  color: Colors.transparent,
+                  child: Chip(label: Text('Beginner friendly')),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -1055,23 +1072,6 @@ class _CompetitionCard extends StatelessWidget {
               ),
               const SizedBox(width: 16),
               CompetitionStatusBadge(status: competition.status),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              CompetitionVisibilityChip(visibility: competition.visibility),
-              Material(
-                color: Colors.transparent,
-                child: Chip(label: Text(competition.safeFormatLabel)),
-              ),
-              if (competition.beginnerFriendly == true)
-                const Material(
-                  color: Colors.transparent,
-                  child: Chip(label: Text('Beginner friendly')),
-                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1111,6 +1111,27 @@ class _CompetitionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          Row(
+            children: List<Widget>.generate(
+              4,
+              (int index) => Expanded(
+                child: Container(
+                  height: 5,
+                  margin: EdgeInsets.only(right: index == 3 ? 0 : 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color:
+                        index < ((competition.fillRate.clamp(0, 1) * 4).ceil())
+                            ? Colors.deepPurpleAccent.withValues(
+                              alpha: 0.9 - (index * 0.14),
+                            )
+                            : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
@@ -1128,7 +1149,7 @@ class _CompetitionCard extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onOpen,
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('View'),
+                label: const Text('Open arena'),
               ),
               const Spacer(),
               Text(
@@ -1224,6 +1245,26 @@ class _LiveFixtureCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _StatPill(
+                label: 'Story',
+                value:
+                    isFinal
+                        ? 'Final result'
+                        : isLive
+                        ? 'Live now'
+                        : 'Up next',
+              ),
+              _StatPill(
+                label: 'Bracket fill',
+                value: '${(fillPct * 100).round()}%',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             children: <Widget>[
               Expanded(
@@ -1265,6 +1306,25 @@ class _LiveFixtureCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          Row(
+            children: List<Widget>.generate(
+              4,
+              (int index) => Expanded(
+                child: Container(
+                  height: 6,
+                  margin: EdgeInsets.only(right: index == 3 ? 0 : 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color:
+                        index < ((fillPct * 4).ceil())
+                            ? accent.withValues(alpha: 0.92 - (index * 0.16))
+                            : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
@@ -1279,10 +1339,6 @@ class _LiveFixtureCard extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              _StatPill(
-                label: 'Bracket fill',
-                value: '${(fillPct * 100).round()}%',
-              ),
               _StatPill(
                 label: 'Phase',
                 value:

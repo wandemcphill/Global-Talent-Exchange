@@ -157,7 +157,7 @@ class ClubHubScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Club routes stay focused on the canonical workspace so football-world, owner, and identity actions do not drift into fallback contexts.',
+                              'This is the power room for your club. Identity, trophies, ownership, world context, and media-facing routes stay together so the club feels like a real institution.',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ],
@@ -170,10 +170,10 @@ class ClubHubScreen extends StatelessWidget {
                     spacing: 10,
                     runSpacing: 10,
                     children: const <Widget>[
-                      Chip(label: Text('Club scope')),
-                      Chip(label: Text('Owner actions')),
-                      Chip(label: Text('World lane')),
-                      Chip(label: Text('2D + 3D matchday')),
+                      Chip(label: Text('Club power')),
+                      Chip(label: Text('Owner control')),
+                      Chip(label: Text('World context')),
+                      Chip(label: Text('Broadcast-ready')),
                     ],
                   ),
                 ],
@@ -186,7 +186,7 @@ class ClubHubScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Club operations',
+                    'Club command',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
@@ -293,7 +293,7 @@ class ClubHubScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Commercial lanes',
+                    'Ownership and commerce',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
@@ -385,7 +385,7 @@ class ClubHubScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'World and scouting',
+                    'World and scouting desk',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),

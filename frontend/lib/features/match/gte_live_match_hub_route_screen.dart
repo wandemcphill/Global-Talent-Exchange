@@ -50,13 +50,30 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: <Widget>[
+                          const GteMetricChip(label: 'Desk', value: 'MATCHDAY'),
+                          GteMetricChip(
+                            label: 'Club',
+                            value: _resolvedClubName.toUpperCase(),
+                          ),
+                          GteMetricChip(
+                            label: 'Live lanes',
+                            value: entries.isEmpty ? 'FALLBACK' : 'ACTIVE',
+                            positive: entries.isNotEmpty,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
                       Text(
-                        '$_resolvedClubName matchday is now routed into the live product lanes.',
+                        '$_resolvedClubName matchday is now running through a real broadcast desk.',
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Open the tactical 2D viewer from one football hub. Player trading, scouting, and transfer planning stay one tap away from the same surface.',
+                        'Open the tactical 2D viewer, jump into scouting, and move straight into transfer action without losing the live football mood.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
@@ -98,7 +115,7 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                                   dependencies: dependencies,
                                 ),
                             icon: const Icon(Icons.show_chart_outlined),
-                            label: const Text('Transfer Market'),
+                            label: const Text('Open transfer market'),
                           ),
                           FilledButton.tonalIcon(
                             onPressed:
@@ -274,6 +291,27 @@ class _MatchLaneCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _StatusPill(
+                label: entry.isLive ? 'Live now' : 'Standby',
+                accent:
+                    entry.isLive
+                        ? GteShellTheme.positive
+                        : GteShellTheme.accentWarm,
+              ),
+              _StatusPill(
+                label: entry.channelLabel,
+                accent:
+                    entry.isFeatured
+                        ? GteShellTheme.accentArena
+                        : GteShellTheme.accent,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -293,28 +331,29 @@ class _MatchLaneCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  _StatusPill(
-                    label: entry.isLive ? 'Live' : 'Fallback',
-                    accent:
-                        entry.isLive
-                            ? GteShellTheme.positive
-                            : GteShellTheme.accentWarm,
-                  ),
-                  const SizedBox(height: 8),
-                  _StatusPill(
-                    label: entry.channelLabel,
-                    accent:
-                        entry.isFeatured
-                            ? GteShellTheme.accentArena
-                            : GteShellTheme.accent,
-                  ),
-                ],
-              ),
             ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: List<Widget>.generate(
+              4,
+              (int index) => Expanded(
+                child: Container(
+                  height: 6,
+                  margin: EdgeInsets.only(right: index == 3 ? 0 : 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color:
+                        index < (entry.isLive ? 4 : 2)
+                            ? (entry.isFeatured
+                                    ? GteShellTheme.accentArena
+                                    : GteShellTheme.accent)
+                                .withValues(alpha: 0.92 - (index * 0.16))
+                            : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -324,7 +363,12 @@ class _MatchLaneCard extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onOpenTwoD,
                 icon: const Icon(Icons.sports_soccer_outlined),
-                label: const Text('Open Match'),
+                label: const Text('Open live viewer'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenTwoD,
+                icon: const Icon(Icons.live_tv_outlined),
+                label: const Text('Broadcast desk'),
               ),
             ],
           ),

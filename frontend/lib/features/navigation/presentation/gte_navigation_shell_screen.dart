@@ -98,10 +98,10 @@ Color _routeAccentFor(BuildContext context, GtePrimaryDestination destination) {
 const List<GtePrimaryDestination> _shellPrimaryDestinations =
     <GtePrimaryDestination>[
       GtePrimaryDestination.home,
-      GtePrimaryDestination.competitions,
       GtePrimaryDestination.market,
-      GtePrimaryDestination.hub,
+      GtePrimaryDestination.competitions,
       GtePrimaryDestination.club,
+      GtePrimaryDestination.hub,
     ];
 
 class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {

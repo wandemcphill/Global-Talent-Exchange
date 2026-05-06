@@ -644,7 +644,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         ((_team?['bench'] as List<dynamic>? ?? <dynamic>[])
             .cast<Map<String, dynamic>>());
 
-    return Card(
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accentWarm,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -791,7 +792,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
   }
 
   Widget _buildCatalogSection() {
-    return Card(
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accent,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -865,7 +867,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
             _sectionHeader(
               'Trade listings',
               subtitle:
-                  'Peer-to-peer manager trades settle immediately. The platform fee comes out of the trade amount, not the manager base value.',
+                  'Peer-to-peer manager trades settle immediately in GTEX Coin. Scarcity, fit, and reputation make this feel like a dugout bazaar instead of a flat card shop.',
               trailing: Text('${_listings.length} live'),
             ),
             const SizedBox(height: 12),
@@ -955,12 +957,13 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
     final String selectedTactic =
         (_recommendation?['selected_tactic'] ?? 'manual').toString();
 
-    return Card(
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accentCapital,
       child: ListTile(
         leading: const Icon(Icons.psychology_alt_outlined),
-        title: const Text('Manager recommendation'),
+        title: const Text('Manager recommendation desk'),
         subtitle: Text(
-          '$summary\n\nPrimary tactic: $selectedTactic • Style fit: $fitScore/99\n'
+          '$summary\n\nPrimary tactic: $selectedTactic | Style fit: $fitScore/99\n'
           'Priority positions: ${positions.isEmpty ? 'None yet' : positions}\n'
           'Suggested actions: ${actions.isEmpty ? 'None yet' : actions}\n'
           'Rationale: ${rationale.isEmpty ? 'Still calculating.' : rationale}\n'
@@ -1211,7 +1214,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'This lane stays distinct from player trading by foregrounding mentality, tactical fit, and dugout influence. Filter the board, compare profiles, then move decisively.',
+                            'This lane treats managers like football assets with identity. Compare mentality, tactical fit, market scarcity, and dugout influence before you recruit, sell, or swap.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           const SizedBox(height: 14),

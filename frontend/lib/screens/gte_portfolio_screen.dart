@@ -76,9 +76,9 @@ class GtePortfolioScreen extends StatelessWidget {
             GtexHeroBanner(
               eyebrow: 'CLUB FUNDS',
               title:
-                  'Funds, player holdings, and pending moves live on one clear page.',
+                  'Capital, holdings, and live transfer pressure sit on one executive board.',
               description:
-                  'This page is quieter than scouting and matchday by design. Check budget, holdings, and recent activity without finance-terminal noise.',
+                  'This is the money room for your club. Check deployable capital, active exposure, and pending moves without losing the premium football-trading feel.',
               accent: GteShellTheme.accentCapital,
               chips: <Widget>[
                 GteMetricChip(
@@ -260,7 +260,7 @@ class _PortfolioSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Portfolio summary',
+            'Ownership summary',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 14),
@@ -305,7 +305,7 @@ class _PortfolioSummaryCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Capital deployed into positions: ${(deployedRatio * 100).toStringAsFixed(0)}%',
+                        'Capital deployed into active positions: ${(deployedRatio * 100).toStringAsFixed(0)}%',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -374,7 +374,7 @@ class _PortfolioSummaryCard extends StatelessWidget {
               ),
               GteMetricChip(label: 'Positions', value: holdingCount.toString()),
               GteMetricChip(
-                label: 'Account posture',
+                label: 'Club posture',
                 value: holdingCount == 0 ? 'GTEX HEAVY' : 'BALANCED',
                 positive: holdingCount > 0,
               ),
@@ -410,7 +410,7 @@ class _HoldingsCard extends StatelessWidget {
           Text('Holdings', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
-            'Latest revalued positions with mark, unrealized performance, and allocation weight.',
+            'Latest revalued positions with mark, unrealized performance, and squad-level allocation weight.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
@@ -471,6 +471,27 @@ class _HoldingsCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
+                    Row(
+                      children: List<Widget>.generate(
+                        4,
+                        (int index) => Expanded(
+                          child: Container(
+                            height: 5,
+                            margin: EdgeInsets.only(right: index == 3 ? 0 : 6),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              color:
+                                  index < ((share * 4).ceil().clamp(1, 4))
+                                      ? tone.withValues(
+                                        alpha: 0.9 - (index * 0.14),
+                                      )
+                                      : Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(999),
                       child: LinearProgressIndicator(
@@ -948,10 +969,7 @@ class _WalletActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            'Wallet actions',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('Money moves', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           if (fundWalletBlocked) ...<Widget>[
             Text(
@@ -962,68 +980,117 @@ class _WalletActionPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool stacked = constraints.maxWidth < 720;
+              final double tileWidth =
+                  stacked
+                      ? constraints.maxWidth
+                      : (constraints.maxWidth - 12) / 2;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: <Widget>[
+                  SizedBox(
+                    width: tileWidth,
+                    child: _WalletActionTile(
+                      title: 'Wallet overview',
+                      detail:
+                          'Open balances, rails, and compliance posture in one place.',
+                      icon: Icons.account_balance_wallet_outlined,
+                      accent: GteShellTheme.accentCapital,
+                      emphasized: true,
+                      onTap: () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (BuildContext context) =>
+                                    GteWalletOverviewScreen(
+                                      controller: controller,
+                                    ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: tileWidth,
+                    child: _WalletActionTile(
+                      title: 'Fund wallet',
+                      detail:
+                          fundWalletBlocked
+                              ? 'Compliance review must clear before fresh deposits open.'
+                              : 'Load GTEX Coin and keep transfer capital ready.',
+                      icon: Icons.add_card_outlined,
+                      accent: GteShellTheme.accent,
+                      enabled: !fundWalletBlocked,
+                      onTap:
+                          fundWalletBlocked
+                              ? null
+                              : () {
+                                Navigator.of(context).push<void>(
+                                  MaterialPageRoute<void>(
+                                    builder:
+                                        (BuildContext context) =>
+                                            GteFundWalletScreen(
+                                              controller: controller,
+                                            ),
+                                  ),
+                                );
+                              },
+                    ),
+                  ),
+                  SizedBox(
+                    width: tileWidth,
+                    child: _WalletActionTile(
+                      title: 'Withdraw',
+                      detail:
+                          'Move settled GTEX Coin out through the live withdrawal lane.',
+                      icon: Icons.payments_outlined,
+                      accent: GteShellTheme.accentWarm,
+                      onTap: () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (BuildContext context) =>
+                                    GteWithdrawalEligibilityScreen(
+                                      controller: controller,
+                                    ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: tileWidth,
+                    child: _WalletActionTile(
+                      title: 'History and support',
+                      detail:
+                          'Inspect deposits, notifications, and disputes without leaving the capital desk.',
+                      icon: Icons.support_agent_outlined,
+                      accent: GteShellTheme.accentCommunity,
+                      onTap: () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (BuildContext context) =>
+                                    GteDepositHistoryScreen(
+                                      controller: controller,
+                                    ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder:
-                          (BuildContext context) =>
-                              GteWalletOverviewScreen(controller: controller),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.account_balance_wallet_outlined),
-                label: const Text('Wallet overview'),
-              ),
-              OutlinedButton.icon(
-                onPressed:
-                    fundWalletBlocked
-                        ? null
-                        : () {
-                          Navigator.of(context).push<void>(
-                            MaterialPageRoute<void>(
-                              builder:
-                                  (BuildContext context) => GteFundWalletScreen(
-                                    controller: controller,
-                                  ),
-                            ),
-                          );
-                        },
-                icon: const Icon(Icons.add_card_outlined),
-                label: const Text('Fund wallet'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder:
-                          (BuildContext context) =>
-                              GteWithdrawalEligibilityScreen(
-                                controller: controller,
-                              ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('Withdraw'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder:
-                          (BuildContext context) =>
-                              GteDepositHistoryScreen(controller: controller),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.history),
-                label: const Text('Deposit history'),
-              ),
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.of(context).push<void>(
@@ -1053,6 +1120,57 @@ class _WalletActionPanel extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WalletActionTile extends StatelessWidget {
+  const _WalletActionTile({
+    required this.title,
+    required this.detail,
+    required this.icon,
+    required this.accent,
+    required this.onTap,
+    this.enabled = true,
+    this.emphasized = false,
+  });
+
+  final String title;
+  final String detail;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback? onTap;
+  final bool enabled;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.58,
+      child: GteSurfacePanel(
+        onTap: enabled ? onTap : null,
+        accentColor: accent,
+        emphasized: emphasized,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: accent.withValues(alpha: 0.22)),
+              ),
+              child: Icon(icon, color: accent, size: 18),
+            ),
+            const SizedBox(height: 14),
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(detail, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
       ),
     );
   }

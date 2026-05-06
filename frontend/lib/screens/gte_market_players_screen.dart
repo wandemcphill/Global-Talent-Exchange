@@ -92,7 +92,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               eyebrow: 'PLAYER MARKET',
               title: 'Scout players and make your next squad move.',
               description:
-                  'This is the live player board. Form, club context, value, and movement stay readable here so you can move from scouting to signing without terminal-style noise.',
+                  'This is the live football trading floor. Form, club context, value, and movement stay sharp enough to scan quickly while still feeling like the sport is alive.',
               accent: GteShellTheme.accent,
               chips: <Widget>[
                 const GteMetricChip(label: 'Board', value: 'REAL PLAYERS'),
@@ -473,11 +473,11 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               title:
                   _filteredPlayers.isEmpty
                       ? 'The board needs another look.'
-                      : 'Scan the board and pick your next entry.',
+                      : 'Scan the tape and pick your next move.',
               description:
                   _filteredPlayers.isEmpty
                       ? 'When the board is thin, the app keeps it explicit. Refresh, widen the filter, or clear the search to keep moving.'
-                      : 'Cards stay compact and readable so this page feels like football scouting, not a finance terminal.',
+                      : 'Cards stay compact, emotional, and deliberate so this page feels like football trading with stakes, not a spreadsheet in disguise.',
               accent: GteShellTheme.accent,
             ),
             const SizedBox(height: 14),
@@ -740,12 +740,12 @@ class _MarketRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'More ways to explore',
+            'Go deeper than the tape',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'This page focuses on live player scouting. Use the routes below for the broader player-card universe, regen world, creator economy, or club ownership.',
+            'This board is for fast player reads. Drop into the broader player-card universe, regen world, creator economy, or club ownership lanes when you want to go from scouting to empire-building.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -817,21 +817,88 @@ class _MarketLensBar extends StatelessWidget {
             value: counts.highInterest.toString(),
           ),
         ];
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool stacked = constraints.maxWidth < 720;
+        final double tileWidth =
+            stacked ? constraints.maxWidth : (constraints.maxWidth - 30) / 4;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: options
+              .map(
+                (({String label, _MarketLens lens, String value}) option) =>
+                    SizedBox(
+                      width: tileWidth,
+                      child: _MarketLensTile(
+                        label: option.label,
+                        value: option.value,
+                        selected: selectedLens == option.lens,
+                        onTap: () => onSelected(option.lens),
+                      ),
+                    ),
+              )
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+}
+
+class _MarketLensTile extends StatelessWidget {
+  const _MarketLensTile({
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent =
+        selected ? GteShellTheme.accent : GteShellTheme.textMuted;
     return GteSurfacePanel(
+      onTap: onTap,
+      emphasized: selected,
+      accentColor: GteShellTheme.accent,
       padding: const EdgeInsets.all(14),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: options
-            .map(
-              (({String label, _MarketLens lens, String value}) option) =>
-                  ChoiceChip(
-                    label: Text('${option.label} ${option.value}'),
-                    selected: selectedLens == option.lens,
-                    onSelected: (_) => onSelected(option.lens),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  label.toUpperCase(),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: accent,
+                    letterSpacing: 0.9,
+                    fontWeight: FontWeight.w700,
                   ),
-            )
-            .toList(growable: false),
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  Icons.radio_button_checked_rounded,
+                  size: 16,
+                  color: GteShellTheme.accent,
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: selected ? GteShellTheme.textPrimary : accent,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -900,12 +967,40 @@ class _PlayerCard extends StatelessWidget {
             ? 'ACTIVE FLOW'
             : 'THIN FLOW';
     final bool looksIlliquid = marketInterestScore < 35 && trendScore < 4;
+    final String momentumLabel =
+        trendScore >= 7
+            ? 'Breakout'
+            : trendScore >= 4
+            ? 'Building'
+            : 'Quiet';
     return GteSurfacePanel(
       onTap: onTap,
       accentColor: movementColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _MarketTickerPill(
+                label: player.isRising ? 'Rising' : 'Cooling',
+                color: movementColor,
+              ),
+              _MarketTickerPill(
+                label: demandLabel,
+                color:
+                    looksIlliquid
+                        ? GteShellTheme.accentWarm
+                        : GteShellTheme.accent,
+              ),
+              _MarketTickerPill(
+                label: momentumLabel,
+                color: GteShellTheme.accentCapital,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               final Widget identityBlock = Column(
@@ -938,8 +1033,8 @@ class _PlayerCard extends StatelessWidget {
                 children: <Widget>[
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                      horizontal: 12,
+                      vertical: 8,
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
@@ -959,10 +1054,39 @@ class _PlayerCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    gteFormatCredits(currentValueCredits),
-                    textAlign: TextAlign.end,
-                    style: Theme.of(context).textTheme.titleLarge,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      color: Colors.white.withValues(alpha: 0.04),
+                      border: Border.all(
+                        color: movementColor.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        Text(
+                          'LIVE QUOTE',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: GteShellTheme.textMuted,
+                            letterSpacing: 0.8,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          gteFormatCredits(currentValueCredits),
+                          textAlign: TextAlign.end,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Container(
@@ -1024,12 +1148,7 @@ class _PlayerCard extends StatelessWidget {
               Expanded(
                 child: _MicroBookStat(
                   label: 'Trend pressure',
-                  value:
-                      trendScore >= 7
-                          ? 'ACCELERATING'
-                          : trendScore >= 4
-                          ? 'BUILDING'
-                          : 'QUIET',
+                  value: momentumLabel.toUpperCase(),
                   color: movementColor,
                 ),
               ),
@@ -1047,6 +1166,27 @@ class _PlayerCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: List<Widget>.generate(
+              5,
+              (int index) => Expanded(
+                child: Container(
+                  height: 6,
+                  margin: EdgeInsets.only(right: index == 4 ? 0 : 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color:
+                        index < ((marketInterestScore / 20).clamp(1, 5).toInt())
+                            ? movementColor.withValues(
+                              alpha: 0.9 - (index * 0.1),
+                            )
+                            : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           Container(
@@ -1096,10 +1236,49 @@ class _PlayerCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Icon(Icons.arrow_forward, size: 18),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    'Open dossier',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelLarge?.copyWith(color: movementColor),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(Icons.arrow_forward, size: 18, color: movementColor),
+                ],
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MarketTickerPill extends StatelessWidget {
+  const _MarketTickerPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.14),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: color,
+          letterSpacing: 0.9,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

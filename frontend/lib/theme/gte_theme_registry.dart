@@ -87,9 +87,9 @@ class GteThemeRegistry {
       spaceMd: 16,
       spaceLg: 24,
       spaceXl: 34,
-      radiusSmall: 16,
-      radiusMedium: 22,
-      radiusLarge: 30,
+      radiusSmall: 12,
+      radiusMedium: 18,
+      radiusLarge: 24,
       radiusPill: 999,
     ),
     visuals: GteThemeVisuals(
@@ -140,7 +140,7 @@ class GteThemeRegistry {
     ),
     button: GteThemeButtonSpec(
       styleName: 'Terminal capsule',
-      cornerRadius: 20,
+      cornerRadius: 14,
       strokeWidth: 1.2,
       horizontalPadding: 20,
       verticalPadding: 15,

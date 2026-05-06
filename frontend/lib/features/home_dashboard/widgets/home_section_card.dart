@@ -31,6 +31,7 @@ class HomeSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = GteShellTheme.tokensOf(context);
+    final theme = Theme.of(context);
 
     return GteSurfacePanel(
       onTap: onTap,
@@ -42,14 +43,12 @@ class HomeSectionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Container(
-                width: 50,
-                height: 50,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(tokens.radiusMedium - 2),
                   color: accent.withValues(alpha: 0.16),
-                  border: Border.all(
-                    color: accent.withValues(alpha: 0.28),
-                  ),
+                  border: Border.all(color: accent.withValues(alpha: 0.28)),
                 ),
                 child: Icon(icon, color: accent),
               ),
@@ -73,10 +72,10 @@ class HomeSectionCard extends StatelessWidget {
                       child: Text(
                         eyebrow.toUpperCase(),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: accent,
-                              letterSpacing: 1,
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: accent,
+                          letterSpacing: 1,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -84,19 +83,47 @@ class HomeSectionCard extends StatelessWidget {
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (actionLabel != null && onTap != null) ...<Widget>[
-                const SizedBox(width: 10),
-                Icon(
-                  Icons.arrow_outward_rounded,
-                  color: accent,
-                  size: 20,
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
                 ),
-              ],
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(tokens.radiusPill),
+                  color: accent.withValues(alpha: 0.12),
+                  border: Border.all(color: accent.withValues(alpha: 0.24)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    Text(
+                      stats.isNotEmpty ? stats.first.value : 'Live',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: accent,
+                      ),
+                    ),
+                    Text(
+                      stats.isNotEmpty
+                          ? stats.first.key.toUpperCase()
+                          : 'BOARD',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: GteShellTheme.textPrimary.withValues(
+                          alpha: 0.72,
+                        ),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -104,9 +131,7 @@ class HomeSectionCard extends StatelessWidget {
             summary,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  height: 1.45,
-                ),
+            style: theme.textTheme.bodyLarge?.copyWith(height: 1.45),
           ),
           if (detail != null) ...<Widget>[
             const SizedBox(height: 8),
@@ -114,9 +139,30 @@ class HomeSectionCard extends StatelessWidget {
               detail!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: GteShellTheme.textPrimary.withValues(alpha: 0.74),
+              ),
             ),
           ],
+          const SizedBox(height: 16),
+          Row(
+            children: List<Widget>.generate(
+              4,
+              (int index) => Expanded(
+                child: Container(
+                  height: 5,
+                  margin: EdgeInsets.only(right: index == 3 ? 0 : 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color:
+                        index < 3
+                            ? accent.withValues(alpha: 0.85 - (index * 0.18))
+                            : tokens.panelElevated,
+                  ),
+                ),
+              ),
+            ),
+          ),
           if (stats.isNotEmpty) ...<Widget>[
             const SizedBox(height: 16),
             Wrap(
@@ -138,14 +184,16 @@ class HomeSectionCard extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Pitch notes',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: accent,
-                    letterSpacing: 0.9,
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: accent,
+                letterSpacing: 0.9,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 10),
-            ...highlights.take(2).map(
+            ...highlights
+                .take(2)
+                .map(
                   (String line) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Row(
@@ -170,7 +218,7 @@ class HomeSectionCard extends StatelessWidget {
                             line,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium,
                           ),
                         ),
                       ],
@@ -180,10 +228,15 @@ class HomeSectionCard extends StatelessWidget {
           ],
           if (actionLabel != null && onTap != null) ...<Widget>[
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: onTap,
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text(actionLabel!),
+            Row(
+              children: <Widget>[
+                Text(
+                  actionLabel!.toUpperCase(),
+                  style: theme.textTheme.labelLarge?.copyWith(color: accent),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.arrow_outward_rounded, color: accent, size: 18),
+              ],
             ),
           ],
         ],
@@ -221,16 +274,16 @@ class _HomeStatChip extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  letterSpacing: 0.9,
-                  fontWeight: FontWeight.w700,
-                ),
+              letterSpacing: 0.9,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: accent,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: accent),
           ),
         ],
       ),
