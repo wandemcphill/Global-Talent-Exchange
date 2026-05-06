@@ -33,7 +33,7 @@ void main() {
         appSource,
         contains('theme: GteShellTheme.build(_themeController.activeTheme),'),
       );
-      expect(appSource, contains("initialPath: '/app/home',"));
+      expect(appSource, contains("this.initialPath = '/app/home',"));
     });
 
     test(

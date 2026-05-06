@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/gte_session_identity.dart';
 import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
 import '../data/gte_models.dart';
-import '../features/app_routes/gte_app_route_registry.dart';
-import '../features/app_routes/gte_route_data.dart';
-import '../features/navigation/routing/gte_navigation_route.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../screens/gte_login_screen.dart';
-import '../screens/gte_exchange_shell_screen.dart';
+import '../router/app_router.dart';
 import '../services/match_3d_monetization_service.dart';
 import '../services/reliability/reliable_event_queue.dart';
 import '../shared/models/auth_session.dart';
@@ -45,6 +43,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   late final bool _ownsController;
   late final GteThemeController _themeController;
   late final bool _ownsThemeController;
+  late final GoRouter _router;
   ProviderContainer? _providerContainer;
   ProviderContainer? _ownedProviderContainer;
   ProviderSubscription<AuthSession?>? _authSessionSubscription;
@@ -85,6 +84,12 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
     );
     _themeController = widget.themeController ?? GteThemeController();
     _controller.addListener(_handleControllerChanged);
+    _router = buildGtexAppRouter(
+      initialLocation: widget.initialPath,
+      controller: _controller,
+      config: _config,
+      dependenciesBuilder: _buildNavigationDependencies,
+    );
   }
 
   @override
@@ -124,12 +129,36 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
 
   @override
   Widget build(BuildContext context) {
+    final Widget app = GteThemeControllerScope(
+      controller: _themeController,
+      child: AnimatedBuilder(
+        animation: _themeController,
+        builder: (BuildContext context, Widget? child) {
+          return MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            title: 'GTEX Football Universe',
+            theme: GteShellTheme.build(_themeController.activeTheme),
+            routerConfig: _router,
+            restorationScopeId: 'gtex-app',
+          );
+        },
+      ),
+    );
+    if (_usesOwnedProviderContainer && _providerContainer != null) {
+      return UncontrolledProviderScope(
+        container: _providerContainer!,
+        child: app,
+      );
+    }
+    return app;
+  }
+
+  GteNavigationDependencies _buildNavigationDependencies(BuildContext context) {
     final GteSessionIdentity identity =
         GteSessionIdentity.fromExchangeController(_controller);
-    final GteBackendMode activeBackendMode = _config.activeShellBackendMode;
-    final GteNavigationDependencies dependencies = GteNavigationDependencies(
+    return GteNavigationDependencies(
       apiBaseUrl: _config.apiBaseUrl,
-      backendMode: activeBackendMode,
+      backendMode: _config.activeShellBackendMode,
       currentUserId: identity.userId,
       currentUserName: identity.userName,
       currentUserRole: _controller.session?.user.role,
@@ -166,135 +195,6 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
             fastReplayAccess: _controller.isAuthenticated,
           ),
     );
-    final GteAppRouteRegistry registry = GteAppRouteRegistry(
-      dependencies: dependencies,
-    );
-    final String? shellInitialPath = _shellInitialPathFor(widget.initialPath);
-    final GteAppRouteData? initialFeatureRoute =
-        widget.initialPath.isEmpty ||
-                widget.initialPath.startsWith('/app') ||
-                shellInitialPath != null
-            ? null
-            : registry.parseSettings(RouteSettings(name: widget.initialPath));
-
-    final Widget app = GteThemeControllerScope(
-      controller: _themeController,
-      child: AnimatedBuilder(
-        animation: _themeController,
-        builder: (BuildContext context, Widget? child) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: 'GTEX Football Universe',
-            theme: GteShellTheme.build(_themeController.activeTheme),
-            home:
-                shellInitialPath != null
-                    ? GteExchangeShellScreen.fromPath(
-                      controller: _controller,
-                      apiBaseUrl: _config.apiBaseUrl,
-                      backendMode: activeBackendMode,
-                      initialPath: shellInitialPath,
-                    )
-                    : initialFeatureRoute != null
-                    ? registry.buildScreen(context, initialFeatureRoute)
-                    : widget.initialPath.isEmpty
-                    ? GteExchangeShellScreen.fromPath(
-                      controller: _controller,
-                      apiBaseUrl: _config.apiBaseUrl,
-                      backendMode: activeBackendMode,
-                      initialPath: '/app/home',
-                    )
-                    : GteExchangeShellScreen.fromPath(
-                      controller: _controller,
-                      apiBaseUrl: _config.apiBaseUrl,
-                      backendMode: activeBackendMode,
-                      initialPath: widget.initialPath,
-                    ),
-            onGenerateRoute: (RouteSettings settings) {
-              final String? name = settings.name;
-              if (name != null && name.startsWith('/app')) {
-                return MaterialPageRoute<void>(
-                  settings: settings,
-                  builder:
-                      (BuildContext context) => GteExchangeShellScreen.fromPath(
-                        controller: _controller,
-                        apiBaseUrl: _config.apiBaseUrl,
-                        backendMode: activeBackendMode,
-                        initialPath: name,
-                    ),
-                );
-              }
-              final String? shellRoute = _shellInitialPathFor(name ?? '');
-              if (shellRoute != null) {
-                return MaterialPageRoute<void>(
-                  settings: settings,
-                  builder:
-                      (BuildContext context) => GteExchangeShellScreen.fromPath(
-                        controller: _controller,
-                        apiBaseUrl: _config.apiBaseUrl,
-                        backendMode: activeBackendMode,
-                        initialPath: shellRoute,
-                      ),
-                );
-              }
-              return registry.onGenerateRoute(settings);
-            },
-            onUnknownRoute: registry.onUnknownRoute,
-            restorationScopeId: 'gtex-app',
-          );
-        },
-      ),
-    );
-    if (_usesOwnedProviderContainer && _providerContainer != null) {
-      return UncontrolledProviderScope(
-        container: _providerContainer!,
-        child: app,
-      );
-    }
-    return app;
-  }
-
-  String? _shellInitialPathFor(String rawPath) {
-    final String normalized = rawPath.trim();
-    if (normalized.isEmpty || normalized.startsWith('/app')) {
-      return null;
-    }
-    final Uri? uri = Uri.tryParse(
-      normalized.startsWith('/') ? normalized : '/$normalized',
-    );
-    if (uri == null) {
-      return null;
-    }
-    final List<String> segments =
-        uri.pathSegments.where((String item) => item.isNotEmpty).toList();
-    if (segments.isEmpty) {
-      return null;
-    }
-    final String first = segments.first.toLowerCase();
-    switch (first) {
-      case 'market':
-        return const GteNavigationRoute.market().path;
-      case 'player-cards':
-        return segments.length == 1
-            ? const GteNavigationRoute.market().path
-            : null;
-      case 'football':
-        return segments.length >= 2 && segments[1].toLowerCase() == 'transfer-center'
-            ? const GteNavigationRoute.market().path
-            : null;
-      case 'competitions':
-        return segments.length <= 2
-            ? const GteNavigationRoute.competitions().path
-            : null;
-      case 'streamer-tournaments':
-      case 'national-team':
-        return const GteNavigationRoute.competitions().path;
-      case 'world':
-      case 'news':
-      case 'clips':
-        return const GteNavigationRoute.hub().path;
-      default:
-        return null;
-    }
   }
 
   void _handleControllerChanged() {

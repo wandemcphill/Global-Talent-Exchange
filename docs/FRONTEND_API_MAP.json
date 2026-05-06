@@ -1,0 +1,6222 @@
+{
+  "generated_from": "tools/audit/generate_contract_audit.py",
+  "call_count": 518,
+  "calls": [
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/competitions",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/god-mode/payment-rails",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/god-mode/payment-rails",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/god-mode/withdrawal-controls",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/god-mode/withdrawal-controls",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/bank-accounts",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/treasury/bank-accounts/$accountId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/deposits",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/deposits/$depositId/confirm",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/deposits/$depositId/reject",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/deposits/$depositId/review",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/settings",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/treasury/settings",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/wallets/market-topups",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/wallets/market-topups/$topupId/status",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_command_center_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/wallets/market-topups/quote",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_engine_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_finance_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/finance/control-tower",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/admin_finance_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/finance/simulate",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/badge",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/honors-timeline",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/identity",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "PATCH",
+      "endpoint": "/api/clubs/$clubId/identity",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/jerseys",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "PATCH",
+      "endpoint": "/api/clubs/$clubId/jerseys",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/season-honors",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/trophy-cabinet",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/leaderboards/trophies",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_creation_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/clubs/academy-analytics",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/clubs/finance-analytics",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/clubs/ops-summary",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/clubs/scouting-analytics",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/clubs/sponsorship-analytics",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/academy",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/finances",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/scouting",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/sponsorships",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/sponsorships/catalog",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sponsorships/contracts",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "PATCH",
+      "endpoint": "/api/clubs/$clubId/sponsorships/contracts/$contractId",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/youth-pipeline",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_ops_fixtures.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://cdn.example.com/greenroots-pathway.png",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/creator-clubs/$clubId/fan-state",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "DELETE",
+      "endpoint": "/api/community/creator-clubs/$clubId/follow",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/community/creator-clubs/$clubId/follow",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/digest",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/live-threads",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/community/live-threads",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/live-threads/$threadId",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/live-threads/$threadId/messages",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/community/live-threads/$threadId/messages",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/private-messages/threads",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/community/private-messages/threads",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/private-messages/threads/$threadId",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/private-messages/threads/$threadId/messages",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/community/private-messages/threads/$threadId/messages",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/community/watchlist",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/community/watchlist",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "DELETE",
+      "endpoint": "/api/community/watchlist/$competitionKey",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/competitions",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/competitions",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/competitions/$competitionId",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/competitions/$competitionId/financials",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/competitions/$competitionId/invites",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/competitions/$competitionId/join",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/competitions/$competitionId/publish",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/competitions/join",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_control_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/admin",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_control_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/admin/$code",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_control_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/admin/$code/orchestrate",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_control_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/runtime/$code",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/creators/$creatorId",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/creators/me/competitions",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/creators/me/copilot/analyze",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/creators/me/finance",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/creators/me/summary",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/media-engine/me/clip-earnings",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://community.gte.local",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_application_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/auth/me",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_application_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/creator/application",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_application_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/creator/apply",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_application_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/creator/verify-email",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_application_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/creator/verify-phone",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/creator_application_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/discovery_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/discovery/featured-rails",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/discovery_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/discovery/featured-rails",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/discovery_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/discovery/home",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/discovery_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/discovery/saved-searches",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/discovery_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/discovery/saved-searches",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/discovery_api.dart",
+      "transport_call": "string_reference",
+      "method": "DELETE",
+      "endpoint": "/api/discovery/saved-searches/$searchId",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/discovery_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/discovery/search",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/discovery_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/dispute_engine_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/governance_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/governance/proposals/$proposalId/status",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/governance_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/governance/me/overview",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/governance_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/governance/proposals",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/governance_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/governance/proposals/$proposalId",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/governance_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/governance/proposals/$proposalId/vote",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/governance_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/analytics/funnels",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/analytics/summary",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/treasury/bank-accounts",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/treasury/bank-accounts",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/treasury/bank-accounts/$accountId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/treasury/dashboard",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/treasury/deposits",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/treasury/deposits/$depositId/confirm",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/treasury/deposits/$depositId/reject",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/treasury/deposits/$depositId/review",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/treasury/disputes",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/treasury/disputes/$disputeId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/treasury/disputes/$disputeId/messages",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/treasury/kyc",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/treasury/kyc/$profileId/review",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/treasury/settings",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/treasury/settings",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/treasury/withdrawals",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/treasury/withdrawals/$withdrawalId/status",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/analytics/events",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/attachments",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/auth/me",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/bank-accounts",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/bank-accounts",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/bank-accounts/$bankAccountId",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/disputes",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/disputes",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/disputes/$disputeId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/disputes/$disputeId/messages",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/kyc",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/kyc",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/market/players",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/market/players/$playerId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/market/players/$playerId/candles",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/market/ticker/$playerId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/notifications/$notificationId/read",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/notifications/me",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/notifications/read-all",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/orders",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/orders",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/orders/$orderId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/orders/$orderId/admin-buyback",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/orders/$orderId/admin-buyback-preview",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/orders/$orderId/cancel",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/orders/book/$playerId",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/portfolio",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/portfolio/summary",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/session/bootstrap",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v1",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v1$trimmed",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v1${trimmed.substring(4)}",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v1/$trimmed",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/wallets/conversions",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/wallets/conversions/quote",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets/deposits",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/wallets/deposits",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/wallets/deposits/$depositId/submit",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets/ledger",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets/overview",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets/summary",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/wallets/top-up/initiate",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/wallets/top-up/verify",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets/transactions",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets/withdrawals",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/wallets/withdrawals",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets/withdrawals/$withdrawalId/receipt",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/wallets/withdrawals/eligibility",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/wallets/withdrawals/quote",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/auth/login",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/auth/logout",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/auth/refresh",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/auth/register",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/tts",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_authed_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/session/bootstrap",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_authed_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/auth/refresh",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/players",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/players/$playerId",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/match-engine/analytics/$matchKey",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/match-engine/highlights/$matchKey",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/match-engine/live-feed/$matchKey",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/match-viewer/$matchKey",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/match-viewer/$matchKey/session",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/$matchKey/commentary/stream?session_id=fixture-spectator-$matchKey",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/$matchKey/replay",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/matches/$matchKey/spectate",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/$matchKey/stream?session_id=fixture-spectator-$matchKey",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/$playerId/career",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/$playerId/lifecycle-snapshot",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/$playerId/overview",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/tts/live?voice=default",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/ws/spectate/$matchKey",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_mock_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://mock.korapay.local/$reference",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_mock_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://mock.paystack.local/$reference",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/hosted-competitions",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/hosted-competitions/$competitionId/finalize",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/hosted-competitions/seed",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/hosted-competitions",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/hosted-competitions",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/hosted-competitions/$competitionId",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/hosted-competitions/$competitionId/finance",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/hosted-competitions/$competitionId/invites",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/hosted-competitions/$competitionId/invites",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/hosted-competitions/$competitionId/invites/accept",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/hosted-competitions/$competitionId/join",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/hosted-competitions/$competitionId/launch",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/hosted-competitions/$competitionId/standings",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/hosted-competitions/mine",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/hosted-competitions/templates",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/hosted_competition_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/$assetId/release",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/assign",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/catalog",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/compare",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/filters",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/history",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/my-trade-listings",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/recommendation",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/recruit",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/swap",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/team",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/trade-listings",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/trade-listings/$listingId/buy",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/manager_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/managers/trade-listings/$listingId/cancel",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/match_gift_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/gift-engine/send",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/moderation_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/moderation/reports",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/moderation_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/moderation/reports/$reportId/assign",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/moderation_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/moderation/reports/$reportId/resolve",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/moderation_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/moderation/reports/summary",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/moderation_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/moderation/me/reports",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/moderation_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/moderation/reports",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/moderation_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/national_team_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/national_team_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/entries/$entryId",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/national_team_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/me/history",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/national_team_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/notifications/announcements",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/notifications/announcements",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/notifications/announcements",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/notifications/preferences",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/notifications/preferences",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/notifications/subscriptions",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/notifications/subscriptions",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "DELETE",
+      "endpoint": "/api/notifications/subscriptions/$subscriptionId",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/policy_admin_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/referrals/analytics/summary",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/referrals/creators",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/referrals/dashboard",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/referrals/flags",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/referrals/share-codes",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/referrals/me/invites",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/referrals/me/rewards",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/referrals/me/summary",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/referrals/share-codes",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/referrals/share-codes/me",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/referral_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://community.gte.local",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/regen_universe_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/risk_ops_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/sponsorship_admin_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/sponsorship/contracts/$contractId/review",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/sponsorship_admin_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/sponsorship/packages",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/sponsorship_admin_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/sponsorship/clubs/$clubId/contracts",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/sponsorship_admin_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/story_feed_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/story-feed",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/story_feed_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/story-feed",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/story_feed_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/story-feed/digest",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/story_feed_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/ai-manager/autopilot/live-decision",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/ai-manager/autopilot/run",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/ai-manager/economy/reward-preview",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/ai-manager/profiles/${route.clubId}",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/broadcast/channels",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/broadcast/channels/$channelId/join",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/broadcast/channels/matchday-prime/audio/stems/stream?session_id=broadcast-fixture",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/broadcast/home",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/calendar-engine/dashboard",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/commentary/profiles",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/fixture-final/audio/stems/stream",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/fixture-final/commentary/stream",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/fixture-final/replay",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/entries/${route.entryId}",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/me/history",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfers/windows",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/world/narratives",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_hub/presentation/club_hub_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/dynasty/data/dynasty_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/dynasty",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/dynasty/data/dynasty_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/dynasty/history",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/dynasty/data/dynasty_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/eras",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/dynasty/data/dynasty_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/leaderboards/dynasties",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/dynasty/presentation/club_dynasty_overview_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/dynasty/presentation/dynasty_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/dynasty/presentation/era_history_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/jerseys/data/club_identity_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/badge",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/jerseys/data/club_identity_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/identity",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/jerseys/data/club_identity_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PATCH",
+      "endpoint": "/api/clubs/$clubId/identity",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/jerseys/data/club_identity_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/jerseys",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/jerseys/data/club_identity_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PATCH",
+      "endpoint": "/api/clubs/$clubId/jerseys",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/jerseys/presentation/club_identity_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/reputation/data/reputation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/reputation",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/reputation/data/reputation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/clubs/$clubId/reputation/history",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/reputation/data/reputation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/leaderboards/prestige",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/reputation/presentation/reputation_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/honors-timeline",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/season-honors",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/trophy-cabinet",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/leaderboards/trophies",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/sale-market",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/sale-market/history",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/sale-market/inquiries",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/inquiries",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/inquiries/$inquiryId/respond",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/listing",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/clubs/$clubId/sale-market/listing",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/listing/cancel",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/sale-market/offers",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/offers",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/offers/$offerId/accept",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/offers/$offerId/counter",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/offers/$offerId/reject",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/clubs/$clubId/sale-market/transfer",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/valuation",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/sale-market/listings",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/me/clubs/sale-market/listings",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/me/clubs/sale-market/offers",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/competitions/live_competitions_hub_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/${item.id}/join",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/competitions/live_competitions_hub_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/${item.id}/launch",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/competitions/live_competitions_hub_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/${item.id}/publish",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/competitions/live_competitions_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/$competitionId/fixtures",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/competitions/live_competitions_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/$competitionId/standings",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_league_admin/data/creator_league_admin_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/competitions/creator-league",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_share_market/data/creator_share_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/creator/fan-share-market/control",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_share_market/data/creator_share_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/creator/fan-share-market/control",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_share_market/data/creator_share_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/creator/clubs/$clubId/fan-share-market",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_share_market/data/creator_share_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/creator/clubs/$clubId/fan-share-market",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_share_market/data/creator_share_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/creator/clubs/$clubId/fan-share-market/distributions",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_share_market/data/creator_share_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/creator/clubs/$clubId/fan-share-market/holding",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_share_market/data/creator_share_market_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/creator/clubs/$clubId/fan-share-market/purchase",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/media-engine/creator-league/clubs/$clubId/stadium-level",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/media-engine/creator-league/matches/$matchId/analytics",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/media-engine/creator-league/matches/$matchId/settlement",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/media-engine/creator-league/stadium-controls",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/media-engine/creator-league/stadium-controls",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/media-engine/creator-league/broadcast-modes",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/media-engine/creator-league/clubs/$clubId/stadium",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/media-engine/creator-league/clubs/$clubId/stadium",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/media-engine/creator-league/matches/$matchId/access",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/media-engine/creator-league/matches/$matchId/analytics",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/media-engine/creator-league/matches/$matchId/gifts",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/media-engine/creator-league/matches/$matchId/purchase",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/media-engine/creator-league/matches/$matchId/stadium",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/media-engine/creator-league/matches/$matchId/stadium/placements",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/media-engine/creator-league/matches/$matchId/stadium/placements",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/media-engine/creator-league/matches/$matchId/tickets",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/media-engine/creator-league/season-passes",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/media-engine/creator-league/season-passes/me",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/fan-wars/creator-country-assignments",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/fan-wars/nations-cup",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/fan-wars/nations-cup/$competitionId/advance",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/fan-wars/points",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/fan-wars/profiles",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/fan-wars/profiles/$profileId/rivals/$rivalProfileId",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/fan-wars/leaderboards/$boardType",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/fan-wars/nations-cup/$competitionId",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/fan-wars/profiles/$profileId/dashboard",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/fan_wars/data/fan_wars_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/fan-wars/rivalries/$boardType",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/$federationId",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/$federationId/governance",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/$federationId/memberships",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/$federationId/narratives",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/$federationId/proposals",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/proposals/$proposalId/votes",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/rankings",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/federations/live_federations_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/regional-tournaments",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/world/clubs/$clubId/context",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/world/cultures/$cultureKey",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/world/narratives/$narrativeSlug",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/federations/$federationId/memberships",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/world/clubs/$clubId/context",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/world/competitions/$competitionId/context",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/world/cultures",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/football_world_simulation/data/football_world_simulation_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/world/narratives",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/jackpot/presentation/gtex_jackpot_route_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/wallets/summary",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/match/live_match_overview_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/broadcast/home",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/match/live_match_viewer_route_support.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/match-viewer/$matchKey",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/match/live_match_viewer_route_support.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/match-viewer/$matchKey/session",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/match/live_match_viewer_route_support.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/$matchKey/spectate",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions/$competitionId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions/$competitionId/auto-build-squad",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions/$competitionId/entries",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions/$competitionId/lifecycle",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions/$competitionId/presentation",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions/$competitionId/rental-entry",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions/$competitionId/rental-pool",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/entries/$entryId/free-players/claim",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/entries/$entryId/rentals",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/me/history",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/national-team-engine/me/previous-roster",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/national_teams/live_national_teams_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/rankings",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/profile/live_profile_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/auth/me",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/profile/profile_admin_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/hosted-competitions/seed",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api${path.substring(",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/economy/burn-events",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/economy/gift-catalog",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/economy/gift-combo-rules",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/economy/gift-combo-rules",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/economy/revenue-share-rules",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/economy/revenue-share-rules",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/world/clubs/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/world/cultures/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/world/cultures/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/admin/world/narratives/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/broadcast/home",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/economy/gift-catalog",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/federations",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/federations/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v1",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v1/",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/world/clubs/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/world/competitions/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/world/cultures",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/world/narratives",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/streamer-tournaments/$tournamentId/review",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/streamer-tournaments/$tournamentId/settle",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/streamer-tournaments/policy",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/streamer-tournaments/policy",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/streamer-tournaments/risk-signals",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/streamer-tournaments/risk-signals/$signalId/review",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/streamer-tournaments",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/streamer-tournaments",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/streamer-tournaments/$tournamentId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PATCH",
+      "endpoint": "/api/streamer-tournaments/$tournamentId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/streamer-tournaments/$tournamentId/invites",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/streamer-tournaments/$tournamentId/join",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/streamer-tournaments/$tournamentId/publish",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/streamer-tournaments/$tournamentId/rewards",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/streamer-tournaments/mine",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/tasks/live_tasks_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/daily-challenges",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/tasks/live_tasks_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/daily-challenges/me",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/tasks/tasks_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/daily-challenges/$challengeKey/claim",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings/$listingId",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings/$listingId/bids",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings/$listingId/contract-offer",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings/$listingId/negotiation",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/watchlist",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_market/live_market_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/calendar-engine/events",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/calendar-engine/hosted-competitions/$competitionId/launch",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/calendar-engine/national-competitions/$competitionId/launch",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/calendar-engine/seasons",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/calendar-engine/dashboard",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/calendar-engine/events",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/calendar-engine/lifecycle-runs",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/calendar-engine/pause-status",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/data/transfer_news_calendar_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/calendar-engine/seasons",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfers/windows",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfers/windows/$windowId/bids",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/transfers/windows/$windowId/bids",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/transfers/windows/$windowId/bids/${bid.id}/accept",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/transfers/windows/$windowId/bids/${bid.id}/reject",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/world/live_world_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/federations",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/academy_analytics_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/admin_command_center_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/hosted-competitions/seed",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/club_finance_analytics_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/club_ops_admin_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/club_sponsorship_analytics_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/manager_admin_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/access",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/manager_admin_screen.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/access",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/manager_admin_screen.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/access/$userId/permissions",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/manager_admin_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/access/permissions",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/manager_admin_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/managers/audit-log",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/manager_admin_screen.dart",
+      "transport_call": "string_reference",
+      "method": "PUT",
+      "endpoint": "/api/admin/managers/catalog/$managerId/supply",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/admin/scouting_analytics_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/academy_overview_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/academy_player_detail_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/academy_players_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/academy_programs_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/academy_training_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_budget_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_cashflow_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_finance_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_ops_screen_host.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_profile_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_sponsorship_catalog_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_sponsorship_contract_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_sponsorship_contract_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://cdn.example.com/brand-mark.png",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/club_sponsorships_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/scouting_assignments_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/scouting_dashboard_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/scouting_prospect_detail_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/scouting_prospects_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/clubs/youth_pipeline_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/competitions/competition_discovery_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/creators/creator_access_request_screen.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://youtube.com/@creatorname\\nhttps://tiktok.com/@creatorname",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/support/gte_support_dispute_screens.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://wa.me/$digits?text=${Uri.encodeComponent(message)}",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/services/match_3d_live_bootstrap_service.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/$resolvedMatchId/unity-access",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/shared/providers/app_realtime_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/realtime/stream",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/shared/providers/auth_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/session/bootstrap",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/shared/providers/transfer_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/shared/providers/transfer_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings/${listing.id}/bids",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/shared/providers/transfer_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/listings/${listing.id}/stream",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/shared/providers/transfer_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/watchlist",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/widgets/player_card_avatar.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/generated-media/",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
@@ -46,6 +47,13 @@ class GteNavigationHelpers {
     required GteAppRouteData route,
     required GteNavigationDependencies dependencies,
   }) {
+    final String location = locationFor(route);
+    final GoRouter? router = GoRouter.maybeOf(context);
+    if (router != null) {
+      return context.push<T>(location);
+    }
+    // Fall back to the legacy material route host while the router purge is
+    // still migrating every surface onto the central GoRouter spine.
     final GteAppRouteRegistry registry =
         GteAppRouteRegistry(dependencies: dependencies);
     return Navigator.of(context).push<T>(registry.routeFor<T>(route));

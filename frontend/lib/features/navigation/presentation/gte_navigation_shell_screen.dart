@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:gte_frontend/controllers/creator_application_controller.dart';
 import 'package:gte_frontend/controllers/creator_controller.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
@@ -115,6 +116,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late String? _competitionUserName;
   late String? _creatorAccessToken;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
+  bool _startupWorkScheduled = false;
 
   @override
   void initState() {
@@ -130,10 +132,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     _creatorApplicationController.addListener(_handleCreatorAccessChanged);
     _creatorController = _buildCreatorController();
     _referralController = _buildReferralController();
-    widget.controller.bootstrap();
-    _competitionController.bootstrap();
-    _primeCreatorAccessState(force: true);
-    _primeRouteData();
+    _scheduleStartupWork();
   }
 
   @override
@@ -156,8 +155,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       _referralController.dispose();
       _referralController = _buildReferralController();
       _creatorAccessToken = widget.controller.accessToken;
-      _competitionController.bootstrap();
-      _primeCreatorAccessState(force: true);
+      _scheduleStartupWork(force: true);
     }
     if (widget.initialRoute != oldWidget.initialRoute &&
         widget.initialRoute != _route) {
@@ -167,7 +165,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           widget.initialRoute.primaryDestination,
         );
       });
-      _primeRouteData();
+      _scheduleStartupWork(force: true);
     }
   }
 
@@ -817,7 +815,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       _selectedPrimaryLane = _resolvePrimaryLane(route.primaryDestination);
     });
     widget.onRouteChanged?.call(_route);
-    _primeRouteData();
+    _scheduleStartupWork(force: true);
   }
 
   void _openPrimaryDestination(GtePrimaryDestination destination) {
@@ -870,9 +868,26 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         _route = targetRoute;
       });
       widget.onRouteChanged?.call(_route);
-      _primeRouteData();
+      _scheduleStartupWork(force: true);
     }
     return true;
+  }
+
+  void _scheduleStartupWork({bool force = false}) {
+    if (_startupWorkScheduled && !force) {
+      return;
+    }
+    _startupWorkScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _startupWorkScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      widget.controller.bootstrap();
+      _competitionController.bootstrap();
+      _primeCreatorAccessState(force: true);
+      _primeRouteData();
+    });
   }
 
   void _primeRouteData() {
