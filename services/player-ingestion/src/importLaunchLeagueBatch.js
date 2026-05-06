@@ -44,6 +44,7 @@ const LAUNCH_EXPANSION_LEAGUES = [
   { code: "ukrainian-premier-league", leagueId: 609, name: "Premier League", country: "Ukraine" },
   { code: "swedish-allsvenskan", leagueId: 573, name: "Allsvenskan", country: "Sweden" },
   { code: "norwegian-eliteserien", leagueId: 444, name: "Eliteserien", country: "Norway" },
+  { code: "czech-chance-liga", leagueId: 262, name: "Chance Liga", country: "Czech Republic" },
   { code: "polish-ekstraklasa", leagueId: 453, name: "Ekstraklasa", country: "Poland" },
   { code: "egyptian-premier-league", leagueId: 830, name: "Premier League", country: "Egypt" },
 ];
