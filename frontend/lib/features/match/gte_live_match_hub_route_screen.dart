@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app_routes/gte_navigation_helpers.dart';
 import '../app_routes/gte_route_data.dart';
 import '../navigation_guards/gte_navigation_guards.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
 import '../../widgets/gte_metric_chip.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
@@ -37,7 +38,7 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Matchday hub')),
+        appBar: AppBar(title: const Text('Matchday desk')),
         body: overview.when(
           data: (LiveMatchOverview value) {
             final List<_MatchLaneEntry> entries = _resolvedEntries(value);
@@ -148,6 +149,20 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 18),
+                GtexLiveTickerBar(
+                  accentColor: GteShellTheme.accentArena,
+                  items: <String>[
+                    if (entries.isEmpty)
+                      'Arena pulse is scouting the next live fixture stream',
+                    if (entries.isNotEmpty)
+                      '${entries.length} matchday lanes are primed for broadcast',
+                    if (entries.any((_MatchLaneEntry entry) => entry.isLive))
+                      'A live fixture is already pushing through the stadium control room',
+                    if (entries.every((_MatchLaneEntry entry) => !entry.isLive))
+                      'Floodlights are on and the next kickoff is loading into the desk',
+                  ],
                 ),
                 const SizedBox(height: 18),
                 ...entries.map(

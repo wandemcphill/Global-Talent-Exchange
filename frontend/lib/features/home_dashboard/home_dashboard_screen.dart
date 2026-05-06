@@ -30,6 +30,7 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
+import 'package:gte_frontend/shared/widgets/gtex_premium_panels.dart';
 
 import 'widgets/home_featured_event_banner.dart';
 import 'widgets/home_section_card.dart';
@@ -230,6 +231,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   stats: snapshot.featuredBanner.stats,
                   actionLabel: snapshot.featuredBanner.actionLabel,
                   onPressed: () => _openTarget(snapshot.featuredBanner.target),
+                ),
+                const SizedBox(height: 20),
+                GtexLiveTickerBar(
+                  accentColor: GteShellTheme.accent,
+                  items: <String>[
+                    '${snapshot.notificationCount} live club alerts are stacked for review',
+                    '${snapshot.openCompetitionCount} active competition lanes are available now',
+                    'Capital posture is ${_capitalMetricLabel()} for ${clubName.toUpperCase()}',
+                    snapshot.featuredBanner.summary,
+                  ],
                 ),
                 const SizedBox(height: 20),
                 _HomeQuickActionsStrip(
@@ -1568,7 +1579,7 @@ class _HomeRuntimeSignalPanel extends StatelessWidget {
               ),
               GteMetricChip(
                 label: 'Access',
-                value: isAuthenticated ? 'Signed in' : 'Guest',
+                value: isAuthenticated ? 'Signed in' : 'Visitor',
                 positive: isAuthenticated,
               ),
               GteMetricChip(
@@ -1704,7 +1715,7 @@ class _HomeQuickActionsStrip extends StatelessWidget {
             accent: GteShellTheme.accentArena,
             badge: 'Live',
             emphasized: true,
-            actionLabel: 'Play now',
+            actionLabel: 'Open matchday',
             onTap: onOpenCompetitions,
           ),
           _HomeActionCard(
@@ -1713,12 +1724,12 @@ class _HomeQuickActionsStrip extends StatelessWidget {
             detail:
                 isAuthenticated
                     ? 'Open the player market to compare form, upside, and value without leaving the football world.'
-                    : 'The player market is visible in guest mode. Sign in when you are ready to make moves and save them to your account.',
+                    : 'The player market is visible in visitor mode. Sign in when you are ready to make moves and save them to your account.',
             icon: Icons.person_search_outlined,
             accent: GteShellTheme.accent,
             badge: 'Live',
             actionLabel:
-                isAuthenticated ? 'Open player market' : 'Preview scouting',
+                isAuthenticated ? 'Open player market' : 'Open market preview',
             onTap: onOpenMarket ?? onOpenLogin,
           ),
           _HomeActionCard(
@@ -1873,7 +1884,7 @@ class _HomeJourneyPanel extends StatelessWidget {
     final String title =
         isAuthenticated
             ? 'Next best moves for $clubName'
-            : 'Guest mode is polished, but your account is still on the touchline';
+            : 'Visitor mode is polished, but your account is still on the touchline';
     final String message =
         isAuthenticated
             ? 'There are $openCompetitionCount open competition lanes and $notificationCount alerts waiting. Use Home to move with intent instead of bouncing between tabs.'

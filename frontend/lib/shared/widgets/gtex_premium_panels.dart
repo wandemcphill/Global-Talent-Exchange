@@ -352,3 +352,77 @@ Color _toneColor(BuildContext context, GtexSurfaceTone tone) {
       return tokens.negative;
   }
 }
+
+class GtexLiveTickerBar extends StatelessWidget {
+  const GtexLiveTickerBar({super.key, required this.items, this.accentColor});
+
+  final List<String> items;
+  final Color? accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color accent =
+        accentColor ?? GteShellTheme.definitionOf(context).primaryColor;
+    final List<String> resolved =
+        items.where((String item) => item.trim().isNotEmpty).toList();
+    if (resolved.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return GteSurfacePanel(
+      accentColor: accent,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: SizedBox(
+        height: 28,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          itemCount: resolved.length,
+          separatorBuilder:
+              (BuildContext context, int index) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(
+                  Icons.fiber_manual_record_rounded,
+                  size: 10,
+                  color: accent.withValues(alpha: 0.72),
+                ),
+              ),
+          itemBuilder:
+              (BuildContext context, int index) => Center(
+                child: Text(
+                  resolved[index],
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: tokens.textPrimary),
+                ),
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class GtexAnimatedMetricValue extends StatelessWidget {
+  const GtexAnimatedMetricValue({
+    super.key,
+    required this.value,
+    required this.builder,
+    this.duration = const Duration(milliseconds: 700),
+  });
+
+  final double value;
+  final Widget Function(BuildContext context, double value) builder;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: value),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      builder: (BuildContext context, double animated, Widget? child) {
+        return builder(context, animated);
+      },
+    );
+  }
+}

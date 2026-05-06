@@ -9,13 +9,68 @@ String gteCanonicalApiPath(String path) {
     return trimmed;
   }
   final String normalized = _normalizePath(trimmed);
-  final String? canonical = gteApiCanonicalPathByAlias[normalized];
+  final String? canonical =
+      gteApiCanonicalPathByAlias[normalized] ??
+      _resolveTemplatedCanonical(normalized);
   if (canonical == null) {
     throw StateError(
       'Endpoint $normalized is not present in shared/api_contract.json.',
     );
   }
   return canonical;
+}
+
+String? _resolveTemplatedCanonical(String normalized) {
+  for (final MapEntry<String, String> entry
+      in gteApiCanonicalPathByAlias.entries) {
+    final String alias = entry.key;
+    if (!alias.contains('{')) {
+      continue;
+    }
+    if (_matchesTemplatedPath(alias, normalized)) {
+      return _materializeCanonical(entry.value, alias, normalized);
+    }
+  }
+  return null;
+}
+
+bool _matchesTemplatedPath(String template, String actual) {
+  final List<String> templateParts = template.split('/');
+  final List<String> actualParts = actual.split('/');
+  if (templateParts.length != actualParts.length) {
+    return false;
+  }
+  for (int index = 0; index < templateParts.length; index += 1) {
+    final String templatePart = templateParts[index];
+    final String actualPart = actualParts[index];
+    final bool placeholder =
+        templatePart.startsWith('{') && templatePart.endsWith('}');
+    if (!placeholder && templatePart != actualPart) {
+      return false;
+    }
+  }
+  return true;
+}
+
+String _materializeCanonical(
+  String canonicalTemplate,
+  String aliasTemplate,
+  String actual,
+) {
+  final List<String> aliasParts = aliasTemplate.split('/');
+  final List<String> actualParts = actual.split('/');
+  final Map<String, String> values = <String, String>{};
+  for (int index = 0; index < aliasParts.length; index += 1) {
+    final String aliasPart = aliasParts[index];
+    if (aliasPart.startsWith('{') && aliasPart.endsWith('}')) {
+      values[aliasPart.substring(1, aliasPart.length - 1)] = actualParts[index];
+    }
+  }
+  String resolved = canonicalTemplate;
+  values.forEach((String key, String value) {
+    resolved = resolved.replaceAll('{$key}', value);
+  });
+  return resolved;
 }
 
 bool gteIsContractExemptPath(String path) {

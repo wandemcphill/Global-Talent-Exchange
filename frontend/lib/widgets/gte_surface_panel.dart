@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'gte_shell_theme.dart';
 
-class GteSurfacePanel extends StatelessWidget {
+class GteSurfacePanel extends StatefulWidget {
   const GteSurfacePanel({
     super.key,
     required this.child,
@@ -19,32 +19,42 @@ class GteSurfacePanel extends StatelessWidget {
   final Color? accentColor;
 
   @override
+  State<GteSurfacePanel> createState() => _GteSurfacePanelState();
+}
+
+class _GteSurfacePanelState extends State<GteSurfacePanel> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final tokens = GteShellTheme.tokensOf(context);
     final visuals = GteShellTheme.visualsOf(context);
     final Color glow =
-        accentColor ?? (emphasized ? tokens.accent : tokens.accentWarm);
+        widget.accentColor ??
+        (widget.emphasized ? tokens.accent : tokens.accentWarm);
     final BorderRadius radius = BorderRadius.circular(tokens.radiusLarge);
     final Widget content = Container(
       constraints: const BoxConstraints(minWidth: 1, minHeight: 1),
-      padding: padding,
+      padding: widget.padding,
       decoration: BoxDecoration(
         borderRadius: radius,
         border: Border.all(
           color: (visuals.glass ? visuals.shellBorder : tokens.stroke)
-              .withValues(alpha: 0.92),
+              .withValues(alpha: _hovered ? 1 : 0.92),
         ),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
             Color.alphaBlend(
-              glow.withValues(alpha: emphasized ? 0.08 : 0.04),
-              (emphasized ? tokens.panelElevated : tokens.panelStrong)
+              glow.withValues(alpha: widget.emphasized ? 0.12 : 0.05),
+              (widget.emphasized ? tokens.panelElevated : tokens.panelStrong)
                   .withValues(alpha: visuals.surfaceOpacity),
             ),
             tokens.panel.withValues(alpha: visuals.surfaceOpacity),
-            tokens.surfaceHighlight.withValues(alpha: emphasized ? 0.06 : 0.03),
+            tokens.surfaceHighlight.withValues(
+              alpha: widget.emphasized ? 0.06 : 0.03,
+            ),
           ],
           stops: const <double>[0, 0.65, 1],
         ),
@@ -55,9 +65,11 @@ class GteSurfacePanel extends StatelessWidget {
             offset: const Offset(0, 18),
           ),
           BoxShadow(
-            color: glow.withValues(alpha: emphasized ? 0.08 : 0.04),
-            blurRadius: 24,
-            spreadRadius: 1,
+            color: glow.withValues(
+              alpha: _hovered ? 0.16 : (widget.emphasized ? 0.08 : 0.04),
+            ),
+            blurRadius: _hovered ? 34 : 24,
+            spreadRadius: _hovered ? 2 : 1,
           ),
         ],
       ),
@@ -72,7 +84,7 @@ class GteSurfacePanel extends StatelessWidget {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: <Color>[
-                      glow.withValues(alpha: emphasized ? 0.24 : 0.16),
+                      glow.withValues(alpha: widget.emphasized ? 0.24 : 0.16),
                       glow.withValues(alpha: 0),
                     ],
                   ),
@@ -111,10 +123,32 @@ class GteSurfacePanel extends StatelessWidget {
                 ),
                 gradient: LinearGradient(
                   colors: <Color>[
-                    glow.withValues(alpha: 0.95),
-                    tokens.surfaceHighlight.withValues(alpha: 0.12),
+                    glow.withValues(alpha: _hovered ? 1 : 0.95),
+                    tokens.surfaceHighlight.withValues(alpha: 0.16),
                     tokens.accentWarm.withValues(alpha: 0.35),
                   ],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 240),
+                opacity: _hovered ? 1 : 0,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: <Color>[
+                        Colors.white.withValues(alpha: 0.08),
+                        Colors.transparent,
+                        glow.withValues(alpha: 0.06),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -135,7 +169,7 @@ class GteSurfacePanel extends StatelessWidget {
               ),
             ),
           ),
-          child,
+          widget.child,
         ],
       ),
     );
@@ -151,13 +185,36 @@ class GteSurfacePanel extends StatelessWidget {
             )
             : content;
 
-    if (onTap == null) {
-      return Material(color: Colors.transparent, child: layeredContent);
+    final Widget animatedBody = AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      transform:
+          Matrix4.identity()
+            ..translate(0.0, _hovered ? -4.0 : 0.0)
+            ..scale(_hovered ? 1.006 : 1.0),
+      transformAlignment: Alignment.center,
+      child: layeredContent,
+    );
+
+    if (widget.onTap == null) {
+      return MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Material(color: Colors.transparent, child: animatedBody),
+      );
     }
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(borderRadius: radius, onTap: onTap, child: layeredContent),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: widget.onTap,
+          child: animatedBody,
+        ),
+      ),
     );
   }
 }

@@ -59,4 +59,3 @@ def test_hosted_discovery_query_budget_stays_single_pass(app_session_factory) ->
 
     assert [competition.title for competition in competitions] == ["Hosted Queue Cup"]
     assert query_count <= 1
-

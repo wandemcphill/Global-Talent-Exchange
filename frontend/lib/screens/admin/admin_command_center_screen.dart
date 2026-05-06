@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/app_feedback.dart';
@@ -7,6 +9,7 @@ import '../../data/gte_models.dart';
 import '../../features/app_routes/gte_navigation_helpers.dart';
 import '../../features/app_routes/gte_route_data.dart';
 import '../../features/navigation_guards/gte_navigation_guards.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
 import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
@@ -31,6 +34,10 @@ class AdminCommandCenterScreen extends StatefulWidget {
 
 class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   late final AdminCommandCenterApi _api;
+  Timer? _liveRefreshTimer;
+
+  bool get _isTestBinding =>
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
 
   final TextEditingController _depositRateController = TextEditingController();
   final TextEditingController _withdrawalRateController =
@@ -104,10 +111,17 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       mode: widget.backendMode,
     );
     _load();
+    if (!_isTestBinding) {
+      _liveRefreshTimer = Timer.periodic(
+        const Duration(seconds: 28),
+        (_) => _load(),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _liveRefreshTimer?.cancel();
     _depositRateController.dispose();
     _withdrawalRateController.dispose();
     _minDepositController.dispose();
@@ -155,8 +169,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       depositsFuture = _captureLoad<GteAdminQueuePage<GteAdminDeposit>>(
         _api.fetchAdminDeposits(limit: 20),
       );
-      final Future<_AdminLoadCapture<AdminPaymentRailsState>> paymentRailsFuture =
-          _captureLoad<AdminPaymentRailsState>(_api.fetchPaymentRails());
+      final Future<_AdminLoadCapture<AdminPaymentRailsState>>
+      paymentRailsFuture = _captureLoad<AdminPaymentRailsState>(
+        _api.fetchPaymentRails(),
+      );
       final Future<_AdminLoadCapture<AdminWithdrawalControls>>
       withdrawalControlsFuture = _captureLoad<AdminWithdrawalControls>(
         _api.fetchWithdrawalControls(),
@@ -318,6 +334,67 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       case GtePaymentMode.hybrid:
         return 'Hybrid';
     }
+  }
+
+  Widget _buildWarRoomHero(BuildContext context) {
+    final int liveDepositCount = _depositQueue?.items.length ?? 0;
+    final int liveRailCount =
+        _paymentRails
+            .where(
+              (AdminPaymentRail rail) =>
+                  rail.depositsEnabled || rail.withdrawalsEnabled,
+            )
+            .length;
+    return GtexHeroPanel(
+      eyebrow: 'GOD MODE',
+      title: 'Control the global football economy from one war room.',
+      description:
+          'Market supply, competition ignition, treasury rails, and user-credit interventions stay visible here as one coordinated control surface.',
+      accentColor: GteShellTheme.accentAdmin,
+      metrics: <Widget>[
+        GtexStatTile(
+          label: 'Trade queue',
+          value: liveDepositCount == 0 ? 'WATCH' : '$liveDepositCount',
+          support: 'Deposits and treasury reviews',
+          tone: GtexSurfaceTone.live,
+        ),
+        GtexStatTile(
+          label: 'Rails',
+          value: liveRailCount == 0 ? 'OFFLINE' : '$liveRailCount',
+          support: 'Active deposit or payout rails',
+          tone: GtexSurfaceTone.warning,
+        ),
+        GtexStatTile(
+          label: 'Withdrawals',
+          value:
+              _withdrawalControls == null
+                  ? 'CHECKING'
+                  : (_withdrawalControls!.tradeWithdrawalsEnabled
+                      ? 'OPEN'
+                      : 'PAUSED'),
+          support: 'Trade payout posture',
+          tone:
+              _withdrawalControls?.tradeWithdrawalsEnabled == false
+                  ? GtexSurfaceTone.danger
+                  : GtexSurfaceTone.success,
+        ),
+      ],
+      actions: <Widget>[
+        FilledButton.icon(
+          onPressed:
+              _creatingGtexCompetition ? null : _createGtexHostedCompetition,
+          icon: const Icon(Icons.emoji_events_outlined),
+          label: const Text('Launch GTEX arena'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _previewingCredit ? null : _previewCredit,
+          icon: const Icon(Icons.toll_outlined),
+          label: Text(
+            _previewingCredit ? 'Previewing credit' : 'Preview wallet credit',
+          ),
+        ),
+      ],
+    );
   }
 
   String _providerLabel(String provider) {
@@ -797,16 +874,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Admin dashboard'),
-          actions: <Widget>[
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: _loading ? null : _load,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
+        appBar: AppBar(title: const Text('Admin dashboard')),
         body:
             _loading && !hasData
                 ? const Center(child: CircularProgressIndicator())
@@ -829,6 +897,24 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
                     children: <Widget>[
+                      _buildWarRoomHero(context),
+                      const SizedBox(height: 18),
+                      GtexLiveTickerBar(
+                        accentColor: GteShellTheme.accentAdmin,
+                        items: <String>[
+                          if (_depositQueue != null)
+                            '${_depositQueue!.items.length} deposits are sitting in the live review lane',
+                          if (_paymentRails.isNotEmpty)
+                            '${_paymentRails.where((AdminPaymentRail rail) => rail.depositsEnabled).length} deposit rails are open to users',
+                          if (_withdrawalControls != null)
+                            'Withdrawal processor is ${_withdrawalControls!.processorMode.toUpperCase()} with trade payouts ${_withdrawalControls!.tradeWithdrawalsEnabled ? 'LIVE' : 'PAUSED'}',
+                          if (_lastCompetitionSummary != null)
+                            _lastCompetitionSummary!,
+                          if (_error != null)
+                            'War room is holding the last stable snapshot while systems recalibrate',
+                        ],
+                      ),
+                      const SizedBox(height: 18),
                       _buildOverviewPanel(context),
                       const SizedBox(height: 18),
                       _buildOperationsRoutesPanel(context),

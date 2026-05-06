@@ -4,7 +4,6 @@ import json
 import re
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = REPO_ROOT / "shared" / "api_contract.json"
 REPORT_PATH = REPO_ROOT / "docs" / "CONTRACT_VIOLATIONS.md"
@@ -74,9 +73,7 @@ def _render_report(violations: list[dict[str, str]]) -> str:
         lines.append("- None")
         return "\n".join(lines) + "\n"
     for violation in violations[:500]:
-        lines.append(
-            f"- `{violation['file']}` -> `{violation['endpoint']}`: {violation['issue']}"
-        )
+        lines.append(f"- `{violation['file']}` -> `{violation['endpoint']}`: {violation['issue']}")
     if len(violations) > 500:
         lines.append(f"- ... and {len(violations) - 500} more")
     return "\n".join(lines) + "\n"

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../features/app_routes/gte_navigation_helpers.dart';
 import '../features/app_routes/gte_route_data.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
+import '../shared/widgets/gtex_premium_panels.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/player_match_service.dart';
 import '../providers/gte_exchange_controller.dart';
@@ -77,6 +78,30 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
     super.dispose();
   }
 
+  List<String> _marketTickerItems() {
+    final List<GteMarketPlayerListItem> players =
+        _filteredPlayers.take(8).toList();
+    if (players.isEmpty) {
+      return const <String>[
+        'Scanning global player pool',
+        'Liquidity brokers are mapping fresh demand',
+        'Scout reports are assembling into the live board',
+      ];
+    }
+    return players
+        .map((GteMarketPlayerListItem player) {
+          final String trend =
+              player.isRising
+                  ? 'rising'
+                  : (player.marketInterestScore ?? 0) > 72
+                  ? 'heavy flow'
+                  : 'watchlist';
+          final double movement = player.movementPct ?? 0;
+          return '${player.playerName} ${movement >= 0 ? '+' : ''}${movement.toStringAsFixed(1)}% · $trend';
+        })
+        .toList(growable: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -98,26 +123,27 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                 const GteMetricChip(label: 'Board', value: 'REAL PLAYERS'),
                 GteMetricChip(
                   label: 'Visible',
-                  value: _filteredPlayers.length.toString(),
+                  value:
+                      _filteredPlayers.isEmpty
+                          ? 'SCANNING'
+                          : _filteredPlayers.length.toString(),
                 ),
                 GteMetricChip(
                   label: 'Pool size',
-                  value: (widget.controller.marketPage?.total ?? 0).toString(),
+                  value:
+                      (widget.controller.marketPage?.total ?? 0) == 0
+                          ? 'WARMING'
+                          : (widget.controller.marketPage?.total ?? 0)
+                              .toString(),
                 ),
                 GteMetricChip(
                   label: 'Session',
-                  value: widget.controller.isAuthenticated ? 'LIVE' : 'PREVIEW',
+                  value: widget.controller.isAuthenticated ? 'LIVE' : 'VISITOR',
                   positive: widget.controller.isAuthenticated,
                 ),
                 GteMetricChip(label: 'Focus', value: _lensLabel(_selectedLens)),
               ],
               actions: <Widget>[
-                FilledButton.tonalIcon(
-                  onPressed:
-                      widget.controller.isLoadingMarket ? null : _refresh,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh board'),
-                ),
                 if (widget.navigationDependencies != null)
                   FilledButton.tonalIcon(
                     onPressed:
@@ -313,17 +339,17 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                           value:
                               widget.controller.isAuthenticated
                                   ? 'READY'
-                                  : 'PREVIEW',
+                                  : 'VISITOR',
                           accent: GteShellTheme.accent,
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _MiniTerminalTile(
-                          label: 'Club funds',
+                          label: 'Capital',
                           value:
                               widget.controller.walletSummary == null
-                                  ? 'PENDING'
+                                  ? 'SYNCING'
                                   : 'READY',
                           accent: GteShellTheme.accentWarm,
                         ),
@@ -332,6 +358,11 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 20),
+            GtexLiveTickerBar(
+              accentColor: GteShellTheme.accent,
+              items: _marketTickerItems(),
             ),
             const SizedBox(height: 20),
             GtexSignalStrip(
@@ -361,9 +392,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                   value:
                       widget.controller.isAuthenticated
                           ? 'READY TO SIGN'
-                          : 'SCOUT MODE',
+                          : 'VISITOR MODE',
                   caption:
-                      'Sign-in unlocks move tickets, club funds, and account-aware confirmation flows.',
+                      'Sign-in unlocks move tickets, capital context, and account-aware confirmation flows.',
                   icon: Icons.bolt_outlined,
                   color: const Color(0xFF8DD9FF),
                 ),
@@ -441,7 +472,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                 _DeskSignalCard(
                   title: 'Access note',
                   body:
-                      'Guests can scout the board. Signed-in users get move tickets, funds context, and account sync.',
+                      'Visitors can scout the board. Signed-in users get move tickets, capital context, and account sync.',
                 ),
               ],
             ),
@@ -476,7 +507,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                       : 'Scan the tape and pick your next move.',
               description:
                   _filteredPlayers.isEmpty
-                      ? 'When the board is thin, the app keeps it explicit. Refresh, widen the filter, or clear the search to keep moving.'
+                      ? 'When the board is thin, the app keeps it explicit. Widen the filter or clear the search while the next live wave assembles.'
                       : 'Cards stay compact, emotional, and deliberate so this page feels like football trading with stakes, not a spreadsheet in disguise.',
               accent: GteShellTheme.accent,
             ),
@@ -516,8 +547,8 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                 title: 'No players match this filter',
                 message:
                     !_hasAnyBoardQuery
-                        ? 'This filter is quiet right now. Switch focus or refresh the board.'
-                        : 'No players matched ${_activeBoardQueryLabel()} in the ${_lensLabel(_selectedLens).toLowerCase()} view.',
+                        ? 'This filter lane is quiet right now. The market is still scanning for the next wave of opportunity.'
+                        : 'No players matched ${_activeBoardQueryLabel()} in the ${_lensLabel(_selectedLens).toLowerCase()} view yet. Brokers are still sweeping the tape.',
                 actionLabel:
                     _hasAnyBoardQuery ? 'Clear filters' : 'Reset filter',
                 onAction: () {

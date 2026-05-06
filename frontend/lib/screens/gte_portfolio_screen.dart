@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
+import '../shared/widgets/gtex_premium_panels.dart';
 import '../widgets/gte_formatters.dart';
 import '../widgets/gte_metric_chip.dart';
 import '../widgets/gte_order_detail_card.dart';
@@ -37,13 +38,13 @@ class GtePortfolioScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
         children: <Widget>[
           GtexHeroBanner(
-            eyebrow: 'CLUB FUNDS',
+            eyebrow: 'CAPITAL DESK',
             title: 'Your club funds stay protected until you sign in.',
             description:
-                'Guest mode shows the layout, not live balances. Sign in to view your balance, player holdings, and account history.',
+                'Visitor mode shows the layout, not live balances. Sign in to view your balance, player holdings, and account history.',
             accent: GteShellTheme.accentCapital,
             chips: const <Widget>[
-              GteMetricChip(label: 'Mode', value: 'PREVIEW'),
+              GteMetricChip(label: 'Mode', value: 'VISITOR'),
               GteMetricChip(label: 'Balance', value: 'LOCKED'),
               GteMetricChip(label: 'Activity', value: 'PRIVATE'),
             ],
@@ -74,7 +75,7 @@ class GtePortfolioScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             GtexHeroBanner(
-              eyebrow: 'CLUB FUNDS',
+              eyebrow: 'CAPITAL DESK',
               title:
                   'Capital, holdings, and live transfer pressure sit on one executive board.',
               description:
@@ -93,17 +94,6 @@ class GtePortfolioScreen extends StatelessWidget {
                 GteMetricChip(
                   label: 'Recent orders',
                   value: controller.recentOrders.length.toString(),
-                ),
-              ],
-              actions: <Widget>[
-                FilledButton.tonalIcon(
-                  onPressed:
-                      controller.isLoadingPortfolio ||
-                              controller.isLoadingOrders
-                          ? null
-                          : controller.refreshAccount,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh account'),
                 ),
               ],
               sidePanel: Column(
@@ -126,6 +116,20 @@ class GtePortfolioScreen extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 20),
+            GtexLiveTickerBar(
+              accentColor: GteShellTheme.accentCapital,
+              items: <String>[
+                if (controller.walletSummary == null)
+                  'Capital desk is calibrating live balances and exposure',
+                if (controller.walletSummary != null)
+                  'Wallet balance is ${gteFormatCredits(controller.walletSummary!.totalBalance)} and ready for deployment',
+                if (controller.openOrders.isNotEmpty)
+                  '${controller.openOrders.length} pending capital moves are still working through the market',
+                if (controller.recentOrders.isNotEmpty)
+                  '${controller.recentOrders.length} recent executions are feeding the account tape',
+              ],
             ),
             if (controller.portfolioError != null &&
                 (controller.walletSummary != null ||
@@ -153,7 +157,7 @@ class GtePortfolioScreen extends StatelessWidget {
               status:
                   controller.isAuthenticated
                       ? 'Balance, holdings, and move history are updating together.'
-                      : 'Guest preview is active. Sign in to unlock funds and live account updates.',
+                      : 'Visitor mode is active. Sign in to unlock capital and live account updates.',
               syncedAt:
                   controller.portfolioSyncedAt ?? controller.ordersSyncedAt,
               accent: GteShellTheme.accentCapital,
@@ -214,9 +218,9 @@ class GtePortfolioScreen extends StatelessWidget {
             else if (controller.portfolio == null ||
                 controller.portfolio!.holdings.isEmpty)
               const GteStatePanel(
-                title: 'No holdings yet',
+                title: 'Capital is waiting for its first move',
                 message:
-                    'Place an order from a player detail screen to start building the portfolio.',
+                    'Your balance is live, but no player positions are open yet. The first signed asset will turn this desk into a real portfolio.',
                 icon: Icons.account_balance_wallet_outlined,
               )
             else
@@ -973,7 +977,7 @@ class _WalletActionPanel extends StatelessWidget {
           const SizedBox(height: 12),
           if (fundWalletBlocked) ...<Widget>[
             Text(
-              'Funding is locked until compliance review completes. Open Wallet overview for the current restriction and next steps.',
+              'Funding is locked until compliance review completes. Open wallet overview for the current restriction and next steps.',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: GteShellTheme.accentWarm),

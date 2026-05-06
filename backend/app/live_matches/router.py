@@ -1572,4 +1572,3 @@ async def _stream_realtime_topics(
 
 
 __all__ = ["router"]
-
