@@ -30,7 +30,9 @@ import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart
 import 'package:gte_frontend/features/match/replay_archive_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/player_card_marketplace/player_card_marketplace.dart';
+import 'package:gte_frontend/features/regens/regens_screen.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/streamer_tournament_engine.dart';
+import 'package:gte_frontend/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_create_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_detail_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
@@ -303,6 +305,19 @@ class GteAppRouteRegistry {
     }
     if (route is WorldOverviewRouteData) {
       return _buildWorldOverviewScreen(context, liveDependencies);
+    }
+    if (route is RegenUniverseRouteData) {
+      return const RegensScreen();
+    }
+    if (route is NewsDeskRouteData) {
+      return TransferNewsCalendarScreen(
+        baseUrl: liveDependencies.apiBaseUrl,
+        backendMode: liveDependencies.backendMode,
+        accessToken: liveDependencies.accessToken,
+        currentUserRole: liveDependencies.currentUserRole,
+        initialTab: 'media',
+        onOpenLogin: openLogin,
+      );
     }
     if (route is WorldClubContextRouteData) {
       return _buildWorldClubContextScreen(context, liveDependencies, route);

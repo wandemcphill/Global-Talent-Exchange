@@ -78,6 +78,28 @@ class _PlayerCardMarketplaceScreenState
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant PlayerCardMarketplaceScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_ownsController &&
+        (oldWidget.baseUrl != widget.baseUrl ||
+            oldWidget.backendMode != widget.backendMode ||
+            oldWidget.accessToken != widget.accessToken)) {
+      _controller.dispose();
+      _controller = PlayerCardMarketplaceController.standard(
+        baseUrl: widget.baseUrl,
+        backendMode: widget.backendMode,
+        accessToken: widget.accessToken,
+      );
+      _reload();
+      return;
+    }
+    if (oldWidget.currentUserId != widget.currentUserId ||
+        oldWidget.accessToken != widget.accessToken) {
+      _reload();
+    }
+  }
+
   Future<void> _reload() async {
     await Future.wait<void>(<Future<void>>[
       _controller.loadMarketplace(

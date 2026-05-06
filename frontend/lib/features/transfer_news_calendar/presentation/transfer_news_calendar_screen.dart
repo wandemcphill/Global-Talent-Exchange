@@ -37,8 +37,8 @@ class TransferNewsCalendarScreen extends StatefulWidget {
 
 class _TransferNewsCalendarScreenState
     extends State<TransferNewsCalendarScreen> {
-  late final TransferNewsCalendarController _controller;
-  late final GteAuthedApi _api;
+  late TransferNewsCalendarController _controller;
+  late GteAuthedApi _api;
 
   List<_TransferWindowRecord> _windows = const <_TransferWindowRecord>[];
   List<_TransferBidRecord> _bids = const <_TransferBidRecord>[];
@@ -58,6 +58,30 @@ class _TransferNewsCalendarScreenState
   @override
   void initState() {
     super.initState();
+    _hydrateClients();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant TransferNewsCalendarScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.baseUrl != widget.baseUrl ||
+        oldWidget.backendMode != widget.backendMode ||
+        oldWidget.accessToken != widget.accessToken ||
+        oldWidget.currentUserRole != widget.currentUserRole) {
+      _controller.dispose();
+      _hydrateClients();
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _hydrateClients() {
     _controller = TransferNewsCalendarController.standard(
       baseUrl: widget.baseUrl,
       backendMode: widget.backendMode,
@@ -68,13 +92,6 @@ class _TransferNewsCalendarScreenState
       mode: widget.backendMode,
       accessToken: widget.accessToken,
     );
-    _load();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {

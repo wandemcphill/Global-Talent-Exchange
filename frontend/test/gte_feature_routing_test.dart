@@ -46,6 +46,8 @@ void main() {
         clubName: 'Royal Lagos FC',
       ),
       const WorldOverviewRouteData(),
+      const RegenUniverseRouteData(),
+      const NewsDeskRouteData(),
       const WorldClubContextRouteData(
         clubId: 'royal-lagos-fc',
         clubName: 'Royal Lagos FC',
@@ -81,6 +83,47 @@ void main() {
         route.toUri().toString(),
       );
     }
+  });
+
+  test('legacy deep links resolve into premium GTEX route data', () {
+    final Map<String, Type> aliases = <String, Type>{
+      '/market': PlayerCardsBrowseRouteData,
+      '/market/transfers': FootballTransferCenterRouteData,
+      '/world/regens': RegenUniverseRouteData,
+      '/clips': NewsDeskRouteData,
+      '/news': NewsDeskRouteData,
+      '/competitions/hosted': CompetitionsDiscoveryRouteData,
+      '/competitions/gtex': CompetitionsDiscoveryRouteData,
+      '/competitions/hosted/comp-1': CompetitionDetailRouteData,
+      '/competitions/gtex/comp-2': CompetitionDetailRouteData,
+    };
+
+    for (final MapEntry<String, Type> entry in aliases.entries) {
+      final GteAppRouteData? parsed = GteNavigationHelpers.parseDeepLink(
+        entry.key,
+      );
+      expect(parsed, isNotNull, reason: entry.key);
+      expect(parsed.runtimeType, entry.value, reason: entry.key);
+    }
+
+    expect(
+      (GteNavigationHelpers.parseDeepLink('/competitions/hosted')
+              as CompetitionsDiscoveryRouteData)
+          .highlight,
+      'hosted',
+    );
+    expect(
+      (GteNavigationHelpers.parseDeepLink('/competitions/gtex')
+              as CompetitionsDiscoveryRouteData)
+          .highlight,
+      'gtex',
+    );
+    expect(
+      (GteNavigationHelpers.parseDeepLink('/competitions/hosted/comp-1')
+              as CompetitionDetailRouteData)
+          .competitionId,
+      'comp-1',
+    );
   });
 
   testWidgets('guest users hit sign-in gating on protected routes', (

@@ -47,27 +47,27 @@ void main() {
           shellSource,
           'GtePrimaryDestination.home,',
         );
-        final int play = _indexOfOrThrow(
-          shellSource,
-          'GtePrimaryDestination.competitions,',
-        );
         final int market = _indexOfOrThrow(
           shellSource,
           'GtePrimaryDestination.market,',
         );
-        final int hub = _indexOfOrThrow(
+        final int play = _indexOfOrThrow(
           shellSource,
-          'GtePrimaryDestination.hub,',
+          'GtePrimaryDestination.competitions,',
         );
         final int club = _indexOfOrThrow(
           shellSource,
           'GtePrimaryDestination.club,',
         );
+        final int hub = _indexOfOrThrow(
+          shellSource,
+          'GtePrimaryDestination.hub,',
+        );
 
-        expect(home, lessThan(play));
-        expect(play, lessThan(market));
-        expect(market, lessThan(hub));
-        expect(hub, lessThan(club));
+        expect(home, lessThan(market));
+        expect(market, lessThan(play));
+        expect(play, lessThan(club));
+        expect(club, lessThan(hub));
         expect(shellSource, contains('_buildThemePickerAction(context)'));
         expect(shellSource, contains('_buildCapitalAction()'));
         expect(shellSource, contains("tooltip: 'Club funds'"));
@@ -81,7 +81,15 @@ void main() {
         'lib/features/home_dashboard/home_dashboard_screen.dart',
       );
 
-      final int hero = _indexOfOrThrow(homeSource, '_HomeHeroPanel(');
+      final int heroV2 = _indexOfOrThrow(homeSource, '_HomeHeroPanelV2(');
+      final int quickActions = _indexOfOrThrow(
+        homeSource,
+        '_HomeQuickActionsStrip(',
+      );
+      final int runtimePanel = _indexOfOrThrow(
+        homeSource,
+        '_HomeRuntimeSignalPanel(',
+      );
       final int status = _indexOfOrThrow(homeSource, 'GteSyncStatusCard(');
       final int banner = _indexOfOrThrow(
         homeSource,
@@ -89,11 +97,7 @@ void main() {
       );
       final int majorMoves = _indexOfOrThrow(
         homeSource,
-        "eyebrow: 'RIGHT NOW'",
-      );
-      final int quickActions = _indexOfOrThrow(
-        homeSource,
-        '_HomeQuickActionsStrip(',
+        "eyebrow: 'LIVE BOARD'",
       );
       final int journey = _indexOfOrThrow(homeSource, '_HomeJourneyPanel(');
       final int quieterSignals = _indexOfOrThrow(
@@ -101,10 +105,11 @@ void main() {
         "eyebrow: 'QUIETER SIGNALS'",
       );
 
-      expect(hero, lessThan(status));
-      expect(status, lessThan(banner));
-      expect(banner, lessThan(majorMoves));
-      expect(majorMoves, lessThan(quickActions));
+      expect(heroV2, lessThan(banner));
+      expect(banner, lessThan(quickActions));
+      expect(quickActions, lessThan(runtimePanel));
+      expect(runtimePanel, lessThan(status));
+      expect(status, lessThan(majorMoves));
       expect(quickActions, lessThan(journey));
       expect(journey, lessThan(quieterSignals));
     });
@@ -191,8 +196,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Club funds'), findsOneWidget);
-      expect(find.text('TRANSFER BALANCE'), findsOneWidget);
-      expect(find.text('CLUB CREDIT'), findsOneWidget);
+      expect(find.text('GTEX COIN'), findsOneWidget);
+      expect(find.text('FAN COIN'), findsOneWidget);
       expect(find.text('Deposit'), findsOneWidget);
     });
 
