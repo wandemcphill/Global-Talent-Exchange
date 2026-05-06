@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 518,
+  "call_count": 489,
   "calls": [
     {
       "file": "frontend/lib/data/admin_command_center_api.dart",
@@ -1265,30 +1265,6 @@
     {
       "file": "frontend/lib/data/gte_api_repository.dart",
       "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api",
-      "expected_shape": "map/envelope",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/data/gte_api_repository.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/",
-      "expected_shape": "map/envelope",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/data/gte_api_repository.dart",
-      "transport_call": "string_reference",
       "method": "GET",
       "endpoint": "/api/admin/analytics/funnels",
       "expected_shape": null,
@@ -1865,54 +1841,6 @@
     {
       "file": "frontend/lib/data/gte_api_repository.dart",
       "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/v1",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/data/gte_api_repository.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/v1$trimmed",
-      "expected_shape": "map/envelope",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/data/gte_api_repository.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/v1${trimmed.substring(4)}",
-      "expected_shape": "map/envelope",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/data/gte_api_repository.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/v1/$trimmed",
-      "expected_shape": "map/envelope",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/data/gte_api_repository.dart",
-      "transport_call": "string_reference",
       "method": "GET",
       "endpoint": "/api/wallets",
       "expected_shape": null,
@@ -2163,18 +2091,6 @@
       ]
     },
     {
-      "file": "frontend/lib/data/gte_api_repository.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/tts",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
       "file": "frontend/lib/data/gte_authed_api.dart",
       "transport_call": "string_reference",
       "method": "GET",
@@ -2397,6 +2313,18 @@
       "endpoint": "http://127.0.0.1:8000",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_http_transport.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v2",
+      "expected_shape": null,
+      "base_url_source": "injected",
       "platforms": [
         "web",
         "mobile"
@@ -4951,282 +4879,6 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/admin/hosted-competitions/seed",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api",
-      "expected_shape": "list",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api${path.substring(",
-      "expected_shape": "list",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "POST",
-      "endpoint": "/api/admin/economy/burn-events",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/admin/economy/gift-catalog",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/admin/economy/gift-combo-rules",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "POST",
-      "endpoint": "/api/admin/economy/gift-combo-rules",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/admin/economy/revenue-share-rules",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "POST",
-      "endpoint": "/api/admin/economy/revenue-share-rules",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "PUT",
-      "endpoint": "/api/admin/world/clubs/",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/admin/world/cultures/",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "PUT",
-      "endpoint": "/api/admin/world/cultures/",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/admin/world/narratives/",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/broadcast/home",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/economy/gift-catalog",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/federations",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/federations/",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/federations/",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/v1",
-      "expected_shape": "list",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/v1/",
-      "expected_shape": "list",
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/world/clubs/",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/world/competitions/",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/world/cultures",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/features/shared/data/gte_feature_support.dart",
-      "transport_call": "string_reference",
-      "method": "GET",
-      "endpoint": "/api/world/narratives",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [

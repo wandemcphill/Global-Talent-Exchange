@@ -93,11 +93,11 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
     app, _client = contract_app
     openapi = app.openapi()
 
-    assert "/api/v1/orders" in openapi["paths"]
-    assert "/api/v1/auth/register" in openapi["paths"]
-    assert "/api/v1/wallets/accounts" in openapi["paths"]
+    assert "/api/v2/orders" in openapi["paths"]
+    assert "/api/v2/auth/register" in openapi["paths"]
+    assert "/api/v2/wallets/accounts" in openapi["paths"]
 
-    list_orders = openapi["paths"]["/api/v1/orders"]["get"]
+    list_orders = openapi["paths"]["/api/v2/orders"]["get"]
     success_schema_ref = list_orders["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
     success_component = openapi["components"]["schemas"][success_schema_ref.rsplit("/", 1)[-1]]
     assert success_component["required"] == ["success", "data"]
@@ -109,7 +109,7 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
     assert error_component["required"] == ["success", "error", "code"]
     assert error_component["properties"]["success"]["enum"] == [False]
 
-    place_order = openapi["paths"]["/api/v1/orders"]["post"]
+    place_order = openapi["paths"]["/api/v2/orders"]["post"]
     assert "requestBody" in place_order
     request_schema = place_order["requestBody"]["content"]["application/json"]["schema"]
     assert "$ref" in request_schema
@@ -118,7 +118,7 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
 def test_versioned_aliases_wrap_legacy_handlers_in_standard_success_envelope(contract_app) -> None:
     _app, client = contract_app
     response = client.post(
-        "/api/v1/auth/register",
+        "/api/v2/auth/register",
         json={
             "email": "contract-user@example.com",
             "full_name": "Contract User",
@@ -135,3 +135,4 @@ def test_versioned_aliases_wrap_legacy_handlers_in_standard_success_envelope(con
     assert "error" not in payload
     assert "code" not in payload
     assert "access_token" in payload["data"]
+

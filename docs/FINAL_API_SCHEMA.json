@@ -347,6 +347,18 @@
       },
       {
         "method": "GET",
+        "path": "/api/admin/access",
+        "handler": "list_admins",
+        "response_model": "list[AdminAccountView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/access",
+        "handler": "create_admin",
+        "response_model": "AdminAccountView"
+      },
+      {
+        "method": "GET",
         "path": "/api/admin/access/permissions",
         "handler": "list_permission_catalog",
         "response_model": "AdminPermissionCatalogView"
@@ -639,6 +651,12 @@
     "agents": [
       {
         "method": "GET",
+        "path": "/agents",
+        "handler": "list_agents",
+        "response_model": "list[CreatorAgentView]"
+      },
+      {
+        "method": "GET",
         "path": "/agents/config",
         "handler": "read_agent_config",
         "response_model": "AgentRuntimeConfigView"
@@ -696,6 +714,36 @@
       {
         "method": "PUT",
         "path": "/ai-manager/profiles/{club_id}",
+        "handler": "upsert_ai_manager_profile",
+        "response_model": "AIManagerProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ai-manager/autopilot/live-decision",
+        "handler": "preview_live_match_decision",
+        "response_model": "LiveDecisionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ai-manager/autopilot/run",
+        "handler": "run_club_autopilot",
+        "response_model": "AutopilotRunResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ai-manager/economy/reward-preview",
+        "handler": "preview_ai_manager_reward_policy",
+        "response_model": "RewardPreviewResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/ai-manager/profiles/{club_id}",
+        "handler": "read_ai_manager_profile",
+        "response_model": "AIManagerProfileView"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/ai-manager/profiles/{club_id}",
         "handler": "upsert_ai_manager_profile",
         "response_model": "AIManagerProfileView"
       },
@@ -759,264 +807,210 @@
       },
       {
         "method": "POST",
-        "path": "/api/v1/broadcast/pay",
+        "path": "/api/v2/broadcast/pay",
         "handler": "pay_to_watch",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/broadcast/{match_id}",
+        "path": "/api/v2/broadcast/{match_id}",
         "handler": "get_broadcast",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/clubs/list",
+        "path": "/api/v2/clubs/list",
         "handler": "list_club_for_sale",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/clubs/marketplace",
+        "path": "/api/v2/clubs/marketplace",
         "handler": "get_club_marketplace",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/clubs/offer",
+        "path": "/api/v2/clubs/offer",
         "handler": "make_club_offer",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/clubs/{club_id}/fans",
+        "path": "/api/v2/clubs/{club_id}/fans",
         "handler": "get_club_fans",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/clubs/{club_id}/finances",
+        "path": "/api/v2/clubs/{club_id}/finances",
         "handler": "get_club_finances",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/clubs/{club_id}/squad",
+        "path": "/api/v2/clubs/{club_id}/squad",
         "handler": "get_club_squad",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/competitions",
+        "path": "/api/v2/competitions",
         "handler": "get_competitions",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/federations",
+        "path": "/api/v2/federations",
         "handler": "create_federation",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/federations/vote",
+        "path": "/api/v2/federations/vote",
         "handler": "vote_on_federation",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/federations/{federation_id}/join",
+        "path": "/api/v2/federations/{federation_id}/join",
         "handler": "join_federation",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/feed",
+        "path": "/api/v2/feed",
         "handler": "get_feed",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/history/records",
+        "path": "/api/v2/history/records",
         "handler": "get_history_records",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/home/dashboard",
+        "path": "/api/v2/home/dashboard",
         "handler": "get_dashboard",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/market/bid",
+        "path": "/api/v2/market/bid",
         "handler": "place_market_bid",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/market/listings",
+        "path": "/api/v2/market/listings",
         "handler": "get_market_listings",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/matches/{match_id}",
+        "path": "/api/v2/matches/{match_id}",
         "handler": "get_match_state",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/players/{player_id}",
+        "path": "/api/v2/players/{player_id}",
         "handler": "get_player",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/regens",
+        "path": "/api/v2/regens",
         "handler": "get_regens",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/stories",
+        "path": "/api/v2/stories",
         "handler": "get_stories",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/stories/generate",
+        "path": "/api/v2/stories/generate",
         "handler": "trigger_story_generation",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/tasks",
+        "path": "/api/v2/tasks",
         "handler": "get_tasks",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/tasks/{task_id}/claim",
+        "path": "/api/v2/tasks/{task_id}/claim",
         "handler": "claim_task_reward",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/tournaments/{tournament_id}",
+        "path": "/api/v2/tournaments/{tournament_id}",
         "handler": "get_tournament",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/tournaments/{tournament_id}/join",
+        "path": "/api/v2/tournaments/{tournament_id}/join",
         "handler": "join_tournament",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/tournaments/{tournament_id}/rent",
+        "path": "/api/v2/tournaments/{tournament_id}/rent",
         "handler": "rent_tournament_player",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/tournaments/{tournament_id}/squad",
+        "path": "/api/v2/tournaments/{tournament_id}/squad",
         "handler": "submit_tournament_squad",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "GET",
-        "path": "/api/v1/users/{user_id}",
+        "path": "/api/v2/users/{user_id}",
         "handler": "get_user_profile",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "POST",
-        "path": "/api/v1/users/{user_id}/follow",
+        "path": "/api/v2/users/{user_id}/follow",
         "handler": "follow_user",
         "response_model": "ApiEnvelope[dict[str"
       },
       {
         "method": "WEBSOCKET",
-        "path": "/api/v1/ws/market/{listing_id}",
+        "path": "/api/v2/ws/market/{listing_id}",
         "handler": "stream_market_bids",
         "response_model": null
       },
       {
         "method": "WEBSOCKET",
-        "path": "/api/v1/ws/match/{match_id}",
+        "path": "/api/v2/ws/match/{match_id}",
         "handler": "stream_match_commentary",
         "response_model": null
       },
       {
         "method": "WEBSOCKET",
-        "path": "/api/v1/ws/notifications",
+        "path": "/api/v2/ws/notifications",
         "handler": "stream_notifications",
         "response_model": null
-      },
-      {
-        "method": "POST",
-        "path": "/match-engine/analytics",
-        "handler": "create_post_match_analytics",
-        "response_model": "MatchPostMatchAnalyticsView"
-      },
-      {
-        "method": "GET",
-        "path": "/match-engine/analytics/{match_key}",
-        "handler": "read_post_match_analytics",
-        "response_model": "MatchPostMatchAnalyticsView"
-      },
-      {
-        "method": "GET",
-        "path": "/match-engine/highlights/{match_key}",
-        "handler": "read_match_highlights",
-        "response_model": "MatchHighlightListView"
-      },
-      {
-        "method": "GET",
-        "path": "/match-engine/live-feed/{match_key}",
-        "handler": "read_match_live_feed",
-        "response_model": "MatchLiveFeedView"
-      },
-      {
-        "method": "POST",
-        "path": "/match-engine/render-sync",
-        "handler": "create_match_render_sync",
-        "response_model": "MatchRenderSyncPayloadView"
-      },
-      {
-        "method": "GET",
-        "path": "/match-engine/render-sync/{match_key}",
-        "handler": "read_match_render_sync",
-        "response_model": "MatchRenderSyncPayloadView"
-      },
-      {
-        "method": "POST",
-        "path": "/match-engine/replay",
-        "handler": "create_match_replay",
-        "response_model": "MatchReplayPayloadView"
-      },
-      {
-        "method": "POST",
-        "path": "/match-engine/simulate",
-        "handler": "simulate_match",
-        "response_model": "MatchSimulationResponseView"
-      },
-      {
-        "method": "POST",
-        "path": "/match-engine/summary",
-        "handler": "create_match_summary",
-        "response_model": "MatchFinalSummaryView"
-      },
-      {
-        "method": "POST",
-        "path": "/match-engine/timeline",
-        "handler": "create_match_timeline",
-        "response_model": "MatchEventTimelineView"
       }
     ],
     "attachments": [
+      {
+        "method": "POST",
+        "path": "/api/attachments",
+        "handler": "upload_attachment",
+        "response_model": "AttachmentView"
+      },
       {
         "method": "GET",
         "path": "/api/attachments/{attachment_id}",
@@ -1052,6 +1046,12 @@
         "response_model": "CurrentUserResponse"
       },
       {
+        "method": "POST",
+        "path": "/api/auth/logout",
+        "handler": "logout_user",
+        "response_model": "ActionStatusResponse"
+      },
+      {
         "method": "GET",
         "path": "/api/auth/me",
         "handler": "read_current_user_profile",
@@ -1062,6 +1062,12 @@
         "path": "/api/auth/me",
         "handler": "update_current_user_profile",
         "response_model": "CurrentUserResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "handler": "refresh_auth_session",
+        "response_model": "TokenResponse"
       },
       {
         "method": "GET",
@@ -1355,6 +1361,36 @@
       },
       {
         "method": "GET",
+        "path": "/api/calendar-engine/dashboard",
+        "handler": "get_dashboard",
+        "response_model": "CalendarDashboardView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/calendar-engine/events",
+        "handler": "list_events",
+        "response_model": "list[CalendarEventView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/calendar-engine/lifecycle-runs",
+        "handler": "list_lifecycle_runs",
+        "response_model": "list[CompetitionLifecycleRunView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/calendar-engine/pause-status",
+        "handler": "get_pause_status",
+        "response_model": "PauseStatusView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/calendar-engine/seasons",
+        "handler": "list_seasons",
+        "response_model": "list[CalendarSeasonView]"
+      },
+      {
+        "method": "GET",
         "path": "/api/events/today",
         "handler": "get_events_today",
         "response_model": "GlobalEventFeedView"
@@ -1364,36 +1400,6 @@
         "path": "/api/events/upcoming",
         "handler": "get_events_upcoming",
         "response_model": "GlobalEventFeedView"
-      },
-      {
-        "method": "GET",
-        "path": "/calendar-engine/dashboard",
-        "handler": "get_dashboard",
-        "response_model": "CalendarDashboardView"
-      },
-      {
-        "method": "GET",
-        "path": "/calendar-engine/events",
-        "handler": "list_events",
-        "response_model": "list[CalendarEventView]"
-      },
-      {
-        "method": "GET",
-        "path": "/calendar-engine/lifecycle-runs",
-        "handler": "list_lifecycle_runs",
-        "response_model": "list[CompetitionLifecycleRunView]"
-      },
-      {
-        "method": "GET",
-        "path": "/calendar-engine/pause-status",
-        "handler": "get_pause_status",
-        "response_model": "PauseStatusView"
-      },
-      {
-        "method": "GET",
-        "path": "/calendar-engine/seasons",
-        "handler": "list_seasons",
-        "response_model": "list[CalendarSeasonView]"
       }
     ],
     "champions": [
@@ -1514,6 +1520,12 @@
         "response_model": "BadgeProfileView"
       },
       {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/buy-tokens",
+        "handler": "buy_club_tokens",
+        "response_model": "ClubTokenTradeResultView"
+      },
+      {
         "method": "GET",
         "path": "/api/clubs/{club_id}/challenges",
         "handler": "list_club_challenges",
@@ -1554,6 +1566,18 @@
         "path": "/api/clubs/{club_id}/jerseys",
         "handler": "patch_club_jerseys",
         "response_model": "JerseySetView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/ownership",
+        "handler": "get_club_ownership",
+        "response_model": "ClubOwnershipView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/proposals",
+        "handler": "create_club_proposal",
+        "response_model": "ClubGovernanceActionView"
       },
       {
         "method": "GET",
@@ -1664,10 +1688,28 @@
         "response_model": "ClubSaleTransferExecutionView"
       },
       {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/sell-tokens",
+        "handler": "sell_club_tokens",
+        "response_model": "ClubTokenTradeResultView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/treasury",
+        "handler": "get_club_treasury",
+        "response_model": "ClubTreasuryView"
+      },
+      {
         "method": "GET",
         "path": "/api/clubs/{club_id}/valuation",
         "handler": "get_club_sale_market_valuation",
         "response_model": "ClubSaleValuationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/vote",
+        "handler": "vote_on_club_proposal",
+        "response_model": "ClubGovernanceActionView"
       },
       {
         "method": "GET",
@@ -1808,6 +1850,12 @@
         "response_model": "ClubInfraActionResponse"
       },
       {
+        "method": "GET",
+        "path": "/clubs/marketplace",
+        "handler": "list_public_club_sale_market_listings",
+        "response_model": "ClubSaleListingCollectionView"
+      },
+      {
         "method": "POST",
         "path": "/clubs/{club_id}/buy-tokens",
         "handler": "buy_club_tokens",
@@ -1853,6 +1901,18 @@
       }
     ],
     "commentary": [
+      {
+        "method": "GET",
+        "path": "/api/commentary/profiles",
+        "handler": "list_commentary_profiles",
+        "response_model": "list[CommentatorProfileView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/commentary/select",
+        "handler": "select_commentary_profile",
+        "response_model": "CommentarySelectionView"
+      },
       {
         "method": "GET",
         "path": "/commentary/profiles",
@@ -2095,6 +2155,78 @@
       },
       {
         "method": "POST",
+        "path": "/api/competitive-integrity/fast-game/runs",
+        "handler": "start_fast_game_run",
+        "response_model": "FastGameRunView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/competitive-integrity/fast-game/runs/{run_id}",
+        "handler": "get_fast_game_run",
+        "response_model": "FastGameRunView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitive-integrity/fast-game/runs/{run_id}/play",
+        "handler": "play_fast_game",
+        "response_model": "FastGameResultView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/competitive-integrity/managers",
+        "handler": "list_managers",
+        "response_model": "list[ManagerView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitive-integrity/managers",
+        "handler": "upsert_manager",
+        "response_model": "ManagerView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/competitive-integrity/managers/candidates",
+        "handler": "list_manager_candidates",
+        "response_model": "list[ManagerCandidateView]"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/competitive-integrity/managers/{manager_id}/instructions",
+        "handler": "update_manager_instructions",
+        "response_model": "ManagerView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitive-integrity/matches",
+        "handler": "schedule_match",
+        "response_model": "CompetitiveMatchView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/competitive-integrity/matches/{match_id}",
+        "handler": "get_match",
+        "response_model": "CompetitiveMatchView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitive-integrity/matches/{match_id}/execute",
+        "handler": "execute_match",
+        "response_model": "CompetitiveMatchExecutionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitive-integrity/notifications/events",
+        "handler": "create_notification_event",
+        "response_model": "CompetitiveNotificationView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/notifications",
+        "handler": "list_notifications",
+        "response_model": "list[CompetitiveNotificationView]"
+      },
+      {
+        "method": "POST",
         "path": "/competitive-integrity/fast-game/runs",
         "handler": "start_fast_game_run",
         "response_model": "FastGameRunView"
@@ -2158,6 +2290,12 @@
         "path": "/competitive-integrity/notifications/events",
         "handler": "create_notification_event",
         "response_model": "CompetitiveNotificationView"
+      },
+      {
+        "method": "GET",
+        "path": "/notifications",
+        "handler": "list_notifications",
+        "response_model": "list[CompetitiveNotificationView]"
       }
     ],
     "creator": [
@@ -2174,9 +2312,27 @@
         "response_model": "list[CreatorApplicationView]"
       },
       {
+        "method": "GET",
+        "path": "/admin/creator/applications",
+        "handler": "list_creator_applications",
+        "response_model": "list[CreatorApplicationView]"
+      },
+      {
         "method": "POST",
         "path": "/admin/creator/applications/{application_id}/approve",
         "handler": "approve_creator_application",
+        "response_model": "CreatorApplicationView"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/creator/applications/{application_id}/approve",
+        "handler": "approve_creator_application",
+        "response_model": "CreatorApplicationView"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/creator/applications/{application_id}/reject",
+        "handler": "reject_creator_application",
         "response_model": "CreatorApplicationView"
       },
       {
@@ -2193,9 +2349,27 @@
       },
       {
         "method": "POST",
+        "path": "/admin/creator/applications/{application_id}/request-verification",
+        "handler": "request_creator_application_verification",
+        "response_model": "CreatorApplicationView"
+      },
+      {
+        "method": "POST",
         "path": "/admin/creator/cards/assign",
         "handler": "assign_creator_card",
         "response_model": "CreatorCardView"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/creator/cards/assign",
+        "handler": "assign_creator_card",
+        "response_model": "CreatorCardView"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/creator/dashboard",
+        "handler": "get_creator_admin_dashboard",
+        "response_model": "CreatorAdminDashboardView"
       },
       {
         "method": "GET",
@@ -2210,34 +2384,304 @@
         "response_model": "CreatorClubShareMarketControlView"
       },
       {
+        "method": "GET",
+        "path": "/admin/creator/fan-share-market/control",
+        "handler": "get_creator_fan_share_market_control",
+        "response_model": "CreatorClubShareMarketControlView"
+      },
+      {
         "method": "PUT",
         "path": "/admin/creator/fan-share-market/control",
         "handler": "update_creator_fan_share_market_control",
         "response_model": "CreatorClubShareMarketControlView"
       },
       {
+        "method": "PUT",
+        "path": "/admin/creator/fan-share-market/control",
+        "handler": "update_creator_fan_share_market_control",
+        "response_model": "CreatorClubShareMarketControlView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/campaigns",
+        "handler": "list_campaigns",
+        "response_model": "list[CampaignView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/campaigns",
+        "handler": "list_campaigns",
+        "response_model": "list[CampaignView]"
+      },
+      {
         "method": "POST",
-        "path": "/campaigns/create",
+        "path": "/api/campaigns/create",
         "handler": "create_campaign",
         "response_model": "CampaignView"
       },
       {
         "method": "POST",
-        "path": "/campaigns/{id}/accept",
+        "path": "/api/campaigns/create",
+        "handler": "create_campaign",
+        "response_model": "CampaignView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/campaigns/{id}/accept",
         "handler": "accept_campaign_offer",
         "response_model": "CampaignParticipationView"
       },
       {
         "method": "POST",
-        "path": "/campaigns/{id}/apply",
+        "path": "/api/campaigns/{id}/accept",
+        "handler": "accept_campaign_offer",
+        "response_model": "CampaignParticipationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/campaigns/{id}/apply",
+        "handler": "apply_to_campaign",
+        "response_model": "CreatorOfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/campaigns/{id}/apply",
         "handler": "apply_to_campaign",
         "response_model": "CreatorOfferView"
       },
       {
         "method": "GET",
-        "path": "/campaigns/{id}/performance",
+        "path": "/api/campaigns/{id}/performance",
         "handler": "get_campaign_performance",
         "response_model": "CampaignPerformanceView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/campaigns/{id}/performance",
+        "handler": "get_campaign_performance",
+        "response_model": "CampaignPerformanceView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/application",
+        "handler": "get_my_creator_application",
+        "response_model": "CreatorApplicationView | None"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/application",
+        "handler": "get_my_creator_application",
+        "response_model": "CreatorApplicationView | None"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/apply",
+        "handler": "submit_creator_application",
+        "response_model": "CreatorApplicationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/apply",
+        "handler": "submit_creator_application",
+        "response_model": "CreatorApplicationView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/cards",
+        "handler": "list_creator_cards",
+        "response_model": "list[CreatorCardView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/cards",
+        "handler": "list_creator_cards",
+        "response_model": "list[CreatorCardView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/cards/listings",
+        "handler": "list_creator_card_listings",
+        "response_model": "list[CreatorCardListingView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/cards/listings",
+        "handler": "list_creator_card_listings",
+        "response_model": "list[CreatorCardListingView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/listings/{listing_id}/buy",
+        "handler": "buy_creator_card_listing",
+        "response_model": "CreatorCardSaleView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/listings/{listing_id}/buy",
+        "handler": "buy_creator_card_listing",
+        "response_model": "CreatorCardSaleView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/loans/{loan_id}/return",
+        "handler": "return_creator_card_loan",
+        "response_model": "CreatorCardLoanView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/loans/{loan_id}/return",
+        "handler": "return_creator_card_loan",
+        "response_model": "CreatorCardLoanView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/swap",
+        "handler": "swap_creator_cards",
+        "response_model": "CreatorCardSwapView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/swap",
+        "handler": "swap_creator_cards",
+        "response_model": "CreatorCardSwapView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/{creator_card_id}/list",
+        "handler": "create_creator_card_listing",
+        "response_model": "CreatorCardListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/{creator_card_id}/list",
+        "handler": "create_creator_card_listing",
+        "response_model": "CreatorCardListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/{creator_card_id}/loan",
+        "handler": "loan_creator_card",
+        "response_model": "CreatorCardLoanView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/{creator_card_id}/loan",
+        "handler": "loan_creator_card",
+        "response_model": "CreatorCardLoanView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market",
+        "handler": "get_creator_club_fan_share_market",
+        "response_model": "CreatorClubShareMarketView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market",
+        "handler": "get_creator_club_fan_share_market",
+        "response_model": "CreatorClubShareMarketView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market",
+        "handler": "issue_creator_club_fan_shares",
+        "response_model": "CreatorClubShareMarketView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market",
+        "handler": "issue_creator_club_fan_shares",
+        "response_model": "CreatorClubShareMarketView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/distributions",
+        "handler": "list_creator_club_fan_share_distributions",
+        "response_model": "list[CreatorClubShareDistributionView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/distributions",
+        "handler": "list_creator_club_fan_share_distributions",
+        "response_model": "list[CreatorClubShareDistributionView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/holding",
+        "handler": "get_my_creator_club_fan_share_holding",
+        "response_model": "CreatorClubShareHoldingView | None"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/holding",
+        "handler": "get_my_creator_club_fan_share_holding",
+        "response_model": "CreatorClubShareHoldingView | None"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/purchase",
+        "handler": "purchase_creator_club_fan_shares",
+        "response_model": "CreatorClubSharePurchaseView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/purchase",
+        "handler": "purchase_creator_club_fan_shares",
+        "response_model": "CreatorClubSharePurchaseView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/verify-email",
+        "handler": "verify_creator_email",
+        "response_model": "CreatorContactVerificationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/verify-email",
+        "handler": "verify_creator_email",
+        "response_model": "CreatorContactVerificationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/verify-phone",
+        "handler": "verify_creator_phone",
+        "response_model": "CreatorContactVerificationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/verify-phone",
+        "handler": "verify_creator_phone",
+        "response_model": "CreatorContactVerificationView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/marketplace",
+        "handler": "list_creator_marketplace",
+        "response_model": "list[CampaignMarketplaceItemView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/marketplace",
+        "handler": "list_creator_marketplace",
+        "response_model": "list[CampaignMarketplaceItemView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/me/reputation",
+        "handler": "get_my_creator_reputation",
+        "response_model": "CreatorReputationView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/me/reputation",
+        "handler": "get_my_creator_reputation",
+        "response_model": "CreatorReputationView"
+      },
+      {
+        "method": "POST",
+        "path": "/creator-campaigns",
+        "handler": "create_campaign",
+        "response_model": "CreatorCampaignView"
       },
       {
         "method": "GET",
@@ -2268,6 +2712,12 @@
         "path": "/creator-campaigns/{campaign_id}/snapshots",
         "handler": "list_snapshots",
         "response_model": "list[CreatorCampaignMetricSnapshotView]"
+      },
+      {
+        "method": "GET",
+        "path": "/creator-league",
+        "handler": "get_creator_league_overview",
+        "response_model": "CreatorLeagueConfigView"
       },
       {
         "method": "PATCH",
@@ -2346,117 +2796,15 @@
         "path": "/creator-league/tiers/{tier_id}",
         "handler": "update_creator_league_tier",
         "response_model": "CreatorLeagueConfigView"
-      },
-      {
-        "method": "GET",
-        "path": "/creator/application",
-        "handler": "get_my_creator_application",
-        "response_model": "CreatorApplicationView | None"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/apply",
-        "handler": "submit_creator_application",
-        "response_model": "CreatorApplicationView"
-      },
-      {
-        "method": "GET",
-        "path": "/creator/cards",
-        "handler": "list_creator_cards",
-        "response_model": "list[CreatorCardView]"
-      },
-      {
-        "method": "GET",
-        "path": "/creator/cards/listings",
-        "handler": "list_creator_card_listings",
-        "response_model": "list[CreatorCardListingView]"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/cards/listings/{listing_id}/buy",
-        "handler": "buy_creator_card_listing",
-        "response_model": "CreatorCardSaleView"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/cards/loans/{loan_id}/return",
-        "handler": "return_creator_card_loan",
-        "response_model": "CreatorCardLoanView"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/cards/swap",
-        "handler": "swap_creator_cards",
-        "response_model": "CreatorCardSwapView"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/cards/{creator_card_id}/list",
-        "handler": "create_creator_card_listing",
-        "response_model": "CreatorCardListingView"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/cards/{creator_card_id}/loan",
-        "handler": "loan_creator_card",
-        "response_model": "CreatorCardLoanView"
-      },
-      {
-        "method": "GET",
-        "path": "/creator/clubs/{club_id}/fan-share-market",
-        "handler": "get_creator_club_fan_share_market",
-        "response_model": "CreatorClubShareMarketView"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/clubs/{club_id}/fan-share-market",
-        "handler": "issue_creator_club_fan_shares",
-        "response_model": "CreatorClubShareMarketView"
-      },
-      {
-        "method": "GET",
-        "path": "/creator/clubs/{club_id}/fan-share-market/distributions",
-        "handler": "list_creator_club_fan_share_distributions",
-        "response_model": "list[CreatorClubShareDistributionView]"
-      },
-      {
-        "method": "GET",
-        "path": "/creator/clubs/{club_id}/fan-share-market/holding",
-        "handler": "get_my_creator_club_fan_share_holding",
-        "response_model": "CreatorClubShareHoldingView | None"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/clubs/{club_id}/fan-share-market/purchase",
-        "handler": "purchase_creator_club_fan_shares",
-        "response_model": "CreatorClubSharePurchaseView"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/verify-email",
-        "handler": "verify_creator_email",
-        "response_model": "CreatorContactVerificationView"
-      },
-      {
-        "method": "POST",
-        "path": "/creator/verify-phone",
-        "handler": "verify_creator_phone",
-        "response_model": "CreatorContactVerificationView"
-      },
-      {
-        "method": "GET",
-        "path": "/creators/marketplace",
-        "handler": "list_creator_marketplace",
-        "response_model": "list[CampaignMarketplaceItemView]"
-      },
-      {
-        "method": "GET",
-        "path": "/creators/me/reputation",
-        "handler": "get_my_creator_reputation",
-        "response_model": "CreatorReputationView"
       }
     ],
     "daily": [
+      {
+        "method": "GET",
+        "path": "/api/daily-challenges",
+        "handler": "list_daily_challenges",
+        "response_model": "DailyChallengeListResponse"
+      },
       {
         "method": "GET",
         "path": "/api/daily-challenges/me",
@@ -2516,6 +2864,12 @@
     ],
     "dispute": [
       {
+        "method": "GET",
+        "path": "/admin/disputes",
+        "handler": "list_disputes",
+        "response_model": "DisputeListResponse"
+      },
+      {
         "method": "POST",
         "path": "/admin/disputes/{dispute_id}/assign",
         "handler": "assign_dispute",
@@ -2526,6 +2880,12 @@
         "path": "/admin/disputes/{dispute_id}/status",
         "handler": "update_dispute_status",
         "response_model": "DisputeView"
+      },
+      {
+        "method": "POST",
+        "path": "/disputes",
+        "handler": "create_dispute",
+        "response_model": "DisputeDetailResponse"
       },
       {
         "method": "GET",
@@ -2842,6 +3202,18 @@
         "response_model": "FederationJobsRunView"
       },
       {
+        "method": "GET",
+        "path": "/api/federations",
+        "handler": "list_federations",
+        "response_model": "list[FederationView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/federations",
+        "handler": "create_federation",
+        "response_model": "FederationView"
+      },
+      {
         "method": "POST",
         "path": "/api/federations/proposals/{proposal_id}/votes",
         "handler": "cast_vote",
@@ -3019,27 +3391,39 @@
       },
       {
         "method": "GET",
-        "path": "/api/media",
-        "handler": "list_media_events",
-        "response_model": "list[MediaEventView]"
-      },
-      {
-        "method": "GET",
-        "path": "/api/media",
-        "handler": "list_media_events",
-        "response_model": "list[MediaEventView]"
-      },
-      {
-        "method": "GET",
-        "path": "/football-events/players/{player_id}/events",
+        "path": "/api/football-events/players/{player_id}/events",
         "handler": "list_player_events",
         "response_model": "list[RealWorldFootballEventView]"
       },
       {
         "method": "GET",
-        "path": "/football-events/players/{player_id}/impact",
+        "path": "/api/football-events/players/{player_id}/events",
+        "handler": "list_player_events",
+        "response_model": "list[RealWorldFootballEventView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/football-events/players/{player_id}/impact",
         "handler": "get_player_impact",
         "response_model": "PlayerRealWorldImpactView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/football-events/players/{player_id}/impact",
+        "handler": "get_player_impact",
+        "response_model": "PlayerRealWorldImpactView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/media",
+        "handler": "list_media_events",
+        "response_model": "list[MediaEventView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/media",
+        "handler": "list_media_events",
+        "response_model": "list[MediaEventView]"
       }
     ],
     "gift": [
@@ -3561,6 +3945,12 @@
     "hosted": [
       {
         "method": "POST",
+        "path": "/api/admin/hosted-competitions",
+        "handler": "create_admin_competition",
+        "response_model": "HostedCompetitionCreateResponse"
+      },
+      {
+        "method": "POST",
         "path": "/api/admin/hosted-competitions/seed",
         "handler": "seed_templates",
         "response_model": "list[CompetitionTemplateView]"
@@ -3576,6 +3966,18 @@
         "path": "/api/admin/hosted-competitions/{competition_id}/launch",
         "handler": "admin_launch_competition",
         "response_model": "HostedCompetitionLaunchResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/hosted-competitions",
+        "handler": "list_public_competitions",
+        "response_model": "HostedCompetitionListResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/hosted-competitions",
+        "handler": "create_competition",
+        "response_model": "HostedCompetitionCreateResponse"
       },
       {
         "method": "GET",
@@ -3951,6 +4353,36 @@
     "leagues": [
       {
         "method": "POST",
+        "path": "/api/leagues/register",
+        "handler": "register_league",
+        "response_model": "LeagueRegistrationView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/leagues/{season_id}/fixtures",
+        "handler": "get_league_fixtures",
+        "response_model": "LeagueFixturesView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/leagues/{season_id}/qualification-markers",
+        "handler": "get_league_qualification_markers",
+        "response_model": "LeagueQualificationView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/leagues/{season_id}/standings",
+        "handler": "get_league_standings",
+        "response_model": "LeagueStandingsView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/leagues/{season_id}/summary",
+        "handler": "get_league_summary",
+        "response_model": "LeagueSeasonSummaryView"
+      },
+      {
+        "method": "POST",
         "path": "/leagues/register",
         "handler": "register_league",
         "response_model": "LeagueRegistrationView"
@@ -4039,12 +4471,102 @@
       },
       {
         "method": "GET",
+        "path": "/api/match/live/active",
+        "handler": "list_active_live_matches",
+        "response_model": "ActiveLiveMatchesResponseView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/match/{match_id}/commentary/stream",
+        "handler": "get_match_commentary_stream",
+        "response_model": "CommentaryStreamResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/match/{match_id}/live",
+        "handler": "read_match_live_bridge",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/match/{match_id}/unity-access",
+        "handler": "issue_unity_live_access",
+        "response_model": "UnityLiveAccessView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/match/{match_id}/unity-access/refresh",
+        "handler": "refresh_unity_live_access",
+        "response_model": "UnityLiveAccessView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/live/active",
+        "handler": "list_active_live_matches",
+        "response_model": "ActiveLiveMatchesResponseView"
+      },
+      {
+        "method": "WEBSOCKET",
+        "path": "/api/matches/{match_id}/audio/stems/stream",
+        "handler": "stream_match_audio_stems",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/commentary/stream",
+        "handler": "get_match_commentary_stream",
+        "response_model": "CommentaryStreamResponse"
+      },
+      {
+        "method": "WEBSOCKET",
+        "path": "/api/matches/{match_id}/commentary/stream",
+        "handler": "stream_match_commentary",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/highlights",
+        "handler": "read_match_highlights",
+        "response_model": "MatchHighlightResponseView"
+      },
+      {
+        "method": "GET",
         "path": "/api/matches/{match_id}/highlights/share-package",
         "handler": "get_match_highlight_share_package",
         "response_model": "MatchHighlightSharePackageView"
       },
       {
         "method": "GET",
+        "path": "/api/matches/{match_id}/live",
+        "handler": "read_match_live_bridge",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/matches/{match_id}/spectate",
+        "handler": "join_spectate",
+        "response_model": "SpectatorSessionView"
+      },
+      {
+        "method": "WEBSOCKET",
+        "path": "/api/matches/{match_id}/stream",
+        "handler": "stream_match",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/matches/{match_id}/unity-access",
+        "handler": "issue_unity_live_access",
+        "response_model": "UnityLiveAccessView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/matches/{match_id}/unity-access/refresh",
+        "handler": "refresh_unity_live_access",
+        "response_model": "UnityLiveAccessView"
+      },
+      {
+        "method": "GET",
         "path": "/api/season-pass",
         "handler": "get_season_pass",
         "response_model": "SeasonPassView"
@@ -4066,6 +4588,36 @@
         "path": "/api/season-pass/claim",
         "handler": "claim_season_pass_reward",
         "response_model": "SeasonPassClaimView"
+      },
+      {
+        "method": "GET",
+        "path": "/match/live/active",
+        "handler": "list_active_live_matches",
+        "response_model": "ActiveLiveMatchesResponseView"
+      },
+      {
+        "method": "GET",
+        "path": "/match/{match_id}/commentary/stream",
+        "handler": "get_match_commentary_stream",
+        "response_model": "CommentaryStreamResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/match/{match_id}/live",
+        "handler": "read_match_live_bridge",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/match/{match_id}/unity-access",
+        "handler": "issue_unity_live_access",
+        "response_model": "UnityLiveAccessView"
+      },
+      {
+        "method": "POST",
+        "path": "/match/{match_id}/unity-access/refresh",
+        "handler": "refresh_unity_live_access",
+        "response_model": "UnityLiveAccessView"
       },
       {
         "method": "GET",
@@ -4158,6 +4710,24 @@
         "path": "/api/admin/managers/competitions/{code}/orchestrate",
         "handler": "orchestrate_competition",
         "response_model": "CompetitionOrchestrationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/manager-duels",
+        "handler": "create_manager_duel",
+        "response_model": "ManagerDuelView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/manager-duels/leaderboard",
+        "handler": "read_leaderboard",
+        "response_model": "list[ManagerDuelLeaderboardEntryView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/manager-duels/{duel_id}",
+        "handler": "read_duel",
+        "response_model": "ManagerDuelView"
       },
       {
         "method": "POST",
@@ -4262,6 +4832,12 @@
         "response_model": "TeamManagersView"
       },
       {
+        "method": "POST",
+        "path": "/manager-duels",
+        "handler": "create_manager_duel",
+        "response_model": "ManagerDuelView"
+      },
+      {
         "method": "GET",
         "path": "/manager-duels/leaderboard",
         "handler": "read_leaderboard",
@@ -4272,6 +4848,12 @@
         "path": "/manager-duels/{duel_id}",
         "handler": "read_duel",
         "response_model": "ManagerDuelView"
+      },
+      {
+        "method": "GET",
+        "path": "/managers",
+        "handler": "list_managers",
+        "response_model": "list[ManagerCardView]"
       },
       {
         "method": "GET",
@@ -4307,170 +4889,404 @@
     "market": [
       {
         "method": "POST",
-        "path": "/market/buy",
+        "path": "/api/market/buy",
         "handler": "buy_market_position",
         "response_model": "CreatorTradeView | PlayerSharePurchaseView"
       },
       {
         "method": "POST",
-        "path": "/market/listings",
+        "path": "/api/market/buy",
+        "handler": "buy_market_position",
+        "response_model": "CreatorTradeView | PlayerSharePurchaseView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/listings",
         "handler": "create_listing",
         "response_model": "ListingView"
       },
       {
         "method": "POST",
-        "path": "/market/listings/{listing_id}/cancel",
+        "path": "/api/market/listings",
+        "handler": "create_listing",
+        "response_model": "ListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/listings/{listing_id}/cancel",
+        "handler": "cancel_listing",
+        "response_model": "ListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/listings/{listing_id}/cancel",
         "handler": "cancel_listing",
         "response_model": "ListingView"
       },
       {
         "method": "GET",
-        "path": "/market/listings/{listing_id}/matches",
+        "path": "/api/market/listings/{listing_id}/matches",
         "handler": "list_trade_intent_matches",
         "response_model": "list[TradeIntentView]"
       },
       {
         "method": "GET",
-        "path": "/market/listings/{listing_id}/offers",
+        "path": "/api/market/listings/{listing_id}/matches",
+        "handler": "list_trade_intent_matches",
+        "response_model": "list[TradeIntentView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/listings/{listing_id}/offers",
         "handler": "list_listing_offers",
         "response_model": "list[OfferView]"
       },
       {
         "method": "GET",
-        "path": "/market/movers",
+        "path": "/api/market/listings/{listing_id}/offers",
+        "handler": "list_listing_offers",
+        "response_model": "list[OfferView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/movers",
+        "handler": "get_market_movers",
+        "response_model": "MarketMoversView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/movers",
         "handler": "get_market_movers",
         "response_model": "MarketMoversView"
       },
       {
         "method": "POST",
-        "path": "/market/offers",
+        "path": "/api/market/offers",
         "handler": "create_offer",
         "response_model": "OfferView"
       },
       {
         "method": "POST",
-        "path": "/market/offers/{offer_id}/accept",
+        "path": "/api/market/offers",
+        "handler": "create_offer",
+        "response_model": "OfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/offers/{offer_id}/accept",
         "handler": "accept_offer",
         "response_model": "OfferView"
       },
       {
         "method": "POST",
-        "path": "/market/offers/{offer_id}/counter",
+        "path": "/api/market/offers/{offer_id}/accept",
+        "handler": "accept_offer",
+        "response_model": "OfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/offers/{offer_id}/counter",
         "handler": "counter_offer",
         "response_model": "OfferView"
       },
       {
         "method": "POST",
-        "path": "/market/offers/{offer_id}/reject",
+        "path": "/api/market/offers/{offer_id}/counter",
+        "handler": "counter_offer",
+        "response_model": "OfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/offers/{offer_id}/reject",
+        "handler": "reject_offer",
+        "response_model": "OfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/offers/{offer_id}/reject",
         "handler": "reject_offer",
         "response_model": "OfferView"
       },
       {
         "method": "GET",
-        "path": "/market/players",
+        "path": "/api/market/players",
         "handler": "list_market_players",
         "response_model": "MarketPlayerListView"
       },
       {
         "method": "GET",
-        "path": "/market/players/{player_id}",
+        "path": "/api/market/players",
+        "handler": "list_market_players",
+        "response_model": "MarketPlayerListView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/players/{player_id}",
         "handler": "get_market_player_detail",
         "response_model": "MarketPlayerDetailView"
       },
       {
         "method": "GET",
-        "path": "/market/players/{player_id}/candles",
+        "path": "/api/market/players/{player_id}",
+        "handler": "get_market_player_detail",
+        "response_model": "MarketPlayerDetailView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/players/{player_id}/candles",
         "handler": "get_market_player_candles",
         "response_model": "MarketCandlesView"
       },
       {
         "method": "GET",
-        "path": "/market/players/{player_id}/history",
+        "path": "/api/market/players/{player_id}/candles",
+        "handler": "get_market_player_candles",
+        "response_model": "MarketCandlesView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/players/{player_id}/history",
+        "handler": "get_market_player_history",
+        "response_model": "MarketPlayerHistoryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/players/{player_id}/history",
         "handler": "get_market_player_history",
         "response_model": "MarketPlayerHistoryView"
       },
       {
         "method": "POST",
-        "path": "/market/sell",
+        "path": "/api/market/sell",
+        "handler": "sell_market_position",
+        "response_model": "CreatorTradeView | PlayerShareSaleView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/sell",
         "handler": "sell_market_position",
         "response_model": "CreatorTradeView | PlayerShareSaleView"
       },
       {
         "method": "GET",
-        "path": "/market/summary/{asset_id}",
+        "path": "/api/market/summary/{asset_id}",
         "handler": "get_market_summary",
         "response_model": "MarketSummaryView"
       },
       {
         "method": "GET",
-        "path": "/market/ticker/{player_id}",
+        "path": "/api/market/summary/{asset_id}",
+        "handler": "get_market_summary",
+        "response_model": "MarketSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/ticker/{player_id}",
+        "handler": "get_market_ticker",
+        "response_model": "MarketTickerView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/ticker/{player_id}",
         "handler": "get_market_ticker",
         "response_model": "MarketTickerView"
       },
       {
         "method": "POST",
-        "path": "/market/trade-intents",
+        "path": "/api/market/trade-intents",
         "handler": "create_trade_intent",
         "response_model": "TradeIntentView"
       },
       {
         "method": "POST",
-        "path": "/market/trade-intents/{intent_id}/withdraw",
+        "path": "/api/market/trade-intents",
+        "handler": "create_trade_intent",
+        "response_model": "TradeIntentView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/trade-intents/{intent_id}/withdraw",
+        "handler": "withdraw_trade_intent",
+        "response_model": "TradeIntentView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/trade-intents/{intent_id}/withdraw",
         "handler": "withdraw_trade_intent",
         "response_model": "TradeIntentView"
       }
     ],
     "marketplace": [
       {
+        "method": "GET",
+        "path": "/api/conversations",
+        "handler": "list_conversations",
+        "response_model": "list[ConversationSummaryView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/conversations",
+        "handler": "list_conversations",
+        "response_model": "list[ConversationSummaryView]"
+      },
+      {
         "method": "POST",
-        "path": "/conversations/start",
+        "path": "/api/conversations/start",
         "handler": "start_conversation",
         "response_model": "ConversationDetailView"
       },
       {
         "method": "POST",
-        "path": "/conversations/{conversation_id}/message",
+        "path": "/api/conversations/start",
+        "handler": "start_conversation",
+        "response_model": "ConversationDetailView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/conversations/{conversation_id}/message",
+        "handler": "send_conversation_message",
+        "response_model": "ConversationDetailView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/conversations/{conversation_id}/message",
         "handler": "send_conversation_message",
         "response_model": "ConversationDetailView"
       },
       {
         "method": "GET",
-        "path": "/conversations/{conversation_id}/messages",
+        "path": "/api/conversations/{conversation_id}/messages",
+        "handler": "get_conversation_messages",
+        "response_model": "ConversationDetailView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/conversations/{conversation_id}/messages",
         "handler": "get_conversation_messages",
         "response_model": "ConversationDetailView"
       },
       {
         "method": "POST",
-        "path": "/conversations/{conversation_id}/status",
+        "path": "/api/conversations/{conversation_id}/status",
+        "handler": "update_conversation_status",
+        "response_model": "ConversationDetailView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/conversations/{conversation_id}/status",
         "handler": "update_conversation_status",
         "response_model": "ConversationDetailView"
       },
       {
         "method": "GET",
-        "path": "/marketplace/my-players",
+        "path": "/api/marketplace/my-players",
         "handler": "list_my_marketplace_players",
         "response_model": "AgentMarketplaceMineView"
       },
       {
         "method": "GET",
-        "path": "/marketplace/players",
+        "path": "/api/marketplace/my-players",
+        "handler": "list_my_marketplace_players",
+        "response_model": "AgentMarketplaceMineView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/marketplace/players",
         "handler": "list_marketplace_players",
         "response_model": "AgentMarketplacePlayerListView"
       },
       {
         "method": "GET",
-        "path": "/marketplace/players/{player_id}",
+        "path": "/api/marketplace/players",
+        "handler": "list_marketplace_players",
+        "response_model": "AgentMarketplacePlayerListView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/marketplace/players/{player_id}",
+        "handler": "get_marketplace_player",
+        "response_model": "AgentMarketplacePlayerView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/marketplace/players/{player_id}",
         "handler": "get_marketplace_player",
         "response_model": "AgentMarketplacePlayerView"
       },
       {
         "method": "PUT",
-        "path": "/marketplace/players/{player_id}",
+        "path": "/api/marketplace/players/{player_id}",
+        "handler": "upsert_marketplace_player",
+        "response_model": "AgentMarketplaceListingView"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/marketplace/players/{player_id}",
         "handler": "upsert_marketplace_player",
         "response_model": "AgentMarketplaceListingView"
       }
     ],
     "match": [
+      {
+        "method": "POST",
+        "path": "/api/match-engine/analytics",
+        "handler": "create_post_match_analytics",
+        "response_model": "MatchPostMatchAnalyticsView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/match-engine/analytics/{match_key}",
+        "handler": "read_post_match_analytics",
+        "response_model": "MatchPostMatchAnalyticsView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/match-engine/highlights/{match_key}",
+        "handler": "read_match_highlights",
+        "response_model": "MatchHighlightListView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/match-engine/live-feed/{match_key}",
+        "handler": "read_match_live_feed",
+        "response_model": "MatchLiveFeedView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/match-engine/render-sync",
+        "handler": "create_match_render_sync",
+        "response_model": "MatchRenderSyncPayloadView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/match-engine/render-sync/{match_key}",
+        "handler": "read_match_render_sync",
+        "response_model": "MatchRenderSyncPayloadView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/match-engine/replay",
+        "handler": "create_match_replay",
+        "response_model": "MatchReplayPayloadView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/match-engine/simulate",
+        "handler": "simulate_match",
+        "response_model": "MatchSimulationResponseView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/match-engine/summary",
+        "handler": "create_match_summary",
+        "response_model": "MatchFinalSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/match-engine/timeline",
+        "handler": "create_match_timeline",
+        "response_model": "MatchEventTimelineView"
+      },
       {
         "method": "GET",
         "path": "/api/match-viewer/{match_key}",
@@ -4488,6 +5304,66 @@
         "path": "/api/match-viewer/{match_key}/session",
         "handler": "read_match_viewer_session",
         "response_model": "MatchViewerSessionView"
+      },
+      {
+        "method": "POST",
+        "path": "/match-engine/analytics",
+        "handler": "create_post_match_analytics",
+        "response_model": "MatchPostMatchAnalyticsView"
+      },
+      {
+        "method": "GET",
+        "path": "/match-engine/analytics/{match_key}",
+        "handler": "read_post_match_analytics",
+        "response_model": "MatchPostMatchAnalyticsView"
+      },
+      {
+        "method": "GET",
+        "path": "/match-engine/highlights/{match_key}",
+        "handler": "read_match_highlights",
+        "response_model": "MatchHighlightListView"
+      },
+      {
+        "method": "GET",
+        "path": "/match-engine/live-feed/{match_key}",
+        "handler": "read_match_live_feed",
+        "response_model": "MatchLiveFeedView"
+      },
+      {
+        "method": "POST",
+        "path": "/match-engine/render-sync",
+        "handler": "create_match_render_sync",
+        "response_model": "MatchRenderSyncPayloadView"
+      },
+      {
+        "method": "GET",
+        "path": "/match-engine/render-sync/{match_key}",
+        "handler": "read_match_render_sync",
+        "response_model": "MatchRenderSyncPayloadView"
+      },
+      {
+        "method": "POST",
+        "path": "/match-engine/replay",
+        "handler": "create_match_replay",
+        "response_model": "MatchReplayPayloadView"
+      },
+      {
+        "method": "POST",
+        "path": "/match-engine/simulate",
+        "handler": "simulate_match",
+        "response_model": "MatchSimulationResponseView"
+      },
+      {
+        "method": "POST",
+        "path": "/match-engine/summary",
+        "handler": "create_match_summary",
+        "response_model": "MatchFinalSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/match-engine/timeline",
+        "handler": "create_match_timeline",
+        "response_model": "MatchEventTimelineView"
       }
     ],
     "matches": [
@@ -4808,6 +5684,12 @@
         "path": "/api/moments/live",
         "handler": "read_live_moments",
         "response_model": "LiveMomentsResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/moments/live",
+        "handler": "read_live_moments",
+        "response_model": "LiveMomentsResponse"
       }
     ],
     "national": [
@@ -5083,6 +5965,60 @@
     "orders": [
       {
         "method": "GET",
+        "path": "/api/orders",
+        "handler": "list_orders",
+        "response_model": "OrderListView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/orders",
+        "handler": "place_order",
+        "response_model": "OrderAcceptedView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/orders/book/{player_id}",
+        "handler": "get_order_book",
+        "response_model": "OrderBookView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/orders/{order_id}",
+        "handler": "get_order_detail",
+        "response_model": "OrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/orders/{order_id}/admin-buyback",
+        "handler": "execute_admin_buyback",
+        "response_model": "AdminBuybackExecutionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/orders/{order_id}/admin-buyback-preview",
+        "handler": "preview_admin_buyback",
+        "response_model": "AdminBuybackPreviewView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/orders/{order_id}/cancel",
+        "handler": "cancel_order",
+        "response_model": "OrderView"
+      },
+      {
+        "method": "GET",
+        "path": "/orders",
+        "handler": "list_orders",
+        "response_model": "OrderListView"
+      },
+      {
+        "method": "POST",
+        "path": "/orders",
+        "handler": "place_order",
+        "response_model": "OrderAcceptedView"
+      },
+      {
+        "method": "GET",
         "path": "/orders/book/{player_id}",
         "handler": "get_order_book",
         "response_model": "OrderBookView"
@@ -5115,6 +6051,12 @@
     "organizations": [
       {
         "method": "POST",
+        "path": "/api/organizations",
+        "handler": "create_organization",
+        "response_model": "OrganizationCreateResponse"
+      },
+      {
+        "method": "POST",
         "path": "/api/organizations/invites/accept",
         "handler": "accept_organization_invite",
         "response_model": "OrganizationMembershipView"
@@ -5144,6 +6086,30 @@
         "path": "/admin/ownership-groups/reputation-cycle",
         "handler": "run_ownership_group_reputation_cycle",
         "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/ownership-groups",
+        "handler": "list_ownership_groups",
+        "response_model": "list[OwnershipGroupView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/ownership-groups",
+        "handler": "list_ownership_groups",
+        "response_model": "list[OwnershipGroupView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ownership-groups",
+        "handler": "create_ownership_group",
+        "response_model": "OwnershipGroupView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ownership-groups",
+        "handler": "create_ownership_group",
+        "response_model": "OwnershipGroupView"
       },
       {
         "method": "GET",
@@ -5299,6 +6265,450 @@
       },
       {
         "method": "GET",
+        "path": "/api/player-cards/admin/preseeded-regens",
+        "handler": "list_admin_preseeded_regens",
+        "response_model": "NationalRegenSeedPageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/admin/preseeded-regens",
+        "handler": "list_admin_preseeded_regens",
+        "response_model": "NationalRegenSeedPageView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/admin/preseeded-regens/mint",
+        "handler": "admin_mint_preseeded_regen",
+        "response_model": "AdminPreseededRegenMintResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/admin/preseeded-regens/mint",
+        "handler": "admin_mint_preseeded_regen",
+        "response_model": "AdminPreseededRegenMintResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/inventory",
+        "handler": "list_inventory",
+        "response_model": "list[PlayerCardHoldingView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/inventory",
+        "handler": "list_inventory",
+        "response_model": "list[PlayerCardHoldingView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/listings",
+        "handler": "list_listings",
+        "response_model": "list[PlayerCardListingView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/listings",
+        "handler": "list_listings",
+        "response_model": "list[PlayerCardListingView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/listings",
+        "handler": "create_listing",
+        "response_model": "PlayerCardListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/listings",
+        "handler": "create_listing",
+        "response_model": "PlayerCardListingView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/listings/mine",
+        "handler": "list_my_listings",
+        "response_model": "list[PlayerCardListingView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/listings/mine",
+        "handler": "list_my_listings",
+        "response_model": "list[PlayerCardListingView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/listings/{listing_id}/buy",
+        "handler": "buy_listing",
+        "response_model": "PlayerCardSaleView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/listings/{listing_id}/buy",
+        "handler": "buy_listing",
+        "response_model": "PlayerCardSaleView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/listings/{listing_id}/cancel",
+        "handler": "cancel_listing",
+        "response_model": "PlayerCardListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/listings/{listing_id}/cancel",
+        "handler": "cancel_listing",
+        "response_model": "PlayerCardListingView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/loans",
+        "handler": "list_loan_listings",
+        "response_model": "list[PlayerCardLoanListingView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/loans",
+        "handler": "list_loan_listings",
+        "response_model": "list[PlayerCardLoanListingView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/loans",
+        "handler": "create_loan_listing",
+        "response_model": "PlayerCardLoanListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/loans",
+        "handler": "create_loan_listing",
+        "response_model": "PlayerCardLoanListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/loans/contracts/{loan_contract_id}/return",
+        "handler": "return_loan_listing",
+        "response_model": "PlayerCardLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/loans/contracts/{loan_contract_id}/return",
+        "handler": "return_loan_listing",
+        "response_model": "PlayerCardLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/loans/{loan_listing_id}/borrow",
+        "handler": "borrow_loan_listing",
+        "response_model": "PlayerCardLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/loans/{loan_listing_id}/borrow",
+        "handler": "borrow_loan_listing",
+        "response_model": "PlayerCardLoanContractView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/listings",
+        "handler": "search_marketplace_listings",
+        "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/listings",
+        "handler": "search_marketplace_listings",
+        "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/loans",
+        "handler": "list_marketplace_loans",
+        "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/loans",
+        "handler": "list_marketplace_loans",
+        "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans",
+        "handler": "create_marketplace_loan_listing",
+        "response_model": "PlayerCardMarketplaceLoanListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans",
+        "handler": "create_marketplace_loan_listing",
+        "response_model": "PlayerCardMarketplaceLoanListingView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/loans/contracts",
+        "handler": "list_marketplace_loan_contracts",
+        "response_model": "PlayerCardMarketplaceLoanContractListResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/loans/contracts",
+        "handler": "list_marketplace_loan_contracts",
+        "response_model": "PlayerCardMarketplaceLoanContractListResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/contracts/{contract_id}/return",
+        "handler": "return_marketplace_loan_contract",
+        "response_model": "PlayerCardMarketplaceLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/contracts/{contract_id}/return",
+        "handler": "return_marketplace_loan_contract",
+        "response_model": "PlayerCardMarketplaceLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/contracts/{contract_id}/settle",
+        "handler": "settle_marketplace_loan_contract",
+        "response_model": "PlayerCardMarketplaceLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/contracts/{contract_id}/settle",
+        "handler": "settle_marketplace_loan_contract",
+        "response_model": "PlayerCardMarketplaceLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/negotiations/{negotiation_id}/accept",
+        "handler": "accept_marketplace_loan_negotiation",
+        "response_model": "PlayerCardMarketplaceLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/negotiations/{negotiation_id}/accept",
+        "handler": "accept_marketplace_loan_negotiation",
+        "response_model": "PlayerCardMarketplaceLoanContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/negotiations/{negotiation_id}/counter",
+        "handler": "counter_marketplace_loan_negotiation",
+        "response_model": "PlayerCardMarketplaceLoanNegotiationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/negotiations/{negotiation_id}/counter",
+        "handler": "counter_marketplace_loan_negotiation",
+        "response_model": "PlayerCardMarketplaceLoanNegotiationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/{listing_id}/cancel",
+        "handler": "cancel_marketplace_loan_listing",
+        "response_model": "PlayerCardMarketplaceLoanListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/{listing_id}/cancel",
+        "handler": "cancel_marketplace_loan_listing",
+        "response_model": "PlayerCardMarketplaceLoanListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/{listing_id}/negotiations",
+        "handler": "create_marketplace_loan_negotiation",
+        "response_model": "PlayerCardMarketplaceLoanNegotiationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/loans/{listing_id}/negotiations",
+        "handler": "create_marketplace_loan_negotiation",
+        "response_model": "PlayerCardMarketplaceLoanNegotiationView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/sales",
+        "handler": "list_marketplace_sales",
+        "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/sales",
+        "handler": "list_marketplace_sales",
+        "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/sales",
+        "handler": "create_marketplace_sale_listing",
+        "response_model": "PlayerCardMarketplaceListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/sales",
+        "handler": "create_marketplace_sale_listing",
+        "response_model": "PlayerCardMarketplaceListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/sales/{listing_id}/buy",
+        "handler": "buy_marketplace_sale_listing",
+        "response_model": "PlayerCardMarketplaceSaleExecutionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/sales/{listing_id}/buy",
+        "handler": "buy_marketplace_sale_listing",
+        "response_model": "PlayerCardMarketplaceSaleExecutionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/sales/{listing_id}/cancel",
+        "handler": "cancel_marketplace_sale_listing",
+        "response_model": "PlayerCardMarketplaceListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/sales/{listing_id}/cancel",
+        "handler": "cancel_marketplace_sale_listing",
+        "response_model": "PlayerCardMarketplaceListingView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/swaps",
+        "handler": "list_marketplace_swaps",
+        "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/marketplace/swaps",
+        "handler": "list_marketplace_swaps",
+        "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/swaps",
+        "handler": "create_marketplace_swap_listing",
+        "response_model": "PlayerCardMarketplaceSwapListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/swaps",
+        "handler": "create_marketplace_swap_listing",
+        "response_model": "PlayerCardMarketplaceSwapListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/swaps/{listing_id}/cancel",
+        "handler": "cancel_marketplace_swap_listing",
+        "response_model": "PlayerCardMarketplaceSwapListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/swaps/{listing_id}/cancel",
+        "handler": "cancel_marketplace_swap_listing",
+        "response_model": "PlayerCardMarketplaceSwapListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/swaps/{listing_id}/execute",
+        "handler": "execute_marketplace_swap_listing",
+        "response_model": "PlayerCardMarketplaceSwapExecutionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/marketplace/swaps/{listing_id}/execute",
+        "handler": "execute_marketplace_swap_listing",
+        "response_model": "PlayerCardMarketplaceSwapExecutionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/players",
+        "handler": "list_players",
+        "response_model": "list[PlayerCardPlayerSummaryView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/players",
+        "handler": "list_players",
+        "response_model": "list[PlayerCardPlayerSummaryView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/players/{player_id}",
+        "handler": "get_player_detail",
+        "response_model": "PlayerCardPlayerDetailView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/players/{player_id}",
+        "handler": "get_player_detail",
+        "response_model": "PlayerCardPlayerDetailView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/starter-rental",
+        "handler": "get_starter_rental",
+        "response_model": "StarterSquadRentalView | None"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/starter-rental",
+        "handler": "get_starter_rental",
+        "response_model": "StarterSquadRentalView | None"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/starter-rental",
+        "handler": "create_starter_rental",
+        "response_model": "StarterSquadRentalView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/starter-rental",
+        "handler": "create_starter_rental",
+        "response_model": "StarterSquadRentalView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/watchlist",
+        "handler": "list_watchlist",
+        "response_model": "list[PlayerCardWatchlistView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/watchlist",
+        "handler": "list_watchlist",
+        "response_model": "list[PlayerCardWatchlistView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/watchlist",
+        "handler": "add_watchlist",
+        "response_model": "PlayerCardWatchlistView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/watchlist",
+        "handler": "add_watchlist",
+        "response_model": "PlayerCardWatchlistView"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/player-cards/watchlist/{watchlist_id}",
+        "handler": "remove_watchlist",
+        "response_model": null
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/player-cards/watchlist/{watchlist_id}",
+        "handler": "remove_watchlist",
+        "response_model": null
+      },
+      {
+        "method": "GET",
         "path": "/api/players/{player_id}/agency",
         "handler": "get_player_agency_snapshot",
         "response_model": "PlayerAgencySnapshotView"
@@ -5317,228 +6727,6 @@
       },
       {
         "method": "GET",
-        "path": "/player-cards/admin/preseeded-regens",
-        "handler": "list_admin_preseeded_regens",
-        "response_model": "NationalRegenSeedPageView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/admin/preseeded-regens/mint",
-        "handler": "admin_mint_preseeded_regen",
-        "response_model": "AdminPreseededRegenMintResponse"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/inventory",
-        "handler": "list_inventory",
-        "response_model": "list[PlayerCardHoldingView]"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/listings",
-        "handler": "list_listings",
-        "response_model": "list[PlayerCardListingView]"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/listings",
-        "handler": "create_listing",
-        "response_model": "PlayerCardListingView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/listings/mine",
-        "handler": "list_my_listings",
-        "response_model": "list[PlayerCardListingView]"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/listings/{listing_id}/buy",
-        "handler": "buy_listing",
-        "response_model": "PlayerCardSaleView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/listings/{listing_id}/cancel",
-        "handler": "cancel_listing",
-        "response_model": "PlayerCardListingView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/loans",
-        "handler": "list_loan_listings",
-        "response_model": "list[PlayerCardLoanListingView]"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/loans",
-        "handler": "create_loan_listing",
-        "response_model": "PlayerCardLoanListingView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/loans/contracts/{loan_contract_id}/return",
-        "handler": "return_loan_listing",
-        "response_model": "PlayerCardLoanContractView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/loans/{loan_listing_id}/borrow",
-        "handler": "borrow_loan_listing",
-        "response_model": "PlayerCardLoanContractView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/marketplace/listings",
-        "handler": "search_marketplace_listings",
-        "response_model": "PlayerCardMarketplaceSearchResponse"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/marketplace/loans",
-        "handler": "list_marketplace_loans",
-        "response_model": "PlayerCardMarketplaceSearchResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/loans",
-        "handler": "create_marketplace_loan_listing",
-        "response_model": "PlayerCardMarketplaceLoanListingView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/marketplace/loans/contracts",
-        "handler": "list_marketplace_loan_contracts",
-        "response_model": "PlayerCardMarketplaceLoanContractListResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/loans/contracts/{contract_id}/return",
-        "handler": "return_marketplace_loan_contract",
-        "response_model": "PlayerCardMarketplaceLoanContractView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/loans/contracts/{contract_id}/settle",
-        "handler": "settle_marketplace_loan_contract",
-        "response_model": "PlayerCardMarketplaceLoanContractView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/loans/negotiations/{negotiation_id}/accept",
-        "handler": "accept_marketplace_loan_negotiation",
-        "response_model": "PlayerCardMarketplaceLoanContractView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/loans/negotiations/{negotiation_id}/counter",
-        "handler": "counter_marketplace_loan_negotiation",
-        "response_model": "PlayerCardMarketplaceLoanNegotiationView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/loans/{listing_id}/cancel",
-        "handler": "cancel_marketplace_loan_listing",
-        "response_model": "PlayerCardMarketplaceLoanListingView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/loans/{listing_id}/negotiations",
-        "handler": "create_marketplace_loan_negotiation",
-        "response_model": "PlayerCardMarketplaceLoanNegotiationView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/marketplace/sales",
-        "handler": "list_marketplace_sales",
-        "response_model": "PlayerCardMarketplaceSearchResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/sales",
-        "handler": "create_marketplace_sale_listing",
-        "response_model": "PlayerCardMarketplaceListingView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/sales/{listing_id}/buy",
-        "handler": "buy_marketplace_sale_listing",
-        "response_model": "PlayerCardMarketplaceSaleExecutionView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/sales/{listing_id}/cancel",
-        "handler": "cancel_marketplace_sale_listing",
-        "response_model": "PlayerCardMarketplaceListingView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/marketplace/swaps",
-        "handler": "list_marketplace_swaps",
-        "response_model": "PlayerCardMarketplaceSearchResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/swaps",
-        "handler": "create_marketplace_swap_listing",
-        "response_model": "PlayerCardMarketplaceSwapListingView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/swaps/{listing_id}/cancel",
-        "handler": "cancel_marketplace_swap_listing",
-        "response_model": "PlayerCardMarketplaceSwapListingView"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/marketplace/swaps/{listing_id}/execute",
-        "handler": "execute_marketplace_swap_listing",
-        "response_model": "PlayerCardMarketplaceSwapExecutionView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/players",
-        "handler": "list_players",
-        "response_model": "list[PlayerCardPlayerSummaryView]"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/players/{player_id}",
-        "handler": "get_player_detail",
-        "response_model": "PlayerCardPlayerDetailView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/starter-rental",
-        "handler": "get_starter_rental",
-        "response_model": "StarterSquadRentalView | None"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/starter-rental",
-        "handler": "create_starter_rental",
-        "response_model": "StarterSquadRentalView"
-      },
-      {
-        "method": "GET",
-        "path": "/player-cards/watchlist",
-        "handler": "list_watchlist",
-        "response_model": "list[PlayerCardWatchlistView]"
-      },
-      {
-        "method": "POST",
-        "path": "/player-cards/watchlist",
-        "handler": "add_watchlist",
-        "response_model": "PlayerCardWatchlistView"
-      },
-      {
-        "method": "DELETE",
-        "path": "/player-cards/watchlist/{watchlist_id}",
-        "handler": "remove_watchlist",
-        "response_model": null
-      },
-      {
-        "method": "GET",
         "path": "/player-import/youth-prospects/me",
         "handler": "list_my_youth_prospects",
         "response_model": "list[YouthProspectView]"
@@ -5551,6 +6739,12 @@
       }
     ],
     "players": [
+      {
+        "method": "GET",
+        "path": "/players",
+        "handler": "list_players",
+        "response_model": "RealPlayerUniversePageView"
+      },
       {
         "method": "POST",
         "path": "/players/events",
@@ -5763,6 +6957,30 @@
       }
     ],
     "predictions": [
+      {
+        "method": "GET",
+        "path": "/api/predictions",
+        "handler": "list_predictions",
+        "response_model": "list[PredictionView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/predictions",
+        "handler": "list_predictions",
+        "response_model": "list[PredictionView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/predictions",
+        "handler": "submit_prediction",
+        "response_model": "PredictionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/predictions",
+        "handler": "submit_prediction",
+        "response_model": "PredictionView"
+      },
       {
         "method": "GET",
         "path": "/api/predictions/leaderboard",
@@ -6735,6 +7953,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/admin/competitions",
+        "handler": "admin_create_competition",
+        "response_model": "CompetitionSummaryView"
+      },
+      {
+        "method": "POST",
         "path": "/api/admin/competitions/reminders/dispatch",
         "handler": "admin_dispatch_competition_reminders",
         "response_model": null
@@ -6818,6 +8042,12 @@
         "response_model": "ShareCodeUsageSummaryView"
       },
       {
+        "method": "POST",
+        "path": "/api/clubs",
+        "handler": "create_club",
+        "response_model": "ClubProfileView"
+      },
+      {
         "method": "GET",
         "path": "/api/clubs/catalog",
         "handler": "get_catalog",
@@ -6881,6 +8111,12 @@
         "method": "GET",
         "path": "/api/clubs/{club_id}/branding",
         "handler": "get_branding",
+        "response_model": "ClubBrandingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/branding",
+        "handler": "upsert_branding",
         "response_model": "ClubBrandingView"
       },
       {
@@ -7104,6 +8340,18 @@
         "path": "/api/clubs/{club_id}/youth-pipeline",
         "handler": "get_youth_pipeline",
         "response_model": "YouthPipelineSnapshotView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/competitions",
+        "handler": "list_competitions",
+        "response_model": "CompetitionListResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions",
+        "handler": "create_competition",
+        "response_model": "CompetitionSummaryView"
       },
       {
         "method": "POST",
@@ -7542,9 +8790,51 @@
         "path": "/api/transfers/windows/{window_id}/players/{player_id}/resolve-regen-bid",
         "handler": "resolve_regen_bid",
         "response_model": "RegenBidResolutionView"
+      },
+      {
+        "method": "POST",
+        "path": "/creators/me/copilot/analyze",
+        "handler": "analyze_my_creator_draft",
+        "response_model": "CreatorCopilotAnalysisView"
+      },
+      {
+        "method": "GET",
+        "path": "/creators/me/insights",
+        "handler": "get_my_creator_insights",
+        "response_model": "CreatorInsightsView"
       }
     ],
     "simulation": [
+      {
+        "method": "POST",
+        "path": "/api/simulation-matchmaking/hosted-competitions/preview",
+        "handler": "preview_hosted_competition",
+        "response_model": "HostedCompetitionPreviewResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/simulation-matchmaking/profiles/{user_id}",
+        "handler": "get_simulation_profile",
+        "response_model": "SimulationGameProfileView"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/simulation-matchmaking/profiles/{user_id}",
+        "handler": "upsert_simulation_profile",
+        "response_model": "SimulationGameProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/simulation-matchmaking/quick-game",
+        "handler": "create_quick_game",
+        "response_model": "QuickGameResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/simulation-matchmaking/quick-tournament",
+        "handler": "create_quick_tournament",
+        "response_model": "QuickTournamentResponse"
+      },
       {
         "method": "POST",
         "path": "/simulation-matchmaking/hosted-competitions/preview",
@@ -7682,6 +8972,18 @@
     ],
     "story": [
       {
+        "method": "POST",
+        "path": "/api/admin/story-feed",
+        "handler": "publish_story",
+        "response_model": "StoryFeedItemResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/story-feed",
+        "handler": "list_story_feed",
+        "response_model": "list[StoryFeedItemResponse]"
+      },
+      {
         "method": "GET",
         "path": "/api/story-feed/digest",
         "handler": "get_story_digest",
@@ -7724,6 +9026,18 @@
         "path": "/api/admin/streamer-tournaments/{tournament_id}/settle",
         "handler": "settle_tournament",
         "response_model": "StreamerTournamentSettlementView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/streamer-tournaments",
+        "handler": "list_public_tournaments",
+        "response_model": "StreamerTournamentListView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/streamer-tournaments",
+        "handler": "create_tournament",
+        "response_model": "StreamerTournamentView"
       },
       {
         "method": "GET",
@@ -7863,6 +9177,18 @@
       }
     ],
     "tournaments": [
+      {
+        "method": "GET",
+        "path": "/api/tournaments",
+        "handler": "list_tournaments",
+        "response_model": "TournamentListView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/tournaments",
+        "handler": "create_tournament",
+        "response_model": "TournamentView"
+      },
       {
         "method": "GET",
         "path": "/api/tournaments/{tournament_id}",
@@ -8179,6 +9505,78 @@
     "ultimate": [
       {
         "method": "GET",
+        "path": "/api/ultimate-league/competitors/{competitor_id}",
+        "handler": "get_competitor",
+        "response_model": "UltimateLeagueCompetitorView"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/ultimate-league/competitors/{competitor_id}",
+        "handler": "upsert_competitor",
+        "response_model": "UltimateLeagueCompetitorView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ultimate-league/matches/result",
+        "handler": "submit_match_result",
+        "response_model": "UltimateLeagueMatchResultResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ultimate-league/matchmaking/batch",
+        "handler": "create_matchmaking_batch",
+        "response_model": "UltimateLeagueMatchmakingResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/ultimate-league/standings/{tier}",
+        "handler": "get_standings",
+        "response_model": "UltimateLeagueStandingsView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/ultimate-league/tactical-presets",
+        "handler": "list_tactical_presets",
+        "response_model": "list[TacticalPresetView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ultimate-league/tactical-presets",
+        "handler": "upsert_tactical_preset",
+        "response_model": "TacticalPresetView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ultimate-league/tactical-presets/{preset_id}/purchase",
+        "handler": "purchase_tactical_preset",
+        "response_model": "TacticalPresetView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/ultimate-league/tiers",
+        "handler": "list_tiers",
+        "response_model": "list[UltimateLeagueTierView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ultimate-league/tournaments",
+        "handler": "create_tournament",
+        "response_model": "UltimateLeagueTournamentView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/ultimate-league/tournaments/{tournament_id}",
+        "handler": "get_tournament",
+        "response_model": "UltimateLeagueTournamentView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ultimate-league/tournaments/{tournament_id}/payouts/preview",
+        "handler": "preview_payouts",
+        "response_model": "UltimateLeaguePayoutPreviewResponse"
+      },
+      {
+        "method": "GET",
         "path": "/ultimate-league/competitors/{competitor_id}",
         "handler": "get_competitor",
         "response_model": "UltimateLeagueCompetitorView"
@@ -8416,6 +9814,18 @@
         "path": "/trust/{user_id}",
         "handler": "read_user_trust_profile",
         "response_model": "TrustProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/viral/cascades",
+        "handler": "read_viral_cascades",
+        "response_model": "ViralCascadesResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/viral/clips/trending",
+        "handler": "read_trending_clips",
+        "response_model": "ViralTrendingResponse"
       }
     ],
     "wallets": [
@@ -8457,159 +9867,369 @@
       },
       {
         "method": "GET",
-        "path": "/portfolio",
-        "handler": "get_portfolio",
-        "response_model": "PortfolioSnapshotView"
+        "path": "/api/wallet",
+        "handler": "get_wallet_profile",
+        "response_model": "WalletProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallet",
+        "handler": "get_wallet_profile",
+        "response_model": "WalletProfileView"
       },
       {
         "method": "POST",
-        "path": "/wallet/top-up/initiate",
+        "path": "/api/wallet/top-up/initiate",
         "handler": "initiate_wallet_top_up",
         "response_model": "WalletTopUpInitiateView"
       },
       {
         "method": "POST",
-        "path": "/wallet/top-up/verify",
+        "path": "/api/wallet/top-up/initiate",
+        "handler": "initiate_wallet_top_up",
+        "response_model": "WalletTopUpInitiateView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallet/top-up/verify",
+        "handler": "verify_wallet_top_up",
+        "response_model": "WalletTopUpVerifyView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallet/top-up/verify",
         "handler": "verify_wallet_top_up",
         "response_model": "WalletTopUpVerifyView"
       },
       {
         "method": "GET",
-        "path": "/wallet/transactions",
+        "path": "/api/wallet/transactions",
         "handler": "list_wallet_transactions",
         "response_model": "list[WalletTransactionRecordView]"
       },
       {
         "method": "GET",
-        "path": "/wallets/accounts",
+        "path": "/api/wallet/transactions",
+        "handler": "list_wallet_transactions",
+        "response_model": "list[WalletTransactionRecordView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets",
+        "handler": "get_wallet_profile",
+        "response_model": "WalletProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets",
+        "handler": "get_wallet_profile",
+        "response_model": "WalletProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/accounts",
         "handler": "list_wallet_accounts",
         "response_model": "list[WalletAccountBalance]"
       },
       {
         "method": "GET",
-        "path": "/wallets/adaptive-overview",
+        "path": "/api/wallets/accounts",
+        "handler": "list_wallet_accounts",
+        "response_model": "list[WalletAccountBalance]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/adaptive-overview",
+        "handler": "get_wallet_adaptive_overview",
+        "response_model": "WalletAdaptiveOverviewView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/adaptive-overview",
         "handler": "get_wallet_adaptive_overview",
         "response_model": "WalletAdaptiveOverviewView"
       },
       {
         "method": "POST",
-        "path": "/wallets/conversions",
+        "path": "/api/wallets/conversions",
         "handler": "create_wallet_conversion",
         "response_model": "WalletConversionView"
       },
       {
         "method": "POST",
-        "path": "/wallets/conversions/quote",
+        "path": "/api/wallets/conversions",
+        "handler": "create_wallet_conversion",
+        "response_model": "WalletConversionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/conversions/quote",
+        "handler": "quote_wallet_conversion",
+        "response_model": "WalletConversionQuoteView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/conversions/quote",
         "handler": "quote_wallet_conversion",
         "response_model": "WalletConversionQuoteView"
       },
       {
         "method": "GET",
-        "path": "/wallets/deposits",
+        "path": "/api/wallets/deposits",
+        "handler": "list_deposits",
+        "response_model": "list[DepositRequestView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/deposits",
         "handler": "list_deposits",
         "response_model": "list[DepositRequestView]"
       },
       {
         "method": "POST",
-        "path": "/wallets/deposits",
+        "path": "/api/wallets/deposits",
         "handler": "create_deposit_request",
         "response_model": "DepositRequestView"
       },
       {
         "method": "POST",
-        "path": "/wallets/deposits/{deposit_id}/submit",
+        "path": "/api/wallets/deposits",
+        "handler": "create_deposit_request",
+        "response_model": "DepositRequestView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/deposits/{deposit_id}/submit",
+        "handler": "submit_deposit_request",
+        "response_model": "DepositRequestView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/deposits/{deposit_id}/submit",
         "handler": "submit_deposit_request",
         "response_model": "DepositRequestView"
       },
       {
         "method": "GET",
-        "path": "/wallets/ledger",
+        "path": "/api/wallets/ledger",
         "handler": "list_wallet_ledger",
         "response_model": "WalletLedgerPageView"
       },
       {
         "method": "GET",
-        "path": "/wallets/market-topups",
+        "path": "/api/wallets/ledger",
+        "handler": "list_wallet_ledger",
+        "response_model": "WalletLedgerPageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/market-topups",
         "handler": "list_market_topups",
         "response_model": "MarketTopupPageView"
       },
       {
         "method": "GET",
-        "path": "/wallets/overview",
+        "path": "/api/wallets/market-topups",
+        "handler": "list_market_topups",
+        "response_model": "MarketTopupPageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/overview",
+        "handler": "get_wallet_overview",
+        "response_model": "WalletOverviewView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/overview",
         "handler": "get_wallet_overview",
         "response_model": "WalletOverviewView"
       },
       {
         "method": "POST",
-        "path": "/wallets/payment-events",
+        "path": "/api/wallets/payment-events",
         "handler": "create_payment_event",
         "response_model": "PaymentEventView"
       },
       {
         "method": "POST",
-        "path": "/wallets/providers/{provider_key}/webhook",
+        "path": "/api/wallets/payment-events",
+        "handler": "create_payment_event",
+        "response_model": "PaymentEventView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/providers/{provider_key}/webhook",
+        "handler": "handle_provider_webhook",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/providers/{provider_key}/webhook",
         "handler": "handle_provider_webhook",
         "response_model": null
       },
       {
         "method": "GET",
-        "path": "/wallets/purchase-orders",
+        "path": "/api/wallets/purchase-orders",
+        "handler": "list_purchase_orders",
+        "response_model": "PurchaseOrderPageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/purchase-orders",
         "handler": "list_purchase_orders",
         "response_model": "PurchaseOrderPageView"
       },
       {
         "method": "POST",
-        "path": "/wallets/purchase-orders",
+        "path": "/api/wallets/purchase-orders",
         "handler": "create_purchase_order",
         "response_model": "PurchaseOrderView"
       },
       {
         "method": "POST",
-        "path": "/wallets/purchase-orders/quote",
+        "path": "/api/wallets/purchase-orders",
+        "handler": "create_purchase_order",
+        "response_model": "PurchaseOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/purchase-orders/quote",
+        "handler": "create_purchase_order_quote",
+        "response_model": "PurchaseOrderQuoteView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/purchase-orders/quote",
         "handler": "create_purchase_order_quote",
         "response_model": "PurchaseOrderQuoteView"
       },
       {
         "method": "GET",
-        "path": "/wallets/purchase-orders/{order_id}",
+        "path": "/api/wallets/purchase-orders/{order_id}",
         "handler": "get_purchase_order",
         "response_model": "PurchaseOrderView"
       },
       {
         "method": "GET",
-        "path": "/wallets/summary",
+        "path": "/api/wallets/purchase-orders/{order_id}",
+        "handler": "get_purchase_order",
+        "response_model": "PurchaseOrderView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/summary",
         "handler": "get_wallet_summary",
         "response_model": "WalletSummaryView"
       },
       {
         "method": "GET",
-        "path": "/wallets/withdrawals",
+        "path": "/api/wallets/summary",
+        "handler": "get_wallet_summary",
+        "response_model": "WalletSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/top-up/initiate",
+        "handler": "initiate_wallet_top_up",
+        "response_model": "WalletTopUpInitiateView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/top-up/initiate",
+        "handler": "initiate_wallet_top_up",
+        "response_model": "WalletTopUpInitiateView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/top-up/verify",
+        "handler": "verify_wallet_top_up",
+        "response_model": "WalletTopUpVerifyView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/top-up/verify",
+        "handler": "verify_wallet_top_up",
+        "response_model": "WalletTopUpVerifyView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/transactions",
+        "handler": "list_wallet_transactions",
+        "response_model": "list[WalletTransactionRecordView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/transactions",
+        "handler": "list_wallet_transactions",
+        "response_model": "list[WalletTransactionRecordView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/withdrawals",
+        "handler": "list_withdrawals",
+        "response_model": "list[TreasuryWithdrawalRequestView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/withdrawals",
         "handler": "list_withdrawals",
         "response_model": "list[TreasuryWithdrawalRequestView]"
       },
       {
         "method": "POST",
-        "path": "/wallets/withdrawals",
+        "path": "/api/wallets/withdrawals",
+        "handler": "create_withdrawal_request",
+        "response_model": "TreasuryWithdrawalRequestView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/withdrawals",
         "handler": "create_withdrawal_request",
         "response_model": "TreasuryWithdrawalRequestView"
       },
       {
         "method": "GET",
-        "path": "/wallets/withdrawals/eligibility",
+        "path": "/api/wallets/withdrawals/eligibility",
+        "handler": "get_withdrawal_eligibility",
+        "response_model": "WithdrawalEligibilityView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/withdrawals/eligibility",
         "handler": "get_withdrawal_eligibility",
         "response_model": "WithdrawalEligibilityView"
       },
       {
         "method": "POST",
-        "path": "/wallets/withdrawals/quote",
+        "path": "/api/wallets/withdrawals/quote",
+        "handler": "create_withdrawal_quote",
+        "response_model": "WithdrawalQuoteView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/withdrawals/quote",
         "handler": "create_withdrawal_quote",
         "response_model": "WithdrawalQuoteView"
       },
       {
         "method": "GET",
-        "path": "/wallets/withdrawals/{withdrawal_id}/receipt",
+        "path": "/api/wallets/withdrawals/{withdrawal_id}/receipt",
         "handler": "get_withdrawal_receipt",
         "response_model": "WithdrawalReceiptView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallets/withdrawals/{withdrawal_id}/receipt",
+        "handler": "get_withdrawal_receipt",
+        "response_model": "WithdrawalReceiptView"
+      },
+      {
+        "method": "GET",
+        "path": "/portfolio",
+        "handler": "get_portfolio",
+        "response_model": "PortfolioSnapshotView"
       }
     ],
     "world": [

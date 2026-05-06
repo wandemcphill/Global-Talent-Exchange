@@ -14,19 +14,29 @@ DOCS_DIR = REPO_ROOT / "docs"
 MODULES_FILE = BACKEND_APP / "modules.py"
 RENDER_FILE = REPO_ROOT / "render.yaml"
 APP_CONFIG_FILE = FRONTEND_LIB / "app" / "gte_app_config.dart"
+FRONTEND_AUDIT_EXCLUDED_FILE_FRAGMENTS = (
+    "frontend/lib/data/generated/gte_api_contract.g.dart",
+    "frontend/lib/data/gte_api_contract.dart",
+    "frontend/lib/features/shared/data/gte_feature_support.dart",
+)
 
 ROUTER_DECLARATION_RE = re.compile(
     r"(?P<name>\w+)\s*=\s*APIRouter\((?P<args>.*?)\)",
     re.DOTALL,
 )
 PREFIX_RE = re.compile(r"prefix\s*=\s*['\"](?P<prefix>[^'\"]+)['\"]")
-DECORATOR_RE = re.compile(
+ROUTE_DECORATOR_RE = re.compile(
     r"@(?P<router>\w+)\.(?P<method>get|post|put|patch|delete|websocket)\("
-    r"\s*['\"](?P<path>[^'\"]+)['\"](?P<args>.*?)\)\s*"
+    r"\s*['\"](?P<path>[^'\"]*)['\"](?P<args>.*?)\)",
+    re.DOTALL,
+)
+DECORATED_FUNCTION_RE = re.compile(
+    r"(?P<decorators>(?:@\w+\.(?:get|post|put|patch|delete|websocket)\(.*?\)\s*)+)"
     r"(?:async\s+)?def\s+(?P<handler>\w+)\((?P<signature>.*?)\)"
     r"(?:\s*->\s*(?P<returns>[^:\n]+))?:",
     re.DOTALL,
 )
+INCLUDE_ROUTER_RE = re.compile(r"(?P<parent>\w+)\.include_router\(\s*(?P<child>\w+)")
 RESPONSE_MODEL_RE = re.compile(r"response_model\s*=\s*(?P<model>[^,\)\n]+)")
 MODULE_ENTRY_RE = re.compile(
     r"_module\(\s*['\"](?P<name>[^'\"]+)['\"]\s*,(?P<body>.*?)\)",
@@ -117,43 +127,57 @@ def _scan_backend_routes() -> tuple[list[dict], list[ModuleMount]]:
             router_prefixes[match.group("name")] = _normalize_path(
                 prefix_match.group("prefix") if prefix_match else ""
             )
+        parent_routers: dict[str, list[str]] = defaultdict(list)
+        for match in INCLUDE_ROUTER_RE.finditer(text):
+            parent_routers[match.group("child")].append(match.group("parent"))
 
-        for match in DECORATOR_RE.finditer(text):
-            router_var = match.group("router")
-            local_prefix = router_prefixes.get(router_var, "")
-            local_path = _join_paths(local_prefix, match.group("path"))
-            mounts = mount_lookup.get((module_path, router_var), [])
-            effective_paths = _effective_paths(local_path, mounts) if mounts else [local_path]
-            response_model_match = RESPONSE_MODEL_RE.search(match.group("args"))
-            routes.append(
-                {
-                    "method": match.group("method").upper(),
-                    "path": local_path,
-                    "effective_paths": effective_paths,
-                    "file": str(file_path.relative_to(REPO_ROOT)).replace("\\", "/"),
-                    "handler": match.group("handler"),
-                    "router_variable": router_var,
-                    "module_path": module_path,
-                    "module_mounts": [mount.name for mount in mounts],
-                    "request_shape": _infer_request_shape(match.group("signature")),
-                    "response_shape": {
-                        "response_model": response_model_match.group("model").strip()
-                        if response_model_match
-                        else None,
-                        "returns": match.group("returns").strip() if match.group("returns") else None,
-                    },
-                    "version": _infer_version(module_path, effective_paths),
-                    "domain": _infer_domain(module_path, mounts),
-                }
-            )
+        for function_match in DECORATED_FUNCTION_RE.finditer(text):
+            decorators = function_match.group("decorators")
+            request_shape = _infer_request_shape(function_match.group("signature"))
+            returns = function_match.group("returns").strip() if function_match.group("returns") else None
+            handler = function_match.group("handler")
+            for match in ROUTE_DECORATOR_RE.finditer(decorators):
+                router_var = match.group("router")
+                route_path = match.group("path")
+                local_paths = [
+                    _join_paths(prefix, route_path)
+                    for prefix in _router_prefix_paths(router_var, router_prefixes, parent_routers)
+                ]
+                local_path = local_paths[0]
+                mounts = _route_mounts(module_path, router_var, mount_lookup, parent_routers)
+                effective_paths = _effective_paths(local_paths, mounts)
+                response_model_match = RESPONSE_MODEL_RE.search(match.group("args"))
+                routes.append(
+                    {
+                        "method": match.group("method").upper(),
+                        "path": local_path,
+                        "effective_paths": effective_paths,
+                        "file": str(file_path.relative_to(REPO_ROOT)).replace("\\", "/"),
+                        "handler": handler,
+                        "router_variable": router_var,
+                        "module_path": module_path,
+                        "module_mounts": [mount.name for mount in mounts],
+                        "request_shape": request_shape,
+                        "response_shape": {
+                            "response_model": response_model_match.group("model").strip()
+                            if response_model_match
+                            else None,
+                            "returns": returns,
+                        },
+                        "version": _infer_version(module_path, effective_paths),
+                        "domain": _infer_domain(module_path, mounts),
+                    }
+                )
     return routes, module_mounts
 
 
 def _scan_frontend_calls() -> list[dict]:
     calls: list[dict] = []
     for file_path in FRONTEND_LIB.rglob("*.dart"):
-        text = file_path.read_text(encoding="utf-8", errors="ignore")
         rel = str(file_path.relative_to(REPO_ROOT)).replace("\\", "/")
+        if any(fragment in rel for fragment in FRONTEND_AUDIT_EXCLUDED_FILE_FRAGMENTS):
+            continue
+        text = file_path.read_text(encoding="utf-8", errors="ignore")
         base_url_source = _infer_base_url_source(text)
         for path_match in STRING_PATH_RE.finditer(text):
             endpoint = path_match.group("path")
@@ -292,7 +316,7 @@ def _analyze_mismatches(
                     "issue": "No exact backend route match found in static route inventory.",
                 }
             )
-        if endpoint.startswith("/api/") and runtime_endpoint.startswith("/api/v1/"):
+        if endpoint.startswith("/api/") and runtime_endpoint.startswith("/api/v2/"):
             mismatches.append(
                 {
                     "severity": "MEDIUM",
@@ -350,8 +374,8 @@ def _build_canonical_contract(
     for call in frontend_calls:
         endpoint = call["endpoint"]
         runtime_endpoint = _resolve_runtime_endpoint(endpoint)
-        if runtime_endpoint.startswith("/api/v1/"):
-            unversioned = "/api/" + runtime_endpoint[len("/api/v1/") :]
+        if runtime_endpoint.startswith("/api/v2/"):
+            unversioned = "/api/" + runtime_endpoint[len("/api/v2/") :]
             if backend_by_effective_path.get(unversioned):
                 deprecation_entries.append(
                     {
@@ -578,16 +602,50 @@ def _route_rank(route: dict) -> tuple[int, int, int]:
     return (non_v1, canonical_mount, richer)
 
 
-def _effective_paths(local_path: str, mounts: list[ModuleMount]) -> list[str]:
+def _effective_paths(local_paths: list[str], mounts: list[ModuleMount]) -> list[str]:
     paths: list[str] = []
-    for mount in mounts:
-        if mount.transform == "with_api_alias":
-            paths.extend([local_path, _join_paths("/api", local_path)])
-        elif mount.transform == "api_only":
-            paths.append(_join_paths("/api", local_path))
+    for local_path in local_paths:
+        if mounts:
+            for mount in mounts:
+                if mount.transform == "with_api_alias":
+                    paths.extend([local_path, _join_paths("/api", local_path)])
+                elif mount.transform == "api_only":
+                    paths.append(_join_paths("/api", local_path))
+                else:
+                    paths.append(local_path)
         else:
             paths.append(local_path)
     return sorted(dict.fromkeys(_normalize_path(path) for path in paths))
+
+
+def _router_prefix_paths(
+    router_var: str,
+    router_prefixes: dict[str, str],
+    parent_routers: dict[str, list[str]],
+) -> list[str]:
+    prefixes = [_normalize_path(router_prefixes.get(router_var, ""))]
+    for parent in parent_routers.get(router_var, []):
+        parent_prefixes = _router_prefix_paths(parent, router_prefixes, parent_routers)
+        current_prefix = _normalize_path(router_prefixes.get(router_var, ""))
+        for parent_prefix in parent_prefixes:
+            prefixes.append(_join_paths(parent_prefix, current_prefix))
+    return sorted(dict.fromkeys(prefixes))
+
+
+def _route_mounts(
+    module_path: str,
+    router_var: str,
+    mount_lookup: dict[tuple[str, str], list[ModuleMount]],
+    parent_routers: dict[str, list[str]],
+) -> list[ModuleMount]:
+    mounts: list[ModuleMount] = []
+    mounts.extend(mount_lookup.get((module_path, router_var), []))
+    for parent in parent_routers.get(router_var, []):
+        mounts.extend(_route_mounts(module_path, parent, mount_lookup, parent_routers))
+    deduped: dict[tuple[str, str, str], ModuleMount] = {}
+    for mount in mounts:
+        deduped[(mount.name, mount.router_path, mount.transform)] = mount
+    return list(deduped.values())
 
 
 def _normalize_path(path: str) -> str:
@@ -656,10 +714,10 @@ def _infer_base_url_source(text: str) -> str:
 
 def _resolve_runtime_endpoint(endpoint: str) -> str:
     endpoint = endpoint.strip()
-    if endpoint.startswith("/api/") and not endpoint.startswith("/api/v1/"):
-        return "/api/v1/" + endpoint[len("/api/") :]
+    if endpoint.startswith("/api/") and not endpoint.startswith("/api/v2/"):
+        return "/api/v2/" + endpoint[len("/api/") :]
     if endpoint == "/api":
-        return "/api/v1"
+        return "/api/v2"
     if endpoint.startswith("/auth/"):
         return endpoint
     return endpoint
@@ -705,3 +763,4 @@ def _write_markdown(path: Path, content: str) -> None:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

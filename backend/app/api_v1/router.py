@@ -36,7 +36,7 @@ from .service import (
     GlobalApiV1ValidationError,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["api-v1"])
+router = APIRouter(prefix="/api/v2", tags=["api-v2"])
 logger = logging.getLogger(__name__)
 
 
@@ -92,7 +92,7 @@ def install_exception_handlers(app, _context: ApplicationContext) -> None:
 
 
 async def _handle_http_exception(request: Request, exc: HTTPException):
-    if not request.url.path.startswith("/api/v1"):
+    if not request.url.path.startswith("/api/v2"):
         return await http_exception_handler(request, exc)
     detail = exc.detail
     message = detail if isinstance(detail, str) else "Request failed."
@@ -109,7 +109,7 @@ async def _handle_http_exception(request: Request, exc: HTTPException):
 
 
 async def _handle_validation_error(request: Request, exc: RequestValidationError):
-    if not request.url.path.startswith("/api/v1"):
+    if not request.url.path.startswith("/api/v2"):
         return await request_validation_exception_handler(request, exc)
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

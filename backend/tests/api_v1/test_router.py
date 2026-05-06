@@ -47,7 +47,7 @@ def _create_authenticated_user(app) -> tuple[str, str]:
 def test_api_v1_requires_auth_and_wraps_success_envelopes(app_client) -> None:
     app, client = app_client
 
-    unauthorized = client.get("/api/v1/home/dashboard")
+    unauthorized = client.get("/api/v2/home/dashboard")
 
     assert unauthorized.status_code == 401
     assert unauthorized.json() == {
@@ -58,7 +58,7 @@ def test_api_v1_requires_auth_and_wraps_success_envelopes(app_client) -> None:
 
     _user_id, token = _create_authenticated_user(app)
     response = client.get(
-        "/api/v1/home/dashboard",
+        "/api/v2/home/dashboard",
         headers={"Authorization": f"Bearer {token}"},
     )
 
@@ -77,7 +77,7 @@ def test_api_v1_protected_environment_does_not_serve_demo_dashboard(app_client) 
     _user_id, token = _create_authenticated_user(app)
 
     response = client.get(
-        "/api/v1/home/dashboard",
+        "/api/v2/home/dashboard",
         headers={"Authorization": f"Bearer {token}"},
     )
 
@@ -95,7 +95,7 @@ def test_api_v1_protected_environment_rejects_demo_mutations(app_client) -> None
     _user_id, token = _create_authenticated_user(app)
 
     response = client.post(
-        "/api/v1/market/bid",
+        "/api/v2/market/bid",
         headers={"Authorization": f"Bearer {token}"},
         json={"listing_id": "l1", "amount": 550000},
     )
@@ -111,7 +111,7 @@ def test_api_v1_http_facade_preserves_mutations_between_requests(app_client) -> 
     headers = {"Authorization": f"Bearer {token}"}
 
     bid_response = client.post(
-        "/api/v1/market/bid",
+        "/api/v2/market/bid",
         headers=headers,
         json={"listing_id": "l1", "amount": 550000},
     )
@@ -119,7 +119,7 @@ def test_api_v1_http_facade_preserves_mutations_between_requests(app_client) -> 
     assert bid_response.json()["data"]["bid"]["amount"] == 550000
 
     listings_response = client.get(
-        "/api/v1/market/listings",
+        "/api/v2/market/listings",
         headers=headers,
         params={"page": 1, "rating_min": 80, "position": "ST"},
     )
@@ -128,29 +128,29 @@ def test_api_v1_http_facade_preserves_mutations_between_requests(app_client) -> 
     assert listings_payload["total"] == 1
     assert listings_payload["listings"][0]["latest_bid"]["amount"] == 550000
 
-    follow_response = client.post("/api/v1/users/scout_42/follow", headers=headers)
+    follow_response = client.post("/api/v2/users/scout_42/follow", headers=headers)
     assert follow_response.status_code == 200, follow_response.text
     assert follow_response.json()["data"]["following"] is True
 
-    profile_response = client.get("/api/v1/users/scout_42", headers=headers)
+    profile_response = client.get("/api/v2/users/scout_42", headers=headers)
     assert profile_response.status_code == 200, profile_response.text
     assert profile_response.json()["data"]["followed_by_current_user"] is True
 
-    claim_response = client.post("/api/v1/tasks/task_daily_login/claim", headers=headers)
+    claim_response = client.post("/api/v2/tasks/task_daily_login/claim", headers=headers)
     assert claim_response.status_code == 200, claim_response.text
     assert claim_response.json()["data"]["status"] == "claimed"
 
-    tasks_response = client.get("/api/v1/tasks", headers=headers)
+    tasks_response = client.get("/api/v2/tasks", headers=headers)
     assert tasks_response.status_code == 200, tasks_response.text
     claimed_task = next(item for item in tasks_response.json()["data"]["tasks"] if item["id"] == "task_daily_login")
     assert claimed_task["claimed"] is True
 
-    tournament_response = client.post("/api/v1/tournaments/t1/join", headers=headers)
+    tournament_response = client.post("/api/v2/tournaments/t1/join", headers=headers)
     assert tournament_response.status_code == 200, tournament_response.text
     assert tournament_response.json()["data"]["participant_count"] == 1
 
     federation_response = client.post(
-        "/api/v1/federations",
+        "/api/v2/federations",
         headers=headers,
         json={"name": "Lagos Managers Union", "region": "Nigeria"},
     )
@@ -158,7 +158,7 @@ def test_api_v1_http_facade_preserves_mutations_between_requests(app_client) -> 
     federation_id = federation_response.json()["data"]["federation"]["id"]
 
     vote_response = client.post(
-        "/api/v1/federations/vote",
+        "/api/v2/federations/vote",
         headers=headers,
         json={"federation_id": federation_id, "proposal_id": "proposal_budget_1", "vote": "yes"},
     )
@@ -172,30 +172,30 @@ def test_api_v1_websockets_emit_match_market_and_notification_events(app_client)
     headers = {"Authorization": f"Bearer {token}"}
 
     bid_response = client.post(
-        "/api/v1/market/bid",
+        "/api/v2/market/bid",
         headers=headers,
         json={"listing_id": "l1", "amount": 560000},
     )
     assert bid_response.status_code == 201, bid_response.text
 
     story_response = client.post(
-        "/api/v1/stories/generate",
+        "/api/v2/stories/generate",
         headers=headers,
         json={"title": "Shock Winner", "story_type": "story_event", "subject_id": "m1"},
     )
     assert story_response.status_code == 201, story_response.text
 
-    with client.websocket_connect(f"/api/v1/ws/match/m1?token={token}") as websocket:
+    with client.websocket_connect(f"/api/v2/ws/match/m1?token={token}") as websocket:
         event = websocket.receive_json()
         assert event["type"] == "commentary"
         assert event["timestamp"] == 72
 
-    with client.websocket_connect(f"/api/v1/ws/market/l1?token={token}") as websocket:
+    with client.websocket_connect(f"/api/v2/ws/market/l1?token={token}") as websocket:
         event = websocket.receive_json()
         assert event["type"] == "new_bid"
         assert event["amount"] == 560000
 
-    with client.websocket_connect(f"/api/v1/ws/notifications?token={token}") as websocket:
+    with client.websocket_connect(f"/api/v2/ws/notifications?token={token}") as websocket:
         event = websocket.receive_json()
         assert event["type"] == "story_event"
         assert event["title"] == "Shock Winner"
@@ -217,7 +217,7 @@ def test_api_v1_match_websocket_supports_unity_live_bridge_stream(app_client) ->
     unity_access_token = unity_access_response.json()["access_token"]
 
     with client.websocket_connect(
-        f"/api/v1/ws/match/{match_id}?format=unity&access_token={unity_access_token}"
+        f"/api/v2/ws/match/{match_id}?format=unity&access_token={unity_access_token}"
     ) as websocket:
         first_payload = websocket.receive_json()
         assert first_payload["matchId"] == match_id
@@ -262,7 +262,7 @@ def test_api_v1_unity_live_bridge_survives_http_bootstrap_before_websocket(app_c
     first_frame = live_response.json()
 
     with client.websocket_connect(
-        f"/api/v1/ws/match/{match_id}?format=unity&access_token={unity_access_token}"
+        f"/api/v2/ws/match/{match_id}?format=unity&access_token={unity_access_token}"
     ) as websocket:
         initial_payload = websocket.receive_json()
         saw_update = False
@@ -323,7 +323,7 @@ def test_api_v1_match_websocket_rejects_unity_live_bridge_without_access_token(a
     match_id = tick_response.json()["matches"][0]["match_id"]
 
     with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect(f"/api/v1/ws/match/{match_id}?format=unity"):
+        with client.websocket_connect(f"/api/v2/ws/match/{match_id}?format=unity"):
             pass
 
     assert exc_info.value.code == 4401
@@ -338,7 +338,7 @@ def test_api_v1_match_websocket_rejects_unity_live_bridge_with_invalid_access_to
 
     with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect(
-            f"/api/v1/ws/match/{match_id}?format=unity&access_token=not-a-real-unity-access-token"
+            f"/api/v2/ws/match/{match_id}?format=unity&access_token=not-a-real-unity-access-token"
         ):
             pass
 
@@ -384,3 +384,4 @@ class _RecordingWebSocket:
 
     async def receive_text(self) -> str:
         raise WebSocketDisconnect(code=1000)
+

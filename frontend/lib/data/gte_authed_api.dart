@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'gte_api_contract.dart';
 import 'gte_api_repository.dart';
 import '../shared/auth/auth_identity_store.dart';
 import '../shared/models/auth_session.dart';
@@ -72,7 +73,7 @@ class GteAuthedApi {
       GteTransportRequest(
         method: method,
         uri: config.uriFor(path, query),
-        headers: headers,
+        headers: gteVersionedApiHeaders(headers),
         body: body,
       ),
     );
@@ -201,7 +202,7 @@ class GteAuthedApi {
       GteTransportRequest(
         method: 'POST',
         uri: config.uriFor('/auth/refresh'),
-        headers: headers,
+        headers: gteVersionedApiHeaders(headers),
         body: <String, Object?>{'refresh_token': refreshToken},
       ),
     );
@@ -231,7 +232,7 @@ class GteAuthedApi {
       GteTransportRequest(
         method: 'GET',
         uri: config.uriFor('/api/session/bootstrap'),
-        headers: headers,
+        headers: gteVersionedApiHeaders(headers),
       ),
     );
     final Object? normalizedPayload = gteApiSuccessPayload(response.body);
