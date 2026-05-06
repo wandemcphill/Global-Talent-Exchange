@@ -134,10 +134,10 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     primaryNav: true,
   ),
   AppRouteSurface(
-    label: 'Fixtures',
+    label: 'Matchday',
     location: AppRoutes.matches,
     state: AppRouteSurfaceState.live,
-    summary: 'Fixtures, live 2D match viewing, and results.',
+    summary: 'Matchday desk with live 2D viewing, fixtures, and results.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -149,10 +149,10 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Transfer Market',
+    label: 'Market',
     location: AppRoutes.market,
     state: AppRouteSurfaceState.live,
-    summary: 'Buy, bid, sign, and list players from the live transfer market.',
+    summary: 'Buy, bid, sign, and list players from the live player market desk.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -161,7 +161,7 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.world,
     state: AppRouteSurfaceState.live,
     summary:
-        'Live world discovery with routed federation, national team, and competition-family entry points. Deeper world programs stay gated to explicit routes as they ship.',
+        'Live world desk with routed federation, national team, and arena-family entry points. Deeper world programs stay gated to explicit routes as they ship.',
     quickAction: true,
   ),
   AppRouteSurface(
@@ -220,10 +220,10 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Manager',
+    label: 'Profile',
     location: AppRoutes.profile,
     state: AppRouteSurfaceState.live,
-    summary: 'Manager account, club wallet, and admin access.',
+    summary: 'Profile, club wallet, and admin access.',
     primaryNav: true,
   ),
   AppRouteSurface(
@@ -245,15 +245,15 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     summary: 'Permission-gated admin tooling.',
   ),
   AppRouteSurface(
-    label: 'Competitions',
+    label: 'Arena',
     location: AppRoutes.competitions,
     state: AppRouteSurfaceState.live,
-    summary: 'Create, join, manage, and review football competitions.',
+    summary: 'Create, join, manage, and review football competitions from one arena desk.',
     primaryNav: true,
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Create Competition',
+    label: 'Create Arena',
     location: AppRoutes.competitionsCreate,
     state: AppRouteSurfaceState.live,
     summary:
