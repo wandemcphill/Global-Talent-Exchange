@@ -53,9 +53,9 @@ class HomeScreen extends ConsumerWidget {
     final String runtimeMode = _runtimeModeLabel(appConfig.backendMode);
 
     return AppPageLayout(
-      title: 'Club HQ',
+      title: 'Home',
       subtitle:
-          'Your 2D football manager hub for squad building, transfers, fixtures, scouting, and competitions.',
+          'Live football command board for matchday, trading, competitions, and club control.',
       trailing: DataSourceBadge(
         status: blocked ? DataSourceStatus.blocked : DataSourceStatus.live,
       ),
@@ -64,10 +64,10 @@ class HomeScreen extends ConsumerWidget {
           eyebrow: authenticated ? 'MANAGER HQ' : 'GUEST HQ',
           title:
               authenticated
-                  ? 'Run your club from one clear manager screen.'
-                  : 'Scout the football world before you sign in.',
+                  ? 'Run your football universe from one live command board.'
+                  : 'Step into the football world before you sign in.',
           description:
-              'Check fixtures, manage your squad, scout the Transfer Market, create competitions, and track club funds.',
+              'Track matchday, move on the market, create competitions, inspect world routes, and keep your club capital within reach.',
           metrics: <Widget>[
             GtexStatTile(
               label: 'Session',
@@ -156,9 +156,9 @@ class HomeScreen extends ConsumerWidget {
         ),
         GtexSectionPanel(
           eyebrow: 'CLUB STATUS',
-          title: 'Launch matchday is set for 2D football management',
+          title: 'Launch shell is aligned to the live football board',
           subtitle:
-              'The main paths are fixtures, Transfer Market, competitions, wallet actions, and manager profile.',
+              'This stack now mirrors the premium shell language so deep routes feel like the same GTEX product.',
           accentColor: GteShellTheme.accentCapital,
           emphasized: true,
           child: Wrap(
@@ -192,7 +192,7 @@ class HomeScreen extends ConsumerWidget {
               GtexStatTile(
                 label: 'Routes',
                 value: '${appDestinations.length} routes',
-                support: 'Squad, fixtures, market, competitions, manager',
+                support: 'Home, matchday, market, arena, profile',
                 tone: GtexSurfaceTone.warning,
               ),
             ],
@@ -200,9 +200,9 @@ class HomeScreen extends ConsumerWidget {
         ),
         GtexSectionPanel(
           eyebrow: 'FOOTBALL ROUTES',
-          title: 'Core football routes are ready',
+          title: 'Core football routes stay hot',
           subtitle:
-              'Federations, national teams, and transfer listings stay easy to reach.',
+              'World, federations, national teams, and transfer listings stay one tap away.',
           child: Wrap(
             spacing: 12,
             runSpacing: 12,
