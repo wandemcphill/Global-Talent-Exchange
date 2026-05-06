@@ -726,9 +726,13 @@ def create_wallet_conversion(
     current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> WalletConversionView:
+    governor = EconomyGovernorService(
+        session,
+        wallet_service=_build_wallet_service(request),
+    )
     try:
         with _wallet_transaction_lock(request, user=current_user, operation="wallet_conversion"):
-            result = EconomyGovernorService(session).convert_wallet_units(
+            result = governor.convert_wallet_units(
                 user=current_user,
                 amount=payload.amount,
                 source_unit=payload.source_unit,
@@ -746,9 +750,10 @@ def create_wallet_conversion(
         source_amount=result.source_amount,
         target_unit=result.target_unit,
         target_amount=result.target_amount,
-        rate=EconomyGovernorService(session)
-        .quote_conversion(source_unit=result.source_unit, amount=result.source_amount)
-        .rate,
+        rate=governor.quote_conversion(
+            source_unit=result.source_unit,
+            amount=result.source_amount,
+        ).rate,
     )
 
 

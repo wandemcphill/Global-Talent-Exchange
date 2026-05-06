@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 
 from app.auth.service import AuthService
 from app.gtex import redis_keys
-from app.gtex.runtime import ensure_gtex_runtime
+from app.gtex.runtime import build_gtex_runtime, ensure_gtex_runtime
 from app.gtex.worker_runtime import AiBrainWorker, AiMatchmakerWorker, JackpotWorker, WorkerContext
 from app.global_memory.constants import MATCH_COMPLETED
 from app.global_memory.models import GlobalProjectionCheckpoint, UserDynasty
@@ -212,6 +212,41 @@ def test_admin_jackpot_runtime_update_and_manual_trigger(
         },
     )
     assert reset_runtime_response.status_code == 200, reset_runtime_response.text
+
+
+def test_gtex_runtime_uses_shared_wallet_cache_backend() -> None:
+    class FakeCacheBackend:
+        enabled = True
+
+        def get(self, key: str) -> str | None:
+            return None
+
+        def set(self, key: str, value: str, ttl_seconds: int) -> None:
+            return None
+
+        def delete_many(self, keys: list[str]) -> None:
+            return None
+
+        def ping(self) -> bool:
+            return True
+
+    cache_backend = FakeCacheBackend()
+    runtime = build_gtex_runtime(
+        app_settings=None,
+        session_factory=None,
+        event_publisher=None,
+        cache_backend=cache_backend,
+        redis_url=None,
+        realtime_channel="gtex.test.realtime",
+    )
+
+    try:
+        assert runtime.wallet_service.cache_backend is cache_backend
+        assert runtime.jackpot.wallet_service.cache_backend is cache_backend
+        assert runtime.creator_market.wallet_service.cache_backend is cache_backend
+        assert runtime.economy.wallet_service.cache_backend is cache_backend
+    finally:
+        runtime.shutdown()
 
 
 def test_creator_market_buy_sell_and_trending(client, app_session_factory, app):

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import json
 from shutil import copyfile
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine, select
@@ -39,6 +41,26 @@ from app.wallets.schemas import (
 )
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
+
+
+class FakeCacheBackend:
+    enabled = True
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    def set(self, key: str, value: str, ttl_seconds: int) -> None:
+        self.values[key] = value
+
+    def delete_many(self, keys: list[str]) -> None:
+        for key in keys:
+            self.values.pop(key, None)
+
+    def ping(self) -> bool:
+        return True
 
 
 @pytest.fixture(scope="session")
@@ -178,6 +200,56 @@ def test_create_wallet_conversion_route_moves_balance(session) -> None:
     assert payload.target_amount == Decimal("100.0000")
     assert wallet_service.get_balance(session, user_coin_account) == Decimal("1.0000")
     assert wallet_service.get_balance(session, user_credit_account) == Decimal("100.0000")
+
+
+def test_create_wallet_conversion_route_refreshes_shared_wallet_summary_cache(session) -> None:
+    current_user = _register_and_load_user(session)
+    cache_backend = FakeCacheBackend()
+    wallet_service = WalletService(cache_backend=cache_backend)
+    user_coin_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    platform_coin_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_coin_account, amount=Decimal("2")),
+            LedgerPosting(account=platform_coin_account, amount=Decimal("-2")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-router-conversion-cache",
+        actor=current_user,
+    )
+    session.commit()
+    wallet_service.get_wallet_summary(session, current_user, currency=LedgerUnit.COIN)
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                event_publisher=None,
+                cache_backend=cache_backend,
+            )
+        )
+    )
+
+    create_wallet_conversion(
+        WalletConversionRequest(
+            amount=Decimal("1"),
+            source_unit=LedgerUnit.COIN,
+            idempotency_key="router-convert-cache-1-coin",
+        ),
+        session=session,
+        current_user=current_user,
+        request=request,
+    )
+
+    coin_payload = json.loads(
+        cache_backend.values[wallet_service._wallet_summary_cache_key(current_user.id, LedgerUnit.COIN)]
+    )
+    credit_payload = json.loads(
+        cache_backend.values[wallet_service._wallet_summary_cache_key(current_user.id, LedgerUnit.CREDIT)]
+    )
+
+    assert coin_payload["balance"] == "1.0000"
+    assert credit_payload["balance"] == "100.0000"
 
 
 def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> None:

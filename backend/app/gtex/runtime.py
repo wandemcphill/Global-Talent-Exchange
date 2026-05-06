@@ -34,12 +34,16 @@ def build_gtex_runtime(
     app_settings,
     session_factory: sessionmaker[Session] | None,
     event_publisher,
+    cache_backend=None,
     redis_url: str | None,
     realtime_channel: str,
 ) -> GtexRuntime:
     del session_factory
     gtex_settings = load_gtex_settings()
-    wallet_service = WalletService(event_publisher=event_publisher)
+    wallet_service = WalletService(
+        event_publisher=event_publisher,
+        cache_backend=cache_backend,
+    )
     state_store = build_state_store(redis_url=redis_url, realtime_channel=realtime_channel)
     jackpot = JackpotService(
         settings=gtex_settings,
@@ -106,6 +110,7 @@ def ensure_gtex_runtime(app: FastAPI) -> GtexRuntime:
             app_settings=getattr(app.state, "settings", None),
             session_factory=getattr(app.state, "session_factory", None),
             event_publisher=getattr(app.state, "event_publisher", None),
+            cache_backend=getattr(app.state, "cache_backend", None),
             redis_url=getattr(getattr(app.state, "settings", None), "redis_url", None),
             realtime_channel=getattr(getattr(app.state, "settings", None), "redis_realtime_channel", "gtex.realtime"),
         )
@@ -121,6 +126,7 @@ def bind_gtex_runtime(app: FastAPI, context: ApplicationContext) -> None:
         app_settings=context.settings,
         session_factory=context.database.session_factory,
         event_publisher=context.event_publisher,
+        cache_backend=context.cache_backend,
         redis_url=context.settings.redis_url,
         realtime_channel=context.settings.redis_realtime_channel,
     )
