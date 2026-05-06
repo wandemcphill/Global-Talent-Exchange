@@ -30,6 +30,8 @@ class GteAppRouteNames {
   static const String clubSaleMarketOwnerOffers =
       'club-sale-market.owner-offers';
   static const String worldOverview = 'world.overview';
+  static const String regenUniverse = 'world.regens';
+  static const String newsDesk = 'news.desk';
   static const String worldClubContext = 'world.club-context';
   static const String worldCompetitionContext = 'world.competition-context';
   static const String nationalTeamCompetitions = 'national-team.competitions';
@@ -146,6 +148,14 @@ class GteAppRouteCatalog {
         GteAppRouteRegistration(
           name: GteAppRouteNames.worldOverview,
           path: '/world',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.regenUniverse,
+          path: '/world/regens',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.newsDesk,
+          path: '/news',
         ),
         GteAppRouteRegistration(
           name: GteAppRouteNames.worldClubContext,
@@ -795,6 +805,26 @@ class WorldOverviewRouteData extends GteAppRouteData {
   Uri toUri() => _buildUri(path: '/world');
 }
 
+class RegenUniverseRouteData extends GteAppRouteData {
+  const RegenUniverseRouteData();
+
+  @override
+  String get name => GteAppRouteNames.regenUniverse;
+
+  @override
+  Uri toUri() => _buildUri(path: '/world/regens');
+}
+
+class NewsDeskRouteData extends GteAppRouteData {
+  const NewsDeskRouteData();
+
+  @override
+  String get name => GteAppRouteNames.newsDesk;
+
+  @override
+  Uri toUri() => _buildUri(path: '/news');
+}
+
 class WorldClubContextRouteData extends GteClubScopedRouteData {
   const WorldClubContextRouteData({required super.clubId, super.clubName});
 
@@ -1145,6 +1175,10 @@ class GteAppRouteParser {
         );
       case GteAppRouteNames.worldOverview:
         return const WorldOverviewRouteData();
+      case GteAppRouteNames.regenUniverse:
+        return const RegenUniverseRouteData();
+      case GteAppRouteNames.newsDesk:
+        return const NewsDeskRouteData();
       case GteAppRouteNames.worldClubContext:
         if (clubId == null) {
           return null;
@@ -1311,12 +1345,23 @@ class GteAppRouteParser {
         if (segments[1] == 'world-super-cup') {
           return const CompetitionWorldSuperCupRouteData();
         }
+        if (segments[1] == 'hosted' || segments[1] == 'gtex') {
+          return CompetitionsDiscoveryRouteData(highlight: segments[1]);
+        }
+        if (segments[1] == 'streamer') {
+          return const StreamerTournamentsListRouteData();
+        }
         return CompetitionDetailRouteData(
           competitionId: segments[1],
           inviteCode: _nonEmpty(uri.queryParameters['inviteCode']),
         );
       }
       if (segments.length == 3) {
+        if (segments[1] == 'hosted' ||
+            segments[1] == 'gtex' ||
+            segments[1] == 'streamer') {
+          return CompetitionDetailRouteData(competitionId: segments[2]);
+        }
         final String competitionId = segments[1];
         if (segments[2] == 'join') {
           return CompetitionJoinRouteData(
@@ -1360,6 +1405,16 @@ class GteAppRouteParser {
       return null;
     }
 
+    if (segments.first == 'market') {
+      if (segments.length == 1) {
+        return const PlayerCardsBrowseRouteData();
+      }
+      if (segments.length >= 2 && segments[1] == 'transfers') {
+        return const FootballTransferCenterRouteData();
+      }
+      return null;
+    }
+
     if (segments.length >= 3 &&
         segments.first == 'creator-share-market' &&
         segments[1] == 'clubs') {
@@ -1375,6 +1430,9 @@ class GteAppRouteParser {
       if (segments.length == 1) {
         return const WorldOverviewRouteData();
       }
+      if (segments.length == 2 && segments[1] == 'regens') {
+        return const RegenUniverseRouteData();
+      }
       if (segments.length == 3 && segments[1] == 'clubs') {
         return WorldClubContextRouteData(
           clubId: segments[2],
@@ -1385,6 +1443,10 @@ class GteAppRouteParser {
         return WorldCompetitionContextRouteData(competitionId: segments[2]);
       }
       return null;
+    }
+
+    if (segments.first == 'clips' || segments.first == 'news') {
+      return const NewsDeskRouteData();
     }
 
     if (segments.first == 'national-team') {

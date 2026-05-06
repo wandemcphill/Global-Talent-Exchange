@@ -41,10 +41,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsWidgets);
-    expect(find.textContaining('matchday lobby'), findsOneWidget);
+    expect(find.textContaining('matchday'), findsWidgets);
     expect(find.text('App-wide sync'), findsOneWidget);
-    expect(find.text('Scouting'), findsWidgets);
+    expect(find.text('Studio'), findsWidgets);
     expect(find.text('Club'), findsWidgets);
+  });
+
+  testWidgets('top-level market deep links stay inside the GTEX shell', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'user-ibadan',
+      userName: 'Ibadan Owner',
+      clubId: 'ibadan-lions',
+      clubName: 'Ibadan Lions FC',
+    );
+
+    await tester.pumpWidget(
+      GteFrontendApp(
+        controller: controller,
+        config: const GteAppConfig(
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+        ),
+        initialPath: '/player-cards',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Market'), findsWidgets);
+    expect(find.text('Matchday'), findsWidgets);
+    expect(find.text('Transfer desk'), findsNothing);
   });
 }
 
