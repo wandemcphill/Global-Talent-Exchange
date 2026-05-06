@@ -131,31 +131,78 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     super.dispose();
   }
 
+  Future<_AdminLoadCapture<T>> _captureLoad<T>(Future<T> future) async {
+    try {
+      return _AdminLoadCapture<T>(value: await future);
+    } catch (error) {
+      return _AdminLoadCapture<T>(error: AppFeedback.messageFor(error));
+    }
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final List<dynamic> payload =
-          await Future.wait<dynamic>(<Future<dynamic>>[
-            _api.fetchTreasurySettings(),
-            _api.listTreasuryBankAccounts(),
-            _api.fetchAdminDeposits(limit: 20),
-            _api.fetchPaymentRails(),
-            _api.fetchWithdrawalControls(),
-          ]);
+      final Future<_AdminLoadCapture<GteTreasurySettings>> settingsFuture =
+          _captureLoad<GteTreasurySettings>(_api.fetchTreasurySettings());
+      final Future<_AdminLoadCapture<List<GteTreasuryBankAccount>>>
+      bankAccountsFuture = _captureLoad<List<GteTreasuryBankAccount>>(
+        _api.listTreasuryBankAccounts(),
+      );
+      final Future<_AdminLoadCapture<GteAdminQueuePage<GteAdminDeposit>>>
+      depositsFuture = _captureLoad<GteAdminQueuePage<GteAdminDeposit>>(
+        _api.fetchAdminDeposits(limit: 20),
+      );
+      final Future<_AdminLoadCapture<AdminPaymentRailsState>> paymentRailsFuture =
+          _captureLoad<AdminPaymentRailsState>(_api.fetchPaymentRails());
+      final Future<_AdminLoadCapture<AdminWithdrawalControls>>
+      withdrawalControlsFuture = _captureLoad<AdminWithdrawalControls>(
+        _api.fetchWithdrawalControls(),
+      );
+
+      final _AdminLoadCapture<GteTreasurySettings> settingsResult =
+          await settingsFuture;
+      final _AdminLoadCapture<List<GteTreasuryBankAccount>> bankAccountsResult =
+          await bankAccountsFuture;
+      final _AdminLoadCapture<GteAdminQueuePage<GteAdminDeposit>>
+      depositsResult = await depositsFuture;
+      final _AdminLoadCapture<AdminPaymentRailsState> paymentRailsResult =
+          await paymentRailsFuture;
+      final _AdminLoadCapture<AdminWithdrawalControls>
+      withdrawalControlsResult = await withdrawalControlsFuture;
       if (!mounted) {
         return;
       }
-      final GteTreasurySettings settings = payload[0] as GteTreasurySettings;
+
+      final List<String> failures = <String>[
+        if (settingsResult.error != null) settingsResult.error!,
+        if (bankAccountsResult.error != null) bankAccountsResult.error!,
+        if (depositsResult.error != null) depositsResult.error!,
+        if (paymentRailsResult.error != null) paymentRailsResult.error!,
+        if (withdrawalControlsResult.error != null)
+          withdrawalControlsResult.error!,
+      ];
+
       setState(() {
-        _treasurySettings = settings;
-        _bankAccounts = payload[1] as List<GteTreasuryBankAccount>;
-        _depositQueue = payload[2] as GteAdminQueuePage<GteAdminDeposit>;
-        _paymentRails = (payload[3] as AdminPaymentRailsState).rails;
-        _withdrawalControls = payload[4] as AdminWithdrawalControls;
-        _seedTreasuryEditors(settings);
+        if (settingsResult.value != null) {
+          _treasurySettings = settingsResult.value;
+          _seedTreasuryEditors(settingsResult.value!);
+        }
+        if (bankAccountsResult.value != null) {
+          _bankAccounts = bankAccountsResult.value!;
+        }
+        if (depositsResult.value != null) {
+          _depositQueue = depositsResult.value!;
+        }
+        if (paymentRailsResult.value != null) {
+          _paymentRails = paymentRailsResult.value!.rails;
+        }
+        if (withdrawalControlsResult.value != null) {
+          _withdrawalControls = withdrawalControlsResult.value!;
+        }
+        _error = failures.isEmpty ? null : failures.first;
       });
     } catch (error) {
       if (!mounted) {
@@ -1898,4 +1945,11 @@ enum _DepositAdminAction {
   final String buttonLabel;
   final String dialogTitle;
   final String successMessage;
+}
+
+class _AdminLoadCapture<T> {
+  const _AdminLoadCapture({this.value, this.error});
+
+  final T? value;
+  final String? error;
 }

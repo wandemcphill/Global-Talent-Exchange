@@ -41,12 +41,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsWidgets);
-    expect(find.textContaining('matchday lobby'), findsOneWidget);
-    expect(find.text('App-wide sync'), findsOneWidget);
-    expect(find.text('Scouting'), findsWidgets);
+    expect(find.text('Matchday'), findsWidgets);
+    expect(find.text('Home sync'), findsOneWidget);
+    expect(find.text('Market'), findsWidgets);
 
     final Finder marketNavChip = find.ancestor(
-      of: find.text('Scouting').last,
+      of: find.text('Market').last,
       matching: find.byType(InkWell),
     );
     await tester.ensureVisible(marketNavChip);

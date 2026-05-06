@@ -124,15 +124,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Transfer Market'), findsWidgets);
+    expect(find.text('Transfer desk'), findsWidgets);
     expect(
-      find.text('Scout, sign, and list players for your club.'),
+      find.text('Trade live player cards and move squad capital.'),
       findsOneWidget,
     );
     expect(find.text('Victor Osimhen'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'View Player'), findsOneWidget);
     expect(find.text('Buy Now'), findsOneWidget);
-    expect(find.text('Refresh market'), findsOneWidget);
+    expect(find.text('Refresh desk'), findsOneWidget);
     expect(find.text('Loan contracts'), findsNothing);
     expect(find.text('Watchlist is empty'), findsNothing);
 

@@ -335,9 +335,9 @@ void main() {
     final Finder playerCardsButton = find.text('Player cards');
     await tester.ensureVisible(playerCardsButton);
     await tester.tap(playerCardsButton);
-    await _pumpUntilText(tester, 'Transfer Market');
+    await _pumpUntilText(tester, 'Transfer desk');
 
-    expect(find.text('Transfer Market'), findsWidgets);
+    expect(find.text('Transfer desk'), findsWidgets);
   });
 
   testWidgets(
@@ -500,9 +500,9 @@ void main() {
         ),
       ),
     );
-    await _pumpUntilText(tester, 'More ways to explore');
+    await _pumpUntilText(tester, 'Player universe');
 
-    expect(find.text('More ways to explore'), findsOneWidget);
+    expect(find.text('Player universe'), findsWidgets);
 
     final Finder clubSaleMarketButton = find.text('Club sale market');
     await tester.ensureVisible(clubSaleMarketButton);
@@ -530,7 +530,7 @@ void main() {
         ),
       ),
     );
-    await _pumpUntilText(tester, 'More ways to explore');
+    await _pumpUntilText(tester, 'Player universe');
 
     final Finder creatorSharesButton = find.text('Creator shares');
     await tester.ensureVisible(creatorSharesButton);
@@ -565,7 +565,7 @@ void main() {
           ),
         ),
       );
-      await _pumpUntilText(tester, 'More ways to explore');
+      await _pumpUntilText(tester, 'Player universe');
 
       final Finder creatorSharesButton = find.text('Creator shares');
       await tester.ensureVisible(creatorSharesButton);
@@ -640,13 +640,16 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final Finder worldContextButton = find.text('World context');
+    final Finder worldContextButton = find.widgetWithText(
+      FilledButton,
+      'World context',
+    );
     await _scrollUntilVisible(
       tester,
       worldContextButton,
       scrollable: find.byType(ListView).first,
     );
-    expect(find.text('World and scouting'), findsOneWidget);
+    expect(find.text('Club command'), findsWidgets);
     await tester.ensureVisible(worldContextButton);
     await tester.tap(worldContextButton);
     await _pumpUntilFound(
