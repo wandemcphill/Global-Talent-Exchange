@@ -35,7 +35,10 @@ import 'package:gte_frontend/screens/referrals/referral_hub_screen.dart';
 import 'package:gte_frontend/screens/admin/manager_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
+import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
+import 'package:gte_frontend/widgets/ambient_audio_toggle_button.dart';
+import 'package:gte_frontend/widgets/cup_lift_hero.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
@@ -47,6 +50,7 @@ class GteNavigationShellScreen extends StatefulWidget {
     required this.controller,
     required this.apiBaseUrl,
     required this.backendMode,
+    this.ambientAudioController,
     this.initialRoute = const GteNavigationRoute.home(),
     this.onRouteChanged,
   });
@@ -56,6 +60,7 @@ class GteNavigationShellScreen extends StatefulWidget {
     required GteExchangeController controller,
     required String apiBaseUrl,
     required GteBackendMode backendMode,
+    AmbientAudioState? ambientAudioController,
     required String initialPath,
     ValueChanged<GteNavigationRoute>? onRouteChanged,
   }) {
@@ -64,6 +69,7 @@ class GteNavigationShellScreen extends StatefulWidget {
       controller: controller,
       apiBaseUrl: apiBaseUrl,
       backendMode: backendMode,
+      ambientAudioController: ambientAudioController,
       initialRoute: GteNavigationRoute.parse(initialPath),
       onRouteChanged: onRouteChanged,
     );
@@ -72,6 +78,7 @@ class GteNavigationShellScreen extends StatefulWidget {
   final GteExchangeController controller;
   final String apiBaseUrl;
   final GteBackendMode backendMode;
+  final AmbientAudioState? ambientAudioController;
   final GteNavigationRoute initialRoute;
   final ValueChanged<GteNavigationRoute>? onRouteChanged;
 
@@ -120,7 +127,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   bool _startupWorkScheduled = false;
   Timer? _liveRefreshTimer;
-  bool _ambientModeEnabled = false;
 
   bool get _isTestBinding =>
       WidgetsBinding.instance.runtimeType.toString().contains('Test');
@@ -406,7 +412,14 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           builder: (BuildContext context, Widget? child) {
             if (widget.controller.isBootstrapping &&
                 widget.controller.players.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+                children: <Widget>[
+                  const CupLiftHero(),
+                  const SizedBox(height: 28),
+                  const Center(child: CircularProgressIndicator()),
+                ],
+              );
             }
 
             return Column(
@@ -506,19 +519,24 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
       if (!widget.controller.isAuthenticated) {
-        return _buildScrollableShellStatePanel(
-          GteStatePanel(
-            eyebrow: 'CLUB SCOPE',
-            title: 'Sign in to open Club HQ',
-            message:
-                'Preview mode does not expose a canonical club yet. Sign in to continue with a real badge, club funds, scouting lane, and world state.',
-            icon: Icons.login_outlined,
-            accentColor: _routeAccentFor(context, GtePrimaryDestination.home),
-            actionLabel: 'Sign in',
-            onAction: () {
-              _openLogin(targetRoute: const GteNavigationRoute.home());
-            },
-          ),
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+          children: <Widget>[
+            const CupLiftHero(),
+            const SizedBox(height: 20),
+            GteStatePanel(
+              eyebrow: 'CLUB SCOPE',
+              title: 'Sign in to open Club HQ',
+              message:
+                  'Preview mode does not expose a canonical club yet. Sign in to continue with a real badge, club funds, scouting lane, and world state.',
+              icon: Icons.login_outlined,
+              accentColor: _routeAccentFor(context, GtePrimaryDestination.home),
+              actionLabel: 'Sign in',
+              onAction: () {
+                _openLogin(targetRoute: const GteNavigationRoute.home());
+              },
+            ),
+          ],
         );
       }
     }
@@ -1086,27 +1104,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildAmbientAction() {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: IconButton(
-        tooltip:
-            _ambientModeEnabled ? 'Atmosphere enabled' : 'Atmosphere muted',
-        onPressed: () {
-          setState(() {
-            _ambientModeEnabled = !_ambientModeEnabled;
-          });
-        },
-        icon: Icon(
-          _ambientModeEnabled
-              ? Icons.surround_sound_rounded
-              : Icons.volume_off_rounded,
-          color:
-              _ambientModeEnabled
-                  ? GteShellTheme.activeTokens.accentCapital
-                  : null,
-        ),
-      ),
-    );
+    final AmbientAudioState? controller = widget.ambientAudioController;
+    if (controller == null) {
+      return const SizedBox.shrink();
+    }
+    return AmbientAudioToggleButton(controller: controller);
   }
 
   Widget _buildCapitalAction() {

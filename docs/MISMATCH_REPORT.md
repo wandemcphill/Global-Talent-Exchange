@@ -1,6 +1,6 @@
 # Mismatch Report
 
-- Total mismatches detected: **768**
+- Total mismatches detected: **786**
 
 ## HIGH
 
@@ -73,6 +73,10 @@
 - `frontend/lib/data/gte_api_repository.dart` POST `/api/admin/treasury/kyc/$profileId/review` -> `/api/v2/admin/treasury/kyc/$profileId/review`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/gte_api_repository.dart` GET `/api/admin/treasury/disputes/$disputeId` -> `/api/v2/admin/treasury/disputes/$disputeId`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/gte_api_repository.dart` POST `/api/admin/treasury/disputes/$disputeId/messages` -> `/api/v2/admin/treasury/disputes/$disputeId/messages`: No exact backend route match found in static route inventory.
+- `frontend/lib/data/gte_exchange_api_client.dart` INFERRED `/api/market/leagues/$leagueId/clubs` -> `/api/v2/market/leagues/$leagueId/clubs`: No exact backend route match found in static route inventory.
+- `frontend/lib/data/gte_exchange_api_client.dart` INFERRED `/api/market/clubs/$clubId/players` -> `/api/v2/market/clubs/$clubId/players`: No exact backend route match found in static route inventory.
+- `frontend/lib/data/gte_exchange_api_client.dart` INFERRED `/api/market/nationalities/$countryCode/players` -> `/api/v2/market/nationalities/$countryCode/players`: No exact backend route match found in static route inventory.
+- `frontend/lib/data/gte_exchange_api_client.dart` INFERRED `/api/market/national-teams/$teamId/eligible-players` -> `/api/v2/market/national-teams/$teamId/eligible-players`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/gte_exchange_api_client.dart` INFERRED `/api/market/players/$playerId` -> `/api/v2/market/players/$playerId`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/gte_exchange_api_client.dart` INFERRED `/api/players/$playerId/overview` -> `/api/v2/players/$playerId/overview`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/gte_exchange_api_client.dart` INFERRED `/api/players/$playerId/career` -> `/api/v2/players/$playerId/career`: No exact backend route match found in static route inventory.
@@ -200,11 +204,7 @@
 - `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart` INFERRED `/api/clubs/$clubId/sale-market` -> `/api/v2/clubs/$clubId/sale-market`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart` POST `/api/clubs/$clubId/sale-market/listing` -> `/api/v2/clubs/$clubId/sale-market/listing`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart` PUT `/api/clubs/$clubId/sale-market/listing` -> `/api/v2/clubs/$clubId/sale-market/listing`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart` POST `/api/clubs/$clubId/sale-market/listing/cancel` -> `/api/v2/clubs/$clubId/sale-market/listing/cancel`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart` POST `/api/clubs/$clubId/sale-market/inquiries` -> `/api/v2/clubs/$clubId/sale-market/inquiries`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart` INFERRED `/api/clubs/$clubId/sale-market/inquiries` -> `/api/v2/clubs/$clubId/sale-market/inquiries`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart` POST `/api/clubs/$clubId/sale-market/inquiries/$inquiryId/respond` -> `/api/v2/clubs/$clubId/sale-market/inquiries/$inquiryId/respond`: No exact backend route match found in static route inventory.
-- ... and 20 more
+- ... and 24 more
 
 ## MEDIUM
 
@@ -408,7 +408,7 @@
 - `frontend/lib/data/gte_api_repository.dart` PUT `/api/bank-accounts/$bankAccountId` -> `/api/v2/bank-accounts/$bankAccountId`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
 - `frontend/lib/data/gte_api_repository.dart` GET `/api/disputes` -> `/api/v2/disputes`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
 - `frontend/lib/data/gte_api_repository.dart` POST `/api/disputes` -> `/api/v2/disputes`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
-- ... and 348 more
+- ... and 362 more
 
 ## LOW
 

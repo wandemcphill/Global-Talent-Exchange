@@ -3,6 +3,7 @@
 const config = require("./config");
 const { stableHash } = require("./hash");
 const { resolveAndStoreImage } = require("./images");
+const { safeJobId } = require("./jobIds");
 const logger = require("./logger");
 const { applyPlayerInfluence } = require("./matchInfluence");
 const { captureException } = require("./observability");
@@ -27,7 +28,7 @@ async function enqueueLeagues({ runId = Date.now() } = {}) {
         leagueId,
         seasonId: league.currentseason?.id || league.currentSeason?.id || null,
       },
-      { jobId: `league:${leagueId}:${runId}` },
+      { jobId: safeJobId("league", leagueId, runId) },
     );
   }
   logger.info("league jobs queued", {
@@ -59,14 +60,14 @@ async function processLeague(job) {
         teamId: team.id,
         teamName: team.name || null,
       },
-      { jobId: `team:${leagueId}:${team.id}:${job.id}` },
+      { jobId: safeJobId("team", leagueId, team.id, job.id) },
     );
   }
   for (let index = 0; index < config.regen.youthPlayersPerLeague; index += 1) {
     await regenQueue.add(
       "generate-regen",
       { leagueId },
-      { jobId: `regen:${leagueId}:${Date.now()}:${index}` },
+      { jobId: safeJobId("regen", leagueId, Date.now(), index) },
     );
   }
   await repository.setSyncState(`sportmonks:league:${leagueId}`);
@@ -108,7 +109,7 @@ async function enqueuePlayer(player, context = {}) {
     teamId: player.teamId || context.teamId || null,
   });
   await playerQueue.add("upsert-player", normalized, {
-    jobId: `player:${normalized.playerId}:${normalized.sourceHash}`,
+    jobId: safeJobId("player", normalized.playerId, normalized.sourceHash),
   });
 }
 

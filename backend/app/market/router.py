@@ -226,6 +226,62 @@ def list_market_players(
     return MarketPlayerListView.model_validate(result)
 
 
+@router.get("/leagues")
+def list_market_leagues(
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> list[dict[str, object]]:
+    return service.list_leagues()
+
+
+@router.get("/leagues/{league_id}/clubs")
+def list_market_league_clubs(
+    league_id: str,
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> list[dict[str, object]]:
+    return service.list_league_clubs(league_id)
+
+
+@router.get("/clubs/{club_id}/players", response_model=MarketPlayerListView)
+def list_market_club_players(
+    club_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketPlayerListView:
+    return MarketPlayerListView.model_validate(service.list_club_players(club_id, limit=limit))
+
+
+@router.get("/nationalities")
+def list_market_nationalities(
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> list[dict[str, object]]:
+    return service.list_nationalities()
+
+
+@router.get("/nationalities/{country_code}/players", response_model=MarketPlayerListView)
+def list_market_nationality_players(
+    country_code: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketPlayerListView:
+    return MarketPlayerListView.model_validate(service.list_nationality_players(country_code, limit=limit))
+
+
+@router.get("/national-teams")
+def list_market_national_teams(
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> list[dict[str, object]]:
+    return service.list_national_teams()
+
+
+@router.get("/national-teams/{team_id}/eligible-players", response_model=MarketPlayerListView)
+def list_market_national_team_eligible_players(
+    team_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketPlayerListView:
+    return MarketPlayerListView.model_validate(service.list_nationality_players(team_id, limit=limit))
+
+
 @router.get("/players/{player_id}", response_model=MarketPlayerDetailView)
 def get_market_player_detail(
     player_id: str,

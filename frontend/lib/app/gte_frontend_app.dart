@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,7 @@ import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../screens/gte_login_screen.dart';
 import '../router/app_router.dart';
+import '../services/ambient_audio_controller.dart';
 import '../services/match_3d_monetization_service.dart';
 import '../services/reliability/reliable_event_queue.dart';
 import '../shared/models/auth_session.dart';
@@ -43,6 +46,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   late final bool _ownsController;
   late final GteThemeController _themeController;
   late final bool _ownsThemeController;
+  late final AmbientAudioController _ambientAudioController;
   late final GoRouter _router;
   ProviderContainer? _providerContainer;
   ProviderContainer? _ownedProviderContainer;
@@ -83,11 +87,14 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       canSend: () => _controller.isAuthenticated,
     );
     _themeController = widget.themeController ?? GteThemeController();
+    _ambientAudioController = AmbientAudioController();
+    unawaited(_ambientAudioController.bootstrap());
     _controller.addListener(_handleControllerChanged);
     _router = buildGtexAppRouter(
       initialLocation: widget.initialPath,
       controller: _controller,
       config: _config,
+      ambientAudioController: _ambientAudioController,
       dependenciesBuilder: _buildNavigationDependencies,
     );
   }
@@ -103,6 +110,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
     if (_ownsThemeController) {
       _themeController.dispose();
     }
+    _ambientAudioController.dispose();
     super.dispose();
   }
 

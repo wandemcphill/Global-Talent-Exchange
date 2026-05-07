@@ -11,7 +11,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.ingestion.models import Player
+from app.ingestion.models import Competition, Player
 from app.market.models import (
     Listing,
     ListingStatus,
@@ -371,7 +371,8 @@ class SqlAlchemyMarketPlayerRepository:
                 .options(
                     selectinload(Player.country),
                     selectinload(Player.current_club),
-                    selectinload(Player.current_competition),
+                    selectinload(Player.current_competition).selectinload(Competition.country),
+                    selectinload(Player.internal_league),
                     selectinload(Player.supply_tier),
                     selectinload(Player.liquidity_band),
                     selectinload(Player.image_metadata),
@@ -388,7 +389,8 @@ class SqlAlchemyMarketPlayerRepository:
             .options(
                 selectinload(Player.country),
                 selectinload(Player.current_club),
-                selectinload(Player.current_competition),
+                selectinload(Player.current_competition).selectinload(Competition.country),
+                selectinload(Player.internal_league),
                 selectinload(Player.supply_tier),
                 selectinload(Player.liquidity_band),
                 selectinload(Player.image_metadata),

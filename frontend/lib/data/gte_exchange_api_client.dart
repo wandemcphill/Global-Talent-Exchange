@@ -409,6 +409,100 @@ class GteExchangeApiClient {
     );
   }
 
+  Future<List<GteMarketLeagueBrowseItem>> fetchMarketLeagues() async {
+    return _loadPublicWithFallback<List<GteMarketLeagueBrowseItem>>(
+      liveCall: () async => GteJson.list(
+        await _sendPublicGet('/api/market/leagues'),
+        label: 'market leagues',
+      ).map(GteMarketLeagueBrowseItem.fromJson).toList(growable: false),
+      fallbackCall: _fallbackMarketLeagues,
+    );
+  }
+
+  Future<List<GteMarketClubBrowseItem>> fetchMarketLeagueClubs(
+    String leagueId,
+  ) async {
+    return _loadPublicWithFallback<List<GteMarketClubBrowseItem>>(
+      liveCall: () async => GteJson.list(
+        await _sendPublicGet('/api/market/leagues/$leagueId/clubs'),
+        label: 'market league clubs',
+      ).map(GteMarketClubBrowseItem.fromJson).toList(growable: false),
+      fallbackCall: () => _fallbackMarketClubs(leagueId),
+    );
+  }
+
+  Future<GteMarketPlayerListView> fetchMarketClubPlayers(
+    String clubId, {
+    int limit = 100,
+  }) async {
+    return _loadPublicWithFallback<GteMarketPlayerListView>(
+      liveCall: () async => GteMarketPlayerListView.fromJson(
+        await _sendPublicGet(
+          '/api/market/clubs/$clubId/players',
+          query: <String, Object?>{'limit': limit},
+        ),
+      ),
+      fallbackCall: () =>
+          _fallbackPlayers(GteMarketPlayersQuery(limit: limit, club: clubId)),
+    );
+  }
+
+  Future<List<GteMarketNationalityBrowseItem>>
+  fetchMarketNationalities() async {
+    return _loadPublicWithFallback<List<GteMarketNationalityBrowseItem>>(
+      liveCall: () async => GteJson.list(
+        await _sendPublicGet('/api/market/nationalities'),
+        label: 'market nationalities',
+      ).map(GteMarketNationalityBrowseItem.fromJson).toList(growable: false),
+      fallbackCall: _fallbackMarketNationalities,
+    );
+  }
+
+  Future<GteMarketPlayerListView> fetchMarketNationalityPlayers(
+    String countryCode, {
+    int limit = 100,
+  }) async {
+    return _loadPublicWithFallback<GteMarketPlayerListView>(
+      liveCall: () async => GteMarketPlayerListView.fromJson(
+        await _sendPublicGet(
+          '/api/market/nationalities/$countryCode/players',
+          query: <String, Object?>{'limit': limit},
+        ),
+      ),
+      fallbackCall: () => _fallbackPlayers(
+        GteMarketPlayersQuery(limit: limit, country: countryCode),
+      ),
+    );
+  }
+
+  Future<List<GteMarketNationalityBrowseItem>>
+  fetchMarketNationalTeams() async {
+    return _loadPublicWithFallback<List<GteMarketNationalityBrowseItem>>(
+      liveCall: () async => GteJson.list(
+        await _sendPublicGet('/api/market/national-teams'),
+        label: 'market national teams',
+      ).map(GteMarketNationalityBrowseItem.fromJson).toList(growable: false),
+      fallbackCall: _fallbackMarketNationalities,
+    );
+  }
+
+  Future<GteMarketPlayerListView> fetchMarketNationalTeamEligiblePlayers(
+    String teamId, {
+    int limit = 100,
+  }) async {
+    return _loadPublicWithFallback<GteMarketPlayerListView>(
+      liveCall: () async => GteMarketPlayerListView.fromJson(
+        await _sendPublicGet(
+          '/api/market/national-teams/$teamId/eligible-players',
+          query: <String, Object?>{'limit': limit},
+        ),
+      ),
+      fallbackCall: () => _fallbackPlayers(
+        GteMarketPlayersQuery(limit: limit, nationalTeam: teamId),
+      ),
+    );
+  }
+
   Future<GteMarketPlayerDetailView> fetchPlayerDetail(String playerId) async {
     return _loadPublicWithFallback<GteMarketPlayerDetailView>(
       liveCall: () async => GteMarketPlayerDetailView.fromJson(
@@ -919,6 +1013,96 @@ class GteExchangeApiClient {
         movementTags: const <String>[],
       ),
     );
+  }
+
+  Future<List<GteMarketLeagueBrowseItem>> _fallbackMarketLeagues() async {
+    final GteMarketPlayerListView players = await _fallbackPlayers(
+      const GteMarketPlayersQuery(limit: 100),
+    );
+    final Map<String, ({String name, Set<String> clubs, int players})> grouped =
+        <String, ({String name, Set<String> clubs, int players})>{};
+    for (final GteMarketPlayerListItem player in players.items) {
+      const String leagueId = 'fixture-global-league';
+      final String club = player.currentClubName?.trim() ?? 'Independent';
+      final current = grouped[leagueId];
+      if (current == null) {
+        grouped[leagueId] = (
+          name: 'Global Exchange League',
+          clubs: <String>{club},
+          players: 1,
+        );
+      } else {
+        grouped[leagueId] = (
+          name: current.name,
+          clubs: <String>{...current.clubs, club},
+          players: current.players + 1,
+        );
+      }
+    }
+    return grouped.entries
+        .map(
+          (entry) => GteMarketLeagueBrowseItem(
+            leagueId: entry.key,
+            slug: entry.key,
+            displayName: entry.value.name,
+            playerCount: entry.value.players,
+            clubCount: entry.value.clubs.length,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<GteMarketClubBrowseItem>> _fallbackMarketClubs(
+    String leagueId,
+  ) async {
+    final GteMarketPlayerListView players = await _fallbackPlayers(
+      const GteMarketPlayersQuery(limit: 100),
+    );
+    final Map<String, int> counts = <String, int>{};
+    for (final GteMarketPlayerListItem player in players.items) {
+      final String name = player.currentClubName?.trim() ?? 'Independent';
+      counts[name] = (counts[name] ?? 0) + 1;
+    }
+    return counts.entries
+        .map(
+          (entry) => GteMarketClubBrowseItem(
+            clubId: entry.key,
+            slug: _fixtureSlug(entry.key),
+            displayName: entry.key,
+            playerCount: entry.value,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<GteMarketNationalityBrowseItem>>
+  _fallbackMarketNationalities() async {
+    final GteMarketPlayerListView players = await _fallbackPlayers(
+      const GteMarketPlayersQuery(limit: 100),
+    );
+    final Map<String, int> counts = <String, int>{};
+    for (final GteMarketPlayerListItem player in players.items) {
+      final String name = player.nationality?.trim() ?? 'Global';
+      counts[name] = (counts[name] ?? 0) + 1;
+    }
+    return counts.entries
+        .map(
+          (entry) => GteMarketNationalityBrowseItem(
+            countryCode: entry.key,
+            slug: _fixtureSlug(entry.key),
+            displayName: entry.key,
+            eligiblePlayerCount: entry.value,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String _fixtureSlug(String value) {
+    final String normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return 'fixture';
+    }
+    return normalized.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
   }
 
   Future<GtePlayerOverview> _fallbackPlayerOverview(String playerId) async {

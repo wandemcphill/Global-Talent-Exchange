@@ -85,6 +85,13 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/governance_api.dart -> /api/governance/proposals/$proposalId`
 - `frontend/lib/data/governance_api.dart -> /api/governance/proposals/$proposalId/vote`
 - `frontend/lib/data/governance_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/clubs/$clubId/players`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/leagues`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/leagues/$leagueId/clubs`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/national-teams`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/national-teams/$teamId/eligible-players`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/nationalities`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/nationalities/$countryCode/players`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/players`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/players/$playerId`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/match-engine/analytics/$matchKey`

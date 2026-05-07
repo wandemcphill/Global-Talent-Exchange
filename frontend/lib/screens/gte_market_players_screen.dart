@@ -6,6 +6,7 @@ import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../shared/widgets/gtex_premium_panels.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/player_match_service.dart';
+import '../models/player_avatar.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../services/avatar_mapper.dart';
 import '../widgets/gte_formatters.dart';
@@ -39,12 +40,28 @@ class GteMarketPlayersScreen extends StatefulWidget {
 
 enum _MarketLens { all, risers, fallers, highInterest }
 
+enum _MarketBrowseLane { buyPlayers, nationalRentals }
+
 class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
   late final TextEditingController _searchController;
   late final TextEditingController _clubController;
   late final TextEditingController _leagueController;
   late final TextEditingController _nationalTeamController;
   _MarketLens _selectedLens = _MarketLens.all;
+  _MarketBrowseLane _browseLane = _MarketBrowseLane.buyPlayers;
+  bool _isBrowseLoading = false;
+  String? _browseError;
+  List<GteMarketLeagueBrowseItem> _browseLeagues =
+      const <GteMarketLeagueBrowseItem>[];
+  List<GteMarketClubBrowseItem> _browseClubs =
+      const <GteMarketClubBrowseItem>[];
+  List<GteMarketNationalityBrowseItem> _browseNationalities =
+      const <GteMarketNationalityBrowseItem>[];
+  List<GteMarketPlayerListItem> _browsePlayers =
+      const <GteMarketPlayerListItem>[];
+  GteMarketLeagueBrowseItem? _selectedBrowseLeague;
+  GteMarketClubBrowseItem? _selectedBrowseClub;
+  GteMarketNationalityBrowseItem? _selectedBrowseNationality;
 
   @override
   void initState() {
@@ -63,6 +80,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
     _clubController.addListener(_handleSearchChanged);
     _leagueController.addListener(_handleSearchChanged);
     _nationalTeamController.addListener(_handleSearchChanged);
+    _loadBrowseRoots();
   }
 
   @override
@@ -79,8 +97,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
   }
 
   List<String> _marketTickerItems() {
-    final List<GteMarketPlayerListItem> players =
-        _filteredPlayers.take(8).toList();
+    final List<GteMarketPlayerListItem> players = _filteredPlayers
+        .take(8)
+        .toList();
     if (players.isEmpty) {
       return const <String>[
         'Scanning global player pool',
@@ -90,12 +109,11 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
     }
     return players
         .map((GteMarketPlayerListItem player) {
-          final String trend =
-              player.isRising
-                  ? 'rising'
-                  : (player.marketInterestScore ?? 0) > 72
-                  ? 'heavy flow'
-                  : 'watchlist';
+          final String trend = player.isRising
+              ? 'rising'
+              : (player.marketInterestScore ?? 0) > 72
+              ? 'heavy flow'
+              : 'watchlist';
           final double movement = player.movementPct ?? 0;
           return '${player.playerName} ${movement >= 0 ? '+' : ''}${movement.toStringAsFixed(1)}% · $trend';
         })
@@ -123,18 +141,15 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                 const GteMetricChip(label: 'Board', value: 'REAL PLAYERS'),
                 GteMetricChip(
                   label: 'Visible',
-                  value:
-                      _filteredPlayers.isEmpty
-                          ? 'SCANNING'
-                          : _filteredPlayers.length.toString(),
+                  value: _filteredPlayers.isEmpty
+                      ? 'SCANNING'
+                      : _filteredPlayers.length.toString(),
                 ),
                 GteMetricChip(
                   label: 'Pool size',
-                  value:
-                      (widget.controller.marketPage?.total ?? 0) == 0
-                          ? 'WARMING'
-                          : (widget.controller.marketPage?.total ?? 0)
-                              .toString(),
+                  value: (widget.controller.marketPage?.total ?? 0) == 0
+                      ? 'WARMING'
+                      : (widget.controller.marketPage?.total ?? 0).toString(),
                 ),
                 GteMetricChip(
                   label: 'Session',
@@ -146,10 +161,8 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               actions: <Widget>[
                 if (widget.navigationDependencies != null)
                   FilledButton.tonalIcon(
-                    onPressed:
-                        () => _openFeatureRoute(
-                          const PlayerCardsBrowseRouteData(),
-                        ),
+                    onPressed: () =>
+                        _openFeatureRoute(const PlayerCardsBrowseRouteData()),
                     icon: const Icon(Icons.style_outlined),
                     label: const Text('Player universe'),
                   ),
@@ -180,10 +193,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                               icon: const Icon(Icons.close),
                             ),
                           IconButton(
-                            onPressed:
-                                widget.controller.isLoadingMarket
-                                    ? null
-                                    : _refresh,
+                            onPressed: widget.controller.isLoadingMarket
+                                ? null
+                                : _refresh,
                             icon: const Icon(Icons.search),
                           ),
                         ],
@@ -193,100 +205,106 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                   ),
                   const SizedBox(height: 12),
                   LayoutBuilder(
-                    builder: (
-                      BuildContext context,
-                      BoxConstraints constraints,
-                    ) {
-                      final bool stacked = constraints.maxWidth < 680;
-                      final double fieldWidth =
-                          stacked
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
+                          final bool stacked = constraints.maxWidth < 680;
+                          final double fieldWidth = stacked
                               ? constraints.maxWidth
                               : (constraints.maxWidth - 24) / 3;
-                      return Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: <Widget>[
-                          SizedBox(
-                            width: fieldWidth,
-                            child: TextField(
-                              controller: _clubController,
-                              textInputAction: TextInputAction.search,
-                              decoration: InputDecoration(
-                                labelText: 'Club',
-                                hintText: 'Arsenal',
-                                prefixIcon: const Icon(Icons.shield_outlined),
-                                suffixIcon:
-                                    _clubController.text.trim().isEmpty
+                          return Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: <Widget>[
+                              SizedBox(
+                                width: fieldWidth,
+                                child: TextField(
+                                  controller: _clubController,
+                                  textInputAction: TextInputAction.search,
+                                  decoration: InputDecoration(
+                                    labelText: 'Club',
+                                    hintText: 'Arsenal',
+                                    prefixIcon: const Icon(
+                                      Icons.shield_outlined,
+                                    ),
+                                    suffixIcon:
+                                        _clubController.text.trim().isEmpty
                                         ? null
                                         : IconButton(
-                                          onPressed:
-                                              widget.controller.isLoadingMarket
-                                                  ? null
-                                                  : () =>
-                                                      _clearFilterController(
-                                                        _clubController,
-                                                      ),
-                                          icon: const Icon(Icons.close),
-                                        ),
+                                            onPressed:
+                                                widget
+                                                    .controller
+                                                    .isLoadingMarket
+                                                ? null
+                                                : () => _clearFilterController(
+                                                    _clubController,
+                                                  ),
+                                            icon: const Icon(Icons.close),
+                                          ),
+                                  ),
+                                  onSubmitted: (_) => _refresh(),
+                                ),
                               ),
-                              onSubmitted: (_) => _refresh(),
-                            ),
-                          ),
-                          SizedBox(
-                            width: fieldWidth,
-                            child: TextField(
-                              controller: _nationalTeamController,
-                              textInputAction: TextInputAction.search,
-                              decoration: InputDecoration(
-                                labelText: 'National team',
-                                hintText: 'Nigeria or Nigeria U20',
-                                prefixIcon: const Icon(Icons.flag_outlined),
-                                suffixIcon:
-                                    _nationalTeamController.text.trim().isEmpty
+                              SizedBox(
+                                width: fieldWidth,
+                                child: TextField(
+                                  controller: _nationalTeamController,
+                                  textInputAction: TextInputAction.search,
+                                  decoration: InputDecoration(
+                                    labelText: 'National team',
+                                    hintText: 'Nigeria or Nigeria U20',
+                                    prefixIcon: const Icon(Icons.flag_outlined),
+                                    suffixIcon:
+                                        _nationalTeamController.text
+                                            .trim()
+                                            .isEmpty
                                         ? null
                                         : IconButton(
-                                          onPressed:
-                                              widget.controller.isLoadingMarket
-                                                  ? null
-                                                  : () =>
-                                                      _clearFilterController(
-                                                        _nationalTeamController,
-                                                      ),
-                                          icon: const Icon(Icons.close),
-                                        ),
+                                            onPressed:
+                                                widget
+                                                    .controller
+                                                    .isLoadingMarket
+                                                ? null
+                                                : () => _clearFilterController(
+                                                    _nationalTeamController,
+                                                  ),
+                                            icon: const Icon(Icons.close),
+                                          ),
+                                  ),
+                                  onSubmitted: (_) => _refresh(),
+                                ),
                               ),
-                              onSubmitted: (_) => _refresh(),
-                            ),
-                          ),
-                          SizedBox(
-                            width: fieldWidth,
-                            child: TextField(
-                              controller: _leagueController,
-                              textInputAction: TextInputAction.search,
-                              decoration: InputDecoration(
-                                labelText: 'League',
-                                hintText: 'Premier League',
-                                prefixIcon: const Icon(Icons.public_outlined),
-                                suffixIcon:
-                                    _leagueController.text.trim().isEmpty
+                              SizedBox(
+                                width: fieldWidth,
+                                child: TextField(
+                                  controller: _leagueController,
+                                  textInputAction: TextInputAction.search,
+                                  decoration: InputDecoration(
+                                    labelText: 'League',
+                                    hintText: 'Premier League',
+                                    prefixIcon: const Icon(
+                                      Icons.public_outlined,
+                                    ),
+                                    suffixIcon:
+                                        _leagueController.text.trim().isEmpty
                                         ? null
                                         : IconButton(
-                                          onPressed:
-                                              widget.controller.isLoadingMarket
-                                                  ? null
-                                                  : () =>
-                                                      _clearFilterController(
-                                                        _leagueController,
-                                                      ),
-                                          icon: const Icon(Icons.close),
-                                        ),
+                                            onPressed:
+                                                widget
+                                                    .controller
+                                                    .isLoadingMarket
+                                                ? null
+                                                : () => _clearFilterController(
+                                                    _leagueController,
+                                                  ),
+                                            icon: const Icon(Icons.close),
+                                          ),
+                                  ),
+                                  onSubmitted: (_) => _refresh(),
+                                ),
                               ),
-                              onSubmitted: (_) => _refresh(),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                            ],
+                          );
+                        },
                   ),
                   if (_hasActiveStructuredFilters) ...<Widget>[
                     const SizedBox(height: 12),
@@ -297,35 +315,30 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                         if (_clubController.text.trim().isNotEmpty)
                           InputChip(
                             label: Text('Club: ${_clubController.text.trim()}'),
-                            onDeleted:
-                                widget.controller.isLoadingMarket
-                                    ? null
-                                    : () =>
-                                        _clearFilterController(_clubController),
+                            onDeleted: widget.controller.isLoadingMarket
+                                ? null
+                                : () => _clearFilterController(_clubController),
                           ),
                         if (_leagueController.text.trim().isNotEmpty)
                           InputChip(
                             label: Text(
                               'League: ${_leagueController.text.trim()}',
                             ),
-                            onDeleted:
-                                widget.controller.isLoadingMarket
-                                    ? null
-                                    : () => _clearFilterController(
-                                      _leagueController,
-                                    ),
+                            onDeleted: widget.controller.isLoadingMarket
+                                ? null
+                                : () =>
+                                      _clearFilterController(_leagueController),
                           ),
                         if (_nationalTeamController.text.trim().isNotEmpty)
                           InputChip(
                             label: Text(
                               'National team: ${_nationalTeamController.text.trim()}',
                             ),
-                            onDeleted:
-                                widget.controller.isLoadingMarket
-                                    ? null
-                                    : () => _clearFilterController(
-                                      _nationalTeamController,
-                                    ),
+                            onDeleted: widget.controller.isLoadingMarket
+                                ? null
+                                : () => _clearFilterController(
+                                    _nationalTeamController,
+                                  ),
                           ),
                       ],
                     ),
@@ -336,10 +349,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                       Expanded(
                         child: _MiniTerminalTile(
                           label: 'Access',
-                          value:
-                              widget.controller.isAuthenticated
-                                  ? 'READY'
-                                  : 'VISITOR',
+                          value: widget.controller.isAuthenticated
+                              ? 'READY'
+                              : 'VISITOR',
                           accent: GteShellTheme.accent,
                         ),
                       ),
@@ -347,10 +359,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                       Expanded(
                         child: _MiniTerminalTile(
                           label: 'Capital',
-                          value:
-                              widget.controller.walletSummary == null
-                                  ? 'SYNCING'
-                                  : 'READY',
+                          value: widget.controller.walletSummary == null
+                              ? 'SYNCING'
+                              : 'READY',
                           accent: GteShellTheme.accentWarm,
                         ),
                       ),
@@ -363,6 +374,24 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             GtexLiveTickerBar(
               accentColor: GteShellTheme.accent,
               items: _marketTickerItems(),
+            ),
+            const SizedBox(height: 20),
+            _MarketBrowsePanel(
+              lane: _browseLane,
+              isLoading: _isBrowseLoading,
+              error: _browseError,
+              leagues: _browseLeagues,
+              clubs: _browseClubs,
+              nationalities: _browseNationalities,
+              players: _browsePlayers,
+              selectedLeague: _selectedBrowseLeague,
+              selectedClub: _selectedBrowseClub,
+              selectedNationality: _selectedBrowseNationality,
+              onLaneChanged: _setBrowseLane,
+              onLeagueSelected: _selectBrowseLeague,
+              onClubSelected: _selectBrowseClub,
+              onNationalitySelected: _selectBrowseNationality,
+              onOpenPlayer: widget.onOpenPlayer,
             ),
             const SizedBox(height: 20),
             GtexSignalStrip(
@@ -389,10 +418,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                 ),
                 GtexSignalTile(
                   label: 'Move status',
-                  value:
-                      widget.controller.isAuthenticated
-                          ? 'READY TO SIGN'
-                          : 'VISITOR MODE',
+                  value: widget.controller.isAuthenticated
+                      ? 'READY TO SIGN'
+                      : 'VISITOR MODE',
                   caption:
                       'Sign-in unlocks move tickets, capital context, and account-aware confirmation flows.',
                   icon: Icons.bolt_outlined,
@@ -403,10 +431,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             const SizedBox(height: 20),
             GteSyncStatusCard(
               title: 'Player board health',
-              status:
-                  widget.controller.marketError == null
-                      ? 'Player discovery, club context, and move hints are in sync.'
-                      : 'Feed degraded. The last confirmed board remains visible for review.',
+              status: widget.controller.marketError == null
+                  ? 'Player discovery, club context, and move hints are in sync.'
+                  : 'Feed degraded. The last confirmed board remains visible for review.',
               syncedAt: widget.controller.marketSyncedAt,
               accent: GteShellTheme.accent,
               isRefreshing: widget.controller.isLoadingMarket,
@@ -415,15 +442,13 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             if (widget.navigationDependencies != null) ...<Widget>[
               const SizedBox(height: 20),
               _MarketRoutePanel(
-                onOpenPlayerCards:
-                    () => _openFeatureRoute(const PlayerCardsBrowseRouteData()),
-                onOpenWorld:
-                    () => _openFeatureRoute(const WorldOverviewRouteData()),
+                onOpenPlayerCards: () =>
+                    _openFeatureRoute(const PlayerCardsBrowseRouteData()),
+                onOpenWorld: () =>
+                    _openFeatureRoute(const WorldOverviewRouteData()),
                 onOpenCreatorShareMarket: _openCreatorShareMarketRoute,
-                onOpenClubSaleMarket:
-                    () => _openFeatureRoute(
-                      const ClubSaleMarketListingsRouteData(),
-                    ),
+                onOpenClubSaleMarket: () =>
+                    _openFeatureRoute(const ClubSaleMarketListingsRouteData()),
               ),
             ],
             const SizedBox(height: 20),
@@ -459,10 +484,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               children: <Widget>[
                 _DeskSignalCard(
                   title: 'Board mood',
-                  body:
-                      widget.controller.players.isEmpty
-                          ? 'Waiting for fresh player activity.'
-                          : 'The board is live and ready to scan.',
+                  body: widget.controller.players.isEmpty
+                      ? 'Waiting for fresh player activity.'
+                      : 'The board is live and ready to scan.',
                 ),
                 _DeskSignalCard(
                   title: 'Depth note',
@@ -501,14 +525,12 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             const SizedBox(height: 20),
             GtexSectionHeader(
               eyebrow: 'PLAYER BOARD',
-              title:
-                  _filteredPlayers.isEmpty
-                      ? 'The board needs another look.'
-                      : 'Scan the tape and pick your next move.',
-              description:
-                  _filteredPlayers.isEmpty
-                      ? 'When the board is thin, the app keeps it explicit. Widen the filter or clear the search while the next live wave assembles.'
-                      : 'Cards stay compact, emotional, and deliberate so this page feels like football trading with stakes, not a spreadsheet in disguise.',
+              title: _filteredPlayers.isEmpty
+                  ? 'The board needs another look.'
+                  : 'Scan the tape and pick your next move.',
+              description: _filteredPlayers.isEmpty
+                  ? 'When the board is thin, the app keeps it explicit. Widen the filter or clear the search while the next live wave assembles.'
+                  : 'Cards stay compact, emotional, and deliberate so this page feels like football trading with stakes, not a spreadsheet in disguise.',
               accent: GteShellTheme.accent,
             ),
             const SizedBox(height: 14),
@@ -545,12 +567,12 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             else if (_filteredPlayers.isEmpty)
               GteStatePanel(
                 title: 'No players match this filter',
-                message:
-                    !_hasAnyBoardQuery
-                        ? 'This filter lane is quiet right now. The market is still scanning for the next wave of opportunity.'
-                        : 'No players matched ${_activeBoardQueryLabel()} in the ${_lensLabel(_selectedLens).toLowerCase()} view yet. Brokers are still sweeping the tape.',
-                actionLabel:
-                    _hasAnyBoardQuery ? 'Clear filters' : 'Reset filter',
+                message: !_hasAnyBoardQuery
+                    ? 'This filter lane is quiet right now. The market is still scanning for the next wave of opportunity.'
+                    : 'No players matched ${_activeBoardQueryLabel()} in the ${_lensLabel(_selectedLens).toLowerCase()} view yet. Brokers are still sweeping the tape.',
+                actionLabel: _hasAnyBoardQuery
+                    ? 'Clear filters'
+                    : 'Reset filter',
                 onAction: () {
                   _searchController.clear();
                   _clubController.clear();
@@ -639,6 +661,174 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
   void _handleSearchChanged() {
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  Future<void> _loadBrowseRoots() async {
+    setState(() {
+      _isBrowseLoading = true;
+      _browseError = null;
+    });
+    try {
+      final List<Object> results = await Future.wait<Object>(<Future<Object>>[
+        widget.controller.api.fetchMarketLeagues(),
+        widget.controller.api.fetchMarketNationalTeams(),
+      ]);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _browseLeagues = results[0] as List<GteMarketLeagueBrowseItem>;
+        _browseNationalities =
+            results[1] as List<GteMarketNationalityBrowseItem>;
+        _selectedBrowseLeague = _browseLeagues.isEmpty
+            ? null
+            : _browseLeagues.first;
+        _selectedBrowseNationality = _browseNationalities.isEmpty
+            ? null
+            : _browseNationalities.first;
+      });
+      final GteMarketLeagueBrowseItem? league = _selectedBrowseLeague;
+      if (league != null) {
+        await _selectBrowseLeague(league);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _browseError = 'Market browse is recalibrating. ${error.toString()}';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBrowseLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _setBrowseLane(_MarketBrowseLane lane) async {
+    if (_browseLane == lane) {
+      return;
+    }
+    setState(() {
+      _browseLane = lane;
+      _browsePlayers = const <GteMarketPlayerListItem>[];
+      _browseError = null;
+    });
+    if (lane == _MarketBrowseLane.buyPlayers) {
+      final GteMarketLeagueBrowseItem? league = _selectedBrowseLeague;
+      if (league != null) {
+        await _selectBrowseLeague(league);
+      }
+      return;
+    }
+    final GteMarketNationalityBrowseItem? nationality =
+        _selectedBrowseNationality;
+    if (nationality != null) {
+      await _selectBrowseNationality(nationality);
+    }
+  }
+
+  Future<void> _selectBrowseLeague(GteMarketLeagueBrowseItem league) async {
+    setState(() {
+      _selectedBrowseLeague = league;
+      _selectedBrowseClub = null;
+      _browseClubs = const <GteMarketClubBrowseItem>[];
+      _browsePlayers = const <GteMarketPlayerListItem>[];
+      _isBrowseLoading = true;
+      _browseError = null;
+    });
+    try {
+      final List<GteMarketClubBrowseItem> clubs = await widget.controller.api
+          .fetchMarketLeagueClubs(league.leagueId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _browseClubs = clubs;
+        _selectedBrowseClub = clubs.isEmpty ? null : clubs.first;
+      });
+      final GteMarketClubBrowseItem? club = _selectedBrowseClub;
+      if (club != null) {
+        await _selectBrowseClub(club);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _browseError = 'League desk is recalibrating. ${error.toString()}';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBrowseLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectBrowseClub(GteMarketClubBrowseItem club) async {
+    setState(() {
+      _selectedBrowseClub = club;
+      _isBrowseLoading = true;
+      _browseError = null;
+    });
+    try {
+      final GteMarketPlayerListView page = await widget.controller.api
+          .fetchMarketClubPlayers(club.clubId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _browsePlayers = page.items;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _browseError = 'Club desk is recalibrating. ${error.toString()}';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBrowseLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectBrowseNationality(
+    GteMarketNationalityBrowseItem nationality,
+  ) async {
+    setState(() {
+      _selectedBrowseNationality = nationality;
+      _isBrowseLoading = true;
+      _browseError = null;
+      _browsePlayers = const <GteMarketPlayerListItem>[];
+    });
+    try {
+      final GteMarketPlayerListView page = await widget.controller.api
+          .fetchMarketNationalTeamEligiblePlayers(nationality.countryCode);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _browsePlayers = page.items;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _browseError =
+              'National rental desk is recalibrating. ${error.toString()}';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBrowseLoading = false;
+        });
+      }
     }
   }
 
@@ -741,8 +931,9 @@ String _deskBiasLabel(List<GteMarketPlayerListItem> players) {
   if (players.isEmpty) {
     return 'WAITING';
   }
-  final int risers =
-      players.where((GteMarketPlayerListItem player) => player.isRising).length;
+  final int risers = players
+      .where((GteMarketPlayerListItem player) => player.isRising)
+      .length;
   final int fallers = players.length - risers;
   if (risers == fallers) {
     return 'BALANCED';
@@ -812,6 +1003,248 @@ class _MarketRoutePanel extends StatelessWidget {
   }
 }
 
+class _MarketBrowsePanel extends StatelessWidget {
+  const _MarketBrowsePanel({
+    required this.lane,
+    required this.isLoading,
+    required this.error,
+    required this.leagues,
+    required this.clubs,
+    required this.nationalities,
+    required this.players,
+    required this.selectedLeague,
+    required this.selectedClub,
+    required this.selectedNationality,
+    required this.onLaneChanged,
+    required this.onLeagueSelected,
+    required this.onClubSelected,
+    required this.onNationalitySelected,
+    required this.onOpenPlayer,
+  });
+
+  final _MarketBrowseLane lane;
+  final bool isLoading;
+  final String? error;
+  final List<GteMarketLeagueBrowseItem> leagues;
+  final List<GteMarketClubBrowseItem> clubs;
+  final List<GteMarketNationalityBrowseItem> nationalities;
+  final List<GteMarketPlayerListItem> players;
+  final GteMarketLeagueBrowseItem? selectedLeague;
+  final GteMarketClubBrowseItem? selectedClub;
+  final GteMarketNationalityBrowseItem? selectedNationality;
+  final ValueChanged<_MarketBrowseLane> onLaneChanged;
+  final ValueChanged<GteMarketLeagueBrowseItem> onLeagueSelected;
+  final ValueChanged<GteMarketClubBrowseItem> onClubSelected;
+  final ValueChanged<GteMarketNationalityBrowseItem> onNationalitySelected;
+  final ValueChanged<String> onOpenPlayer;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool buyMode = lane == _MarketBrowseLane.buyPlayers;
+    return GteSurfacePanel(
+      accentColor: buyMode ? GteShellTheme.accent : GteShellTheme.accentWarm,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: GtexSectionHeader(
+                  eyebrow: 'BROWSE DESK',
+                  title: buyMode
+                      ? 'Buy players by league, club, then card.'
+                      : 'Rent national-team talent by country.',
+                  description: buyMode
+                      ? 'Follow the real football map instead of searching blind: pick a league, open a club, then inspect the players available for purchase.'
+                      : 'Pick a national-team pool and inspect eligible players before entering hosted country competitions.',
+                  accent: buyMode
+                      ? GteShellTheme.accent
+                      : GteShellTheme.accentWarm,
+                ),
+              ),
+              if (isLoading)
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SegmentedButton<_MarketBrowseLane>(
+            segments: const <ButtonSegment<_MarketBrowseLane>>[
+              ButtonSegment<_MarketBrowseLane>(
+                value: _MarketBrowseLane.buyPlayers,
+                icon: Icon(Icons.storefront_outlined),
+                label: Text('Buy Players'),
+              ),
+              ButtonSegment<_MarketBrowseLane>(
+                value: _MarketBrowseLane.nationalRentals,
+                icon: Icon(Icons.flag_outlined),
+                label: Text('National Team Rentals'),
+              ),
+            ],
+            selected: <_MarketBrowseLane>{lane},
+            onSelectionChanged: (Set<_MarketBrowseLane> value) =>
+                onLaneChanged(value.first),
+          ),
+          if (error != null) ...<Widget>[
+            const SizedBox(height: 14),
+            Text(error!, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+          const SizedBox(height: 14),
+          if (buyMode) ...<Widget>[
+            _BrowseChipWrap<GteMarketLeagueBrowseItem>(
+              items: leagues,
+              selected: selectedLeague,
+              labelFor: (GteMarketLeagueBrowseItem item) =>
+                  '${item.displayName} · ${item.clubCount} clubs',
+              onSelected: onLeagueSelected,
+            ),
+            const SizedBox(height: 10),
+            _BrowseChipWrap<GteMarketClubBrowseItem>(
+              items: clubs,
+              selected: selectedClub,
+              labelFor: (GteMarketClubBrowseItem item) =>
+                  '${item.displayName} · ${item.playerCount} players',
+              onSelected: onClubSelected,
+            ),
+          ] else
+            _BrowseChipWrap<GteMarketNationalityBrowseItem>(
+              items: nationalities,
+              selected: selectedNationality,
+              labelFor: (GteMarketNationalityBrowseItem item) =>
+                  '${item.displayName} · ${item.eligiblePlayerCount} eligible',
+              onSelected: onNationalitySelected,
+            ),
+          const SizedBox(height: 14),
+          if (players.isEmpty)
+            Text(
+              isLoading
+                  ? 'Scanning the live player pool...'
+                  : 'Select a lane above to reveal live player cards.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
+          else
+            SizedBox(
+              height: 132,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: players.take(12).length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (BuildContext context, int index) {
+                  final GteMarketPlayerListItem player = players[index];
+                  return _BrowsePlayerTile(
+                    player: player,
+                    onTap: () => onOpenPlayer(player.playerId),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BrowseChipWrap<T> extends StatelessWidget {
+  const _BrowseChipWrap({
+    required this.items,
+    required this.selected,
+    required this.labelFor,
+    required this.onSelected,
+  });
+
+  final List<T> items;
+  final T? selected;
+  final String Function(T item) labelFor;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Text(
+        'Browse data is warming up.',
+        style: Theme.of(context).textTheme.bodyMedium,
+      );
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: items
+          .take(8)
+          .map(
+            (T item) => ChoiceChip(
+              label: Text(labelFor(item)),
+              selected: identical(item, selected),
+              onSelected: (_) => onSelected(item),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class _BrowsePlayerTile extends StatelessWidget {
+  const _BrowsePlayerTile({required this.player, required this.onTap});
+
+  final GteMarketPlayerListItem player;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final PlayerAvatar avatar = AvatarMapper.fromMarketListItem(player);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 260,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: Colors.white.withValues(alpha: 0.06),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: <Widget>[
+            _PlayerPortrait(imageUrl: player.imageUrl, avatar: avatar),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    player.playerName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    player.currentClubName ??
+                        player.nationality ??
+                        'Scout pool',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    gteFormatNullableCredits(player.currentValueCredits),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: GteShellTheme.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MarketLensBar extends StatelessWidget {
   const _MarketLensBar({
     required this.selectedLens,
@@ -851,8 +1284,9 @@ class _MarketLensBar extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool stacked = constraints.maxWidth < 720;
-        final double tileWidth =
-            stacked ? constraints.maxWidth : (constraints.maxWidth - 30) / 4;
+        final double tileWidth = stacked
+            ? constraints.maxWidth
+            : (constraints.maxWidth - 30) / 4;
         return Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -891,8 +1325,9 @@ class _MarketLensTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accent =
-        selected ? GteShellTheme.accent : GteShellTheme.textMuted;
+    final Color accent = selected
+        ? GteShellTheme.accent
+        : GteShellTheme.textMuted;
     return GteSurfacePanel(
       onTap: onTap,
       emphasized: selected,
@@ -951,27 +1386,22 @@ class _MarketLensCounts {
   factory _MarketLensCounts.fromPlayers(List<GteMarketPlayerListItem> players) {
     return _MarketLensCounts(
       total: players.length,
-      risers:
-          players
-              .where(
-                (GteMarketPlayerListItem player) =>
-                    (player.movementPct ?? 0) > 0,
-              )
-              .length,
-      fallers:
-          players
-              .where(
-                (GteMarketPlayerListItem player) =>
-                    (player.movementPct ?? 0) < 0,
-              )
-              .length,
-      highInterest:
-          players
-              .where(
-                (GteMarketPlayerListItem player) =>
-                    (player.marketInterestScore ?? 0) >= 70,
-              )
-              .length,
+      risers: players
+          .where(
+            (GteMarketPlayerListItem player) => (player.movementPct ?? 0) > 0,
+          )
+          .length,
+      fallers: players
+          .where(
+            (GteMarketPlayerListItem player) => (player.movementPct ?? 0) < 0,
+          )
+          .length,
+      highInterest: players
+          .where(
+            (GteMarketPlayerListItem player) =>
+                (player.marketInterestScore ?? 0) >= 70,
+          )
+          .length,
     );
   }
 }
@@ -988,22 +1418,25 @@ class _PlayerCard extends StatelessWidget {
     final double movementPct = player.movementPct ?? 0;
     final double trendScore = player.trendScore ?? 0;
     final int marketInterestScore = player.marketInterestScore ?? 0;
-    final Color movementColor =
-        player.isRising ? GteShellTheme.positive : GteShellTheme.negative;
+    final Color movementColor = player.isRising
+        ? GteShellTheme.positive
+        : GteShellTheme.negative;
     final avatar = AvatarMapper.fromMarketListItem(player);
-    final String demandLabel =
-        marketInterestScore >= 80
-            ? 'HEAVY FLOW'
-            : marketInterestScore >= 55
-            ? 'ACTIVE FLOW'
-            : 'THIN FLOW';
+    final Widget playerPortrait = _PlayerPortrait(
+      imageUrl: player.imageUrl,
+      avatar: avatar,
+    );
+    final String demandLabel = marketInterestScore >= 80
+        ? 'HEAVY FLOW'
+        : marketInterestScore >= 55
+        ? 'ACTIVE FLOW'
+        : 'THIN FLOW';
     final bool looksIlliquid = marketInterestScore < 35 && trendScore < 4;
-    final String momentumLabel =
-        trendScore >= 7
-            ? 'Breakout'
-            : trendScore >= 4
-            ? 'Building'
-            : 'Quiet';
+    final String momentumLabel = trendScore >= 7
+        ? 'Breakout'
+        : trendScore >= 4
+        ? 'Building'
+        : 'Quiet';
     return GteSurfacePanel(
       onTap: onTap,
       accentColor: movementColor,
@@ -1020,10 +1453,9 @@ class _PlayerCard extends StatelessWidget {
               ),
               _MarketTickerPill(
                 label: demandLabel,
-                color:
-                    looksIlliquid
-                        ? GteShellTheme.accentWarm
-                        : GteShellTheme.accent,
+                color: looksIlliquid
+                    ? GteShellTheme.accentWarm
+                    : GteShellTheme.accent,
               ),
               _MarketTickerPill(
                 label: momentumLabel,
@@ -1069,18 +1501,16 @@ class _PlayerCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      color:
-                          looksIlliquid
-                              ? GteShellTheme.accentWarm.withValues(alpha: 0.12)
-                              : movementColor.withValues(alpha: 0.1),
+                      color: looksIlliquid
+                          ? GteShellTheme.accentWarm.withValues(alpha: 0.12)
+                          : movementColor.withValues(alpha: 0.1),
                     ),
                     child: Text(
                       looksIlliquid ? 'THIN BOOK' : demandLabel,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color:
-                            looksIlliquid
-                                ? GteShellTheme.accentWarm
-                                : movementColor,
+                        color: looksIlliquid
+                            ? GteShellTheme.accentWarm
+                            : movementColor,
                       ),
                     ),
                   ),
@@ -1102,13 +1532,12 @@ class _PlayerCard extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           'LIVE QUOTE',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: GteShellTheme.textMuted,
-                            letterSpacing: 0.8,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: GteShellTheme.textMuted,
+                                letterSpacing: 0.8,
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -1145,7 +1574,7 @@ class _PlayerCard extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        PlayerMarketAvatar(avatar: avatar),
+                        playerPortrait,
                         const SizedBox(width: 16),
                         Expanded(child: identityBlock),
                       ],
@@ -1158,7 +1587,7 @@ class _PlayerCard extends StatelessWidget {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  PlayerMarketAvatar(avatar: avatar),
+                  playerPortrait,
                   const SizedBox(width: 16),
                   Expanded(child: identityBlock),
                   const SizedBox(width: 16),
@@ -1187,12 +1616,11 @@ class _PlayerCard extends StatelessWidget {
               Expanded(
                 child: _MicroBookStat(
                   label: 'Scout demand',
-                  value:
-                      marketInterestScore >= 70
-                          ? 'HEAVY'
-                          : marketInterestScore >= 40
-                          ? 'ACTIVE'
-                          : 'LIGHT',
+                  value: marketInterestScore >= 70
+                      ? 'HEAVY'
+                      : marketInterestScore >= 40
+                      ? 'ACTIVE'
+                      : 'LIGHT',
                   color: GteShellTheme.accentWarm,
                 ),
               ),
@@ -1210,10 +1638,8 @@ class _PlayerCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                     color:
                         index < ((marketInterestScore / 20).clamp(1, 5).toInt())
-                            ? movementColor.withValues(
-                              alpha: 0.9 - (index * 0.1),
-                            )
-                            : Colors.white.withValues(alpha: 0.08),
+                        ? movementColor.withValues(alpha: 0.9 - (index * 0.1))
+                        : Colors.white.withValues(alpha: 0.08),
                   ),
                 ),
               ),
@@ -1335,6 +1761,34 @@ class _DeskSignalCard extends StatelessWidget {
             Text(body, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PlayerPortrait extends StatelessWidget {
+  const _PlayerPortrait({required this.imageUrl, required this.avatar});
+
+  final String? imageUrl;
+  final PlayerAvatar avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final String? url = imageUrl?.trim();
+    if (url == null || url.isEmpty) {
+      return PlayerMarketAvatar(avatar: avatar);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Image.network(
+        url,
+        key: const Key('market-player-network-image'),
+        width: 64,
+        height: 64,
+        fit: BoxFit.cover,
+        errorBuilder:
+            (BuildContext context, Object error, StackTrace? stackTrace) =>
+                PlayerMarketAvatar(avatar: avatar),
       ),
     );
   }

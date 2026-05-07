@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1455,
+  "route_count": 1461,
   "routes": [
     {
       "method": "POST",
@@ -19789,6 +19789,89 @@
     },
     {
       "method": "GET",
+      "path": "/api/market/clubs/{club_id}/players",
+      "effective_paths": [
+        "/api/market/clubs/{club_id}/players",
+        "/market/clubs/{club_id}/players"
+      ],
+      "file": "backend/app/market/router.py",
+      "handler": "list_market_club_players",
+      "router_variable": "router",
+      "module_path": "app.market.router",
+      "module_mounts": [
+        "market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "limit",
+          "ge",
+          "le",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketPlayerListView",
+        "returns": "MarketPlayerListView"
+      },
+      "version": "canonical",
+      "domain": "market"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/leagues",
+      "effective_paths": [
+        "/api/market/leagues",
+        "/market/leagues"
+      ],
+      "file": "backend/app/market/router.py",
+      "handler": "list_market_leagues",
+      "router_variable": "router",
+      "module_path": "app.market.router",
+      "module_mounts": [
+        "market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "list[dict[str, object]]"
+      },
+      "version": "canonical",
+      "domain": "market"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/leagues/{league_id}/clubs",
+      "effective_paths": [
+        "/api/market/leagues/{league_id}/clubs",
+        "/market/leagues/{league_id}/clubs"
+      ],
+      "file": "backend/app/market/router.py",
+      "handler": "list_market_league_clubs",
+      "router_variable": "router",
+      "module_path": "app.market.router",
+      "module_mounts": [
+        "market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "league_id",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "list[dict[str, object]]"
+      },
+      "version": "canonical",
+      "domain": "market"
+    },
+    {
+      "method": "GET",
       "path": "/api/market/listings/{listing_id}/matches",
       "effective_paths": [
         "/api/market/listings/{listing_id}/matches",
@@ -19868,6 +19951,118 @@
       "response_shape": {
         "response_model": "MarketMoversView",
         "returns": "MarketMoversView"
+      },
+      "version": "canonical",
+      "domain": "market"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/national-teams",
+      "effective_paths": [
+        "/api/market/national-teams",
+        "/market/national-teams"
+      ],
+      "file": "backend/app/market/router.py",
+      "handler": "list_market_national_teams",
+      "router_variable": "router",
+      "module_path": "app.market.router",
+      "module_mounts": [
+        "market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "list[dict[str, object]]"
+      },
+      "version": "canonical",
+      "domain": "market"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/national-teams/{team_id}/eligible-players",
+      "effective_paths": [
+        "/api/market/national-teams/{team_id}/eligible-players",
+        "/market/national-teams/{team_id}/eligible-players"
+      ],
+      "file": "backend/app/market/router.py",
+      "handler": "list_market_national_team_eligible_players",
+      "router_variable": "router",
+      "module_path": "app.market.router",
+      "module_mounts": [
+        "market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "team_id",
+          "limit",
+          "ge",
+          "le",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketPlayerListView",
+        "returns": "MarketPlayerListView"
+      },
+      "version": "canonical",
+      "domain": "market"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/nationalities",
+      "effective_paths": [
+        "/api/market/nationalities",
+        "/market/nationalities"
+      ],
+      "file": "backend/app/market/router.py",
+      "handler": "list_market_nationalities",
+      "router_variable": "router",
+      "module_path": "app.market.router",
+      "module_mounts": [
+        "market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "list[dict[str, object]]"
+      },
+      "version": "canonical",
+      "domain": "market"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/nationalities/{country_code}/players",
+      "effective_paths": [
+        "/api/market/nationalities/{country_code}/players",
+        "/market/nationalities/{country_code}/players"
+      ],
+      "file": "backend/app/market/router.py",
+      "handler": "list_market_nationality_players",
+      "router_variable": "router",
+      "module_path": "app.market.router",
+      "module_mounts": [
+        "market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "country_code",
+          "limit",
+          "ge",
+          "le",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketPlayerListView",
+        "returns": "MarketPlayerListView"
       },
       "version": "canonical",
       "domain": "market"
@@ -20832,36 +21027,6 @@
       "response_shape": {
         "response_model": "MatchViewStateView",
         "returns": "MatchViewStateView"
-      },
-      "version": "canonical",
-      "domain": "match"
-    },
-    {
-      "method": "GET",
-      "path": "/match-viewer/{match_key}/illusion",
-      "effective_paths": [
-        "/api/match-viewer/{match_key}/illusion"
-      ],
-      "file": "backend/app/routes/match_viewer.py",
-      "handler": "read_match_viewer_illusion_payload",
-      "router_variable": "router",
-      "module_path": "app.routes.match_viewer",
-      "module_mounts": [
-        "match_viewer"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_key",
-          "request",
-          "session",
-          "service",
-          "scaling_service",
-          "presentation_service"
-        ]
-      },
-      "response_shape": {
-        "response_model": "MatchViewerIllusionPayloadView",
-        "returns": "MatchViewerIllusionPayloadView"
       },
       "version": "canonical",
       "domain": "match"

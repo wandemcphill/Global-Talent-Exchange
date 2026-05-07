@@ -445,6 +445,24 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/data/gte_exchange_api_client.dart",
+      "from": "/api/v2/market/leagues",
+      "to": "/api/market/leagues",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/gte_exchange_api_client.dart",
+      "from": "/api/v2/market/nationalities",
+      "to": "/api/market/nationalities",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/gte_exchange_api_client.dart",
+      "from": "/api/v2/market/national-teams",
+      "to": "/api/market/national-teams",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/data/hosted_competition_api.dart",
       "from": "/api/v2/hosted-competitions/templates",
       "to": "/api/hosted-competitions/templates",

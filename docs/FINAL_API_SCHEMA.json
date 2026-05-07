@@ -4900,6 +4900,42 @@
         "response_model": "CreatorTradeView | PlayerSharePurchaseView"
       },
       {
+        "method": "GET",
+        "path": "/api/market/clubs/{club_id}/players",
+        "handler": "list_market_club_players",
+        "response_model": "MarketPlayerListView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/clubs/{club_id}/players",
+        "handler": "list_market_club_players",
+        "response_model": "MarketPlayerListView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/leagues",
+        "handler": "list_market_leagues",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/leagues",
+        "handler": "list_market_leagues",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/leagues/{league_id}/clubs",
+        "handler": "list_market_league_clubs",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/leagues/{league_id}/clubs",
+        "handler": "list_market_league_clubs",
+        "response_model": null
+      },
+      {
         "method": "POST",
         "path": "/api/market/listings",
         "handler": "create_listing",
@@ -4958,6 +4994,54 @@
         "path": "/api/market/movers",
         "handler": "get_market_movers",
         "response_model": "MarketMoversView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/national-teams",
+        "handler": "list_market_national_teams",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/national-teams",
+        "handler": "list_market_national_teams",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/national-teams/{team_id}/eligible-players",
+        "handler": "list_market_national_team_eligible_players",
+        "response_model": "MarketPlayerListView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/national-teams/{team_id}/eligible-players",
+        "handler": "list_market_national_team_eligible_players",
+        "response_model": "MarketPlayerListView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/nationalities",
+        "handler": "list_market_nationalities",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/nationalities",
+        "handler": "list_market_nationalities",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/nationalities/{country_code}/players",
+        "handler": "list_market_nationality_players",
+        "response_model": "MarketPlayerListView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/nationalities/{country_code}/players",
+        "handler": "list_market_nationality_players",
+        "response_model": "MarketPlayerListView"
       },
       {
         "method": "POST",
@@ -5292,12 +5376,6 @@
         "path": "/api/match-viewer/{match_key}",
         "handler": "read_match_viewer_timeline",
         "response_model": "MatchViewStateView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/match-viewer/{match_key}/illusion",
-        "handler": "read_match_viewer_illusion_payload",
-        "response_model": "MatchViewerIllusionPayloadView"
       },
       {
         "method": "GET",

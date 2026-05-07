@@ -5,6 +5,7 @@ const logger = require("./logger");
 const { captureException } = require("./observability");
 const { seasonQueue } = require("./queues");
 const { runMatchday } = require("./seasonEngine");
+const { safeJobId } = require("./jobIds");
 
 async function enqueueSeasonTick({ date = new Date(), runId = toDateKey(date) } = {}) {
   if (!config.season.enabled) {
@@ -20,7 +21,7 @@ async function enqueueSeasonTick({ date = new Date(), runId = toDateKey(date) } 
     {
       date: dateKey,
     },
-    { jobId: `season:matchday:${dateKey}:${runId}` },
+    { jobId: safeJobId("season", "matchday", dateKey, runId) },
   );
   logger.info("season matchday queued", {
     event: "season_matchday_queued",

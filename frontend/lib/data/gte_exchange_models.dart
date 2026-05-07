@@ -39,22 +39,22 @@ class PlayerFilter {
   }) {
     return PlayerFilter(
       search: search == _playerFilterUnset ? this.search : search as String?,
-      position:
-          position == _playerFilterUnset ? this.position : position as String?,
-      country:
-          country == _playerFilterUnset ? this.country : country as String?,
-      nationalTeam:
-          nationalTeam == _playerFilterUnset
-              ? this.nationalTeam
-              : nationalTeam as String?,
+      position: position == _playerFilterUnset
+          ? this.position
+          : position as String?,
+      country: country == _playerFilterUnset
+          ? this.country
+          : country as String?,
+      nationalTeam: nationalTeam == _playerFilterUnset
+          ? this.nationalTeam
+          : nationalTeam as String?,
       club: club == _playerFilterUnset ? this.club : club as String?,
       league: league == _playerFilterUnset ? this.league : league as String?,
       minAge: minAge == _playerFilterUnset ? this.minAge : minAge as int?,
       maxAge: maxAge == _playerFilterUnset ? this.maxAge : maxAge as int?,
-      availability:
-          availability == _playerFilterUnset
-              ? this.availability
-              : availability as String?,
+      availability: availability == _playerFilterUnset
+          ? this.availability
+          : availability as String?,
     );
   }
 
@@ -190,6 +190,7 @@ class GteMarketPlayerListItem {
     this.agentUserId = '',
     this.agentName = 'Listed agent',
     this.marketplaceNote,
+    this.imageUrl,
     this.avatar,
   });
 
@@ -210,6 +211,7 @@ class GteMarketPlayerListItem {
   final String agentUserId;
   final String agentName;
   final String? marketplaceNote;
+  final String? imageUrl;
   final PlayerAvatar? avatar;
 
   bool get isRising => (movementPct ?? 0) > 0;
@@ -270,6 +272,7 @@ class GteMarketPlayerListItem {
         'marketplace_note',
         'marketplaceNote',
       ]),
+      imageUrl: GteJson.stringOrNull(json, <String>['image_url', 'imageUrl']),
       avatar: PlayerAvatar.fromJsonOrNull(
         GteJson.value(json, <String>['avatar']),
       ),
@@ -323,6 +326,146 @@ class GteMarketPlayerListView {
       ]),
       offset: offset,
       total: total,
+    );
+  }
+}
+
+class GteMarketLeagueBrowseItem {
+  const GteMarketLeagueBrowseItem({
+    required this.leagueId,
+    required this.slug,
+    required this.displayName,
+    required this.playerCount,
+    required this.clubCount,
+    this.country,
+    this.countryCode,
+    this.crestUrl,
+  });
+
+  final String leagueId;
+  final String slug;
+  final String displayName;
+  final int playerCount;
+  final int clubCount;
+  final String? country;
+  final String? countryCode;
+  final String? crestUrl;
+
+  factory GteMarketLeagueBrowseItem.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'market league browse item',
+    );
+    return GteMarketLeagueBrowseItem(
+      leagueId: GteJson.string(json, <String>['league_id', 'leagueId']),
+      slug: GteJson.string(json, <String>['slug'], fallback: 'league'),
+      displayName: GteJson.string(json, <String>[
+        'display_name',
+        'displayName',
+      ]),
+      playerCount: GteJson.integer(json, <String>[
+        'player_count',
+        'playerCount',
+      ]),
+      clubCount: GteJson.integer(json, <String>['club_count', 'clubCount']),
+      country: GteJson.stringOrNull(json, <String>['country']),
+      countryCode: GteJson.stringOrNull(json, <String>[
+        'country_code',
+        'countryCode',
+      ]),
+      crestUrl: GteJson.stringOrNull(json, <String>['crest_url', 'crestUrl']),
+    );
+  }
+}
+
+class GteMarketClubBrowseItem {
+  const GteMarketClubBrowseItem({
+    required this.clubId,
+    required this.slug,
+    required this.displayName,
+    required this.playerCount,
+    this.shortName,
+    this.country,
+    this.countryCode,
+    this.crestUrl,
+  });
+
+  final String clubId;
+  final String slug;
+  final String displayName;
+  final int playerCount;
+  final String? shortName;
+  final String? country;
+  final String? countryCode;
+  final String? crestUrl;
+
+  factory GteMarketClubBrowseItem.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'market club browse item',
+    );
+    return GteMarketClubBrowseItem(
+      clubId: GteJson.string(json, <String>['club_id', 'clubId']),
+      slug: GteJson.string(json, <String>['slug'], fallback: 'club'),
+      displayName: GteJson.string(json, <String>[
+        'display_name',
+        'displayName',
+      ]),
+      playerCount: GteJson.integer(json, <String>[
+        'player_count',
+        'playerCount',
+      ]),
+      shortName: GteJson.stringOrNull(json, <String>[
+        'short_name',
+        'shortName',
+      ]),
+      country: GteJson.stringOrNull(json, <String>['country']),
+      countryCode: GteJson.stringOrNull(json, <String>[
+        'country_code',
+        'countryCode',
+      ]),
+      crestUrl: GteJson.stringOrNull(json, <String>['crest_url', 'crestUrl']),
+    );
+  }
+}
+
+class GteMarketNationalityBrowseItem {
+  const GteMarketNationalityBrowseItem({
+    required this.countryCode,
+    required this.slug,
+    required this.displayName,
+    required this.eligiblePlayerCount,
+    this.flagUrl,
+  });
+
+  final String countryCode;
+  final String slug;
+  final String displayName;
+  final int eligiblePlayerCount;
+  final String? flagUrl;
+
+  factory GteMarketNationalityBrowseItem.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'market nationality browse item',
+    );
+    return GteMarketNationalityBrowseItem(
+      countryCode: GteJson.string(json, <String>[
+        'country_code',
+        'countryCode',
+        'team_id',
+        'teamId',
+      ]),
+      slug: GteJson.string(json, <String>['slug'], fallback: 'nationality'),
+      displayName: GteJson.string(json, <String>[
+        'display_name',
+        'displayName',
+      ]),
+      eligiblePlayerCount: GteJson.integer(json, <String>[
+        'eligible_player_count',
+        'eligiblePlayerCount',
+      ]),
+      flagUrl: GteJson.stringOrNull(json, <String>['flag_url', 'flagUrl']),
     );
   }
 }
@@ -976,20 +1119,17 @@ class GtePlayerAgencySummary {
       ]),
       pressureState:
           GteJson.value(json, <String>['pressure_state', 'pressureState']) ==
-                  null
-              ? null
-              : GtePlayerAgencyPressureView.fromJson(
-                GteJson.value(json, <String>[
-                  'pressure_state',
-                  'pressureState',
-                ]),
-              ),
+              null
+          ? null
+          : GtePlayerAgencyPressureView.fromJson(
+              GteJson.value(json, <String>['pressure_state', 'pressureState']),
+            ),
       teamDynamics:
           GteJson.value(json, <String>['team_dynamics', 'teamDynamics']) == null
-              ? null
-              : GtePlayerAgencyTeamDynamicsView.fromJson(
-                GteJson.value(json, <String>['team_dynamics', 'teamDynamics']),
-              ),
+          ? null
+          : GtePlayerAgencyTeamDynamicsView.fromJson(
+              GteJson.value(json, <String>['team_dynamics', 'teamDynamics']),
+            ),
     );
   }
 
@@ -1111,14 +1251,11 @@ class GtePlayerLifecycleSnapshot {
       ),
       contractBadge:
           GteJson.value(json, <String>['contract_badge', 'contractBadge']) ==
-                  null
-              ? null
-              : GteContractBadgeView.fromJson(
-                GteJson.value(json, <String>[
-                  'contract_badge',
-                  'contractBadge',
-                ]),
-              ),
+              null
+          ? null
+          : GteContractBadgeView.fromJson(
+              GteJson.value(json, <String>['contract_badge', 'contractBadge']),
+            ),
       agencySummary: _agencySummaryFromJson(json),
       recentEvents: GteJson.typedList(json, <String>[
         'recent_events',
@@ -1430,14 +1567,11 @@ class GtePlayerOverview {
       ),
       contractBadge:
           GteJson.value(json, <String>['contract_badge', 'contractBadge']) ==
-                  null
-              ? null
-              : GteContractBadgeView.fromJson(
-                GteJson.value(json, <String>[
-                  'contract_badge',
-                  'contractBadge',
-                ]),
-              ),
+              null
+          ? null
+          : GteContractBadgeView.fromJson(
+              GteJson.value(json, <String>['contract_badge', 'contractBadge']),
+            ),
       transferStatus: GteTransferStatusView.fromJson(
         GteJson.value(json, <String>['transfer_status', 'transferStatus']) ??
             const <String, Object?>{},

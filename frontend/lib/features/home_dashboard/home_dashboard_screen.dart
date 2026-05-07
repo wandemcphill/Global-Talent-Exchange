@@ -29,6 +29,7 @@ import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
+import 'package:gte_frontend/widgets/cup_lift_hero.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 import 'package:gte_frontend/shared/widgets/gtex_premium_panels.dart';
 
@@ -187,6 +188,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                const CupLiftHero(),
+                const SizedBox(height: 16),
                 _HomeHeroPanelV2(
                   clubName: clubName,
                   userLabel: _displayUserLabel(),
@@ -962,15 +965,25 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Widget _buildNoClubState() {
     final bool isAuthenticated = widget.exchangeController.isAuthenticated;
-    return GteNoClubOnboardingView(
-      isAuthenticated: isAuthenticated,
-      onCreateClub: _createClubOnboardingAction(),
-      onBrowseClubMarket: _browseClubMarketOnboardingAction(),
-      onExploreArena: _arenaOnboardingAction(),
-      onOpenMatchday: _matchdayOnboardingAction(),
-      onOpenPlayerUniverse: _playerUniverseOnboardingAction(),
-      onOpenWorld: _worldOnboardingAction(),
-      onOpenWallet: _walletOnboardingAction(),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+      child: Column(
+        children: <Widget>[
+          const CupLiftHero(),
+          const SizedBox(height: 16),
+          GteNoClubOnboardingView(
+            isAuthenticated: isAuthenticated,
+            onCreateClub: _createClubOnboardingAction(),
+            onBrowseClubMarket: _browseClubMarketOnboardingAction(),
+            onExploreArena: _arenaOnboardingAction(),
+            onOpenMatchday: _matchdayOnboardingAction(),
+            onOpenPlayerUniverse: _playerUniverseOnboardingAction(),
+            onOpenWorld: _worldOnboardingAction(),
+            onOpenWallet: _walletOnboardingAction(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2560,6 +2573,8 @@ class _HomeLoadingView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
       children: const <Widget>[
+        CupLiftHero(),
+        SizedBox(height: 20),
         GteSurfacePanel(child: SizedBox(height: 170)),
         SizedBox(height: 20),
         GteSurfacePanel(child: SizedBox(height: 240)),

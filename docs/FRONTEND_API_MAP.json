@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 489,
+  "call_count": 496,
   "calls": [
     {
       "file": "frontend/lib/data/admin_command_center_api.dart",
@@ -2118,8 +2118,92 @@
       "file": "frontend/lib/data/gte_exchange_api_client.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
-      "endpoint": "/api/market/players",
+      "endpoint": "/api/market/clubs/$clubId/players",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/leagues",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/leagues/$leagueId/clubs",
       "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/national-teams",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/national-teams/$teamId/eligible-players",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/nationalities",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/nationalities/$countryCode/players",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/market/players",
+      "expected_shape": "list",
       "base_url_source": "hardcoded_localhost",
       "platforms": [
         "web",

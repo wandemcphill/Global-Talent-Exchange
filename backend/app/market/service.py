@@ -747,6 +747,7 @@ class MarketPlayerListItem:
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    image_url: str | None
     avatar: PlayerAvatarView
 
 
@@ -1152,6 +1153,137 @@ class MarketPlayerQueryService:
             trending=trending,
         )
 
+    def list_leagues(self) -> list[dict[str, Any]]:
+        grouped: dict[str, dict[str, Any]] = {}
+        for record in self.repository.list_player_records():
+            league_id = record.player.current_competition_id or record.player.internal_league_id
+            if not league_id:
+                continue
+            competition = record.player.current_competition
+            internal_league = record.player.internal_league
+            name = (
+                competition.name
+                if competition is not None
+                else (
+                    internal_league.name
+                    if internal_league is not None
+                    else record.player.real_world_league_name or "Unknown league"
+                )
+            )
+            item = grouped.setdefault(
+                league_id,
+                {
+                    "league_id": league_id,
+                    "slug": self._slug(name),
+                    "display_name": name,
+                    "country": competition.country.name if competition is not None and competition.country else None,
+                    "country_code": (
+                        self._country_code(competition.country)
+                        if competition is not None and competition.country is not None
+                        else None
+                    ),
+                    "crest_url": None,
+                    "player_count": 0,
+                    "club_count": 0,
+                    "_clubs": set(),
+                },
+            )
+            item["player_count"] += 1
+            if record.player.current_club_id:
+                item["_clubs"].add(record.player.current_club_id)
+        return [
+            self._finalize_count_item(item) for item in sorted(grouped.values(), key=lambda row: row["display_name"])
+        ]
+
+    def list_league_clubs(self, league_id: str) -> list[dict[str, Any]]:
+        grouped: dict[str, dict[str, Any]] = {}
+        for record in self.repository.list_player_records():
+            player_league_id = record.player.current_competition_id or record.player.internal_league_id
+            if player_league_id != league_id or record.player.current_club is None:
+                continue
+            club = record.player.current_club
+            item = grouped.setdefault(
+                club.id,
+                {
+                    "club_id": club.id,
+                    "slug": club.slug,
+                    "display_name": club.name,
+                    "short_name": club.short_name,
+                    "crest_url": club.crest_url,
+                    "country": club.country.name if club.country is not None else None,
+                    "country_code": self._country_code(club.country),
+                    "player_count": 0,
+                },
+            )
+            item["player_count"] += 1
+        return list(sorted(grouped.values(), key=lambda row: row["display_name"]))
+
+    def list_club_players(self, club_id: str, *, limit: int = 100) -> MarketPlayerListResult:
+        records = [
+            record for record in self.repository.list_player_records() if record.player.current_club_id == club_id
+        ]
+        sorted_records = self._sort_player_records(records, sort="current_value")[:limit]
+        return MarketPlayerListResult(
+            items=tuple(self._build_list_item(record) for record in sorted_records),
+            limit=limit,
+            next_cursor=None,
+            has_more=len(records) > limit,
+            total=len(records),
+            offset=0,
+        )
+
+    def list_nationalities(self) -> list[dict[str, Any]]:
+        grouped: dict[str, dict[str, Any]] = {}
+        for record in self.repository.list_player_records():
+            country = record.player.country
+            code = self._country_code(country) or self._nationality_code(record)
+            if not code:
+                continue
+            display_name = country.name if country is not None else code
+            item = grouped.setdefault(
+                code,
+                {
+                    "country_code": code,
+                    "slug": self._slug(display_name),
+                    "display_name": display_name,
+                    "flag_url": None,
+                    "eligible_player_count": 0,
+                },
+            )
+            item["eligible_player_count"] += 1
+        return list(sorted(grouped.values(), key=lambda row: row["display_name"]))
+
+    def list_nationality_players(self, country_code: str, *, limit: int = 100) -> MarketPlayerListResult:
+        normalized_code = self._normalize_text(country_code)
+        records = [
+            record
+            for record in self.repository.list_player_records()
+            if self._normalize_text(self._nationality_code(record)) == normalized_code
+            or self._normalize_text(record.player.country.name if record.player.country else None) == normalized_code
+        ]
+        sorted_records = self._sort_player_records(records, sort="current_value")[:limit]
+        return MarketPlayerListResult(
+            items=tuple(self._build_list_item(record) for record in sorted_records),
+            limit=limit,
+            next_cursor=None,
+            has_more=len(records) > limit,
+            total=len(records),
+            offset=0,
+        )
+
+    def list_national_teams(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "team_id": item["country_code"],
+                "country_code": item["country_code"],
+                "slug": item["slug"],
+                "display_name": f"{item['display_name']} National Team",
+                "flag_url": item["flag_url"],
+                "eligible_player_count": item["eligible_player_count"],
+            }
+            for item in self.list_nationalities()
+        ]
+
     def _build_list_item(self, record: MarketPlayerRecord) -> MarketPlayerListItem:
         return MarketPlayerListItem(
             player_id=record.player.id,
@@ -1165,6 +1297,7 @@ class MarketPlayerQueryService:
             trend_score=self._trend_score(record),
             market_interest_score=(record.summary.market_interest_score if record.summary is not None else None),
             average_rating=record.summary.average_rating if record.summary is not None else None,
+            image_url=self._image_url(record),
             avatar=self._avatar(record),
         )
 
@@ -1770,6 +1903,21 @@ class MarketPlayerQueryService:
             if image.storage_key:
                 return image.storage_key
         return None
+
+    def _country_code(self, country: Any | None) -> str | None:
+        if country is None:
+            return None
+        return country.alpha3_code or country.fifa_code or country.alpha2_code
+
+    def _slug(self, value: str) -> str:
+        normalized = self._normalize_text(value).replace(" ", "-")
+        return normalized or "unknown"
+
+    def _finalize_count_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        clubs = item.pop("_clubs", None)
+        if clubs is not None:
+            item["club_count"] = len(clubs)
+        return item
 
     def _normalize_optional_text(self, value: str | None) -> str | None:
         normalized = self._normalize_text(value)

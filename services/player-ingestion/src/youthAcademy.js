@@ -1,6 +1,7 @@
 "use strict";
 
 const config = require("./config");
+const { safeJobId } = require("./jobIds");
 
 function academyIdentity(team) {
   const name = String(team.name || team.team_name || "club").toLowerCase();
@@ -27,7 +28,7 @@ async function generateYouthForTeam(team, { count = null, reason = "youth_academ
         reason,
         academyIdentity: academyIdentity(team),
       },
-      { jobId: `academy:${team.team_id || team.teamId}:${Date.now()}:${index}` },
+      { jobId: safeJobId("academy", team.team_id || team.teamId, Date.now(), index) },
     );
     queued += 1;
   }

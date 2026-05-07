@@ -206,6 +206,7 @@ class MarketPlayerListItemView(BaseModel):
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    image_url: str | None
     avatar: PlayerAvatarView
 
 

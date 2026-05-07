@@ -11,7 +11,15 @@ import app.ingestion.models  # noqa: F401
 import app.market.read_models  # noqa: F401
 import app.players.read_models  # noqa: F401
 import app.value_engine.read_models  # noqa: F401
-from app.ingestion.models import Club, Competition, Country, LiquidityBand, Player, SupplyTier
+from app.ingestion.models import (
+    Club,
+    Competition,
+    Country,
+    LiquidityBand,
+    Player,
+    PlayerImageMetadata,
+    SupplyTier,
+)
 
 from app.market import (
     ListingStatus,
@@ -26,6 +34,12 @@ from app.market import (
 from app.market.router import (
     get_market_player_detail,
     get_market_player_history,
+    list_market_club_players,
+    list_market_league_clubs,
+    list_market_leagues,
+    list_market_national_team_eligible_players,
+    list_market_national_teams,
+    list_market_nationalities,
     list_market_players,
 )
 from app.market.service import MarketPlayerQueryService
@@ -226,6 +240,17 @@ def _seed_market_player_catalog(session) -> None:
         ),
     ]
     session.add_all([country_ng, country_es, competition, supply_tier, liquidity_band, alpha_fc, beta_united, *players])
+    session.add(
+        PlayerImageMetadata(
+            id="image-player-1-primary",
+            player_id="player-1",
+            source_provider="sportmonks",
+            provider_external_id="sportmonks-player-1-primary",
+            source_url="https://cdn.sportmonks.test/players/player-1.png",
+            is_primary=True,
+            moderation_status="approved",
+        )
+    )
 
     summary_common = {
         "supply_tier": {
@@ -590,6 +615,61 @@ def test_market_player_list_pagination_returns_total_and_window(session) -> None
 
     assert payload.total == 4
     assert [item.player_id for item in payload.items] == ["player-2", "player-3"]
+
+
+def test_market_player_list_includes_primary_image_url(session) -> None:
+    _seed_market_player_catalog(session)
+
+    payload = list_market_players(
+        limit=20,
+        cursor=None,
+        offset=0,
+        position=None,
+        nationality=None,
+        national_team=None,
+        club=None,
+        league=None,
+        min_age=None,
+        max_age=None,
+        min_value=None,
+        max_value=None,
+        search=None,
+        sort="current_value",
+        service=_build_market_query_service(session),
+    )
+
+    by_id = {item.player_id: item for item in payload.items}
+    assert by_id["player-1"].image_url == "https://cdn.sportmonks.test/players/player-1.png"
+
+
+def test_market_browse_endpoints_expose_league_club_and_nationality_paths(session) -> None:
+    _seed_market_player_catalog(session)
+    service = _build_market_query_service(session)
+
+    leagues = list_market_leagues(service=service)
+    clubs = list_market_league_clubs("competition-prem", service=service)
+    club_players = list_market_club_players("club-alpha", limit=100, service=service)
+    nationalities = list_market_nationalities(service=service)
+    national_teams = list_market_national_teams(service=service)
+    eligible_players = list_market_national_team_eligible_players("NGA", limit=100, service=service)
+
+    assert leagues == [
+        {
+            "league_id": "competition-prem",
+            "slug": "premier-league",
+            "display_name": "Premier League",
+            "country": None,
+            "country_code": None,
+            "crest_url": None,
+            "player_count": 4,
+            "club_count": 2,
+        }
+    ]
+    assert [club["club_id"] for club in clubs] == ["club-alpha", "club-beta"]
+    assert [item.player_id for item in club_players.items] == ["player-1", "player-3"]
+    assert [item["country_code"] for item in nationalities] == ["NGA", "ESP"]
+    assert [team["team_id"] for team in national_teams] == ["NGA", "ESP"]
+    assert [item.player_id for item in eligible_players.items] == ["player-1", "player-2"]
 
 
 def test_market_player_list_supports_cursor_pagination(session) -> None:

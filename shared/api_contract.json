@@ -8535,6 +8535,45 @@
       }
     },
     "market": {
+      "get_api_v2_market_clubs_club_id_players": {
+        "method": "GET",
+        "canonical_path": "/api/v2/market/clubs/{club_id}/players",
+        "aliases": [
+          "/api/market/clubs/{club_id}/players",
+          "/api/v1/market/clubs/{club_id}/players",
+          "/api/v2/market/clubs/{club_id}/players",
+          "/market/clubs/{club_id}/players"
+        ],
+        "handler": "list_market_club_players",
+        "source_file": "backend/app/market/router.py",
+        "response_model": "MarketPlayerListView"
+      },
+      "get_api_v2_market_leagues": {
+        "method": "GET",
+        "canonical_path": "/api/v2/market/leagues",
+        "aliases": [
+          "/api/market/leagues",
+          "/api/v1/market/leagues",
+          "/api/v2/market/leagues",
+          "/market/leagues"
+        ],
+        "handler": "list_market_leagues",
+        "source_file": "backend/app/market/router.py",
+        "response_model": null
+      },
+      "get_api_v2_market_leagues_league_id_clubs": {
+        "method": "GET",
+        "canonical_path": "/api/v2/market/leagues/{league_id}/clubs",
+        "aliases": [
+          "/api/market/leagues/{league_id}/clubs",
+          "/api/v1/market/leagues/{league_id}/clubs",
+          "/api/v2/market/leagues/{league_id}/clubs",
+          "/market/leagues/{league_id}/clubs"
+        ],
+        "handler": "list_market_league_clubs",
+        "source_file": "backend/app/market/router.py",
+        "response_model": null
+      },
       "get_api_v2_market_listings_listing_id_matches": {
         "method": "GET",
         "canonical_path": "/api/v2/market/listings/{listing_id}/matches",
@@ -8573,6 +8612,58 @@
         "handler": "get_market_movers",
         "source_file": "backend/app/market/router.py",
         "response_model": "MarketMoversView"
+      },
+      "get_api_v2_market_national_teams": {
+        "method": "GET",
+        "canonical_path": "/api/v2/market/national-teams",
+        "aliases": [
+          "/api/market/national-teams",
+          "/api/v1/market/national-teams",
+          "/api/v2/market/national-teams",
+          "/market/national-teams"
+        ],
+        "handler": "list_market_national_teams",
+        "source_file": "backend/app/market/router.py",
+        "response_model": null
+      },
+      "get_api_v2_market_national_teams_team_id_eligible_players": {
+        "method": "GET",
+        "canonical_path": "/api/v2/market/national-teams/{team_id}/eligible-players",
+        "aliases": [
+          "/api/market/national-teams/{team_id}/eligible-players",
+          "/api/v1/market/national-teams/{team_id}/eligible-players",
+          "/api/v2/market/national-teams/{team_id}/eligible-players",
+          "/market/national-teams/{team_id}/eligible-players"
+        ],
+        "handler": "list_market_national_team_eligible_players",
+        "source_file": "backend/app/market/router.py",
+        "response_model": "MarketPlayerListView"
+      },
+      "get_api_v2_market_nationalities": {
+        "method": "GET",
+        "canonical_path": "/api/v2/market/nationalities",
+        "aliases": [
+          "/api/market/nationalities",
+          "/api/v1/market/nationalities",
+          "/api/v2/market/nationalities",
+          "/market/nationalities"
+        ],
+        "handler": "list_market_nationalities",
+        "source_file": "backend/app/market/router.py",
+        "response_model": null
+      },
+      "get_api_v2_market_nationalities_country_code_players": {
+        "method": "GET",
+        "canonical_path": "/api/v2/market/nationalities/{country_code}/players",
+        "aliases": [
+          "/api/market/nationalities/{country_code}/players",
+          "/api/v1/market/nationalities/{country_code}/players",
+          "/api/v2/market/nationalities/{country_code}/players",
+          "/market/nationalities/{country_code}/players"
+        ],
+        "handler": "list_market_nationality_players",
+        "source_file": "backend/app/market/router.py",
+        "response_model": "MarketPlayerListView"
       },
       "get_api_v2_market_players": {
         "method": "GET",
@@ -8967,19 +9058,6 @@
         "handler": "read_match_viewer_timeline",
         "source_file": "backend/app/routes/match_viewer.py",
         "response_model": "MatchViewStateView"
-      },
-      "get_api_v2_match_viewer_match_key_illusion": {
-        "method": "GET",
-        "canonical_path": "/api/v2/match-viewer/{match_key}/illusion",
-        "aliases": [
-          "/api/match-viewer/{match_key}/illusion",
-          "/api/v1/match-viewer/{match_key}/illusion",
-          "/api/v2/match-viewer/{match_key}/illusion",
-          "/match-viewer/{match_key}/illusion"
-        ],
-        "handler": "read_match_viewer_illusion_payload",
-        "source_file": "backend/app/routes/match_viewer.py",
-        "response_model": "MatchViewerIllusionPayloadView"
       },
       "get_api_v2_match_viewer_match_key_session": {
         "method": "GET",
@@ -18270,11 +18348,18 @@
     "/api/v2/managers/{manager_id}/release": "post_api_v2_managers_manager_id_release",
     "/api/v2/market/bid": "post_api_v2_market_bid",
     "/api/v2/market/buy": "post_api_v2_market_buy",
+    "/api/v2/market/clubs/{club_id}/players": "get_api_v2_market_clubs_club_id_players",
+    "/api/v2/market/leagues": "get_api_v2_market_leagues",
+    "/api/v2/market/leagues/{league_id}/clubs": "get_api_v2_market_leagues_league_id_clubs",
     "/api/v2/market/listings": "post_api_v2_market_listings",
     "/api/v2/market/listings/{listing_id}/cancel": "post_api_v2_market_listings_listing_id_cancel",
     "/api/v2/market/listings/{listing_id}/matches": "get_api_v2_market_listings_listing_id_matches",
     "/api/v2/market/listings/{listing_id}/offers": "get_api_v2_market_listings_listing_id_offers",
     "/api/v2/market/movers": "get_api_v2_market_movers",
+    "/api/v2/market/national-teams": "get_api_v2_market_national_teams",
+    "/api/v2/market/national-teams/{team_id}/eligible-players": "get_api_v2_market_national_teams_team_id_eligible_players",
+    "/api/v2/market/nationalities": "get_api_v2_market_nationalities",
+    "/api/v2/market/nationalities/{country_code}/players": "get_api_v2_market_nationalities_country_code_players",
     "/api/v2/market/offers": "post_api_v2_market_offers",
     "/api/v2/market/offers/{offer_id}/accept": "post_api_v2_market_offers_offer_id_accept",
     "/api/v2/market/offers/{offer_id}/counter": "post_api_v2_market_offers_offer_id_counter",
@@ -18305,7 +18390,6 @@
     "/api/v2/match-share-links/{share_code}": "get_api_v2_match_share_links_share_code",
     "/api/v2/match-share-links/{share_code}/events": "post_api_v2_match_share_links_share_code_events",
     "/api/v2/match-viewer/{match_key}": "get_api_v2_match_viewer_match_key",
-    "/api/v2/match-viewer/{match_key}/illusion": "get_api_v2_match_viewer_match_key_illusion",
     "/api/v2/match-viewer/{match_key}/session": "get_api_v2_match_viewer_match_key_session",
     "/api/v2/match/find": "post_api_v2_match_find",
     "/api/v2/match/live/active": "get_api_v2_match_live_active",
@@ -19688,11 +19772,18 @@
     "/api/managers/{manager_id}/history": "/api/v2/managers/{manager_id}/history",
     "/api/managers/{manager_id}/release": "/api/v2/managers/{manager_id}/release",
     "/api/market/buy": "/api/v2/market/buy",
+    "/api/market/clubs/{club_id}/players": "/api/v2/market/clubs/{club_id}/players",
+    "/api/market/leagues": "/api/v2/market/leagues",
+    "/api/market/leagues/{league_id}/clubs": "/api/v2/market/leagues/{league_id}/clubs",
     "/api/market/listings": "/api/v2/market/listings",
     "/api/market/listings/{listing_id}/cancel": "/api/v2/market/listings/{listing_id}/cancel",
     "/api/market/listings/{listing_id}/matches": "/api/v2/market/listings/{listing_id}/matches",
     "/api/market/listings/{listing_id}/offers": "/api/v2/market/listings/{listing_id}/offers",
     "/api/market/movers": "/api/v2/market/movers",
+    "/api/market/national-teams": "/api/v2/market/national-teams",
+    "/api/market/national-teams/{team_id}/eligible-players": "/api/v2/market/national-teams/{team_id}/eligible-players",
+    "/api/market/nationalities": "/api/v2/market/nationalities",
+    "/api/market/nationalities/{country_code}/players": "/api/v2/market/nationalities/{country_code}/players",
     "/api/market/offers": "/api/v2/market/offers",
     "/api/market/offers/{offer_id}/accept": "/api/v2/market/offers/{offer_id}/accept",
     "/api/market/offers/{offer_id}/counter": "/api/v2/market/offers/{offer_id}/counter",
@@ -19723,7 +19814,6 @@
     "/api/match-share-links/{share_code}": "/api/v2/match-share-links/{share_code}",
     "/api/match-share-links/{share_code}/events": "/api/v2/match-share-links/{share_code}/events",
     "/api/match-viewer/{match_key}": "/api/v2/match-viewer/{match_key}",
-    "/api/match-viewer/{match_key}/illusion": "/api/v2/match-viewer/{match_key}/illusion",
     "/api/match-viewer/{match_key}/session": "/api/v2/match-viewer/{match_key}/session",
     "/api/match/find": "/api/v2/match/find",
     "/api/match/live/active": "/api/v2/match/live/active",
@@ -20837,11 +20927,18 @@
     "/api/v1/managers/{manager_id}/history": "/api/v2/managers/{manager_id}/history",
     "/api/v1/managers/{manager_id}/release": "/api/v2/managers/{manager_id}/release",
     "/api/v1/market/buy": "/api/v2/market/buy",
+    "/api/v1/market/clubs/{club_id}/players": "/api/v2/market/clubs/{club_id}/players",
+    "/api/v1/market/leagues": "/api/v2/market/leagues",
+    "/api/v1/market/leagues/{league_id}/clubs": "/api/v2/market/leagues/{league_id}/clubs",
     "/api/v1/market/listings": "/api/v2/market/listings",
     "/api/v1/market/listings/{listing_id}/cancel": "/api/v2/market/listings/{listing_id}/cancel",
     "/api/v1/market/listings/{listing_id}/matches": "/api/v2/market/listings/{listing_id}/matches",
     "/api/v1/market/listings/{listing_id}/offers": "/api/v2/market/listings/{listing_id}/offers",
     "/api/v1/market/movers": "/api/v2/market/movers",
+    "/api/v1/market/national-teams": "/api/v2/market/national-teams",
+    "/api/v1/market/national-teams/{team_id}/eligible-players": "/api/v2/market/national-teams/{team_id}/eligible-players",
+    "/api/v1/market/nationalities": "/api/v2/market/nationalities",
+    "/api/v1/market/nationalities/{country_code}/players": "/api/v2/market/nationalities/{country_code}/players",
     "/api/v1/market/offers": "/api/v2/market/offers",
     "/api/v1/market/offers/{offer_id}/accept": "/api/v2/market/offers/{offer_id}/accept",
     "/api/v1/market/offers/{offer_id}/counter": "/api/v2/market/offers/{offer_id}/counter",
@@ -20872,7 +20969,6 @@
     "/api/v1/match-share-links/{share_code}": "/api/v2/match-share-links/{share_code}",
     "/api/v1/match-share-links/{share_code}/events": "/api/v2/match-share-links/{share_code}/events",
     "/api/v1/match-viewer/{match_key}": "/api/v2/match-viewer/{match_key}",
-    "/api/v1/match-viewer/{match_key}/illusion": "/api/v2/match-viewer/{match_key}/illusion",
     "/api/v1/match-viewer/{match_key}/session": "/api/v2/match-viewer/{match_key}/session",
     "/api/v1/match/find": "/api/v2/match/find",
     "/api/v1/match/live/active": "/api/v2/match/live/active",
@@ -21443,6 +21539,9 @@
     "/api/v2/managers/swap": "/api/v2/managers/swap",
     "/api/v2/managers/team": "/api/v2/managers/team",
     "/api/v2/managers/trade-listings": "/api/v2/managers/trade-listings",
+    "/api/v2/market/leagues": "/api/v2/market/leagues",
+    "/api/v2/market/national-teams": "/api/v2/market/national-teams",
+    "/api/v2/market/nationalities": "/api/v2/market/nationalities",
     "/api/v2/market/players": "/api/v2/market/players",
     "/api/v2/me/clubs/sale-market/listings": "/api/v2/me/clubs/sale-market/listings",
     "/api/v2/me/clubs/sale-market/offers": "/api/v2/me/clubs/sale-market/offers",
@@ -21826,11 +21925,18 @@
     "/managers/{manager_id}/history": "/api/v2/managers/{manager_id}/history",
     "/managers/{manager_id}/release": "/api/v2/managers/{manager_id}/release",
     "/market/buy": "/api/v2/market/buy",
+    "/market/clubs/{club_id}/players": "/api/v2/market/clubs/{club_id}/players",
+    "/market/leagues": "/api/v2/market/leagues",
+    "/market/leagues/{league_id}/clubs": "/api/v2/market/leagues/{league_id}/clubs",
     "/market/listings": "/api/v2/market/listings",
     "/market/listings/{listing_id}/cancel": "/api/v2/market/listings/{listing_id}/cancel",
     "/market/listings/{listing_id}/matches": "/api/v2/market/listings/{listing_id}/matches",
     "/market/listings/{listing_id}/offers": "/api/v2/market/listings/{listing_id}/offers",
     "/market/movers": "/api/v2/market/movers",
+    "/market/national-teams": "/api/v2/market/national-teams",
+    "/market/national-teams/{team_id}/eligible-players": "/api/v2/market/national-teams/{team_id}/eligible-players",
+    "/market/nationalities": "/api/v2/market/nationalities",
+    "/market/nationalities/{country_code}/players": "/api/v2/market/nationalities/{country_code}/players",
     "/market/offers": "/api/v2/market/offers",
     "/market/offers/{offer_id}/accept": "/api/v2/market/offers/{offer_id}/accept",
     "/market/offers/{offer_id}/counter": "/api/v2/market/offers/{offer_id}/counter",
@@ -21859,7 +21965,6 @@
     "/match-engine/summary": "/api/v2/match-engine/summary",
     "/match-engine/timeline": "/api/v2/match-engine/timeline",
     "/match-viewer/{match_key}": "/api/v2/match-viewer/{match_key}",
-    "/match-viewer/{match_key}/illusion": "/api/v2/match-viewer/{match_key}/illusion",
     "/match-viewer/{match_key}/session": "/api/v2/match-viewer/{match_key}/session",
     "/match/find": "/api/v2/match/find",
     "/match/live/active": "/api/v2/match/live/active",
