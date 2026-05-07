@@ -38,7 +38,6 @@ import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
 import 'package:gte_frontend/widgets/ambient_audio_toggle_button.dart';
-import 'package:gte_frontend/widgets/cup_lift_hero.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
@@ -199,10 +198,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     final Size viewport = MediaQuery.sizeOf(context);
     final bool compactViewport = viewport.height < 720 || viewport.width < 480;
     final tokens = GteShellTheme.tokensOf(context);
-    final EdgeInsets topSectionPadding =
-        compactViewport
-            ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
-            : const EdgeInsets.fromLTRB(20, 12, 20, 0);
+    final EdgeInsets topSectionPadding = compactViewport
+        ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
+        : const EdgeInsets.fromLTRB(20, 12, 20, 0);
     final double sectionGap = compactViewport ? 0 : 8;
     final bool showShellStatusCard = !compactViewport;
     return Container(
@@ -212,27 +210,26 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         appBar: AppBar(
           toolbarHeight: compactViewport ? 72 : 82,
           titleSpacing: compactViewport ? 12 : 16,
-          title:
-              compactViewport
-                  ? const GtexLogoMark(size: 32, compact: true)
-                  : Row(
-                    children: <Widget>[
-                      const GtexLogoMark(size: 38, compact: true),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(_routeTitle()),
-                            Text(
-                              _routeContextLine(),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
+          title: compactViewport
+              ? const GtexLogoMark(size: 32, compact: true)
+              : Row(
+                  children: <Widget>[
+                    const GtexLogoMark(size: 38, compact: true),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(_routeTitle()),
+                          Text(
+                            _routeContextLine(),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
           actions: <Widget>[
             AnimatedBuilder(
               animation: widget.controller,
@@ -291,10 +288,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                             onPressed: () {
                               Navigator.of(context).push<void>(
                                 MaterialPageRoute<void>(
-                                  builder:
-                                      (
-                                        BuildContext context,
-                                      ) => ReferralHubScreen(
+                                  builder: (BuildContext context) =>
+                                      ReferralHubScreen(
                                         referralController: _referralController,
                                         creatorController: _creatorController,
                                         isAuthenticated:
@@ -303,10 +298,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                                             _hasApprovedCreatorAccess,
                                         isReferralRuntimeAvailable:
                                             _isReferralRuntimeAvailable,
-                                        onOpenCreatorAccessRequest:
-                                            () => _pushCreatorAccessRequest(
-                                              context,
-                                            ),
+                                        onOpenCreatorAccessRequest: () =>
+                                            _pushCreatorAccessRequest(context),
                                       ),
                                 ),
                               );
@@ -325,34 +318,28 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                             }
                             Navigator.of(context).push<void>(
                               MaterialPageRoute<void>(
-                                builder:
-                                    (BuildContext context) =>
-                                        ManagerMarketScreen(
-                                          baseUrl: widget.apiBaseUrl,
-                                          accessToken: session.accessToken,
-                                          isAdmin: <String>{
-                                            'admin',
-                                            'super_admin',
-                                          }.contains(
+                                builder: (BuildContext context) =>
+                                    ManagerMarketScreen(
+                                      baseUrl: widget.apiBaseUrl,
+                                      accessToken: session.accessToken,
+                                      isAdmin: <String>{'admin', 'super_admin'}
+                                          .contains(
                                             session.user.role.toLowerCase(),
                                           ),
-                                          onOpenAdmin: () {
-                                            Navigator.of(context).push<void>(
-                                              MaterialPageRoute<void>(
-                                                builder:
-                                                    (
-                                                      BuildContext context,
-                                                    ) => ManagerAdminScreen(
-                                                      baseUrl:
-                                                          widget.apiBaseUrl,
-                                                      accessToken:
-                                                          session.accessToken,
-                                                      role: session.user.role,
-                                                    ),
-                                              ),
-                                            );
-                                          },
-                                        ),
+                                      onOpenAdmin: () {
+                                        Navigator.of(context).push<void>(
+                                          MaterialPageRoute<void>(
+                                            builder: (BuildContext context) =>
+                                                ManagerAdminScreen(
+                                                  baseUrl: widget.apiBaseUrl,
+                                                  accessToken:
+                                                      session.accessToken,
+                                                  role: session.user.role,
+                                                ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                               ),
                             );
                           },
@@ -415,8 +402,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
                 children: <Widget>[
-                  const CupLiftHero(),
-                  const SizedBox(height: 28),
                   const Center(child: CircularProgressIndicator()),
                 ],
               );
@@ -474,21 +459,19 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
       return GteNoClubOnboardingView(
         isAuthenticated: widget.controller.isAuthenticated,
-        onCreateClub:
-            widget.controller.isAuthenticated
-                ? _openCreateClubFlow
-                : () =>
-                    _openLogin(targetRoute: const GteNavigationRoute.club()),
-        onBrowseClubMarket:
-            () => _openFeatureRoute(const ClubSaleMarketListingsRouteData()),
-        onExploreArena:
-            () => _openPrimaryDestination(GtePrimaryDestination.competitions),
+        onCreateClub: widget.controller.isAuthenticated
+            ? _openCreateClubFlow
+            : () => _openLogin(targetRoute: const GteNavigationRoute.club()),
+        onBrowseClubMarket: () =>
+            _openFeatureRoute(const ClubSaleMarketListingsRouteData()),
+        onExploreArena: () =>
+            _openPrimaryDestination(GtePrimaryDestination.competitions),
         onOpenMatchday: _openNoClubMatchdayHub,
-        onOpenPlayerUniverse:
-            () => _openFeatureRoute(const PlayerCardsBrowseRouteData()),
+        onOpenPlayerUniverse: () =>
+            _openFeatureRoute(const PlayerCardsBrowseRouteData()),
         onOpenWorld: () => _openFeatureRoute(const WorldOverviewRouteData()),
-        onOpenWallet:
-            () => _openPrimaryDestination(GtePrimaryDestination.wallet),
+        onOpenWallet: () =>
+            _openPrimaryDestination(GtePrimaryDestination.wallet),
       );
     }
     return ClubHubScreen(
@@ -498,8 +481,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       baseUrl: widget.apiBaseUrl,
       backendMode: widget.backendMode,
       isAuthenticated: widget.controller.isAuthenticated,
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.club()),
+      onOpenLogin: () =>
+          _openLogin(targetRoute: const GteNavigationRoute.club()),
       navigationDependencies: _navigationDependencies(),
     );
   }
@@ -522,8 +505,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
           children: <Widget>[
-            const CupLiftHero(),
-            const SizedBox(height: 20),
             GteStatePanel(
               eyebrow: 'CLUB SCOPE',
               title: 'Sign in to open Club HQ',
@@ -545,20 +526,20 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       exchangeController: widget.controller,
       apiBaseUrl: widget.apiBaseUrl,
       backendMode: _liveBackendMode,
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.home()),
+      onOpenLogin: () =>
+          _openLogin(targetRoute: const GteNavigationRoute.home()),
       isCheckingCreatorAccess: _isCheckingCreatorAccess,
       canHostCompetitions: _canHostCompetitions,
       clubId: _canonicalClubId(),
       clubName: _canonicalClubName(),
       onOpenClubTab: () => _openPrimaryDestination(GtePrimaryDestination.club),
-      onOpenCompetitionsTab:
-          () => _openPrimaryDestination(GtePrimaryDestination.competitions),
-      onOpenMarketTab:
-          () => _openPrimaryDestination(GtePrimaryDestination.market),
+      onOpenCompetitionsTab: () =>
+          _openPrimaryDestination(GtePrimaryDestination.competitions),
+      onOpenMarketTab: () =>
+          _openPrimaryDestination(GtePrimaryDestination.market),
       onOpenHubTab: () => _openPrimaryDestination(GtePrimaryDestination.hub),
-      onOpenWalletTab:
-          () => _openPrimaryDestination(GtePrimaryDestination.wallet),
+      onOpenWalletTab: () =>
+          _openPrimaryDestination(GtePrimaryDestination.wallet),
       onOpenClubSubtab: null,
       onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
       navigationDependencies: _navigationDependencies(),
@@ -712,8 +693,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       hasApprovedCreatorAccess: _hasApprovedCreatorAccess,
       canHostCompetitions: _canHostCompetitions,
       onOpenLogin: (BuildContext _) => _openLogin(targetRoute: _route),
-      onOpenCreatorAccessRequest:
-          (BuildContext context) => _pushCreatorAccessRequest(context),
+      onOpenCreatorAccessRequest: (BuildContext context) =>
+          _pushCreatorAccessRequest(context),
       currentUserIdProvider: _resolveCompetitionUserId,
       currentUserNameProvider: _resolveCompetitionUserName,
       currentUserRoleProvider: () => widget.controller.session?.user.role,
@@ -730,10 +711,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   Future<void> _pushCreatorAccessRequest(BuildContext context) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder:
-            (BuildContext context) => CreatorAccessRequestScreen(
-              exchangeController: widget.controller,
-            ),
+        builder: (BuildContext context) =>
+            CreatorAccessRequestScreen(exchangeController: widget.controller),
       ),
     );
   }
@@ -756,8 +735,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           icon: Icons.groups_outlined,
           accentColor: const Color(0xFF5FE3A1),
           actionLabel: 'Sign in',
-          onAction:
-              () => _openLogin(targetRoute: const GteNavigationRoute.hub()),
+          onAction: () =>
+              _openLogin(targetRoute: const GteNavigationRoute.hub()),
         ),
       );
     }
@@ -769,8 +748,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       isAuthenticated: widget.controller.isAuthenticated,
       hasApprovedCreatorAccess: _hasApprovedCreatorAccess,
       isReferralRuntimeAvailable: _isReferralRuntimeAvailable,
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.hub()),
+      onOpenLogin: () =>
+          _openLogin(targetRoute: const GteNavigationRoute.hub()),
       onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
     );
   }
@@ -785,8 +764,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       isAuthenticated: widget.controller.isAuthenticated,
       currentClubId: _canonicalClubId(),
       currentClubName: _canonicalClubName(),
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.community()),
+      onOpenLogin: () =>
+          _openLogin(targetRoute: const GteNavigationRoute.community()),
     );
   }
 
@@ -818,12 +797,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       isAuthenticated: widget.controller.isAuthenticated,
       isCheckingCreatorAccess: _isCheckingCreatorAccess,
       canHostCompetitions: _canHostCompetitions,
-      onOpenLogin:
-          () => _openLogin(
-            targetRoute: GteNavigationRoute.competitions(
-              destination: _route.effectiveCompetitionDestination,
-            ),
-          ),
+      onOpenLogin: () => _openLogin(
+        targetRoute: GteNavigationRoute.competitions(
+          destination: _route.effectiveCompetitionDestination,
+        ),
+      ),
       onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
       navigationDependencies: _navigationDependencies(),
     );
@@ -832,11 +810,10 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   void _openNoClubMatchdayHub() {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder:
-            (BuildContext context) => GteLiveMatchHubRouteScreen(
-              dependencies: _navigationDependencies(),
-              clubName: 'GTEX Matchday',
-            ),
+        builder: (BuildContext context) => GteLiveMatchHubRouteScreen(
+          dependencies: _navigationDependencies(),
+          clubName: 'GTEX Matchday',
+        ),
       ),
     );
   }
@@ -846,8 +823,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       key: const PageStorageKey<String>('market-screen'),
       controller: widget.controller,
       onOpenPlayer: _openPlayer,
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.market()),
+      onOpenLogin: () =>
+          _openLogin(targetRoute: const GteNavigationRoute.market()),
       navigationDependencies: _navigationDependencies(),
     );
   }
@@ -857,8 +834,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       key: const PageStorageKey<String>('portfolio-screen'),
       controller: widget.controller,
       onOpenPlayer: _openPlayer,
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.wallet()),
+      onOpenLogin: () =>
+          _openLogin(targetRoute: const GteNavigationRoute.wallet()),
     );
   }
 
@@ -973,9 +950,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   Future<bool> _openLogin({GteNavigationRoute? targetRoute}) async {
     final bool? signedIn = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
-        builder:
-            (BuildContext context) =>
-                GteLoginScreen(controller: widget.controller),
+        builder: (BuildContext context) =>
+            GteLoginScreen(controller: widget.controller),
       ),
     );
     if (!mounted || signedIn != true) {
@@ -1023,13 +999,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder:
-            (BuildContext context) => ManagerMarketScreen(
-              baseUrl: widget.apiBaseUrl,
-              accessToken: session.accessToken,
-              isAdmin: _isAdminSession,
-              onOpenAdmin: _openManagerAdmin,
-            ),
+        builder: (BuildContext context) => ManagerMarketScreen(
+          baseUrl: widget.apiBaseUrl,
+          accessToken: session.accessToken,
+          isAdmin: _isAdminSession,
+          onOpenAdmin: _openManagerAdmin,
+        ),
       ),
     );
   }
@@ -1041,12 +1016,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder:
-            (BuildContext context) => ManagerAdminScreen(
-              baseUrl: widget.apiBaseUrl,
-              accessToken: session.accessToken,
-              role: session.user.role,
-            ),
+        builder: (BuildContext context) => ManagerAdminScreen(
+          baseUrl: widget.apiBaseUrl,
+          accessToken: session.accessToken,
+          role: session.user.role,
+        ),
       ),
     );
   }
@@ -1058,12 +1032,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder:
-            (BuildContext context) => AdminCommandCenterScreen(
-              baseUrl: widget.apiBaseUrl,
-              accessToken: session.accessToken,
-              backendMode: widget.backendMode,
-            ),
+        builder: (BuildContext context) => AdminCommandCenterScreen(
+          baseUrl: widget.apiBaseUrl,
+          accessToken: session.accessToken,
+          backendMode: widget.backendMode,
+        ),
       ),
     );
   }
@@ -1071,14 +1044,13 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   Future<void> _openPlayer(String playerId) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder:
-            (BuildContext context) => GteExchangePlayerDetailScreen(
-              controller: widget.controller,
-              playerId: playerId,
-              onRequireLogin: () {
-                _openLogin(targetRoute: _route);
-              },
-            ),
+        builder: (BuildContext context) => GteExchangePlayerDetailScreen(
+          controller: widget.controller,
+          playerId: playerId,
+          onRequireLogin: () {
+            _openLogin(targetRoute: _route);
+          },
+        ),
       ),
     );
   }
@@ -1150,10 +1122,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       case GtePrimaryDestination.competitions:
         return GteSyncStatusCard(
           title: 'Competitions',
-          status:
-              _competitionController.discoveryError == null
-                  ? 'Fixtures, brackets, and competition updates are synced.'
-                  : 'Competition feed degraded. Showing the latest available snapshot.',
+          status: _competitionController.discoveryError == null
+              ? 'Fixtures, brackets, and competition updates are synced.'
+              : 'Competition feed degraded. Showing the latest available snapshot.',
           syncedAt: _competitionController.discoverySyncedAt,
           accent: accent,
           isRefreshing: _competitionController.isLoadingDiscovery,
@@ -1162,10 +1133,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       case GtePrimaryDestination.market:
         return GteSyncStatusCard(
           title: 'Player market',
-          status:
-              widget.controller.marketError == null
-                  ? 'Players, regens, prices, and club context are ready.'
-                  : 'Player board degraded. The last confirmed board is still visible.',
+          status: widget.controller.marketError == null
+              ? 'Players, regens, prices, and club context are ready.'
+              : 'Player board degraded. The last confirmed board is still visible.',
           syncedAt: widget.controller.marketSyncedAt,
           accent: accent,
           isRefreshing: widget.controller.isLoadingMarket,
@@ -1175,31 +1145,28 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         final bool creatorHealthy = _creatorController.errorMessage == null;
         return GteSyncStatusCard(
           title: 'Community',
-          status:
-              creatorHealthy
-                  ? _isReferralRuntimeAvailable
-                      ? 'Creator tools, referral activity, and community signals are synced.'
-                      : 'Creator tools are live. Referral rewards will appear here once that runtime is enabled.'
-                  : 'Community feed degraded. Showing the latest available snapshot.',
+          status: creatorHealthy
+              ? _isReferralRuntimeAvailable
+                    ? 'Creator tools, referral activity, and community signals are synced.'
+                    : 'Creator tools are live. Referral rewards will appear here once that runtime is enabled.'
+              : 'Community feed degraded. Showing the latest available snapshot.',
           syncedAt: _creatorController.syncedAt,
           accent: accent,
           isRefreshing:
               _referralController.isLoading || _creatorController.isLoading,
-          onRefresh:
-              widget.controller.isAuthenticated
-                  ? () {
-                    _referralController.load();
-                    _creatorController.load();
-                  }
-                  : null,
+          onRefresh: widget.controller.isAuthenticated
+              ? () {
+                  _referralController.load();
+                  _creatorController.load();
+                }
+              : null,
         );
       case GtePrimaryDestination.community:
         return GteSyncStatusCard(
           title: 'Community',
-          status:
-              widget.controller.isAuthenticated
-                  ? 'Watchlists, live threads, direct messages, and creator-club follows are wired to live community endpoints.'
-                  : 'Public live threads are visible. Sign in to manage watchlists, follows, and direct messages.',
+          status: widget.controller.isAuthenticated
+              ? 'Watchlists, live threads, direct messages, and creator-club follows are wired to live community endpoints.'
+              : 'Public live threads are visible. Sign in to manage watchlists, follows, and direct messages.',
           syncedAt: null,
           accent: accent,
           isRefreshing: false,
@@ -1218,10 +1185,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       case GtePrimaryDestination.wallet:
         return GteSyncStatusCard(
           title: 'Club funds',
-          status:
-              widget.controller.isAuthenticated
-                  ? 'Balance, player holdings, and activity records are up to date.'
-                  : 'Sign in to view funds, holdings, and account activity.',
+          status: widget.controller.isAuthenticated
+              ? 'Balance, player holdings, and activity records are up to date.'
+              : 'Sign in to view funds, holdings, and account activity.',
           syncedAt:
               widget.controller.portfolioSyncedAt ??
               widget.controller.ordersSyncedAt,
@@ -1229,10 +1195,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           isRefreshing:
               widget.controller.isLoadingPortfolio ||
               widget.controller.isLoadingOrders,
-          onRefresh:
-              widget.controller.isAuthenticated
-                  ? widget.controller.refreshAccount
-                  : null,
+          onRefresh: widget.controller.isAuthenticated
+              ? widget.controller.refreshAccount
+              : null,
         );
       case GtePrimaryDestination.home:
         return GteSyncStatusCard(
@@ -1295,12 +1260,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   String _runtimeAudienceLabel() {
     final bool hasClubScope = (_canonicalClubId()?.trim().isNotEmpty ?? false);
-    final String accessLabel =
-        widget.controller.isAuthenticated
-            ? 'signed-in access'
-            : 'preview access';
-    final String clubLabel =
-        hasClubScope ? 'club scope ready' : 'club scope pending';
+    final String accessLabel = widget.controller.isAuthenticated
+        ? 'signed-in access'
+        : 'preview access';
+    final String clubLabel = hasClubScope
+        ? 'club scope ready'
+        : 'club scope pending';
     return '$accessLabel, $clubLabel';
   }
 
@@ -1317,19 +1282,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     if (accessToken == null || accessToken.trim().isEmpty) {
       return;
     }
-    final GteCreatedClubProfile? created = await Navigator.of(
-      context,
-    ).push<GteCreatedClubProfile>(
-      MaterialPageRoute<GteCreatedClubProfile>(
-        builder:
-            (BuildContext context) => CreateClubScreen(
+    final GteCreatedClubProfile? created = await Navigator.of(context)
+        .push<GteCreatedClubProfile>(
+          MaterialPageRoute<GteCreatedClubProfile>(
+            builder: (BuildContext context) => CreateClubScreen(
               baseUrl: widget.apiBaseUrl,
               accessToken: accessToken,
               backendMode: widget.backendMode,
               onClubCreated: _adoptCreatedClub,
             ),
-      ),
-    );
+          ),
+        );
     if (created != null) {
       _adoptCreatedClub(created);
     }
@@ -1383,8 +1346,8 @@ class _ShellBottomNav extends StatelessWidget {
             _ShellNavChip(
               destination: GtePrimaryDestination.wallet,
               isActive: currentDestination == GtePrimaryDestination.wallet,
-              onTap:
-                  () => onOpenPrimaryDestination(GtePrimaryDestination.wallet),
+              onTap: () =>
+                  onOpenPrimaryDestination(GtePrimaryDestination.wallet),
             ),
           ],
         ),
@@ -1419,15 +1382,13 @@ class _ShellNavChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            color:
-                isActive
-                    ? tone.withValues(alpha: 0.18)
-                    : tokens.panelElevated.withValues(alpha: 0.78),
+            color: isActive
+                ? tone.withValues(alpha: 0.18)
+                : tokens.panelElevated.withValues(alpha: 0.78),
             border: Border.all(
-              color:
-                  isActive
-                      ? tone.withValues(alpha: 0.45)
-                      : tokens.stroke.withValues(alpha: 0.65),
+              color: isActive
+                  ? tone.withValues(alpha: 0.45)
+                  : tokens.stroke.withValues(alpha: 0.65),
             ),
           ),
           child: Row(

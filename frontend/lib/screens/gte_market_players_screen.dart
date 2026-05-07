@@ -62,6 +62,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
   GteMarketLeagueBrowseItem? _selectedBrowseLeague;
   GteMarketClubBrowseItem? _selectedBrowseClub;
   GteMarketNationalityBrowseItem? _selectedBrowseNationality;
+  bool _autoPagingQueued = false;
 
   @override
   void initState() {
@@ -122,6 +123,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _queueFullBoardLoad();
     return RefreshIndicator(
       onRefresh: _refresh,
       child: SingleChildScrollView(
@@ -597,7 +599,16 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               ),
             if (widget.controller.isLoadingMoreMarket) ...<Widget>[
               const SizedBox(height: 12),
-              const Center(child: CircularProgressIndicator()),
+              const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    CircularProgressIndicator(),
+                    SizedBox(height: 10),
+                    Text('Bringing more players onto the live board...'),
+                  ],
+                ),
+              ),
             ] else if (widget.controller.hasMorePlayers) ...<Widget>[
               const SizedBox(height: 4),
               Center(
@@ -662,6 +673,31 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _queueFullBoardLoad() {
+    if (_autoPagingQueued ||
+        widget.controller.isLoadingMarket ||
+        widget.controller.isLoadingMoreMarket ||
+        !widget.controller.hasMorePlayers) {
+      return;
+    }
+    _autoPagingQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      _autoPagingQueued = false;
+      if (!widget.controller.hasMorePlayers ||
+          widget.controller.isLoadingMarket ||
+          widget.controller.isLoadingMoreMarket) {
+        return;
+      }
+      await widget.controller.loadMarket(
+        search: _searchController.text,
+        reset: false,
+      );
+    });
   }
 
   Future<void> _loadBrowseRoots() async {

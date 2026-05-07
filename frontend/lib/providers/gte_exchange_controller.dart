@@ -11,7 +11,7 @@ import '../data/gte_exchange_api_client.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/gte_models.dart';
 
-const int _marketPageSize = 100;
+const int _marketPageSize = 500;
 
 class GteExchangeController extends ChangeNotifier {
   GteExchangeController({required GteExchangeApiClient api}) : _api = api;

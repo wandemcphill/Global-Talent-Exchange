@@ -6,10 +6,10 @@ import 'package:gte_frontend/app/gte_frontend_app.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/features/shared/presentation/gte_no_club_onboarding_view.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/widgets/ambient_audio_toggle_button.dart';
-import 'package:gte_frontend/widgets/cup_lift_hero.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
@@ -34,7 +34,7 @@ void main() {
     expect(controller.toggleCount, 1);
   });
 
-  testWidgets('CupLiftHero appears on /app/home through the active router', (
+  testWidgets('home keeps premium media as a non-blocking wallpaper layer', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 2200);
@@ -65,8 +65,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(CupLiftHero), findsOneWidget);
-    expect(find.byKey(const Key('cup-lift-hero')), findsOneWidget);
+    expect(find.byKey(const Key('cup-lift-hero')), findsNothing);
+    expect(find.byType(GteNoClubOnboardingView), findsOneWidget);
   });
 
   testWidgets('premium media assets are present in AssetManifest', (
@@ -80,6 +80,7 @@ void main() {
     expect(assets, contains('assets/media/gtex_stadium_ambient.mp3'));
     expect(assets, contains('assets/media/gtex_cup_lift_hero.mp4'));
     expect(assets, contains('assets/media/gtex_cup_lift_poster.webp'));
+    expect(assets, contains('assets/media/gtex_matchday_wallpaper.png'));
   });
 }
 
