@@ -22,6 +22,7 @@ void main() {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
     );
+    addTearDown(controller.dispose);
     controller.session = _authenticatedSession(
       userId: 'user-ibadan',
       userName: 'Ibadan Owner',
@@ -38,6 +39,8 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsWidgets);
@@ -60,6 +63,7 @@ void main() {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
     );
+    addTearDown(controller.dispose);
     controller.session = _authenticatedSession(
       userId: 'user-ibadan',
       userName: 'Ibadan Owner',

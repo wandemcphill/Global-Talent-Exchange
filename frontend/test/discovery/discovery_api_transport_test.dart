@@ -59,13 +59,13 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/discovery/home',
-        '/api/v1/discovery/search',
-        '/api/v1/discovery/saved-searches',
-        '/api/v1/discovery/saved-searches',
-        '/api/v1/discovery/saved-searches/search-1',
-        '/api/v1/admin/discovery/featured-rails',
-        '/api/v1/admin/discovery/featured-rails',
+        '/api/v2/discovery/home',
+        '/api/v2/discovery/search',
+        '/api/v2/discovery/saved-searches',
+        '/api/v2/discovery/saved-searches',
+        '/api/v2/discovery/saved-searches/search-1',
+        '/api/v2/admin/discovery/featured-rails',
+        '/api/v2/admin/discovery/featured-rails',
       ],
     );
     expect(transport.requests[1].uri.queryParameters['q'], 'lagos');

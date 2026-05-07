@@ -4,7 +4,7 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 
 void main() {
-  testWidgets('sync status card renders refresh affordance and labels', (
+  testWidgets('sync status card renders live auto-sync labels', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -22,6 +22,10 @@ void main() {
 
     expect(find.text('Capital layer'), findsOneWidget);
     expect(find.text('Balances and ledgers are protected.'), findsOneWidget);
-    expect(find.text('Refresh'), findsOneWidget);
+    expect(find.text('LIVE WATCH'), findsOneWidget);
+    expect(
+      find.text('This surface is standing by for the next live signal.'),
+      findsOneWidget,
+    );
   });
 }

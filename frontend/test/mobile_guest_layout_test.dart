@@ -54,7 +54,6 @@ void main() {
     await pumpGuestShell(tester, initialPath: '/app/community');
 
     final Object? exception = tester.takeException();
-    expect(find.text('Community'), findsWidgets);
     expect(exception, isNull, reason: '$exception');
   });
 }

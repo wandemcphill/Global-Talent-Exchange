@@ -132,7 +132,7 @@ void main() {
     expect(find.text('Victor Osimhen'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'View Player'), findsOneWidget);
     expect(find.text('Buy Now'), findsOneWidget);
-    expect(find.text('Refresh desk'), findsOneWidget);
+    expect(find.text('Latest transfer'), findsOneWidget);
     expect(find.text('Loan contracts'), findsNothing);
     expect(find.text('Watchlist is empty'), findsNothing);
 

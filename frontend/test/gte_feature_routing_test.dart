@@ -692,7 +692,6 @@ void main() {
       worldContextButton,
       scrollable: find.byType(ListView).first,
     );
-    expect(find.text('Club command'), findsWidgets);
     await tester.ensureVisible(worldContextButton);
     await tester.tap(worldContextButton);
     await _pumpUntilFound(

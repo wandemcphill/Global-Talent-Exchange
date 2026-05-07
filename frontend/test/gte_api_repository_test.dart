@@ -171,7 +171,7 @@ void main() {
     );
 
     expect(transport.requests, hasLength(1));
-    expect(transport.requests.single.uri.path, '/api/v1/auth/register');
+    expect(transport.requests.single.uri.path, '/api/v2/auth/register');
     expect(transport.requests.single.body, <String, Object?>{
       'email': 'qa@example.com',
       'full_name': 'QA User',
@@ -729,7 +729,7 @@ void main() {
       expect((await authSessionStore.readSession())?.sessionId, 'live-session');
       expect((await authSessionStore.readSession())?.clubId, 'ibadan-lions');
       expect(user.username, 'qa_user');
-      expect(transport.requests[1].uri.path, '/api/v1/session/bootstrap');
+      expect(transport.requests[1].uri.path, '/api/v2/session/bootstrap');
       expect(
         transport.requests.last.headers['Authorization'],
         'Bearer live-token',

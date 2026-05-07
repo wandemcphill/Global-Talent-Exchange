@@ -21,11 +21,11 @@ void main() {
       );
       final _QueuedTransport
       transport = _QueuedTransport(<String, List<GteTransportResponse>>{
-        'GET /api/v1/daily-challenges': <GteTransportResponse>[
+        'GET /api/v2/daily-challenges': <GteTransportResponse>[
           _dailyChallengesResponse(),
           _dailyChallengesResponse(),
         ],
-        'GET /api/v1/daily-challenges/me': <GteTransportResponse>[
+        'GET /api/v2/daily-challenges/me': <GteTransportResponse>[
           _dailyChallengesMeResponse(
             currentStreak: 4,
             longestStreak: 8,
@@ -59,7 +59,7 @@ void main() {
             todayClaimed: true,
           ),
         ],
-        'POST /api/v1/daily-challenges/daily-login/claim': <
+        'POST /api/v2/daily-challenges/daily-login/claim': <
           GteTransportResponse
         >[
           const GteTransportResponse(
@@ -155,11 +155,11 @@ void main() {
         findsOneWidget,
       );
       expect(transport.requestLog, <String>[
-        'GET /api/v1/daily-challenges',
-        'GET /api/v1/daily-challenges/me',
-        'POST /api/v1/daily-challenges/daily-login/claim',
-        'GET /api/v1/daily-challenges',
-        'GET /api/v1/daily-challenges/me',
+        'GET /api/v2/daily-challenges',
+        'GET /api/v2/daily-challenges/me',
+        'POST /api/v2/daily-challenges/daily-login/claim',
+        'GET /api/v2/daily-challenges',
+        'GET /api/v2/daily-challenges/me',
       ]);
     },
   );

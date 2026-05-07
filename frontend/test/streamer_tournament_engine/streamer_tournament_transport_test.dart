@@ -106,16 +106,16 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/streamer-tournaments',
-        '/api/v1/streamer-tournaments/mine',
-        '/api/v1/streamer-tournaments',
-        '/api/v1/streamer-tournaments/tournament-1',
-        '/api/v1/admin/streamer-tournaments/policy',
-        '/api/v1/admin/streamer-tournaments/policy',
-        '/api/v1/admin/streamer-tournaments/tournament-1/review',
-        '/api/v1/admin/streamer-tournaments/risk-signals',
-        '/api/v1/admin/streamer-tournaments/risk-signals/signal-1/review',
-        '/api/v1/admin/streamer-tournaments/tournament-1/settle',
+        '/api/v2/streamer-tournaments',
+        '/api/v2/streamer-tournaments/mine',
+        '/api/v2/streamer-tournaments',
+        '/api/v2/streamer-tournaments/tournament-1',
+        '/api/v2/admin/streamer-tournaments/policy',
+        '/api/v2/admin/streamer-tournaments/policy',
+        '/api/v2/admin/streamer-tournaments/tournament-1/review',
+        '/api/v2/admin/streamer-tournaments/risk-signals',
+        '/api/v2/admin/streamer-tournaments/risk-signals/signal-1/review',
+        '/api/v2/admin/streamer-tournaments/tournament-1/settle',
       ],
     );
   });

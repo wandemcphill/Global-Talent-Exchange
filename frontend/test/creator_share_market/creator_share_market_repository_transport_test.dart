@@ -169,13 +169,13 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/creator/clubs/club-1/fan-share-market',
-        '/api/v1/creator/clubs/club-1/fan-share-market',
-        '/api/v1/creator/clubs/club-1/fan-share-market/purchase',
-        '/api/v1/creator/clubs/club-1/fan-share-market/holding',
-        '/api/v1/creator/clubs/club-1/fan-share-market/distributions',
-        '/api/v1/admin/creator/fan-share-market/control',
-        '/api/v1/admin/creator/fan-share-market/control',
+        '/api/v2/creator/clubs/club-1/fan-share-market',
+        '/api/v2/creator/clubs/club-1/fan-share-market',
+        '/api/v2/creator/clubs/club-1/fan-share-market/purchase',
+        '/api/v2/creator/clubs/club-1/fan-share-market/holding',
+        '/api/v2/creator/clubs/club-1/fan-share-market/distributions',
+        '/api/v2/admin/creator/fan-share-market/control',
+        '/api/v2/admin/creator/fan-share-market/control',
       ],
     );
     expect(

@@ -10,7 +10,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/creators/me/summary': const GteTransportResponse(
+          '/api/v2/creators/me/summary': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'profile': <String, Object?>{
@@ -30,7 +30,7 @@ void main() {
               'approved_rewards': 6,
             },
           ),
-          '/api/v1/creators/me/competitions': const GteTransportResponse(
+          '/api/v2/creators/me/competitions': const GteTransportResponse(
             statusCode: 200,
             body: <Object?>[
               <String, Object?>{
@@ -43,7 +43,7 @@ void main() {
               },
             ],
           ),
-          '/api/v1/creators/me/finance': const GteTransportResponse(
+          '/api/v2/creators/me/finance': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'currency': 'credits',
@@ -85,9 +85,9 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/creators/me/summary',
-          '/api/v1/creators/me/competitions',
-          '/api/v1/creators/me/finance',
+          '/api/v2/creators/me/summary',
+          '/api/v2/creators/me/competitions',
+          '/api/v2/creators/me/finance',
         ],
       );
       expect(profile.handle, 'maya_scout');
@@ -105,7 +105,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/creators/maya_scout': const GteTransportResponse(
+          '/api/v2/creators/maya_scout': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'creator_id': 'creator-1',
@@ -133,7 +133,7 @@ void main() {
         transport.requests.map(
           (GteTransportRequest request) => request.uri.path,
         ),
-        <String>['/api/v1/creators/maya_scout'],
+        <String>['/api/v2/creators/maya_scout'],
       );
       expect(profile.handle, 'maya_scout');
       expect(profile.displayName, 'Maya Scout');
@@ -152,7 +152,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/creators/maya_scout': const GteTransportResponse(
+          '/api/v2/creators/maya_scout': const GteTransportResponse(
             statusCode: 404,
             body: <String, Object?>{'detail': 'Not found.'},
           ),
@@ -184,7 +184,7 @@ void main() {
         transport.requests.map(
           (GteTransportRequest request) => request.uri.path,
         ),
-        <String>['/api/v1/creators/maya_scout', '/api/creators/maya_scout'],
+        <String>['/api/v2/creators/maya_scout', '/api/creators/maya_scout'],
       );
     },
   );
@@ -192,7 +192,7 @@ void main() {
   test('creator api copilot analysis uses creators route', () async {
     final _PathTransport transport = _PathTransport(
       <String, GteTransportResponse>{
-        '/api/v1/creators/me/copilot/analyze': const GteTransportResponse(
+        '/api/v2/creators/me/copilot/analyze': const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{'creator_id': 'creator-1'},
         ),
@@ -222,7 +222,7 @@ void main() {
 
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
-      <String>['/api/v1/creators/me/copilot/analyze'],
+      <String>['/api/v2/creators/me/copilot/analyze'],
     );
     expect(
       transport.requests.map((GteTransportRequest request) => request.method),
@@ -236,7 +236,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/creators/me/copilot/analyze': const GteTransportResponse(
+          '/api/v2/creators/me/copilot/analyze': const GteTransportResponse(
             statusCode: 404,
             body: <String, Object?>{'detail': 'Not found.'},
           ),
@@ -273,7 +273,7 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/creators/me/copilot/analyze',
+          '/api/v2/creators/me/copilot/analyze',
           '/creators/me/copilot/analyze',
         ],
       );
@@ -286,7 +286,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/creators/me/finance': const GteTransportResponse(
+          '/api/v2/creators/me/finance': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'currency': 'credits',
@@ -312,7 +312,7 @@ void main() {
               'insights': <Object?>['Coarse creator summary'],
             },
           ),
-          '/api/v1/media-engine/me/clip-earnings': const GteTransportResponse(
+          '/api/v2/media-engine/me/clip-earnings': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'generated_clip_count': 4,
@@ -351,8 +351,8 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/creators/me/finance',
-          '/api/v1/media-engine/me/clip-earnings',
+          '/api/v2/creators/me/finance',
+          '/api/v2/media-engine/me/clip-earnings',
         ],
       );
       expect(summary.totalGiftIncome, 8);
@@ -380,7 +380,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/creators/me/finance': const GteTransportResponse(
+          '/api/v2/creators/me/finance': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'currency': 'credits',
@@ -406,7 +406,7 @@ void main() {
               'insights': <Object?>['Finance summary only'],
             },
           ),
-          '/api/v1/media-engine/me/clip-earnings': const GteTransportResponse(
+          '/api/v2/media-engine/me/clip-earnings': const GteTransportResponse(
             statusCode: 404,
             body: <String, Object?>{'detail': 'Not found.'},
           ),
@@ -430,8 +430,8 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/creators/me/finance',
-          '/api/v1/media-engine/me/clip-earnings',
+          '/api/v2/creators/me/finance',
+          '/api/v2/media-engine/me/clip-earnings',
           '/media-engine/me/clip-earnings',
         ],
       );

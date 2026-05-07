@@ -11,13 +11,13 @@ void main() {
   test('scoreboard stays masked until a goal is confirmed', () {
     final GtexMatchBroadcastController controller =
         GtexMatchBroadcastController(
-      viewState: buildBroadcastTestViewState(),
-      initialMode: GtexMatchRenderMode.quick,
-      initialViewType: GtexMatchViewType.twoD,
-      isPremiumUser: false,
-      spectatorMode: true,
-      auto3DEnabled: false,
-    );
+          viewState: buildBroadcastTestViewState(),
+          initialMode: GtexMatchRenderMode.quick,
+          initialViewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+        );
 
     expect(controller.hudState.scoreMasked, isTrue);
 
@@ -38,13 +38,13 @@ void main() {
   test('scoreless matches reveal 0-0 only at full time', () {
     final GtexMatchBroadcastController controller =
         GtexMatchBroadcastController(
-      viewState: buildBroadcastTestViewState(scoreless: true),
-      initialMode: GtexMatchRenderMode.quick,
-      initialViewType: GtexMatchViewType.twoD,
-      isPremiumUser: false,
-      spectatorMode: true,
-      auto3DEnabled: false,
-    );
+          viewState: buildBroadcastTestViewState(scoreless: true),
+          initialMode: GtexMatchRenderMode.quick,
+          initialViewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+        );
 
     expect(controller.hudState.scoreMasked, isTrue);
 
@@ -87,7 +87,9 @@ void main() {
     );
 
     expect(
-        quick.modeController.targetDurationSeconds, inInclusiveRange(180, 300));
+      quick.modeController.targetDurationSeconds,
+      inInclusiveRange(180, 300),
+    );
     expect(
       standard.modeController.targetDurationSeconds,
       inInclusiveRange(420, 600),
@@ -106,67 +108,71 @@ void main() {
     );
   });
 
-  test('broadcast spectator HUD suppresses gifting affordances', () {
+  test('broadcast spectator HUD exposes gifting affordances', () {
     final GtexMatchBroadcastController controller =
         GtexMatchBroadcastController(
-      viewState: buildBroadcastTestViewState(),
-      initialMode: GtexMatchRenderMode.quick,
-      initialViewType: GtexMatchViewType.twoD,
-      isPremiumUser: false,
-      spectatorMode: true,
-      auto3DEnabled: false,
-    );
+          viewState: buildBroadcastTestViewState(),
+          initialMode: GtexMatchRenderMode.quick,
+          initialViewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+        );
 
-    expect(controller.hudState.canGift, isFalse);
-    expect(controller.hudState.socialReactions, isNot(contains('GIFT')));
+    expect(controller.hudState.canGift, isTrue);
+    expect(controller.hudState.showSocialRail, isTrue);
   });
 
-  test('cinematic viewer-only beats do not change the authoritative outcome',
-      () {
-    final viewState = buildBroadcastTestViewState();
-    final GtexMatchBroadcastController quick = GtexMatchBroadcastController(
-      viewState: viewState,
-      initialMode: GtexMatchRenderMode.quick,
-      initialViewType: GtexMatchViewType.twoD,
-      isPremiumUser: false,
-      spectatorMode: true,
-      auto3DEnabled: false,
-    );
-    final GtexMatchBroadcastController cinematic = GtexMatchBroadcastController(
-      viewState: viewState,
-      initialMode: GtexMatchRenderMode.cinematic,
-      initialViewType: GtexMatchViewType.twoD,
-      isPremiumUser: false,
-      spectatorMode: true,
-      auto3DEnabled: false,
-    );
+  test(
+    'cinematic viewer-only beats do not change the authoritative outcome',
+    () {
+      final viewState = buildBroadcastTestViewState();
+      final GtexMatchBroadcastController quick = GtexMatchBroadcastController(
+        viewState: viewState,
+        initialMode: GtexMatchRenderMode.quick,
+        initialViewType: GtexMatchViewType.twoD,
+        isPremiumUser: false,
+        spectatorMode: true,
+        auto3DEnabled: false,
+      );
+      final GtexMatchBroadcastController cinematic =
+          GtexMatchBroadcastController(
+            viewState: viewState,
+            initialMode: GtexMatchRenderMode.cinematic,
+            initialViewType: GtexMatchViewType.twoD,
+            isPremiumUser: false,
+            spectatorMode: true,
+            auto3DEnabled: false,
+          );
 
-    expect(quick.modeController.viewerOnlyBeats, isEmpty);
-    expect(cinematic.modeController.viewerOnlyBeats, isNotEmpty);
+      expect(quick.modeController.viewerOnlyBeats, isEmpty);
+      expect(cinematic.modeController.viewerOnlyBeats, isNotEmpty);
 
-    quick.advanceBy(
-        Duration(seconds: quick.modeController.targetDurationSeconds));
-    cinematic.advanceBy(
-      Duration(seconds: cinematic.modeController.targetDurationSeconds),
-    );
+      quick.advanceBy(
+        Duration(seconds: quick.modeController.targetDurationSeconds),
+      );
+      cinematic.advanceBy(
+        Duration(seconds: cinematic.modeController.targetDurationSeconds),
+      );
 
-    expect(quick.hudState.homeScore, cinematic.hudState.homeScore);
-    expect(quick.hudState.awayScore, cinematic.hudState.awayScore);
-    expect(cinematic.hudState.homeScore, 1);
-    expect(cinematic.hudState.awayScore, 0);
-  });
+      expect(quick.hudState.homeScore, cinematic.hudState.homeScore);
+      expect(quick.hudState.awayScore, cinematic.hudState.awayScore);
+      expect(cinematic.hudState.homeScore, 1);
+      expect(cinematic.hudState.awayScore, 0);
+    },
+  );
 
   test('VAR/disallowed presentation never commits the disallowed goal', () {
     final viewState = buildBroadcastTestViewState();
     final GtexMatchBroadcastController controller =
         GtexMatchBroadcastController(
-      viewState: viewState,
-      initialMode: GtexMatchRenderMode.quick,
-      initialViewType: GtexMatchViewType.twoD,
-      isPremiumUser: false,
-      spectatorMode: true,
-      auto3DEnabled: false,
-    );
+          viewState: viewState,
+          initialMode: GtexMatchRenderMode.quick,
+          initialViewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+        );
 
     final double disallowedViewerSeconds =
         controller.modeController.viewerSecondsForAuthoritative(2.8) + 1.0;
@@ -188,26 +194,33 @@ void main() {
     expect(viewState.lastFrame.awayScore, 0);
   });
 
-  test('broadcast controller stays on existing viewer contracts for frame data',
-      () {
-    final viewState = buildBroadcastTestViewState();
-    final GtexMatchBroadcastController controller =
-        GtexMatchBroadcastController(
-      viewState: viewState,
-      initialMode: GtexMatchRenderMode.quick,
-      initialViewType: GtexMatchViewType.twoD,
-      isPremiumUser: false,
-      spectatorMode: true,
-      auto3DEnabled: false,
-    );
+  test(
+    'broadcast controller stays on existing viewer contracts for frame data',
+    () {
+      final viewState = buildBroadcastTestViewState();
+      final GtexMatchBroadcastController controller =
+          GtexMatchBroadcastController(
+            viewState: viewState,
+            initialMode: GtexMatchRenderMode.quick,
+            initialViewType: GtexMatchViewType.twoD,
+            isPremiumUser: false,
+            spectatorMode: true,
+            auto3DEnabled: false,
+          );
 
-    final MatchEvent goalEvent = viewState.events.firstWhere(
-      (MatchEvent event) => event.id == 'goal-home',
-    );
-    final frame = controller.frameAtAuthoritativeSeconds(goalEvent.timeSeconds);
+      final MatchEvent goalEvent = viewState.events.firstWhere(
+        (MatchEvent event) => event.id == 'goal-home',
+      );
+      final frame = controller.frameAtAuthoritativeSeconds(
+        goalEvent.timeSeconds,
+      );
 
-    expect(frame.activeEventId, anyOf('attack-home', 'goal-home'));
-    expect(frame.players.map((player) => player.playerId), contains('home-9'));
-    expect(controller.viewState.homeTeam.teamName, 'Lagos Stars');
-  });
+      expect(frame.activeEventId, anyOf('attack-home', 'goal-home'));
+      expect(
+        frame.players.map((player) => player.playerId),
+        contains('home-9'),
+      );
+      expect(controller.viewState.homeTeam.teamName, 'Lagos Stars');
+    },
+  );
 }

@@ -104,7 +104,7 @@ void main() {
       await client.fetchMatchViewer('match-001', mode: MatchMode.cinematic);
 
       expect(transport.lastRequest, isNotNull);
-      expect(transport.lastRequest!.uri.path, '/api/v1/match-viewer/match-001');
+      expect(transport.lastRequest!.uri.path, '/api/v2/match-viewer/match-001');
       expect(transport.lastRequest!.uri.queryParameters['mode'], 'cinematic');
     },
   );
@@ -135,7 +135,7 @@ void main() {
       );
 
       expect(transport.lastRequest, isNotNull);
-      expect(transport.lastRequest!.uri.path, '/api/v1/market/players');
+      expect(transport.lastRequest!.uri.path, '/api/v2/market/players');
       expect(transport.lastRequest!.uri.queryParameters['search'], 'ronaldo');
       expect(transport.lastRequest!.uri.queryParameters['position'], 'ST');
       expect(
@@ -259,7 +259,7 @@ class _RecordingTransport implements GteTransport {
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) async {
     lastRequest = request;
-    if (request.uri.path == '/api/v1/market/players') {
+    if (request.uri.path == '/api/v2/market/players') {
       return const GteTransportResponse(
         statusCode: 200,
         body: <String, Object?>{

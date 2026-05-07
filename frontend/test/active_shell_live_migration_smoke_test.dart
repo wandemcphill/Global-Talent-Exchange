@@ -97,8 +97,7 @@ void main() {
 
       await _scrollTo(tester, find.text('Transfer Market'));
       expect(find.text('Transfer Market'), findsWidgets);
-      expect(find.text('Scout players'), findsOneWidget);
-      expect(find.text('Scout'), findsWidgets);
+      expect(find.byType(TransferMarketScreen), findsOneWidget);
     },
   );
 

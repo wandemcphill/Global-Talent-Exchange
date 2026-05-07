@@ -59,7 +59,7 @@ def _build_contract(
         if not method or not legacy_path:
             continue
         route_inventory[(method, legacy_path)] = route
-        public_aliases = effective_paths or [legacy_path]
+        public_aliases = _apply_route_alias_fixes(route, effective_paths or [legacy_path])
         preferred_source_path = _preferred_public_path(public_aliases)
         canonical_path = _canonicalize_path(preferred_source_path)
         aliases = set()
@@ -124,6 +124,18 @@ def _canonicalize_path(path: str) -> str:
     if normalized.startswith("/api/"):
         return f"{API_VERSION_PREFIX}/{normalized[len('/api/'):].lstrip('/')}"
     return f"{API_VERSION_PREFIX}{normalized}"
+
+
+def _apply_route_alias_fixes(route: dict[str, Any], aliases: list[str]) -> list[str]:
+    source_file = str(route.get("file") or "").replace("\\", "/")
+    if source_file != "backend/app/competitions/creator_league_router.py":
+        return aliases
+
+    normalized_aliases = [_normalize_path(alias) for alias in aliases]
+    competition_aliases = [
+        f"/api/competitions{alias}" for alias in normalized_aliases if alias.startswith("/creator-league")
+    ]
+    return list(dict.fromkeys([*normalized_aliases, *competition_aliases]))
 
 
 def _route_aliases(legacy_path: str, canonical_path: str) -> set[str]:

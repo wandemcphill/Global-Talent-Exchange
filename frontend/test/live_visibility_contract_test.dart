@@ -21,7 +21,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/market/players': const GteTransportResponse(
+          '/api/v2/market/players': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'items': <Object?>[
@@ -57,7 +57,7 @@ void main() {
 
       final market = await client.fetchPlayers();
 
-      expect(transport.requests.single.uri.path, '/api/v1/market/players');
+      expect(transport.requests.single.uri.path, '/api/v2/market/players');
       expect(market.items, hasLength(1));
       expect(market.items.single.playerId, 'player-osimhen');
       expect(market.items.single.availabilityLabel, 'Available now');
@@ -68,7 +68,7 @@ void main() {
   test('world aggregate provider parses map-backed regen payloads', () async {
     final ProviderContainer container = _buildContainer(
       transport: _PathTransport(<String, GteTransportResponse>{
-        '/api/v1/regen-universe/rising-stars': const GteTransportResponse(
+        '/api/v2/regen-universe/rising-stars': const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
             'entries': <Object?>[
@@ -79,7 +79,7 @@ void main() {
             ],
           },
         ),
-        '/api/v1/regen-universe/scouting-feed': const GteTransportResponse(
+        '/api/v2/regen-universe/scouting-feed': const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
             'items': <Object?>[
@@ -87,7 +87,7 @@ void main() {
             ],
           },
         ),
-        '/api/v1/regen-universe/seasons': const GteTransportResponse(
+        '/api/v2/regen-universe/seasons': const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
             'items': <Object?>[
@@ -95,7 +95,7 @@ void main() {
             ],
           },
         ),
-        '/api/v1/regen-universe/awards': const GteTransportResponse(
+        '/api/v2/regen-universe/awards': const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
             'items': <Object?>[
@@ -103,7 +103,7 @@ void main() {
             ],
           },
         ),
-        '/api/v1/regen-universe/hall-of-fame': const GteTransportResponse(
+        '/api/v2/regen-universe/hall-of-fame': const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
             'entries': <Object?>[
@@ -114,13 +114,13 @@ void main() {
             ],
           },
         ),
-        '/api/v1/federations': const GteTransportResponse(
+        '/api/v2/federations': const GteTransportResponse(
           statusCode: 200,
           body: <Object?>[
             <String, Object?>{'id': 'fed-1', 'name': 'West Africa Federation'},
           ],
         ),
-        '/api/v1/regen-universe/tracking': const GteTransportResponse(
+        '/api/v2/regen-universe/tracking': const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{'season_phase': 'live'},
         ),
@@ -154,12 +154,12 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/community/creator-clubs/ibadan-lions/follow':
+          '/api/v2/community/creator-clubs/ibadan-lions/follow':
               const GteTransportResponse(
                 statusCode: 201,
                 body: <String, Object?>{'status': 'created'},
               ),
-          '/api/v1/community/watchlist': GteTransportResponse(
+          '/api/v2/community/watchlist': GteTransportResponse(
             statusCode: 201,
             body: <String, Object?>{
               'id': 'watch-2',
@@ -173,7 +173,7 @@ void main() {
               'updated_at': DateTime.utc(2026, 4, 13).toIso8601String(),
             },
           ),
-          '/api/v1/community/live-threads': GteTransportResponse(
+          '/api/v2/community/live-threads': GteTransportResponse(
             statusCode: 201,
             body: <String, Object?>{
               'id': 'thread-2',
@@ -189,7 +189,7 @@ void main() {
               'updated_at': DateTime.utc(2026, 4, 13).toIso8601String(),
             },
           ),
-          '/api/v1/community/private-messages/threads': GteTransportResponse(
+          '/api/v2/community/private-messages/threads': GteTransportResponse(
             statusCode: 201,
             body: <String, Object?>{
               'id': 'pm-2',
@@ -258,10 +258,10 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/community/creator-clubs/ibadan-lions/follow',
-          '/api/v1/community/watchlist',
-          '/api/v1/community/live-threads',
-          '/api/v1/community/private-messages/threads',
+          '/api/v2/community/creator-clubs/ibadan-lions/follow',
+          '/api/v2/community/watchlist',
+          '/api/v2/community/live-threads',
+          '/api/v2/community/private-messages/threads',
         ],
       );
       expect(
@@ -288,7 +288,7 @@ void main() {
     () async {
       final ProviderContainer container = _buildContainer(
         transport: _PathTransport(<String, GteTransportResponse>{
-          '/api/v1/federations': const GteTransportResponse(
+          '/api/v2/federations': const GteTransportResponse(
             statusCode: 200,
             body: <Object?>[
               <String, Object?>{
@@ -306,7 +306,7 @@ void main() {
               },
             ],
           ),
-          '/api/v1/federations/rankings': const GteTransportResponse(
+          '/api/v2/federations/rankings': const GteTransportResponse(
             statusCode: 200,
             body: <Object?>[
               <String, Object?>{
@@ -320,7 +320,7 @@ void main() {
               },
             ],
           ),
-          '/api/v1/federations/regional-tournaments':
+          '/api/v2/federations/regional-tournaments':
               const GteTransportResponse(
                 statusCode: 200,
                 body: <Object?>[
@@ -353,7 +353,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/federations/fed-1/proposals': const GteTransportResponse(
+          '/api/v2/federations/fed-1/proposals': const GteTransportResponse(
             statusCode: 201,
             body: <String, Object?>{
               'id': 'proposal-1',
@@ -361,7 +361,7 @@ void main() {
               'status': 'open',
             },
           ),
-          '/api/v1/federations/proposals/proposal-1/votes':
+          '/api/v2/federations/proposals/proposal-1/votes':
               const GteTransportResponse(
                 statusCode: 200,
                 body: <String, Object?>{
@@ -399,7 +399,7 @@ void main() {
       expect(transport.requests, hasLength(2));
       expect(
         transport.requests.first.uri.path,
-        '/api/v1/federations/fed-1/proposals',
+        '/api/v2/federations/fed-1/proposals',
       );
       expect(
         transport.requests.first.body,
@@ -417,7 +417,7 @@ void main() {
       );
       expect(
         transport.requests.last.uri.path,
-        '/api/v1/federations/proposals/proposal-1/votes',
+        '/api/v2/federations/proposals/proposal-1/votes',
       );
       expect(
         transport.requests.last.body,
@@ -435,7 +435,7 @@ void main() {
     () async {
       final ProviderContainer container = _buildContainer(
         transport: _PathTransport(<String, GteTransportResponse>{
-          '/api/v1/national-team-engine/competitions':
+          '/api/v2/national-team-engine/competitions':
               const GteTransportResponse(
                 statusCode: 200,
                 body: <Object?>[
@@ -455,7 +455,7 @@ void main() {
                   },
                 ],
               ),
-          '/api/v1/national-team-engine/rankings': const GteTransportResponse(
+          '/api/v2/national-team-engine/rankings': const GteTransportResponse(
             statusCode: 200,
             body: <Object?>[
               <String, Object?>{
@@ -470,7 +470,7 @@ void main() {
               },
             ],
           ),
-          '/api/v1/regen-universe/national-regens': const GteTransportResponse(
+          '/api/v2/regen-universe/national-regens': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'items': <Object?>[
@@ -510,7 +510,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/transfer-market/listings/listing-1':
+          '/api/v2/transfer-market/listings/listing-1':
               const GteTransportResponse(
                 statusCode: 200,
                 body: <String, Object?>{
@@ -535,7 +535,7 @@ void main() {
                   'channel': 'market:listing-1',
                 },
               ),
-          '/api/v1/transfer-market/listings/listing-1/negotiation':
+          '/api/v2/transfer-market/listings/listing-1/negotiation':
               const GteTransportResponse(
                 statusCode: 401,
                 body: <String, Object?>{'detail': 'Authentication required.'},
@@ -573,7 +573,7 @@ void main() {
     () async {
       final ProviderContainer container = _buildContainer(
         transport: _PathTransport(<String, GteTransportResponse>{
-          '/api/v1/players/markets': const GteTransportResponse(
+          '/api/v2/players/markets': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'items': <Object?>[
@@ -594,7 +594,7 @@ void main() {
               'per_page': 24,
             },
           ),
-          '/api/v1/transfer-market/listings': const GteTransportResponse(
+          '/api/v2/transfer-market/listings': const GteTransportResponse(
             statusCode: 200,
             body: <Object?>[
               <String, Object?>{
@@ -636,7 +636,7 @@ void main() {
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          '/api/v1/players/markets': const GteTransportResponse(
+          '/api/v2/players/markets': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'items': <Object?>[],
@@ -645,7 +645,7 @@ void main() {
               'per_page': 24,
             },
           ),
-          '/api/v1/players': const GteTransportResponse(
+          '/api/v2/players': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
               'players': <Object?>[
@@ -664,7 +664,7 @@ void main() {
               'total': 1,
             },
           ),
-          '/api/v1/transfer-market/listings': const GteTransportResponse(
+          '/api/v2/transfer-market/listings': const GteTransportResponse(
             statusCode: 200,
             body: <Object?>[],
           ),
@@ -693,13 +693,13 @@ void main() {
         transport.requests.map(
           (GteTransportRequest request) => request.uri.path,
         ),
-        containsAll(<String>['/api/v1/players/markets', '/api/v1/players']),
+        containsAll(<String>['/api/v2/players/markets', '/api/v2/players']),
       );
       expect(
         transport.requests
             .where(
               (GteTransportRequest request) =>
-                  request.uri.path == '/api/v1/players',
+                  request.uri.path == '/api/v2/players',
             )
             .single
             .uri

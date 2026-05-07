@@ -38,6 +38,7 @@ class ClubController extends ChangeNotifier {
   Future<void>? _loadFuture;
   DateTime? dataSyncedAt;
   final String? clubName;
+  bool _isDisposed = false;
 
   bool isLoading = false;
   bool isSavingIdentity = false;
@@ -110,6 +111,18 @@ class ClubController extends ChangeNotifier {
   String get displayClubName =>
       _data?.clubName ?? clubName ?? prettifyClubId(clubId);
 
+  void _notifyIfActive() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
   Future<void> ensureLoaded() async {
     if (isLoading || hasData) {
       return;
@@ -123,7 +136,7 @@ class ClubController extends ChangeNotifier {
     }
     isLoading = true;
     errorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
     final Future<void> task = () async {
       try {
         final ClubDashboardData dashboard = await api.fetchDashboard(
@@ -139,7 +152,7 @@ class ClubController extends ChangeNotifier {
       } finally {
         isLoading = false;
         _loadFuture = null;
-        notifyListeners();
+        _notifyIfActive();
       }
     }();
     _loadFuture = task;
@@ -150,7 +163,7 @@ class ClubController extends ChangeNotifier {
 
   Future<void> loadAdmin() async {
     isLoadingAdmin = true;
-    notifyListeners();
+    _notifyIfActive();
     try {
       adminAnalytics = await api.fetchAdminAnalytics();
       moderationQueue = await api.fetchBrandingModerationQueue();
@@ -158,7 +171,7 @@ class ClubController extends ChangeNotifier {
       errorMessage = 'Unable to load club admin surfaces. $error';
     } finally {
       isLoadingAdmin = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -167,7 +180,7 @@ class ClubController extends ChangeNotifier {
       return;
     }
     catalogCategory = category;
-    notifyListeners();
+    _notifyIfActive();
   }
 
   void setSelectedKit(JerseyType type) {
@@ -175,7 +188,7 @@ class ClubController extends ChangeNotifier {
       return;
     }
     selectedKit = type;
-    notifyListeners();
+    _notifyIfActive();
   }
 
   void updateSelectedKit({
@@ -214,7 +227,7 @@ class ClubController extends ChangeNotifier {
     _data = current.copyWith(
       identity: current.identity.copyWith(jerseySet: updatedSet),
     );
-    notifyListeners();
+    _notifyIfActive();
   }
 
   void updateBrandingTheme(String themeId) {
@@ -225,7 +238,7 @@ class ClubController extends ChangeNotifier {
     _data = current.copyWith(
       branding: current.branding.copyWith(selectedThemeId: themeId),
     );
-    notifyListeners();
+    _notifyIfActive();
   }
 
   void updateBackdrop(String backdropId) {
@@ -236,7 +249,7 @@ class ClubController extends ChangeNotifier {
     _data = current.copyWith(
       branding: current.branding.copyWith(selectedBackdropId: backdropId),
     );
-    notifyListeners();
+    _notifyIfActive();
   }
 
   void updateMotto(String motto) {
@@ -245,7 +258,7 @@ class ClubController extends ChangeNotifier {
       return;
     }
     _data = current.copyWith(branding: current.branding.copyWith(motto: motto));
-    notifyListeners();
+    _notifyIfActive();
   }
 
   Future<void> saveIdentity() async {
@@ -255,7 +268,7 @@ class ClubController extends ChangeNotifier {
     }
     isSavingIdentity = true;
     errorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
     try {
       final ClubIdentityDto saved = await api.saveIdentity(
         clubId: clubId,
@@ -268,7 +281,7 @@ class ClubController extends ChangeNotifier {
       errorMessage = 'Unable to save jersey design changes. $error';
     } finally {
       isSavingIdentity = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -279,7 +292,7 @@ class ClubController extends ChangeNotifier {
     }
     isSavingBranding = true;
     errorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
     try {
       final ClubBrandingProfile saved = await api.saveBranding(
         clubId: clubId,
@@ -293,7 +306,7 @@ class ClubController extends ChangeNotifier {
       errorMessage = 'Unable to save club branding updates. $error';
     } finally {
       isSavingBranding = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -303,7 +316,7 @@ class ClubController extends ChangeNotifier {
     }
     isProcessingCatalog = true;
     errorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
     try {
       await api.purchaseCatalogItem(clubId: clubId, item: item);
       await _reloadDashboardWithMessage(
@@ -313,7 +326,7 @@ class ClubController extends ChangeNotifier {
       errorMessage = 'Unable to complete the catalog purchase. $error';
     } finally {
       isProcessingCatalog = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -323,7 +336,7 @@ class ClubController extends ChangeNotifier {
     }
     isProcessingCatalog = true;
     errorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
     try {
       await api.equipCatalogItem(clubId: clubId, item: item);
       await _reloadDashboardWithMessage(
@@ -333,7 +346,7 @@ class ClubController extends ChangeNotifier {
       errorMessage = 'Unable to equip the selected cosmetic. $error';
     } finally {
       isProcessingCatalog = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -350,7 +363,7 @@ class ClubController extends ChangeNotifier {
               : 'Branding review sent back for identity refinements.';
     } catch (error) {
       errorMessage = 'Unable to update branding review. $error';
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -359,7 +372,7 @@ class ClubController extends ChangeNotifier {
       return;
     }
     noticeMessage = null;
-    notifyListeners();
+    _notifyIfActive();
   }
 
   Future<void> _reloadDashboardWithMessage(String message) async {

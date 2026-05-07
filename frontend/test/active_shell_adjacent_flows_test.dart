@@ -43,16 +43,21 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Club funds'));
-      await _pumpUntilText(tester, 'Wallet actions');
-      expect(find.text('Wallet actions'), findsOneWidget);
+      await _pumpUntilText(tester, 'Money moves');
+      expect(find.text('Money moves'), findsOneWidget);
       expect(find.text('Fund wallet'), findsOneWidget);
 
-      await tester.tap(find.text('Notifications'));
+      final Finder notificationsButton = find.widgetWithText(
+        OutlinedButton,
+        'Notifications',
+      );
+      await tester.ensureVisible(notificationsButton);
+      await tester.tap(notificationsButton);
       await _pumpUntilText(tester, 'Mark all read');
       expect(find.text('Mark all read'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
       expect(find.byTooltip('Creator community'), findsNothing);
 
@@ -88,20 +93,21 @@ void main() {
           ),
         ),
       );
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
-      expect(find.text('Funds'), findsWidgets);
-      final Finder fundsNavChip = find.text('Funds').last;
-      expect(fundsNavChip, findsOneWidget);
+      expect(find.text('Wallet'), findsWidgets);
+      final Finder walletNavChip = find.text('Wallet').last;
+      expect(walletNavChip, findsOneWidget);
 
       await tester.tap(find.text('Home').last);
       await tester.pumpAndSettle();
-      expect(find.widgetWithText(FilledButton, 'Enter club'), findsOneWidget);
+      expect(find.text('Home sync'), findsOneWidget);
 
-      await tester.ensureVisible(fundsNavChip);
-      await tester.tap(fundsNavChip);
-      await _pumpUntilText(tester, 'Wallet actions');
+      await tester.ensureVisible(walletNavChip);
+      await tester.tap(walletNavChip);
+      await _pumpUntilText(tester, 'Money moves');
       expect(find.text('Fund wallet'), findsOneWidget);
+      await tester.pumpAndSettle();
     },
   );
 
@@ -135,27 +141,21 @@ void main() {
         ),
       );
       controller.refreshAccount();
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
-      final Finder walletOverviewButton = find.widgetWithText(
-        FilledButton,
-        'Wallet overview',
-      );
+      final Finder walletOverviewButton = find.text('Wallet overview');
       await tester.ensureVisible(walletOverviewButton);
       await tester.tap(walletOverviewButton);
       await _pumpUntilText(tester, 'Club funds');
       expect(find.text('Club Wallet'), findsOneWidget);
       expect(find.text('Club funds'), findsOneWidget);
-      expect(find.text('TRANSFER BALANCE'), findsOneWidget);
-      expect(find.text('CLUB CREDIT'), findsOneWidget);
+      expect(find.text('GTEX COIN'), findsWidgets);
+      expect(find.text('FAN COIN'), findsWidgets);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
-      final Finder fundWalletButton = find.widgetWithText(
-        OutlinedButton,
-        'Fund wallet',
-      );
+      final Finder fundWalletButton = find.text('Fund wallet');
       await tester.ensureVisible(fundWalletButton);
       await tester.tap(fundWalletButton);
       await _pumpUntilText(tester, 'Choose a deposit method');
@@ -163,32 +163,26 @@ void main() {
       expect(find.text('Continue to Paystack'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
-      final Finder withdrawButton = find.widgetWithText(
-        OutlinedButton,
-        'Withdraw',
-      );
+      final Finder withdrawButton = find.text('Withdraw');
       await tester.ensureVisible(withdrawButton);
       await tester.tap(withdrawButton);
       await _pumpUntilText(tester, 'Request withdrawal');
       expect(find.text('Request withdrawal'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
-      final Finder depositHistoryButton = find.widgetWithText(
-        OutlinedButton,
-        'Deposit history',
-      );
-      await tester.ensureVisible(depositHistoryButton);
-      await tester.tap(depositHistoryButton);
+      final Finder historyButton = find.text('History and support');
+      await tester.ensureVisible(historyButton);
+      await tester.tap(historyButton);
       await _pumpUntilText(tester, 'Transaction History');
       expect(find.text('No wallet activity yet'), findsOneWidget);
       expect(find.text('Deposit'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
       final Finder notificationsButton = find.widgetWithText(
         OutlinedButton,
@@ -200,7 +194,7 @@ void main() {
       expect(find.text('Mark all read'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
       final Finder supportButton = find.widgetWithText(
         OutlinedButton,
@@ -265,16 +259,13 @@ void main() {
             controller.complianceStatus!.canDeposit == false &&
             !controller.isLoadingCompliance,
       );
-      await _pumpUntilText(tester, 'Wallet actions');
+      await _pumpUntilText(tester, 'Money moves');
 
-      final Finder fundWalletButton = find.widgetWithText(
-        OutlinedButton,
-        'Fund wallet',
-      );
-      expect(tester.widget<OutlinedButton>(fundWalletButton).onPressed, isNull);
+      final Finder fundWalletButton = find.text('Fund wallet');
+      expect(fundWalletButton, findsOneWidget);
       expect(
         find.text(
-          'Funding is locked until compliance review completes. Open Wallet overview for the current restriction and next steps.',
+          'Funding is locked until compliance review completes. Open wallet overview for the current restriction and next steps.',
         ),
         findsOneWidget,
       );

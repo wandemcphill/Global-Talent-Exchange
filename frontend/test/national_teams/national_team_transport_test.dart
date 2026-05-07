@@ -48,9 +48,9 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/national-team-engine/competitions',
-        '/api/v1/national-team-engine/entries/entry-1',
-        '/api/v1/national-team-engine/me/history',
+        '/api/v2/national-team-engine/competitions',
+        '/api/v2/national-team-engine/entries/entry-1',
+        '/api/v2/national-team-engine/me/history',
       ],
     );
   });
@@ -126,13 +126,13 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/national-team-engine/competitions',
-        '/api/v1/national-team-engine/rankings',
-        '/api/v1/national-team-engine/competitions/comp-1',
-        '/api/v1/national-team-engine/competitions/comp-1/lifecycle',
-        '/api/v1/national-team-engine/competitions/comp-1/presentation',
-        '/api/v1/national-team-engine/me/history',
-        '/api/v1/national-team-engine/competitions/comp-1/auto-build-squad',
+        '/api/v2/national-team-engine/competitions',
+        '/api/v2/national-team-engine/rankings',
+        '/api/v2/national-team-engine/competitions/comp-1',
+        '/api/v2/national-team-engine/competitions/comp-1/lifecycle',
+        '/api/v2/national-team-engine/competitions/comp-1/presentation',
+        '/api/v2/national-team-engine/me/history',
+        '/api/v2/national-team-engine/competitions/comp-1/auto-build-squad',
       ],
     );
     expect(transport.requests[1].uri.queryParameters['limit'], '8');

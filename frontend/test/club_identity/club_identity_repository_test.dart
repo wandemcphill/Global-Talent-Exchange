@@ -28,7 +28,7 @@ void main() {
     expect(transport.requests.single.method, 'GET');
     expect(
       transport.requests.single.uri.path,
-      '/api/v1/clubs/atlas-fc/identity',
+      '/api/v2/clubs/atlas-fc/identity',
     );
   });
 

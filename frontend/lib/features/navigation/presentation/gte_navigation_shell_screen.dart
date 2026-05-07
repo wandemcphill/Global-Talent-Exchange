@@ -190,14 +190,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool compactViewport = MediaQuery.sizeOf(context).height < 720;
+    final Size viewport = MediaQuery.sizeOf(context);
+    final bool compactViewport = viewport.height < 720 || viewport.width < 480;
     final tokens = GteShellTheme.tokensOf(context);
     final EdgeInsets topSectionPadding =
         compactViewport
             ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
             : const EdgeInsets.fromLTRB(20, 12, 20, 0);
     final double sectionGap = compactViewport ? 0 : 8;
-    const bool showShellStatusCard = true;
+    final bool showShellStatusCard = !compactViewport;
     return Container(
       decoration: gteBackdropDecoration(),
       child: Scaffold(
@@ -205,28 +206,57 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         appBar: AppBar(
           toolbarHeight: compactViewport ? 72 : 82,
           titleSpacing: compactViewport ? 12 : 16,
-          title: Row(
-            children: <Widget>[
-              const GtexLogoMark(size: 38, compact: true),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(_routeTitle()),
-                    Text(
-                      _routeContextLine(),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          title:
+              compactViewport
+                  ? const GtexLogoMark(size: 32, compact: true)
+                  : Row(
+                    children: <Widget>[
+                      const GtexLogoMark(size: 38, compact: true),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(_routeTitle()),
+                            Text(
+                              _routeContextLine(),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
           actions: <Widget>[
             AnimatedBuilder(
               animation: widget.controller,
               builder: (BuildContext context, Widget? child) {
+                if (compactViewport) {
+                  if (widget.controller.isAuthenticated) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: IconButton(
+                        tooltip: 'Sign out',
+                        onPressed: () async {
+                          await widget.controller.signOut();
+                          if (!mounted) {
+                            return;
+                          }
+                          _setRoute(const GteNavigationRoute.home());
+                        },
+                        icon: const Icon(Icons.logout),
+                      ),
+                    );
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: IconButton(
+                      tooltip: 'Sign in',
+                      onPressed: _openLogin,
+                      icon: const Icon(Icons.login),
+                    ),
+                  );
+                }
                 if (widget.controller.isAuthenticated) {
                   return Row(
                     children: <Widget>[

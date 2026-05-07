@@ -27,7 +27,7 @@ void main() {
                     'expires_in': 1800,
                     'refresh_expires_in': 43200,
                     'live_path': '/match/match-123/live',
-                    'websocket_path': '/api/v1/ws/match/match-123?format=unity',
+                    'websocket_path': '/api/v2/ws/match/match-123?format=unity',
                     'refresh_path': '/match/match-123/unity-access/refresh',
                   },
                 },

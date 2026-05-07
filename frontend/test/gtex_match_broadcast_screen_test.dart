@@ -114,7 +114,7 @@ void main() {
     );
   });
 
-  testWidgets('broadcast screen does not expose gifting controls', (
+  testWidgets('broadcast screen exposes gifting controls', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -135,8 +135,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 32));
 
-    expect(find.text('Gift'), findsNothing);
-    expect(find.byIcon(Icons.card_giftcard_rounded), findsNothing);
+    expect(find.text('Gift'), findsOneWidget);
+    expect(find.byIcon(Icons.card_giftcard_rounded), findsOneWidget);
   });
 
   testWidgets('broadcast HUD remains usable in a narrow layout', (
