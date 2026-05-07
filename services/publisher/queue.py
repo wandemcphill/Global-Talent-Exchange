@@ -8,7 +8,6 @@ from pathlib import Path
 import sqlite3
 from typing import Any, Literal
 
-
 PlatformName = Literal["tiktok", "instagram", "youtube"]
 PublishPhase = Literal["immediate", "polished"]
 PublishStatus = Literal["queued", "processing", "posted", "failed", "skipped"]
@@ -95,14 +94,11 @@ class PublisherQueue:
         self._initialize()
 
     def enqueue(self, job: PublisherJob) -> QueuedPublisherRecord:
-        existing = self.get_by_target(clip_id=job.clip_id, phase=job.phase, platform=job.platform)
-        if existing is not None:
-            return existing
         timestamp = _utcnow().isoformat()
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO publish_jobs (
+                INSERT OR IGNORE INTO publish_jobs (
                     job_id,
                     clip_id,
                     match_id,
@@ -144,7 +140,10 @@ class PublisherQueue:
                     json.dumps({}, ensure_ascii=True, sort_keys=True),
                 ),
             )
-        return self.get(job.job_id)  # pragma: no cover
+        existing = self.get_by_target(clip_id=job.clip_id, phase=job.phase, platform=job.platform)
+        if existing is None:  # pragma: no cover
+            raise RuntimeError("Publisher job enqueue did not create or find a job record.")
+        return existing
 
     def get(self, job_id: str) -> QueuedPublisherRecord | None:
         with self._connect() as connection:
@@ -280,8 +279,7 @@ class PublisherQueue:
 
     def _initialize(self) -> None:
         with self._connect() as connection:
-            connection.executescript(
-                """
+            connection.executescript("""
                 CREATE TABLE IF NOT EXISTS publish_jobs (
                     job_id TEXT PRIMARY KEY,
                     clip_id TEXT NOT NULL,
@@ -306,8 +304,7 @@ class PublisherQueue:
                     ON publish_jobs (clip_id, phase, platform);
                 CREATE INDEX IF NOT EXISTS idx_publish_jobs_due
                     ON publish_jobs (status, scheduled_for);
-                """
-            )
+                """)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)

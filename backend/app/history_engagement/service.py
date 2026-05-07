@@ -6,6 +6,8 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -52,7 +54,6 @@ from app.models.story_feed import StoryFeedItem
 from app.models.transfer_market import MarketWatchlistEntry, TransferNegotiation
 from app.models.user import User
 from app.predictions.models import Prediction
-
 
 DEFAULT_ACHIEVEMENTS: tuple[dict[str, Any], ...] = (
     {
@@ -338,7 +339,9 @@ class HistoryEngagementService:
             ).all()
         )
         regen_awards = list(
-            self.session.scalars(select(RegenAward).order_by(RegenAward.awarded_at.asc(), RegenAward.created_at.asc())).all()
+            self.session.scalars(
+                select(RegenAward).order_by(RegenAward.awarded_at.asc(), RegenAward.created_at.asc())
+            ).all()
         )
         completed_federation_competitions = list(
             self.session.scalars(
@@ -472,9 +475,78 @@ class HistoryEngagementService:
             players=players,
             completed_matches=completed_matches,
         )
-        self.session.add_all(leaderboard_entries)
+        self._upsert_leaderboard_entries(leaderboard_entries)
         self.session.flush()
         return {"history_records": len(records), "leaderboard_entries": len(leaderboard_entries)}
+
+    def _upsert_leaderboard_entries(self, entries: list[HistoricalLeaderboardEntry]) -> None:
+        if not entries:
+            return
+
+        values = [
+            {
+                "board_key": entry.board_key,
+                "entity_type": entry.entity_type,
+                "entity_id": entry.entity_id,
+                "entity_name": entry.entity_name,
+                "rank": entry.rank,
+                "score": entry.score,
+                "score_breakdown_json": dict(entry.score_breakdown_json or {}),
+                "generated_at": entry.generated_at,
+                "metadata_json": dict(entry.metadata_json or {}),
+            }
+            for entry in entries
+        ]
+        bind = self.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else ""
+        insert_factory = None
+        if dialect_name == "postgresql":
+            insert_factory = postgresql_insert
+        elif dialect_name == "sqlite":
+            insert_factory = sqlite_insert
+
+        if insert_factory is None:
+            self._fallback_upsert_leaderboard_entries(values)
+            return
+
+        statement = insert_factory(HistoricalLeaderboardEntry).values(values)
+        excluded = statement.excluded
+        update_columns = (
+            "rank",
+            "score",
+            "score_breakdown_json",
+            "generated_at",
+            "metadata_json",
+            "entity_type",
+            "entity_name",
+        )
+        statement = statement.on_conflict_do_update(
+            index_elements=["board_key", "entity_id"],
+            set_={column: getattr(excluded, column) for column in update_columns},
+        )
+        self.session.execute(statement)
+
+    def _fallback_upsert_leaderboard_entries(self, values: list[dict[str, Any]]) -> None:
+        for payload in values:
+            existing = self.session.scalar(
+                select(HistoricalLeaderboardEntry).where(
+                    HistoricalLeaderboardEntry.board_key == payload["board_key"],
+                    HistoricalLeaderboardEntry.entity_id == payload["entity_id"],
+                )
+            )
+            if existing is None:
+                self.session.add(HistoricalLeaderboardEntry(**payload))
+                continue
+            for column in (
+                "rank",
+                "score",
+                "score_breakdown_json",
+                "generated_at",
+                "metadata_json",
+                "entity_type",
+                "entity_name",
+            ):
+                setattr(existing, column, payload[column])
 
     def list_records(
         self,
@@ -533,7 +605,9 @@ class HistoryEngagementService:
     def list_achievements(self) -> list[Achievement]:
         self.seed_defaults()
         return list(
-            self.session.scalars(select(Achievement).where(Achievement.active.is_(True)).order_by(Achievement.name.asc())).all()
+            self.session.scalars(
+                select(Achievement).where(Achievement.active.is_(True)).order_by(Achievement.name.asc())
+            ).all()
         )
 
     def achievements_for_user(self, *, actor: User) -> list[UserAchievement]:
@@ -592,7 +666,9 @@ class HistoryEngagementService:
         else:
             raise HistoryEngagementError("Unsupported follow target type.")
 
-        existing = self.session.scalar(select(UserFollow).where(UserFollow.follower_user_id == actor.id, UserFollow.target_key == target_key))
+        existing = self.session.scalar(
+            select(UserFollow).where(UserFollow.follower_user_id == actor.id, UserFollow.target_key == target_key)
+        )
         if existing is not None:
             return existing
         item = UserFollow(**payload)
@@ -627,7 +703,9 @@ class HistoryEngagementService:
 
     def unfollow(self, *, actor: User, target_type: str, target_id: str) -> None:
         target_key = f"{target_type.strip().lower()}:{target_id}"
-        item = self.session.scalar(select(UserFollow).where(UserFollow.follower_user_id == actor.id, UserFollow.target_key == target_key))
+        item = self.session.scalar(
+            select(UserFollow).where(UserFollow.follower_user_id == actor.id, UserFollow.target_key == target_key)
+        )
         if item is None:
             raise HistoryEngagementError("Follow relationship was not found.")
         target_user_id = item.target_user_id
@@ -638,13 +716,13 @@ class HistoryEngagementService:
             self._sync_profile_counters(target_user_id)
 
     def list_feed(self, *, actor: User, limit: int = 40) -> list[dict[str, Any] | SocialActivity]:
-        followed = list(
-            self.session.scalars(select(UserFollow).where(UserFollow.follower_user_id == actor.id)).all()
-        )
+        followed = list(self.session.scalars(select(UserFollow).where(UserFollow.follower_user_id == actor.id)).all())
         followed_user_ids = {item.target_user_id for item in followed if item.target_user_id}
         followed_club_ids = {item.target_club_id for item in followed if item.target_club_id}
         social_items = list(
-            self.session.scalars(select(SocialActivity).order_by(SocialActivity.created_at.desc()).limit(limit * 2)).all()
+            self.session.scalars(
+                select(SocialActivity).order_by(SocialActivity.created_at.desc()).limit(limit * 2)
+            ).all()
         )
         filtered_social = [
             item
@@ -820,10 +898,14 @@ class HistoryEngagementService:
         self._sync_milestones(actor=actor, metrics=metrics, now=now)
 
         daily_tasks = list(
-            self.session.scalars(select(DailyTask).where(DailyTask.active.is_(True)).order_by(DailyTask.sort_order.asc())).all()
+            self.session.scalars(
+                select(DailyTask).where(DailyTask.active.is_(True)).order_by(DailyTask.sort_order.asc())
+            ).all()
         )
         weekly_tasks = list(
-            self.session.scalars(select(WeeklyTask).where(WeeklyTask.active.is_(True)).order_by(WeeklyTask.sort_order.asc())).all()
+            self.session.scalars(
+                select(WeeklyTask).where(WeeklyTask.active.is_(True)).order_by(WeeklyTask.sort_order.asc())
+            ).all()
         )
         synced_daily, new_daily = self._sync_objectives(
             actor=actor,
@@ -850,7 +932,8 @@ class HistoryEngagementService:
                 self._grant_progress_reward(progress=item, profile=profile)
         self._sync_profile_counters(actor.id)
         community_posts = int(
-            self.session.scalar(select(func.count(SocialActivity.id)).where(SocialActivity.actor_user_id == actor.id)) or 0
+            self.session.scalar(select(func.count(SocialActivity.id)).where(SocialActivity.actor_user_id == actor.id))
+            or 0
         )
         unlocked_count = int(
             self.session.scalar(select(func.count(UserAchievement.id)).where(UserAchievement.user_id == actor.id)) or 0
@@ -919,8 +1002,16 @@ class HistoryEngagementService:
             default=None,
         )
         if highest_scoring is not None:
-            home_name = clubs.get(highest_scoring.home_club_id).club_name if clubs.get(highest_scoring.home_club_id) else "Home club"
-            away_name = clubs.get(highest_scoring.away_club_id).club_name if clubs.get(highest_scoring.away_club_id) else "Away club"
+            home_name = (
+                clubs.get(highest_scoring.home_club_id).club_name
+                if clubs.get(highest_scoring.home_club_id)
+                else "Home club"
+            )
+            away_name = (
+                clubs.get(highest_scoring.away_club_id).club_name
+                if clubs.get(highest_scoring.away_club_id)
+                else "Away club"
+            )
             records.append(
                 HistoricalRecord(
                     type=HistoricalRecordType.MATCH,
@@ -1001,7 +1092,9 @@ class HistoryEngagementService:
     ) -> list[HistoricalLeaderboardEntry]:
         generated_at = datetime.now(UTC)
         club_rows = self._club_leaderboard_rows(clubs=clubs, completed_matches=completed_matches)
-        manager_rows = self._manager_leaderboard_rows(users=users, clubs=clubs, club_rows=club_rows, completed_matches=completed_matches)
+        manager_rows = self._manager_leaderboard_rows(
+            users=users, clubs=clubs, club_rows=club_rows, completed_matches=completed_matches
+        )
         player_rows = self._player_leaderboard_rows(players=players)
         entries: list[HistoricalLeaderboardEntry] = []
         for rank, row in enumerate(player_rows, start=1):
@@ -1087,7 +1180,9 @@ class HistoryEngagementService:
             )
         return entries
 
-    def _club_leaderboard_rows(self, *, clubs: dict[str, ClubProfile], completed_matches: list[CompetitionMatch]) -> list[dict[str, Any]]:
+    def _club_leaderboard_rows(
+        self, *, clubs: dict[str, ClubProfile], completed_matches: list[CompetitionMatch]
+    ) -> list[dict[str, Any]]:
         trophy_counts = self._club_trophy_counts()
         trophy_weights = self._club_trophy_weights()
         win_counts = self._club_win_counts(completed_matches=completed_matches)
@@ -1098,7 +1193,9 @@ class HistoryEngagementService:
             trophies = float(trophy_counts.get(club_id, 0))
             longevity = float(max(trophy_counts.get(club_id, 0), 0) + max(win_counts.get(club_id, 0), 0) / 10.0)
             peak_performance = float(streak_counts.get(club_id, 0) * 2 + win_counts.get(club_id, 0) / 4.0)
-            legacy_score = float(media_rows.get(club_id, {}).get("legacy_score", 0.0) + trophy_weights.get(club_id, 0) / 25.0)
+            legacy_score = float(
+                media_rows.get(club_id, {}).get("legacy_score", 0.0) + trophy_weights.get(club_id, 0) / 25.0
+            )
             rows.append(
                 {
                     "entity_id": club.id,
@@ -1140,18 +1237,26 @@ class HistoryEngagementService:
         rows: list[dict[str, Any]] = []
         for user_id, user in users.items():
             club_ids = user_club_ids.get(user_id, [])
-            club_trophies = sum(int(club_rows_by_id.get(club_id, {}).get("breakdown", {}).get("trophies", 0)) for club_id in club_ids)
+            club_trophies = sum(
+                int(club_rows_by_id.get(club_id, {}).get("breakdown", {}).get("trophies", 0)) for club_id in club_ids
+            )
             match_wins = sum(win_counts.get(club_id, 0) for club_id in club_ids)
             peak_performance = max([streak_counts.get(club_id, 0) for club_id in club_ids] or [0]) * 2.0
             profile = self._ensure_profile(user_id)
             longevity = len(club_ids) + federation_rows.get(user_id, {}).get("campaigns", 0)
-            legacy_score = float(profile.followers + profile.reputation_score / 25.0 + federation_rows.get(user_id, {}).get("titles", 0) * 10)
+            legacy_score = float(
+                profile.followers
+                + profile.reputation_score / 25.0
+                + federation_rows.get(user_id, {}).get("titles", 0) * 10
+            )
             rows.append(
                 {
                     "entity_id": user.id,
                     "entity_name": self._display_name(user),
                     "score": round(club_trophies * 10 + match_wins + legacy_score * 2, 2),
-                    "goat_score": round(float(club_trophies) + float(longevity) + float(peak_performance) + legacy_score, 2),
+                    "goat_score": round(
+                        float(club_trophies) + float(longevity) + float(peak_performance) + legacy_score, 2
+                    ),
                     "breakdown": {
                         "trophies": club_trophies,
                         "match_wins": match_wins,
@@ -1181,20 +1286,33 @@ class HistoryEngagementService:
             if regen_profile is None:
                 continue
             award_counts[regen_profile.player_id] = award_counts.get(regen_profile.player_id, 0) + 1
-            award_peaks[regen_profile.player_id] = max(award_peaks.get(regen_profile.player_id, 0.0), float(award.impact_score or 0.0))
+            award_peaks[regen_profile.player_id] = max(
+                award_peaks.get(regen_profile.player_id, 0.0), float(award.impact_score or 0.0)
+            )
         rows: list[dict[str, Any]] = []
         for player_id, player in players.items():
             legacy = legacy_by_player.get(player_id)
             regen = regen_by_player.get(player_id)
             trophies = float((legacy.awards_total if legacy is not None else 0) + award_counts.get(player_id, 0))
-            longevity = float((legacy.seasons_total if legacy is not None else 0) + award_counts.get(player_id, 0) / 2.0)
-            peak_performance = float(max((regen.current_gsi if regen is not None else 0) / 10.0, award_peaks.get(player_id, 0.0) * 10.0))
+            longevity = float(
+                (legacy.seasons_total if legacy is not None else 0) + award_counts.get(player_id, 0) / 2.0
+            )
+            peak_performance = float(
+                max((regen.current_gsi if regen is not None else 0) / 10.0, award_peaks.get(player_id, 0.0) * 10.0)
+            )
             legacy_score = float(legacy.legacy_score if legacy is not None else 0.0)
             rows.append(
                 {
                     "entity_id": player.id,
                     "entity_name": player.full_name,
-                    "score": round(trophies + longevity + peak_performance + legacy_score + float((legacy.goals_total if legacy is not None else 0) / 10.0), 2),
+                    "score": round(
+                        trophies
+                        + longevity
+                        + peak_performance
+                        + legacy_score
+                        + float((legacy.goals_total if legacy is not None else 0) / 10.0),
+                        2,
+                    ),
                     "goat_score": round(trophies + longevity + peak_performance + legacy_score, 2),
                     "breakdown": {
                         "awards_total": legacy.awards_total if legacy is not None else 0,
@@ -1255,7 +1373,9 @@ class HistoryEngagementService:
                     }
                 )
             for badge in self.session.scalars(
-                select(RegenDiscoveryBadge).where(RegenDiscoveryBadge.regen_id == regen_profile.id).order_by(RegenDiscoveryBadge.awarded_at.asc())
+                select(RegenDiscoveryBadge)
+                .where(RegenDiscoveryBadge.regen_id == regen_profile.id)
+                .order_by(RegenDiscoveryBadge.awarded_at.asc())
             ).all():
                 timeline.append(
                     {
@@ -1318,7 +1438,9 @@ class HistoryEngagementService:
                 }
             )
         other_clubs = {item.id: item for item in self.session.scalars(select(ClubProfile)).all()}
-        completed_matches = [item for item in self._completed_matches() if item.home_club_id == club_id or item.away_club_id == club_id]
+        completed_matches = [
+            item for item in self._completed_matches() if item.home_club_id == club_id or item.away_club_id == club_id
+        ]
         for match in completed_matches:
             opponent_id = match.away_club_id if match.home_club_id == club_id else match.home_club_id
             opponent = other_clubs.get(opponent_id)
@@ -1328,8 +1450,16 @@ class HistoryEngagementService:
                     "headline": f"{club.club_name} played {opponent.club_name if opponent else 'an opponent'}",
                     "narrative": self._match_narrative(
                         match=match,
-                        home_name=other_clubs.get(match.home_club_id).club_name if other_clubs.get(match.home_club_id) else "Home club",
-                        away_name=other_clubs.get(match.away_club_id).club_name if other_clubs.get(match.away_club_id) else "Away club",
+                        home_name=(
+                            other_clubs.get(match.home_club_id).club_name
+                            if other_clubs.get(match.home_club_id)
+                            else "Home club"
+                        ),
+                        away_name=(
+                            other_clubs.get(match.away_club_id).club_name
+                            if other_clubs.get(match.away_club_id)
+                            else "Away club"
+                        ),
                     ),
                     "event_type": "match",
                     "data": {
@@ -1408,7 +1538,9 @@ class HistoryEngagementService:
 
     def _club_trophy_weights(self) -> dict[str, int]:
         rows = self.session.execute(
-            select(ClubTrophy.club_id, func.coalesce(func.sum(ClubTrophy.prestige_weight), 0)).group_by(ClubTrophy.club_id)
+            select(ClubTrophy.club_id, func.coalesce(func.sum(ClubTrophy.prestige_weight), 0)).group_by(
+                ClubTrophy.club_id
+            )
         ).all()
         return {club_id: int(total or 0) for club_id, total in rows}
 
@@ -1534,7 +1666,11 @@ class HistoryEngagementService:
             .order_by(TransferNegotiation.resolved_at.desc(), TransferNegotiation.updated_at.desc())
             .limit(limit)
         ).all():
-            if followed_club_ids and transfer.selling_club_id not in followed_club_ids and transfer.bidder_club_id not in followed_club_ids:
+            if (
+                followed_club_ids
+                and transfer.selling_club_id not in followed_club_ids
+                and transfer.bidder_club_id not in followed_club_ids
+            ):
                 continue
             player = players.get(transfer.player_id)
             buying_club = clubs.get(transfer.bidder_club_id)
@@ -1593,10 +1729,16 @@ class HistoryEngagementService:
                 }
             )
 
-        for story in self.session.scalars(select(StoryFeedItem).order_by(StoryFeedItem.created_at.desc()).limit(limit)).all():
+        for story in self.session.scalars(
+            select(StoryFeedItem).order_by(StoryFeedItem.created_at.desc()).limit(limit)
+        ).all():
             if followed_club_ids and story.subject_type == "club" and story.subject_id not in followed_club_ids:
                 continue
-            if followed_user_ids and story.subject_type in {"manager", "user"} and story.subject_id not in followed_user_ids:
+            if (
+                followed_user_ids
+                and story.subject_type in {"manager", "user"}
+                and story.subject_id not in followed_user_ids
+            ):
                 continue
             items.append(
                 {
@@ -1673,7 +1815,9 @@ class HistoryEngagementService:
     def _sync_milestones(self, *, actor: User, metrics: dict[str, float], now: datetime) -> None:
         existing = {
             item.milestone_key: item
-            for item in self.session.scalars(select(MilestoneProgress).where(MilestoneProgress.user_id == actor.id)).all()
+            for item in self.session.scalars(
+                select(MilestoneProgress).where(MilestoneProgress.user_id == actor.id)
+            ).all()
         }
         for definition in DEFAULT_MILESTONES:
             item = existing.get(definition["milestone_key"])
@@ -1801,10 +1945,7 @@ class HistoryEngagementService:
             "xp_progress": xp_progress,
             "premium_enabled": bool(season.premium_enabled),
             "has_premium": bool(progress.has_premium),
-            "xp_rules": {
-                key: int(value)
-                for key, value in dict(season.xp_rules_json or {}).items()
-            },
+            "xp_rules": {key: int(value) for key, value in dict(season.xp_rules_json or {}).items()},
             "daily_missions": synced_missions,
             "rewards": reward_views,
         }
@@ -1897,10 +2038,14 @@ class HistoryEngagementService:
         daily_end = min(next_day, season_end)
         has_daily_window = daily_start < daily_end
         return {
-            "season_matches_played": float(len(self._user_matches(club_ids=club_ids, start=season_start, end=season_end))),
+            "season_matches_played": float(
+                len(self._user_matches(club_ids=club_ids, start=season_start, end=season_end))
+            ),
             "season_match_wins": float(self._user_match_wins(club_ids=club_ids, start=season_start, end=season_end)),
             "season_trades": float(self._user_transfers(club_ids=club_ids, start=season_start, end=season_end)),
-            "season_matches_watched": float(self._user_match_views(user_id=user_id, start=season.starts_at, end=season.ends_at)),
+            "season_matches_watched": float(
+                self._user_match_views(user_id=user_id, start=season.starts_at, end=season.ends_at)
+            ),
             "daily_matches_played": float(
                 len(self._user_matches(club_ids=club_ids, start=daily_start, end=daily_end)) if has_daily_window else 0
             ),
@@ -2063,7 +2208,9 @@ class HistoryEngagementService:
         return synced, any_new_completion
 
     def _grant_progress_reward(self, *, progress: UserObjectiveProgress, profile: UserProfile) -> None:
-        reward = self._multiplied_reward(dict(progress.reward_payload_json or {}), multiplier=float(progress.reward_multiplier or 1.0))
+        reward = self._multiplied_reward(
+            dict(progress.reward_payload_json or {}), multiplier=float(progress.reward_multiplier or 1.0)
+        )
         self._apply_profile_reward(profile=profile, reward=reward)
         progress.reward_payload_json = reward
         progress.reward_granted_at = datetime.now(UTC)
@@ -2103,9 +2250,15 @@ class HistoryEngagementService:
             "daily_match_wins": float(self._user_match_wins(club_ids=club_ids, start=today, end=next_day)),
             "daily_players_scouted": float(self._user_scouting_events(club_ids=club_ids, start=today, end=next_day)),
             "daily_predictions_placed": float(self._user_predictions(user_id=user_id, start=today, end=next_day)),
-            "weekly_finals_reached": float(self._user_finals_reached(club_ids=club_ids, start=week_start, end=week_end)),
-            "weekly_transfers_completed": float(self._user_transfers(club_ids=club_ids, start=week_start, end=week_end)),
-            "weekly_youth_development": float(self._user_youth_development(club_ids=club_ids, start=week_start, end=week_end)),
+            "weekly_finals_reached": float(
+                self._user_finals_reached(club_ids=club_ids, start=week_start, end=week_end)
+            ),
+            "weekly_transfers_completed": float(
+                self._user_transfers(club_ids=club_ids, start=week_start, end=week_end)
+            ),
+            "weekly_youth_development": float(
+                self._user_youth_development(club_ids=club_ids, start=week_start, end=week_end)
+            ),
         }
 
     def _club_ids_for_user(self, user_id: str) -> list[str]:
@@ -2114,7 +2267,9 @@ class HistoryEngagementService:
             for item in self.session.scalars(select(ClubProfile).where(ClubProfile.owner_user_id == user_id)).all()
         ]
 
-    def _user_matches(self, *, club_ids: list[str], start: date | None = None, end: date | None = None) -> list[CompetitionMatch]:
+    def _user_matches(
+        self, *, club_ids: list[str], start: date | None = None, end: date | None = None
+    ) -> list[CompetitionMatch]:
         if not club_ids:
             return []
         stmt = select(CompetitionMatch).where(
@@ -2124,12 +2279,20 @@ class HistoryEngagementService:
             stmt = stmt.where(CompetitionMatch.match_date >= start)
         if end is not None:
             stmt = stmt.where(CompetitionMatch.match_date < end)
-        stmt = stmt.where((CompetitionMatch.completed_at.is_not(None)) | CompetitionMatch.status.in_(tuple(COMPLETED_MATCH_STATUSES)))
+        stmt = stmt.where(
+            (CompetitionMatch.completed_at.is_not(None)) | CompetitionMatch.status.in_(tuple(COMPLETED_MATCH_STATUSES))
+        )
         return list(self.session.scalars(stmt).all())
 
     def _user_match_wins(self, *, club_ids: list[str], start: date | None = None, end: date | None = None) -> int:
         club_id_set = set(club_ids)
-        return len([item for item in self._user_matches(club_ids=club_ids, start=start, end=end) if item.winner_club_id in club_id_set])
+        return len(
+            [
+                item
+                for item in self._user_matches(club_ids=club_ids, start=start, end=end)
+                if item.winner_club_id in club_id_set
+            ]
+        )
 
     def _user_transfers(self, *, club_ids: list[str], start: date | None = None, end: date | None = None) -> int:
         if not club_ids:
@@ -2138,7 +2301,8 @@ class HistoryEngagementService:
             self.session.scalars(
                 select(TransferNegotiation).where(
                     TransferNegotiation.status == "completed",
-                    (TransferNegotiation.selling_club_id.in_(tuple(club_ids))) | (TransferNegotiation.bidder_club_id.in_(tuple(club_ids))),
+                    (TransferNegotiation.selling_club_id.in_(tuple(club_ids)))
+                    | (TransferNegotiation.bidder_club_id.in_(tuple(club_ids))),
                 )
             ).all()
         )
@@ -2194,7 +2358,9 @@ class HistoryEngagementService:
     def _user_trophies(self, *, club_ids: list[str]) -> int:
         if not club_ids:
             return 0
-        return int(self.session.scalar(select(func.count(ClubTrophy.id)).where(ClubTrophy.club_id.in_(tuple(club_ids)))) or 0)
+        return int(
+            self.session.scalar(select(func.count(ClubTrophy.id)).where(ClubTrophy.club_id.in_(tuple(club_ids)))) or 0
+        )
 
     def _follower_count(self, *, user_id: str) -> int:
         return int(
@@ -2235,7 +2401,9 @@ class HistoryEngagementService:
         high_potential = len(
             [
                 item
-                for item in self.session.scalars(select(RegenProfile).where(RegenProfile.generated_for_club_id.in_(tuple(club_ids)))).all()
+                for item in self.session.scalars(
+                    select(RegenProfile).where(RegenProfile.generated_for_club_id.in_(tuple(club_ids)))
+                ).all()
                 if int((item.potential_range_json or {}).get("max", 0)) >= 95
             ]
         )
@@ -2247,7 +2415,9 @@ class HistoryEngagementService:
         return len(
             [
                 item
-                for item in self.session.scalars(select(MarketWatchlistEntry).where(MarketWatchlistEntry.club_id.in_(tuple(club_ids)))).all()
+                for item in self.session.scalars(
+                    select(MarketWatchlistEntry).where(MarketWatchlistEntry.club_id.in_(tuple(club_ids)))
+                ).all()
                 if start <= item.created_at.date() < end
             ]
         )
@@ -2262,7 +2432,9 @@ class HistoryEngagementService:
         )
 
     def _user_finals_reached(self, *, club_ids: list[str], start: date, end: date) -> int:
-        return len([item for item in self._user_matches(club_ids=club_ids, start=start, end=end) if item.stage == "final"])
+        return len(
+            [item for item in self._user_matches(club_ids=club_ids, start=start, end=end) if item.stage == "final"]
+        )
 
     def _user_youth_development(self, *, club_ids: list[str], start: date, end: date) -> int:
         if not club_ids:
@@ -2270,14 +2442,18 @@ class HistoryEngagementService:
         award_count = len(
             [
                 item
-                for item in self.session.scalars(select(RegenAward).where(RegenAward.club_id.in_(tuple(club_ids)))).all()
+                for item in self.session.scalars(
+                    select(RegenAward).where(RegenAward.club_id.in_(tuple(club_ids)))
+                ).all()
                 if start <= item.awarded_at.date() < end
             ]
         )
         badge_count = len(
             [
                 item
-                for item in self.session.scalars(select(RegenDiscoveryBadge).where(RegenDiscoveryBadge.club_id.in_(tuple(club_ids)))).all()
+                for item in self.session.scalars(
+                    select(RegenDiscoveryBadge).where(RegenDiscoveryBadge.club_id.in_(tuple(club_ids)))
+                ).all()
                 if start <= item.awarded_at.date() < end
             ]
         )
@@ -2304,7 +2480,9 @@ class HistoryEngagementService:
     def _sync_profile_counters(self, user_id: str) -> None:
         profile = self._ensure_profile(user_id)
         profile.followers = self._follower_count(user_id=user_id)
-        profile.following = int(self.session.scalar(select(func.count(UserFollow.id)).where(UserFollow.follower_user_id == user_id)) or 0)
+        profile.following = int(
+            self.session.scalar(select(func.count(UserFollow.id)).where(UserFollow.follower_user_id == user_id)) or 0
+        )
 
     def _advance_streak(self, *, streak: UserStreak, today: date) -> None:
         if streak.last_completed_on == today - timedelta(days=1):
@@ -2354,7 +2532,11 @@ class HistoryEngagementService:
     def _ensure_streak_warning(self, *, user_id: str) -> int:
         streak = self._ensure_streak(user_id)
         today = datetime.now(UTC).date()
-        if streak.streak_days <= 0 or streak.last_completed_on != today - timedelta(days=1) or streak.warning_sent_on == today:
+        if (
+            streak.streak_days <= 0
+            or streak.last_completed_on != today - timedelta(days=1)
+            or streak.warning_sent_on == today
+        ):
             return 0
         self._notify(
             user_id=user_id,

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import logging
 import os
 from pathlib import Path
 from threading import Event, RLock, Thread
+import time
 from typing import Any, Iterable, Sequence
 
 from fastapi import FastAPI
@@ -77,6 +79,7 @@ from services.universe import (
     create_league,
     generate_fixtures,
 )
+from services.universe.advanced_match_engine import match_result_from_mapping
 
 logger = logging.getLogger(__name__)
 _RUNTIME_LOCK = RLock()
@@ -117,6 +120,42 @@ def _display_name(owner_id: str) -> str:
     if owner_id.startswith("persona:") or owner_id.startswith("club:"):
         return owner_id.split(":", 1)[1]
     return owner_id
+
+
+@contextmanager
+def _exclusive_file_lock(lock_path: Path):
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+b")
+    try:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            while True:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
 
 
 @dataclass(slots=True)
@@ -237,9 +276,16 @@ class InfiniteLeagueRuntime:
     def ensure_seeded(self) -> None:
         with self._lock:
             self._ensure_bootstrap_locked()
+            self._hydrate_seeded_matches_locked()
             seeded = bool(self._match_order)
         if not seeded:
-            self.advance(count=self.initial_match_count)
+            with _exclusive_file_lock(self.root_path / "bootstrap.lock"):
+                with self._lock:
+                    self._ensure_bootstrap_locked()
+                    self._hydrate_seeded_matches_locked()
+                    seeded = bool(self._match_order)
+                if not seeded:
+                    self.advance(count=self.initial_match_count)
 
     def advance(self, *, count: int = 1) -> list[RuntimeMatchRecord]:
         generated: list[RuntimeMatchRecord] = []
@@ -297,7 +343,9 @@ class InfiniteLeagueRuntime:
         record = self.get_match(match_id)
         if record is None:
             return None
-        clip = self._personalize_clip(record.viral_clip, favorite_team=favorite_team, favorite_event_types=favorite_event_types)
+        clip = self._personalize_clip(
+            record.viral_clip, favorite_team=favorite_team, favorite_event_types=favorite_event_types
+        )
         return ViralFeedResponse(
             clips=[clip],
             generated_at=_utcnow(),
@@ -345,7 +393,9 @@ class InfiniteLeagueRuntime:
                 else [self._records[match_id] for match_id in self._match_order[: max(limit * 2, 6)]]
             )
         clips = [
-            self._personalize_clip(record.viral_clip, favorite_team=favorite_team, favorite_event_types=favorite_event_types)
+            self._personalize_clip(
+                record.viral_clip, favorite_team=favorite_team, favorite_event_types=favorite_event_types
+            )
             for record in records
         ]
         clips.sort(key=lambda item: (-item.ranking_score, -item.viral_score, item.minute, item.highlight_id))
@@ -368,7 +418,9 @@ class InfiniteLeagueRuntime:
         self.ensure_seeded()
         with self._lock:
             queue_depth = len(self.publisher_queue.list_jobs(status="queued"))
-            next_fixture_id = self._fixtures[self._fixture_cursor].fixture_id if self._fixture_cursor < len(self._fixtures) else None
+            next_fixture_id = (
+                self._fixtures[self._fixture_cursor].fixture_id if self._fixture_cursor < len(self._fixtures) else None
+            )
             featured_match_id = self._match_order[0] if self._match_order else None
             window_duration = 0 if self._stream_window is None else self._stream_window.total_duration_seconds
             return InfiniteLeagueStatusView(
@@ -393,7 +445,9 @@ class InfiniteLeagueRuntime:
             self._rebuild_stream_window_locked()
             window = self._stream_window
         if window is None:
-            return InfiniteLeagueLivestreamView(total_duration_seconds=0, playlist_manifest="", ffmpeg_command=[], segments=[])
+            return InfiniteLeagueLivestreamView(
+                total_duration_seconds=0, playlist_manifest="", ffmpeg_command=[], segments=[]
+            )
         playlist_manifest = build_concat_playlist(window.segments)
         command = build_ffmpeg_command(FFmpegStreamConfig(rtmp_url=self.rtmp_url), playlist_path="playlist.txt")
         return InfiniteLeagueLivestreamView(
@@ -464,12 +518,29 @@ class InfiniteLeagueRuntime:
         if self._league is not None:
             return
         generator = UniverseGenerator(seed=self.seed + self._season)
-        self._league = create_league(name=self.league_name, season=self._season, club_count=self.club_count, generator=generator)
+        self._league = create_league(
+            name=self.league_name, season=self._season, club_count=self.club_count, generator=generator
+        )
         self._fixtures = generate_fixtures(self._league.clubs)
         self._fixture_cursor = 0
         self._engine = LeagueEngine(seed=self.seed + (self._season * 97))
         self.store.save_league(self._league)
         self.store.save_fixtures(league_id=self._league.league_id, fixtures=self._fixtures)
+
+    def _hydrate_seeded_matches_locked(self) -> None:
+        if self._match_order or self._league is None:
+            return
+        try:
+            recent_results = self.store.recent_results(
+                league_id=self._league.league_id,
+                limit=max(self.initial_match_count, 1),
+            )
+            for payload in reversed(recent_results):
+                result = match_result_from_mapping(payload)
+                self._fixture_cursor = max(self._fixture_cursor, int(result.round_number))
+                self._record_result_locked(result)
+        except Exception:
+            logger.exception("Failed to hydrate infinite league seed state.")
 
     def _roll_season_locked(self) -> None:
         self._season += 1
@@ -482,13 +553,17 @@ class InfiniteLeagueRuntime:
     def _record_result_locked(self, result: MatchResult) -> RuntimeMatchRecord:
         persona = select_persona(result.highlight_payload, story_tags=result.storyline.tags)
         persona_payload = generate_persona_content(persona, result.highlight_payload, story_tags=result.storyline.tags)
-        persona_clip = build_publishable_persona_clip(result.highlight_payload, persona=persona, story_tags=result.storyline.tags)
+        persona_clip = build_publishable_persona_clip(
+            result.highlight_payload, persona=persona, story_tags=result.storyline.tags
+        )
         scheduled = self.publisher_scheduler.schedule_clip(result.highlight_payload)
         scheduled.extend(self.publisher_scheduler.schedule_clip(persona_clip))
         queued_publish_jobs = tuple(record.job.job_id for record in scheduled)
         highlights = self._build_highlights(result)
         pundit_debate = self._build_pundit_debate(result)
-        viral_clip = self._build_viral_clip(result, persona_payload=persona_payload, queued_publish_jobs=queued_publish_jobs)
+        viral_clip = self._build_viral_clip(
+            result, persona_payload=persona_payload, queued_publish_jobs=queued_publish_jobs
+        )
         segments = self._build_segments(result, pundit_debate)
         record = RuntimeMatchRecord(
             result=result,
@@ -512,7 +587,9 @@ class InfiniteLeagueRuntime:
         self._segments.extend(segments)
         self._reward_wallet(f"persona:{record.persona_name}", "viral_clip", {"viral_score": result.viral_score})
         if result.winner_club_id is not None:
-            winner_name = result.home_club_name if result.winner_club_id == result.home_club_id else result.away_club_name
+            winner_name = (
+                result.home_club_name if result.winner_club_id == result.home_club_id else result.away_club_name
+            )
             self._reward_wallet(f"club:{winner_name}", "match_win", {"upset": result.upset})
         self._rebuild_stream_window_locked()
         return record
@@ -534,7 +611,11 @@ class InfiniteLeagueRuntime:
         return MatchHighlightResponseView(highlights=items)
 
     def _build_pundit_debate(self, result: MatchResult) -> PunditDebateResponse:
-        winner_name = result.home_club_name if result.winner_club_id == result.home_club_id else result.away_club_name if result.winner_club_id else None
+        winner_name = (
+            result.home_club_name
+            if result.winner_club_id == result.home_club_id
+            else result.away_club_name if result.winner_club_id else None
+        )
         possession_winner = result.home_club_name if result.home_goals >= result.away_goals else result.away_club_name
         turning_point = result.events[-1].description if result.events else result.storyline.hook
         analysis = PunditMatchAnalysisView(
@@ -613,7 +694,9 @@ class InfiniteLeagueRuntime:
                     niche=account.niche,
                     target_audience=account.target_audience,
                     fit_score=min(fit, 100),
-                    persona=ViralPersonaView(name=str(persona_payload["persona"]["name"]), tone=str(persona_payload["persona"]["tone"])),
+                    persona=ViralPersonaView(
+                        name=str(persona_payload["persona"]["name"]), tone=str(persona_payload["persona"]["tone"])
+                    ),
                     cross_promo_handles=[],
                     caption_tests=[],
                 )
@@ -621,8 +704,22 @@ class InfiniteLeagueRuntime:
         editor = ViralEditPlanView(
             crop_filter="scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
             overlay_text=result.storyline.headline,
-            transcode_command=["ffmpeg", "-i", result.highlight_payload["video_path"], "-vf", "scale=1080:1920", "out.mp4"],
-            overlay_command=["ffmpeg", "-i", result.highlight_payload["video_path"], "-vf", "drawtext=text=GTEX", "out.mp4"],
+            transcode_command=[
+                "ffmpeg",
+                "-i",
+                result.highlight_payload["video_path"],
+                "-vf",
+                "scale=1080:1920",
+                "out.mp4",
+            ],
+            overlay_command=[
+                "ffmpeg",
+                "-i",
+                result.highlight_payload["video_path"],
+                "-vf",
+                "drawtext=text=GTEX",
+                "out.mp4",
+            ],
             share_targets=["tiktok", "instagram", "youtube"],
             commentary_prompt=result.commentary_prompt,
         )
@@ -639,7 +736,9 @@ class InfiniteLeagueRuntime:
             comment_rate=min(0.22, result.viral_score / 420.0),
         )
         feedback = ViralFeedbackLoopView(
-            performance_tier="elite" if result.viral_score >= 90 else "strong" if result.viral_score >= 75 else "steady",
+            performance_tier=(
+                "elite" if result.viral_score >= 90 else "strong" if result.viral_score >= 75 else "steady"
+            ),
             recommendation="Keep pushing rivalry and underdog edits through persona-led distribution.",
             increase_similar_clips=result.viral_score >= 80,
             adjust_captions=result.viral_score < 70,
@@ -751,9 +850,7 @@ class InfiniteLeagueRuntime:
         winner_name = (
             result.home_club_name
             if result.winner_club_id == result.home_club_id
-            else result.away_club_name
-            if result.winner_club_id == result.away_club_id
-            else None
+            else result.away_club_name if result.winner_club_id == result.away_club_id else None
         )
         return InfiniteLeagueMatchView(
             match_id=result.match_id,
@@ -837,7 +934,9 @@ class InfiniteLeagueRuntime:
                     team_id=event.team_id,
                     team=event.team_name,
                     player=event.player_name,
-                    position=self._event_position(team_side=team_side, minute=event.minute, player_name=event.player_name),
+                    position=self._event_position(
+                        team_side=team_side, minute=event.minute, player_name=event.player_name
+                    ),
                     target_position=self._target_position(team_side=team_side, raw_event_type=raw_event_type),
                     meta={
                         "presentation_second": presentation_second,

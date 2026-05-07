@@ -179,6 +179,28 @@ class UniverseStore:
                         payload_json,
                         created_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(match_id, player_id) DO UPDATE SET
+                        team_id = excluded.team_id,
+                        team_name = excluded.team_name,
+                        player_name = excluded.player_name,
+                        position = excluded.position,
+                        minutes = excluded.minutes,
+                        rating = excluded.rating,
+                        goals = excluded.goals,
+                        assists = excluded.assists,
+                        shots = excluded.shots,
+                        shots_on_target = excluded.shots_on_target,
+                        xg = excluded.xg,
+                        key_passes = excluded.key_passes,
+                        passes_completed = excluded.passes_completed,
+                        tackles_won = excluded.tackles_won,
+                        fouls_committed = excluded.fouls_committed,
+                        yellow_cards = excluded.yellow_cards,
+                        red_card = excluded.red_card,
+                        saves = excluded.saves,
+                        clean_sheet = excluded.clean_sheet,
+                        payload_json = excluded.payload_json,
+                        created_at = excluded.created_at
                     """,
                     (
                         str(payload["match_id"]),
@@ -280,8 +302,7 @@ class UniverseStore:
 
     def _initialize(self) -> None:
         with self._connect() as connection:
-            connection.executescript(
-                """
+            connection.executescript("""
                 CREATE TABLE IF NOT EXISTS leagues (
                     league_id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -344,8 +365,7 @@ class UniverseStore:
                     created_at TEXT NOT NULL,
                     PRIMARY KEY (match_id, player_id)
                 );
-                """
-            )
+                """)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
