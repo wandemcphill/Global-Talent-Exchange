@@ -62,7 +62,7 @@ def upgrade() -> None:
         sa.Column("min_coin_amount", sa.Numeric(18, 4), nullable=False, server_default="0"),
         sa.Column("max_coin_amount", sa.Numeric(18, 4), nullable=False, server_default="0"),
         sa.Column("available_liquidity", sa.Numeric(18, 4), nullable=False, server_default="0"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.ForeignKeyConstraint(["trader_profile_id"], ["coin_trader_profiles.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),

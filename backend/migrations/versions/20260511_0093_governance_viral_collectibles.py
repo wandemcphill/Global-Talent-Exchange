@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("price_credits", sa.Numeric(18, 4), nullable=False, server_default="0"),
         sa.Column("cards_per_pack", sa.Integer(), nullable=False, server_default="3"),
         sa.Column("drop_odds_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),

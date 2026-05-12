@@ -43,7 +43,7 @@ def upgrade() -> None:
         sa.Column("checklist_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("blockers_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
         sa.Column("recommended_state", sa.String(length=32), nullable=False, server_default="created"),
-        sa.Column("competition_eligible", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("competition_eligible", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),

@@ -25,9 +25,9 @@ def upgrade() -> None:
         batch_op.add_column(
             sa.Column("allowed_regions_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'"))
         )
-        batch_op.add_column(sa.Column("beta_only", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+        batch_op.add_column(sa.Column("beta_only", sa.Boolean(), nullable=False, server_default=sa.text("false")))
         batch_op.add_column(
-            sa.Column("kill_switch_enabled", sa.Boolean(), nullable=False, server_default=sa.text("0"))
+            sa.Column("kill_switch_enabled", sa.Boolean(), nullable=False, server_default=sa.text("false"))
         )
         batch_op.add_column(sa.Column("maintenance_message", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("metadata_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")))
@@ -52,7 +52,7 @@ def upgrade() -> None:
         "admin_beta_access_grants",
         sa.Column("feature_key", sa.String(length=64), nullable=False),
         sa.Column("user_id", sa.String(length=36), nullable=False),
-        sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("granted_by_user_id", sa.String(length=36), nullable=True),
