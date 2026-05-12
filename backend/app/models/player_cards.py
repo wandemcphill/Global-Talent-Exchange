@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
@@ -283,6 +284,74 @@ class PlayerCardWatchlist(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class PlayerCardPack(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "player_card_packs"
+    __table_args__ = (
+        UniqueConstraint("pack_key", name="uq_player_card_packs_key"),
+        Index("ix_player_card_packs_active", "is_active"),
+    )
+
+    pack_key: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(140), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    price_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    cards_per_pack: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default="3")
+    drop_odds_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class PlayerCardPackOpening(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "player_card_pack_openings"
+    __table_args__ = (
+        Index("ix_player_card_pack_openings_user_id", "user_id"),
+        Index("ix_player_card_pack_openings_pack_id", "pack_id"),
+    )
+
+    pack_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("player_card_packs.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="opened", server_default="opened")
+    price_credits: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    opened_cards_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class PlayerCardUpgradeEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "player_card_upgrade_events"
+    __table_args__ = (Index("ix_player_card_upgrade_events_user_id", "user_id"),)
+
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    source_player_card_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    target_player_card_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="completed", server_default="completed")
+    burn_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class PlayerCardBurnEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "player_card_burn_events"
+    __table_args__ = (
+        Index("ix_player_card_burn_events_user_id", "user_id"),
+        Index("ix_player_card_burn_events_player_card_id", "player_card_id"),
+    )
+
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    player_card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 

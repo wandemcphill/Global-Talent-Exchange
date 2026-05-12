@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'gte_shell_theme.dart';
+import '../ui_gtex/components/gtex_button.dart';
+import '../ui_gtex/theme/gtex_colors.dart';
+import '../ui_gtex/theme/gtex_spacing.dart';
 import 'gte_surface_panel.dart';
 
 class GteStatePanel extends StatelessWidget {
@@ -27,21 +29,23 @@ class GteStatePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = GteShellTheme.tokensOf(context);
-    final Color accent = accentColor ?? tokens.accent;
+    final Color accent = accentColor ?? GtexColors.pitch;
     final String resolvedEyebrow =
-        eyebrow ?? (isLoading ? 'LIVE SYNC' : 'MATCHDAY STATUS');
+        eyebrow ?? (isLoading ? 'LIVE SYNC' : 'GTEX STATUS');
     final bool stackHeader = MediaQuery.sizeOf(context).width < 480;
     final bool showStatusVisual = icon != null || isLoading;
     final Widget eyebrowChip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: GtexSpacing.sm,
+        vertical: 7,
+      ),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(tokens.radiusPill),
-        border: Border.all(color: accent.withValues(alpha: 0.24)),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusPill),
+        border: Border.all(color: accent.withValues(alpha: 0.42)),
       ),
       child: Wrap(
-        spacing: 8,
+        spacing: GtexSpacing.xs,
         runSpacing: 4,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: <Widget>[
@@ -53,9 +57,11 @@ class GteStatePanel extends StatelessWidget {
           ),
           Text(
             resolvedEyebrow,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: accent, letterSpacing: 1.1),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.6,
+            ),
           ),
         ],
       ),
@@ -64,13 +70,19 @@ class GteStatePanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         eyebrowChip,
-        const SizedBox(height: 14),
-        Text(title, style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 10),
+        const SizedBox(height: GtexSpacing.sm),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: GtexColors.text,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.xs),
         Text(
           message,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: tokens.textMuted,
+            color: GtexColors.textSecondary,
             height: 1.45,
           ),
         ),
@@ -82,9 +94,9 @@ class GteStatePanel extends StatelessWidget {
             : Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(tokens.radiusMedium),
+                borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
                 color: accent.withValues(alpha: 0.14),
-                border: Border.all(color: accent.withValues(alpha: 0.24)),
+                border: Border.all(color: accent.withValues(alpha: 0.36)),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
                     color: accent.withValues(alpha: 0.12),
@@ -109,7 +121,7 @@ class GteStatePanel extends StatelessWidget {
     return GteSurfacePanel(
       emphasized: true,
       accentColor: accent,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(GtexSpacing.lg),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +132,7 @@ class GteStatePanel extends StatelessWidget {
               children: <Widget>[
                 headerCopy,
                 if (statusVisual != null) ...<Widget>[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: GtexSpacing.md),
                   statusVisual,
                 ],
               ],
@@ -131,17 +143,17 @@ class GteStatePanel extends StatelessWidget {
               children: <Widget>[
                 Expanded(child: headerCopy),
                 if (statusVisual != null) ...<Widget>[
-                  const SizedBox(width: 18),
+                  const SizedBox(width: GtexSpacing.md),
                   statusVisual,
                 ],
               ],
             ),
           if (actionLabel != null && onAction != null) ...<Widget>[
-            const SizedBox(height: 18),
-            FilledButton.icon(
+            const SizedBox(height: GtexSpacing.md),
+            GtexButton(
+              label: actionLabel!,
+              icon: isLoading ? Icons.refresh : Icons.arrow_forward,
               onPressed: onAction,
-              icon: Icon(isLoading ? Icons.refresh : Icons.arrow_forward),
-              label: Text(actionLabel!),
             ),
           ],
         ],

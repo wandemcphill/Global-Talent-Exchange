@@ -8,15 +8,20 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.models  # noqa: F401
 import app.ingestion.models  # noqa: F401
+import app.models.card_access  # noqa: F401
 import app.models.player_cards  # noqa: F401
 import app.players.read_models  # noqa: F401
 from app.ingestion.models import Player
 from app.integrity_engine.service import IntegrityEngineService
 from app.models.base import Base
+from app.models.notification_record import NotificationRecord
 from app.models.player_cards import PlayerCard, PlayerCardHolding, PlayerCardOwnerHistory, PlayerCardTier
+from app.player_cards.collectibles_service import PlayerCardCollectiblesService
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.player_cards.marketplace_service import PlayerCardMarketplaceService
 from app.player_cards.service import PlayerCardMarketService, PlayerCardValidationError
 from app.player_import_engine.service import PlayerImportService
 from app.players.read_models import PlayerSummaryReadModel
@@ -154,6 +159,57 @@ def test_create_listing_reserves_holdings(session):
     assert listing["status"] == "open"
 
 
+def test_marketplace_loan_offer_publishes_notification(session):
+    owner = _create_user(session, user_id="loan-owner", email="loan-owner@example.com", username="loan-owner")
+    borrower = _create_user(
+        session,
+        user_id="loan-borrower",
+        email="loan-borrower@example.com",
+        username="loan-borrower",
+    )
+    player = _create_player(session, player_id="loan-player", name="Notify Loan Target")
+    tier = _create_tier(session)
+    card = _create_card(session, player=player, tier=tier)
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id,
+            owner_user_id=owner.id,
+            quantity_total=2,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
+    session.flush()
+
+    service = PlayerCardMarketplaceService(session=session)
+    listing = service.create_loan_listing(
+        actor=owner,
+        player_card_id=card.id,
+        total_slots=1,
+        duration_days=7,
+        loan_fee_credits=Decimal("4.0000"),
+        is_negotiable=True,
+    )
+    negotiation = service.create_loan_negotiation(
+        actor=borrower,
+        listing_id=listing["listing_id"],
+        proposed_duration_days=5,
+        proposed_loan_fee_credits=Decimal("3.0000"),
+        note="Can we do five days?",
+    )
+
+    notification = session.scalar(
+        select(NotificationRecord).where(
+            NotificationRecord.user_id == owner.id,
+            NotificationRecord.resource_id == negotiation["negotiation_id"],
+        )
+    )
+    assert notification is not None
+    assert notification.template_key == "card.offer.received"
+    assert notification.resource_type == "card_offer_received"
+    assert notification.metadata_json["listing_id"] == listing["listing_id"]
+
+
 def test_invalid_ownership_rejected(session):
     seller = _create_user(session, user_id="user-seller", email="seller2@example.com", username="seller2")
     player = _create_player(session, player_id="player-2", name="Bola Mid")
@@ -163,6 +219,119 @@ def test_invalid_ownership_rejected(session):
     service = PlayerCardMarketService(session=session)
     with pytest.raises(PlayerCardValidationError):
         service.create_listing(actor=seller, player_card_id=card.id, quantity=1, price_per_card_credits=Decimal("10"))
+
+
+def test_collectible_packs_burns_and_upgrades_use_existing_card_supply(session):
+    owner = _create_user(session, user_id="collector", email="collector@example.com", username="collector")
+    player = _create_player(session, player_id="collectible-player", name="Collectible Ace")
+    tiers = [
+        PlayerCardTier(
+            id="tier-bronze",
+            code="bronze",
+            name="Bronze",
+            rarity_rank=4,
+            max_supply=1000,
+            supply_multiplier=1,
+            base_mint_price_credits=0,
+            is_active=True,
+            metadata_json={},
+        ),
+        PlayerCardTier(
+            id="tier-silver",
+            code="silver",
+            name="Silver",
+            rarity_rank=3,
+            max_supply=1000,
+            supply_multiplier=1,
+            base_mint_price_credits=0,
+            is_active=True,
+            metadata_json={},
+        ),
+        PlayerCardTier(
+            id="tier-fusion-elite",
+            code="elite",
+            name="Elite",
+            rarity_rank=1,
+            max_supply=100,
+            supply_multiplier=1,
+            base_mint_price_credits=0,
+            is_active=True,
+            metadata_json={},
+        ),
+    ]
+    session.add_all(tiers)
+    session.flush()
+    cards = [
+        PlayerCard(
+            id="collectible-card-bronze",
+            player_id=player.id,
+            tier_id=tiers[0].id,
+            edition_code="base",
+            display_name="Collectible Ace Bronze",
+            supply_total=10,
+            supply_available=10,
+            is_active=True,
+            metadata_json={},
+        ),
+        PlayerCard(
+            id="collectible-card-silver",
+            player_id=player.id,
+            tier_id=tiers[1].id,
+            edition_code="base",
+            display_name="Collectible Ace Silver",
+            supply_total=10,
+            supply_available=10,
+            is_active=True,
+            metadata_json={},
+        ),
+        PlayerCard(
+            id="collectible-card-elite",
+            player_id=player.id,
+            tier_id=tiers[2].id,
+            edition_code="base",
+            display_name="Collectible Ace Elite",
+            supply_total=10,
+            supply_available=10,
+            is_active=True,
+            metadata_json={},
+        ),
+    ]
+    session.add_all(cards)
+    session.add_all(
+        [
+            PlayerCardHolding(
+                player_card_id=cards[0].id,
+                owner_user_id=owner.id,
+                quantity_total=2,
+                quantity_reserved=0,
+                metadata_json={},
+            ),
+            PlayerCardHolding(
+                player_card_id=cards[1].id,
+                owner_user_id=owner.id,
+                quantity_total=2,
+                quantity_reserved=0,
+                metadata_json={},
+            ),
+        ]
+    )
+    session.flush()
+
+    service = PlayerCardCollectiblesService(session=session)
+    packs = service.list_packs()
+    opening = service.open_pack(actor=owner, pack_key=packs[0]["pack_key"])
+    burn = service.burn_card(actor=owner, player_card_id=cards[0].id, quantity=1, reason="test")
+    upgrade = service.upgrade_cards(
+        actor=owner,
+        source_player_card_ids=[cards[0].id, cards[1].id],
+        target_tier_code="elite",
+    )
+
+    assert packs[0]["pack_key"] == "starter-draft"
+    assert len(opening["opened_cards"]) == 3
+    assert burn["remaining_quantity"] >= 1
+    assert upgrade["target_player_card_id"]
+    assert session.get(PlayerCard, upgrade["target_player_card_id"]) is not None
 
 
 def test_sale_execution_fee_and_owner_history(session):

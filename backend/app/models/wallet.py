@@ -88,6 +88,11 @@ class LedgerSourceTag(StrEnum):
     ADMIN_ADJUSTMENT = "admin_adjustment"
     HIGHLIGHT_DOWNLOAD_SPEND = "highlight_download_spend"
     CREATOR_CLIP_REVENUE = "creator_clip_revenue"
+    COIN_TRADER_ESCROW_LOCK = "coin_trader_escrow_lock"
+    COIN_TRADER_ESCROW_RELEASE = "coin_trader_escrow_release"
+    COIN_TRADER_ESCROW_REFUND = "coin_trader_escrow_refund"
+    COIN_TRADER_FEE = "coin_trader_fee"
+    COIN_TRADER_ADMIN_RESOLUTION = "coin_trader_admin_resolution"
 
 
 class PaymentProvider(StrEnum):

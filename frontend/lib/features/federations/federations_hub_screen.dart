@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../data/gte_authed_api.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -14,6 +15,51 @@ import '../../widgets/gte_state_panel.dart';
 import '../shared/data/feature_telemetry.dart';
 import '../shared/data/gte_feature_support.dart';
 import 'live_federations_provider.dart';
+
+class FederationsHubRouteScreen extends StatelessWidget {
+  const FederationsHubRouteScreen({super.key, required this.client});
+
+  final GteAuthedApi client;
+
+  @override
+  Widget build(BuildContext context) {
+    final FederationsApi api = FederationsApi(client: client);
+    return ProviderScope(
+      overrides: [
+        federationsApiProvider.overrideWithValue(api),
+        federationsHubProvider.overrideWith(
+          (Ref ref) => loadFederationHubData(api),
+        ),
+      ],
+      child: const FederationsHubScreen(),
+    );
+  }
+}
+
+class FederationDetailRouteScreen extends StatelessWidget {
+  const FederationDetailRouteScreen({
+    super.key,
+    required this.client,
+    required this.federationId,
+  });
+
+  final GteAuthedApi client;
+  final String federationId;
+
+  @override
+  Widget build(BuildContext context) {
+    final FederationsApi api = FederationsApi(client: client);
+    return ProviderScope(
+      overrides: [
+        federationsApiProvider.overrideWithValue(api),
+        federationsHubProvider.overrideWith(
+          (Ref ref) => loadFederationHubData(api),
+        ),
+      ],
+      child: FederationDetailScreen(federationId: federationId),
+    );
+  }
+}
 
 class FederationsHubScreen extends ConsumerStatefulWidget {
   const FederationsHubScreen({super.key});

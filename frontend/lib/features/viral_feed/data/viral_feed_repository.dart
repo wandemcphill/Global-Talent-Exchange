@@ -6,7 +6,6 @@ import '../../../app/gte_app_config.dart';
 import '../../../data/gte_api_contracts.dart';
 import '../../../data/gte_api_repository.dart';
 import '../../../data/gte_authed_api.dart';
-import '../../../data/gte_http_transport.dart';
 import '../../../data/gte_models.dart';
 import '../../../services/frontend_audit_hooks.dart';
 import '../../../shared/models/auth_session.dart';
@@ -41,20 +40,18 @@ class ViralFeedApiRepository implements ViralFeedRepository {
     String? accessToken,
     AuthSession? authSession,
     String? deviceId,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
     final String resolvedBaseUrl =
         baseUrl ?? resolveGteApiBaseUrlForRuntimeEnvironment();
     return ViralFeedApiRepository(
       client: GteAuthedApi(
-        config: GteRepositoryConfig(
-          baseUrl: resolvedBaseUrl,
-          mode: GteBackendMode.live,
-        ),
-        transport: GteHttpTransport(),
+        config: GteRepositoryConfig(baseUrl: resolvedBaseUrl, mode: mode),
+        transport: createModeAwareTransport(mode),
         accessToken: accessToken,
         authSession: authSession,
         deviceId: deviceId,
-        mode: GteBackendMode.live,
+        mode: mode,
       ),
       validator: const ViralFeedValidator(),
       auditHooks: FrontendAuditHooks(

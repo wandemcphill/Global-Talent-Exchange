@@ -369,10 +369,11 @@ class SqlAlchemyMarketPlayerRepository:
             self.session.scalars(
                 select(Player)
                 .options(
-                    selectinload(Player.country),
-                    selectinload(Player.current_club),
-                    selectinload(Player.current_competition).selectinload(Competition.country),
-                    selectinload(Player.internal_league),
+                      selectinload(Player.country),
+                      selectinload(Player.current_club),
+                      selectinload(Player.current_competition).selectinload(Competition.country),
+                      selectinload(Player.current_competition).selectinload(Competition.internal_league),
+                      selectinload(Player.internal_league),
                     selectinload(Player.supply_tier),
                     selectinload(Player.liquidity_band),
                     selectinload(Player.image_metadata),
@@ -387,9 +388,10 @@ class SqlAlchemyMarketPlayerRepository:
         player = self.session.scalar(
             select(Player)
             .options(
-                selectinload(Player.country),
-                selectinload(Player.current_club),
-                selectinload(Player.current_competition).selectinload(Competition.country),
+                  selectinload(Player.country),
+                  selectinload(Player.current_club),
+                  selectinload(Player.current_competition).selectinload(Competition.country),
+                  selectinload(Player.current_competition).selectinload(Competition.internal_league),
                 selectinload(Player.internal_league),
                 selectinload(Player.supply_tier),
                 selectinload(Player.liquidity_band),

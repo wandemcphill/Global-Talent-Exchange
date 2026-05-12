@@ -973,25 +973,12 @@ class RealPlayerBulkImportOpsService:
                 "reasons": ["source_market_reference"],
             }
 
-        market_value_eur = self._fallback_valuation_eur(
-            normalized=normalized,
-            country=country,
-            competition=competition,
-            club=club,
-        )
-        confidence = 0.38
-        if country is not None:
-            confidence += 0.10
-        if club is not None or competition is not None:
-            confidence += 0.10
-        confidence += max(float(normalized.profile_completeness_score or 0.0) - 0.55, 0.0) * 0.7
-        confidence = min(max(confidence, 0.35), 0.74)
         return {
-            "market_value_eur": round(market_value_eur, 2),
-            "source": "fallback",
-            "fallback_used": True,
-            "confidence_score": round(confidence, 4),
-            "reasons": ["fallback_market_value"],
+            "market_value_eur": None,
+            "source": "missing_real_life_reference",
+            "fallback_used": False,
+            "confidence_score": 0.0,
+            "reasons": ["missing_source_market_reference"],
             "inputs": {
                 "age_years": normalized.age_years,
                 "competition_level": normalized.competition_level,

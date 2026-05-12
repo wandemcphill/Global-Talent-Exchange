@@ -9,6 +9,7 @@ import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
 import 'gte_policy_compliance_center_screen.dart';
+import 'gte_wallet_flow_scaffold.dart';
 
 class GteFundWalletScreen extends StatefulWidget {
   const GteFundWalletScreen({super.key, required this.controller});
@@ -491,9 +492,13 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
         !blocked &&
         _providerSupportsCheckout(_automaticProvider) &&
         session == null;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Deposit')),
-      body: RefreshIndicator(
+    return GteWalletFlowScaffold(
+      title: 'Deposit',
+      subtitle:
+          'Add capital through instant checkout or manual bank transfer while preserving GTEX compliance controls.',
+      icon: Icons.add_card_outlined,
+      statusLabel: 'FUND WALLET',
+      child: RefreshIndicator(
         onRefresh: _refreshFundingSurface,
         child: ListView(
           padding: const EdgeInsets.all(20),

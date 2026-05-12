@@ -10,6 +10,8 @@ void main() {
         club: ' Arsenal ',
         nationalTeam: ' Nigeria U20 ',
         league: ' Premier League ',
+        minValue: 100000,
+        maxValue: 5000000,
       );
 
       final PlayerFilter normalized = raw.normalized();
@@ -18,6 +20,8 @@ void main() {
       expect(normalized.club, 'Arsenal');
       expect(normalized.nationalTeam, 'Nigeria U20');
       expect(normalized.league, 'Premier League');
+      expect(normalized.minValue, 100000);
+      expect(normalized.maxValue, 5000000);
       expect(normalized.hasActiveFilters, isTrue);
     },
   );
@@ -30,6 +34,8 @@ void main() {
         club: 'Arsenal',
         nationalTeam: 'Nigeria U20',
         league: 'Premier League',
+        minValue: 100000,
+        maxValue: 5000000,
       );
 
       expect(query.toQueryParameters(), <String, Object?>{
@@ -39,6 +45,8 @@ void main() {
         'club': 'Arsenal',
         'national_team': 'Nigeria U20',
         'league': 'Premier League',
+        'min_value': 100000.0,
+        'max_value': 5000000.0,
       });
     },
   );

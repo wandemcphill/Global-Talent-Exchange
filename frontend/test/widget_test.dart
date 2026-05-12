@@ -7,6 +7,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/screens/gte_market_players_screen_v2.dart';
 
 void main() {
   testWidgets('app smoke test renders new GTEX shell', (
@@ -36,26 +37,15 @@ void main() {
           apiBaseUrl: 'http://127.0.0.1:8000',
           backendMode: GteBackendMode.fixture,
         ),
+        initialPath: '/app/market',
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Home'), findsWidgets);
-    expect(find.text('Matchday'), findsWidgets);
-
-    final Finder marketNavChip = find.ancestor(
-      of: find.text('Market').last,
-      matching: find.byType(InkWell),
-    );
-    await tester.ensureVisible(marketNavChip);
-    await tester.tap(marketNavChip);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Player market'), findsOneWidget);
-    expect(
-      find.textContaining('Search player, club'),
-      findsOneWidget,
-    );
+    expect(find.byType(GteMarketPlayersScreenV2), findsOneWidget);
+    expect(find.text('Transfer Hub'), findsWidgets);
+    expect(find.text('My Shortlist'), findsOneWidget);
+    expect(find.textContaining('Search player, club'), findsOneWidget);
   });
 }
 

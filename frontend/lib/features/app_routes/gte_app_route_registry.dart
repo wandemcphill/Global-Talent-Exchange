@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/data/story_feed_api.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/app_routes/gte_feature_route_support.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
@@ -22,23 +23,26 @@ import 'package:gte_frontend/features/club_sale_market/club_sale_market.dart';
 import 'package:gte_frontend/features/creator_league_admin/creator_league_admin.dart';
 import 'package:gte_frontend/features/creator_share_market/creator_share_market.dart';
 import 'package:gte_frontend/features/creator_stadium_monetization/creator_stadium_monetization.dart';
+import 'package:gte_frontend/features/awards/gtex_awards_screen_v2.dart';
 import 'package:gte_frontend/features/fan_prediction/fan_prediction.dart';
+import 'package:gte_frontend/features/fan_wars/fan_wars.dart';
+import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/football_world_simulation/football_world_simulation.dart';
 import 'package:gte_frontend/features/gift_economy_admin/gift_economy_admin.dart';
 import 'package:gte_frontend/features/jackpot/presentation/gtex_jackpot_route_screen.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/match/replay_archive_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen_v2.dart';
+import 'package:gte_frontend/features/news_agency/gtex_news_agency_screen_v2.dart';
 import 'package:gte_frontend/features/player_card_marketplace/player_card_marketplace.dart';
-import 'package:gte_frontend/features/regens/regens_screen.dart';
+import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/streamer_tournament_engine.dart';
-import 'package:gte_frontend/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_create_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_detail_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_join_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_share_screen.dart';
-import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
+import 'package:gte_frontend/features/transfer_news_calendar/transfer_news_calendar.dart';
+import 'package:gte_frontend/features/viral_feed/data/viral_feed_repository.dart';
+import 'package:gte_frontend/features/viral_feed/presentation/viral_feed_screen.dart';
+import 'package:gte_frontend/screens/competitions/competition_create_screen_v2.dart';
+import 'package:gte_frontend/screens/clubs/gtex_public_club_profile_screen_v2.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 
@@ -61,6 +65,10 @@ class GteAppRouteRegistry {
           (BuildContext context) =>
               _GteGuardedRouteHost(registry: this, route: route),
     );
+  }
+
+  Widget guardedScreenFor(GteAppRouteData route) {
+    return _GteGuardedRouteHost(registry: this, route: route);
   }
 
   Route<dynamic>? onGenerateRoute(RouteSettings settings) {
@@ -98,75 +106,33 @@ class GteAppRouteRegistry {
 
   Widget buildScreen(BuildContext context, GteAppRouteData route) {
     final GteNavigationDependencies liveDependencies = dependencies;
-    final VoidCallback? openLogin =
-        dependencies.onOpenLogin == null
-            ? null
-            : () {
-              dependencies.onOpenLogin!.call(context);
-            };
-    final VoidCallback? openCreatorAccessRequest =
-        dependencies.onOpenCreatorAccessRequest == null
-            ? null
-            : () {
-              dependencies.onOpenCreatorAccessRequest!.call(context);
-            };
     if (route is CompetitionsDiscoveryRouteData) {
-      return CompetitionDiscoveryScreen(
-        baseUrl: liveDependencies.apiBaseUrl,
-        backendMode: liveDependencies.backendMode,
-        accessToken: liveDependencies.accessToken,
-        currentUserId: liveDependencies.currentUserId,
-        currentUserName: liveDependencies.currentUserName,
-        isAuthenticated: liveDependencies.isAuthenticated,
-        isCheckingCreatorAccess: liveDependencies.isCheckingCreatorAccess,
-        canHostCompetitions: liveDependencies.canHostCompetitions,
-        onOpenLogin: openLogin,
-        onOpenCreatorAccessRequest: openCreatorAccessRequest,
-      );
+      return _CompetitionHubRouteScreen(dependencies: liveDependencies);
     }
     if (route is CompetitionCreateRouteData) {
       return _CompetitionCreateRouteScreen(dependencies: liveDependencies);
     }
     if (route is CompetitionDetailRouteData) {
-      return _CompetitionDetailRouteScreen(
+      return _CompetitionHubRouteScreen(
         dependencies: liveDependencies,
-        route: route,
+        competitionId: route.competitionId,
       );
     }
     if (route is CompetitionJoinRouteData) {
-      return _CompetitionPreloadRouteScreen(
+      return _CompetitionHubRouteScreen(
         dependencies: liveDependencies,
         competitionId: route.competitionId,
         inviteCode: route.inviteCode,
-        loadingTitle: 'Loading competition',
-        builder: (CompetitionController controller) {
-          return CompetitionJoinScreen(controller: controller);
-        },
       );
     }
     if (route is CompetitionShareRouteData) {
-      return _CompetitionPreloadRouteScreen(
+      return _CompetitionHubRouteScreen(
         dependencies: liveDependencies,
         competitionId: route.competitionId,
-        loadingTitle: 'Loading competition',
-        builder: (CompetitionController controller) {
-          return CompetitionShareScreen(controller: controller);
-        },
       );
     }
     if (route is CompetitionWorldSuperCupRouteData) {
-      return CompetitionDiscoveryScreen(
-        baseUrl: liveDependencies.apiBaseUrl,
-        backendMode: liveDependencies.backendMode,
-        accessToken: liveDependencies.accessToken,
-        currentUserId: liveDependencies.currentUserId,
-        currentUserName: liveDependencies.currentUserName,
-        isAuthenticated: liveDependencies.isAuthenticated,
-        isCheckingCreatorAccess: liveDependencies.isCheckingCreatorAccess,
-        canHostCompetitions: liveDependencies.canHostCompetitions,
-        onOpenLogin: openLogin,
-        onOpenCreatorAccessRequest: openCreatorAccessRequest,
-      );
+      return _CompetitionHubRouteScreen(dependencies: liveDependencies);
     }
     if (route is ClubIdentityJerseysRouteData) {
       return ClubIdentityScreen(
@@ -267,10 +233,14 @@ class GteAppRouteRegistry {
       );
     }
     if (route is StreamerTournamentsListRouteData) {
-      return _launchComingSoonScreen('Streamer tournaments');
+      return _buildStreamerTournamentsListScreen(context, liveDependencies);
     }
     if (route is StreamerTournamentDetailRouteData) {
-      return _launchComingSoonScreen('Streamer tournament detail');
+      return _buildStreamerTournamentDetailScreen(
+        context,
+        liveDependencies,
+        route,
+      );
     }
     if (route is FanPredictionMatchRouteData) {
       return _buildFanPredictionMatchScreen(context, liveDependencies, route);
@@ -285,10 +255,17 @@ class GteAppRouteRegistry {
       return _buildPlayerCardsInventoryScreen(context, liveDependencies);
     }
     if (route is CreatorShareMarketClubRouteData) {
-      return _launchComingSoonScreen('Club share market');
+      return _buildCreatorShareMarketClubScreen(
+        context,
+        liveDependencies,
+        route,
+      );
     }
     if (route is CreatorShareMarketAdminControlRouteData) {
-      return _launchComingSoonScreen('Share market admin controls');
+      return _buildCreatorShareMarketAdminControlScreen(
+        context,
+        liveDependencies,
+      );
     }
     if (route is ClubSaleMarketListingsRouteData) {
       return _buildClubSaleMarketListingsScreen(context, liveDependencies);
@@ -307,16 +284,62 @@ class GteAppRouteRegistry {
       return _buildWorldOverviewScreen(context, liveDependencies);
     }
     if (route is RegenUniverseRouteData) {
-      return const RegensScreen();
+      return RegensScreenV2(
+        baseUrl: liveDependencies.apiBaseUrl,
+        backendMode: liveDependencies.backendMode,
+        accessToken: liveDependencies.accessToken,
+        isAuthenticated: liveDependencies.isAuthenticated,
+        isAdmin: liveDependencies.currentUserRole == 'admin',
+        onOpenAwards: () {
+          unawaited(
+            GteNavigationHelpers.pushRoute<void>(
+              context,
+              route: const WorldAwardsRouteData(),
+              dependencies: liveDependencies,
+            ),
+          );
+        },
+      );
+    }
+    if (route is WorldFederationsRouteData) {
+      return FederationsHubRouteScreen(
+        client: liveDependencies.createAuthedApi(),
+      );
+    }
+    if (route is WorldAwardsRouteData) {
+      return GtexAwardsScreenV2(
+        baseUrl: liveDependencies.apiBaseUrl,
+        backendMode: liveDependencies.backendMode,
+        accessToken: liveDependencies.accessToken,
+      );
     }
     if (route is NewsDeskRouteData) {
-      return TransferNewsCalendarScreen(
+      return GtexNewsAgencyScreenV2(
+        api: StoryFeedApi.standard(
+          baseUrl: liveDependencies.apiBaseUrl,
+          mode: liveDependencies.backendMode,
+          accessToken: liveDependencies.accessToken,
+        ),
+      );
+    }
+    if (route is ViralFeedRouteData) {
+      return ViralFeedScreen(
+        currentUserId: liveDependencies.currentUserId,
+        repository: ViralFeedApiRepository.standard(
+          baseUrl: liveDependencies.apiBaseUrl,
+          accessToken: liveDependencies.accessToken,
+          mode: liveDependencies.backendMode,
+        ),
+      );
+    }
+    if (route is FanWarsRouteData) {
+      return FanWarsScreen(
         baseUrl: liveDependencies.apiBaseUrl,
         backendMode: liveDependencies.backendMode,
         accessToken: liveDependencies.accessToken,
         currentUserRole: liveDependencies.currentUserRole,
-        initialTab: 'media',
-        onOpenLogin: openLogin,
+        entryId: route.entryId,
+        showHistory: route.showHistory,
       );
     }
     if (route is WorldClubContextRouteData) {
@@ -346,7 +369,11 @@ class GteAppRouteRegistry {
       );
     }
     if (route is BroadcastDeskRouteData) {
-      return _launchComingSoonScreen('Coming soon');
+      return GteLiveMatchHubRouteScreen(
+        dependencies: liveDependencies,
+        clubId: liveDependencies.currentClubId,
+        clubName: liveDependencies.currentClubName,
+      );
     }
     if (route is GtexJackpotRouteData) {
       return _buildGtexJackpotScreen(context, liveDependencies);
@@ -355,13 +382,13 @@ class GteAppRouteRegistry {
       return _buildClubAiAssistantScreen(context, liveDependencies, route);
     }
     if (route is CreatorStadiumClubRouteData) {
-      return _launchComingSoonScreen('Coming soon');
+      return _buildCreatorStadiumClubScreen(context, liveDependencies, route);
     }
     if (route is CreatorStadiumMatchRouteData) {
-      return _launchComingSoonScreen('Coming soon');
+      return _buildCreatorStadiumMatchScreen(context, liveDependencies, route);
     }
     if (route is CreatorStadiumAdminControlRouteData) {
-      return _launchComingSoonScreen('Coming soon');
+      return _buildCreatorStadiumAdminControlScreen(context, liveDependencies);
     }
     if (route is CreatorLeagueFinancialReportRouteData) {
       return _buildCreatorLeagueFinancialReportScreen(
@@ -455,6 +482,18 @@ class _GteGuardedRouteHostState extends State<_GteGuardedRouteHost> {
     if (_resolution == null) {
       return const _RouteLoadingScreen();
     }
+    final gate = _resolution!.featureGateDecision;
+    if (gate != null && gate.blocked) {
+      return _RouteStateScreen(
+        title: '${gate.title} unavailable',
+        message:
+            gate.message ??
+            'This route is controlled by Launch Control and is not available right now.',
+        actionLabel: 'Retry',
+        onAction: _resolveRoute,
+        icon: Icons.lock_clock_outlined,
+      );
+    }
     return widget.registry.buildScreen(context, _resolution!.route);
   }
 }
@@ -497,92 +536,33 @@ class _CompetitionCreateRouteScreenState
             : () {
               widget.dependencies.onOpenLogin!.call(context);
             };
-    final VoidCallback? openCreatorAccessRequest =
-        widget.dependencies.onOpenCreatorAccessRequest == null
-            ? null
-            : () {
-              widget.dependencies.onOpenCreatorAccessRequest!.call(context);
-            };
-    return CompetitionCreateScreen(
+    return CompetitionCreateScreenV2(
       controller: _controller,
       isAuthenticated: widget.dependencies.isAuthenticated,
-      isCheckingHostEligibility: false,
-      hostEligible: widget.dependencies.isAuthenticated,
       onOpenLogin: openLogin,
-      onOpenCreatorAccessRequest: openCreatorAccessRequest,
     );
   }
 }
 
-class _CompetitionDetailRouteScreen extends StatefulWidget {
-  const _CompetitionDetailRouteScreen({
+class _CompetitionHubRouteScreen extends StatefulWidget {
+  const _CompetitionHubRouteScreen({
     required this.dependencies,
-    required this.route,
-  });
-
-  final GteNavigationDependencies dependencies;
-  final CompetitionDetailRouteData route;
-
-  @override
-  State<_CompetitionDetailRouteScreen> createState() =>
-      _CompetitionDetailRouteScreenState();
-}
-
-class _CompetitionDetailRouteScreenState
-    extends State<_CompetitionDetailRouteScreen> {
-  late final CompetitionController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = CompetitionController(
-      api: widget.dependencies.createCompetitionApi(),
-      currentUserId: widget.dependencies.currentUserId,
-      currentUserName: widget.dependencies.currentUserName,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CompetitionDetailScreen(
-      controller: _controller,
-      competitionId: widget.route.competitionId,
-      navigationDependencies: widget.dependencies,
-    );
-  }
-}
-
-class _CompetitionPreloadRouteScreen extends StatefulWidget {
-  const _CompetitionPreloadRouteScreen({
-    required this.dependencies,
-    required this.competitionId,
-    required this.loadingTitle,
-    required this.builder,
+    this.competitionId,
     this.inviteCode,
   });
 
   final GteNavigationDependencies dependencies;
-  final String competitionId;
+  final String? competitionId;
   final String? inviteCode;
-  final String loadingTitle;
-  final Widget Function(CompetitionController controller) builder;
 
   @override
-  State<_CompetitionPreloadRouteScreen> createState() =>
-      _CompetitionPreloadRouteScreenState();
+  State<_CompetitionHubRouteScreen> createState() =>
+      _CompetitionHubRouteScreenState();
 }
 
-class _CompetitionPreloadRouteScreenState
-    extends State<_CompetitionPreloadRouteScreen> {
+class _CompetitionHubRouteScreenState
+    extends State<_CompetitionHubRouteScreen> {
   late final CompetitionController _controller;
-  String? _errorMessage;
-  bool _isPrimed = false;
 
   @override
   void initState() {
@@ -592,7 +572,6 @@ class _CompetitionPreloadRouteScreenState
       currentUserId: widget.dependencies.currentUserId,
       currentUserName: widget.dependencies.currentUserName,
     );
-    _primeCompetition();
   }
 
   @override
@@ -601,48 +580,30 @@ class _CompetitionPreloadRouteScreenState
     super.dispose();
   }
 
-  Future<void> _primeCompetition() async {
-    setState(() {
-      _isPrimed = false;
-      _errorMessage = null;
-    });
-    try {
-      await _controller.openCompetition(
-        widget.competitionId,
-        inviteCode: widget.inviteCode,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isPrimed = true;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorMessage = AppFeedback.messageFor(error);
-        _isPrimed = true;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (!_isPrimed && _controller.selectedCompetition == null) {
-      return _RouteLoadingScreen(title: widget.loadingTitle);
-    }
-    if (_errorMessage != null && _controller.selectedCompetition == null) {
-      return _RouteStateScreen(
-        title: 'Competition unavailable',
-        message: _errorMessage!,
-        actionLabel: 'Retry',
-        onAction: _primeCompetition,
-        icon: Icons.groups_outlined,
-      );
-    }
-    return widget.builder(_controller);
+    final VoidCallback? openLogin =
+        widget.dependencies.onOpenLogin == null
+            ? null
+            : () {
+              widget.dependencies.onOpenLogin!.call(context);
+            };
+    return GteCompetitionsHubScreenV2(
+      controller: _controller,
+      isAuthenticated: widget.dependencies.isAuthenticated,
+      canHostCompetitions: widget.dependencies.canHostCompetitions,
+      isCheckingCreatorAccess: widget.dependencies.isCheckingCreatorAccess,
+      initialCompetitionId: widget.competitionId,
+      inviteCode: widget.inviteCode,
+      onOpenLogin: openLogin,
+      onOpenCreatorAccessRequest:
+          widget.dependencies.onOpenCreatorAccessRequest == null
+              ? null
+              : () {
+                widget.dependencies.onOpenCreatorAccessRequest!.call(context);
+              },
+      navigationDependencies: widget.dependencies,
+    );
   }
 }
 
@@ -750,16 +711,6 @@ class _RouteLoadingScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-Widget _launchComingSoonScreen(String title) {
-  return GteRouteIntegrityScreen.blocked(
-    eyebrow: 'COMING SOON',
-    title: '$title coming soon',
-    message:
-        'This route is blocked for launch while GTEX focuses on the 2D football manager experience.',
-    icon: Icons.lock_clock_outlined,
-  );
 }
 
 class _RouteStateScreen extends StatelessWidget {

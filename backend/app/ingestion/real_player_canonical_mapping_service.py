@@ -186,11 +186,12 @@ class CanonicalReferenceResolution:
 
 @dataclass(slots=True)
 class RealPlayerCanonicalMappingService:
-    settings: Settings = field(default_factory=get_settings)
+    settings: Settings | None = None
     auto_create_missing_entities: bool | None = None
 
     def __post_init__(self) -> None:
         if self.auto_create_missing_entities is None:
+            self.settings = self.settings or get_settings()
             self.auto_create_missing_entities = self.settings.real_player_mapping_auto_create_missing_entities
 
     def resolve_country(

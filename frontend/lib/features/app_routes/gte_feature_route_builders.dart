@@ -254,6 +254,14 @@ double _numberFromMap(
   return double.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
+double? _numberOrNullFromMap(Map<String, dynamic> json, List<String> keys) {
+  final Object? value = _pick(json, keys);
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '');
+}
+
 String _creditsLabel(num value) {
   final bool whole = value == value.roundToDouble();
   return '${value.toStringAsFixed(whole ? 0 : 2)} cr';
@@ -364,6 +372,14 @@ Widget _buildPlayerCardDetailScreen(
           ),
           () => throw StateError('Route-level fixture fallback is disabled.'),
         );
+        final double? globalScoutingIndex =
+            _numberOrNullFromMap(detail, <String>[
+              'global_scouting_index',
+              'globalScoutingIndex',
+              'gsi',
+              'current_gsi',
+              'currentGsi',
+            ]);
         return GteFeatureRouteResult.ready(
           GteFeatureRouteContent(
             eyebrow: 'CARD DETAIL',
@@ -377,6 +393,11 @@ Widget _buildPlayerCardDetailScreen(
             icon: Icons.badge_outlined,
             accentColor: GteShellTheme.accent,
             metrics: <GteFeatureRouteMetric>[
+              if (globalScoutingIndex != null)
+                GteFeatureRouteMetric(
+                  label: 'GSI',
+                  value: globalScoutingIndex.round().toString(),
+                ),
               GteFeatureRouteMetric(
                 label: 'Overall',
                 value: _stringFromMap(detail, <String>[
@@ -685,13 +706,14 @@ Widget _buildWorldClubContextScreen(
   GteNavigationDependencies dependencies,
   WorldClubContextRouteData route,
 ) {
-  return FootballWorldSimulationScreen(
+  return GtexPublicClubProfileScreenV2(
+    clubId: route.clubId,
+    clubName: route.clubName,
     baseUrl: dependencies.apiBaseUrl,
     backendMode: dependencies.backendMode,
     accessToken: dependencies.accessToken,
-    currentUserRole: dependencies.currentUserRole,
-    clubId: route.clubId,
-    clubName: route.clubName,
+    isAuthenticated: dependencies.isAuthenticated,
+    onOpenLogin: _loginAction(context, dependencies),
   );
 }
 
@@ -1041,118 +1063,18 @@ Widget _buildFootballTransferCenterScreen(
   GteNavigationDependencies dependencies,
   FootballTransferCenterRouteData route,
 ) {
-  return _publicFeatureScreen(
-    dependencies: dependencies,
-    loadingTitle: 'Loading transfer center',
-    icon: Icons.event_note_outlined,
-    accentColor: const Color(0xFF8ED8FF),
-    load: () async {
-      try {
-        final Map<String, dynamic> payload = await _withApi(
-          dependencies,
-          (dynamic api) async {
-            final List<dynamic> live = await Future.wait<dynamic>(
-              <Future<dynamic>>[
-                api.getList('/api/transfers/windows', auth: false),
-                api.getMap('/api/calendar-engine/dashboard', auth: false),
-                api.getList(
-                  '/api/world/narratives',
-                  auth: false,
-                  query: const <String, Object?>{'limit': 6},
-                ),
-              ],
-            );
-            return <String, dynamic>{
-              'windows': _asList(live[0]),
-              'dashboard': _asMap(live[1]),
-              'narratives': _asList(live[2]),
-            };
-          },
-          () async => <String, dynamic>{
-            'windows': <Map<String, Object?>>[
-              <String, Object?>{
-                'id': 'summer-2026',
-                'name': 'Summer 2026',
-                'status': 'open',
-                'closing_at': '2026-08-31T18:00:00Z',
-              },
-            ],
-            'dashboard': <String, Object?>{
-              'upcoming_events': <Map<String, Object?>>[
-                <String, Object?>{'title': 'Deadline day', 'days_out': 12},
-              ],
+  return TransferNewsCalendarScreen(
+    baseUrl: dependencies.apiBaseUrl,
+    backendMode: dependencies.backendMode,
+    accessToken: dependencies.accessToken,
+    currentUserRole: dependencies.currentUserRole,
+    initialTab: route.tab.slug,
+    onOpenLogin:
+        dependencies.onOpenLogin == null
+            ? null
+            : () {
+              unawaited(dependencies.onOpenLogin!(context));
             },
-            'narratives': <Map<String, Object?>>[
-              <String, Object?>{'headline': 'Creator clubs are scouting early'},
-            ],
-          },
-        );
-        final List<dynamic> windows = _listFromMap(payload, <String>[
-          'windows',
-        ]);
-        final Map<String, dynamic> dashboard = _mapFromMap(payload, <String>[
-          'dashboard',
-        ]);
-        final List<dynamic> narratives = _listFromMap(payload, <String>[
-          'narratives',
-        ]);
-        if (windows.isEmpty && narratives.isEmpty) {
-          return GteFeatureRouteResult.empty(
-            title: 'No transfer center updates',
-            message:
-                'The transfer, media, and calendar route is wired, but there are no windows or narratives to show right now.',
-            icon: Icons.event_note_outlined,
-            accentColor: const Color(0xFF8ED8FF),
-            actionLabel: 'Retry',
-          );
-        }
-        final Map<String, dynamic> featuredWindow =
-            windows.isEmpty ? const <String, dynamic>{} : _asMap(windows.first);
-        final List<dynamic> upcomingEvents = _listFromMap(dashboard, <String>[
-          'upcoming_events',
-          'upcomingEvents',
-        ]);
-        return GteFeatureRouteResult.ready(
-          GteFeatureRouteContent(
-            eyebrow: 'TRANSFER CENTER',
-            title: 'Football transfer center',
-            description:
-                'Transfer windows, media storylines, and calendar routing now mount in a single resilient deep-link surface.',
-            icon: Icons.event_note_outlined,
-            accentColor: const Color(0xFF8ED8FF),
-            metrics: <GteFeatureRouteMetric>[
-              GteFeatureRouteMetric(
-                label: 'Windows',
-                value: windows.length.toString(),
-              ),
-              GteFeatureRouteMetric(
-                label: 'Calendar items',
-                value: upcomingEvents.length.toString(),
-              ),
-              GteFeatureRouteMetric(
-                label: 'Default tab',
-                value: route.tab.slug,
-              ),
-            ],
-            highlights: <String>[
-              'Transfer center routing stays public and does not crash when one feed is empty.',
-              if (featuredWindow.isNotEmpty)
-                'Featured window: ${_stringFromMap(featuredWindow, <String>['name', 'title'])}.',
-            ],
-            notes: <String>[
-              'Window, media, and calendar gaps resolve into explicit empty states instead of blank routes.',
-            ],
-          ),
-        );
-      } on GteApiException catch (error) {
-        return _featureUnavailable(
-          title: 'Transfer center unavailable',
-          icon: Icons.event_note_outlined,
-          accentColor: const Color(0xFF8ED8FF),
-          error: error,
-        );
-      }
-    },
   );
 }
 

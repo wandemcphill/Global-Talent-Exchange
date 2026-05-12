@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, FastAPI, Query, Request, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,15 +12,18 @@ from app.match_engine.services import ensure_local_match_execution_runtime
 from app.models.notification_record import NotificationRecord
 from app.models.user import User
 from app.notifications.schemas import (
+    NotificationEventMatrixItemView,
     NotificationPreferenceUpdate,
     NotificationPreferenceView,
     NotificationSubscriptionCreate,
     NotificationSubscriptionView,
+    NotificationTestEventRequest,
+    NotificationTestEventView,
     NotificationView,
     PlatformAnnouncementCreate,
     PlatformAnnouncementView,
 )
-from app.notifications.service import NotificationSettingsService
+from app.notifications.service import NotificationEventMatrixService, NotificationServiceError, NotificationSettingsService
 from app.replay_archive.router import router as replay_router
 from app.replay_archive.service import ensure_replay_archive
 
@@ -88,6 +91,23 @@ def _notification_created_at_key(item: NotificationView) -> datetime:
     if created_at.tzinfo is None:
         return created_at.replace(tzinfo=timezone.utc)
     return created_at.astimezone(timezone.utc)
+
+
+def _notification_record_view(item: NotificationRecord) -> NotificationView:
+    return NotificationView(
+        notification_id=item.id,
+        user_id=item.user_id,
+        topic=item.topic,
+        template_key=item.template_key,
+        resource_id=item.resource_id,
+        fixture_id=item.fixture_id,
+        competition_id=item.competition_id,
+        message=item.message,
+        metadata=item.metadata_json,
+        created_at=item.created_at,
+        read_at=item.read_at,
+        is_read=item.read_at is not None,
+    )
 
 
 @notifications_router.get("/me", response_model=list[NotificationView])
@@ -188,6 +208,33 @@ def publish_announcement(payload: PlatformAnnouncementCreate, actor: User = Depe
     session.commit()
     session.refresh(item)
     return PlatformAnnouncementView.model_validate(item)
+
+
+@admin_router.get("/event-matrix", response_model=list[NotificationEventMatrixItemView])
+def admin_notification_event_matrix(
+    _: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> list[NotificationEventMatrixItemView]:
+    return NotificationEventMatrixService(session).list_matrix()
+
+
+@admin_router.post("/test-event", response_model=NotificationTestEventView)
+def admin_test_notification_event(
+    payload: NotificationTestEventRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> NotificationTestEventView:
+    service = NotificationEventMatrixService(session)
+    try:
+        record, matrix_item = service.publish_test_event(actor=actor, payload=payload)
+    except NotificationServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    session.commit()
+    session.refresh(record)
+    return NotificationTestEventView(
+        notification=_notification_record_view(record),
+        matrix_item=matrix_item,
+    )
 
 
 router.include_router(notifications_router)

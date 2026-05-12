@@ -31,7 +31,11 @@ class GteAppRouteNames {
       'club-sale-market.owner-offers';
   static const String worldOverview = 'world.overview';
   static const String regenUniverse = 'world.regens';
+  static const String worldFederations = 'world.federations';
+  static const String worldAwards = 'world.awards';
   static const String newsDesk = 'news.desk';
+  static const String viralFeed = 'viral.feed';
+  static const String fanWars = 'fan-wars.hub';
   static const String worldClubContext = 'world.club-context';
   static const String worldCompetitionContext = 'world.competition-context';
   static const String nationalTeamCompetitions = 'national-team.competitions';
@@ -154,8 +158,21 @@ class GteAppRouteCatalog {
           path: '/world/regens',
         ),
         GteAppRouteRegistration(
-          name: GteAppRouteNames.newsDesk,
-          path: '/news',
+          name: GteAppRouteNames.worldFederations,
+          path: '/world/federations',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.worldAwards,
+          path: '/world/awards',
+        ),
+        GteAppRouteRegistration(name: GteAppRouteNames.newsDesk, path: '/news'),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.viralFeed,
+          path: '/viral-feed',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.fanWars,
+          path: '/fan-wars',
         ),
         GteAppRouteRegistration(
           name: GteAppRouteNames.worldClubContext,
@@ -815,6 +832,26 @@ class RegenUniverseRouteData extends GteAppRouteData {
   Uri toUri() => _buildUri(path: '/world/regens');
 }
 
+class WorldFederationsRouteData extends GteAppRouteData {
+  const WorldFederationsRouteData();
+
+  @override
+  String get name => GteAppRouteNames.worldFederations;
+
+  @override
+  Uri toUri() => _buildUri(path: '/world/federations');
+}
+
+class WorldAwardsRouteData extends GteAppRouteData {
+  const WorldAwardsRouteData();
+
+  @override
+  String get name => GteAppRouteNames.worldAwards;
+
+  @override
+  Uri toUri() => _buildUri(path: '/world/awards');
+}
+
 class NewsDeskRouteData extends GteAppRouteData {
   const NewsDeskRouteData();
 
@@ -823,6 +860,35 @@ class NewsDeskRouteData extends GteAppRouteData {
 
   @override
   Uri toUri() => _buildUri(path: '/news');
+}
+
+class ViralFeedRouteData extends GteAppRouteData {
+  const ViralFeedRouteData();
+
+  @override
+  String get name => GteAppRouteNames.viralFeed;
+
+  @override
+  Uri toUri() => _buildUri(path: '/viral-feed');
+}
+
+class FanWarsRouteData extends GteAppRouteData {
+  const FanWarsRouteData({this.entryId, this.showHistory = false});
+
+  final String? entryId;
+  final bool showHistory;
+
+  @override
+  String get name => GteAppRouteNames.fanWars;
+
+  @override
+  Uri toUri() => _buildUri(
+    path: '/fan-wars',
+    queryParameters: <String, String>{
+      if (entryId != null && entryId!.trim().isNotEmpty) 'entryId': entryId!,
+      if (showHistory) 'history': 'true',
+    },
+  );
 }
 
 class WorldClubContextRouteData extends GteClubScopedRouteData {
@@ -1177,8 +1243,20 @@ class GteAppRouteParser {
         return const WorldOverviewRouteData();
       case GteAppRouteNames.regenUniverse:
         return const RegenUniverseRouteData();
+      case GteAppRouteNames.worldFederations:
+        return const WorldFederationsRouteData();
+      case GteAppRouteNames.worldAwards:
+        return const WorldAwardsRouteData();
       case GteAppRouteNames.newsDesk:
         return const NewsDeskRouteData();
+      case GteAppRouteNames.viralFeed:
+        return const ViralFeedRouteData();
+      case GteAppRouteNames.fanWars:
+        return FanWarsRouteData(
+          entryId: _nonEmpty(queryParameters['entryId']),
+          showHistory:
+              queryParameters['history']?.trim().toLowerCase() == 'true',
+        );
       case GteAppRouteNames.worldClubContext:
         if (clubId == null) {
           return null;
@@ -1433,6 +1511,12 @@ class GteAppRouteParser {
       if (segments.length == 2 && segments[1] == 'regens') {
         return const RegenUniverseRouteData();
       }
+      if (segments.length == 2 && segments[1] == 'federations') {
+        return const WorldFederationsRouteData();
+      }
+      if (segments.length == 2 && segments[1] == 'awards') {
+        return const WorldAwardsRouteData();
+      }
       if (segments.length == 3 && segments[1] == 'clubs') {
         return WorldClubContextRouteData(
           clubId: segments[2],
@@ -1447,6 +1531,22 @@ class GteAppRouteParser {
 
     if (segments.first == 'clips' || segments.first == 'news') {
       return const NewsDeskRouteData();
+    }
+
+    if (segments.first == 'viral-feed') {
+      return const ViralFeedRouteData();
+    }
+
+    if (segments.first == 'awards') {
+      return const WorldAwardsRouteData();
+    }
+
+    if (segments.first == 'fan-wars') {
+      return FanWarsRouteData(
+        entryId: _nonEmpty(uri.queryParameters['entryId']),
+        showHistory:
+            uri.queryParameters['history']?.trim().toLowerCase() == 'true',
+      );
     }
 
     if (segments.first == 'national-team') {

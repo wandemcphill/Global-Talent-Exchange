@@ -1577,6 +1577,9 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/admin/calendar-engine/national-competitions/{competition_id}/launch':
       '/api/v2/admin/calendar-engine/national-competitions/{competition_id}/launch',
   '/api/admin/calendar-engine/seasons': '/api/v2/admin/calendar-engine/seasons',
+  '/api/admin/clips/moderation': '/api/v2/admin/clips/moderation',
+  '/api/admin/clips/{clip_id}/approve': '/api/v2/admin/clips/{clip_id}/approve',
+  '/api/admin/clips/{clip_id}/block': '/api/v2/admin/clips/{clip_id}/block',
   '/api/admin/club-infra/seed': '/api/v2/admin/club-infra/seed',
   '/api/admin/clubs/academy-analytics': '/api/v2/admin/clubs/academy-analytics',
   '/api/admin/clubs/analytics': '/api/v2/admin/clubs/analytics',
@@ -2072,6 +2075,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/champions-league/prize-pool/preview',
   '/api/champions-league/qualification-map':
       '/api/v2/champions-league/qualification-map',
+  '/api/clips/{clip_id}': '/api/v2/clips/{clip_id}',
+  '/api/clips/{clip_id}/report': '/api/v2/clips/{clip_id}/report',
   '/api/club-infra/clubs/{club_id}': '/api/v2/club-infra/clubs/{club_id}',
   '/api/club-infra/clubs/{club_id}/support':
       '/api/v2/club-infra/clubs/{club_id}/support',
@@ -2473,6 +2478,10 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/fast-cups/{cup_id}/result-summary':
       '/api/v2/fast-cups/{cup_id}/result-summary',
   '/api/federations': '/api/v2/federations',
+  '/api/federations/national-associations/{country_code}':
+      '/api/v2/federations/national-associations/{country_code}',
+  '/api/federations/national-associations/{country_code}/eligibility-review':
+      '/api/v2/federations/national-associations/{country_code}/eligibility-review',
   '/api/federations/proposals/{proposal_id}/votes':
       '/api/v2/federations/proposals/{proposal_id}/votes',
   '/api/federations/rankings': '/api/v2/federations/rankings',
@@ -2886,6 +2895,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/player-cards/admin/preseeded-regens',
   '/api/player-cards/admin/preseeded-regens/mint':
       '/api/v2/player-cards/admin/preseeded-regens/mint',
+  '/api/player-cards/cards/burn': '/api/v2/player-cards/cards/burn',
+  '/api/player-cards/cards/upgrade': '/api/v2/player-cards/cards/upgrade',
   '/api/player-cards/inventory': '/api/v2/player-cards/inventory',
   '/api/player-cards/listings': '/api/v2/player-cards/listings',
   '/api/player-cards/listings/mine': '/api/v2/player-cards/listings/mine',
@@ -2928,6 +2939,9 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/player-cards/marketplace/swaps/{listing_id}/cancel',
   '/api/player-cards/marketplace/swaps/{listing_id}/execute':
       '/api/v2/player-cards/marketplace/swaps/{listing_id}/execute',
+  '/api/player-cards/packs': '/api/v2/player-cards/packs',
+  '/api/player-cards/packs/{pack_key}/open':
+      '/api/v2/player-cards/packs/{pack_key}/open',
   '/api/player-cards/players': '/api/v2/player-cards/players',
   '/api/player-cards/players/{player_id}':
       '/api/v2/player-cards/players/{player_id}',
@@ -3306,6 +3320,10 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/admin/calendar-engine/national-competitions/{competition_id}/launch',
   '/api/v1/admin/calendar-engine/seasons':
       '/api/v2/admin/calendar-engine/seasons',
+  '/api/v1/admin/clips/moderation': '/api/v2/admin/clips/moderation',
+  '/api/v1/admin/clips/{clip_id}/approve':
+      '/api/v2/admin/clips/{clip_id}/approve',
+  '/api/v1/admin/clips/{clip_id}/block': '/api/v2/admin/clips/{clip_id}/block',
   '/api/v1/admin/club-infra/seed': '/api/v2/admin/club-infra/seed',
   '/api/v1/admin/clubs/academy-analytics':
       '/api/v2/admin/clubs/academy-analytics',
@@ -3825,6 +3843,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/champions-league/prize-pool/preview',
   '/api/v1/champions-league/qualification-map':
       '/api/v2/champions-league/qualification-map',
+  '/api/v1/clips/{clip_id}': '/api/v2/clips/{clip_id}',
+  '/api/v1/clips/{clip_id}/report': '/api/v2/clips/{clip_id}/report',
   '/api/v1/club-infra/clubs/{club_id}': '/api/v2/club-infra/clubs/{club_id}',
   '/api/v1/club-infra/clubs/{club_id}/support':
       '/api/v2/club-infra/clubs/{club_id}/support',
@@ -4233,6 +4253,10 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/v1/fast-cups/{cup_id}/result-summary':
       '/api/v2/fast-cups/{cup_id}/result-summary',
   '/api/v1/federations': '/api/v2/federations',
+  '/api/v1/federations/national-associations/{country_code}':
+      '/api/v2/federations/national-associations/{country_code}',
+  '/api/v1/federations/national-associations/{country_code}/eligibility-review':
+      '/api/v2/federations/national-associations/{country_code}/eligibility-review',
   '/api/v1/federations/proposals/{proposal_id}/votes':
       '/api/v2/federations/proposals/{proposal_id}/votes',
   '/api/v1/federations/rankings': '/api/v2/federations/rankings',
@@ -4665,6 +4689,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/player-cards/admin/preseeded-regens',
   '/api/v1/player-cards/admin/preseeded-regens/mint':
       '/api/v2/player-cards/admin/preseeded-regens/mint',
+  '/api/v1/player-cards/cards/burn': '/api/v2/player-cards/cards/burn',
+  '/api/v1/player-cards/cards/upgrade': '/api/v2/player-cards/cards/upgrade',
   '/api/v1/player-cards/inventory': '/api/v2/player-cards/inventory',
   '/api/v1/player-cards/listings': '/api/v2/player-cards/listings',
   '/api/v1/player-cards/listings/mine': '/api/v2/player-cards/listings/mine',
@@ -4707,6 +4733,9 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/player-cards/marketplace/swaps/{listing_id}/cancel',
   '/api/v1/player-cards/marketplace/swaps/{listing_id}/execute':
       '/api/v2/player-cards/marketplace/swaps/{listing_id}/execute',
+  '/api/v1/player-cards/packs': '/api/v2/player-cards/packs',
+  '/api/v1/player-cards/packs/{pack_key}/open':
+      '/api/v2/player-cards/packs/{pack_key}/open',
   '/api/v1/player-cards/players': '/api/v2/player-cards/players',
   '/api/v1/player-cards/players/{player_id}':
       '/api/v2/player-cards/players/{player_id}',
@@ -5095,6 +5124,7 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/v1/value-engine/snapshots/{player_id}/trend-summary':
       '/api/v2/value-engine/snapshots/{player_id}/trend-summary',
   '/api/v1/version': '/version',
+  '/api/v1/viral-feed': '/api/v2/viral-feed',
   '/api/v1/viral/accounts': '/api/v2/viral/accounts',
   '/api/v1/viral/cascades': '/api/v2/viral/cascades',
   '/api/v1/viral/clips/trending': '/api/v2/viral/clips/trending',
@@ -5207,6 +5237,10 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/admin/calendar-engine/national-competitions/{competition_id}/launch',
   '/api/v2/admin/calendar-engine/seasons':
       '/api/v2/admin/calendar-engine/seasons',
+  '/api/v2/admin/clips/moderation': '/api/v2/admin/clips/moderation',
+  '/api/v2/admin/clips/{clip_id}/approve':
+      '/api/v2/admin/clips/{clip_id}/approve',
+  '/api/v2/admin/clips/{clip_id}/block': '/api/v2/admin/clips/{clip_id}/block',
   '/api/v2/admin/club-infra/seed': '/api/v2/admin/club-infra/seed',
   '/api/v2/admin/clubs/academy-analytics':
       '/api/v2/admin/clubs/academy-analytics',
@@ -5727,6 +5761,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/champions-league/prize-pool/preview',
   '/api/v2/champions-league/qualification-map':
       '/api/v2/champions-league/qualification-map',
+  '/api/v2/clips/{clip_id}': '/api/v2/clips/{clip_id}',
+  '/api/v2/clips/{clip_id}/report': '/api/v2/clips/{clip_id}/report',
   '/api/v2/club-infra/clubs/{club_id}': '/api/v2/club-infra/clubs/{club_id}',
   '/api/v2/club-infra/clubs/{club_id}/support':
       '/api/v2/club-infra/clubs/{club_id}/support',
@@ -6117,6 +6153,10 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/v2/fast-cups/{cup_id}/result-summary':
       '/api/v2/fast-cups/{cup_id}/result-summary',
   '/api/v2/federations': '/api/v2/federations',
+  '/api/v2/federations/national-associations/{country_code}':
+      '/api/v2/federations/national-associations/{country_code}',
+  '/api/v2/federations/national-associations/{country_code}/eligibility-review':
+      '/api/v2/federations/national-associations/{country_code}/eligibility-review',
   '/api/v2/federations/proposals/{proposal_id}/votes':
       '/api/v2/federations/proposals/{proposal_id}/votes',
   '/api/v2/federations/rankings': '/api/v2/federations/rankings',
@@ -6555,6 +6595,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/player-cards/admin/preseeded-regens',
   '/api/v2/player-cards/admin/preseeded-regens/mint':
       '/api/v2/player-cards/admin/preseeded-regens/mint',
+  '/api/v2/player-cards/cards/burn': '/api/v2/player-cards/cards/burn',
+  '/api/v2/player-cards/cards/upgrade': '/api/v2/player-cards/cards/upgrade',
   '/api/v2/player-cards/inventory': '/api/v2/player-cards/inventory',
   '/api/v2/player-cards/listings': '/api/v2/player-cards/listings',
   '/api/v2/player-cards/listings/mine': '/api/v2/player-cards/listings/mine',
@@ -6597,6 +6639,9 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/player-cards/marketplace/swaps/{listing_id}/cancel',
   '/api/v2/player-cards/marketplace/swaps/{listing_id}/execute':
       '/api/v2/player-cards/marketplace/swaps/{listing_id}/execute',
+  '/api/v2/player-cards/packs': '/api/v2/player-cards/packs',
+  '/api/v2/player-cards/packs/{pack_key}/open':
+      '/api/v2/player-cards/packs/{pack_key}/open',
   '/api/v2/player-cards/players': '/api/v2/player-cards/players',
   '/api/v2/player-cards/players/{player_id}':
       '/api/v2/player-cards/players/{player_id}',
@@ -6957,6 +7002,7 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/value-engine/snapshots/{player_id}/latest',
   '/api/v2/value-engine/snapshots/{player_id}/trend-summary':
       '/api/v2/value-engine/snapshots/{player_id}/trend-summary',
+  '/api/v2/viral-feed': '/api/v2/viral-feed',
   '/api/v2/viral/accounts': '/api/v2/viral/accounts',
   '/api/v2/viral/cascades': '/api/v2/viral/cascades',
   '/api/v2/viral/clips/trending': '/api/v2/viral/clips/trending',
@@ -7034,6 +7080,7 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/value-engine/snapshots/{player_id}/trend-summary':
       '/api/v2/value-engine/snapshots/{player_id}/trend-summary',
   '/api/version': '/version',
+  '/api/viral-feed': '/api/v2/viral-feed',
   '/api/viral/accounts': '/api/v2/viral/accounts',
   '/api/viral/cascades': '/api/v2/viral/cascades',
   '/api/viral/clips/trending': '/api/v2/viral/clips/trending',
@@ -7345,6 +7392,10 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/fast-cups/{cup_id}/result-summary':
       '/api/v2/fast-cups/{cup_id}/result-summary',
   '/federations': '/api/v2/federations',
+  '/federations/national-associations/{country_code}':
+      '/api/v2/federations/national-associations/{country_code}',
+  '/federations/national-associations/{country_code}/eligibility-review':
+      '/api/v2/federations/national-associations/{country_code}/eligibility-review',
   '/federations/proposals/{proposal_id}/votes':
       '/api/v2/federations/proposals/{proposal_id}/votes',
   '/federations/rankings': '/api/v2/federations/rankings',
@@ -7705,6 +7756,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/player-cards/admin/preseeded-regens',
   '/player-cards/admin/preseeded-regens/mint':
       '/api/v2/player-cards/admin/preseeded-regens/mint',
+  '/player-cards/cards/burn': '/api/v2/player-cards/cards/burn',
+  '/player-cards/cards/upgrade': '/api/v2/player-cards/cards/upgrade',
   '/player-cards/inventory': '/api/v2/player-cards/inventory',
   '/player-cards/listings': '/api/v2/player-cards/listings',
   '/player-cards/listings/mine': '/api/v2/player-cards/listings/mine',
@@ -7744,6 +7797,9 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/player-cards/marketplace/swaps/{listing_id}/cancel',
   '/player-cards/marketplace/swaps/{listing_id}/execute':
       '/api/v2/player-cards/marketplace/swaps/{listing_id}/execute',
+  '/player-cards/packs': '/api/v2/player-cards/packs',
+  '/player-cards/packs/{pack_key}/open':
+      '/api/v2/player-cards/packs/{pack_key}/open',
   '/player-cards/players': '/api/v2/player-cards/players',
   '/player-cards/players/{player_id}':
       '/api/v2/player-cards/players/{player_id}',

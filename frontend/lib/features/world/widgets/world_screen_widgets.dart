@@ -237,8 +237,8 @@ class RegensGrid extends StatelessWidget {
                       runSpacing: spacingSM,
                       children: <Widget>[
                         MetricPill(
-                          label: 'OVR',
-                          value: '${player.rating}',
+                          label: 'GSI',
+                          value: '${player.resolvedGsi}',
                           highlight: true,
                         ),
                         MetricPill(

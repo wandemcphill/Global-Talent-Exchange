@@ -94,6 +94,13 @@ class AdminFeatureFlagView(BaseModel):
     description: str | None = None
     enabled: bool
     audience: str
+    launch_state: str = "public"
+    allowed_roles_json: list[str] = Field(default_factory=list)
+    allowed_regions_json: list[str] = Field(default_factory=list)
+    beta_only: bool = False
+    kill_switch_enabled: bool = False
+    maintenance_message: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
     updated_at: datetime
 
 

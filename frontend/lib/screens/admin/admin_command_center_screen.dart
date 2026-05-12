@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
 import '../../data/admin_command_center_api.dart';
@@ -10,6 +11,7 @@ import '../../features/app_routes/gte_navigation_helpers.dart';
 import '../../features/app_routes/gte_route_data.dart';
 import '../../features/navigation_guards/gte_navigation_guards.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../ui_gtex/layout/gtex_production_flow_scaffold.dart';
 import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
@@ -21,11 +23,13 @@ class AdminCommandCenterScreen extends StatefulWidget {
     required this.baseUrl,
     required this.accessToken,
     required this.backendMode,
+    this.api,
   });
 
   final String baseUrl;
   final String accessToken;
   final GteBackendMode backendMode;
+  final AdminCommandCenterApi? api;
 
   @override
   State<AdminCommandCenterScreen> createState() =>
@@ -77,13 +81,16 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   bool _previewingCredit = false;
   bool _runningCredit = false;
   bool _creatingGtexCompetition = false;
+  bool _notifyingReadinessBlockers = false;
   String? _error;
+  String? _readinessDispatchMessage;
 
   GteTreasurySettings? _treasurySettings;
   List<GteTreasuryBankAccount> _bankAccounts = <GteTreasuryBankAccount>[];
   GteAdminQueuePage<GteAdminDeposit>? _depositQueue;
   List<AdminPaymentRail> _paymentRails = <AdminPaymentRail>[];
   AdminWithdrawalControls? _withdrawalControls;
+  AdminOperationsReadinessSnapshot? _operationsReadiness;
   AdminMarketTopupQuote? _creditQuote;
   AdminMarketTopup? _lastCreditResult;
   String? _lastCompetitionSummary;
@@ -105,11 +112,13 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   @override
   void initState() {
     super.initState();
-    _api = AdminCommandCenterApi.standard(
-      baseUrl: widget.baseUrl,
-      accessToken: widget.accessToken,
-      mode: widget.backendMode,
-    );
+    _api =
+        widget.api ??
+        AdminCommandCenterApi.standard(
+          baseUrl: widget.baseUrl,
+          accessToken: widget.accessToken,
+          mode: widget.backendMode,
+        );
     _load();
     if (!_isTestBinding) {
       _liveRefreshTimer = Timer.periodic(
@@ -177,6 +186,11 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       withdrawalControlsFuture = _captureLoad<AdminWithdrawalControls>(
         _api.fetchWithdrawalControls(),
       );
+      final Future<_AdminLoadCapture<AdminOperationsReadinessSnapshot>>
+      operationsReadinessFuture =
+          _captureLoad<AdminOperationsReadinessSnapshot>(
+            _api.fetchOperationsReadiness(),
+          );
 
       final _AdminLoadCapture<GteTreasurySettings> settingsResult =
           await settingsFuture;
@@ -188,6 +202,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           await paymentRailsFuture;
       final _AdminLoadCapture<AdminWithdrawalControls>
       withdrawalControlsResult = await withdrawalControlsFuture;
+      final _AdminLoadCapture<AdminOperationsReadinessSnapshot>
+      operationsReadinessResult = await operationsReadinessFuture;
       if (!mounted) {
         return;
       }
@@ -199,6 +215,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         if (paymentRailsResult.error != null) paymentRailsResult.error!,
         if (withdrawalControlsResult.error != null)
           withdrawalControlsResult.error!,
+        if (operationsReadinessResult.error != null)
+          operationsReadinessResult.error!,
       ];
 
       setState(() {
@@ -217,6 +235,9 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         }
         if (withdrawalControlsResult.value != null) {
           _withdrawalControls = withdrawalControlsResult.value!;
+        }
+        if (operationsReadinessResult.value != null) {
+          _operationsReadiness = operationsReadinessResult.value!;
         }
         _error = failures.isEmpty ? null : failures.first;
       });
@@ -257,6 +278,40 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       route: route,
       dependencies: _dependencies,
     );
+  }
+
+  Future<void> _openRouteString(BuildContext context, String? rawRoute) async {
+    final String route = _canonicalOperationsRoute(rawRoute);
+    if (route.isEmpty) {
+      return;
+    }
+    final GteAppRouteData? parsed = GteAppRouteParser.parse(route);
+    if (parsed != null) {
+      await _openRoute(context, parsed);
+      return;
+    }
+    if (context.mounted) {
+      context.go(route);
+    }
+  }
+
+  String _canonicalOperationsRoute(String? rawRoute) {
+    final String route = rawRoute?.trim() ?? '';
+    switch (route.toLowerCase()) {
+      case '':
+        return '';
+      case '/admin/ops':
+      case '/admin/risk-ops':
+      case '/admin/policies':
+      case '/admin/moderation':
+      case '/admin/disputes':
+      case '/admin/ops/audit':
+        return '/admin/trust-ops';
+      case '/broadcast':
+        return const BroadcastDeskRouteData().toUri().toString();
+      default:
+        return route;
+    }
   }
 
   Widget _buildRouteLauncher({
@@ -325,6 +380,42 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     }
   }
 
+  Future<void> _notifyOperationsReadinessBlockers() async {
+    if (_notifyingReadinessBlockers) {
+      return;
+    }
+    setState(() {
+      _notifyingReadinessBlockers = true;
+      _readinessDispatchMessage = null;
+    });
+    try {
+      final AdminOperationsReadinessDispatch dispatch =
+          await _api.notifyOperationsReadinessBlockers();
+      if (!mounted) {
+        return;
+      }
+      final int queueCount = dispatch.queueKeys.length;
+      final String message =
+          dispatch.sent
+              ? '${dispatch.notificationsCreated} readiness notification(s) sent for $queueCount queue(s).'
+              : 'No readiness blocker notifications were sent.';
+      setState(() {
+        _readinessDispatchMessage = message;
+      });
+      AppFeedback.showSuccess(context, message);
+    } catch (error) {
+      if (mounted) {
+        AppFeedback.showError(context, error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _notifyingReadinessBlockers = false;
+        });
+      }
+    }
+  }
+
   String _paymentModeLabel(GtePaymentMode mode) {
     switch (mode) {
       case GtePaymentMode.manual:
@@ -346,10 +437,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             )
             .length;
     return GtexHeroPanel(
-      eyebrow: 'GOD MODE',
-      title: 'Control the global football economy from one war room.',
+      eyebrow: 'ADMIN OPS',
+      title: 'Run the GTEX football economy from one operating cockpit.',
       description:
-          'Market supply, competition ignition, treasury rails, and user-credit interventions stay visible here as one coordinated control surface.',
+          'Market supply, competition launches, treasury rails, and user-credit interventions stay visible here as one coordinated operations surface.',
       accentColor: GteShellTheme.accentAdmin,
       metrics: <Widget>[
         GtexStatTile(
@@ -869,71 +960,86 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         _treasurySettings != null ||
         _depositQueue != null ||
         _paymentRails.isNotEmpty ||
-        _withdrawalControls != null;
-    return Container(
-      decoration: gteBackdropDecoration(),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Admin dashboard')),
-        body:
-            _loading && !hasData
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null && !hasData
-                ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: GteStatePanel(
-                      title: 'Admin dashboard unavailable',
-                      message: _error!,
-                      actionLabel: 'Retry',
-                      onAction: _load,
-                      icon: Icons.admin_panel_settings_outlined,
-                    ),
-                  ),
-                )
-                : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-                    children: <Widget>[
-                      _buildWarRoomHero(context),
-                      const SizedBox(height: 18),
-                      GtexLiveTickerBar(
-                        accentColor: GteShellTheme.accentAdmin,
-                        items: <String>[
-                          if (_depositQueue != null)
-                            '${_depositQueue!.items.length} deposits are sitting in the live review lane',
-                          if (_paymentRails.isNotEmpty)
-                            '${_paymentRails.where((AdminPaymentRail rail) => rail.depositsEnabled).length} deposit rails are open to users',
-                          if (_withdrawalControls != null)
-                            'Withdrawal processor is ${_withdrawalControls!.processorMode.toUpperCase()} with trade payouts ${_withdrawalControls!.tradeWithdrawalsEnabled ? 'LIVE' : 'PAUSED'}',
-                          if (_lastCompetitionSummary != null)
-                            _lastCompetitionSummary!,
-                          if (_error != null)
-                            'War room is holding the last stable snapshot while systems recalibrate',
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      _buildOverviewPanel(context),
-                      const SizedBox(height: 18),
-                      _buildOperationsRoutesPanel(context),
-                      const SizedBox(height: 18),
-                      _buildCompetitionHostPanel(context),
-                      const SizedBox(height: 18),
-                      _buildTreasurySettingsPanel(context),
-                      const SizedBox(height: 18),
-                      _buildPaymentRailsPanel(context),
-                      const SizedBox(height: 18),
-                      _buildBankAccountsPanel(context),
-                      const SizedBox(height: 18),
-                      _buildDepositQueuePanel(context),
-                      const SizedBox(height: 18),
-                      _buildWalletCreditPanel(context),
-                    ],
+        _withdrawalControls != null ||
+        _operationsReadiness != null;
+    return GtexProductionFlowScaffold(
+      title: 'Admin command center',
+      subtitle:
+          'Live treasury rails, user-credit controls, payment queues, and GTEX competition operations.',
+      icon: Icons.admin_panel_settings_outlined,
+      accent: GteShellTheme.accentAdmin,
+      statusLabel: 'Admin dashboard',
+      actions: <Widget>[
+        IconButton(
+          tooltip: 'Refresh admin console',
+          onPressed: _load,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      child:
+          _loading && !hasData
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null && !hasData
+              ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: GteStatePanel(
+                    title: 'Admin dashboard unavailable',
+                    message: _error!,
+                    actionLabel: 'Retry',
+                    onAction: _load,
+                    icon: Icons.admin_panel_settings_outlined,
                   ),
                 ),
-      ),
+              )
+              : RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+                  children: <Widget>[
+                    _buildWarRoomHero(context),
+                    const SizedBox(height: 18),
+                    GtexLiveTickerBar(
+                      accentColor: GteShellTheme.accentAdmin,
+                      items: <String>[
+                        if (_depositQueue != null)
+                          '${_depositQueue!.items.length} deposits are sitting in the live review lane',
+                        if (_paymentRails.isNotEmpty)
+                          '${_paymentRails.where((AdminPaymentRail rail) => rail.depositsEnabled).length} deposit rails are open to users',
+                        if (_withdrawalControls != null)
+                          'Withdrawal processor is ${_withdrawalControls!.processorMode.toUpperCase()} with trade payouts ${_withdrawalControls!.tradeWithdrawalsEnabled ? 'LIVE' : 'PAUSED'}',
+                        if (_lastCompetitionSummary != null)
+                          _lastCompetitionSummary!,
+                        if (_operationsReadiness != null)
+                          'Operations readiness is ${_opsStatusLabel(_operationsReadiness!.status).toUpperCase()} with ${_operationsReadiness!.alertCount} alert signals',
+                        if (_error != null)
+                          'War room is holding the last stable snapshot while systems recalibrate',
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    _buildOverviewPanel(context),
+                    const SizedBox(height: 18),
+                    if (_operationsReadiness != null) ...<Widget>[
+                      _buildOperationsReadinessPanel(context),
+                      const SizedBox(height: 18),
+                    ],
+                    _buildOperationsRoutesPanel(context),
+                    const SizedBox(height: 18),
+                    _buildCompetitionHostPanel(context),
+                    const SizedBox(height: 18),
+                    _buildTreasurySettingsPanel(context),
+                    const SizedBox(height: 18),
+                    _buildPaymentRailsPanel(context),
+                    const SizedBox(height: 18),
+                    _buildBankAccountsPanel(context),
+                    const SizedBox(height: 18),
+                    _buildDepositQueuePanel(context),
+                    const SizedBox(height: 18),
+                    _buildWalletCreditPanel(context),
+                  ],
+                ),
+              ),
     );
   }
 
@@ -1023,6 +1129,180 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     );
   }
 
+  Widget _buildOperationsReadinessPanel(BuildContext context) {
+    final AdminOperationsReadinessSnapshot snapshot = _operationsReadiness!;
+    final List<AdminOperationsQueue> queues = snapshot.queues
+        .take(5)
+        .toList(growable: false);
+    final List<AdminOperationsLaunchGate> launchGates = snapshot.launchGates
+        .where(
+          (AdminOperationsLaunchGate gate) =>
+              gate.killSwitchEnabled ||
+              !gate.enabled ||
+              gate.launchState != 'public',
+        )
+        .take(6)
+        .toList(growable: false);
+    return GteSurfacePanel(
+      emphasized: snapshot.status != 'ok',
+      accentColor: _opsAccent(snapshot.status),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _SectionHeader(
+            title: 'Operations readiness',
+            subtitle:
+                'Live trust, risk, policy, diagnostics, ledger and worker signals collected from existing GTEX engines.',
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              _AdminStatTile(
+                label: 'Readiness',
+                value: _opsStatusLabel(snapshot.status),
+              ),
+              _AdminStatTile(
+                label: 'Alerts',
+                value: snapshot.alertCount.toString(),
+              ),
+              _AdminStatTile(
+                label: 'Blocked queues',
+                value: snapshot.blockedQueueCount.toString(),
+              ),
+              _AdminStatTile(
+                label: 'Kill switches',
+                value: snapshot.killSwitchCount.toString(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/admin/trust-ops'),
+                icon: const Icon(Icons.policy_outlined),
+                label: const Text('Open trust ops'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/admin/launch-control'),
+                icon: const Icon(Icons.tune_outlined),
+                label: const Text('Open launch control'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed:
+                    _notifyingReadinessBlockers
+                        ? null
+                        : _notifyOperationsReadinessBlockers,
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: Text(
+                  _notifyingReadinessBlockers
+                      ? 'Notifying blockers'
+                      : 'Notify blockers',
+                ),
+              ),
+            ],
+          ),
+          if (_readinessDispatchMessage != null) ...<Widget>[
+            const SizedBox(height: 10),
+            GteSurfacePanel(
+              padding: const EdgeInsets.all(12),
+              accentColor: GteShellTheme.positive,
+              child: Text(_readinessDispatchMessage!),
+            ),
+          ],
+          if (launchGates.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 14),
+            _SectionHeader(
+              title: 'Launch gates',
+              subtitle:
+                  'Non-public, paused, disabled, beta, maintenance, or kill-switch modules from Batch 34.',
+            ),
+            const SizedBox(height: 10),
+            for (final AdminOperationsLaunchGate gate
+                in launchGates) ...<Widget>[
+              _OperationsLaunchGateRow(
+                gate: gate,
+                statusLabel: _launchGateStatusLabel(gate),
+                accent: _launchGateAccent(gate),
+                onOpen:
+                    gate.route == null
+                        ? null
+                        : () => _openRouteString(context, gate.route),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
+          const SizedBox(height: 14),
+          for (final AdminOperationsQueue queue in queues) ...<Widget>[
+            _OperationsReadinessRow(
+              title: queue.title,
+              status: _opsStatusLabel(queue.status),
+              detail:
+                  queue.alerts.isNotEmpty
+                      ? queue.alerts.first
+                      : queue.description,
+              accent: _opsAccent(queue.status),
+              actionRoutes: queue.actionRoutes,
+              onOpenActionRoute:
+                  (String route) => _openRouteString(context, route),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _opsStatusLabel(String status) {
+    switch (status) {
+      case 'blocked':
+        return 'Blocked';
+      case 'attention':
+        return 'Needs attention';
+      case 'gated':
+        return 'Gated';
+      case 'maintenance':
+        return 'Maintenance';
+      default:
+        return 'Healthy';
+    }
+  }
+
+  Color _opsAccent(String status) {
+    switch (status) {
+      case 'blocked':
+        return Colors.redAccent;
+      case 'attention':
+      case 'maintenance':
+        return Colors.orangeAccent;
+      case 'gated':
+        return Colors.amberAccent;
+      default:
+        return GteShellTheme.accentAdmin;
+    }
+  }
+
+  String _launchGateStatusLabel(AdminOperationsLaunchGate gate) {
+    if (gate.killSwitchEnabled) {
+      return 'Kill switch';
+    }
+    if (!gate.enabled) {
+      return 'Off';
+    }
+    return _opsStatusLabel(gate.launchState);
+  }
+
+  Color _launchGateAccent(AdminOperationsLaunchGate gate) {
+    if (gate.killSwitchEnabled || !gate.enabled) {
+      return Colors.redAccent;
+    }
+    return _opsAccent(gate.launchState);
+  }
+
   Widget _buildOperationsRoutesPanel(BuildContext context) {
     return GteSurfacePanel(
       accentColor: GteShellTheme.accentAdmin,
@@ -1045,6 +1325,21 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 icon: Icons.add_circle_outline,
                 route: const CompetitionCreateRouteData(),
                 emphasized: true,
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/admin/launch-control'),
+                icon: const Icon(Icons.tune_outlined),
+                label: const Text('Launch control'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/admin/trust-ops'),
+                icon: const Icon(Icons.policy_outlined),
+                label: const Text('Trust ops'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/admin/matchday-economy'),
+                icon: const Icon(Icons.query_stats_outlined),
+                label: const Text('Matchday economy'),
               ),
               _buildRouteLauncher(
                 context: context,
@@ -1976,6 +2271,172 @@ class _SectionHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+class _OperationsReadinessRow extends StatelessWidget {
+  const _OperationsReadinessRow({
+    required this.title,
+    required this.status,
+    required this.detail,
+    required this.accent,
+    required this.actionRoutes,
+    required this.onOpenActionRoute,
+  });
+
+  final String title;
+  final String status;
+  final String detail;
+  final Color accent;
+  final List<String> actionRoutes;
+  final ValueChanged<String> onOpenActionRoute;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.42)),
+        color: Colors.white.withValues(alpha: 0.025),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(title, style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 3),
+                    Text(
+                      detail,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(status, style: Theme.of(context).textTheme.labelLarge),
+            ],
+          ),
+          if (actionRoutes.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: actionRoutes
+                  .take(3)
+                  .map(
+                    (String route) => TextButton.icon(
+                      onPressed: () => onOpenActionRoute(route),
+                      icon: const Icon(Icons.open_in_new_outlined),
+                      label: Text(_opsRouteLabel(route)),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OperationsLaunchGateRow extends StatelessWidget {
+  const _OperationsLaunchGateRow({
+    required this.gate,
+    required this.statusLabel,
+    required this.accent,
+    required this.onOpen,
+  });
+
+  final AdminOperationsLaunchGate gate;
+  final String statusLabel;
+  final Color accent;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final String route = gate.route?.trim() ?? '';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.42)),
+        color: accent.withValues(alpha: 0.05),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.flag_outlined, color: accent, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(gate.title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 3),
+                Text(
+                  '${gate.featureKey} · ${gate.launchState} · ${gate.audience}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (gate.maintenanceMessage?.trim().isNotEmpty == true)
+                  Text(
+                    gate.maintenanceMessage!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(statusLabel, style: Theme.of(context).textTheme.labelLarge),
+          if (route.isNotEmpty) ...<Widget>[
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Open ${_opsRouteLabel(route)}',
+              onPressed: onOpen,
+              icon: const Icon(Icons.open_in_new_outlined),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _opsRouteLabel(String route) {
+  final String cleaned = route.trim();
+  if (cleaned.isEmpty) {
+    return 'Open';
+  }
+  final List<String> parts = cleaned
+      .split('/')
+      .where((String part) => part.trim().isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return cleaned;
+  }
+  return parts.last
+      .split(RegExp(r'[-_]+'))
+      .where((String part) => part.isNotEmpty)
+      .map((String part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
 }
 
 class _AdminStatTile extends StatelessWidget {

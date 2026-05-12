@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Never
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
@@ -453,6 +454,10 @@ def get_player_avatar(
         raise_player_face_http_exception(exc)
     session.commit()
     if format == "svg":
+        if payload.portrait_url:
+            return RedirectResponse(payload.portrait_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+        if payload.layered_svg is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="approved_regen_portrait_missing")
         return Response(content=payload.layered_svg or "", media_type="image/svg+xml")
     return payload
 

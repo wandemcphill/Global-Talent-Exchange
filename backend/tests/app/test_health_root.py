@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_optional_current_user
 from app.core.api_contract import build_versioned_path
-from app.core.health import router as health_router
+from app.core.health import ReadinessResponse, ServiceCheck, get_system_status_service, router as health_router
 
 
 def test_root_route_returns_service_metadata_and_is_hidden_from_schema() -> None:
@@ -62,3 +62,25 @@ def test_root_route_hides_docs_links_when_docs_are_disabled() -> None:
     assert response.status_code == 200
     assert response.json()["docs_url"] is None
     assert response.json()["openapi_url"] is None
+
+
+def test_ready_route_is_mounted_at_root_path() -> None:
+    class _ReadyService:
+        def build_readiness(self, request, *, check_schema: bool = True) -> ReadinessResponse:
+            assert check_schema is True
+            return ReadinessResponse(
+                status="ready",
+                checks={"database": ServiceCheck(status="ok")},
+                runtime_mode="normal",
+            )
+
+    app = FastAPI()
+    app.state.settings = SimpleNamespace(app_name="GTEX API")
+    app.dependency_overrides[get_system_status_service] = lambda: _ReadyService()
+    app.include_router(health_router)
+
+    with TestClient(app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
@@ -23,11 +24,16 @@ from app.transfer_market.schemas import (
     PlayerDecisionProfileView,
     TeamDynamicsUpsertRequest,
     TransferBidPlaceRequest,
+    TransferHubOfferCounterRequest,
+    TransferHubOfferCreateRequest,
+    TransferHubOfferView,
     TransferListingCreateRequest,
     TransferListingView,
     TransferMarketJobRunRequest,
     TransferMarketJobRunView,
     TransferNegotiationView,
+    TransferRequestCreateRequest,
+    TransferRequestView,
     WatchlistEntryCreateRequest,
 )
 from app.transfer_market.service import (
@@ -122,16 +128,50 @@ def _resolve_transfer_market_actor_club(
     )
 
 
+@router.get("/api/transfer-hub/listings", response_model=list[TransferListingView])
 @router.get("/api/transfer-market/listings", response_model=list[TransferListingView])
 def list_transfer_market_listings(
     status_filter: str | None = Query(default=None, alias="status"),
     player_id: str | None = Query(default=None),
     club_id: str | None = Query(default=None),
+    listing_type: str | None = Query(default=None),
+    asset_type: str | None = Query(default=None),
+    visibility: str | None = Query(default=None),
+    min_price: Decimal | None = Query(default=None, ge=0),
+    max_price: Decimal | None = Query(default=None, ge=0),
+    min_salary: Decimal | None = Query(default=None, ge=0),
+    max_salary: Decimal | None = Query(default=None, ge=0),
+    min_contract_years: Decimal | None = Query(default=None, ge=0),
+    max_contract_years: Decimal | None = Query(default=None, ge=0),
+    position: str | None = Query(default=None),
+    country_id: str | None = Query(default=None),
+    league_id: str | None = Query(default=None),
+    club_profile_id: str | None = Query(default=None),
+    real_player_only: bool | None = Query(default=None),
     service: TransferMarketService = Depends(_service),
 ) -> list[TransferListingView]:
-    return service.list_listings(status=status_filter, player_id=player_id, club_id=club_id)
+    return service.list_listings(
+        status=status_filter,
+        player_id=player_id,
+        club_id=club_id,
+        listing_type=listing_type,
+        asset_type=asset_type,
+        visibility=visibility,
+        min_price=min_price,
+        max_price=max_price,
+        min_salary=min_salary,
+        max_salary=max_salary,
+        min_contract_years=min_contract_years,
+        max_contract_years=max_contract_years,
+        position=position,
+        country_id=country_id,
+        league_id=league_id,
+        club_profile_id=club_profile_id,
+        real_player_only=real_player_only,
+    )
 
 
+@router.post("/api/transfer-hub/listings", response_model=TransferListingView, status_code=status.HTTP_201_CREATED)
 @router.post("/api/transfer-market/listings", response_model=TransferListingView, status_code=status.HTTP_201_CREATED)
 def create_transfer_market_listing(
     payload: TransferListingCreateRequest,
@@ -144,6 +184,7 @@ def create_transfer_market_listing(
         _raise_transfer_market_error(exc)
 
 
+@router.get("/api/transfer-hub/listings/{listing_id}", response_model=TransferListingView)
 @router.get("/api/transfer-market/listings/{listing_id}", response_model=TransferListingView)
 def get_transfer_market_listing(listing_id: str, service: TransferMarketService = Depends(_service)) -> TransferListingView:
     try:
@@ -152,6 +193,7 @@ def get_transfer_market_listing(listing_id: str, service: TransferMarketService 
         _raise_transfer_market_error(exc)
 
 
+@router.post("/api/transfer-hub/listings/{listing_id}/bids", response_model=TransferListingView)
 @router.post("/api/transfer-market/listings/{listing_id}/bids", response_model=TransferListingView)
 def place_transfer_market_bid(
     listing_id: str,
@@ -171,6 +213,99 @@ def place_transfer_market_bid(
         _raise_transfer_market_error(exc)
 
 
+@router.get("/api/transfer-hub/offers", response_model=list[TransferHubOfferView])
+def list_transfer_hub_offers(
+    listing_id: str | None = Query(default=None),
+    club_id: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> list[TransferHubOfferView]:
+    del current_user
+    return service.list_hub_offers(listing_id=listing_id, club_id=club_id, status=status_filter)
+
+
+@router.post("/api/transfer-hub/listings/{listing_id}/offers", response_model=TransferHubOfferView, status_code=status.HTTP_201_CREATED)
+def create_transfer_hub_offer(
+    listing_id: str,
+    payload: TransferHubOfferCreateRequest,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> TransferHubOfferView:
+    try:
+        return service.create_hub_offer(
+            listing_id,
+            payload,
+            actor=current_user,
+            bidder_club_id=payload.bidder_club_id,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-hub/offers/{offer_id}/accept", response_model=TransferHubOfferView)
+def accept_transfer_hub_offer(
+    offer_id: str,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> TransferHubOfferView:
+    try:
+        return service.accept_hub_offer(offer_id, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-hub/offers/{offer_id}/reject", response_model=TransferHubOfferView)
+def reject_transfer_hub_offer(
+    offer_id: str,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> TransferHubOfferView:
+    try:
+        return service.reject_hub_offer(offer_id, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-hub/offers/{offer_id}/cancel", response_model=TransferHubOfferView)
+def cancel_transfer_hub_offer(
+    offer_id: str,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> TransferHubOfferView:
+    try:
+        return service.cancel_hub_offer(offer_id, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-hub/offers/{offer_id}/counter", response_model=TransferHubOfferView)
+def counter_transfer_hub_offer(
+    offer_id: str,
+    payload: TransferHubOfferCounterRequest,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> TransferHubOfferView:
+    try:
+        return service.counter_hub_offer(offer_id, payload, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-hub/players/{player_id}/transfer-request", response_model=TransferRequestView, status_code=status.HTTP_201_CREATED)
+def create_transfer_hub_transfer_request(
+    player_id: str,
+    payload: TransferRequestCreateRequest,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> TransferRequestView:
+    try:
+        return service.create_transfer_request(player_id, payload, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-hub/listings/{listing_id}/close", response_model=TransferListingView)
 @router.post("/api/transfer-market/listings/{listing_id}/close", response_model=TransferListingView)
 def close_transfer_market_listing(
     listing_id: str,
@@ -183,6 +318,7 @@ def close_transfer_market_listing(
         _raise_transfer_market_error(exc)
 
 
+@router.get("/api/transfer-hub/listings/{listing_id}/negotiation", response_model=TransferNegotiationView)
 @router.get("/api/transfer-market/listings/{listing_id}/negotiation", response_model=TransferNegotiationView)
 def get_transfer_market_negotiation(
     listing_id: str,
@@ -195,6 +331,7 @@ def get_transfer_market_negotiation(
         _raise_transfer_market_error(exc)
 
 
+@router.post("/api/transfer-hub/listings/{listing_id}/contract-offer", response_model=TransferNegotiationView)
 @router.post("/api/transfer-market/listings/{listing_id}/contract-offer", response_model=TransferNegotiationView)
 def submit_transfer_market_contract_offer(
     listing_id: str,
@@ -273,6 +410,7 @@ def upsert_transfer_market_team_dynamics(
         _raise_transfer_market_error(exc)
 
 
+@router.post("/api/transfer-hub/watchlist", response_model=MarketWatchlistEntryView, status_code=status.HTTP_201_CREATED)
 @router.post("/api/transfer-market/watchlist", response_model=MarketWatchlistEntryView, status_code=status.HTTP_201_CREATED)
 def add_transfer_market_watchlist_entry(
     payload: WatchlistEntryCreateRequest,

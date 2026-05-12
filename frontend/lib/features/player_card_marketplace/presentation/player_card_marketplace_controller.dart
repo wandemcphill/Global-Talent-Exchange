@@ -29,6 +29,7 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
   final GteRequestGate _supportGate = GteRequestGate();
   final GteRequestGate _playerGate = GteRequestGate();
   final GteRequestGate _contractsGate = GteRequestGate();
+  final GteRequestGate _collectiblesGate = GteRequestGate();
 
   PlayerCardMarketplaceQuery currentMarketplaceQuery =
       const PlayerCardMarketplaceQuery();
@@ -58,11 +59,14 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
       const PlayerCardMarketplaceSearchResult.empty();
   PlayerCardMarketplaceLoanContractList loanContracts =
       const PlayerCardMarketplaceLoanContractList.empty();
+  List<PlayerCardPack> packs = const <PlayerCardPack>[];
 
   PlayerCardMarketplaceSaleExecution? latestSaleExecution;
   PlayerCardMarketplaceLoanNegotiation? latestLoanNegotiation;
   PlayerCardMarketplaceLoanContract? latestLoanContract;
   PlayerCardMarketplaceSwapExecution? latestSwapExecution;
+  PlayerCardPackOpening? latestPackOpening;
+  PlayerCardCollectibleActionResult? latestCollectibleAction;
 
   bool isLoadingMarketplace = false;
   bool isLoadingSupport = false;
@@ -83,11 +87,16 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
   bool isExecutingSwapListing = false;
   bool isAddingWatchlist = false;
   bool isRemovingWatchlist = false;
+  bool isLoadingCollectibles = false;
+  bool isOpeningPack = false;
+  bool isBurningCard = false;
+  bool isUpgradingCards = false;
 
   String? marketplaceError;
   String? supportError;
   String? playerError;
   String? loanContractsError;
+  String? collectiblesError;
   String? actionError;
 
   Future<_SupportLoadResult<T>> _captureSupport<T>(Future<T> future) async {
@@ -261,6 +270,30 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
     } finally {
       if (_supportGate.isActive(requestId)) {
         isLoadingSupport = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadCollectibles() async {
+    final int requestId = _collectiblesGate.begin();
+    collectiblesError = null;
+    isLoadingCollectibles = true;
+    notifyListeners();
+
+    try {
+      final List<PlayerCardPack> result = await _repository.listPacks();
+      if (!_collectiblesGate.isActive(requestId)) {
+        return;
+      }
+      packs = result;
+    } catch (error) {
+      if (_collectiblesGate.isActive(requestId)) {
+        collectiblesError = AppFeedback.messageFor(error);
+      }
+    } finally {
+      if (_collectiblesGate.isActive(requestId)) {
+        isLoadingCollectibles = false;
         notifyListeners();
       }
     }
@@ -653,6 +686,81 @@ class PlayerCardMarketplaceController extends ChangeNotifier {
       actionError = AppFeedback.messageFor(error);
     } finally {
       isExecutingSwapListing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> openPack(String packKey) async {
+    if (isOpeningPack) {
+      return;
+    }
+    isOpeningPack = true;
+    actionError = null;
+    notifyListeners();
+    try {
+      latestPackOpening = await _repository.openPack(packKey);
+      await Future.wait<void>(<Future<void>>[
+        loadCollectibles(),
+        loadSupport(
+          playersQuery: currentPlayersQuery,
+          listingsQuery: currentListingsQuery,
+          loanSupportQuery: currentLoanSupportQuery,
+          includeAuthed: true,
+        ),
+      ]);
+    } catch (error) {
+      actionError = AppFeedback.messageFor(error);
+    } finally {
+      isOpeningPack = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> burnCard(PlayerCardBurnRequest request) async {
+    if (isBurningCard) {
+      return;
+    }
+    isBurningCard = true;
+    actionError = null;
+    notifyListeners();
+    try {
+      latestCollectibleAction = await _repository.burnCard(request);
+      await loadSupport(
+        playersQuery: currentPlayersQuery,
+        listingsQuery: currentListingsQuery,
+        loanSupportQuery: currentLoanSupportQuery,
+        includeAuthed: true,
+      );
+    } catch (error) {
+      actionError = AppFeedback.messageFor(error);
+    } finally {
+      isBurningCard = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> upgradeCards(PlayerCardUpgradeRequest request) async {
+    if (isUpgradingCards) {
+      return;
+    }
+    isUpgradingCards = true;
+    actionError = null;
+    notifyListeners();
+    try {
+      latestCollectibleAction = await _repository.upgradeCards(request);
+      await Future.wait<void>(<Future<void>>[
+        loadCollectibles(),
+        loadSupport(
+          playersQuery: currentPlayersQuery,
+          listingsQuery: currentListingsQuery,
+          loanSupportQuery: currentLoanSupportQuery,
+          includeAuthed: true,
+        ),
+      ]);
+    } catch (error) {
+      actionError = AppFeedback.messageFor(error);
+    } finally {
+      isUpgradingCards = false;
       notifyListeners();
     }
   }

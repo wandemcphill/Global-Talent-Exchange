@@ -32,6 +32,8 @@ class RealPlayerValuationAdapter:
     ) -> RealPlayerValuationBridgeResult | None:
         if not player.is_real_player or not self.config.real_player_bridge_enabled:
             return None
+        if reference_context.confidence_tier == "heuristic_only" or reference_context.source == "heuristic_profile_baseline":
+            return None
 
         source_market_value_eur = round(max(reference_market_value_eur, 1.0), 2)
         reference_weight = self._reference_weight(reference_context.confidence_tier)

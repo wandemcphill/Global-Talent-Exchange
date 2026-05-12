@@ -45,6 +45,7 @@ void main() {
     );
     expect(filtered.items, hasLength(1));
     expect(filtered.items.single.playerName, 'Lamine Yamal');
+    expect(filtered.items.single.globalScoutingIndex, 96);
   });
 
   test(
@@ -138,13 +139,14 @@ void main() {
       expect(transport.lastRequest!.uri.path, '/api/v2/market/players');
       expect(transport.lastRequest!.uri.queryParameters['search'], 'ronaldo');
       expect(transport.lastRequest!.uri.queryParameters['position'], 'ST');
-      expect(
-        transport.lastRequest!.uri.queryParameters['nationality'],
-        'Nigeria',
-      );
+      expect(transport.lastRequest!.uri.queryParameters['country'], 'Nigeria');
+      expect(transport.lastRequest!.uri.queryParameters['nationality'], isNull);
       expect(transport.lastRequest!.uri.queryParameters['min_age'], '18');
       expect(transport.lastRequest!.uri.queryParameters['max_age'], '28');
-      expect(transport.lastRequest!.uri.queryParameters['availability'], isNull);
+      expect(
+        transport.lastRequest!.uri.queryParameters['availability'],
+        isNull,
+      );
     },
   );
 

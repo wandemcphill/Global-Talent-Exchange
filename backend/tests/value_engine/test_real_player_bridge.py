@@ -100,9 +100,9 @@ def test_real_player_bridge_is_deterministic_for_identical_inputs() -> None:
     assert first == second
     assert first is not None
     assert first.bridge_market_value_eur == 61_508_798.4
-    assert first.base_value_credits == 615.09
-    assert first.floor_credits == 510.0
-    assert first.ceiling_credits == 690.0
+    assert first.base_value_credits == 51.207
+    assert first.floor_credits == 41.0
+    assert first.ceiling_credits == 57.2
     assert first.actions == ()
 
 
@@ -120,10 +120,9 @@ def test_real_player_bridge_applies_ceiling_guard_and_smoothing() -> None:
     )
     reference_context = ReferenceValueContext(
         market_value_eur=20_000_000.0,
-        source="heuristic_profile_baseline",
-        confidence_tier="heuristic_only",
-        confidence_score=38.0,
-        blended_with_profile_baseline=True,
+        source="player.current_market_reference_value",
+        confidence_tier="direct_verified_reference",
+        confidence_score=86.0,
     )
     previous_snapshot = PlayerValueSnapshotRecord(
         id="snapshot-prev",
@@ -150,9 +149,30 @@ def test_real_player_bridge_applies_ceiling_guard_and_smoothing() -> None:
 
     assert result is not None
     assert result.bridge_market_value_eur == 21_700_000.0
-    assert result.base_value_credits == 217.0
+    assert result.base_value_credits == 13.36
     assert result.actions == ("ceiling_guard", "smoothed")
     assert result.previous_bridge_market_value_eur == 21_000_000.0
+
+
+def test_real_player_bridge_rejects_heuristic_reference_for_real_players() -> None:
+    adapter = RealPlayerValuationAdapter(config=_config())
+    adapter.scorer = _StubScorer(profile_baseline_market_value_eur=60_000_000.0)
+
+    result = adapter.build(
+        player=_player(real_player_tier="elite"),
+        profile=PlayerProfileContext(),
+        reference_context=ReferenceValueContext(
+            market_value_eur=20_000_000.0,
+            source="heuristic_profile_baseline",
+            confidence_tier="heuristic_only",
+            confidence_score=38.0,
+            blended_with_profile_baseline=True,
+        ),
+        reference_market_value_eur=20_000_000.0,
+        previous_snapshot=None,
+    )
+
+    assert result is None
 
 
 def test_real_player_bridge_is_skipped_for_non_real_players() -> None:

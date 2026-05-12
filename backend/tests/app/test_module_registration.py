@@ -112,10 +112,10 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/career/retire" in openapi_paths
     assert "/career/{user_id}" in openapi_paths
     assert "/sync/update" in openapi_paths
-    assert "/federations" in openapi_paths
-    assert "/federations/rankings" in openapi_paths
-    assert "/federations/{federation_id}/governance" in openapi_paths
-    assert "/admin/federations/run-jobs" in openapi_paths
+    assert "/api/federations" in openapi_paths
+    assert "/api/federations/rankings" in openapi_paths
+    assert "/api/federations/{federation_id}/governance" in openapi_paths
+    assert "/api/admin/federations/run-jobs" in openapi_paths
     assert "/api/clubs/{club_id}/reputation" in openapi_paths
     assert "/api/clubs/{club_id}/dynasty" in openapi_paths
     assert "/api/clubs/{club_id}/identity" in openapi_paths
@@ -138,7 +138,7 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/players/{player_id}/dna" in openapi_paths
     assert "/players/{player_id}/rivalries" in openapi_paths
     assert "/replays/public/featured" in openapi_paths
-    assert "/notifications/me" in openapi_paths
+    assert "/api/notifications/me" in openapi_paths
 
 
 def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
@@ -256,7 +256,7 @@ def test_streamer_tournaments_route_does_not_force_global_lazy_hydration(mounted
     assert mounted_app.state.modules_hydrated is False
 
     with TestClient(mounted_app) as client:
-        response = client.get("/streamer-tournaments")
+        response = client.get("/api/streamer-tournaments")
 
     assert response.status_code == 200
     assert mounted_app.state.modules_hydrated is False

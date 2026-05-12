@@ -5,7 +5,8 @@ import 'player_card_marketplace_models.dart';
 
 abstract class PlayerCardMarketplaceRepository {
   Future<List<PlayerCardPlayerSummary>> listPlayers(
-      PlayerCardPlayersQuery query);
+    PlayerCardPlayersQuery query,
+  );
 
   Future<PlayerCardPlayerDetail> fetchPlayerDetail(String playerId);
 
@@ -91,6 +92,18 @@ abstract class PlayerCardMarketplaceRepository {
 
   Future<List<PlayerCardWatchlistItem>> listWatchlist();
 
+  Future<List<PlayerCardPack>> listPacks();
+
+  Future<PlayerCardPackOpening> openPack(String packKey);
+
+  Future<PlayerCardCollectibleActionResult> burnCard(
+    PlayerCardBurnRequest request,
+  );
+
+  Future<PlayerCardCollectibleActionResult> upgradeCards(
+    PlayerCardUpgradeRequest request,
+  );
+
   Future<PlayerCardWatchlistItem> addWatchlist(
     PlayerCardWatchlistCreateRequest request,
   );
@@ -100,9 +113,8 @@ abstract class PlayerCardMarketplaceRepository {
 
 class PlayerCardMarketplaceApiRepository
     implements PlayerCardMarketplaceRepository {
-  PlayerCardMarketplaceApiRepository({
-    required GteAuthedApi client,
-  }) : _client = client;
+  PlayerCardMarketplaceApiRepository({required GteAuthedApi client})
+    : _client = client;
 
   factory PlayerCardMarketplaceApiRepository.standard({
     required String baseUrl,
@@ -257,7 +269,8 @@ class PlayerCardMarketplaceApiRepository
 
   @override
   Future<PlayerCardMarketplaceListing> cancelSaleListing(
-      String listingId) async {
+    String listingId,
+  ) async {
     return PlayerCardMarketplaceListing.fromJson(
       await _client.request(
         'POST',
@@ -430,6 +443,52 @@ class PlayerCardMarketplaceApiRepository
   }
 
   @override
+  Future<List<PlayerCardPack>> listPacks() async {
+    return parseList(
+      await _client.getList('/player-cards/packs', auth: false),
+      PlayerCardPack.fromJson,
+      label: 'player card packs',
+    );
+  }
+
+  @override
+  Future<PlayerCardPackOpening> openPack(String packKey) async {
+    return PlayerCardPackOpening.fromJson(
+      await _client.request(
+        'POST',
+        '/player-cards/packs/$packKey/open',
+        body: const <String, Object?>{},
+      ),
+    );
+  }
+
+  @override
+  Future<PlayerCardCollectibleActionResult> burnCard(
+    PlayerCardBurnRequest request,
+  ) async {
+    return PlayerCardCollectibleActionResult.fromJson(
+      await _client.request(
+        'POST',
+        '/player-cards/cards/burn',
+        body: request.toJson(),
+      ),
+    );
+  }
+
+  @override
+  Future<PlayerCardCollectibleActionResult> upgradeCards(
+    PlayerCardUpgradeRequest request,
+  ) async {
+    return PlayerCardCollectibleActionResult.fromJson(
+      await _client.request(
+        'POST',
+        '/player-cards/cards/upgrade',
+        body: request.toJson(),
+      ),
+    );
+  }
+
+  @override
   Future<PlayerCardWatchlistItem> addWatchlist(
     PlayerCardWatchlistCreateRequest request,
   ) async {
@@ -444,9 +503,6 @@ class PlayerCardMarketplaceApiRepository
 
   @override
   Future<void> removeWatchlist(String watchlistId) async {
-    await _client.request(
-      'DELETE',
-      '/player-cards/watchlist/$watchlistId',
-    );
+    await _client.request('DELETE', '/player-cards/watchlist/$watchlistId');
   }
 }

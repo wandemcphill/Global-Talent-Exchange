@@ -11,6 +11,31 @@ enum GtePrimaryDestination {
   wallet,
 }
 
+enum GteCapitalDestination {
+  wallet,
+  orders,
+  holdings,
+  coinTraders,
+  traderDashboard,
+}
+
+extension GteCapitalDestinationX on GteCapitalDestination {
+  String get pathSegment {
+    switch (this) {
+      case GteCapitalDestination.wallet:
+        return 'capital';
+      case GteCapitalDestination.orders:
+        return 'orders';
+      case GteCapitalDestination.holdings:
+        return 'holdings';
+      case GteCapitalDestination.coinTraders:
+        return 'coin-traders';
+      case GteCapitalDestination.traderDashboard:
+        return 'trader-dashboard';
+    }
+  }
+}
+
 extension GtePrimaryDestinationX on GtePrimaryDestination {
   String get label {
     switch (this) {
@@ -19,7 +44,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.competitions:
         return 'Matchday';
       case GtePrimaryDestination.market:
-        return 'Market';
+        return 'Transfer Hub';
       case GtePrimaryDestination.hub:
         return 'Studio';
       case GtePrimaryDestination.community:
@@ -113,6 +138,7 @@ class GteNavigationRoute {
   const GteNavigationRoute._({
     required this.primaryDestination,
     this.competitionDestination,
+    this.capitalDestination = GteCapitalDestination.wallet,
   });
 
   const GteNavigationRoute.home()
@@ -137,11 +163,16 @@ class GteNavigationRoute {
   const GteNavigationRoute.club()
     : this._(primaryDestination: GtePrimaryDestination.club);
 
-  const GteNavigationRoute.wallet()
-    : this._(primaryDestination: GtePrimaryDestination.wallet);
+  const GteNavigationRoute.wallet({
+    GteCapitalDestination capitalDestination = GteCapitalDestination.wallet,
+  }) : this._(
+         primaryDestination: GtePrimaryDestination.wallet,
+         capitalDestination: capitalDestination,
+       );
 
   final GtePrimaryDestination primaryDestination;
   final CompetitionHubDestination? competitionDestination;
+  final GteCapitalDestination capitalDestination;
 
   CompetitionHubDestination get effectiveCompetitionDestination =>
       competitionDestination ?? CompetitionHubDestination.overview;
@@ -152,6 +183,18 @@ class GteNavigationRoute {
   String get path {
     if (isCompetitions) {
       return '/app/play/${effectiveCompetitionDestination.pathSegment}';
+    }
+    if (primaryDestination == GtePrimaryDestination.wallet) {
+      switch (capitalDestination) {
+        case GteCapitalDestination.wallet:
+          return GtePrimaryDestination.wallet.routePath;
+        case GteCapitalDestination.orders:
+        case GteCapitalDestination.holdings:
+          return '/app/capital/${capitalDestination.pathSegment}';
+        case GteCapitalDestination.coinTraders:
+        case GteCapitalDestination.traderDashboard:
+          return '/app/${capitalDestination.pathSegment}';
+      }
     }
     return primaryDestination.routePath;
   }
@@ -218,14 +261,53 @@ class GteNavigationRoute {
           ),
         );
       case 'market':
+      case 'transfer-hub':
         return const GteNavigationRoute.market();
+      case 'coin-traders':
+        return const GteNavigationRoute.wallet(
+          capitalDestination: GteCapitalDestination.coinTraders,
+        );
+      case 'orders':
+        return const GteNavigationRoute.wallet(
+          capitalDestination: GteCapitalDestination.orders,
+        );
+      case 'holdings':
+        return const GteNavigationRoute.wallet(
+          capitalDestination: GteCapitalDestination.holdings,
+        );
+      case 'trader-dashboard':
+        return const GteNavigationRoute.wallet(
+          capitalDestination: GteCapitalDestination.traderDashboard,
+        );
       case 'hub':
-      case 'community':
         return const GteNavigationRoute.hub();
+      case 'community':
+      case 'social':
+        return const GteNavigationRoute.community();
       case 'club':
         return const GteNavigationRoute.club();
       case 'capital':
       case 'wallet':
+        if (normalizedSegments.length > 1) {
+          switch (normalizedSegments[1].toLowerCase()) {
+            case 'orders':
+              return const GteNavigationRoute.wallet(
+                capitalDestination: GteCapitalDestination.orders,
+              );
+            case 'holdings':
+              return const GteNavigationRoute.wallet(
+                capitalDestination: GteCapitalDestination.holdings,
+              );
+            case 'coin-traders':
+              return const GteNavigationRoute.wallet(
+                capitalDestination: GteCapitalDestination.coinTraders,
+              );
+            case 'trader-dashboard':
+              return const GteNavigationRoute.wallet(
+                capitalDestination: GteCapitalDestination.traderDashboard,
+              );
+          }
+        }
         return const GteNavigationRoute.wallet();
       case 'home':
       default:
@@ -237,9 +319,14 @@ class GteNavigationRoute {
   bool operator ==(Object other) {
     return other is GteNavigationRoute &&
         other.primaryDestination == primaryDestination &&
-        other.competitionDestination == competitionDestination;
+        other.competitionDestination == competitionDestination &&
+        other.capitalDestination == capitalDestination;
   }
 
   @override
-  int get hashCode => Object.hash(primaryDestination, competitionDestination);
+  int get hashCode => Object.hash(
+    primaryDestination,
+    competitionDestination,
+    capitalDestination,
+  );
 }

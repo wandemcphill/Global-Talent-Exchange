@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import '../../core/app_feedback.dart';
 import '../../data/club_creation_api.dart';
 import '../../data/gte_api_repository.dart';
-import '../../widgets/gte_shell_theme.dart';
-import '../../widgets/gte_state_panel.dart';
-import '../../widgets/gte_surface_panel.dart';
+import '../../ui_gtex/components/gtex_button.dart';
+import '../../ui_gtex/components/gtex_panel.dart';
+import '../../ui_gtex/components/gtex_status_chip.dart';
+import '../../ui_gtex/layout/gtex_focus_flow_scaffold.dart';
+import '../../ui_gtex/theme/gtex_colors.dart';
+import '../../ui_gtex/theme/gtex_spacing.dart';
 
 class CreateClubScreen extends StatefulWidget {
   const CreateClubScreen({
@@ -165,80 +168,72 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: gteBackdropDecoration(),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('Create your club')),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-          children: <Widget>[
-            GteSurfacePanel(
-              emphasized: true,
-              accentColor: GteShellTheme.accentClub,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return GtexFocusFlowScaffold(
+      title: 'Launch your GTEX club',
+      subtitle:
+          'Create the live ownership workspace that unlocks squad management, club identity, competitions, finances, followers, shares, and news.',
+      maxWidth: 1240,
+      accent: GtexColors.gold,
+      leading: Align(
+        alignment: Alignment.centerLeft,
+        child: GtexButton(
+          label: 'Back',
+          icon: Icons.arrow_back,
+          variant: GtexButtonVariant.ghost,
+          compact: true,
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final bool stacked = constraints.maxWidth < 930;
+          final Widget briefing = _ClubLaunchBriefing(stacked: stacked);
+          final Widget form = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _FormSection(
+                title: 'Club basics',
+                subtitle: 'Name the club and decide how visible it should be.',
+                accent: GtexColors.gold,
                 children: <Widget>[
-                  Text(
-                    'Launch a real club workspace',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Name the club, choose its public palette, and create the ownership workspace that unlocks club identity, competitions, scouting, and commercial surfaces.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: const <Widget>[
-                      Chip(label: Text('Live club creation')),
-                      Chip(label: Text('Owner workspace')),
-                      Chip(label: Text('Club routes unlock immediately')),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            GteSurfacePanel(
-              accentColor: GteShellTheme.accentClub,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Club basics',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 14),
                   TextField(
                     controller: _clubNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Club name',
-                      hintText: 'Lagos Comets FC',
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Club name',
+                      hint: 'Lagos Comets FC',
+                      icon: Icons.shield_outlined,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   TextField(
                     controller: _shortNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Short name',
-                      hintText: 'Comets',
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Short name',
+                      hint: 'Comets',
+                      icon: Icons.badge_outlined,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   TextField(
                     controller: _slugController,
-                    decoration: const InputDecoration(
-                      labelText: 'Slug',
-                      hintText: 'lagos-comets-fc',
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Slug',
+                      hint: 'lagos-comets-fc',
+                      icon: Icons.link,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   DropdownButtonFormField<String>(
                     value: _visibility,
-                    decoration: const InputDecoration(labelText: 'Visibility'),
+                    dropdownColor: GtexColors.panelStrong,
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Visibility',
+                      icon: Icons.visibility_outlined,
+                    ),
                     items: const <DropdownMenuItem<String>>[
                       DropdownMenuItem<String>(
                         value: 'public',
@@ -264,163 +259,341 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 18),
-            GteSurfacePanel(
-              accentColor: GteShellTheme.accentWarm,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: GtexSpacing.md),
+              _FormSection(
+                title: 'Identity palette',
+                subtitle:
+                    'Pick a launch palette, then fine-tune the exact club colors.',
+                accent: GtexColors.pitch,
                 children: <Widget>[
-                  Text(
-                    'Identity palette',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Choose a launch palette, then fine-tune the exact hex values if needed.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
                   Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
+                    spacing: GtexSpacing.sm,
+                    runSpacing: GtexSpacing.sm,
                     children: _clubPalettes
                         .map((_ClubPalette palette) {
                           final bool selected = identical(
                             palette,
                             _selectedPalette,
                           );
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(18),
+                          return _PaletteChoice(
+                            palette: palette,
+                            selected: selected,
                             onTap: () {
                               setState(() {
                                 _applyPalette(palette);
                               });
                             },
-                            child: Container(
-                              width: 170,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color:
-                                      selected
-                                          ? GteShellTheme.accentWarm
-                                          : GteShellTheme.stroke,
-                                ),
-                                color: Colors.white.withValues(alpha: 0.03),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    palette.name,
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    children: <Widget>[
-                                      _ColorDot(color: palette.primary),
-                                      const SizedBox(width: 8),
-                                      _ColorDot(color: palette.secondary),
-                                      const SizedBox(width: 8),
-                                      _ColorDot(color: palette.accent),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
                           );
                         })
                         .toList(growable: false),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: GtexSpacing.md),
                   TextField(
                     controller: _primaryColorController,
-                    decoration: const InputDecoration(
-                      labelText: 'Primary color',
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Primary color',
+                      icon: Icons.palette_outlined,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   TextField(
                     controller: _secondaryColorController,
-                    decoration: const InputDecoration(
-                      labelText: 'Secondary color',
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Secondary color',
+                      icon: Icons.color_lens_outlined,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   TextField(
                     controller: _accentColorController,
-                    decoration: const InputDecoration(
-                      labelText: 'Accent color',
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Accent color',
+                      icon: Icons.bolt_outlined,
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 18),
-            GteSurfacePanel(
-              accentColor: GteShellTheme.accentCapital,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: GtexSpacing.md),
+              _FormSection(
+                title: 'Location and story',
+                subtitle:
+                    'Give the club a home base and a football identity people can follow.',
+                accent: GtexColors.cyan,
                 children: <Widget>[
-                  Text(
-                    'Club location',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 14),
                   TextField(
                     controller: _venueController,
-                    decoration: const InputDecoration(
-                      labelText: 'Home venue',
-                      hintText: 'Marina Arena',
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Home venue',
+                      hint: 'Marina Arena',
+                      icon: Icons.stadium_outlined,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   TextField(
                     controller: _countryCodeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Country code',
-                      hintText: 'NG',
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Country code',
+                      hint: 'NG',
+                      icon: Icons.flag_outlined,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   TextField(
                     controller: _regionController,
-                    decoration: const InputDecoration(labelText: 'Region'),
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Region',
+                      icon: Icons.map_outlined,
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   TextField(
                     controller: _cityController,
-                    decoration: const InputDecoration(labelText: 'City'),
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'City',
+                      icon: Icons.location_city_outlined,
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: GtexSpacing.sm),
                   TextField(
                     controller: _descriptionController,
                     maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      hintText:
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: _gtexInputDecoration(
+                      label: 'Description',
+                      hint:
                           'Describe the club identity, fan culture, and sporting ambition.',
+                      icon: Icons.notes_outlined,
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: GtexSpacing.md),
+              _LaunchPanel(
+                submitting: _submitting,
+                onSubmit: _submitting ? null : _submit,
+              ),
+            ],
+          );
+
+          if (stacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                briefing,
+                const SizedBox(height: GtexSpacing.lg),
+                form,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(flex: 4, child: briefing),
+              const SizedBox(width: GtexSpacing.lg),
+              Expanded(flex: 6, child: form),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ClubLaunchBriefing extends StatelessWidget {
+  const _ClubLaunchBriefing({required this.stacked});
+
+  final bool stacked;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const GtexStatusChip(
+          label: 'LIVE CLUB CREATION',
+          icon: Icons.rocket_launch_outlined,
+          tone: GtexStatusTone.premium,
+        ),
+        const SizedBox(height: GtexSpacing.lg),
+        Text(
+          'This is where a user stops browsing and becomes a club owner.',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: GtexColors.text,
+            fontWeight: FontWeight.w900,
+            height: 1.08,
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        Text(
+          'The form still calls the live club creation API. The redesign simply puts that serious operation inside the same GTEX command-center language as the market and owner dashboard.',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: GtexColors.textSecondary,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.lg),
+        Wrap(
+          spacing: GtexSpacing.md,
+          runSpacing: GtexSpacing.md,
+          children: <Widget>[
+            _BriefingTile(
+              width: stacked ? double.infinity : 250,
+              title: 'Owner workspace',
+              body: 'Squad, transfers, finances, trophies, identity.',
+              icon: Icons.admin_panel_settings_outlined,
+              accent: GtexColors.gold,
             ),
-            const SizedBox(height: 18),
-            GteStatePanel(
-              eyebrow: 'READY TO LAUNCH',
-              title: 'Create the club and unlock the full club lane',
-              message:
-                  'As soon as the club is created, this account will switch into its club workspace so identity, prestige, trophy, replay, and creator commerce routes open without another sign-in.',
-              icon: Icons.rocket_launch_outlined,
-              accentColor: GteShellTheme.accentClub,
-              actionLabel: _submitting ? 'Creating...' : 'Create club',
-              onAction: _submitting ? null : _submit,
+            _BriefingTile(
+              width: stacked ? double.infinity : 250,
+              title: 'Public profile',
+              body: 'Followers, shares, club value, and public story.',
+              icon: Icons.public_outlined,
+              accent: GtexColors.pitch,
+            ),
+            _BriefingTile(
+              width: stacked ? double.infinity : 250,
+              title: 'Competition path',
+              body: 'A club identity ready for fixtures and tournaments.',
+              icon: Icons.emoji_events_outlined,
+              accent: GtexColors.cyan,
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _BriefingTile extends StatelessWidget {
+  const _BriefingTile({
+    required this.width,
+    required this.title,
+    required this.body,
+    required this.icon,
+    required this.accent,
+  });
+
+  final double width;
+  final String title;
+  final String body;
+  final IconData icon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: GtexPanel(
+        title: title,
+        subtitle: body,
+        trailing: Icon(icon, color: accent),
+        accent: accent,
+        child: const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+class _FormSection extends StatelessWidget {
+  const _FormSection({
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.children,
+  });
+
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexPanel(
+      title: title,
+      subtitle: subtitle,
+      accent: accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _PaletteChoice extends StatelessWidget {
+  const _PaletteChoice({
+    required this.palette,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _ClubPalette palette;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = selected ? GtexColors.pitch : GtexColors.textMuted;
+    return SizedBox(
+      width: 170,
+      child: GtexPanel(
+        title: palette.name,
+        accent: accent,
+        isSelected: selected,
+        onTap: onTap,
+        padding: const EdgeInsets.all(GtexSpacing.md),
+        child: Row(
+          children: <Widget>[
+            _ColorDot(color: palette.primary),
+            const SizedBox(width: GtexSpacing.xs),
+            _ColorDot(color: palette.secondary),
+            const SizedBox(width: GtexSpacing.xs),
+            _ColorDot(color: palette.accent),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LaunchPanel extends StatelessWidget {
+  const _LaunchPanel({required this.submitting, required this.onSubmit});
+
+  final bool submitting;
+  final VoidCallback? onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexPanel(
+      title: 'Ready to launch',
+      subtitle:
+          'Create the club and this account moves straight into the owner dashboard.',
+      accent: GtexColors.pitch,
+      trailing: const Icon(
+        Icons.rocket_launch_outlined,
+        color: GtexColors.pitch,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (submitting) ...<Widget>[
+            const LinearProgressIndicator(color: GtexColors.pitch),
+            const SizedBox(height: GtexSpacing.md),
+          ],
+          GtexButton(
+            label: submitting ? 'Creating club...' : 'Create club',
+            icon: Icons.shield_outlined,
+            onPressed: onSubmit,
+          ),
+        ],
       ),
     );
   }
@@ -443,6 +616,31 @@ class _ColorDot extends StatelessWidget {
       ),
     );
   }
+}
+
+InputDecoration _gtexInputDecoration({
+  required String label,
+  required IconData icon,
+  String? hint,
+}) {
+  final OutlineInputBorder border = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+    borderSide: BorderSide(color: GtexColors.line.withValues(alpha: 0.9)),
+  );
+  return InputDecoration(
+    labelText: label,
+    hintText: hint,
+    labelStyle: const TextStyle(color: GtexColors.textMuted),
+    hintStyle: TextStyle(color: GtexColors.textMuted.withValues(alpha: 0.78)),
+    prefixIcon: Icon(icon, color: GtexColors.gold),
+    filled: true,
+    fillColor: Colors.white.withValues(alpha: 0.045),
+    border: border,
+    enabledBorder: border,
+    focusedBorder: border.copyWith(
+      borderSide: const BorderSide(color: GtexColors.gold),
+    ),
+  );
 }
 
 class _ClubPalette {

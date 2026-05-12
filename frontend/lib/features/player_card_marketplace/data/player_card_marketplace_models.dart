@@ -284,11 +284,157 @@ class PlayerCardWatchlistCreateRequest {
   };
 }
 
+class PlayerCardPack {
+  const PlayerCardPack._(this.raw);
+
+  final JsonMap raw;
+
+  factory PlayerCardPack.fromJson(Object? value) {
+    return PlayerCardPack._(jsonMap(value, label: 'player card pack'));
+  }
+
+  String get packKey => stringValue(raw['pack_key']);
+  String get title => stringValue(raw['title']);
+  String? get description => stringOrNullValue(raw['description']);
+  double get priceCredits => numberValue(raw['price_credits']);
+  int get cardsPerPack => intValue(raw['cards_per_pack'], fallback: 3);
+  JsonMap get dropOdds =>
+      jsonMap(raw['drop_odds_json'], fallback: const <String, Object?>{});
+  bool get isActive => boolValue(raw['is_active'], fallback: true);
+}
+
+class PlayerCardPackOpening {
+  const PlayerCardPackOpening._(this.raw);
+
+  final JsonMap raw;
+
+  factory PlayerCardPackOpening.fromJson(Object? value) {
+    return PlayerCardPackOpening._(
+      jsonMap(value, label: 'player card pack opening'),
+    );
+  }
+
+  String get openingId => stringValue(raw['opening_id']);
+  String get packKey => stringValue(raw['pack_key']);
+  String get status => stringValue(raw['status'], fallback: 'opened');
+  double get priceCredits => numberValue(raw['price_credits']);
+  List<JsonMap> get openedCards =>
+      jsonMapList(raw['opened_cards'], label: 'opened player cards');
+  DateTime? get createdAt => dateTimeValue(raw['created_at']);
+}
+
+class PlayerCardBurnRequest {
+  const PlayerCardBurnRequest({
+    required this.playerCardId,
+    this.quantity = 1,
+    this.reason,
+  });
+
+  final String playerCardId;
+  final int quantity;
+  final String? reason;
+
+  JsonMap toJson() => <String, Object?>{
+    'player_card_id': playerCardId,
+    'quantity': quantity,
+    if (reason != null && reason!.trim().isNotEmpty) 'reason': reason,
+  };
+}
+
+class PlayerCardUpgradeRequest {
+  const PlayerCardUpgradeRequest({
+    required this.sourcePlayerCardIds,
+    required this.targetTierCode,
+  });
+
+  final List<String> sourcePlayerCardIds;
+  final String targetTierCode;
+
+  JsonMap toJson() => <String, Object?>{
+    'source_player_card_ids': sourcePlayerCardIds,
+    'target_tier_code': targetTierCode,
+  };
+}
+
+class PlayerCardCollectibleActionResult {
+  const PlayerCardCollectibleActionResult._(this.raw);
+
+  final JsonMap raw;
+
+  factory PlayerCardCollectibleActionResult.fromJson(Object? value) {
+    return PlayerCardCollectibleActionResult._(
+      jsonMap(value, label: 'player card collectible action'),
+    );
+  }
+
+  String get id =>
+      stringOrNullValue(raw['burn_event_id']) ??
+      stringOrNullValue(raw['upgrade_event_id']) ??
+      stringValue(raw['id']);
+  String get status => stringValue(raw['status'], fallback: 'completed');
+}
+
 String? _playerImageUrl(JsonMap raw) =>
     stringOrNullValue(raw['image_url']) ??
     stringOrNullValue(raw['portrait_url']) ??
     stringOrNullValue(raw['portraitUrl']) ??
     stringOrNullValue(raw['photo_url']);
+
+double? _numberFromKeys(JsonMap raw, List<String> keys) {
+  for (final String key in keys) {
+    if (raw[key] != null) {
+      return numberValue(raw[key]);
+    }
+  }
+  return null;
+}
+
+double? _globalScoutingIndex(JsonMap raw) {
+  const List<String> keys = <String>[
+    'global_scouting_index',
+    'globalScoutingIndex',
+    'gsi',
+    'current_gsi',
+    'currentGsi',
+  ];
+  final double? direct = _numberFromKeys(raw, keys);
+  if (direct != null) {
+    return direct;
+  }
+  for (final String nestedKey in <String>[
+    'player',
+    'player_snapshot',
+    'playerSnapshot',
+    'latest_stats_snapshot',
+    'latestStatsSnapshot',
+    'latest_market_snapshot',
+    'latestMarketSnapshot',
+    'metadata',
+    'metadata_json',
+  ]) {
+    final JsonMap? nested = jsonMapOrNull(raw[nestedKey]);
+    if (nested == null) {
+      continue;
+    }
+    final double? value = _numberFromKeys(nested, keys);
+    if (value != null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+int? _gsiScore(JsonMap raw) => _globalScoutingIndex(raw)?.round();
+
+String? _gsiTierLabel(JsonMap raw) {
+  final int? score = _gsiScore(raw);
+  if (score == null) return null;
+  if (score >= 90) return 'Elite GSI';
+  if (score >= 82) return 'High-grade GSI';
+  if (score >= 74) return 'First-team GSI';
+  if (score >= 66) return 'Developing GSI';
+  return 'Prospect GSI';
+}
 
 class PlayerCardMarketplaceListing {
   const PlayerCardMarketplaceListing._(this.raw);
@@ -320,6 +466,9 @@ class PlayerCardMarketplaceListing {
   String? get position => stringOrNullValue(raw['position']);
   double? get averageRating =>
       raw['average_rating'] == null ? null : numberValue(raw['average_rating']);
+  double? get globalScoutingIndex => _globalScoutingIndex(raw);
+  int? get gsiScore => _gsiScore(raw);
+  String? get gsiTierLabel => _gsiTierLabel(raw);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   int get rarityRank => intValue(raw['rarity_rank']);
@@ -655,6 +804,9 @@ class PlayerCardPlayerSummary {
   String? get position => stringOrNullValue(raw['position']);
   String? get nationalityCode => stringOrNullValue(raw['nationality_code']);
   String? get currentClubName => stringOrNullValue(raw['current_club_name']);
+  double? get globalScoutingIndex => _globalScoutingIndex(raw);
+  int? get gsiScore => _gsiScore(raw);
+  String? get gsiTierLabel => _gsiTierLabel(raw);
   int get cardSupplyTotal => intValue(raw['card_supply_total']);
   double? get latestValueCredits =>
       raw['latest_value_credits'] == null
@@ -680,6 +832,9 @@ class PlayerCardPlayerDetail {
   String? get position => stringOrNullValue(raw['position']);
   String? get nationalityCode => stringOrNullValue(raw['nationality_code']);
   String? get currentClubName => stringOrNullValue(raw['current_club_name']);
+  double? get globalScoutingIndex => _globalScoutingIndex(raw);
+  int? get gsiScore => _gsiScore(raw);
+  String? get gsiTierLabel => _gsiTierLabel(raw);
   List<String> get aliases => stringListValue(raw['aliases']);
   List<String> get monikers => stringListValue(raw['monikers']);
   List<JsonMap> get cards => jsonMapList(raw['cards'], label: 'player cards');
@@ -720,6 +875,9 @@ class PlayerCardHolding {
   String get playerName => stringValue(raw['player_name']);
   PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get imageUrl => _playerImageUrl(raw);
+  double? get globalScoutingIndex => _globalScoutingIndex(raw);
+  int? get gsiScore => _gsiScore(raw);
+  String? get gsiTierLabel => _gsiTierLabel(raw);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   String get editionCode => stringValue(raw['edition_code']);

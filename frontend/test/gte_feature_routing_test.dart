@@ -19,7 +19,7 @@ import 'package:gte_frontend/features/navigation/presentation/gte_navigation_she
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
-import 'package:gte_frontend/screens/gte_market_players_screen.dart';
+import 'package:gte_frontend/screens/clubs/gtex_club_owner_dashboard_screen_v2.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
@@ -47,7 +47,9 @@ void main() {
       ),
       const WorldOverviewRouteData(),
       const RegenUniverseRouteData(),
+      const WorldAwardsRouteData(),
       const NewsDeskRouteData(),
+      const FanWarsRouteData(),
       const WorldClubContextRouteData(
         clubId: 'royal-lagos-fc',
         clubName: 'Royal Lagos FC',
@@ -90,6 +92,9 @@ void main() {
       '/market': PlayerCardsBrowseRouteData,
       '/market/transfers': FootballTransferCenterRouteData,
       '/world/regens': RegenUniverseRouteData,
+      '/awards': WorldAwardsRouteData,
+      '/world/awards': WorldAwardsRouteData,
+      '/fan-wars': FanWarsRouteData,
       '/clips': NewsDeskRouteData,
       '/news': NewsDeskRouteData,
       '/competitions/hosted': CompetitionsDiscoveryRouteData,
@@ -204,7 +209,7 @@ void main() {
     expect(find.text('Reject'), findsOneWidget);
   });
 
-  testWidgets('creator-share admin control is blocked for launch', (
+  testWidgets('creator-share admin control mounts live admin surface', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -221,12 +226,9 @@ void main() {
     );
 
     await tester.tap(find.text('Open control'));
-    await _pumpUntilText(tester, 'Share market admin controls coming soon');
+    await _pumpUntilText(tester, 'Creator share control');
 
-    expect(
-      find.text('Share market admin controls coming soon'),
-      findsOneWidget,
-    );
+    expect(find.text('Creator share control'), findsOneWidget);
     expect(find.text('Club selection required'), findsNothing);
   });
 
@@ -263,9 +265,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final ClubHubScreen clubHub = tester.widget<ClubHubScreen>(
-        find.byType(ClubHubScreen),
-      );
+      final GtexClubOwnerDashboardScreenV2 clubHub = tester
+          .widget<GtexClubOwnerDashboardScreenV2>(
+            find.byType(GtexClubOwnerDashboardScreenV2),
+          );
       expect(clubHub.clubId, 'ibadan-lions');
       expect(clubHub.clubName, 'Ibadan Lions FC');
     },
@@ -303,9 +306,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(HomeDashboardScreen), findsOneWidget);
-      expect(find.text('CLUB SETUP'), findsOneWidget);
-      expect(find.text('This account has no club yet'), findsOneWidget);
+      expect(find.text('Build your club command center'), findsOneWidget);
+      expect(find.text('Create club'), findsWidgets);
+      expect(find.text('Transfer Hub'), findsWidgets);
       expect(find.text('No canonical club is selected'), findsNothing);
       expect(find.text('Create or join a club to unlock Home'), findsNothing);
       expect(
@@ -317,12 +320,8 @@ void main() {
         findsNothing,
       );
 
-      final Finder browseClubMarketButton =
-          find.widgetWithText(FilledButton, 'Browse club market').first;
-      expect(
-        tester.widget<FilledButton>(browseClubMarketButton).onPressed,
-        isNotNull,
-      );
+      final Finder browseClubMarketButton = find.text('Transfer Hub').first;
+      expect(browseClubMarketButton, findsOneWidget);
 
       await _scrollUntilVisible(
         tester,
@@ -330,10 +329,10 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       await tester.tap(browseClubMarketButton);
-      await _pumpUntilText(tester, 'Refresh market');
+      await _pumpUntilText(tester, 'Transfer Hub');
+      await tester.pumpAndSettle();
 
-      expect(find.text('Refresh market'), findsOneWidget);
-      expect(find.text('Open club market'), findsWidgets);
+      expect(find.text('Transfer Hub'), findsWidgets);
     },
   );
 
@@ -498,17 +497,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('CLUB SETUP'), findsOneWidget);
-      expect(find.text('This account has no club yet'), findsOneWidget);
+      expect(find.text('Build your club command center'), findsOneWidget);
+      expect(find.text('Create club'), findsWidgets);
       expect(find.text('Open home'), findsNothing);
       expect(find.text('No canonical club is selected'), findsNothing);
 
-      final Finder browseClubMarketButton =
-          find.widgetWithText(FilledButton, 'Browse club market').first;
-      expect(
-        tester.widget<FilledButton>(browseClubMarketButton).onPressed,
-        isNotNull,
-      );
+      final Finder browseClubMarketButton = find.text('Transfer Hub').first;
+      expect(browseClubMarketButton, findsOneWidget);
 
       await _scrollUntilVisible(
         tester,
@@ -516,107 +511,10 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       await tester.tap(browseClubMarketButton);
-      await _pumpUntilText(tester, 'Refresh market');
+      await _pumpUntilText(tester, 'Transfer Hub');
+      await tester.pumpAndSettle();
 
-      expect(find.text('Refresh market'), findsOneWidget);
-      expect(find.text('Open club market'), findsWidgets);
-    },
-  );
-
-  testWidgets('market quick links open public club sale listings', (
-    WidgetTester tester,
-  ) async {
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: GteMarketPlayersScreen(
-          controller: controller,
-          onOpenPlayer: (_) {},
-          onOpenLogin: () {},
-          navigationDependencies: _dependencies(
-            clubId: 'royal-lagos-fc',
-            clubName: 'Royal Lagos FC',
-          ),
-        ),
-      ),
-    );
-    await _pumpUntilText(tester, 'Player universe');
-
-    expect(find.text('Player universe'), findsWidgets);
-
-    final Finder clubSaleMarketButton = find.text('Club sale market');
-    await tester.ensureVisible(clubSaleMarketButton);
-    await tester.tap(clubSaleMarketButton);
-    await _pumpUntilText(tester, 'Refresh market');
-
-    expect(find.text('Refresh market'), findsOneWidget);
-    expect(find.text('Open club market'), findsOneWidget);
-  });
-
-  testWidgets('market creator-share shortcut requires a canonical club id', (
-    WidgetTester tester,
-  ) async {
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: GteMarketPlayersScreen(
-          controller: controller,
-          onOpenPlayer: (_) {},
-          onOpenLogin: () {},
-          navigationDependencies: _dependencies(clubId: null, clubName: null),
-        ),
-      ),
-    );
-    await _pumpUntilText(tester, 'Player universe');
-
-    final Finder creatorSharesButton = find.text('Creator shares');
-    await tester.ensureVisible(creatorSharesButton);
-    await tester.tap(creatorSharesButton);
-    await _pumpUntilText(tester, 'Club selection required');
-
-    expect(find.text('Club selection required'), findsOneWidget);
-    expect(
-      find.textContaining('Creator-share market routes are club-scoped'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets(
-    'market creator-share shortcut opens when a canonical club is derivable',
-    (WidgetTester tester) async {
-      final GteExchangeController controller = GteExchangeController(
-        api: GteExchangeApiClient.fixture(),
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: GteMarketPlayersScreen(
-            controller: controller,
-            onOpenPlayer: (_) {},
-            onOpenLogin: () {},
-            navigationDependencies: _dependencies(
-              isAuthenticated: true,
-              clubId: 'ibadan-lions',
-              clubName: 'Ibadan Lions FC',
-            ),
-          ),
-        ),
-      );
-      await _pumpUntilText(tester, 'Player universe');
-
-      final Finder creatorSharesButton = find.text('Creator shares');
-      await tester.ensureVisible(creatorSharesButton);
-      await tester.tap(creatorSharesButton);
-      await _pumpUntilText(tester, 'Club share market coming soon');
-
-      expect(find.text('Club share market coming soon'), findsOneWidget);
-      expect(find.text('Club selection required'), findsNothing);
+      expect(find.text('Transfer Hub'), findsWidgets);
     },
   );
 
@@ -694,15 +592,9 @@ void main() {
     );
     await tester.ensureVisible(worldContextButton);
     await tester.tap(worldContextButton);
-    await _pumpUntilFound(
-      tester,
-      find.textContaining('canonical football-world simulation'),
-    );
+    await _pumpUntilFound(tester, find.textContaining('public view'));
 
-    expect(
-      find.textContaining('canonical football-world simulation'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('public view'), findsOneWidget);
   });
 
   testWidgets('club hub demotes owner inbox when owner workspace is unknown', (

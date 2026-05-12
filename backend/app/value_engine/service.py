@@ -376,11 +376,13 @@ class IngestionValueSnapshotRepository:
         as_of: datetime,
         player_window: PlayerEventWindow | None,
     ) -> float:
-        explicit_value = self._latest_signal_score(player.market_signals, REFERENCE_MARKET_VALUE_SIGNAL_TYPES, as_of=as_of)
+        explicit_value = self._real_life_reference_market_value(player=player, as_of=as_of)
         if explicit_value is not None and explicit_value > 0:
             return round(explicit_value, 2)
-        if player.market_value_eur is not None and player.market_value_eur > 0:
-            return round(player.market_value_eur, 2)
+        if player.is_real_player:
+            raise ValueError(
+                f"Real player '{player.full_name}' is missing an imported real-life market reference value."
+            )
 
         base_value = POSITION_BASE_VALUES_EUR[self._position_bucket(player)]
         appearances = (season_stat.appearances if season_stat is not None and season_stat.appearances is not None else 0)
@@ -410,6 +412,21 @@ class IngestionValueSnapshotRepository:
             multiplier += min(player_window.big_moment_count, 5) * 0.05
 
         return round(max(base_value * multiplier, 5_000_000.0), 2)
+
+    def _real_life_reference_market_value(self, *, player: Player, as_of: datetime) -> float | None:
+        explicit_value = self._latest_signal_score(
+            player.market_signals,
+            REFERENCE_MARKET_VALUE_SIGNAL_TYPES,
+            as_of=as_of,
+        )
+        if explicit_value is not None and explicit_value > 0:
+            return round(explicit_value, 2)
+        if player.current_market_reference_value is not None and player.current_market_reference_value > 0:
+            if player.market_reference_currency is None or player.market_reference_currency.upper() == "EUR":
+                return round(float(player.current_market_reference_value), 2)
+        if player.market_value_eur is not None and player.market_value_eur > 0:
+            return round(float(player.market_value_eur), 2)
+        return None
 
     def _current_credits(self, market_signals: Sequence[MarketSignal], *, as_of: datetime) -> float | None:
         latest_value = self._latest_signal_score(market_signals, CURRENT_CREDITS_SIGNAL_TYPES, as_of=as_of)
@@ -480,6 +497,26 @@ class IngestionValueSnapshotRepository:
                 blended_with_profile_baseline=staleness_days >= stale_days_threshold,
             )
 
+        if player.current_market_reference_value is not None and player.current_market_reference_value > 0:
+            if player.market_reference_currency is None or player.market_reference_currency.upper() == "EUR":
+                staleness_anchor = _coerce_utc(player.last_synced_at) if player.last_synced_at is not None else as_of
+                staleness_days = max((as_of - staleness_anchor).days, 0)
+                confidence_tier = (
+                    "direct_verified_reference"
+                    if staleness_days < stale_days_threshold
+                    else "inferred_reference"
+                )
+                confidence_score = 86.0 if confidence_tier == "direct_verified_reference" else 66.0
+                return ReferenceValueContext(
+                    market_value_eur=round(float(player.current_market_reference_value), 2),
+                    source="player.current_market_reference_value",
+                    confidence_tier=confidence_tier,
+                    confidence_score=confidence_score,
+                    staleness_days=staleness_days,
+                    is_stale=confidence_tier != "direct_verified_reference",
+                    blended_with_profile_baseline=confidence_tier != "direct_verified_reference",
+                )
+
         if player.market_value_eur is not None and player.market_value_eur > 0:
             staleness_anchor = _coerce_utc(player.last_synced_at) if player.last_synced_at is not None else as_of
             staleness_days = max((as_of - staleness_anchor).days, 0)
@@ -493,6 +530,11 @@ class IngestionValueSnapshotRepository:
                 staleness_days=staleness_days,
                 is_stale=confidence_tier != "direct_verified_reference",
                 blended_with_profile_baseline=confidence_tier != "direct_verified_reference",
+            )
+
+        if player.is_real_player:
+            raise ValueError(
+                f"Real player '{player.full_name}' is missing an imported real-life market reference value."
             )
 
         return ReferenceValueContext(

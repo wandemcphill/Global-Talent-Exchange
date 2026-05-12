@@ -169,6 +169,24 @@ class ViralClipView(CommonSchema):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ClipReportRequest(CommonSchema):
+    reason: str = Field(min_length=3, max_length=1000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ClipModerationEventView(CommonSchema):
+    id: str
+    clip_id: str
+    reporter_user_id: str | None = None
+    action: str
+    status: str
+    reason: str | None = None
+    resolved_by_user_id: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
 class ViralClipVariantView(CommonSchema):
     base_clip_id: str
     variant_id: str
@@ -212,6 +230,7 @@ class ViralSessionStateView(CommonSchema):
     refresh_after_clips: int = Field(default=5, ge=1)
     clips_until_refresh: int = Field(default=0, ge=0)
     pending_refresh: bool = False
+    refresh_in_flight: bool = False
     affinity: ViralSessionAffinityView = Field(default_factory=ViralSessionAffinityView)
     last_updated_at: datetime
 

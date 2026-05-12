@@ -187,6 +187,13 @@ class NationalTeamsApi {
                 ),
                 'age': _optionalInt(player['age']),
                 'overall_rating': _optionalInt(player['overall_rating']),
+                'global_scouting_index': _optionalInt(
+                  player['global_scouting_index'] ??
+                      player['globalScoutingIndex'] ??
+                      player['gsi'] ??
+                      player['current_gsi'] ??
+                      player['currentGsi'],
+                ),
                 'position': stringOrNullValue(player['primary_position']),
                 'metadata_json': <String, Object?>{
                   'source_bucket': stringOrNullValue(player['source_bucket']),

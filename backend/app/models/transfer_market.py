@@ -56,9 +56,36 @@ class TransferListing(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default="open",
         index=True,
     )
+    listing_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="transfer",
+        server_default="transfer",
+        index=True,
+    )
+    asset_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="real_player",
+        server_default="real_player",
+        index=True,
+    )
+    visibility: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="public",
+        server_default="public",
+        index=True,
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reserve_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    salary_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    contract_years_remaining: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    buy_clause_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    loan_terms_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    swap_terms_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    availability_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     bid_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     watchlist_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     anti_sniping_extension_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
@@ -94,6 +121,79 @@ class TransferListingBid(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=func.now(),
         index=True,
     )
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class TransferHubOffer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "transfer_hub_offers"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_transfer_hub_offers_idempotency_key"),
+    )
+
+    listing_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("transfer_listings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    offer_type: Mapped[str] = mapped_column(String(32), nullable=False, default="transfer", server_default="transfer")
+    seller_club_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("club_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    bidder_club_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("club_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    cash_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4),
+        nullable=False,
+        default=Decimal("0.0000"),
+        server_default="0",
+    )
+    offered_player_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    loan_terms_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    swap_terms_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    conditional_terms_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    sell_on_percentage: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open", server_default="open", index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class TransferRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "transfer_requests"
+
+    player_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    current_club_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("club_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    requested_by_user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open", server_default="open", index=True)
+    preferred_leagues_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    preferred_clubs_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    reasons_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 

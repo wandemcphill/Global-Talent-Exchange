@@ -10,6 +10,7 @@ import '../../widgets/gte_surface_panel.dart';
 import '../support/gte_support_dispute_screens.dart';
 import 'gte_bank_details_screen.dart';
 import 'gte_kyc_screen.dart';
+import 'gte_wallet_flow_scaffold.dart';
 
 class GteWithdrawalEligibilityScreen extends StatefulWidget {
   const GteWithdrawalEligibilityScreen({super.key, required this.controller});
@@ -39,14 +40,16 @@ class _GteWithdrawalEligibilityScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Withdrawals'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: FutureBuilder<GteWithdrawalEligibility>(
+    return GteWalletFlowScaffold(
+      title: 'Withdrawals',
+      subtitle:
+          'Check eligibility, payout controls, compliance blockers, and withdrawal history from one GTEX wallet lane.',
+      icon: Icons.payments_outlined,
+      statusLabel: 'PAYOUT OPS',
+      actions: <Widget>[
+        IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
+      ],
+      child: FutureBuilder<GteWithdrawalEligibility>(
         future: _eligibilityFuture,
         builder: (
           BuildContext context,
@@ -406,9 +409,13 @@ class _GteWithdrawalRequestScreenState
             : _quote == null
             ? 'Preview a clear withdrawal quote before submitting.'
             : null);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Request withdrawal')),
-      body: ListView(
+    return GteWalletFlowScaffold(
+      title: 'Request withdrawal',
+      subtitle:
+          'Preview fees, choose the payout destination, and submit a controlled withdrawal request.',
+      icon: Icons.price_check_outlined,
+      statusLabel: 'WITHDRAWAL QUOTE',
+      child: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
           GteSurfacePanel(
@@ -711,14 +718,16 @@ class _GteWithdrawalReceiptScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Withdrawal receipt'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: FutureBuilder<GteWithdrawalReceipt>(
+    return GteWalletFlowScaffold(
+      title: 'Withdrawal receipt',
+      subtitle:
+          'Review payout amount, processor route, bank destination, and dispute path.',
+      icon: Icons.receipt_long_outlined,
+      statusLabel: 'PAYOUT RECEIPT',
+      actions: <Widget>[
+        IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
+      ],
+      child: FutureBuilder<GteWithdrawalReceipt>(
         future: _receiptFuture,
         builder: (
           BuildContext context,
@@ -859,14 +868,16 @@ class _GteWithdrawalHistoryScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Withdrawal history'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: FutureBuilder<List<GteTreasuryWithdrawalRequest>>(
+    return GteWalletFlowScaffold(
+      title: 'Withdrawal history',
+      subtitle:
+          'Track every payout request, receipt, status, and dispute handoff.',
+      icon: Icons.history,
+      statusLabel: 'PAYOUT LEDGER',
+      actions: <Widget>[
+        IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
+      ],
+      child: FutureBuilder<List<GteTreasuryWithdrawalRequest>>(
         future: _withdrawalsFuture,
         builder: (
           BuildContext context,

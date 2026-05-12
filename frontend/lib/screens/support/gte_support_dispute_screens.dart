@@ -6,16 +6,15 @@ import '../../core/app_feedback.dart';
 import '../../data/gte_exchange_api_client.dart';
 import '../../data/gte_models.dart';
 import '../../providers/gte_exchange_controller.dart';
+import '../../ui_gtex/layout/gtex_production_flow_scaffold.dart';
+import '../../ui_gtex/theme/gtex_colors.dart';
 import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
 
 class GteDisputeHubScreen extends StatefulWidget {
-  const GteDisputeHubScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteDisputeHubScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -40,17 +39,26 @@ class _GteDisputeHubScreenState extends State<GteDisputeHubScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Support & disputes'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: FutureBuilder<List<GteDispute>>(
+    return GtexProductionFlowScaffold(
+      title: 'Support & disputes',
+      subtitle:
+          'Live order, wallet, and payout disputes with evidence and resolution threads.',
+      icon: Icons.support_agent_outlined,
+      accent: GtexColors.gold,
+      statusLabel: 'GTEX Support',
+      actions: <Widget>[
+        IconButton(
+          tooltip: 'Refresh disputes',
+          onPressed: _refresh,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      child: FutureBuilder<List<GteDispute>>(
         future: _disputesFuture,
-        builder:
-            (BuildContext context, AsyncSnapshot<List<GteDispute>> snapshot) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<List<GteDispute>> snapshot,
+        ) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -77,8 +85,10 @@ class _GteDisputeHubScreenState extends State<GteDisputeHubScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(dispute.reference,
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        dispute.reference,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         'Status: ${_disputeStatusLabel(dispute.status)}',
@@ -100,11 +110,12 @@ class _GteDisputeHubScreenState extends State<GteDisputeHubScreen> {
                         onPressed: () {
                           Navigator.of(context).push<void>(
                             MaterialPageRoute<void>(
-                              builder: (BuildContext context) =>
-                                  GteDisputeThreadScreen(
-                                api: widget.controller.api,
-                                disputeId: dispute.id,
-                              ),
+                              builder:
+                                  (BuildContext context) =>
+                                      GteDisputeThreadScreen(
+                                        api: widget.controller.api,
+                                        disputeId: dispute.id,
+                                      ),
                             ),
                           );
                         },
@@ -156,10 +167,12 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
   @override
   void initState() {
     super.initState();
-    _subjectController =
-        TextEditingController(text: widget.prefillSubject ?? '');
-    _messageController =
-        TextEditingController(text: widget.prefillMessage ?? '');
+    _subjectController = TextEditingController(
+      text: widget.prefillSubject ?? '',
+    );
+    _messageController = TextEditingController(
+      text: widget.prefillMessage ?? '',
+    );
     _loadWhatsapp();
   }
 
@@ -207,13 +220,13 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
       if (bytes.isEmpty) {
         throw Exception('Unable to read the selected file.');
       }
-      final GteAttachment attachment =
-          await widget.controller.api.uploadAttachment(
-        file.name,
-        bytes,
-        contentType:
-            file.extension == null ? null : 'application/${file.extension}',
-      );
+      final GteAttachment attachment = await widget.controller.api
+          .uploadAttachment(
+            file.name,
+            bytes,
+            contentType:
+                file.extension == null ? null : 'application/${file.extension}',
+          );
       if (!mounted) {
         return;
       }
@@ -254,9 +267,10 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
           resourceType: widget.resourceType,
           resourceId: widget.resourceId,
           reference: widget.reference,
-          subject: _subjectController.text.trim().isEmpty
-              ? null
-              : _subjectController.text.trim(),
+          subject:
+              _subjectController.text.trim().isEmpty
+                  ? null
+                  : _subjectController.text.trim(),
           message: message,
           attachmentId: _attachment?.id,
         ),
@@ -264,15 +278,16 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dispute created.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Dispute created.')));
       Navigator.of(context).pushReplacement<void, void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) => GteDisputeThreadScreen(
-            api: widget.controller.api,
-            disputeId: dispute.id,
-          ),
+          builder:
+              (BuildContext context) => GteDisputeThreadScreen(
+                api: widget.controller.api,
+                disputeId: dispute.id,
+              ),
         ),
       );
     } catch (error) {
@@ -302,16 +317,22 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
     }
     final String message =
         'Support request for ${widget.reference} (${widget.resourceType}).';
-    final Uri uri =
-        Uri.parse('https://wa.me/$digits?text=${Uri.encodeComponent(message)}');
+    final Uri uri = Uri.parse(
+      'https://wa.me/$digits?text=${Uri.encodeComponent(message)}',
+    );
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Open dispute')),
-      body: ListView(
+    return GtexProductionFlowScaffold(
+      title: 'Open dispute',
+      subtitle:
+          'Attach evidence, describe the issue, and start a live GTEX support case.',
+      icon: Icons.report_problem_outlined,
+      accent: GteShellTheme.warning,
+      statusLabel: 'Support intake',
+      child: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
           GteSurfacePanel(
@@ -320,14 +341,20 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Dispute summary',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Dispute summary',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 8),
-                Text('Reference: ${widget.reference}',
-                    style: Theme.of(context).textTheme.bodyMedium),
+                Text(
+                  'Reference: ${widget.reference}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
                 const SizedBox(height: 4),
-                Text('Type: ${widget.resourceType}',
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'Type: ${widget.resourceType}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 10),
                 if (_whatsappNumber != null)
                   OutlinedButton.icon(
@@ -343,8 +370,10 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Describe the issue',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Describe the issue',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _subjectController,
@@ -371,7 +400,8 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
                       onPressed: _isUploading ? null : _pickAttachment,
                       icon: const Icon(Icons.attach_file_outlined),
                       label: Text(
-                          _isUploading ? 'Uploading...' : 'Add attachment'),
+                        _isUploading ? 'Uploading...' : 'Add attachment',
+                      ),
                     ),
                     if (_attachment != null)
                       Chip(label: Text(_attachment!.filename)),
@@ -390,8 +420,9 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: _isSubmitting ? null : _submit,
-                    child:
-                        Text(_isSubmitting ? 'Submitting...' : 'Open dispute'),
+                    child: Text(
+                      _isSubmitting ? 'Submitting...' : 'Open dispute',
+                    ),
                   ),
                 ),
               ],
@@ -574,21 +605,29 @@ class _GteDisputeThreadScreenState extends State<GteDisputeThreadScreen> {
     }
     final String message =
         'Support thread ${dispute.reference} (${dispute.resourceType}).';
-    final Uri uri =
-        Uri.parse('https://wa.me/$digits?text=${Uri.encodeComponent(message)}');
+    final Uri uri = Uri.parse(
+      'https://wa.me/$digits?text=${Uri.encodeComponent(message)}',
+    );
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isAdmin ? 'Dispute console' : 'Dispute thread'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: FutureBuilder<GteDispute>(
+    return GtexProductionFlowScaffold(
+      title: widget.isAdmin ? 'Dispute console' : 'Dispute thread',
+      subtitle:
+          'Evidence, messages, status, and support handoff stay attached to the live dispute record.',
+      icon: Icons.forum_outlined,
+      accent: GteShellTheme.warning,
+      statusLabel: widget.isAdmin ? 'Admin dispute' : 'Support thread',
+      actions: <Widget>[
+        IconButton(
+          tooltip: 'Refresh dispute',
+          onPressed: _refresh,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      child: FutureBuilder<GteDispute>(
         future: _disputeFuture,
         builder: (BuildContext context, AsyncSnapshot<GteDispute> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -616,8 +655,10 @@ class _GteDisputeThreadScreenState extends State<GteDisputeThreadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(dispute.reference,
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        dispute.reference,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         'Status: ${_disputeStatusLabel(dispute.status)}',
@@ -649,9 +690,10 @@ class _GteDisputeThreadScreenState extends State<GteDisputeThreadScreen> {
                   ...messages.map(
                     (GteDisputeMessage message) => _MessageBubble(
                       message: message,
-                      isOwn: widget.isAdmin
-                          ? message.senderRole == 'admin'
-                          : message.senderRole == 'user',
+                      isOwn:
+                          widget.isAdmin
+                              ? message.senderRole == 'admin'
+                              : message.senderRole == 'user',
                     ),
                   ),
                 const SizedBox(height: 12),
@@ -659,8 +701,10 @@ class _GteDisputeThreadScreenState extends State<GteDisputeThreadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Send a message',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Send a message',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _messageController,
@@ -678,9 +722,9 @@ class _GteDisputeThreadScreenState extends State<GteDisputeThreadScreen> {
                           OutlinedButton.icon(
                             onPressed: _isUploading ? null : _pickAttachment,
                             icon: const Icon(Icons.attach_file_outlined),
-                            label: Text(_isUploading
-                                ? 'Uploading...'
-                                : 'Add attachment'),
+                            label: Text(
+                              _isUploading ? 'Uploading...' : 'Add attachment',
+                            ),
                           ),
                           if (_attachment != null)
                             Chip(label: Text(_attachment!.filename)),
@@ -700,8 +744,9 @@ class _GteDisputeThreadScreenState extends State<GteDisputeThreadScreen> {
                         child: FilledButton(
                           onPressed:
                               _isSending ? null : () => _sendMessage(dispute),
-                          child:
-                              Text(_isSending ? 'Sending...' : 'Send message'),
+                          child: Text(
+                            _isSending ? 'Sending...' : 'Send message',
+                          ),
                         ),
                       ),
                     ],
@@ -717,19 +762,17 @@ class _GteDisputeThreadScreenState extends State<GteDisputeThreadScreen> {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
-    required this.message,
-    required this.isOwn,
-  });
+  const _MessageBubble({required this.message, required this.isOwn});
 
   final GteDisputeMessage message;
   final bool isOwn;
 
   @override
   Widget build(BuildContext context) {
-    final Color bubbleColor = isOwn
-        ? GteShellTheme.accentCapital.withValues(alpha: 0.2)
-        : Colors.white.withValues(alpha: 0.06);
+    final Color bubbleColor =
+        isOwn
+            ? GteShellTheme.accentCapital.withValues(alpha: 0.2)
+            : Colors.white.withValues(alpha: 0.06);
     return Align(
       alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -745,12 +788,16 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment:
               isOwn ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: <Widget>[
-            Text(message.message,
-                style: Theme.of(context).textTheme.bodyMedium),
+            Text(
+              message.message,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             if (message.attachmentId != null) ...<Widget>[
               const SizedBox(height: 8),
-              Text('Attachment on file',
-                  style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'Attachment on file',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
             const SizedBox(height: 6),
             Text(

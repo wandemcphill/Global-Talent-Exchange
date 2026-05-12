@@ -569,15 +569,24 @@ def test_player_story_dna_and_rivalries_routes(app_client) -> None:
     avatar_payload = avatar_response.json()
     assert avatar_payload["player_id"] == wonderkid.id
     assert avatar_payload["render_format"] == "json"
-    assert avatar_payload["face"]["region_preset"] == "west_african"
-    assert avatar_payload["face"]["facial_features"]["dna_archetype"] in {"playmaker", "poacher", "engine", "destroyer"}
-    assert avatar_payload["layered_svg"].startswith("<svg")
-    assert avatar_payload["static_image_data_uri"].startswith("data:image/svg+xml;base64,")
+    assert avatar_payload["portrait_url"].startswith("http://127.0.0.1:8000/generated-media/")
+    assert "/regen_newgen_faces/script_skin_hair/" in avatar_payload["portrait_url"]
+    assert avatar_payload["portrait_source_provider"] == "gtex_regen_newgen_face_bank"
+    assert avatar_payload["portrait_source_collection"] == "script_skin_tone_hair_colour"
+    assert avatar_payload["portrait_status"] == "ready_newgen_face_bank"
+    assert avatar_payload["face"] is None
+    assert avatar_payload["legacy_avatar"] is None
+    assert avatar_payload["layered_svg"] is None
+    assert avatar_payload["static_image_data_uri"] is None
+    assert avatar_payload["capabilities"] == ["newgen_face_bank_image"]
 
-    avatar_svg_response = client.get(f"/players/{wonderkid.id}/avatar", params={"format": "svg"})
-    assert avatar_svg_response.status_code == 200, avatar_svg_response.text
-    assert avatar_svg_response.headers["content-type"].startswith("image/svg+xml")
-    assert "<svg" in avatar_svg_response.text
+    avatar_svg_response = client.get(
+        f"/players/{wonderkid.id}/avatar",
+        params={"format": "svg"},
+        follow_redirects=False,
+    )
+    assert avatar_svg_response.status_code == 307, avatar_svg_response.text
+    assert "/regen_newgen_faces/script_skin_hair/" in avatar_svg_response.headers["location"]
 
     missing_story_response = client.get("/players/nonexistent/story")
     missing_dna_response = client.get("/players/nonexistent/dna")

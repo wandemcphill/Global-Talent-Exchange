@@ -7,14 +7,55 @@ import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
+import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
+import 'package:gte_frontend/screens/gte_market_players_screen.dart';
+import 'package:gte_frontend/screens/gte_market_players_screen_v2.dart';
 import 'package:gte_frontend/screens/gte_portfolio_screen.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen.dart';
 import 'package:gte_frontend/screens/wallet/gte_withdrawal_flow_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
+  test('community route parses to the live Social shell lane', () {
+    expect(
+      GteNavigationRoute.parse('/app/community').primaryDestination,
+      GtePrimaryDestination.community,
+    );
+    expect(
+      GteNavigationRoute.parse('/app/social').primaryDestination,
+      GtePrimaryDestination.community,
+    );
+  });
+
+  testWidgets('active shell mounts the GTEX V2 transfer market route', (
+    WidgetTester tester,
+  ) async {
+    _setLargeViewport(tester);
+
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteExchangeShellScreen.fromPath(
+          controller: controller,
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+          initialPath: '/app/market',
+        ),
+      ),
+    );
+    await _pumpUntilText(tester, 'Transfer Hub');
+
+    expect(find.byType(GteMarketPlayersScreenV2), findsOneWidget);
+    expect(find.byType(GteMarketPlayersScreen), findsNothing);
+    expect(find.text('My Shortlist'), findsOneWidget);
+  });
+
   testWidgets(
     'active shell keeps creator community hidden for non-creators while preserving adjacent flows',
     (WidgetTester tester) async {
@@ -43,21 +84,9 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Club funds'));
-      await _pumpUntilText(tester, 'Money moves');
-      expect(find.text('Money moves'), findsOneWidget);
-      expect(find.text('Fund wallet'), findsOneWidget);
-
-      final Finder notificationsButton = find.widgetWithText(
-        OutlinedButton,
-        'Notifications',
-      );
-      await tester.ensureVisible(notificationsButton);
-      await tester.tap(notificationsButton);
-      await _pumpUntilText(tester, 'Mark all read');
-      expect(find.text('Mark all read'), findsOneWidget);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      await _pumpUntilText(tester, 'Money moves');
+      await _pumpUntilText(tester, 'Capital position');
+      expect(find.text('Wallet & Capital'), findsWidgets);
+      expect(find.text('Top up'), findsOneWidget);
 
       expect(find.byTooltip('Creator community'), findsNothing);
 
@@ -93,7 +122,7 @@ void main() {
           ),
         ),
       );
-      await _pumpUntilText(tester, 'Money moves');
+      await _pumpUntilText(tester, 'Wallet & Capital');
 
       expect(find.text('Wallet'), findsWidgets);
       final Finder walletNavChip = find.text('Wallet').last;
@@ -105,8 +134,8 @@ void main() {
 
       await tester.ensureVisible(walletNavChip);
       await tester.tap(walletNavChip);
-      await _pumpUntilText(tester, 'Money moves');
-      expect(find.text('Fund wallet'), findsOneWidget);
+      await _pumpUntilText(tester, 'Capital position');
+      expect(find.text('Top up'), findsOneWidget);
       await tester.pumpAndSettle();
     },
   );

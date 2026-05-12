@@ -5509,6 +5509,19 @@
         "source_file": "backend/app/federations/router.py",
         "response_model": "list[FederationView]"
       },
+      "get_api_v2_federations_national_associations_country_code": {
+        "method": "GET",
+        "canonical_path": "/api/v2/federations/national-associations/{country_code}",
+        "aliases": [
+          "/api/federations/national-associations/{country_code}",
+          "/api/v1/federations/national-associations/{country_code}",
+          "/api/v2/federations/national-associations/{country_code}",
+          "/federations/national-associations/{country_code}"
+        ],
+        "handler": "get_national_association",
+        "source_file": "backend/app/federations/router.py",
+        "response_model": "NationalAssociationProfileView"
+      },
       "get_api_v2_federations_federation_id": {
         "method": "GET",
         "canonical_path": "/api/v2/federations/{federation_id}",
@@ -5638,6 +5651,19 @@
         "handler": "create_league",
         "source_file": "backend/app/federations/router.py",
         "response_model": "FederationLeagueView"
+      },
+      "post_api_v2_federations_national_associations_country_code_eligibility_review": {
+        "method": "POST",
+        "canonical_path": "/api/v2/federations/national-associations/{country_code}/eligibility-review",
+        "aliases": [
+          "/api/federations/national-associations/{country_code}/eligibility-review",
+          "/api/v1/federations/national-associations/{country_code}/eligibility-review",
+          "/api/v2/federations/national-associations/{country_code}/eligibility-review",
+          "/federations/national-associations/{country_code}/eligibility-review"
+        ],
+        "handler": "review_national_eligibility",
+        "source_file": "backend/app/federations/router.py",
+        "response_model": "NationalEligibilityReviewView"
       },
       "post_api_v2_federations_federation_id_memberships": {
         "method": "POST",
@@ -10785,6 +10811,19 @@
         "source_file": "backend/app/player_cards/router.py",
         "response_model": "list[PlayerCardHoldingView]"
       },
+      "get_api_v2_player_cards_packs": {
+        "method": "GET",
+        "canonical_path": "/api/v2/player-cards/packs",
+        "aliases": [
+          "/api/player-cards/packs",
+          "/api/v1/player-cards/packs",
+          "/api/v2/player-cards/packs",
+          "/player-cards/packs"
+        ],
+        "handler": "list_card_packs",
+        "source_file": "backend/app/player_cards/router.py",
+        "response_model": "list[PlayerCardPackView]"
+      },
       "get_api_v2_player_cards_listings": {
         "method": "GET",
         "canonical_path": "/api/v2/player-cards/listings",
@@ -11043,6 +11082,45 @@
         "handler": "admin_mint_preseeded_regen",
         "source_file": "backend/app/player_cards/router.py",
         "response_model": "AdminPreseededRegenMintResponse"
+      },
+      "post_api_v2_player_cards_cards_burn": {
+        "method": "POST",
+        "canonical_path": "/api/v2/player-cards/cards/burn",
+        "aliases": [
+          "/api/player-cards/cards/burn",
+          "/api/v1/player-cards/cards/burn",
+          "/api/v2/player-cards/cards/burn",
+          "/player-cards/cards/burn"
+        ],
+        "handler": "burn_player_card",
+        "source_file": "backend/app/player_cards/router.py",
+        "response_model": "PlayerCardBurnView"
+      },
+      "post_api_v2_player_cards_cards_upgrade": {
+        "method": "POST",
+        "canonical_path": "/api/v2/player-cards/cards/upgrade",
+        "aliases": [
+          "/api/player-cards/cards/upgrade",
+          "/api/v1/player-cards/cards/upgrade",
+          "/api/v2/player-cards/cards/upgrade",
+          "/player-cards/cards/upgrade"
+        ],
+        "handler": "upgrade_player_cards",
+        "source_file": "backend/app/player_cards/router.py",
+        "response_model": "PlayerCardUpgradeView"
+      },
+      "post_api_v2_player_cards_packs_pack_key_open": {
+        "method": "POST",
+        "canonical_path": "/api/v2/player-cards/packs/{pack_key}/open",
+        "aliases": [
+          "/api/player-cards/packs/{pack_key}/open",
+          "/api/v1/player-cards/packs/{pack_key}/open",
+          "/api/v2/player-cards/packs/{pack_key}/open",
+          "/player-cards/packs/{pack_key}/open"
+        ],
+        "handler": "open_card_pack",
+        "source_file": "backend/app/player_cards/router.py",
+        "response_model": "PlayerCardPackOpeningView"
       },
       "post_api_v2_player_cards_listings": {
         "method": "POST",
@@ -16757,6 +16835,30 @@
         "source_file": "backend/app/viral/router.py",
         "response_model": "ViralFeedResponse"
       },
+      "get_api_v2_viral_feed_public": {
+        "method": "GET",
+        "canonical_path": "/api/v2/viral-feed",
+        "aliases": [
+          "/api/viral-feed",
+          "/api/v1/viral-feed",
+          "/api/v2/viral-feed"
+        ],
+        "handler": "read_viral_feed",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "ViralFeedResponse"
+      },
+      "get_api_v2_clips_clip_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clips/{clip_id}",
+        "aliases": [
+          "/api/clips/{clip_id}",
+          "/api/v1/clips/{clip_id}",
+          "/api/v2/clips/{clip_id}"
+        ],
+        "handler": "read_clip_detail",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "ViralClipView"
+      },
       "get_api_v2_viral_feed_for_you": {
         "method": "GET",
         "canonical_path": "/api/v2/viral/feed/for-you",
@@ -16805,6 +16907,54 @@
         "handler": "ingest_clip_events",
         "source_file": "backend/app/viral/router.py",
         "response_model": "ClipEventIngestionAccepted"
+      },
+      "get_api_v2_admin_clips_moderation": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/clips/moderation",
+        "aliases": [
+          "/api/admin/clips/moderation",
+          "/api/v1/admin/clips/moderation",
+          "/api/v2/admin/clips/moderation"
+        ],
+        "handler": "list_clip_moderation_events",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "list[ClipModerationEventView]"
+      },
+      "post_api_v2_admin_clips_clip_id_approve": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/clips/{clip_id}/approve",
+        "aliases": [
+          "/api/admin/clips/{clip_id}/approve",
+          "/api/v1/admin/clips/{clip_id}/approve",
+          "/api/v2/admin/clips/{clip_id}/approve"
+        ],
+        "handler": "approve_clip",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "ClipModerationEventView"
+      },
+      "post_api_v2_admin_clips_clip_id_block": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/clips/{clip_id}/block",
+        "aliases": [
+          "/api/admin/clips/{clip_id}/block",
+          "/api/v1/admin/clips/{clip_id}/block",
+          "/api/v2/admin/clips/{clip_id}/block"
+        ],
+        "handler": "block_clip",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "ClipModerationEventView"
+      },
+      "post_api_v2_clips_clip_id_report": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clips/{clip_id}/report",
+        "aliases": [
+          "/api/clips/{clip_id}/report",
+          "/api/v1/clips/{clip_id}/report",
+          "/api/v2/clips/{clip_id}/report"
+        ],
+        "handler": "report_clip",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "ClipModerationEventView"
       }
     },
     "wallets": {

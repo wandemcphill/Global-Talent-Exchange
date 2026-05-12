@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.awards.service import AwardsCultureService
@@ -19,6 +19,7 @@ from app.models.gtex_economy import GtexContributionSourceType
 from app.models.notification_record import NotificationRecord
 from app.models.ticketing import StadiumEvent, StadiumTicket, TicketReaction, TicketWaitlist
 from app.models.user import User, UserRole
+from app.notifications.service import NotificationEventMatrixService
 from app.ticketing.schemas import (
     AttendeeExperienceView,
     StadiumDemandView,
@@ -159,6 +160,21 @@ class TicketingService:
                 raise TicketingValidationError("seat_tier is required when buying from primary inventory.")
             ticket = self._buy_primary_ticket(event=event, buyer=user, seat_tier=str(seat_tier))
         self._refresh_event_market_state(event)
+        self._publish_matrix_notification(
+            event_key="ticket_purchased",
+            target_user_ids=[user.id],
+            resource_id=ticket.id,
+            message=f"Your {event.title} ticket is confirmed.",
+            metadata={
+                "event_id": event.id,
+                "match_id": event.match_id,
+                "ticket_id": ticket.id,
+                "seat_tier": ticket.seat_tier,
+                "seat_code": ticket.seat_code,
+                "sale_type": "resale" if resale_ticket_id is not None else "primary",
+                "route": "/app/play",
+            },
+        )
         wallet_summary = self.wallet_service.get_wallet_summary(self.session, user, currency=LedgerUnit.CREDIT)
         return TicketBuyResponse(
             event=self._build_event_view(event, user=user),
@@ -1083,6 +1099,35 @@ class TicketingService:
             )
             notified += 1
         return notified
+
+    def _publish_matrix_notification(
+        self,
+        *,
+        event_key: str,
+        target_user_ids: list[str | None],
+        resource_id: str,
+        message: str,
+        metadata: dict[str, object],
+    ) -> None:
+        if not self._notification_tables_available():
+            return
+        normalized_targets = [user_id for user_id in target_user_ids if user_id]
+        if not normalized_targets:
+            return
+        NotificationEventMatrixService(self.session).publish_event(
+            event_key=event_key,
+            target_user_ids=normalized_targets,
+            resource_id=resource_id,
+            message=message,
+            metadata_json=metadata,
+        )
+
+    def _notification_tables_available(self) -> bool:
+        inspector = inspect(self.session.connection())
+        return all(
+            inspector.has_table(table_name)
+            for table_name in ("notification_records", "notification_preferences", "users")
+        )
 
     def _record_jackpot_contribution(self, *, participant_user_id: str | None, source_id: str | None, entry_fee: Decimal, contribution_amount: Decimal, metadata: dict[str, Any]) -> None:
         if self.app is None or contribution_amount <= Decimal("0.0000"):

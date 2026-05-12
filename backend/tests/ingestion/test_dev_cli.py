@@ -23,6 +23,7 @@ from app.ingestion.dev_cli import (
     build_parser,
     migrate_database,
     rebuild_demo_market,
+    repair_national_regen_seed_names_database,
     reset_local_database,
     resolve_sqlite_database_path,
     run_backend_server,
@@ -31,6 +32,7 @@ from app.ingestion.dev_cli import (
     run_simulation_ticks_database,
     seed_all_database,
     seed_demo_liquidity_database,
+    seed_national_regen_pool_database,
     seed_world_visibility_database,
 )
 from app.ingestion.models import Country, Player
@@ -43,6 +45,7 @@ from app.models.transfer_market import TransferListing
 from app.models.user import User
 from app.models.wallet import PaymentEvent
 from app.orders.models import Order
+from app.services.regen_country_name_pools import COUNTRY_SPECIFIC_NAME_POOLS
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
@@ -355,6 +358,165 @@ def test_seed_world_visibility_database_prefers_canonical_country_codes(tmp_path
     assert summary["transfer_listing_count"] > 0
     assert summary["federation_count"] > 0
     assert summary["national_team_competition_count"] > 0
+
+
+def test_seed_national_regen_pool_database_seeds_kenya_u21_with_approved_portraits(tmp_path: Path) -> None:
+    database_path = tmp_path / "national-regen-pool.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+    migrate_database(database_url)
+
+    result = seed_national_regen_pool_database(
+        database_url=database_url,
+        country_codes=["KE"],
+        seeds_per_country=30,
+        age_band="u21",
+        preseed_batch="test_global_u21_batch",
+    )
+
+    assert result["seed_result"]["summary"]["created"] == 30
+    assert result["total_in_batch"] == 30
+    assert result["country_count"] == 1
+    assert result["kenya_count"] == 30
+    assert result["age_min"] >= 14
+    assert result["age_max"] <= 21
+
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        with SessionLocal() as session:
+            rows = session.scalars(
+                select(NationalRegenSeed)
+                .where(
+                    NationalRegenSeed.country_code == "KE",
+                    NationalRegenSeed.preseed_batch == "test_global_u21_batch",
+                )
+                .order_by(NationalRegenSeed.display_name.asc())
+            ).all()
+            assert len(rows) == 30
+            given_names = {"Victor", "Brian", "Dennis", "Michael", "Kevin", "John", "Joseph", "Samuel", "Collins", "Elvis"}
+            surnames = {"Otieno", "Omondi", "Wanyama", "Odhiambo", "Mutiso", "Kiptoo", "Ochieng", "Kamau", "Maina", "Mwangi"}
+            for seed in rows:
+                parts = seed.display_name.split()
+                assert parts[0] in given_names
+                assert parts[1] in surnames
+                assert not parts[-1].isdigit()
+                assert seed.age_band == "u21"
+                assert 14 <= seed.age <= 21
+                metadata = dict(seed.metadata_json or {})
+                portrait_url = str(metadata.get("portraitUrl") or "")
+                assert "/generated-media/regen_newgen_faces/script_skin_hair/" in portrait_url
+                assert not portrait_url.lower().endswith(".svg")
+    finally:
+        engine.dispose()
+
+
+def test_seed_national_regen_pool_database_uses_country_specific_name_pools(tmp_path: Path) -> None:
+    database_path = tmp_path / "national-regen-country-names.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+    migrate_database(database_url)
+
+    countries = [
+        Country(
+            source_provider="test",
+            provider_external_id="BRA",
+            name="Brazil",
+            alpha2_code="BR",
+            alpha3_code="BRA",
+            fifa_code="BRA",
+            is_enabled_for_universe=True,
+        ),
+        Country(
+            source_provider="test",
+            provider_external_id="JPN",
+            name="Japan",
+            alpha2_code="JP",
+            alpha3_code="JPN",
+            fifa_code="JPN",
+            is_enabled_for_universe=True,
+        ),
+        Country(
+            source_provider="test",
+            provider_external_id="HTI",
+            name="Haiti",
+            alpha2_code="HT",
+            alpha3_code="HTI",
+            fifa_code="HAI",
+            is_enabled_for_universe=True,
+        ),
+        Country(
+            source_provider="test",
+            provider_external_id="ENG",
+            name="England",
+            alpha2_code="EN",
+            alpha3_code="ENG",
+            fifa_code="ENG",
+            is_enabled_for_universe=True,
+        ),
+        Country(
+            source_provider="test",
+            provider_external_id="BONAIRE",
+            name="Bonaire",
+            confederation_code="CONCACAF",
+            is_enabled_for_universe=True,
+        ),
+    ]
+
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        with SessionLocal() as session:
+            session.add_all(countries)
+            session.commit()
+    finally:
+        engine.dispose()
+
+    result = seed_national_regen_pool_database(
+        database_url=database_url,
+        country_codes=None,
+        seeds_per_country=12,
+        age_band="u21",
+        preseed_batch="test_country_name_pool_batch",
+        include_canonical_countries=False,
+    )
+    repair = repair_national_regen_seed_names_database(
+        database_url=database_url,
+        preseed_batch="test_country_name_pool_batch",
+        refresh_portraits=False,
+    )
+
+    assert result["total_in_batch"] == 150
+    assert result["country_count"] == 5
+    assert repair["scanned"] == 150
+    assert repair["country_count"] == 5
+
+    expected_profile_by_country = {
+        "Brazil": "BR",
+        "Japan": "JP",
+        "Haiti": "HT",
+        "England": "EN",
+        "Bonaire": "BQ",
+    }
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        with SessionLocal() as session:
+            rows = session.scalars(
+                select(NationalRegenSeed)
+                .where(NationalRegenSeed.preseed_batch == "test_country_name_pool_batch")
+                .order_by(NationalRegenSeed.country_name.asc(), NationalRegenSeed.display_name.asc())
+            ).all()
+            assert len(rows) == 150
+            for seed in rows:
+                profile_code = expected_profile_by_country[seed.country_name]
+                pool = COUNTRY_SPECIFIC_NAME_POOLS[profile_code]
+                expected_names = {f"{given} {surname}" for given in pool["given"] for surname in pool["surnames"]}
+                assert seed.display_name in expected_names
+                assert not seed.display_name.split()[-1].isdigit()
+                metadata = dict(seed.metadata_json or {})
+                assert metadata.get("naming_country_code") == profile_code
+                assert metadata.get("portraitCountryCode") == profile_code
+    finally:
+        engine.dispose()
 
 
 def test_seed_all_database_is_idempotent_and_populates_backend_tables(tmp_path: Path) -> None:

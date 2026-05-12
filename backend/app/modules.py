@@ -325,6 +325,18 @@ def _seed_sponsorship_defaults(app, context) -> None:
     _run_startup_seed(context, seed_name="sponsorship_defaults", seed_action=_seed)
 
 
+def _seed_club_growth_defaults(app, context) -> None:
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.club_growth.service import ClubGrowthService
+
+            service = ClubGrowthService(session)
+            service.seed_staff_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="club_growth_defaults", seed_action=_seed)
+
+
 def _seed_engagement_defaults(app, context) -> None:
     def _seed() -> None:
         with context.database.session_factory() as session:
@@ -475,6 +487,7 @@ DOMAIN_MODULES = (
         on_startup=(_seed_admin_engine_defaults,),
     ),
     _module("admin_engine_admin", router_path="app.admin_engine.router:admin_router"),
+    _module("launch_control", router_path="app.launch_control.router:router", api_only=True),
     _module("runtime_config", router_path="app.runtime_config.router:router"),
     _module("ai_manager", router_path="app.ai_manager.router:router"),
     _module(
@@ -579,6 +592,8 @@ DOMAIN_MODULES = (
     _module("jobs_api", router_path="app.jobs.router:router"),
     _module("organizations", router_path="app.access_control.router:router"),
     _module("wallets", router_path="app.wallets.router:router"),
+    _module("coin_traders", router_path="app.coin_traders.router:router"),
+    _module("admin_coin_traders", router_path="app.coin_traders.router:admin_router"),
     _module("paystack_webhooks", router_path="app.admin_finance.router:webhook_router"),
     _module("payments", router_path="app.integrations.payments.router:router"),
     _module("media_engine", router_path="app.media_engine.router:router"),
@@ -629,6 +644,9 @@ DOMAIN_MODULES = (
         router_path="app.discovery_engine.router:admin_router",
         api_only=True,
     ),
+    _module("global_search", router_path="app.global_search.router:router", api_only=True),
+    _module("matchday_economy", router_path="app.matchday_economy.router:router", api_only=True),
+    _module("operations_readiness", router_path="app.operations_readiness.router:router", api_only=True),
     _module("player_import_admin", router_path="app.player_import_engine.router:admin_router"),
     _module("risk_ops_engine", router_path="app.risk_ops_engine.router:router"),
     _module("risk_ops_engine_admin", router_path="app.risk_ops_engine.router:admin_router"),
@@ -743,6 +761,13 @@ DOMAIN_MODULES = (
     _module("football_universe", router_path="app.football_universe.router:router", with_api_alias=True),
     _module("clubs", router_path="app.clubs.router:router"),
     _module("canonical_clubs", router_path="app.routes.clubs:router"),
+    _module("club_lifecycle", router_path="app.club_lifecycle.router:router", api_only=True),
+    _module(
+        "club_growth",
+        router_path="app.club_growth.router:router",
+        api_only=True,
+        on_startup=(_seed_club_growth_defaults,),
+    ),
     _module("admin_clubs", router_path="app.routes.admin_clubs:router"),
     _module("club_ops", router_path="app.routes.club_ops:router"),
     _module("competitions", router_path="app.routes.competitions:router"),

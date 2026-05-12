@@ -94,6 +94,27 @@ class GtexApp extends StatelessWidget {
       config: config ?? _bootstrapConfig,
       controller: controller ?? _bootstrapController,
       themeController: themeController,
+      initialPath: _resolveInitialAppPath(),
     );
   }
+}
+
+String _resolveInitialAppPath() {
+  final Uri uri = Uri.base;
+  final String fragment = uri.fragment.trim();
+  if (fragment.startsWith('/')) {
+    return _withQuery(fragment, uri.query);
+  }
+  final String path = uri.path.trim();
+  if (path.isNotEmpty && path != '/') {
+    return _withQuery(path, uri.query);
+  }
+  return '/';
+}
+
+String _withQuery(String path, String query) {
+  if (query.trim().isEmpty || path.contains('?')) {
+    return path;
+  }
+  return '$path?$query';
 }

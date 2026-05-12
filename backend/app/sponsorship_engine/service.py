@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
 from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
@@ -18,6 +18,7 @@ from app.models.sponsorship_engine import SponsorshipLead
 from app.models.user import User
 from app.models.wallet import LedgerSourceTag
 from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.notifications.service import NotificationEventMatrixService
 from app.story_feed_engine.service import StoryFeedService
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -252,6 +253,20 @@ class SponsorshipEngineService:
             metadata_json={"contract_id": contract.id, "payout_id": payout.id, "credit_amount": str(credit_amount)},
             published_by_user_id=actor.id,
         )
+        self._publish_matrix_notification(
+            event_key="sponsorship_paid",
+            target_user_ids=[club.owner_user_id],
+            resource_id=payout.id,
+            message=f"{contract.sponsor_name} sponsorship paid {credit_amount:.4f} credits.",
+            metadata={
+                "club_id": club.id,
+                "contract_id": contract.id,
+                "payout_id": payout.id,
+                "credit_amount": str(credit_amount),
+                "currency": contract.currency,
+                "route": "/app/club",
+            },
+        )
         self.session.flush()
         return contract, payout, credit_amount, club.owner_user_id
 
@@ -301,3 +316,32 @@ class SponsorshipEngineService:
             )
             self.session.add(payout)
         self.session.flush()
+
+    def _publish_matrix_notification(
+        self,
+        *,
+        event_key: str,
+        target_user_ids: list[str | None],
+        resource_id: str,
+        message: str,
+        metadata: dict[str, object],
+    ) -> None:
+        if not self._notification_tables_available():
+            return
+        normalized_targets = [user_id for user_id in target_user_ids if user_id]
+        if not normalized_targets:
+            return
+        NotificationEventMatrixService(self.session).publish_event(
+            event_key=event_key,
+            target_user_ids=normalized_targets,
+            resource_id=resource_id,
+            message=message,
+            metadata_json=metadata,
+        )
+
+    def _notification_tables_available(self) -> bool:
+        inspector = inspect(self.session.connection())
+        return all(
+            inspector.has_table(table_name)
+            for table_name in ("notification_records", "notification_preferences", "users")
+        )

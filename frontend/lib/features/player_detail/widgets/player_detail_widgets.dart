@@ -11,7 +11,7 @@ import '../../../shared/widgets/metric_pill.dart';
 String playerDetailHeroTag(Player player) => 'player-detail-${player.id}';
 
 bool isElitePlayer(Player player) {
-  return player.rating >= 88 || player.potential >= 92;
+  return player.resolvedGsi >= 88 || player.potential >= 92;
 }
 
 class PlayerStoryBeat {
@@ -161,7 +161,7 @@ class PlayerDetailHeader extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'OVR ${player.rating}',
+                      'GSI ${player.resolvedGsi}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: elite ? AppColors.gold : AppColors.primary,
                         fontWeight: FontWeight.w700,

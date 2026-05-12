@@ -21,6 +21,7 @@ class UserRole(StrEnum):
     SCOUT = "scout"
     AGENT = "agent"
     CLUB = "club"
+    COIN_TRADER = "coin_trader"
 
 
 class KycStatus(StrEnum):

@@ -408,7 +408,7 @@ def test_bulk_ops_reporting_counts_stay_consistent(tmp_path: Path) -> None:
         engine.dispose()
 
 
-def test_bulk_ops_applies_fallback_valuation_when_source_value_is_missing(tmp_path: Path) -> None:
+def test_bulk_ops_marks_rows_partial_when_real_life_market_value_is_missing(tmp_path: Path) -> None:
     engine, session_factory = _session_factory()
     try:
         with session_factory() as session:
@@ -444,9 +444,10 @@ def test_bulk_ops_applies_fallback_valuation_when_source_value_is_missing(tmp_pa
         )
 
         assert imported.run is not None
-        assert imported.run.status == "completed"
-        assert imported.run.publish_ready_rows == 1
-        assert imported.run.mapped_ready_rows == 1
+        assert imported.run.status == "completed_with_errors"
+        assert imported.run.publish_ready_rows == 0
+        assert imported.run.mapped_ready_rows == 0
+        assert imported.run.mapped_partial_rows == 1
 
         with session_factory() as session:
             record = session.scalar(
@@ -455,11 +456,13 @@ def test_bulk_ops_applies_fallback_valuation_when_source_value_is_missing(tmp_pa
                 )
             )
             assert record is not None
-            assert record.processing_state == RealPlayerImportProcessingState.MAPPED_READY.value
+            assert record.processing_state == RealPlayerImportProcessingState.MAPPED_PARTIAL.value
             valuation = dict((record.metadata_json or {}).get("valuation") or {})
-            assert valuation["source"] == "fallback"
-            assert valuation["fallback_used"] is True
-            assert float(valuation["market_value_eur"]) > 0
+            assert valuation["source"] == "missing_real_life_reference"
+            assert valuation["fallback_used"] is False
+            assert valuation["market_value_eur"] is None
+            contract = dict((record.metadata_json or {}).get("publish_contract") or {})
+            assert "market_value" in contract["publish_minimum"]["missing_fields"]
     finally:
         engine.dispose()
 
@@ -632,6 +635,8 @@ def test_bulk_ops_can_publish_provider_shaped_staging_rows() -> None:
                         "provider_player_id": "37672209",
                         "currentClub": {"id": "fulham", "name": "Fulham"},
                         "currentCompetition": {"id": "premier-league", "name": "Premier League"},
+                        "current_market_reference_value": 1_250_000,
+                        "market_reference_currency": "EUR",
                         "season": {"id": "25583"},
                     },
                     metadata_json={

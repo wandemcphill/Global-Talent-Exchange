@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from hashlib import sha256
 import random
+import unicodedata
 from uuid import uuid4
 
 from app.core.config import Settings, get_settings
@@ -21,6 +22,7 @@ from app.schemas.regen_core import (
 )
 from app.regen_universe.dna import generate_dna_profile
 from app.services.club_finance_service import ClubOpsStore, get_club_ops_store
+from app.services.regen_country_name_pools import COUNTRY_NAME_PROFILE_ALIASES, COUNTRY_SPECIFIC_NAME_POOLS
 
 _PRIMARY_POSITIONS = ("GK", "CB", "RB", "LB", "DM", "CM", "AM", "RW", "LW", "ST")
 _SECONDARY_POSITIONS = {
@@ -200,6 +202,80 @@ def _country_profile(
         region_profile_weights=region_profile_weights,
         profiles={profile.key: profile for profile in profiles},
     )
+
+
+def _weighted_name_profile(
+    country_profile: CountryNamingProfile,
+    *,
+    region_name: str | None,
+    rng: random.Random,
+) -> NameProfile:
+    region_key = (region_name or country_profile.default_region).strip().lower()
+    profile_weights = country_profile.region_profile_weights.get(region_key) or country_profile.region_profile_weights.get(
+        "default"
+    )
+    assert profile_weights is not None
+    total = sum(max(weight, 0.0) for _, weight in profile_weights)
+    if total <= 0:
+        return next(iter(country_profile.profiles.values()))
+    marker = rng.random() * total
+    running = 0.0
+    for profile_key, weight in profile_weights:
+        running += max(weight, 0.0)
+        if marker <= running:
+            return country_profile.profiles[profile_key]
+    return country_profile.profiles[profile_weights[-1][0]]
+
+
+def generate_country_display_name(
+    country_profile: CountryNamingProfile,
+    *,
+    region_name: str | None = None,
+    used_names: set[str] | None = None,
+    rng: random.Random | None = None,
+    forced_surname: str | None = None,
+) -> tuple[NameProfile, str]:
+    randomizer = rng or random.Random()
+    used = used_names if used_names is not None else set()
+    taken = {name.casefold() for name in used}
+    profile = _weighted_name_profile(country_profile, region_name=region_name, rng=randomizer)
+
+    def claim(candidate: str) -> str | None:
+        normalized = " ".join(candidate.split())
+        if not normalized:
+            return None
+        folded = normalized.casefold()
+        if folded in taken:
+            return None
+        taken.add(folded)
+        used.add(normalized)
+        return normalized
+
+    def claim_pair(given_name: str, surname: str) -> str | None:
+        if given_name.strip().casefold() == surname.strip().casefold():
+            return None
+        return claim(f"{given_name} {surname}")
+
+    for _ in range(50):
+        surname = forced_surname or randomizer.choice(profile.surnames)
+        candidate = claim_pair(randomizer.choice(profile.given_names), surname)
+        if candidate is not None:
+            return profile, candidate
+
+    given_names = list(profile.given_names)
+    surnames = [forced_surname] if forced_surname else list(profile.surnames)
+    randomizer.shuffle(given_names)
+    randomizer.shuffle(surnames)
+    for given_name in given_names:
+        for surname in surnames:
+            candidate = claim_pair(given_name, surname)
+            if candidate is not None:
+                return profile, candidate
+
+    surname = forced_surname or randomizer.choice(profile.surnames)
+    candidate = f"{randomizer.choice(profile.given_names)} {surname} {randomizer.randint(2, 99)}"
+    used.add(candidate)
+    return profile, candidate
 
 
 _NAMING_PROFILES: dict[str, CountryNamingProfile] = {
@@ -690,6 +766,28 @@ _NAMING_PROFILES.update(
     }
 )
 
+
+def _install_country_specific_name_pools() -> None:
+    for code, pool in COUNTRY_SPECIFIC_NAME_POOLS.items():
+        _NAMING_PROFILES[code] = _country_profile(
+            country_code=code,
+            default_region=str(pool["region"]),
+            default_city=str(pool["city"]),
+            urbanicity="urban",
+            profiles=(
+                _name_profile(
+                    key=f"{code.lower()}_local",
+                    ethnolinguistic_profile=str(pool["ethno"]),
+                    religion_naming_pattern=str(pool["pattern"]),
+                    given_names=tuple(str(name) for name in pool["given"]),
+                    surnames=tuple(str(name) for name in pool["surnames"]),
+                ),
+            ),
+        )
+
+
+_install_country_specific_name_pools()
+
 _COUNTRY_PROFILE_ALIASES: dict[str, tuple[str, str, str]] = {
     "DZ": ("MA", "Algiers", "Algiers"),
     "TN": ("MA", "Tunis", "Tunis"),
@@ -775,7 +873,29 @@ _COUNTRY_PROFILE_ALIASES: dict[str, tuple[str, str, str]] = {
     "KW": ("EG", "Kuwait City", "Kuwait City"),
     "OM": ("EG", "Muscat", "Muscat"),
     "BH": ("EG", "Manama", "Manama"),
+    "NE": ("SN", "Niamey", "Niamey"),
+    "TD": ("CM", "N'Djamena", "N'Djamena"),
+    "MG": ("AO", "Antananarivo", "Antananarivo"),
+    "MU": ("ZA", "Port Louis", "Port Louis"),
+    "TT": ("GB", "Port of Spain", "Port of Spain"),
+    "AG": ("GB", "Saint John", "Saint John's"),
+    "GD": ("GB", "Saint George", "Saint George's"),
+    "GY": ("GB", "Demerara-Mahaica", "Georgetown"),
+    "CU": ("AR", "Havana", "Havana"),
+    "HT": ("FR", "Ouest", "Port-au-Prince"),
+    "GF": ("FR", "Cayenne", "Cayenne"),
+    "MQ": ("FR", "Fort-de-France", "Fort-de-France"),
+    "MF": ("FR", "Marigot", "Marigot"),
+    "NC": ("FR", "South Province", "Noumea"),
+    "PS": ("EG", "Ramallah", "Ramallah"),
+    "TM": ("TR", "Ashgabat", "Ashgabat"),
 }
+
+
+def _normalized_country_name_alias(country_name: str | None) -> str:
+    normalized = unicodedata.normalize("NFKD", country_name or "")
+    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
+    return " ".join(ascii_name.replace("`", "'").replace("\u2019", "'").replace("\u2018", "'").split()).casefold()
 
 
 @lru_cache(maxsize=None)
@@ -797,6 +917,25 @@ def resolve_country_naming_profile(country_code: str | None, *, default_country_
             profiles=base_profile.profiles,
         )
     return _NAMING_PROFILES[default_country_code]
+
+
+def resolve_country_naming_profile_for_country(
+    *,
+    country_code: str | None,
+    country_name: str | None,
+    alpha2_code: str | None = None,
+    alpha3_code: str | None = None,
+    fifa_code: str | None = None,
+    default_country_code: str,
+) -> CountryNamingProfile:
+    for candidate in (alpha2_code, fifa_code, alpha3_code, country_code):
+        normalized = (candidate or "").strip().upper()
+        if normalized in _NAMING_PROFILES or normalized in _COUNTRY_PROFILE_ALIASES:
+            return resolve_country_naming_profile(normalized, default_country_code=default_country_code)
+    name_alias = COUNTRY_NAME_PROFILE_ALIASES.get(_normalized_country_name_alias(country_name))
+    if name_alias:
+        return resolve_country_naming_profile(name_alias, default_country_code=default_country_code)
+    return resolve_country_naming_profile(country_code, default_country_code=default_country_code)
 
 
 @dataclass(slots=True)
@@ -1818,33 +1957,13 @@ class RegenGenerationEngine:
         )
         region_name = lineage_region or club_context.region_name or country_profile.default_region
         city_name = lineage_city or club_context.city_name or country_profile.default_city
-        region_key = region_name.strip().lower()
-        profile_weights = country_profile.region_profile_weights.get(
-            region_key
-        ) or country_profile.region_profile_weights.get("default")
-        assert profile_weights is not None
-        profile_key = self._weighted_choice(profile_weights, rng)
-        profile = country_profile.profiles[profile_key]
-
-        for _ in range(50):
-            surname = forced_surname or rng.choice(profile.surnames)
-            display_name = f"{rng.choice(profile.given_names)} {surname}"
-            if display_name not in used_names:
-                used_names.add(display_name)
-                return (
-                    RegenOriginView(
-                        country_code=country_profile.country_code,
-                        region_name=region_name,
-                        city_name=city_name,
-                        ethnolinguistic_profile=profile.ethnolinguistic_profile,
-                        religion_naming_pattern=profile.religion_naming_pattern,
-                        urbanicity=club_context.urbanicity or country_profile.urbanicity,
-                    ),
-                    display_name,
-                )
-        surname = forced_surname or rng.choice(profile.surnames)
-        display_name = f"{rng.choice(profile.given_names)} {surname} {rng.randint(2, 99)}"
-        used_names.add(display_name)
+        profile, display_name = generate_country_display_name(
+            country_profile,
+            region_name=region_name,
+            used_names=used_names,
+            rng=rng,
+            forced_surname=forced_surname,
+        )
         return (
             RegenOriginView(
                 country_code=country_profile.country_code,
@@ -2189,6 +2308,8 @@ __all__ = [
     "RegenClubContext",
     "RegenGenerationEngine",
     "RegenService",
+    "generate_country_display_name",
     "get_regen_service",
     "resolve_country_naming_profile",
+    "resolve_country_naming_profile_for_country",
 ]

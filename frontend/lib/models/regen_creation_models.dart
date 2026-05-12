@@ -124,6 +124,7 @@ class RegenCreationGeneratedPlayer {
     required this.position,
     required this.currentRating,
     required this.potentialRating,
+    this.globalScoutingIndex,
     this.countryCode,
     this.countryName,
     this.clubId,
@@ -144,7 +145,11 @@ class RegenCreationGeneratedPlayer {
   final String? imageUrl;
   final int currentRating;
   final int potentialRating;
+  final int? globalScoutingIndex;
   final String? cardId;
+
+  int get resolvedGsi =>
+      (globalScoutingIndex ?? currentRating).clamp(0, 100).toInt();
 
   factory RegenCreationGeneratedPlayer.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -174,6 +179,13 @@ class RegenCreationGeneratedPlayer {
       currentRating: GteJson.integer(json, <String>[
         'current_rating',
         'currentRating',
+      ]),
+      globalScoutingIndex: GteJson.integerOrNull(json, <String>[
+        'global_scouting_index',
+        'globalScoutingIndex',
+        'gsi',
+        'current_gsi',
+        'currentGsi',
       ]),
       potentialRating: GteJson.integer(json, <String>[
         'potential_rating',

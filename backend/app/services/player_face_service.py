@@ -16,6 +16,13 @@ from app.models.player_story import PlayerStory
 from app.models.regen import RegenLegacyRecord, RegenPersonalityProfile, RegenProfile
 from app.schemas.avatar import PlayerAvatarRenderView, PlayerAvatarView, PlayerFaceView
 from app.services.avatar_service import AvatarService
+from app.services.regen_portrait_service import (
+    NEWGEN_FACE_BANK_COLLECTION,
+    NEWGEN_FACE_BANK_PROVIDER,
+    RegenPortraitError,
+    RegenPortraitNotFoundError,
+    RegenPortraitService,
+)
 
 _REGION_PRESET_BY_CODE = {
     "NG": "west_african",
@@ -132,6 +139,28 @@ class PlayerFaceService:
 
     def get_avatar_render(self, player_id: str, *, render_format: str = "json") -> PlayerAvatarRenderView:
         player = self._require_player(player_id)
+        regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player.id))
+        if regen is not None or not bool(player.is_real_player):
+            try:
+                portrait = RegenPortraitService(self.session).ensure_player_portrait(player, regen=regen)
+            except RegenPortraitNotFoundError as exc:
+                raise PlayerFaceNotFoundError(str(exc)) from exc
+            except RegenPortraitError as exc:
+                raise PlayerFaceError(str(exc)) from exc
+            return PlayerAvatarRenderView(
+                player_id=player.id,
+                render_format=render_format,  # type: ignore[arg-type]
+                portrait_url=portrait.portrait_url,
+                portrait_status=portrait.status,
+                portrait_storage_key=portrait.storage_key,
+                portrait_source_provider=NEWGEN_FACE_BANK_PROVIDER,
+                portrait_source_collection=NEWGEN_FACE_BANK_COLLECTION,
+                capabilities=(
+                    ["newgen_face_bank_image"]
+                    if portrait.portrait_url
+                    else ["newgen_face_bank_required"]
+                ),
+            )
         legacy_avatar = self.avatar_service.build_from_player(
             player,
             nationality_code=self._country_code(player),

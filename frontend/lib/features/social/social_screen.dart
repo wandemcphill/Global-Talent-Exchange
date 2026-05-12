@@ -5,12 +5,14 @@ import '../../core/constants/app_spacing.dart';
 import '../../data/community_api.dart';
 import '../../data/gte_api_repository.dart';
 import '../../models/community_models.dart';
-import '../../shared/widgets/section_heading.dart';
 import '../../widgets/creator_club_follow_panel.dart';
 import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import '../../ui_gtex/ui_gtex.dart';
+import '../engagement_redesign/engagement_widgets.dart';
+import '../matchday_economy_redesign/matchday_economy_widgets.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({
@@ -22,6 +24,7 @@ class CommunityScreen extends StatefulWidget {
     this.currentClubId,
     this.currentClubName,
     this.onOpenLogin,
+    this.onOpenFanWars,
     this.api,
   });
 
@@ -32,6 +35,7 @@ class CommunityScreen extends StatefulWidget {
   final String? currentClubId;
   final String? currentClubName;
   final VoidCallback? onOpenLogin;
+  final VoidCallback? onOpenFanWars;
   final CommunityApi? api;
 
   @override
@@ -44,6 +48,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   List<CommunityWatchlistItem> _watchlist = const <CommunityWatchlistItem>[];
   List<LiveThread> _liveThreads = const <LiveThread>[];
   List<PrivateMessageThread> _privateThreads = const <PrivateMessageThread>[];
+  _CommunityModule _selectedModule = _CommunityModule.liveThreads;
   bool _isLoading = false;
   bool _isMutating = false;
   String? _loadError;
@@ -591,117 +596,210 @@ class _CommunityScreenState extends State<CommunityScreen> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(spacingMD),
-        children: <Widget>[
-          SectionHeading(
-            title: 'Community',
-            subtitle:
-                _hasAuthenticatedCommunityAccess
-                    ? 'Watchlists, live thread actions, private creator messages, and creator-club follows are wired to live community endpoints.'
-                    : 'Public live threads stay visible here. Sign in to manage follows, watchlists, and direct messages.',
+    return GtexMasterDetailScaffold(
+      title: 'GTEX Social',
+      subtitle:
+          _hasAuthenticatedCommunityAccess
+              ? 'Live community threads, watchlists, follows, and direct messages from GTEX APIs.'
+              : 'Public live threads stay visible. Sign in to manage follows, watchlists, and direct messages.',
+      accent: GtexColors.mint,
+      mobileLeftTitle: 'Social lanes',
+      leftPanelWidth: 330,
+      rightPanelWidth: 310,
+      actions: <Widget>[
+        GtexActionButton(
+          label: _isLoading ? 'Syncing' : 'Refresh',
+          icon: Icons.refresh_outlined,
+          onPressed: _isLoading ? null : _load,
+          accent: GtexColors.mint,
+          secondary: true,
+        ),
+        if (!_hasAuthenticatedCommunityAccess && widget.onOpenLogin != null)
+          GtexActionButton(
+            label: 'Sign in',
+            icon: Icons.login_outlined,
+            onPressed: widget.onOpenLogin,
+            accent: GtexColors.mint,
           ),
-          if ((widget.currentClubId?.trim().isNotEmpty ?? false)) ...<Widget>[
-            CreatorClubFollowPanel(
-              api: widget.api,
-              baseUrl: widget.baseUrl,
-              backendMode: widget.backendMode,
-              clubId: widget.currentClubId!,
-              clubName: widget.currentClubName,
-              accessToken: widget.accessToken,
-              isAuthenticated: _hasAuthenticatedCommunityAccess,
-              onOpenLogin: widget.onOpenLogin,
+      ],
+      leftPanel: _CommunityLeftPanel(
+        selected: _selectedModule,
+        digest: _digest,
+        isAuthenticated: _hasAuthenticatedCommunityAccess,
+        liveThreadCount: _liveThreads.length,
+        watchlistCount: _watchlist.length,
+        privateThreadCount: _privateThreads.length,
+        hasClubFollow: widget.currentClubId?.trim().isNotEmpty ?? false,
+        onOpenFanWars: widget.onOpenFanWars,
+        onSelected:
+            (_CommunityModule module) =>
+                setState(() => _selectedModule = module),
+      ),
+      detail: _buildSelectedCommunityDetail(),
+      rightPanel: _CommunityRightPanel(
+        digest: _digest,
+        isAuthenticated: _hasAuthenticatedCommunityAccess,
+        isMutating: _isMutating,
+        hasCurrentClub: widget.currentClubId?.trim().isNotEmpty ?? false,
+        loadError: _loadError,
+        onRefresh: _load,
+        onSignIn: widget.onOpenLogin,
+        onAddWatchlist: _addWatchlist,
+        onCreateLiveThread: _createLiveThread,
+        onCreatePrivateThread: _createPrivateThread,
+        onOpenWatchlist:
+            () => setState(() => _selectedModule = _CommunityModule.watchlist),
+        onOpenLiveThreads:
+            () =>
+                setState(() => _selectedModule = _CommunityModule.liveThreads),
+        onOpenPrivateThreads:
+            () => setState(
+              () => _selectedModule = _CommunityModule.privateMessages,
             ),
-            const SizedBox(height: spacingSM),
-          ],
-          if (!_hasAuthenticatedCommunityAccess) ...<Widget>[
-            GteStatePanel(
-              eyebrow: 'COMMUNITY ACCESS',
-              title: 'Sign in to manage community actions',
-              message:
-                  'Watchlist edits, direct messages, and creator-club follow mutations require a signed-in session with a live access token.',
-              icon: Icons.lock_outline,
-              accentColor: GteShellTheme.accentCommunity,
-              actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
-              onAction: widget.onOpenLogin,
-            ),
-            const SizedBox(height: spacingSM),
-          ],
-          if (_digest != null) ...<Widget>[
-            _DigestSummary(digest: _digest!),
-            const SizedBox(height: spacingSM),
-          ],
-          if (_loadError != null) ...<Widget>[
-            GteStatePanel(
-              title: 'Community sync degraded',
-              message: _loadError!,
-              icon: Icons.sync_problem_outlined,
-              actionLabel: 'Retry',
-              onAction: _load,
-            ),
-            const SizedBox(height: spacingSM),
-          ],
-          _CommunitySection(
-            title: 'Competition watchlist',
-            subtitle:
-                'Pin community competitions and keep their live launches in view.',
-            action:
-                _hasAuthenticatedCommunityAccess
-                    ? FilledButton.tonal(
-                      onPressed: _isMutating ? null : _addWatchlist,
-                      child: const Text('Add competition'),
-                    )
-                    : null,
-            child:
-                _hasAuthenticatedCommunityAccess
-                    ? _buildWatchlistBody()
-                    : _buildReadOnlyBody(
-                      'Sign in to add or remove watchlist entries.',
-                    ),
-          ),
-          const SizedBox(height: spacingSM),
-          _CommunitySection(
-            title: 'Live threads',
-            subtitle:
-                'Open real-time matchday and competition discussion lanes.',
-            action:
-                _hasAuthenticatedCommunityAccess
-                    ? FilledButton.tonal(
-                      onPressed: _isMutating ? null : _createLiveThread,
-                      child: const Text('Start thread'),
-                    )
-                    : widget.onOpenLogin == null
-                    ? null
-                    : FilledButton.tonal(
-                      onPressed: widget.onOpenLogin,
-                      child: const Text('Sign in'),
-                    ),
-            child: _buildLiveThreadsBody(),
-          ),
-          const SizedBox(height: spacingSM),
-          _CommunitySection(
-            title: 'Direct messages',
-            subtitle:
-                'Open private creator-community threads with real participants.',
-            action:
-                _hasAuthenticatedCommunityAccess
-                    ? FilledButton.tonal(
-                      onPressed: _isMutating ? null : _createPrivateThread,
-                      child: const Text('New DM'),
-                    )
-                    : null,
-            child:
-                _hasAuthenticatedCommunityAccess
-                    ? _buildPrivateMessagesBody()
-                    : _buildReadOnlyBody(
-                      'Sign in to open direct threads and reply to private messages.',
-                    ),
-          ),
-        ],
+        onOpenClubFollow:
+            () => setState(() => _selectedModule = _CommunityModule.clubFollow),
+        onOpenFanWars: widget.onOpenFanWars,
       ),
     );
+  }
+
+  Widget _buildSelectedCommunityDetail() {
+    switch (_selectedModule) {
+      case _CommunityModule.liveThreads:
+        return _CommunityDetailScroll(
+          children: <Widget>[
+            _CommunitySection(
+              title: 'Live threads',
+              subtitle:
+                  'Open real-time matchday and competition discussion lanes.',
+              action:
+                  _hasAuthenticatedCommunityAccess
+                      ? GtexActionButton(
+                        label: 'Start thread',
+                        icon: Icons.add_comment_outlined,
+                        onPressed: _isMutating ? null : _createLiveThread,
+                        accent: GtexColors.mint,
+                        secondary: true,
+                      )
+                      : widget.onOpenLogin == null
+                      ? null
+                      : GtexActionButton(
+                        label: 'Sign in',
+                        icon: Icons.login_outlined,
+                        onPressed: widget.onOpenLogin,
+                        accent: GtexColors.mint,
+                      ),
+              child: _buildLiveThreadsBody(),
+            ),
+          ],
+        );
+      case _CommunityModule.watchlist:
+        return _CommunityDetailScroll(
+          children: <Widget>[
+            _CommunitySection(
+              title: 'Competition watchlist',
+              subtitle:
+                  'Pin community competitions and keep their live launches in view.',
+              action:
+                  _hasAuthenticatedCommunityAccess
+                      ? GtexActionButton(
+                        label: 'Add competition',
+                        icon: Icons.playlist_add_outlined,
+                        onPressed: _isMutating ? null : _addWatchlist,
+                        accent: GtexColors.mint,
+                        secondary: true,
+                      )
+                      : null,
+              child:
+                  _hasAuthenticatedCommunityAccess
+                      ? _buildWatchlistBody()
+                      : _buildReadOnlyBody(
+                        'Sign in to add or remove watchlist entries.',
+                      ),
+            ),
+          ],
+        );
+      case _CommunityModule.privateMessages:
+        return _CommunityDetailScroll(
+          children: <Widget>[
+            _CommunitySection(
+              title: 'Direct messages',
+              subtitle:
+                  'Open private creator-community threads with real participants.',
+              action:
+                  _hasAuthenticatedCommunityAccess
+                      ? GtexActionButton(
+                        label: 'New DM',
+                        icon: Icons.mark_chat_unread_outlined,
+                        onPressed: _isMutating ? null : _createPrivateThread,
+                        accent: GtexColors.mint,
+                        secondary: true,
+                      )
+                      : null,
+              child:
+                  _hasAuthenticatedCommunityAccess
+                      ? _buildPrivateMessagesBody()
+                      : _buildReadOnlyBody(
+                        'Sign in to open direct threads and reply to private messages.',
+                      ),
+            ),
+          ],
+        );
+      case _CommunityModule.clubFollow:
+        return _CommunityDetailScroll(
+          children: <Widget>[
+            if ((widget.currentClubId?.trim().isNotEmpty ?? false))
+              CreatorClubFollowPanel(
+                api: widget.api,
+                baseUrl: widget.baseUrl,
+                backendMode: widget.backendMode,
+                clubId: widget.currentClubId!,
+                clubName: widget.currentClubName,
+                accessToken: widget.accessToken,
+                isAuthenticated: _hasAuthenticatedCommunityAccess,
+                onOpenLogin: widget.onOpenLogin,
+              )
+            else
+              const GtexEmptyState(
+                title: 'No active club context',
+                message:
+                    'Create or select a club to manage follows and community club actions.',
+                icon: Icons.shield_outlined,
+                accent: GtexColors.mint,
+              ),
+          ],
+        );
+      case _CommunityModule.overview:
+        return _CommunityDetailScroll(
+          children: <Widget>[
+            GtexMatchdayEconomyPanel(
+              baseUrl: widget.baseUrl,
+              backendMode: widget.backendMode,
+              accessToken: widget.accessToken,
+            ),
+            if (!_hasAuthenticatedCommunityAccess)
+              GteStatePanel(
+                eyebrow: 'COMMUNITY ACCESS',
+                title: 'Sign in to manage community actions',
+                message:
+                    'Watchlist edits, direct messages, and creator-club follow mutations require a signed-in session with a live access token.',
+                icon: Icons.lock_outline,
+                accentColor: GteShellTheme.accentCommunity,
+                actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
+                onAction: widget.onOpenLogin,
+              ),
+            if (_digest != null) _DigestSummary(digest: _digest!),
+            if (_loadError != null)
+              GteStatePanel(
+                title: 'Community sync degraded',
+                message: _loadError!,
+                icon: Icons.sync_problem_outlined,
+                actionLabel: 'Retry',
+                onAction: _load,
+              ),
+          ],
+        );
+    }
   }
 
   Widget _buildWatchlistBody() {
@@ -821,6 +919,406 @@ class _DigestSummary extends StatelessWidget {
           _DigestChip(
             label: 'Unread hints',
             value: '${digest.unreadHintCount}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _CommunityModule {
+  overview,
+  liveThreads,
+  watchlist,
+  privateMessages,
+  clubFollow,
+}
+
+extension _CommunityModuleX on _CommunityModule {
+  String get label {
+    switch (this) {
+      case _CommunityModule.overview:
+        return 'Overview';
+      case _CommunityModule.liveThreads:
+        return 'Live threads';
+      case _CommunityModule.watchlist:
+        return 'Watchlist';
+      case _CommunityModule.privateMessages:
+        return 'Direct messages';
+      case _CommunityModule.clubFollow:
+        return 'Club follow';
+    }
+  }
+
+  String get subtitle {
+    switch (this) {
+      case _CommunityModule.overview:
+        return 'Digest and access state';
+      case _CommunityModule.liveThreads:
+        return 'Matchday discussion lanes';
+      case _CommunityModule.watchlist:
+        return 'Pinned competitions';
+      case _CommunityModule.privateMessages:
+        return 'Creator and support DMs';
+      case _CommunityModule.clubFollow:
+        return 'Current club community';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _CommunityModule.overview:
+        return Icons.space_dashboard_outlined;
+      case _CommunityModule.liveThreads:
+        return Icons.forum_outlined;
+      case _CommunityModule.watchlist:
+        return Icons.playlist_add_check_outlined;
+      case _CommunityModule.privateMessages:
+        return Icons.mark_chat_unread_outlined;
+      case _CommunityModule.clubFollow:
+        return Icons.shield_outlined;
+    }
+  }
+}
+
+class _CommunityLeftPanel extends StatelessWidget {
+  const _CommunityLeftPanel({
+    required this.selected,
+    required this.digest,
+    required this.isAuthenticated,
+    required this.liveThreadCount,
+    required this.watchlistCount,
+    required this.privateThreadCount,
+    required this.hasClubFollow,
+    required this.onOpenFanWars,
+    required this.onSelected,
+  });
+
+  final _CommunityModule selected;
+  final CommunityDigest? digest;
+  final bool isAuthenticated;
+  final int liveThreadCount;
+  final int watchlistCount;
+  final int privateThreadCount;
+  final bool hasClubFollow;
+  final VoidCallback? onOpenFanWars;
+  final ValueChanged<_CommunityModule> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      children: <Widget>[
+        GtexPanel(
+          accent: GtexColors.mint,
+          title: 'Social command',
+          subtitle:
+              isAuthenticated
+                  ? 'Live community access'
+                  : 'Public read-only mode',
+          child: Wrap(
+            spacing: GtexSpacing.xs,
+            runSpacing: GtexSpacing.xs,
+            children: <Widget>[
+              GtexStatusChip(
+                label: isAuthenticated ? 'SIGNED IN' : 'GUEST',
+                color: isAuthenticated ? GtexColors.mint : GtexColors.gold,
+                icon:
+                    isAuthenticated
+                        ? Icons.verified_user_outlined
+                        : Icons.visibility_outlined,
+              ),
+              GtexStatusChip(
+                label: '${digest?.unreadHintCount ?? 0} UNREAD HINTS',
+                color: GtexColors.cyan,
+                icon: Icons.notifications_active_outlined,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        for (final _CommunityModule module in _CommunityModule.values)
+          if (module != _CommunityModule.clubFollow || hasClubFollow)
+            GtexSectionListTile(
+              title: module.label,
+              subtitle: '${module.subtitle} - ${_countFor(module)}',
+              icon: module.icon,
+              accent: GtexColors.mint,
+              isSelected: selected == module,
+              onTap: () => onSelected(module),
+            ),
+        if (onOpenFanWars != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.sm),
+          GtexSectionListTile(
+            title: 'Fan wars',
+            subtitle: 'Leaderboards and Nations Cup rivalries',
+            icon: Icons.military_tech_outlined,
+            accent: GtexColors.gold,
+            isSelected: false,
+            onTap: onOpenFanWars!,
+            trailing: const Icon(
+              Icons.open_in_new_outlined,
+              color: GtexColors.gold,
+              size: 18,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _countFor(_CommunityModule module) {
+    switch (module) {
+      case _CommunityModule.liveThreads:
+        return '$liveThreadCount live';
+      case _CommunityModule.watchlist:
+        return '$watchlistCount pinned';
+      case _CommunityModule.privateMessages:
+        return '$privateThreadCount threads';
+      case _CommunityModule.clubFollow:
+        return 'club context';
+      case _CommunityModule.overview:
+        return '${digest?.watchlistCount ?? watchlistCount} watchlist';
+    }
+  }
+}
+
+class _CommunityRightPanel extends StatelessWidget {
+  const _CommunityRightPanel({
+    required this.digest,
+    required this.isAuthenticated,
+    required this.isMutating,
+    required this.hasCurrentClub,
+    required this.loadError,
+    required this.onRefresh,
+    required this.onSignIn,
+    required this.onAddWatchlist,
+    required this.onCreateLiveThread,
+    required this.onCreatePrivateThread,
+    required this.onOpenWatchlist,
+    required this.onOpenLiveThreads,
+    required this.onOpenPrivateThreads,
+    required this.onOpenClubFollow,
+    required this.onOpenFanWars,
+  });
+
+  final CommunityDigest? digest;
+  final bool isAuthenticated;
+  final bool isMutating;
+  final bool hasCurrentClub;
+  final String? loadError;
+  final VoidCallback onRefresh;
+  final VoidCallback? onSignIn;
+  final VoidCallback onAddWatchlist;
+  final VoidCallback onCreateLiveThread;
+  final VoidCallback onCreatePrivateThread;
+  final VoidCallback onOpenWatchlist;
+  final VoidCallback onOpenLiveThreads;
+  final VoidCallback onOpenPrivateThreads;
+  final VoidCallback onOpenClubFollow;
+  final VoidCallback? onOpenFanWars;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      children: <Widget>[
+        GtexPanel(
+          title: 'Social pulse',
+          subtitle: 'Live API summary',
+          accent: GtexColors.mint,
+          child: Column(
+            children: <Widget>[
+              _MetricLine(
+                label: 'Watchlist',
+                value: '${digest?.watchlistCount ?? 0}',
+              ),
+              _MetricLine(
+                label: 'Live threads',
+                value: '${digest?.liveThreadCount ?? 0}',
+              ),
+              _MetricLine(
+                label: 'Direct threads',
+                value: '${digest?.privateThreadCount ?? 0}',
+              ),
+              _MetricLine(
+                label: 'Unread hints',
+                value: '${digest?.unreadHintCount ?? 0}',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Quick actions',
+          subtitle:
+              isAuthenticated
+                  ? 'Create live social work'
+                  : 'Sign in to unlock mutations',
+          accent: GtexColors.mint,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (isAuthenticated) ...<Widget>[
+                GtexActionButton(
+                  label: 'Start live thread',
+                  icon: Icons.add_comment_outlined,
+                  onPressed: isMutating ? null : onCreateLiveThread,
+                  accent: GtexColors.mint,
+                ),
+                const SizedBox(height: GtexSpacing.sm),
+                GtexActionButton(
+                  label: 'Add watchlist',
+                  icon: Icons.playlist_add_outlined,
+                  onPressed: isMutating ? null : onAddWatchlist,
+                  accent: GtexColors.mint,
+                  secondary: true,
+                ),
+                const SizedBox(height: GtexSpacing.sm),
+                GtexActionButton(
+                  label: 'New direct message',
+                  icon: Icons.mark_chat_unread_outlined,
+                  onPressed: isMutating ? null : onCreatePrivateThread,
+                  accent: GtexColors.mint,
+                  secondary: true,
+                ),
+              ] else
+                GtexActionButton(
+                  label: 'Sign in',
+                  icon: Icons.login_outlined,
+                  onPressed: onSignIn,
+                  accent: GtexColors.mint,
+                ),
+              const SizedBox(height: GtexSpacing.sm),
+              GtexActionButton(
+                label: 'Refresh',
+                icon: Icons.refresh_outlined,
+                onPressed: onRefresh,
+                accent: GtexColors.cyan,
+                secondary: true,
+              ),
+            ],
+          ),
+        ),
+        if (loadError != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.md),
+          GtexPanel(
+            title: 'Sync degraded',
+            subtitle: loadError,
+            accent: GtexColors.red,
+            child: GtexActionButton(
+              label: 'Retry',
+              icon: Icons.sync_problem_outlined,
+              onPressed: onRefresh,
+              accent: GtexColors.red,
+              secondary: true,
+            ),
+          ),
+        ],
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Jump to',
+          subtitle: 'Move without losing live state',
+          accent: GtexColors.cyan,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              GtexActionButton(
+                label: 'Live threads',
+                icon: Icons.forum_outlined,
+                onPressed: onOpenLiveThreads,
+                accent: GtexColors.mint,
+                secondary: true,
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              GtexActionButton(
+                label: 'Watchlist',
+                icon: Icons.playlist_add_check_outlined,
+                onPressed: onOpenWatchlist,
+                accent: GtexColors.mint,
+                secondary: true,
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              GtexActionButton(
+                label: 'Direct messages',
+                icon: Icons.mark_chat_unread_outlined,
+                onPressed: onOpenPrivateThreads,
+                accent: GtexColors.mint,
+                secondary: true,
+              ),
+              if (hasCurrentClub) ...<Widget>[
+                const SizedBox(height: GtexSpacing.sm),
+                GtexActionButton(
+                  label: 'Club follow',
+                  icon: Icons.shield_outlined,
+                  onPressed: onOpenClubFollow,
+                  accent: GtexColors.mint,
+                  secondary: true,
+                ),
+              ],
+              if (onOpenFanWars != null) ...<Widget>[
+                const SizedBox(height: GtexSpacing.sm),
+                GtexActionButton(
+                  label: 'Fan wars',
+                  icon: Icons.military_tech_outlined,
+                  onPressed: onOpenFanWars,
+                  accent: GtexColors.gold,
+                  secondary: true,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CommunityDetailScroll extends StatelessWidget {
+  const _CommunityDetailScroll({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(GtexSpacing.lg),
+      children: children
+          .expand((Widget child) sync* {
+            yield child;
+            yield const SizedBox(height: GtexSpacing.md);
+          })
+          .toList(growable: false),
+    );
+  }
+}
+
+class _MetricLine extends StatelessWidget {
+  const _MetricLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: GtexColors.textMuted),
+            ),
+          ),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: GtexColors.text,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),

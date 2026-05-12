@@ -155,8 +155,8 @@ class TransferPlayerCard extends StatelessWidget {
                             value: '${listing.player.age}',
                           ),
                           MetricPill(
-                            label: 'OVR',
-                            value: '${listing.player.rating}',
+                            label: 'GSI',
+                            value: '${listing.player.resolvedGsi}',
                             highlight: true,
                           ),
                         ],
@@ -503,8 +503,8 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
                             runSpacing: spacingSM,
                             children: <Widget>[
                               MetricPill(
-                                label: 'OVR',
-                                value: '${listing.player.rating}',
+                                label: 'GSI',
+                                value: '${listing.player.resolvedGsi}',
                                 highlight: true,
                               ),
                               MetricPill(

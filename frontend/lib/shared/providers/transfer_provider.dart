@@ -909,6 +909,12 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
         (72 + (seed % 11) + (fallbackValueInMillions ~/ 18))
             .clamp(70, 92)
             .toInt();
+    final int? globalScoutingIndex =
+        _intOrNullFromKeys(payload, _gsiKeys) ??
+        _intOrNullFromKeys(_mapValue(payload['summary_json']), _gsiKeys) ??
+        _intOrNullFromKeys(_mapValue(payload['summaryJson']), _gsiKeys) ??
+        _intOrNullFromKeys(_mapValue(payload['metadata_json']), _gsiKeys) ??
+        _intOrNullFromKeys(_mapValue(payload['metadataJson']), _gsiKeys);
     final int potential = (rating + 4 + (seed % 6)).clamp(rating, 95).toInt();
     final int age = (18 + (seed % 11)).clamp(18, 34).toInt();
 
@@ -929,6 +935,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
       technique: _metricFromSeed(seed, 1),
       mentality: _metricFromSeed(seed, 2),
       image: 'assets/branding/gtex_icon.png',
+      globalScoutingIndex: globalScoutingIndex,
       isHot: isHot,
     );
   }
@@ -1221,6 +1228,31 @@ int _intValue(Object? value, {int fallback = 0}) {
     return value.round();
   }
   return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+const List<String> _gsiKeys = <String>[
+  'global_scouting_index',
+  'globalScoutingIndex',
+  'gsi',
+  'current_gsi',
+  'currentGsi',
+];
+
+int? _intOrNullFromKeys(Map<String, Object?> payload, List<String> keys) {
+  for (final String key in keys) {
+    final Object? value = payload[key];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.round();
+    }
+    final int? parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+  return null;
 }
 
 DateTime? _dateTimeValue(Object? value) {

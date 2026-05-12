@@ -18,6 +18,7 @@ from app.market.repositories import build_market_repository
 from app.market.schemas import (
     ListingCreate,
     ListingView,
+    MarketBrowseCatalogView,
     MarketPlayerDetailView,
     MarketPlayerHistoryView,
     MarketPlayerListView,
@@ -191,32 +192,39 @@ def list_market_players(
     cursor: str | None = Query(default=None),
     offset: int | None = Query(default=None, ge=0, deprecated=True),
     position: str | None = Query(default=None),
+    country: str | None = Query(default=None),
     nationality: str | None = Query(default=None),
     national_team: str | None = Query(default=None),
     club: str | None = Query(default=None),
     league: str | None = Query(default=None),
+    division: str | None = Query(default=None),
     min_age: int | None = Query(default=None, ge=0),
     max_age: int | None = Query(default=None, ge=0),
     min_value: float | None = Query(default=None, ge=0),
     max_value: float | None = Query(default=None, ge=0),
+    availability: str | None = None,
     search: str | None = Query(default=None),
     sort: str = Query(default="current_value"),
     service: MarketPlayerQueryService = Depends(get_market_player_query_service),
 ) -> MarketPlayerListView:
     try:
+        country_value = country if isinstance(country, str) else None
         result = service.list_players(
             limit=limit,
             cursor=cursor,
             offset=offset,
             position=position,
+            country=country_value,
             nationality=nationality,
             national_team=national_team,
             club=club,
             league=league,
+            division=division,
             min_age=min_age,
             max_age=max_age,
             min_value=min_value,
             max_value=max_value,
+            availability=availability,
             search=search,
             sort=sort,
         )
@@ -224,6 +232,13 @@ def list_market_players(
         raise_market_http_exception(exc)
 
     return MarketPlayerListView.model_validate(result)
+
+
+@router.get("/browse/catalog", response_model=MarketBrowseCatalogView)
+def get_market_browse_catalog(
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketBrowseCatalogView:
+    return MarketBrowseCatalogView.model_validate(service.browse_catalog())
 
 
 @router.get("/leagues")

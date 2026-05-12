@@ -208,6 +208,14 @@ def test_federation_service_governance_and_rules_work_with_sqlite_datetimes(tmp_
         dashboard = service.build_dashboard(federation.id)
         governance = service.build_governance_view(federation.id)
         regional_tournaments = service.list_regional_tournaments()
+        national_profile = service.build_national_association_profile("NG")
+        national_review = service.review_national_eligibility(
+            country_code="NG",
+            player_id=regen_player.id,
+            club_id=club.id,
+            competition_id="competition-ng",
+            metadata_json={"source": "test"},
+        )
 
         assert membership.status == "active"
         assert vote.weight == 2
@@ -230,6 +238,11 @@ def test_federation_service_governance_and_rules_work_with_sqlite_datetimes(tmp_
         assert regional_tournaments[0]["region_code"] == "west_africa"
         assert regional_tournaments[0]["region_label"] == "West Africa"
         assert regional_tournaments[0]["active_league_count"] == 1
+        assert national_profile["country_code"] == "NG"
+        assert national_profile["federation_count"] == 1
+        assert national_profile["member_club_count"] == 1
+        assert national_review["allowed"] is True
+        assert national_review["audit_id"] is not None
     finally:
         session.close()
         engine.dispose()

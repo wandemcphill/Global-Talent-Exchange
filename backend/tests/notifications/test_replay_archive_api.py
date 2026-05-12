@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from app.common.enums.competition_type import CompetitionType
 from app.common.enums.replay_visibility import ReplayVisibility
 from app.core.events import DomainEvent
 from app.replay_archive.service import ensure_replay_archive
+
+pytestmark = pytest.mark.notifications_slow
 
 
 def _build_replay_payload(

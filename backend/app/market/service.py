@@ -30,6 +30,7 @@ from app.market.repositories import (
     MarketRepository,
     SqlAlchemyMarketPlayerRepository,
 )
+from app.models.transfer_market import TransferListing
 from app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, PlayerExecution, PlayerPricingSnapshot
 from app.pricing.service import MarketPricingService, PricingValidationError
 from app.schemas.avatar import PlayerAvatarView
@@ -38,6 +39,7 @@ from app.services.runtime_control_service import RuntimeControlService
 from app.value_engine.authority import authoritative_reference_credits
 from app.value_engine.pricing_curve import round_gtex_display_value
 from app.value_engine.scoring import credits_from_real_world_value
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 
@@ -740,13 +742,34 @@ class MarketPlayerListItem:
     player_name: str
     position: str | None
     nationality: str | None
+    nationality_code: str | None
+    current_club_id: str | None
     current_club_name: str | None
+    current_competition_id: str | None
+    current_competition_name: str | None
+    current_division_id: str | None
+    current_division_name: str | None
     age: int | None
     current_value_credits: float | None
     movement_pct: float | None
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    global_scouting_index: float | None
+    previous_global_scouting_index: float | None
+    global_scouting_index_movement_pct: float | None
+    transfer_listing_id: str | None
+    transfer_listing_status: str | None
+    selling_club_id: str | None
+    availability_label: str
+    asking_type: str
+    salary_amount: float | None
+    contract_years_remaining: float | None
+    buy_clause_amount: float | None
+    loan_terms: dict[str, Any]
+    swap_terms: dict[str, Any]
+    availability: dict[str, Any]
+    is_tradable: bool
     image_url: str | None
     avatar: PlayerAvatarView
 
@@ -759,6 +782,27 @@ class MarketPlayerListResult:
     has_more: bool
     total: int
     offset: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class MarketBrowseOption:
+    id: str
+    label: str
+    count: int
+    subtitle: str | None = None
+    parent_id: str | None = None
+    country_id: str | None = None
+    league_id: str | None = None
+    division_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MarketBrowseCatalog:
+    total: int
+    countries: tuple[MarketBrowseOption, ...]
+    leagues: tuple[MarketBrowseOption, ...]
+    divisions: tuple[MarketBrowseOption, ...]
+    clubs: tuple[MarketBrowseOption, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -886,22 +930,28 @@ class MarketPlayerQueryService:
         cursor: str | None = None,
         offset: int | None = 0,
         position: str | None = None,
+        country: str | None = None,
         nationality: str | None = None,
         national_team: str | None = None,
         club: str | None = None,
         league: str | None = None,
+        division: str | None = None,
         min_age: int | None = None,
         max_age: int | None = None,
         min_value: float | None = None,
         max_value: float | None = None,
+        availability: str | None = None,
         search: str | None = None,
         sort: str = "current_value",
     ) -> MarketPlayerListResult:
         normalized_position = self._normalize_optional_text(position)
+        normalized_country = self._normalize_optional_text(country)
         normalized_nationality = self._normalize_optional_text(nationality)
         normalized_national_team = self._normalize_optional_text(national_team)
         normalized_club = self._normalize_optional_text(club)
         normalized_league = self._normalize_optional_text(league)
+        normalized_division = self._normalize_optional_text(division)
+        normalized_availability = self._normalize_optional_text(availability)
         normalized_search = self._normalize_optional_text(search)
         normalized_offset = 0 if offset is None else offset
         self._validate_player_query(
@@ -914,16 +964,25 @@ class MarketPlayerQueryService:
             sort=sort,
         )
 
+        records = self.repository.list_player_records()
+        open_listings_by_player_id = self._open_transfer_listings_by_player_id(records)
         filtered_records = [
             record
-            for record in self.repository.list_player_records()
+            for record in records
             if self._matches_position(record, normalized_position)
+            and self._matches_market_country(record, normalized_country)
             and self._matches_nationality(record, normalized_nationality)
             and self._matches_national_team(record, normalized_national_team)
             and self._matches_club(record, normalized_club)
             and self._matches_league(record, normalized_league)
+            and self._matches_division(record, normalized_division)
             and self._matches_age(record, min_age=min_age, max_age=max_age)
             and self._matches_value(record, min_value=min_value, max_value=max_value)
+            and self._matches_availability(
+                record,
+                normalized_availability,
+                open_listings_by_player_id.get(record.player.id),
+            )
             and self._matches_search(record, normalized_search)
         ]
         sorted_records = self._sort_player_records(filtered_records, sort=sort)
@@ -931,14 +990,17 @@ class MarketPlayerQueryService:
         query_signature = self._player_query_signature(
             sort=sort,
             position=normalized_position,
+            country=normalized_country,
             nationality=normalized_nationality,
             national_team=normalized_national_team,
             club=normalized_club,
             league=normalized_league,
+            division=normalized_division,
             min_age=min_age,
             max_age=max_age,
             min_value=min_value,
             max_value=max_value,
+            availability=normalized_availability,
             search=normalized_search,
         )
         start_index = (
@@ -964,12 +1026,82 @@ class MarketPlayerQueryService:
             else None
         )
         return MarketPlayerListResult(
-            items=tuple(self._build_list_item(record) for record in page_records),
+            items=tuple(
+                self._build_list_item(
+                    record,
+                    open_listing=open_listings_by_player_id.get(record.player.id),
+                )
+                for record in page_records
+            ),
             limit=limit,
             next_cursor=next_cursor,
             has_more=has_more,
             total=total,
             offset=start_index,
+        )
+
+    def browse_catalog(self) -> MarketBrowseCatalog:
+        records = self.repository.list_player_records()
+        countries: dict[str, dict[str, Any]] = {}
+        leagues: dict[str, dict[str, Any]] = {}
+        divisions: dict[str, dict[str, Any]] = {}
+        clubs: dict[str, dict[str, Any]] = {}
+
+        for record in records:
+            country = self._catalog_country(record)
+            country_id = self._country_id(country) or self._catalog_country_id(record)
+            country_label = country.name if country is not None else None
+            self._bump_catalog_option(
+                countries,
+                option_id=country_id,
+                label=country_label,
+                country_id=country_id,
+            )
+
+            league_id = self._catalog_league_id(record)
+            league_label = self._catalog_league_label(record)
+            self._bump_catalog_option(
+                leagues,
+                option_id=league_id,
+                label=league_label,
+                subtitle=country_label,
+                parent_id=country_id,
+                country_id=country_id,
+                league_id=league_id,
+            )
+
+            division_id = self._current_division_id(record)
+            division_label = self._current_division_name(record)
+            self._bump_catalog_option(
+                divisions,
+                option_id=division_id,
+                label=division_label,
+                subtitle=league_label,
+                parent_id=league_id,
+                country_id=country_id,
+                league_id=league_id,
+                division_id=division_id,
+            )
+
+            club_id = self._catalog_club_id(record)
+            club_label = self._catalog_club_label(record)
+            self._bump_catalog_option(
+                clubs,
+                option_id=club_id,
+                label=club_label,
+                subtitle=league_label or country_label,
+                parent_id=division_id or league_id,
+                country_id=country_id,
+                league_id=league_id,
+                division_id=division_id,
+            )
+
+        return MarketBrowseCatalog(
+            total=len(records),
+            countries=self._catalog_options(countries),
+            leagues=self._catalog_options(leagues),
+            divisions=self._catalog_options(divisions),
+            clubs=self._catalog_options(clubs),
         )
 
     def get_player_detail(self, player_id: str) -> MarketPlayerDetail:
@@ -998,18 +1130,16 @@ class MarketPlayerQueryService:
                 shirt_number=player.shirt_number,
                 height_cm=player.height_cm,
                 weight_kg=player.weight_kg,
-                current_club_id=player.current_club_id,
-                current_club_name=player.current_club.name if player.current_club is not None else None,
-                current_competition_id=player.current_competition_id,
-                current_competition_name=(
-                    player.current_competition.name if player.current_competition is not None else None
-                ),
+                current_club_id=self._catalog_club_id(record),
+                current_club_name=self._catalog_club_label(record),
+                current_competition_id=self._catalog_league_id(record),
+                current_competition_name=self._catalog_league_label(record),
                 image_url=self._image_url(record),
                 avatar=self._avatar(record),
             ),
             market_profile=MarketPlayerMarketProfile(
                 is_tradable=is_transfer_market_eligible(player),
-                market_value_eur=player.market_value_eur,
+                market_value_eur=player.current_market_reference_value or player.market_value_eur,
                 supply_tier=self._supply_tier_payload(record),
                 liquidity_band=self._liquidity_band_payload(record),
                 holder_count=self._coerce_int(breakdown_payload.get("holder_count")),
@@ -1284,22 +1414,223 @@ class MarketPlayerQueryService:
             for item in self.list_nationalities()
         ]
 
-    def _build_list_item(self, record: MarketPlayerRecord) -> MarketPlayerListItem:
+    def _catalog_country_id(self, record: MarketPlayerRecord) -> str | None:
+        return self._nationality_code(record) or (record.player.country.id if record.player.country is not None else None)
+
+    def _catalog_country(self, record: MarketPlayerRecord) -> Any | None:
+        competition = record.player.current_competition
+        if competition is not None and competition.country is not None:
+            return competition.country
+        club = record.player.current_club
+        if club is not None and club.country is not None:
+            return club.country
+        return record.player.country
+
+    def _catalog_league_id(self, record: MarketPlayerRecord) -> str | None:
+        competition = record.player.current_competition
+        if competition is not None:
+            return competition.id
+        if record.summary is not None and record.summary.current_competition_id:
+            return record.summary.current_competition_id
+        league_name = (record.player.real_world_league_name or "").strip()
+        return self._slug(league_name) if league_name else None
+
+    def _catalog_league_label(self, record: MarketPlayerRecord) -> str | None:
+        competition = record.player.current_competition
+        if competition is not None:
+            return competition.name
+        if record.summary is not None and record.summary.current_competition_name:
+            return record.summary.current_competition_name
+        league_name = (record.player.real_world_league_name or "").strip()
+        return league_name or None
+
+    def _catalog_club_id(self, record: MarketPlayerRecord) -> str | None:
+        club = record.player.current_club
+        if club is not None:
+            return club.id
+        if record.summary is not None and record.summary.current_club_id:
+            return record.summary.current_club_id
+        club_name = (record.player.real_world_club_name or "").strip()
+        return self._slug(club_name) if club_name else None
+
+    def _catalog_club_label(self, record: MarketPlayerRecord) -> str | None:
+        club = record.player.current_club
+        if club is not None:
+            return club.name
+        if record.summary is not None and record.summary.current_club_name:
+            return record.summary.current_club_name
+        club_name = (record.player.real_world_club_name or "").strip()
+        return club_name or None
+
+    def _current_division_id(self, record: MarketPlayerRecord) -> str | None:
+        competition = record.player.current_competition
+        if competition is not None and competition.domestic_level is not None:
+            return f"division-{competition.domestic_level}"
+        internal_league = record.player.internal_league or (
+            competition.internal_league if competition is not None else None
+        )
+        if internal_league is not None:
+            return internal_league.id
+        return None
+
+    def _current_division_name(self, record: MarketPlayerRecord) -> str | None:
+        competition = record.player.current_competition
+        if competition is not None and competition.domestic_level is not None:
+            return f"Division {competition.domestic_level}"
+        internal_league = record.player.internal_league or (
+            competition.internal_league if competition is not None else None
+        )
+        if internal_league is not None:
+            return internal_league.name
+        return None
+
+    def _bump_catalog_option(
+        self,
+        groups: dict[str, dict[str, Any]],
+        *,
+        option_id: str | None,
+        label: str | None,
+        subtitle: str | None = None,
+        parent_id: str | None = None,
+        country_id: str | None = None,
+        league_id: str | None = None,
+        division_id: str | None = None,
+    ) -> None:
+        normalized_id = (option_id or "").strip()
+        normalized_label = (label or "").strip()
+        if not normalized_id or not normalized_label:
+            return
+        current = groups.get(normalized_id)
+        if current is None:
+            groups[normalized_id] = {
+                "id": normalized_id,
+                "label": normalized_label,
+                "count": 1,
+                "subtitle": subtitle.strip() if isinstance(subtitle, str) and subtitle.strip() else None,
+                "parent_id": parent_id.strip() if isinstance(parent_id, str) and parent_id.strip() else None,
+                "country_id": country_id.strip() if isinstance(country_id, str) and country_id.strip() else None,
+                "league_id": league_id.strip() if isinstance(league_id, str) and league_id.strip() else None,
+                "division_id": division_id.strip() if isinstance(division_id, str) and division_id.strip() else None,
+            }
+            return
+        current["count"] = int(current["count"]) + 1
+
+    def _catalog_options(self, groups: dict[str, dict[str, Any]]) -> tuple[MarketBrowseOption, ...]:
+        sorted_options = sorted(
+            groups.values(),
+            key=lambda value: (-int(value["count"]), str(value["label"]).lower(), str(value["id"])),
+        )
+        return tuple(MarketBrowseOption(**option) for option in sorted_options)
+
+    def _build_list_item(
+        self,
+        record: MarketPlayerRecord,
+        *,
+        open_listing: TransferListing | None = None,
+    ) -> MarketPlayerListItem:
         return MarketPlayerListItem(
             player_id=record.player.id,
             player_name=record.player.full_name,
             position=record.player.normalized_position or record.player.position,
             nationality=record.player.country.name if record.player.country is not None else None,
-            current_club_name=record.player.current_club.name if record.player.current_club is not None else None,
+            nationality_code=self._nationality_code(record),
+            current_club_id=self._catalog_club_id(record),
+            current_club_name=self._catalog_club_label(record),
+            current_competition_id=self._catalog_league_id(record),
+            current_competition_name=self._catalog_league_label(record),
+            current_division_id=self._current_division_id(record),
+            current_division_name=self._current_division_name(record),
             age=self._player_age(record.player.date_of_birth),
             current_value_credits=self._current_value_credits(record),
             movement_pct=self._movement_pct(record),
             trend_score=self._trend_score(record),
             market_interest_score=(record.summary.market_interest_score if record.summary is not None else None),
             average_rating=record.summary.average_rating if record.summary is not None else None,
+            global_scouting_index=self._global_scouting_index(record),
+            previous_global_scouting_index=self._previous_global_scouting_index(record),
+            global_scouting_index_movement_pct=self._global_scouting_index_movement_pct(record),
+            transfer_listing_id=open_listing.id if open_listing is not None else None,
+            transfer_listing_status=open_listing.status if open_listing is not None else None,
+            selling_club_id=open_listing.selling_club_id if open_listing is not None else None,
+            availability_label=self._availability_label(record, open_listing),
+            asking_type=self._asking_type(record, open_listing),
+            salary_amount=self._decimal_float(open_listing.salary_amount if open_listing is not None else None),
+            contract_years_remaining=self._decimal_float(
+                open_listing.contract_years_remaining if open_listing is not None else None
+            ),
+            buy_clause_amount=self._decimal_float(open_listing.buy_clause_amount if open_listing is not None else None),
+            loan_terms=self._json_object(open_listing.loan_terms_json if open_listing is not None else None),
+            swap_terms=self._json_object(open_listing.swap_terms_json if open_listing is not None else None),
+            availability=self._json_object(open_listing.availability_json if open_listing is not None else None),
+            is_tradable=record.player.is_tradable,
             image_url=self._image_url(record),
             avatar=self._avatar(record),
         )
+
+    def _open_transfer_listings_by_player_id(
+        self,
+        records: list[MarketPlayerRecord],
+    ) -> dict[str, TransferListing]:
+        player_ids = [record.player.id for record in records if record.player.id]
+        if not player_ids:
+            return {}
+        listings = self.session.scalars(
+            select(TransferListing)
+            .where(
+                TransferListing.player_id.in_(player_ids),
+                TransferListing.status.in_(("open", "countered", "negotiated")),
+            )
+            .order_by(TransferListing.created_at.desc())
+        ).all()
+        by_player_id: dict[str, TransferListing] = {}
+        for listing in listings:
+            by_player_id.setdefault(listing.player_id, listing)
+        return by_player_id
+
+    def _matches_availability(
+        self,
+        record: MarketPlayerRecord,
+        availability: str | None,
+        open_listing: TransferListing | None,
+    ) -> bool:
+        if availability is None:
+            return True
+        if availability == "free_agent":
+            club_name = self._normalize_text(self._catalog_club_label(record))
+            return club_name in {"free agent", "unattached"}
+        if open_listing is None:
+            return False
+        asking_type = self._asking_type(record, open_listing)
+        return asking_type == availability
+
+    def _asking_type(self, record: MarketPlayerRecord, open_listing: TransferListing | None) -> str:
+        if open_listing is not None:
+            return open_listing.listing_type or "transfer"
+        return "transfer_eligible" if record.player.is_tradable else "unavailable"
+
+    def _availability_label(self, record: MarketPlayerRecord, open_listing: TransferListing | None) -> str:
+        if open_listing is not None:
+            return self._label_from_token(open_listing.listing_type or "transfer")
+        if record.player.is_tradable:
+            return "Transfer eligible"
+        return "Not tradable"
+
+    def _label_from_token(self, value: str) -> str:
+        normalized = value.replace("_", " ").strip()
+        if not normalized:
+            return "Pending"
+        return " ".join(word.capitalize() for word in normalized.split())
+
+    def _decimal_float(self, value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _json_object(self, value: Any) -> dict[str, Any]:
+        return value if isinstance(value, dict) else {}
 
     def _build_history_point(self, snapshot: Any) -> MarketPlayerHistoryPoint:
         breakdown_payload = snapshot.breakdown_json if isinstance(snapshot.breakdown_json, dict) else {}
@@ -1365,12 +1696,29 @@ class MarketPlayerQueryService:
         candidate = record.player.normalized_position or record.player.position
         return self._normalize_text(candidate) == position
 
+    def _matches_market_country(self, record: MarketPlayerRecord, country: str | None) -> bool:
+        if country is None:
+            return True
+        market_country = self._catalog_country(record)
+        if market_country is None:
+            return False
+        candidates = {
+            self._normalize_text(self._country_id(market_country)),
+            self._normalize_text(market_country.id),
+            self._normalize_text(market_country.name),
+            self._normalize_text(getattr(market_country, "alpha2_code", None)),
+            self._normalize_text(getattr(market_country, "alpha3_code", None)),
+            self._normalize_text(getattr(market_country, "fifa_code", None)),
+        }
+        return country in candidates
+
     def _matches_nationality(self, record: MarketPlayerRecord, nationality: str | None) -> bool:
         if nationality is None:
             return True
         if record.player.country is None:
             return False
         candidates = {
+            self._normalize_text(record.player.country.id),
             self._normalize_text(record.player.country.name),
             self._normalize_text(record.player.country.alpha2_code),
             self._normalize_text(record.player.country.alpha3_code),
@@ -1395,12 +1743,21 @@ class MarketPlayerQueryService:
         if club is None:
             return True
         if record.player.current_club is None:
-            return False
+            candidates = {
+                self._normalize_text(self._catalog_club_id(record)),
+                self._normalize_text(self._catalog_club_label(record)),
+                self._normalize_text(record.player.real_world_club_name),
+            }
+            return club in candidates
         candidates = {
+            self._normalize_text(record.player.current_club.id),
             self._normalize_text(record.player.current_club.name),
             self._normalize_text(record.player.current_club.short_name),
             self._normalize_text(record.player.current_club.code),
             self._normalize_text(record.player.current_club.slug),
+            self._normalize_text(record.summary.current_club_id if record.summary is not None else None),
+            self._normalize_text(record.summary.current_club_name if record.summary is not None else None),
+            self._normalize_text(record.player.real_world_club_name),
         }
         return club in candidates
 
@@ -1408,15 +1765,54 @@ class MarketPlayerQueryService:
         if league is None:
             return True
         if record.player.current_competition is None:
-            return False
+            candidates = {
+                self._normalize_text(self._catalog_league_id(record)),
+                self._normalize_text(self._catalog_league_label(record)),
+                self._normalize_text(record.player.real_world_league_name),
+            }
+            return league in candidates
         competition = record.player.current_competition
         candidates = {
+            self._normalize_text(competition.id),
             self._normalize_text(competition.name),
             self._normalize_text(getattr(competition, "short_name", None)),
             self._normalize_text(getattr(competition, "code", None)),
             self._normalize_text(getattr(competition, "slug", None)),
+            self._normalize_text(record.summary.current_competition_id if record.summary is not None else None),
+            self._normalize_text(record.summary.current_competition_name if record.summary is not None else None),
+            self._normalize_text(record.player.real_world_league_name),
         }
         return league in candidates
+
+    def _matches_division(self, record: MarketPlayerRecord, division: str | None) -> bool:
+        if division is None:
+            return True
+        candidates = {
+            self._normalize_text(self._current_division_id(record)),
+            self._normalize_text(self._current_division_name(record)),
+        }
+        internal_league = record.player.internal_league
+        if internal_league is not None:
+            candidates.update(
+                {
+                    self._normalize_text(internal_league.id),
+                    self._normalize_text(internal_league.code),
+                    self._normalize_text(internal_league.name),
+                }
+            )
+        competition = record.player.current_competition
+        if competition is not None and competition.internal_league is not None:
+            candidates.update(
+                {
+                    self._normalize_text(competition.internal_league.id),
+                    self._normalize_text(competition.internal_league.code),
+                    self._normalize_text(competition.internal_league.name),
+                }
+            )
+        if competition is not None and competition.domestic_level is not None:
+            level = str(competition.domestic_level)
+            candidates.update({level, f"division {level}", f"level {level}"})
+        return division in candidates
 
     def _matches_age(
         self,
@@ -1464,6 +1860,8 @@ class MarketPlayerQueryService:
             record.player.short_name,
             record.player.current_club.name if record.player.current_club is not None else None,
             (record.player.current_competition.name if record.player.current_competition is not None else None),
+            self._catalog_club_label(record),
+            self._catalog_league_label(record),
             record.player.country.name if record.player.country is not None else None,
             *self._national_team_search_terms(record),
         ]
@@ -1482,27 +1880,33 @@ class MarketPlayerQueryService:
         *,
         sort: str,
         position: str | None,
+        country: str | None,
         nationality: str | None,
         national_team: str | None,
         club: str | None,
         league: str | None,
+        division: str | None,
         min_age: int | None,
         max_age: int | None,
         min_value: float | None,
         max_value: float | None,
+        availability: str | None,
         search: str | None,
     ) -> dict[str, Any]:
         return {
             "sort": sort,
             "position": position,
+            "country": country,
             "nationality": nationality,
             "national_team": national_team,
             "club": club,
             "league": league,
+            "division": division,
             "min_age": min_age,
             "max_age": max_age,
             "min_value": min_value,
             "max_value": max_value,
+            "availability": availability,
             "search": search,
         }
 
@@ -1657,9 +2061,16 @@ class MarketPlayerQueryService:
         if override is not None:
             return override
         if record.summary is not None:
-            return round_gtex_display_value(record.summary.current_value_credits)
+            summary_value = self._positive_display_value(record.summary.current_value_credits)
+            if summary_value is not None:
+                return summary_value
         if record.latest_snapshot is not None:
-            return round_gtex_display_value(record.latest_snapshot.target_credits)
+            snapshot_value = self._positive_display_value(record.latest_snapshot.target_credits)
+            if snapshot_value is not None:
+                return snapshot_value
+        real_world_value = self._real_world_value_credits(record)
+        if real_world_value is not None:
+            return real_world_value
         return None
 
     def _previous_value_credits(self, record: MarketPlayerRecord) -> float | None:
@@ -1767,11 +2178,12 @@ class MarketPlayerQueryService:
             breakdown_payload=self._breakdown_payload(record),
         )
         if authoritative_value is not None:
-            return round_gtex_display_value(authoritative_value)
-        if record.player.is_real_player:
-            return None
-        if record.player.market_value_eur is not None and record.player.market_value_eur > 0:
-            return round_gtex_display_value(credits_from_real_world_value(record.player.market_value_eur))
+            display_value = self._positive_display_value(authoritative_value)
+            if display_value is not None:
+                return display_value
+        real_world_value = self._real_world_value_credits(record)
+        if real_world_value is not None:
+            return real_world_value
         return None
 
     def _require_reference_price(self, record: MarketPlayerRecord) -> float | None:
@@ -1779,6 +2191,19 @@ class MarketPlayerQueryService:
         if reference_price is None and record.player.is_real_player:
             raise MarketValidationError(f"Authoritative pricing is unavailable for real player '{record.player.id}'.")
         return reference_price
+
+    def _real_world_value_credits(self, record: MarketPlayerRecord) -> float | None:
+        for value in (record.player.current_market_reference_value, record.player.market_value_eur):
+            if value is None or value <= 0:
+                continue
+            return self._positive_display_value(credits_from_real_world_value(value))
+        return None
+
+    @staticmethod
+    def _positive_display_value(value: float | None) -> float | None:
+        if value is None or value <= 0:
+            return None
+        return round_gtex_display_value(value)
 
     def _pricing_symbol(self, record: MarketPlayerRecord) -> str | None:
         return record.player.short_name
@@ -1908,6 +2333,11 @@ class MarketPlayerQueryService:
         if country is None:
             return None
         return country.alpha3_code or country.fifa_code or country.alpha2_code
+
+    def _country_id(self, country: Any | None) -> str | None:
+        if country is None:
+            return None
+        return country.alpha3_code or country.fifa_code or country.alpha2_code or country.id
 
     def _slug(self, value: str) -> str:
         normalized = self._normalize_text(value).replace(" ", "-")

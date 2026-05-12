@@ -9,9 +9,9 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
-  testWidgets(
-      'club hub exposes the canonical workspace quick links',
-      (WidgetTester tester) async {
+  testWidgets('club hub exposes the canonical workspace quick links', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -40,24 +40,11 @@ void main() {
       ),
     );
     await _pumpUntilFound(tester, find.text('Club command'));
-    expect(find.text('Club command'), findsWidgets);
-    expect(find.text('World context'), findsWidgets);
-    expect(find.text('Owner offer inbox'), findsOneWidget);
-
-    final Finder worldContextButton = find.widgetWithText(
-      FilledButton,
-      'World context',
-    );
-    await tester.ensureVisible(worldContextButton);
-    await tester.tap(worldContextButton);
-    await _pumpUntilFound(
-      tester,
-      find.textContaining('canonical football-world simulation'),
-    );
-    expect(
-      find.textContaining('canonical football-world simulation'),
-      findsOneWidget,
-    );
+    expect(find.text('Club HQ'), findsWidgets);
+    expect(find.text('Overview'), findsWidgets);
+    expect(find.text('Transfers'), findsWidgets);
+    expect(find.text('Trophies'), findsWidgets);
+    expect(find.text('Today inside your club'), findsOneWidget);
   });
 }
 
@@ -82,22 +69,20 @@ GteAuthSession _authenticatedSession({
   String? clubId,
   String? clubName,
 }) {
-  return GteAuthSession.fromJson(
-    <String, Object?>{
-      'access_token': 'test-token',
-      'token_type': 'bearer',
-      'expires_in': 3600,
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'test-token',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    if (clubId != null) 'current_club_id': clubId,
+    if (clubName != null) 'current_club_name': clubName,
+    'user': <String, Object?>{
+      'id': userId,
+      'email': '$userId@gtex.test',
+      'username': userId,
+      'display_name': userName,
+      'role': 'user',
       if (clubId != null) 'current_club_id': clubId,
       if (clubName != null) 'current_club_name': clubName,
-      'user': <String, Object?>{
-        'id': userId,
-        'email': '$userId@gtex.test',
-        'username': userId,
-        'display_name': userName,
-        'role': 'user',
-        if (clubId != null) 'current_club_id': clubId,
-        if (clubName != null) 'current_club_name': clubName,
-      },
     },
-  );
+  });
 }

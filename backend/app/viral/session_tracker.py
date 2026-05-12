@@ -414,6 +414,7 @@ class ViralSessionTracker:
             refresh_after_clips=snapshot.refresh_after_clips,
             clips_until_refresh=snapshot.clips_until_refresh,
             pending_refresh=snapshot.pending_refresh,
+            refresh_in_flight=snapshot.refresh_in_flight,
             affinity=self._affinity_view(snapshot),
             last_updated_at=state.last_updated_at,
         )

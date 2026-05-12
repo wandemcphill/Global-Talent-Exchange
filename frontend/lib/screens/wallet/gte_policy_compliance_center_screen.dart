@@ -7,6 +7,7 @@ import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
 import '../onboarding/gte_region_selection_screen.dart';
+import 'gte_wallet_flow_scaffold.dart';
 
 class GtePolicyComplianceCenterScreen extends StatefulWidget {
   const GtePolicyComplianceCenterScreen({super.key, required this.controller});
@@ -138,14 +139,16 @@ class _GtePolicyComplianceCenterScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Policy & compliance center'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: FutureBuilder<_PolicyCenterBundle>(
+    return GteWalletFlowScaffold(
+      title: 'Policy & compliance center',
+      subtitle:
+          'Review required policies, region rules, and account permissions before deposits, withdrawals, and market actions.',
+      icon: Icons.gavel_outlined,
+      statusLabel: 'COMPLIANCE CONTROL',
+      actions: <Widget>[
+        IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
+      ],
+      child: FutureBuilder<_PolicyCenterBundle>(
         future: _bundleFuture,
         builder: (
           BuildContext context,

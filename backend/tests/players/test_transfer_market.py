@@ -22,7 +22,7 @@ from app.models.club_profile import ClubProfile
 from app.models.player_contract import PlayerContract
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.transfer_bid import TransferBid
-from app.models.transfer_market import CoachProfile, TransferListing, TransferNegotiation
+from app.models.transfer_market import CoachProfile, TransferHubOffer, TransferListing, TransferNegotiation
 from app.models.transfer_window import TransferWindow
 from app.models.user import KycStatus, User, UserRole
 from app.regen_universe import models as _regen_universe_models  # noqa: F401
@@ -151,6 +151,16 @@ def seed_transfer_market_context(session: Session) -> dict[str, str]:
         full_name="Ayo Forward",
         normalized_position="forward",
     )
+    buyer_player = Player(
+        id="player-2",
+        source_provider="test",
+        provider_external_id="player-2",
+        current_club_id=buyer_ingestion_club.id,
+        current_club_profile_id=buyer_profile.id,
+        current_competition_id=competition.id,
+        full_name="River Midfielder",
+        normalized_position="midfielder",
+    )
     contract = PlayerContract(
         id="contract-1",
         player_id=player.id,
@@ -180,6 +190,7 @@ def seed_transfer_market_context(session: Session) -> dict[str, str]:
             seller_ingestion_club,
             buyer_ingestion_club,
             player,
+            buyer_player,
             contract,
             window,
         ]
@@ -191,6 +202,7 @@ def seed_transfer_market_context(session: Session) -> dict[str, str]:
     session.commit()
     return {
         "player_id": player.id,
+        "buyer_player_id": buyer_player.id,
         "seller_club_id": seller_profile.id,
         "buyer_club_id": buyer_profile.id,
         "seller_user_id": seller_user.id,
@@ -239,6 +251,78 @@ def test_transfer_market_bid_extends_auction_window(
     assert payload["current_highest_bid"] == "1700000.00"
     assert payload["bid_count"] == 1
     assert datetime.fromisoformat(payload["expires_at"]) > expires_at
+
+
+def test_transfer_hub_supports_loan_swap_offer_lifecycle(
+    transfer_market_api: TestClient, transfer_market_session: Session
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
+    listing_response = transfer_market_api.post(
+        "/api/transfer-hub/listings",
+        json={
+            "player_id": context["player_id"],
+            "base_price": "800000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=3)).isoformat(),
+            "window_id": context["window_id"],
+            "listing_type": "loan_to_buy",
+            "asset_type": "real_player",
+            "visibility": "public",
+            "salary_amount": "25000.00",
+            "contract_years_remaining": "2.50",
+            "buy_clause_amount": "1200000.00",
+            "loan_terms": {"months": 12, "wage_share_pct": 60},
+            "swap_terms": {"minimum_rating": 70, "positions": ["midfielder"]},
+            "availability": {"loan": True, "swap": True, "loan_to_buy": True},
+        },
+        headers=seller_headers,
+    )
+    assert listing_response.status_code == 201
+    listing_payload = listing_response.json()
+    assert listing_payload["listing_type"] == "loan_to_buy"
+    assert listing_payload["loan_terms"]["months"] == 12
+    assert listing_payload["swap_terms"]["minimum_rating"] == 70
+
+    offer_body = {
+        "bidder_club_id": context["buyer_club_id"],
+        "offer_type": "swap_plus_cash",
+        "cash_amount": "300000.00",
+        "offered_player_ids": [context["buyer_player_id"]],
+        "loan_terms": {"months": 12},
+        "swap_terms": {"sell_on_pct": 10},
+        "conditional_terms": {"must_include_position": "midfielder"},
+        "idempotency_key": "offer-key-123",
+    }
+    offer_response = transfer_market_api.post(
+        f"/api/transfer-hub/listings/{listing_payload['id']}/offers",
+        json=offer_body,
+        headers=buyer_headers,
+    )
+    assert offer_response.status_code == 201
+    offer_payload = offer_response.json()
+    assert offer_payload["status"] == "open"
+    assert offer_payload["offered_player_ids"] == [context["buyer_player_id"]]
+
+    repeat_response = transfer_market_api.post(
+        f"/api/transfer-hub/listings/{listing_payload['id']}/offers",
+        json=offer_body,
+        headers=buyer_headers,
+    )
+    assert repeat_response.status_code == 201
+    assert repeat_response.json()["id"] == offer_payload["id"]
+
+    accept_response = transfer_market_api.post(
+        f"/api/transfer-hub/offers/{offer_payload['id']}/accept",
+        headers=seller_headers,
+    )
+    assert accept_response.status_code == 200
+    assert accept_response.json()["status"] == "accepted"
+    offer = transfer_market_session.get(TransferHubOffer, offer_payload["id"])
+    assert offer is not None
+    listing = transfer_market_session.get(TransferListing, listing_payload["id"])
+    assert listing is not None
+    assert listing.status == "accepted"
 
 
 def test_transfer_market_completes_transfer_after_player_and_coach_approval(

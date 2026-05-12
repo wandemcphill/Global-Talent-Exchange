@@ -99,6 +99,15 @@ class FederationValidateActionRequest(BaseModel):
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
+class NationalEligibilityReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    player_id: str | None = None
+    club_id: str | None = None
+    competition_id: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
 class FederationRevenueDistributionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -169,6 +178,41 @@ class RegionalTournamentView(BaseModel):
     active_league_count: int
     total_member_clubs: int
     leagues: list[RegionalTournamentLeagueView] = Field(default_factory=list)
+
+
+class NationalAssociationFederationView(BaseModel):
+    federation_id: str
+    name: str
+    ranking_score: float = 0
+    reputation_score: float = 0
+    active_league_count: int = 0
+    active_member_count: int = 0
+    rules: dict[str, Any] = Field(default_factory=dict)
+
+
+class NationalAssociationProfileView(BaseModel):
+    country_code: str
+    country_name: str
+    confederation_code: str | None = None
+    market_region: str | None = None
+    federation_count: int = 0
+    active_league_count: int = 0
+    member_club_count: int = 0
+    sanction_count: int = 0
+    ranking_score: float = 0
+    top_federations: list[NationalAssociationFederationView] = Field(default_factory=list)
+    national_team_oversight: dict[str, Any] = Field(default_factory=dict)
+
+
+class NationalEligibilityReviewView(BaseModel):
+    country_code: str
+    country_name: str
+    allowed: bool
+    audit_id: str | None = None
+    applied_rules: list[str] = Field(default_factory=list)
+    violations: list[dict[str, Any]] = Field(default_factory=list)
+    federation_ids: list[str] = Field(default_factory=list)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class FederationMembershipView(BaseModel):

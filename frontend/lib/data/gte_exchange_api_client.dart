@@ -399,22 +399,34 @@ class GteExchangeApiClient {
     GteMarketPlayersQuery query = const GteMarketPlayersQuery(),
   }) async {
     return _loadPublicWithFallback<GteMarketPlayerListView>(
-      liveCall: () async => GteMarketPlayerListView.fromJson(
-        await _sendPublicGet(
-          '/api/market/players',
-          query: query.toQueryParameters(),
-        ),
-      ),
+      liveCall:
+          () async => GteMarketPlayerListView.fromJson(
+            await _sendPublicGet(
+              '/api/market/players',
+              query: query.toQueryParameters(),
+            ),
+          ),
       fallbackCall: () => _fallbackPlayers(query),
+    );
+  }
+
+  Future<GteMarketBrowseCatalog> fetchMarketBrowseCatalog() async {
+    return _loadPublicWithFallback<GteMarketBrowseCatalog>(
+      liveCall:
+          () async => GteMarketBrowseCatalog.fromJson(
+            await _sendPublicGet('/api/market/browse/catalog'),
+          ),
+      fallbackCall: _fallbackMarketBrowseCatalog,
     );
   }
 
   Future<List<GteMarketLeagueBrowseItem>> fetchMarketLeagues() async {
     return _loadPublicWithFallback<List<GteMarketLeagueBrowseItem>>(
-      liveCall: () async => GteJson.list(
-        await _sendPublicGet('/api/market/leagues'),
-        label: 'market leagues',
-      ).map(GteMarketLeagueBrowseItem.fromJson).toList(growable: false),
+      liveCall:
+          () async => GteJson.list(
+            await _sendPublicGet('/api/market/leagues'),
+            label: 'market leagues',
+          ).map(GteMarketLeagueBrowseItem.fromJson).toList(growable: false),
       fallbackCall: _fallbackMarketLeagues,
     );
   }
@@ -423,10 +435,11 @@ class GteExchangeApiClient {
     String leagueId,
   ) async {
     return _loadPublicWithFallback<List<GteMarketClubBrowseItem>>(
-      liveCall: () async => GteJson.list(
-        await _sendPublicGet('/api/market/leagues/$leagueId/clubs'),
-        label: 'market league clubs',
-      ).map(GteMarketClubBrowseItem.fromJson).toList(growable: false),
+      liveCall:
+          () async => GteJson.list(
+            await _sendPublicGet('/api/market/leagues/$leagueId/clubs'),
+            label: 'market league clubs',
+          ).map(GteMarketClubBrowseItem.fromJson).toList(growable: false),
       fallbackCall: () => _fallbackMarketClubs(leagueId),
     );
   }
@@ -436,24 +449,30 @@ class GteExchangeApiClient {
     int limit = 100,
   }) async {
     return _loadPublicWithFallback<GteMarketPlayerListView>(
-      liveCall: () async => GteMarketPlayerListView.fromJson(
-        await _sendPublicGet(
-          '/api/market/clubs/$clubId/players',
-          query: <String, Object?>{'limit': limit},
-        ),
-      ),
-      fallbackCall: () =>
-          _fallbackPlayers(GteMarketPlayersQuery(limit: limit, club: clubId)),
+      liveCall:
+          () async => GteMarketPlayerListView.fromJson(
+            await _sendPublicGet(
+              '/api/market/clubs/$clubId/players',
+              query: <String, Object?>{'limit': limit},
+            ),
+          ),
+      fallbackCall:
+          () => _fallbackPlayers(
+            GteMarketPlayersQuery(limit: limit, club: clubId),
+          ),
     );
   }
 
   Future<List<GteMarketNationalityBrowseItem>>
   fetchMarketNationalities() async {
     return _loadPublicWithFallback<List<GteMarketNationalityBrowseItem>>(
-      liveCall: () async => GteJson.list(
-        await _sendPublicGet('/api/market/nationalities'),
-        label: 'market nationalities',
-      ).map(GteMarketNationalityBrowseItem.fromJson).toList(growable: false),
+      liveCall:
+          () async => GteJson.list(
+                await _sendPublicGet('/api/market/nationalities'),
+                label: 'market nationalities',
+              )
+              .map(GteMarketNationalityBrowseItem.fromJson)
+              .toList(growable: false),
       fallbackCall: _fallbackMarketNationalities,
     );
   }
@@ -463,25 +482,30 @@ class GteExchangeApiClient {
     int limit = 100,
   }) async {
     return _loadPublicWithFallback<GteMarketPlayerListView>(
-      liveCall: () async => GteMarketPlayerListView.fromJson(
-        await _sendPublicGet(
-          '/api/market/nationalities/$countryCode/players',
-          query: <String, Object?>{'limit': limit},
-        ),
-      ),
-      fallbackCall: () => _fallbackPlayers(
-        GteMarketPlayersQuery(limit: limit, country: countryCode),
-      ),
+      liveCall:
+          () async => GteMarketPlayerListView.fromJson(
+            await _sendPublicGet(
+              '/api/market/nationalities/$countryCode/players',
+              query: <String, Object?>{'limit': limit},
+            ),
+          ),
+      fallbackCall:
+          () => _fallbackPlayers(
+            GteMarketPlayersQuery(limit: limit, country: countryCode),
+          ),
     );
   }
 
   Future<List<GteMarketNationalityBrowseItem>>
   fetchMarketNationalTeams() async {
     return _loadPublicWithFallback<List<GteMarketNationalityBrowseItem>>(
-      liveCall: () async => GteJson.list(
-        await _sendPublicGet('/api/market/national-teams'),
-        label: 'market national teams',
-      ).map(GteMarketNationalityBrowseItem.fromJson).toList(growable: false),
+      liveCall:
+          () async => GteJson.list(
+                await _sendPublicGet('/api/market/national-teams'),
+                label: 'market national teams',
+              )
+              .map(GteMarketNationalityBrowseItem.fromJson)
+              .toList(growable: false),
       fallbackCall: _fallbackMarketNationalities,
     );
   }
@@ -491,32 +515,36 @@ class GteExchangeApiClient {
     int limit = 100,
   }) async {
     return _loadPublicWithFallback<GteMarketPlayerListView>(
-      liveCall: () async => GteMarketPlayerListView.fromJson(
-        await _sendPublicGet(
-          '/api/market/national-teams/$teamId/eligible-players',
-          query: <String, Object?>{'limit': limit},
-        ),
-      ),
-      fallbackCall: () => _fallbackPlayers(
-        GteMarketPlayersQuery(limit: limit, nationalTeam: teamId),
-      ),
+      liveCall:
+          () async => GteMarketPlayerListView.fromJson(
+            await _sendPublicGet(
+              '/api/market/national-teams/$teamId/eligible-players',
+              query: <String, Object?>{'limit': limit},
+            ),
+          ),
+      fallbackCall:
+          () => _fallbackPlayers(
+            GteMarketPlayersQuery(limit: limit, nationalTeam: teamId),
+          ),
     );
   }
 
   Future<GteMarketPlayerDetailView> fetchPlayerDetail(String playerId) async {
     return _loadPublicWithFallback<GteMarketPlayerDetailView>(
-      liveCall: () async => GteMarketPlayerDetailView.fromJson(
-        await _sendPublicGet('/api/market/players/$playerId'),
-      ),
+      liveCall:
+          () async => GteMarketPlayerDetailView.fromJson(
+            await _sendPublicGet('/api/market/players/$playerId'),
+          ),
       fallbackCall: () => _fallbackPlayerDetail(playerId),
     );
   }
 
   Future<GtePlayerOverview> fetchPlayerOverview(String playerId) async {
     return _loadPublicWithFallback<GtePlayerOverview>(
-      liveCall: () async => GtePlayerOverview.fromJson(
-        await _sendPublicGet('/api/players/$playerId/overview'),
-      ),
+      liveCall:
+          () async => GtePlayerOverview.fromJson(
+            await _sendPublicGet('/api/players/$playerId/overview'),
+          ),
       fallbackCall: () => _fallbackPlayerOverview(playerId),
     );
   }
@@ -565,9 +593,10 @@ class GteExchangeApiClient {
     String playerId,
   ) async {
     return _loadPublicWithFallback<GtePlayerLifecycleSnapshot?>(
-      liveCall: () async => GtePlayerLifecycleSnapshot.fromJson(
-        await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
-      ),
+      liveCall:
+          () async => GtePlayerLifecycleSnapshot.fromJson(
+            await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
+          ),
       fallbackCall: () async {
         final GtePlayerOverview overview = await _fallbackPlayerOverview(
           playerId,
@@ -869,12 +898,13 @@ class GteExchangeApiClient {
     final List<PlayerSnapshot> filtered = base
         .where((PlayerSnapshot player) {
           if (searchTerm.isNotEmpty) {
-            final String haystack = <String>[
-              player.name,
-              player.club,
-              player.nation,
-              player.position,
-            ].join(' ').toLowerCase();
+            final String haystack =
+                <String>[
+                  player.name,
+                  player.club,
+                  player.nation,
+                  player.position,
+                ].join(' ').toLowerCase();
             if (!haystack.contains(searchTerm)) {
               return false;
             }
@@ -916,9 +946,8 @@ class GteExchangeApiClient {
       items: page.map(_mapSnapshotToListItem).toList(growable: false),
       limit: query.limit,
       hasMore: hasMore,
-      nextCursor: hasMore
-          ? _encodeFallbackCursor(startOffset + page.length)
-          : null,
+      nextCursor:
+          hasMore ? _encodeFallbackCursor(startOffset + page.length) : null,
       offset: startOffset,
       total: filtered.length,
     );
@@ -931,9 +960,10 @@ class GteExchangeApiClient {
     final double normalizedMovement = _normalizeMovement(
       profile.snapshot.valueDeltaPct,
     );
-    final double previousValue = normalizedMovement.abs() < 0.0001
-        ? profile.snapshot.marketCredits.toDouble()
-        : profile.snapshot.marketCredits / (1 + normalizedMovement);
+    final double previousValue =
+        normalizedMovement.abs() < 0.0001
+            ? profile.snapshot.marketCredits.toDouble()
+            : profile.snapshot.marketCredits / (1 + normalizedMovement);
     return GteMarketPlayerDetailView(
       playerId: profile.snapshot.id,
       identity: GteMarketPlayerIdentity(
@@ -985,11 +1015,12 @@ class GteExchangeApiClient {
         confidenceTier: null,
         trend7dPct: normalizedMovement,
         trend30dPct: null,
-        trendDirection: normalizedMovement > 0
-            ? 'up'
-            : normalizedMovement < 0
-            ? 'down'
-            : 'flat',
+        trendDirection:
+            normalizedMovement > 0
+                ? 'up'
+                : normalizedMovement < 0
+                ? 'down'
+                : 'flat',
         trendConfidence: null,
         movementTags: const <String>[],
       ),
@@ -1003,11 +1034,12 @@ class GteExchangeApiClient {
         drivers: List<String>.from(profile.snapshot.recentHighlights),
         trend7dPct: normalizedMovement,
         trend30dPct: null,
-        trendDirection: normalizedMovement > 0
-            ? 'up'
-            : normalizedMovement < 0
-            ? 'down'
-            : 'flat',
+        trendDirection:
+            normalizedMovement > 0
+                ? 'up'
+                : normalizedMovement < 0
+                ? 'down'
+                : 'flat',
         trendConfidence: null,
         confidenceTier: null,
         movementTags: const <String>[],
@@ -1047,6 +1079,82 @@ class GteExchangeApiClient {
             displayName: entry.value.name,
             playerCount: entry.value.players,
             clubCount: entry.value.clubs.length,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<GteMarketBrowseCatalog> _fallbackMarketBrowseCatalog() async {
+    final GteMarketPlayerListView players = await _fallbackPlayers(
+      const GteMarketPlayersQuery(limit: 500),
+    );
+    return GteMarketBrowseCatalog(
+      total: players.total,
+      countries: _fallbackBrowseOptions(
+        players.items.map(
+          (GteMarketPlayerListItem player) =>
+              _BrowseSeed(player.nationality ?? 'Global', player.nationality),
+        ),
+      ),
+      leagues: _fallbackBrowseOptions(
+        players.items.map(
+          (GteMarketPlayerListItem player) => _BrowseSeed(
+            player.currentCompetitionName ?? 'Global Exchange League',
+            player.currentCompetitionName,
+          ),
+        ),
+      ),
+      divisions: _fallbackBrowseOptions(
+        players.items.map(
+          (GteMarketPlayerListItem player) => _BrowseSeed(
+            player.currentDivisionName ?? 'Division 1',
+            player.currentDivisionName,
+          ),
+        ),
+      ),
+      clubs: _fallbackBrowseOptions(
+        players.items.map(
+          (GteMarketPlayerListItem player) => _BrowseSeed(
+            player.currentClubName ?? 'Independent',
+            player.currentClubName,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<GteMarketBrowseOption> _fallbackBrowseOptions(
+    Iterable<_BrowseSeed> seeds,
+  ) {
+    final Map<String, int> counts = <String, int>{};
+    final Map<String, String> labels = <String, String>{};
+    for (final _BrowseSeed seed in seeds) {
+      final String label = seed.label.trim();
+      if (label.isEmpty) {
+        continue;
+      }
+      final String id =
+          seed.id?.trim().isNotEmpty == true ? seed.id!.trim() : label;
+      labels[id] = label;
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    final List<MapEntry<String, int>> entries =
+        counts.entries.toList()
+          ..sort((MapEntry<String, int> left, MapEntry<String, int> right) {
+            final int byCount = right.value.compareTo(left.value);
+            if (byCount != 0) {
+              return byCount;
+            }
+            return (labels[left.key] ?? left.key).compareTo(
+              labels[right.key] ?? right.key,
+            );
+          });
+    return entries
+        .map(
+          (MapEntry<String, int> entry) => GteMarketBrowseOption(
+            id: entry.key,
+            label: labels[entry.key] ?? entry.key,
+            count: entry.value,
           ),
         )
         .toList(growable: false);
@@ -1197,10 +1305,11 @@ class GteExchangeApiClient {
             goals: season.goals,
             assists: season.assists,
             averageRating: season.averageRating?.round(),
-            notes: snapshot.recentHighlights.isEmpty
-                ? null
-                : snapshot.recentHighlights[entry.key %
-                      snapshot.recentHighlights.length],
+            notes:
+                snapshot.recentHighlights.isEmpty
+                    ? null
+                    : snapshot.recentHighlights[entry.key %
+                        snapshot.recentHighlights.length],
             startOn: DateTime.utc(now.year - (2 - entry.key), 7, 1),
             endOn: DateTime.utc(now.year - (1 - entry.key), 6, 30),
             updatedAt: now,
@@ -1227,14 +1336,16 @@ class GteExchangeApiClient {
       trendScore: player.gsi.toDouble(),
       marketInterestScore: player.recentHighlights.length * 10,
       averageRating: player.formRating,
+      globalScoutingIndex: player.gsi.toDouble(),
       isAvailable: true,
       availabilityLabel: 'Available now',
       askingType: player.inTransferRoom ? 'transfer' : 'trial',
       agentUserId: 'fixture-agent-${player.id}',
       agentName: '${player.club} representation',
-      marketplaceNote: player.recentHighlights.isEmpty
-          ? null
-          : player.recentHighlights.first,
+      marketplaceNote:
+          player.recentHighlights.isEmpty
+              ? null
+              : player.recentHighlights.first,
     );
   }
 
@@ -1254,13 +1365,13 @@ class GteExchangeApiClient {
         (24 + (snapshot.gsi / 5).round() + (snapshot.age % 6))
             .clamp(18, 48)
             .toInt();
-    final int starts = (appearances * (0.72 + (snapshot.formRating / 25)))
-        .round()
-        .clamp(12, appearances)
-        .toInt();
-    final int minutes = (starts * (position == 'GK' ? 90 : 79))
-        .clamp(1200, 4320)
-        .toInt();
+    final int starts =
+        (appearances * (0.72 + (snapshot.formRating / 25)))
+            .round()
+            .clamp(12, appearances)
+            .toInt();
+    final int minutes =
+        (starts * (position == 'GK' ? 90 : 79)).clamp(1200, 4320).toInt();
     if (_isGoalkeeper(position)) {
       return GteCareerTotals(
         appearances: appearances,
@@ -1333,9 +1444,10 @@ class GteExchangeApiClient {
         cleanSheets: cleanSheets[index],
         saves: saves[index],
         minutes: minutes[index],
-        averageRating: (snapshot.formRating - (0.4 - (index * 0.2)))
-            .clamp(6.4, 9.2)
-            .toDouble(),
+        averageRating:
+            (snapshot.formRating - (0.4 - (index * 0.2)))
+                .clamp(6.4, 9.2)
+                .toDouble(),
       );
     }).reversed.toList(growable: false);
   }
@@ -1344,9 +1456,8 @@ class GteExchangeApiClient {
     if (total <= 0) {
       return List<int>.filled(weights.length, 0, growable: false);
     }
-    final List<int> values = weights
-        .map((double weight) => (total * weight).floor())
-        .toList();
+    final List<int> values =
+        weights.map((double weight) => (total * weight).floor()).toList();
     int assigned = values.fold<int>(0, (int sum, int value) => sum + value);
     int cursor = values.length - 1;
     while (assigned < total) {
@@ -1404,6 +1515,13 @@ class GteExchangeApiClient {
         position == 'LM' ||
         position == 'RM';
   }
+}
+
+class _BrowseSeed {
+  const _BrowseSeed(this.label, this.id);
+
+  final String label;
+  final String? id;
 }
 
 class _UnsupportedTransport implements GteTransport {

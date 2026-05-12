@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from app.common.enums.replay_visibility import ReplayVisibility
 from app.replay_archive.policy import SpectatorVisibilityPolicyService
+
+pytestmark = pytest.mark.notifications_fast
 
 
 def test_visibility_policy_keeps_early_rounds_private_without_public_opt_in() -> None:

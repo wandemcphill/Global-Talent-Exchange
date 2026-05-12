@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../core/app_feedback.dart';
 import '../../data/gte_models.dart';
@@ -7,12 +7,10 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import 'gte_wallet_flow_scaffold.dart';
 
 class GteBankDetailsScreen extends StatefulWidget {
-  const GteBankDetailsScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteBankDetailsScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -38,10 +36,11 @@ class _GteBankDetailsScreenState extends State<GteBankDetailsScreen> {
   Future<void> _openForm([GteUserBankAccount? account]) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GteBankDetailsFormScreen(
-          controller: widget.controller,
-          account: account,
-        ),
+        builder:
+            (BuildContext context) => GteBankDetailsFormScreen(
+              controller: widget.controller,
+              account: account,
+            ),
       ),
     );
     await _refresh();
@@ -64,29 +63,30 @@ class _GteBankDetailsScreenState extends State<GteBankDetailsScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppFeedback.messageFor(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AppFeedback.messageFor(error))));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bank details'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-          IconButton(
-            onPressed: () => _openForm(),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-      body: FutureBuilder<List<GteUserBankAccount>>(
+    return GteWalletFlowScaffold(
+      title: 'Bank details',
+      subtitle:
+          'Manage the verified payout accounts used for withdrawals and creator earnings.',
+      icon: Icons.account_balance_outlined,
+      statusLabel: 'PAYOUT CONTROLS',
+      actions: <Widget>[
+        IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
+        IconButton(onPressed: () => _openForm(), icon: const Icon(Icons.add)),
+      ],
+      child: FutureBuilder<List<GteUserBankAccount>>(
         future: _accountsFuture,
-        builder: (BuildContext context,
-            AsyncSnapshot<List<GteUserBankAccount>> snapshot) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<List<GteUserBankAccount>> snapshot,
+        ) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -114,14 +114,15 @@ class _GteBankDetailsScreenState extends State<GteBankDetailsScreen> {
                 final GteUserBankAccount account = accounts[index];
                 return GteSurfacePanel(
                   emphasized: account.isActive,
-                  accentColor: account.isActive
-                      ? GteShellTheme.accentCapital
-                      : null,
+                  accentColor:
+                      account.isActive ? GteShellTheme.accentCapital : null,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(account.bankName,
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        account.bankName,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         '${account.accountName} - ${account.accountNumber}',
@@ -191,13 +192,17 @@ class _GteBankDetailsFormScreenState extends State<GteBankDetailsFormScreen> {
   void initState() {
     super.initState();
     _bankNameController = TextEditingController(
-        text: widget.account?.bankName ?? '');
+      text: widget.account?.bankName ?? '',
+    );
     _accountNumberController = TextEditingController(
-        text: widget.account?.accountNumber ?? '');
+      text: widget.account?.accountNumber ?? '',
+    );
     _accountNameController = TextEditingController(
-        text: widget.account?.accountName ?? '');
-    _bankCodeController =
-        TextEditingController(text: widget.account?.bankCode ?? '');
+      text: widget.account?.accountName ?? '',
+    );
+    _bankCodeController = TextEditingController(
+      text: widget.account?.bankCode ?? '',
+    );
     _setPrimary = widget.account?.isActive ?? true;
   }
 
@@ -273,11 +278,13 @@ class _GteBankDetailsFormScreenState extends State<GteBankDetailsFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEditing ? 'Edit bank details' : 'Add bank details'),
-      ),
-      body: ListView(
+    return GteWalletFlowScaffold(
+      title: _isEditing ? 'Edit bank details' : 'Add bank details',
+      subtitle:
+          'Keep payout records accurate so withdrawals and platform rewards route cleanly.',
+      icon: Icons.account_balance_outlined,
+      statusLabel: _isEditing ? 'UPDATE PAYOUT' : 'NEW PAYOUT',
+      child: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
           GteSurfacePanel(
@@ -286,8 +293,10 @@ class _GteBankDetailsFormScreenState extends State<GteBankDetailsFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Account details',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Account details',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _bankNameController,
@@ -344,7 +353,9 @@ class _GteBankDetailsFormScreenState extends State<GteBankDetailsFormScreen> {
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: _isSubmitting ? null : _submit,
-                    child: Text(_isSubmitting ? 'Saving...' : 'Save bank details'),
+                    child: Text(
+                      _isSubmitting ? 'Saving...' : 'Save bank details',
+                    ),
                   ),
                 ),
               ],

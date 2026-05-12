@@ -534,6 +534,40 @@ class _FakePlayerCardMarketplaceRepository
   Future<List<PlayerCardWatchlistItem>> listWatchlist() async => _watchlist;
 
   @override
+  Future<List<PlayerCardPack>> listPacks() async => const <PlayerCardPack>[];
+
+  @override
+  Future<PlayerCardPackOpening> openPack(String packKey) async {
+    return PlayerCardPackOpening.fromJson(<String, Object?>{
+      'opening_id': 'opening-1',
+      'pack_key': packKey,
+      'status': 'opened',
+      'price_credits': 0,
+      'opened_cards': const <Object?>[],
+    });
+  }
+
+  @override
+  Future<PlayerCardCollectibleActionResult> burnCard(
+    PlayerCardBurnRequest request,
+  ) async {
+    return PlayerCardCollectibleActionResult.fromJson(<String, Object?>{
+      'burn_event_id': 'burn-${request.playerCardId}',
+      'status': 'completed',
+    });
+  }
+
+  @override
+  Future<PlayerCardCollectibleActionResult> upgradeCards(
+    PlayerCardUpgradeRequest request,
+  ) async {
+    return PlayerCardCollectibleActionResult.fromJson(<String, Object?>{
+      'upgrade_event_id': 'upgrade-${request.targetTierCode}',
+      'status': 'completed',
+    });
+  }
+
+  @override
   Future<void> removeWatchlist(String watchlistId) async {}
 
   @override

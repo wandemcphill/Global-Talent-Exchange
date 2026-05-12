@@ -8,12 +8,10 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import 'gte_wallet_flow_scaffold.dart';
 
 class GteKycScreen extends StatefulWidget {
-  const GteKycScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteKycScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -29,8 +27,9 @@ class _GteKycScreenState extends State<GteKycScreen> {
   final TextEditingController _addressLine2Controller = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _stateController = TextEditingController();
-  final TextEditingController _countryController =
-      TextEditingController(text: 'Nigeria');
+  final TextEditingController _countryController = TextEditingController(
+    text: 'Nigeria',
+  );
 
   bool _hasHydrated = false;
   bool _isSubmitting = false;
@@ -108,13 +107,13 @@ class _GteKycScreenState extends State<GteKycScreen> {
       if (bytes.isEmpty) {
         throw Exception('Unable to read the selected file.');
       }
-      final GteAttachment attachment =
-          await widget.controller.api.uploadAttachment(
-        file.name,
-        bytes,
-        contentType:
-            file.extension == null ? null : 'application/${file.extension}',
-      );
+      final GteAttachment attachment = await widget.controller.api
+          .uploadAttachment(
+            file.name,
+            bytes,
+            contentType:
+                file.extension == null ? null : 'application/${file.extension}',
+          );
       if (!mounted) {
         return;
       }
@@ -184,9 +183,9 @@ class _GteKycScreenState extends State<GteKycScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('KYC submission received.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('KYC submission received.')));
       await _refresh();
     } catch (error) {
       if (!mounted) {
@@ -206,14 +205,16 @@ class _GteKycScreenState extends State<GteKycScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('KYC verification'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: FutureBuilder<GteKycProfile>(
+    return GteWalletFlowScaffold(
+      title: 'KYC verification',
+      subtitle:
+          'Submit identity and address details used by wallet, withdrawals, orders, and compliance controls.',
+      icon: Icons.verified_user_outlined,
+      statusLabel: 'TRUST OPS',
+      actions: <Widget>[
+        IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
+      ],
+      child: FutureBuilder<GteKycProfile>(
         future: _profileFuture,
         builder: (BuildContext context, AsyncSnapshot<GteKycProfile> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -229,7 +230,8 @@ class _GteKycScreenState extends State<GteKycScreen> {
             );
           }
           final GteKycProfile profile = snapshot.data!;
-          final bool isLocked = profile.status == GteKycStatus.pending ||
+          final bool isLocked =
+              profile.status == GteKycStatus.pending ||
               profile.status == GteKycStatus.fullyVerified;
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -242,15 +244,16 @@ class _GteKycScreenState extends State<GteKycScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('KYC status',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'KYC status',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         _kycStatusLabel(profile.status),
-                        style: Theme.of(context)
-                            .textTheme
-                            .displaySmall
-                            ?.copyWith(fontSize: 28),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.displaySmall?.copyWith(fontSize: 28),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -274,8 +277,10 @@ class _GteKycScreenState extends State<GteKycScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Identity details',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Identity details',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _ninController,
@@ -350,18 +355,21 @@ class _GteKycScreenState extends State<GteKycScreen> {
                         runSpacing: 12,
                         children: <Widget>[
                           OutlinedButton.icon(
-                            onPressed: isLocked || _isUploading
-                                ? null
-                                : _pickAttachment,
+                            onPressed:
+                                isLocked || _isUploading
+                                    ? null
+                                    : _pickAttachment,
                             icon: const Icon(Icons.upload_file_outlined),
                             label: Text(
-                                _isUploading ? 'Uploading...' : 'Upload ID'),
+                              _isUploading ? 'Uploading...' : 'Upload ID',
+                            ),
                           ),
                           if (_attachment != null ||
                               profile.idDocumentAttachmentId != null)
                             Chip(
-                              label: Text(_attachment?.filename ??
-                                  'Attachment on file'),
+                              label: Text(
+                                _attachment?.filename ?? 'Attachment on file',
+                              ),
                             ),
                         ],
                       ),
@@ -377,11 +385,13 @@ class _GteKycScreenState extends State<GteKycScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
-                          onPressed: isLocked || _isSubmitting
-                              ? null
-                              : () => _submit(profile),
+                          onPressed:
+                              isLocked || _isSubmitting
+                                  ? null
+                                  : () => _submit(profile),
                           child: Text(
-                              _isSubmitting ? 'Submitting...' : 'Submit KYC'),
+                            _isSubmitting ? 'Submitting...' : 'Submit KYC',
+                          ),
                         ),
                       ),
                     ],

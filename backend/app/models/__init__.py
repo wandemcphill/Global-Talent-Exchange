@@ -32,7 +32,13 @@ from app.models.agent_marketplace import (
     PlayerConversationParticipant,
     PlayerConversationStatus,
 )
-from app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
+from app.models.admin_rules import (
+    AdminBetaAccessGrant,
+    AdminCalendarRule,
+    AdminFeatureFlag,
+    AdminFeatureFlagAuditLog,
+    AdminRewardRule,
+)
 from app.models.admin_runtime_state import AdminRuntimeState
 from app.models.attachment import Attachment
 from app.models.betting import BetAuditLog, BetIntegrityAlert, BetTicket, BettingProfile
@@ -73,6 +79,28 @@ from app.models.club_ownership import (
 )
 from app.models.club_identity_theme import ClubIdentityTheme
 from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_lifecycle import (
+    ClubEligibilityFlag,
+    ClubLifecycleAuditEvent,
+    ClubLifecycleState,
+    ClubOperatingStatus,
+    ClubReadinessStatus,
+    ClubRegistrationSlot,
+    ClubSquadRegistration,
+)
+from app.models.club_growth import (
+    AcademyGenerationRun,
+    AcademyProfile,
+    AcademyPromotionHistory,
+    AcademyProspect,
+    AcademyRegenContractOffer,
+    AcademyTrainingPlan,
+    ClubGrowthAuditEvent,
+    ClubStaffAssignment,
+    ClubStaffContract,
+    ClubStaffPerformanceLog,
+    ClubStaffProfile,
+)
 from app.models.club_profile import ClubProfile
 from app.models.club_sale import (
     ClubSaleAuditEvent,
@@ -85,6 +113,15 @@ from app.models.club_sale import (
     ClubSaleTransfer,
     ClubSaleTransferStatus,
     ClubValuationSnapshot,
+)
+from app.models.coin_trader import (
+    CoinTradeDirection,
+    CoinTradeOrder,
+    CoinTradeOrderStatus,
+    CoinTraderProfile,
+    CoinTraderProfileStatus,
+    CoinTraderRate,
+    CoinTraderTier,
 )
 from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
 from app.models.club_social import (
@@ -125,6 +162,7 @@ from app.models.club_sponsorship_package import ClubSponsorshipPackage
 from app.models.club_sponsorship_payout import ClubSponsorshipPayout
 from app.models.club_trophy import ClubTrophy
 from app.models.clip_variant import ClipVariant
+from app.models.viral_moderation import ClipModerationEvent
 from app.models.competition import Competition, UserCompetition
 from app.models.competition_autofill_rule import CompetitionAutofillRule
 from app.models.competition_entry import CompetitionEntry
@@ -404,9 +442,11 @@ from app.models.transfer_market import (
     MarketWatchlistEntry,
     PlayerCoachRelationship,
     PlayerDecisionProfile,
+    TransferHubOffer,
     TransferListing,
     TransferListingBid,
     TransferNegotiation,
+    TransferRequest,
 )
 from app.models.transfer_window import TransferWindow
 from app.models.treasury import (
@@ -679,7 +719,9 @@ __all__ = [
     "AuthEmailToken",
     "AuthEmailTokenPurpose",
     "AdminCalendarRule",
+    "AdminBetaAccessGrant",
     "AdminFeatureFlag",
+    "AdminFeatureFlagAuditLog",
     "AdminRewardRule",
     "Attachment",
     "BetAuditLog",
@@ -717,6 +759,24 @@ __all__ = [
     "ClubSupporterToken",
     "ClubIdentityTheme",
     "ClubJerseyDesign",
+    "ClubEligibilityFlag",
+    "ClubLifecycleAuditEvent",
+    "ClubLifecycleState",
+    "ClubOperatingStatus",
+    "ClubReadinessStatus",
+    "ClubRegistrationSlot",
+    "ClubSquadRegistration",
+    "AcademyGenerationRun",
+    "AcademyProfile",
+    "AcademyPromotionHistory",
+    "AcademyProspect",
+    "AcademyRegenContractOffer",
+    "AcademyTrainingPlan",
+    "ClubGrowthAuditEvent",
+    "ClubStaffAssignment",
+    "ClubStaffContract",
+    "ClubStaffPerformanceLog",
+    "ClubStaffProfile",
     "ClubProfile",
     "ClubSaleAuditEvent",
     "ClubSaleInquiry",

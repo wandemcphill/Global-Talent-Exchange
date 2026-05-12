@@ -94,3 +94,28 @@ class PlatformAnnouncementCreate(BaseModel):
     active: bool = True
     deliver_as_notification: bool = True
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationEventMatrixItemView(BaseModel):
+    event_key: str
+    topic: str
+    template_key: str
+    title: str
+    default_message: str
+    audience: str
+    deep_link_route: str
+    preference_key: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationTestEventRequest(BaseModel):
+    event_key: str
+    target_user_id: str
+    resource_id: str | None = None
+    message: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationTestEventView(BaseModel):
+    notification: NotificationView
+    matrix_item: NotificationEventMatrixItemView

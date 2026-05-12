@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -62,7 +62,9 @@ class FederationService:
 
     def list_federations(self) -> list[Federation]:
         self.refresh_rankings()
-        stmt = select(Federation).order_by(Federation.ranking_score.desc(), Federation.reputation_score.desc(), Federation.name.asc())
+        stmt = select(Federation).order_by(
+            Federation.ranking_score.desc(), Federation.reputation_score.desc(), Federation.name.asc()
+        )
         return list(self.session.scalars(stmt).all())
 
     def get_federation(self, federation_id: str) -> Federation:
@@ -75,13 +77,21 @@ class FederationService:
     def list_leagues(self, federation_id: str) -> list[FederationLeague]:
         if self.session.get(Federation, federation_id) is None:
             raise FederationNotFoundError("Federation was not found.")
-        stmt = select(FederationLeague).where(FederationLeague.federation_id == federation_id).order_by(FederationLeague.created_at.asc())
+        stmt = (
+            select(FederationLeague)
+            .where(FederationLeague.federation_id == federation_id)
+            .order_by(FederationLeague.created_at.asc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def list_memberships(self, federation_id: str) -> list[FederationMembership]:
         if self.session.get(Federation, federation_id) is None:
             raise FederationNotFoundError("Federation was not found.")
-        stmt = select(FederationMembership).where(FederationMembership.federation_id == federation_id).order_by(FederationMembership.created_at.asc())
+        stmt = (
+            select(FederationMembership)
+            .where(FederationMembership.federation_id == federation_id)
+            .order_by(FederationMembership.created_at.asc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def list_regional_tournaments(self) -> list[dict[str, Any]]:
@@ -103,12 +113,16 @@ class FederationService:
         )
         for federation in federations:
             metadata = dict(federation.metadata_json or {})
-            region_code = str(
-                metadata.get("region_code")
-                or metadata.get("region")
-                or (federation.rules_json or {}).get("region_code")
-                or "global"
-            ).strip().lower()
+            region_code = (
+                str(
+                    metadata.get("region_code")
+                    or metadata.get("region")
+                    or (federation.rules_json or {}).get("region_code")
+                    or "global"
+                )
+                .strip()
+                .lower()
+            )
             region_label = str(
                 metadata.get("region_label")
                 or metadata.get("region_name")
@@ -174,6 +188,168 @@ class FederationService:
             )
         result.sort(key=lambda item: (-item["active_league_count"], item["region_label"]))
         return result
+
+    def build_national_association_profile(self, country_code: str) -> dict[str, Any]:
+        country = self._get_country_by_code(country_code)
+        codes = self._country_codes(country)
+        federations = self._federations_for_country(country)
+        federation_ids = [item.id for item in federations]
+
+        league_count = 0
+        member_club_ids: set[str] = set()
+        sanction_count = 0
+        federation_views: list[dict[str, Any]] = []
+        for federation in federations:
+            active_leagues = list(
+                self.session.scalars(
+                    select(FederationLeague).where(
+                        FederationLeague.federation_id == federation.id,
+                        FederationLeague.status != "archived",
+                    )
+                ).all()
+            )
+            active_memberships = list(
+                self.session.scalars(
+                    select(FederationMembership).where(
+                        FederationMembership.federation_id == federation.id,
+                        FederationMembership.status == FederationMembershipStatus.ACTIVE.value,
+                    )
+                ).all()
+            )
+            sanctions = int(
+                self.session.scalar(
+                    select(func.count(FederationSanction.id)).where(FederationSanction.federation_id == federation.id)
+                )
+                or 0
+            )
+            league_count += len(active_leagues)
+            member_club_ids.update(item.club_id for item in active_memberships)
+            sanction_count += sanctions
+            federation_views.append(
+                {
+                    "federation_id": federation.id,
+                    "name": federation.name,
+                    "ranking_score": federation.ranking_score,
+                    "reputation_score": federation.reputation_score,
+                    "active_league_count": len(active_leagues),
+                    "active_member_count": len(active_memberships),
+                    "rules": dict(federation.rules_json or {}),
+                }
+            )
+
+        federation_views.sort(key=lambda item: (-float(item["ranking_score"]), str(item["name"])))
+        ranking_score = max((float(item.ranking_score or 0) for item in federations), default=0.0)
+        return {
+            "country_code": self._primary_country_code(country),
+            "country_name": country.name,
+            "confederation_code": country.confederation_code,
+            "market_region": country.market_region,
+            "federation_count": len(federations),
+            "active_league_count": league_count,
+            "member_club_count": len(member_club_ids),
+            "sanction_count": sanction_count,
+            "ranking_score": ranking_score,
+            "top_federations": federation_views[:5],
+            "national_team_oversight": {
+                "country_codes": sorted(codes),
+                "federation_ids": federation_ids,
+                "eligibility_policy": "country_code_match",
+                "requires_active_membership_for_club_review": bool(federation_ids),
+            },
+        }
+
+    def review_national_eligibility(
+        self,
+        *,
+        country_code: str,
+        player_id: str | None = None,
+        club_id: str | None = None,
+        competition_id: str | None = None,
+        metadata_json: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        country = self._get_country_by_code(country_code)
+        codes = self._country_codes(country)
+        federations = self._federations_for_country(country)
+        applied_rules = ["national_association.country_code_match"]
+        violations: list[dict[str, Any]] = []
+
+        if player_id:
+            player = self.session.get(Player, player_id)
+            if player is None:
+                violations.append(
+                    {
+                        "code": "player_not_found",
+                        "message": "Player could not be found for national eligibility review.",
+                        "context": {"player_id": player_id},
+                    }
+                )
+            else:
+                player_country_code = self._country_code_for_player(player)
+                if player_country_code not in codes:
+                    violations.append(
+                        {
+                            "code": "country_mismatch",
+                            "message": "Player country metadata does not match this national association.",
+                            "context": {
+                                "player_id": player_id,
+                                "player_country_code": player_country_code,
+                                "expected_country_codes": sorted(codes),
+                            },
+                        }
+                    )
+
+        if club_id and federations:
+            applied_rules.append("national_association.active_membership")
+            active_membership = self.session.scalar(
+                select(FederationMembership).where(
+                    FederationMembership.federation_id.in_([item.id for item in federations]),
+                    FederationMembership.club_id == club_id,
+                    FederationMembership.status == FederationMembershipStatus.ACTIVE.value,
+                )
+            )
+            if active_membership is None:
+                violations.append(
+                    {
+                        "code": "club_membership_missing",
+                        "message": "Club is not an active member of this national association's federation network.",
+                        "context": {"club_id": club_id},
+                    }
+                )
+
+        audit_id: str | None = None
+        if federations:
+            audit = FederationRuleAudit(
+                federation_id=federations[0].id,
+                league_id=None,
+                action_type="national_eligibility_review",
+                club_id=club_id,
+                player_id=player_id,
+                status=(
+                    FederationRuleAuditStatus.VIOLATION.value if violations else FederationRuleAuditStatus.PASSED.value
+                ),
+                violation_count=len(violations),
+                violations_json=violations,
+                checked_at=datetime.now(UTC),
+                metadata_json={
+                    "country_code": self._primary_country_code(country),
+                    "competition_id": competition_id,
+                    **dict(metadata_json or {}),
+                },
+            )
+            self.session.add(audit)
+            self.session.flush()
+            audit_id = audit.id
+
+        return {
+            "country_code": self._primary_country_code(country),
+            "country_name": country.name,
+            "allowed": not violations,
+            "audit_id": audit_id,
+            "applied_rules": applied_rules,
+            "violations": violations,
+            "federation_ids": [item.id for item in federations],
+            "metadata_json": dict(metadata_json or {}),
+        }
 
     def build_dashboard(self, federation_id: str) -> dict[str, Any]:
         federation = self.get_federation(federation_id)
@@ -333,7 +509,10 @@ class FederationService:
     ) -> FederationMembership:
         federation = self.get_federation(federation_id)
         club = self._require_club(club_id)
-        if actor.id not in {club.owner_user_id, federation.owner_user_id} and actor.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        if actor.id not in {club.owner_user_id, federation.owner_user_id} and actor.role not in {
+            UserRole.ADMIN,
+            UserRole.SUPER_ADMIN,
+        }:
             raise FederationValidationError("Only the club owner or federation admins can manage federation entry.")
         membership = self.session.scalar(
             select(FederationMembership).where(
@@ -346,7 +525,11 @@ class FederationService:
             club=club,
             requested_requirements=entry_requirements_json,
         )
-        status = FederationMembershipStatus.ACTIVE.value if auto_activate and not violations else FederationMembershipStatus.PENDING.value
+        status = (
+            FederationMembershipStatus.ACTIVE.value
+            if auto_activate and not violations
+            else FederationMembershipStatus.PENDING.value
+        )
         if membership is None:
             membership = FederationMembership(
                 federation_id=federation.id,
@@ -542,7 +725,9 @@ class FederationService:
             max_active_contracts = self._nested_int(rules, "squad_limits", "max_active_contracts")
             if max_active_contracts is not None:
                 active_contracts = self._active_contract_count(club_id)
-                projected_count = active_contracts + (1 if player_id and action_type in {"transfer_bid", "competition_entry"} else 0)
+                projected_count = active_contracts + (
+                    1 if player_id and action_type in {"transfer_bid", "competition_entry"} else 0
+                )
                 applied_rules.append("squad_limits.max_active_contracts")
                 if projected_count > max_active_contracts:
                     violations.append(
@@ -684,7 +869,11 @@ class FederationService:
         normalized_amount = self._normalize_amount(resolved_amount)
         if normalized_amount <= Decimal("0.0000"):
             raise FederationValidationError("Revenue amount must be greater than zero.")
-        share_bps = federation_share_bps if federation_share_bps is not None else self._nested_int(federation.rules_json, "economy", "federation_share_bps", default=1500)
+        share_bps = (
+            federation_share_bps
+            if federation_share_bps is not None
+            else self._nested_int(federation.rules_json, "economy", "federation_share_bps", default=1500)
+        )
         federation_share = self._normalize_amount((normalized_amount * Decimal(share_bps)) / Decimal(10_000))
         member_club_ids = self._active_member_club_ids(federation.id)
         club_distribution_json: list[dict[str, Any]] = []
@@ -708,7 +897,9 @@ class FederationService:
             metadata_json={"share_bps": share_bps, **dict(metadata_json or {})},
         )
         self.session.add(entry)
-        federation.treasury_balance = self._normalize_amount(Decimal(federation.treasury_balance or 0) + federation_share)
+        federation.treasury_balance = self._normalize_amount(
+            Decimal(federation.treasury_balance or 0) + federation_share
+        )
         self.session.flush()
         return entry
 
@@ -723,14 +914,18 @@ class FederationService:
             )
             or 0
         )
-        view_count = int(
-            self.session.scalar(
-                select(func.coalesce(func.sum(MatchRevenueSnapshot.total_views), 0)).where(
-                    MatchRevenueSnapshot.competition_key.in_(competition_ids)
+        view_count = (
+            int(
+                self.session.scalar(
+                    select(func.coalesce(func.sum(MatchRevenueSnapshot.total_views), 0)).where(
+                        MatchRevenueSnapshot.competition_key.in_(competition_ids)
+                    )
                 )
+                or 0
             )
-            or 0
-        ) if competition_ids else 0
+            if competition_ids
+            else 0
+        )
         open_proposals = int(
             self.session.scalar(
                 select(func.count(FederationProposal.id)).where(
@@ -777,20 +972,28 @@ class FederationService:
             active_member_count = len(self._active_member_club_ids(federation.id))
             league_ids, competition_ids = self._federation_competition_context(federation.id)
             proposal_count = int(
-                self.session.scalar(select(func.count(FederationProposal.id)).where(FederationProposal.federation_id == federation.id))
+                self.session.scalar(
+                    select(func.count(FederationProposal.id)).where(FederationProposal.federation_id == federation.id)
+                )
                 or 0
             )
             vote_count = int(
-                self.session.scalar(select(func.count(FederationVote.id)).where(FederationVote.federation_id == federation.id))
+                self.session.scalar(
+                    select(func.count(FederationVote.id)).where(FederationVote.federation_id == federation.id)
+                )
                 or 0
             )
             sanction_count = int(
-                self.session.scalar(select(func.count(FederationSanction.id)).where(FederationSanction.federation_id == federation.id))
+                self.session.scalar(
+                    select(func.count(FederationSanction.id)).where(FederationSanction.federation_id == federation.id)
+                )
                 or 0
             )
             narrative_count = int(
                 self.session.scalar(
-                    select(func.count(FederationNarrativeSnapshot.id)).where(FederationNarrativeSnapshot.federation_id == federation.id)
+                    select(func.count(FederationNarrativeSnapshot.id)).where(
+                        FederationNarrativeSnapshot.federation_id == federation.id
+                    )
                 )
                 or 0
             )
@@ -803,10 +1006,7 @@ class FederationService:
             )
             activity_score = min(
                 100.0,
-                (proposal_count * 4.0)
-                + (vote_count * 1.5)
-                + (sanction_count * 2.0)
-                + (narrative_count * 3.0),
+                (proposal_count * 4.0) + (vote_count * 1.5) + (sanction_count * 2.0) + (narrative_count * 3.0),
             )
             ranking_score = round(
                 activity_score
@@ -872,9 +1072,7 @@ class FederationService:
                 if yes_votes > no_votes and total_counted >= quorum_votes
                 else FederationProposalStatus.REJECTED.value
             )
-            proposal.result_summary = (
-                f"Voting closed with yes={proposal.yes_votes}, no={proposal.no_votes}, abstain={proposal.abstain_votes}, quorum={quorum_votes}."
-            )
+            proposal.result_summary = f"Voting closed with yes={proposal.yes_votes}, no={proposal.no_votes}, abstain={proposal.abstain_votes}, quorum={quorum_votes}."
             if proposal.status == FederationProposalStatus.ACCEPTED.value:
                 self._apply_proposal_outcome(proposal)
             closed += 1
@@ -1050,12 +1248,16 @@ class FederationService:
     def _sync_snapshot_fields(self, federation: Federation) -> None:
         leagues = self.list_leagues(federation.id)
         memberships = self.list_memberships(federation.id)
-        club_map = {
-            club.id: club
-            for club in self.session.scalars(
-                select(ClubProfile).where(ClubProfile.id.in_([item.club_id for item in memberships]))
-            ).all()
-        } if memberships else {}
+        club_map = (
+            {
+                club.id: club
+                for club in self.session.scalars(
+                    select(ClubProfile).where(ClubProfile.id.in_([item.club_id for item in memberships]))
+                ).all()
+            }
+            if memberships
+            else {}
+        )
         federation.competitions_json = [
             {
                 "league_id": league.id,
@@ -1100,13 +1302,13 @@ class FederationService:
 
     def _recompute_vote_totals(self, proposal: FederationProposal) -> None:
         votes = list(
-            self.session.scalars(
-                select(FederationVote).where(FederationVote.proposal_id == proposal.id)
-            ).all()
+            self.session.scalars(select(FederationVote).where(FederationVote.proposal_id == proposal.id)).all()
         )
         proposal.yes_votes = sum(vote.weight for vote in votes if vote.vote_type == FederationVoteType.YES.value)
         proposal.no_votes = sum(vote.weight for vote in votes if vote.vote_type == FederationVoteType.NO.value)
-        proposal.abstain_votes = sum(vote.weight for vote in votes if vote.vote_type == FederationVoteType.ABSTAIN.value)
+        proposal.abstain_votes = sum(
+            vote.weight for vote in votes if vote.vote_type == FederationVoteType.ABSTAIN.value
+        )
         self.session.flush()
 
     def _apply_proposal_outcome(self, proposal: FederationProposal) -> None:
@@ -1245,6 +1447,81 @@ class FederationService:
         if country is None:
             return None
         return (country.alpha2_code or country.alpha3_code or country.fifa_code or "").upper() or None
+
+    def _get_country_by_code(self, country_code: str) -> Country:
+        normalized = country_code.strip().upper()
+        if not normalized:
+            raise FederationValidationError("Country code is required.")
+        country = self.session.scalar(
+            select(Country).where(
+                or_(
+                    func.upper(Country.alpha2_code) == normalized,
+                    func.upper(Country.alpha3_code) == normalized,
+                    func.upper(Country.fifa_code) == normalized,
+                    func.upper(Country.name) == normalized,
+                )
+            )
+        )
+        if country is None:
+            raise FederationNotFoundError("National association country was not found.")
+        return country
+
+    @staticmethod
+    def _country_codes(country: Country) -> set[str]:
+        return {
+            value.strip().upper()
+            for value in (country.alpha2_code, country.alpha3_code, country.fifa_code, country.name)
+            if isinstance(value, str) and value.strip()
+        }
+
+    def _federations_for_country(self, country: Country) -> list[Federation]:
+        codes = self._country_codes(country)
+        federations = list(
+            self.session.scalars(
+                select(Federation)
+                .where(Federation.is_public.is_(True))
+                .order_by(Federation.ranking_score.desc(), Federation.name.asc())
+            ).all()
+        )
+        return [
+            federation for federation in federations if self._federation_matches_country(federation, country, codes)
+        ]
+
+    @staticmethod
+    def _federation_matches_country(federation: Federation, country: Country, codes: set[str]) -> bool:
+        payloads = [dict(federation.metadata_json or {}), dict(federation.rules_json or {})]
+        candidate_values: set[str] = set()
+        for payload in payloads:
+            for key in (
+                "country_code",
+                "country",
+                "fifa_code",
+                "national_association_code",
+                "region_code",
+                "region",
+            ):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    candidate_values.add(value.strip().upper())
+            for key in ("country_codes", "home_country_codes", "member_country_codes"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    candidate_values.update(str(item).strip().upper() for item in value if str(item).strip())
+            nationality_rules = payload.get("nationality_rules")
+            if isinstance(nationality_rules, dict):
+                home_codes = nationality_rules.get("home_country_codes")
+                if isinstance(home_codes, list):
+                    candidate_values.update(str(item).strip().upper() for item in home_codes if str(item).strip())
+        name = federation.name.upper()
+        return (
+            bool(candidate_values & codes)
+            or any(code in name for code in codes if len(code) > 2)
+            or country.name.upper() in name
+        )
+
+    @staticmethod
+    def _primary_country_code(country: Country) -> str:
+        return (country.alpha2_code or country.fifa_code or country.alpha3_code or country.name).upper()
 
     def _active_contract_count(self, club_id: str) -> int:
         return int(

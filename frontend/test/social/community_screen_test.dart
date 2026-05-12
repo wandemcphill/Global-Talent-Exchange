@@ -36,14 +36,20 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Creator Cup Night'), findsOneWidget);
+      expect(find.text('GTEX Social'), findsOneWidget);
       expect(find.text('Matchday derby watch party'), findsOneWidget);
-      expect(find.text('Transfer room collab'), findsOneWidget);
+
+      await tester.tap(find.text('Club follow').first);
+      await tester.pumpAndSettle();
       expect(find.widgetWithText(FilledButton, 'Unfollow'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(FilledButton, 'Unfollow'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(FilledButton, 'Follow'), findsOneWidget);
+
+      await tester.tap(find.text('Watchlist').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Creator Cup Night'), findsOneWidget);
 
       await tester.tap(find.text('Add competition'));
       await tester.pumpAndSettle();
@@ -63,6 +69,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('All Stars Cup'), findsOneWidget);
 
+      await tester.tap(find.text('Live threads').first);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Start thread'));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -92,6 +100,9 @@ void main() {
       Navigator.of(tester.element(find.byType(CommunityScreen))).pop();
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('Direct messages').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Transfer room collab'), findsOneWidget);
       await tester.tap(find.text('New DM'));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -147,17 +158,47 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Competition watchlist'), findsOneWidget);
-      expect(find.text('Creator Cup Night'), findsOneWidget);
+      expect(find.text('GTEX Social'), findsOneWidget);
+      expect(find.text('Live threads'), findsWidgets);
+      expect(find.text('Fan wars'), findsWidgets);
       expect(find.text('Maya Scout community desk'), findsNothing);
       expect(
         find.text(
-          'Watchlists, live threads, direct messages, and creator-club follows are wired to live community endpoints.',
+          'Live community threads, watchlists, follows, and direct messages from GTEX APIs.',
         ),
         findsOneWidget,
       );
     },
   );
+
+  testWidgets('community overview mounts matchday economy integration', (
+    WidgetTester tester,
+  ) async {
+    _setLargeViewport(tester);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: const Scaffold(
+          body: CommunityScreen(
+            api: null,
+            baseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+            accessToken: 'fixture-token',
+            isAuthenticated: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Overview').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Matchday economy'), findsOneWidget);
+    expect(find.text('Federation Governance'), findsOneWidget);
+    expect(find.text('Ticketing And Stadium'), findsOneWidget);
+  });
 }
 
 void _setLargeViewport(WidgetTester tester) {

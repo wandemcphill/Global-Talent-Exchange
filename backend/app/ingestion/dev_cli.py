@@ -5,10 +5,12 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+from random import Random
 import subprocess
 import sys
 from typing import Any, Sequence
 
+from sqlalchemy import func, select
 from sqlalchemy.engine.url import make_url
 
 from app.core.config import (
@@ -19,6 +21,7 @@ from app.core.config import (
     reset_settings_cache,
 )
 from app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
+from app.ingestion.canonical_countries import seed_canonical_countries
 from app.ingestion.demo_bootstrap import (
     DEFAULT_DEMO_BATCH_SIZE,
     DEFAULT_DEMO_PASSWORD,
@@ -28,7 +31,12 @@ from app.ingestion.demo_bootstrap import (
     DEFAULT_DEMO_SIGNAL_PROVIDER,
     seed_demo_data,
 )
+from app.ingestion.models import Country
 from app.ingestion.demo_visibility import seed_world_visibility_data
+from app.models.regen_ecosystem import NationalRegenSeed
+from app.regen_universe.expansion_service import RegenUniverseExpansionService
+from app.services.regen_portrait_service import RegenPortraitService
+from app.services.regen_service import generate_country_display_name, resolve_country_naming_profile_for_country
 from app.simulation.service import (
     DEFAULT_ILLIQUID_PLAYER_COUNT,
     DEFAULT_LIQUID_PLAYER_COUNT,
@@ -208,6 +216,197 @@ def seed_world_visibility_database(
             provider_name=provider,
         )
         return summary.to_dict()
+
+
+def seed_national_regen_pool_database(
+    *,
+    database_url: str,
+    country_codes: Sequence[str] | None = None,
+    seeds_per_country: int = 70,
+    age_band: str | None = "u21",
+    age_min: int | None = None,
+    age_max: int | None = None,
+    include_legendary_regens: bool = True,
+    preseed_batch: str = "global_u21_batch",
+    include_canonical_countries: bool = True,
+) -> dict[str, Any]:
+    with _local_demo_environment(database_url=database_url):
+        engine = create_database_engine(database_url)
+        try:
+            ensure_database_schema_current(engine)
+            session_factory = create_session_factory(engine)
+            with session_factory() as session:
+                canonical_result = None
+                if include_canonical_countries:
+                    canonical_result = seed_canonical_countries(session)
+                result = RegenUniverseExpansionService(session).seed_preseeded_national_regens(
+                    country_codes=list(country_codes or []),
+                    seeds_per_country=seeds_per_country,
+                    age_band=age_band,
+                    age_min=age_min,
+                    age_max=age_max,
+                    include_legendary_regens=include_legendary_regens,
+                    preseed_batch=preseed_batch,
+                )
+                session.commit()
+                created_items = list(result.get("items") or [])
+                seed_result = {
+                    "summary": dict(result.get("summary") or {}),
+                    "created_sample": created_items[:10],
+                }
+
+                batch_stmt = select(NationalRegenSeed).where(NationalRegenSeed.preseed_batch == preseed_batch)
+                total_in_batch = int(session.scalar(select(func.count()).select_from(batch_stmt.subquery())) or 0)
+                country_count = int(
+                    session.scalar(
+                        select(func.count(func.distinct(NationalRegenSeed.country_code))).where(
+                            NationalRegenSeed.preseed_batch == preseed_batch
+                        )
+                    )
+                    or 0
+                )
+                age_min_value = session.scalar(
+                    select(func.min(NationalRegenSeed.age)).where(NationalRegenSeed.preseed_batch == preseed_batch)
+                )
+                age_max_value = session.scalar(
+                    select(func.max(NationalRegenSeed.age)).where(NationalRegenSeed.preseed_batch == preseed_batch)
+                )
+                kenya_count = int(
+                    session.scalar(
+                        select(func.count())
+                        .select_from(NationalRegenSeed)
+                        .where(
+                            NationalRegenSeed.preseed_batch == preseed_batch,
+                            NationalRegenSeed.country_code == "KE",
+                        )
+                    )
+                    or 0
+                )
+
+            return {
+                "database_url": database_url,
+                "preseed_batch": preseed_batch,
+                "age_band": age_band,
+                "seeds_per_country": seeds_per_country,
+                "canonical_countries": {
+                    "inserted_count": canonical_result.inserted_count if canonical_result is not None else 0,
+                    "updated_count": canonical_result.updated_count if canonical_result is not None else 0,
+                    "inserted_names": list(canonical_result.inserted_names) if canonical_result is not None else [],
+                    "updated_names": list(canonical_result.updated_names) if canonical_result is not None else [],
+                },
+                "seed_result": seed_result,
+                "total_in_batch": total_in_batch,
+                "country_count": country_count,
+                "age_min": age_min_value,
+                "age_max": age_max_value,
+                "kenya_count": kenya_count,
+            }
+        finally:
+            engine.dispose()
+
+
+def repair_national_regen_seed_names_database(
+    *,
+    database_url: str,
+    preseed_batch: str = "global_u21_batch",
+    country_codes: Sequence[str] | None = None,
+    refresh_portraits: bool = True,
+) -> dict[str, Any]:
+    with _local_demo_environment(database_url=database_url):
+        engine = create_database_engine(database_url)
+        try:
+            ensure_database_schema_current(engine)
+            session_factory = create_session_factory(engine)
+            with session_factory() as session:
+                stmt = select(NationalRegenSeed).where(NationalRegenSeed.preseed_batch == preseed_batch)
+                normalized_codes = {code.strip().upper() for code in country_codes or [] if code and code.strip()}
+                if normalized_codes:
+                    stmt = stmt.where(NationalRegenSeed.country_code.in_(normalized_codes))
+                seeds = list(
+                    session.scalars(
+                        stmt.order_by(
+                            NationalRegenSeed.country_name.asc(),
+                            NationalRegenSeed.country_code.asc(),
+                            NationalRegenSeed.primary_position.asc(),
+                            NationalRegenSeed.seed_key.asc(),
+                        )
+                    ).all()
+                )
+                countries_by_name = {
+                    country.name: country
+                    for country in session.scalars(select(Country).order_by(Country.name.asc(), Country.id.asc())).all()
+                }
+                grouped: dict[tuple[str, str], list[NationalRegenSeed]] = {}
+                for seed in seeds:
+                    grouped.setdefault((seed.country_code, seed.country_name), []).append(seed)
+
+                renamed = 0
+                portrait_refreshed = 0
+                changed_samples: list[dict[str, Any]] = []
+                portrait_service = RegenPortraitService(session)
+                for (seed_country_code, country_name), country_seeds in grouped.items():
+                    country = countries_by_name.get(country_name)
+                    country_profile = resolve_country_naming_profile_for_country(
+                        country_code=seed_country_code,
+                        country_name=country_name,
+                        alpha2_code=country.alpha2_code if country is not None else None,
+                        alpha3_code=country.alpha3_code if country is not None else None,
+                        fifa_code=country.fifa_code if country is not None else None,
+                        default_country_code=load_settings().regen_generation.default_country_code,
+                    )
+                    rng = Random(
+                        f"national-regen-name-repair:{preseed_batch}:{seed_country_code}:{country_name}:{country_profile.country_code}"
+                    )
+                    used_names: set[str] = set()
+                    for seed in country_seeds:
+                        _, display_name = generate_country_display_name(
+                            country_profile,
+                            region_name=country_profile.default_region,
+                            used_names=used_names,
+                            rng=rng,
+                        )
+                        old_name = seed.display_name
+                        if old_name != display_name:
+                            seed.display_name = display_name
+                            renamed += 1
+                            if len(changed_samples) < 20:
+                                changed_samples.append(
+                                    {
+                                        "country_code": seed_country_code,
+                                        "country_name": country_name,
+                                        "old_name": old_name,
+                                        "new_name": display_name,
+                                        "profile_country_code": country_profile.country_code,
+                                    }
+                                )
+                        metadata = dict(seed.metadata_json or {})
+                        seed.metadata_json = {
+                            **metadata,
+                            "nationality": country_profile.country_code,
+                            "seed_country_code": seed_country_code,
+                            "naming_country_code": country_profile.country_code,
+                            "portraitCountryCode": country_profile.country_code,
+                            "country_name": country_name,
+                            "age": seed.age,
+                            "age_band": seed.age_band,
+                        }
+                        before_portrait = dict(seed.metadata_json or {})
+                        portrait_service.ensure_national_seed_portrait(seed, force=refresh_portraits)
+                        after_portrait = dict(seed.metadata_json or {})
+                        if before_portrait.get("portraitStorageKey") != after_portrait.get("portraitStorageKey"):
+                            portrait_refreshed += 1
+                session.commit()
+                return {
+                    "database_url": database_url,
+                    "preseed_batch": preseed_batch,
+                    "scanned": len(seeds),
+                    "country_count": len(grouped),
+                    "renamed": renamed,
+                    "portrait_refreshed": portrait_refreshed,
+                    "changed_sample": changed_samples,
+                }
+        finally:
+            engine.dispose()
 
 
 def resolve_seed_all_database_url(database_url: str | None = None) -> str:
@@ -590,6 +789,82 @@ def build_parser() -> argparse.ArgumentParser:
         help="Reserved for parity with other demo commands; the world visibility layer is deterministic.",
     )
 
+    national_regen_parser = subparsers.add_parser(
+        "seed-national-regen-pool",
+        help="Seed the large preseeded national-team regen pool.",
+        description=(
+            "Seed canonical countries, then fill the national_regen_seeds table with a large, idempotent "
+            "14-21 national-team regen pool using the approved regen portrait bank."
+        ),
+        formatter_class=_HelpFormatter,
+    )
+    national_regen_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
+    national_regen_parser.add_argument(
+        "--country-code",
+        dest="country_codes",
+        action="append",
+        default=[],
+        help="Country code to seed. Repeat for multiple countries. Defaults to every enabled universe country.",
+    )
+    national_regen_parser.add_argument(
+        "--seeds-per-country",
+        type=int,
+        default=70,
+        help="Target active national regen slots per country.",
+    )
+    national_regen_parser.add_argument(
+        "--age-band",
+        default="u21",
+        help="National regen age band. The default u21 band spans ages 14-21.",
+    )
+    national_regen_parser.add_argument("--age-min", type=int, default=None, help="Optional explicit minimum age.")
+    national_regen_parser.add_argument("--age-max", type=int, default=None, help="Optional explicit maximum age.")
+    national_regen_parser.add_argument(
+        "--preseed-batch",
+        default="global_u21_batch",
+        help="Batch key written to national_regen_seeds.preseed_batch.",
+    )
+    national_regen_parser.add_argument(
+        "--include-legendary-regens",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include deterministic legendary national-pool regens.",
+    )
+    national_regen_parser.add_argument(
+        "--canonical-countries",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Upsert canonical small-country records before seeding.",
+    )
+
+    national_regen_repair_parser = subparsers.add_parser(
+        "repair-national-regen-names",
+        help="Repair preseeded national regen display names and portrait country metadata.",
+        description=(
+            "Regenerate preseeded national regen names from the country-specific naming pools, then refresh "
+            "approved face-bank portraits using the resolved nationality profile."
+        ),
+        formatter_class=_HelpFormatter,
+    )
+    national_regen_repair_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
+    national_regen_repair_parser.add_argument(
+        "--preseed-batch",
+        default="global_u21_batch",
+        help="National regen batch to repair.",
+    )
+    national_regen_repair_parser.add_argument(
+        "--country-code",
+        dest="country_codes",
+        action="append",
+        help="Optional country code to repair. Repeat for multiple countries.",
+    )
+    national_regen_repair_parser.add_argument(
+        "--refresh-portraits",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Refresh approved face-bank portrait assignments while repairing names.",
+    )
+
     tick_parser = subparsers.add_parser(
         "simulation-tick",
         help="Run one deterministic simulation tick against the current demo market.",
@@ -842,6 +1117,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(result, indent=2, default=str))
         return 0
 
+    if args.command == "seed-national-regen-pool":
+        result = seed_national_regen_pool_database(
+            database_url=args.database_url,
+            country_codes=args.country_codes,
+            seeds_per_country=args.seeds_per_country,
+            age_band=args.age_band,
+            age_min=args.age_min,
+            age_max=args.age_max,
+            include_legendary_regens=args.include_legendary_regens,
+            preseed_batch=args.preseed_batch,
+            include_canonical_countries=args.canonical_countries,
+        )
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+
+    if args.command == "repair-national-regen-names":
+        result = repair_national_regen_seed_names_database(
+            database_url=args.database_url,
+            preseed_batch=args.preseed_batch,
+            country_codes=args.country_codes,
+            refresh_portraits=args.refresh_portraits,
+        )
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+
     if args.command == "simulation-tick":
         result = run_simulation_tick_database(
             database_url=args.database_url,
@@ -904,6 +1204,7 @@ __all__ = [
     "main",
     "migrate_database",
     "rebuild_demo_market",
+    "repair_national_regen_seed_names_database",
     "reset_local_database",
     "resolve_sqlite_database_path",
     "run_backend_server",
@@ -911,5 +1212,6 @@ __all__ = [
     "run_simulation_tick_database",
     "run_simulation_ticks_database",
     "seed_demo_liquidity_database",
+    "seed_national_regen_pool_database",
     "seed_world_visibility_database",
 ]

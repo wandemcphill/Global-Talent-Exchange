@@ -26,7 +26,7 @@ class RegensScreen extends ConsumerWidget {
     return AppPageLayout(
       title: 'Scout Prospects',
       subtitle:
-          'Scout rising prospects, national-pool depth, form, potential, and club-building stories.',
+          'Scout rising prospects, national-pool depth, GSI, potential, and club-building stories.',
       trailing: DataSourceBadge(
         status:
             value.hasError ? DataSourceStatus.blocked : DataSourceStatus.live,
@@ -91,7 +91,7 @@ class _Hero extends StatelessWidget {
       eyebrow: 'LIVE TALENT MAP',
       title: 'Scout the next wave of football talent.',
       description:
-          'Review ratings, form, potential, national-pool depth, and request-son prospects with clean football card visuals.',
+          'Review GSI, form, potential, national-pool depth, and request-son prospects with clean football card visuals.',
       metrics: <Widget>[
         _MetricChip(
           label: 'Awards',
@@ -206,7 +206,8 @@ class _NationalPoolPanel extends StatelessWidget {
                           imageUrl: seed.imageUrl,
                           position: seed.primaryPosition,
                           nationalityCode: seed.countryCode,
-                          rating: seed.currentRating,
+                          rating: seed.resolvedGsi,
+                          ratingLabel: 'GSI',
                           ageLabel: '${seed.age ?? '--'}',
                           potentialLabel: '${seed.potentialRating}',
                           attributes: <String>[
@@ -250,7 +251,8 @@ class _RisingStarsPanel extends StatelessWidget {
                           imageUrl: star.player.imageUrl,
                           position: star.player.position,
                           nationalityCode: star.player.nationalityCode,
-                          rating: star.player.currentRating,
+                          rating: star.player.resolvedGsi,
+                          ratingLabel: 'GSI',
                           ageLabel: '${star.player.age}',
                           potentialLabel: '${star.player.potential}',
                           attributes: <String>[
@@ -307,7 +309,8 @@ class _RequestedSonsPanel extends StatelessWidget {
                           imageUrl: order.generatedPlayer?.imageUrl,
                           position: order.generatedPlayer?.position,
                           nationalityCode: order.generatedPlayer?.countryCode,
-                          rating: order.generatedPlayer?.currentRating,
+                          rating: order.generatedPlayer?.resolvedGsi,
+                          ratingLabel: 'GSI',
                           ageLabel: '${order.generatedPlayer?.age ?? '--'}',
                           potentialLabel:
                               '${order.generatedPlayer?.potentialRating ?? '--'}',
@@ -385,7 +388,7 @@ class _TrackingPanel extends StatelessWidget {
             tone: GtexSurfaceTone.live,
           ),
           _MetricChip(
-            label: 'Peak rating',
+            label: 'Peak GSI',
             value: '${tracking.globalPeakRating}',
             tone: GtexSurfaceTone.warning,
           ),

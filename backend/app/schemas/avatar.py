@@ -44,8 +44,13 @@ class PlayerFaceView(BaseModel):
 class PlayerAvatarRenderView(BaseModel):
     player_id: str = Field(min_length=1)
     render_format: Literal["json", "svg", "static", "model"] = "json"
-    face: PlayerFaceView
-    legacy_avatar: PlayerAvatarView
+    face: PlayerFaceView | None = None
+    legacy_avatar: PlayerAvatarView | None = None
+    portrait_url: str | None = None
+    portrait_status: str | None = None
+    portrait_storage_key: str | None = None
+    portrait_source_provider: str | None = None
+    portrait_source_collection: str | None = None
     layered_svg: str | None = None
     static_image_data_uri: str | None = None
     model_manifest: dict[str, Any] | None = None

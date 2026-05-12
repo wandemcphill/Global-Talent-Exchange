@@ -55,6 +55,73 @@ class NationalTeamApi {
     }, fixtures.listCompetitions);
   }
 
+  Future<NationalTeamRentalPlayerCollection> listRentalPool(
+    String competitionId, {
+    int limit = 200,
+    int offset = 0,
+    String? countryCode,
+    String? position,
+  }) {
+    return client.withFallback<NationalTeamRentalPlayerCollection>(() async {
+      final Map<String, Object?> query = <String, Object?>{
+        'limit': limit,
+        'offset': offset,
+        if (countryCode != null && countryCode.trim().isNotEmpty)
+          'country_code': countryCode.trim(),
+        if (position != null && position.trim().isNotEmpty)
+          'position': position.trim(),
+      };
+      final Map<String, dynamic> payload = await client.getMap(
+        '/api/national-team-engine/competitions/$competitionId/rental-pool',
+        query: query,
+        auth: false,
+      );
+      return NationalTeamRentalPlayerCollection.fromJson(payload);
+    }, () => fixtures.rentalPool(competitionId, countryCode: countryCode));
+  }
+
+  Future<NationalTeamEntry> createRentalEntry(
+    String competitionId, {
+    required String countryCode,
+    required String countryName,
+  }) {
+    return client.withFallback<NationalTeamEntry>(
+      () async {
+        final Object? payload = await client.post(
+          '/api/national-team-engine/competitions/$competitionId/rental-entry',
+          body: <String, Object?>{
+            'country_code': countryCode,
+            'country_name': countryName,
+            'metadata_json': <String, Object?>{'source': 'gtex_frontend_v2'},
+          },
+        );
+        return NationalTeamEntry.fromJson(payload);
+      },
+      () => fixtures.createRentalEntry(
+        competitionId,
+        countryCode: countryCode,
+        countryName: countryName,
+      ),
+    );
+  }
+
+  Future<NationalTeamEntryDetail> rentPlayer({
+    required String entryId,
+    required String playerId,
+    int? shirtNumber,
+  }) {
+    return client.withFallback<NationalTeamEntryDetail>(() async {
+      final Object? payload = await client.post(
+        '/api/national-team-engine/entries/$entryId/rentals',
+        body: <String, Object?>{
+          'player_id': playerId,
+          if (shirtNumber != null) 'shirt_number': shirtNumber,
+        },
+      );
+      return NationalTeamEntryDetail.fromJson(payload);
+    }, () => fixtures.entryDetail(entryId));
+  }
+
   Future<NationalTeamEntryDetail> fetchEntryDetail(String entryId) {
     return client.withFallback<NationalTeamEntryDetail>(() async {
       final Map<String, dynamic> payload = await client.getMap(
@@ -117,6 +184,83 @@ class _NationalTeamFixtures {
 
   Future<List<NationalTeamCompetition>> listCompetitions() async =>
       List<NationalTeamCompetition>.of(_competitions, growable: false);
+
+  Future<NationalTeamRentalPlayerCollection> rentalPool(
+    String competitionId, {
+    String? countryCode,
+  }) async {
+    final List<NationalTeamRentalPlayer> items = <NationalTeamRentalPlayer>[
+      NationalTeamRentalPlayer(
+        playerId: 'fixture-ng-9',
+        playerName: 'T. Adebayo',
+        overallRating: 78.4,
+        primaryPosition: 'ST',
+        currentClubName: 'Lagos Meteors',
+        currentLeagueName: 'GTEX National Pool',
+        nationality: 'Nigeria',
+        countryCode: 'NG',
+        age: 19,
+        gsi: 81,
+        baseValueCoin: 1200000,
+        loanPriceCoin: 240000,
+        tierLabel: 'Gold',
+        sourceBucket: 'SportMonks',
+        isRegen: false,
+        isPreseededNationalRegen: false,
+        marketEligible: true,
+      ),
+      NationalTeamRentalPlayer(
+        playerId: 'fixture-ng-10',
+        playerName: 'M. Okoro',
+        overallRating: 74.8,
+        primaryPosition: 'CM',
+        currentClubName: 'GTEX National Seed',
+        currentLeagueName: 'National Seed Pool',
+        nationality: 'Nigeria',
+        countryCode: 'NG',
+        age: 18,
+        gsi: 77,
+        baseValueCoin: 475000,
+        loanPriceCoin: 95000,
+        tierLabel: 'Seed',
+        sourceBucket: 'national_seed',
+        isRegen: true,
+        isPreseededNationalRegen: true,
+        marketEligible: true,
+      ),
+    ];
+    final List<NationalTeamRentalPlayer> filtered =
+        countryCode == null || countryCode.trim().isEmpty
+            ? items
+            : items
+                .where(
+                  (NationalTeamRentalPlayer player) =>
+                      player.countryCode == countryCode,
+                )
+                .toList(growable: false);
+    return NationalTeamRentalPlayerCollection(
+      total: filtered.length,
+      items: filtered,
+    );
+  }
+
+  Future<NationalTeamEntry> createRentalEntry(
+    String competitionId, {
+    required String countryCode,
+    required String countryName,
+  }) async {
+    return NationalTeamEntry(
+      id: 'fixture-entry-$countryCode',
+      competitionId: competitionId,
+      countryCode: countryCode,
+      countryName: countryName,
+      managerUserId: 'fixture-user',
+      squadSize: 0,
+      metadata: const <String, Object?>{'source': 'fixture'},
+      createdAt: DateTime.now().toUtc(),
+      updatedAt: DateTime.now().toUtc(),
+    );
+  }
 
   Future<NationalTeamEntryDetail> entryDetail(String entryId) async {
     final NationalTeamEntry entry = _entries.firstWhere(

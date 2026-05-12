@@ -12,6 +12,7 @@ import '../../../widgets/gtex_branding.dart';
 import '../../../shared/widgets/gtex_premium_panels.dart';
 import '../../../widgets/football_player_card.dart';
 import '../../../widgets/player_card_avatar.dart';
+import '../../shared/data/gte_feature_support.dart';
 import '../data/player_card_marketplace_models.dart';
 import 'player_card_marketplace_controller.dart';
 
@@ -81,7 +82,7 @@ class _PlayerCardMarketplaceScreenState
           backendMode: widget.backendMode,
           accessToken: widget.accessToken,
         );
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _searchController = TextEditingController();
     _negotiationIdController = TextEditingController();
     _reload();
@@ -133,6 +134,7 @@ class _PlayerCardMarketplaceScreenState
         ),
         includeAuthed: _hasAuth,
       ),
+      _controller.loadCollectibles(),
     ]);
   }
 
@@ -246,6 +248,7 @@ class _PlayerCardMarketplaceScreenState
                         Tab(text: 'Scout Players'),
                         Tab(text: 'Squad'),
                         Tab(text: 'My Listings'),
+                        Tab(text: 'Packs'),
                       ],
                     ),
                   ),
@@ -260,6 +263,7 @@ class _PlayerCardMarketplaceScreenState
                         _buildPlayersTab(context),
                         _buildInventoryTab(context),
                         _buildMyListingsTab(context),
+                        _buildCollectiblesTab(context),
                       ],
                     ),
                   ),
@@ -537,6 +541,188 @@ class _PlayerCardMarketplaceScreenState
             ),
           )
           .toList(growable: false),
+    );
+  }
+
+  Widget _buildCollectiblesTab(BuildContext context) {
+    if (_controller.isLoadingCollectibles && _controller.packs.isEmpty) {
+      return const GteStatePanel(
+        title: 'Loading packs',
+        message: 'Pack odds and collectible actions are loading.',
+        icon: Icons.style_outlined,
+        isLoading: true,
+      );
+    }
+    if (_controller.collectiblesError != null && _controller.packs.isEmpty) {
+      return GteStatePanel(
+        title: 'Collectibles unavailable',
+        message: _controller.collectiblesError!,
+        actionLabel: 'Retry',
+        onAction: _controller.loadCollectibles,
+        icon: Icons.style_outlined,
+      );
+    }
+    final PlayerCardHolding? firstHolding =
+        _controller.inventory.isEmpty ? null : _controller.inventory.first;
+    final List<PlayerCardHolding> upgradeSources =
+        firstHolding == null
+            ? const <PlayerCardHolding>[]
+            : _controller.inventory
+                .where(
+                  (PlayerCardHolding holding) =>
+                      holding.playerId == firstHolding.playerId &&
+                      holding.quantityAvailable > 0,
+                )
+                .take(2)
+                .toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (_controller.latestPackOpening != null) ...<Widget>[
+          GteSurfacePanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Latest pack opening',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _controller.latestPackOpening!.openedCards
+                      .map(
+                        (JsonMap card) => Chip(
+                          label: Text(
+                            '${stringValue(card['display_name'])} · ${stringValue(card['tier_name'])}',
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        ..._controller.packs.map(
+          (PlayerCardPack pack) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: GteSurfacePanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      const Icon(Icons.style_outlined),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          pack.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      GteMetricChip(
+                        label: 'Cards',
+                        value: pack.cardsPerPack.toString(),
+                      ),
+                    ],
+                  ),
+                  if (pack.description != null) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(pack.description!),
+                  ],
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: pack.dropOdds.entries
+                        .map(
+                          (MapEntry<String, Object?> entry) => Chip(
+                            label: Text('${entry.key}: ${entry.value}%'),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed:
+                        !_hasAuth
+                            ? widget.onOpenLogin
+                            : _controller.isOpeningPack
+                            ? null
+                            : () => _controller.openPack(pack.packKey),
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    label: Text(
+                      pack.priceCredits <= 0
+                          ? 'Open pack'
+                          : 'Open for ${gteFormatCredits(pack.priceCredits)}',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        GteSurfacePanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Collection actions',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  FilledButton.tonalIcon(
+                    onPressed:
+                        !_hasAuth
+                            ? widget.onOpenLogin
+                            : firstHolding == null ||
+                                firstHolding.quantityAvailable <= 0 ||
+                                _controller.isBurningCard
+                            ? null
+                            : () => _controller.burnCard(
+                              PlayerCardBurnRequest(
+                                playerCardId: firstHolding.playerCardId,
+                                reason: 'collection_cleanup',
+                              ),
+                            ),
+                    icon: const Icon(Icons.local_fire_department_outlined),
+                    label: const Text('Burn spare card'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed:
+                        !_hasAuth
+                            ? widget.onOpenLogin
+                            : upgradeSources.length < 2 ||
+                                _controller.isUpgradingCards
+                            ? null
+                            : () => _controller.upgradeCards(
+                              PlayerCardUpgradeRequest(
+                                sourcePlayerCardIds: upgradeSources
+                                    .map(
+                                      (PlayerCardHolding holding) =>
+                                          holding.playerCardId,
+                                    )
+                                    .toList(growable: false),
+                                targetTierCode: 'elite',
+                              ),
+                            ),
+                    icon: const Icon(Icons.upgrade_outlined),
+                    label: const Text('Fuse two cards'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1227,6 +1413,18 @@ class _MarketplaceListingTile extends StatelessWidget {
             runSpacing: 10,
             children: <Widget>[
               GteMetricChip(label: 'Price', value: priceLabel),
+              if (listing.gsiScore != null)
+                GteMetricChip(
+                  label: 'GSI',
+                  value: listing.gsiScore!.toString(),
+                  positive: listing.gsiScore! >= 82,
+                ),
+              if (listing.gsiTierLabel != null)
+                GteMetricChip(
+                  label: 'Quality',
+                  value: listing.gsiTierLabel!,
+                  positive: listing.gsiScore != null && listing.gsiScore! >= 82,
+                ),
               if (listing.availableQuantity != null)
                 GteMetricChip(
                   label: 'Available',
@@ -1234,7 +1432,7 @@ class _MarketplaceListingTile extends StatelessWidget {
                 ),
               if (listing.averageRating != null)
                 GteMetricChip(
-                  label: 'Rating',
+                  label: 'Form',
                   value: listing.averageRating!.round().toString(),
                 ),
               if (listing.position != null)
@@ -1309,6 +1507,29 @@ class _HoldingTile extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              if (holding.gsiScore != null)
+                GteMetricChip(
+                  label: 'GSI',
+                  value: holding.gsiScore!.toString(),
+                  positive: holding.gsiScore! >= 82,
+                ),
+              if (holding.gsiTierLabel != null)
+                GteMetricChip(
+                  label: 'Quality',
+                  value: holding.gsiTierLabel!,
+                  positive: holding.gsiScore != null && holding.gsiScore! >= 82,
+                ),
+              GteMetricChip(
+                label: 'Edition',
+                value: holding.editionCode.toUpperCase(),
               ),
             ],
           ),

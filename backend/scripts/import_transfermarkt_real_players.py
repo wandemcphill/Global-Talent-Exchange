@@ -919,7 +919,17 @@ def _parse_market_value_eur(value: str | None) -> float | None:
     cleaned = _clean_text(value)
     if not cleaned or cleaned == "-":
         return None
-    normalized = cleaned.replace("€", "").replace(",", "").strip().lower()
+    normalized = (
+        cleaned.replace("€", "")
+        .replace("EUR", "")
+        .replace("eur", "")
+        .replace("&euro;", "")
+        .replace(",", "")
+        .strip()
+        .lower()
+    )
+    if not normalized or normalized == "-":
+        return None
     multiplier = 1.0
     if normalized.endswith("bn"):
         multiplier = 1_000_000_000.0

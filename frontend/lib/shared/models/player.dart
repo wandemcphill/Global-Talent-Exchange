@@ -12,6 +12,7 @@ class Player {
     required this.technique,
     required this.mentality,
     required this.image,
+    this.globalScoutingIndex,
     this.isHot = false,
   });
 
@@ -27,5 +28,8 @@ class Player {
   final double technique;
   final double mentality;
   final String image;
+  final int? globalScoutingIndex;
   final bool isHot;
+
+  int get resolvedGsi => (globalScoutingIndex ?? rating).clamp(0, 100).toInt();
 }

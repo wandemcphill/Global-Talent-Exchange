@@ -45,7 +45,11 @@ from app.regen_universe.dna import (
 )
 from app.regen_universe.models import RegenAwardWinner, RegenPerformanceRecord, RegenSeason
 from app.services.regen_portrait_service import RegenPortraitService
-from app.services.regen_service import RegenClubContext, RegenGenerationEngine, resolve_country_naming_profile
+from app.services.regen_service import (
+    RegenClubContext,
+    RegenGenerationEngine,
+    resolve_country_naming_profile_for_country,
+)
 from app.story_feed_engine.service import StoryFeedService
 
 
@@ -194,6 +198,7 @@ class _NationalSeedAgeBandPolicy:
 _NATIONAL_SEED_AGE_BAND_POLICIES: dict[str, _NationalSeedAgeBandPolicy] = {
     "u17": _NationalSeedAgeBandPolicy(key="u17", age_min=14, age_max=17, default_batch="u17_batch"),
     "u20": _NationalSeedAgeBandPolicy(key="u20", age_min=18, age_max=20, default_batch="u20_batch"),
+    "u21": _NationalSeedAgeBandPolicy(key="u21", age_min=14, age_max=21, default_batch="u21_batch"),
     "senior": _NationalSeedAgeBandPolicy(key="senior", age_min=21, age_max=30, default_batch="system_start"),
 }
 _NATIONAL_SEED_BATCH_AGE_BANDS: dict[str, str] = {
@@ -319,6 +324,8 @@ class RegenUniverseExpansionService:
             "under17": "u17",
             "u20": "u20",
             "under20": "u20",
+            "u21": "u21",
+            "under21": "u21",
             "senior": "senior",
             "seniors": "senior",
             "fallback": "senior",
@@ -386,6 +393,8 @@ class RegenUniverseExpansionService:
             return "u17"
         if age <= 20:
             return "u20"
+        if age <= 21:
+            return "u21"
         return "senior"
 
     def get_player_story(self, player_id: str) -> dict[str, Any]:
@@ -2030,8 +2039,12 @@ class RegenUniverseExpansionService:
         for country_index, country in enumerate(countries):
             try:
                 country_code = self._national_seed_country_code(country, batch=batch)
-                country_profile = resolve_country_naming_profile(
-                    country_code,
+                country_profile = resolve_country_naming_profile_for_country(
+                    country_code=country_code,
+                    country_name=country.name,
+                    alpha2_code=country.alpha2_code,
+                    alpha3_code=country.alpha3_code,
+                    fifa_code=country.fifa_code,
                     default_country_code=get_settings().regen_generation.default_country_code,
                 )
                 used_names = {
@@ -2041,7 +2054,7 @@ class RegenUniverseExpansionService:
                     ).all()
                 }
                 context = RegenClubContext(
-                    country_code=country_code,
+                    country_code=country_profile.country_code,
                     region_name=country_profile.default_region,
                     city_name=country_profile.default_city,
                     youth_coaching=68.0,
@@ -2162,7 +2175,10 @@ class RegenUniverseExpansionService:
                             status="active",
                             preseed_batch=batch,
                             metadata_json={
-                                "nationality": country_code,
+                                "nationality": country_profile.country_code,
+                                "seed_country_code": country_code,
+                                "naming_country_code": country_profile.country_code,
+                                "portraitCountryCode": country_profile.country_code,
                                 "country_name": country.name,
                                 "source_generation": f"preseeded_{batch}",
                                 "position_slot": batch_slot,

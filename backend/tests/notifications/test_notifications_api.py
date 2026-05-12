@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from app.core.events import DomainEvent
+
+pytestmark = pytest.mark.notifications_fast
 
 
 def test_my_notifications_cover_requested_competition_templates(app_client, participant_user) -> None:

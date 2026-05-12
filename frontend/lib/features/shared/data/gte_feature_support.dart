@@ -307,6 +307,8 @@ class _FeatureFixtureTransport implements GteTransport {
           'name': 'West Africa Federation',
           'ranking_score': 84.2,
           'reputation_score': 79.5,
+          'audience_size': 820000,
+          'treasury_balance': 4200,
           'is_public': true,
           'structure_json': <String, Object?>{
             'divisions': 3,
@@ -327,6 +329,8 @@ class _FeatureFixtureTransport implements GteTransport {
           'name': 'Global Elite Federation',
           'ranking_score': 92.1,
           'reputation_score': 90.4,
+          'audience_size': 1800000,
+          'treasury_balance': 9400,
           'is_public': true,
           'structure_json': <String, Object?>{
             'divisions': 1,
@@ -403,6 +407,113 @@ class _FeatureFixtureTransport implements GteTransport {
     }
     if (method == 'GET' && path == '/api/federations') {
       return _ok(_federations);
+    }
+    if (method == 'GET' && path == '/api/federations/rankings') {
+      return _ok(_federationRankings());
+    }
+    if (method == 'GET' && path == '/api/federations/regional-tournaments') {
+      return _ok(_regionalTournaments());
+    }
+    if (method == 'GET' &&
+        path.startsWith('/api/federations/national-associations/')) {
+      final String countryCode =
+          path
+              .substring('/api/federations/national-associations/'.length)
+              .split('/')
+              .first
+              .toUpperCase();
+      return _ok(_nationalAssociation(countryCode));
+    }
+    if (method == 'GET' &&
+        path.startsWith('/api/federations/') &&
+        path.endsWith('/governance')) {
+      return _ok(const <String, Object?>{
+        'proposals': <Object?>[],
+        'votes': <Object?>[],
+        'sanctions': <Object?>[],
+      });
+    }
+    if (method == 'GET' &&
+        path.startsWith('/api/federations/') &&
+        path.endsWith('/narratives')) {
+      return _ok(_narratives);
+    }
+    if (method == 'GET' && path.startsWith('/api/federations/')) {
+      return _ok(const <String, Object?>{
+        'leagues': <Object?>[],
+        'rules': <String, Object?>{},
+        'members': <Object?>[],
+        'reputation': <String, Object?>{
+          'score': 80,
+          'ranking_score': 84,
+          'audience_size': 820000,
+          'treasury_balance': 4200,
+        },
+      });
+    }
+    if (method == 'GET' &&
+        (path == '/feed/for-you' || path == '/feed/following')) {
+      return _ok(_viralFeedPayload(path.endsWith('following')));
+    }
+    if (method == 'GET' && path == '/feed/for-you/refresh') {
+      return _ok(const <String, Object?>{
+        'replace_indices': <int>[0],
+        'new_items': <Object?>[],
+      });
+    }
+    if (method == 'GET' && path == '/player-cards/packs') {
+      return _ok(const <Object?>[
+        <String, Object?>{
+          'pack_key': 'starter-draft',
+          'title': 'Starter Draft Pack',
+          'description':
+              'A fixture pack that mirrors the live collectible card contract.',
+          'price_credits': 0,
+          'cards_per_pack': 3,
+          'drop_odds_json': <String, Object?>{
+            'bronze': 70,
+            'silver': 20,
+            'gold': 8,
+            'elite': 2,
+          },
+          'is_active': true,
+        },
+      ]);
+    }
+    if (method == 'POST' &&
+        path.startsWith('/player-cards/packs/') &&
+        path.endsWith('/open')) {
+      return _ok(<String, Object?>{
+        'opening_id': 'fixture-pack-opening',
+        'pack_key': 'starter-draft',
+        'user_id': 'fixture-user',
+        'status': 'opened',
+        'price_credits': 0,
+        'created_at': DateTime.utc(2026, 5, 11, 9, 5).toIso8601String(),
+        'opened_cards': const <Object?>[
+          <String, Object?>{
+            'player_card_id': 'fixture-card-1',
+            'player_id': 'fixture-player-1',
+            'display_name': 'Ayo Striker Base',
+            'tier_code': 'gold',
+            'tier_name': 'Gold',
+            'rarity_rank': 3,
+            'edition_code': 'base',
+          },
+        ],
+      });
+    }
+    if (method == 'POST' &&
+        (path == '/player-cards/cards/burn' ||
+            path == '/player-cards/cards/upgrade')) {
+      final bool isBurn = path == '/player-cards/cards/burn';
+      return _ok(<String, Object?>{
+        if (isBurn)
+          'burn_event_id': 'fixture-collectible-action'
+        else
+          'upgrade_event_id': 'fixture-collectible-action',
+        'status': 'completed',
+      });
     }
     if (method == 'POST' &&
         path.startsWith('/api/federations/') &&
@@ -666,6 +777,113 @@ class _FeatureFixtureTransport implements GteTransport {
     return membership;
   }
 
+  List<JsonMap> _federationRankings() {
+    return _federations
+        .map(
+          (JsonMap item) => <String, Object?>{
+            'federation_id': item['id'],
+            'name': item['name'],
+            'ranking_score': item['ranking_score'],
+            'reputation_score': item['reputation_score'],
+            'audience_size': item['audience_size'],
+            'activity_score': 76,
+            'competitiveness_score': 81,
+          },
+        )
+        .toList(growable: false);
+  }
+
+  List<JsonMap> _regionalTournaments() {
+    return const <JsonMap>[
+      <String, Object?>{
+        'region_code': 'west_africa',
+        'region_label': 'West Africa',
+        'federation_count': 1,
+        'active_league_count': 3,
+        'total_member_clubs': 18,
+      },
+      <String, Object?>{
+        'region_code': 'global',
+        'region_label': 'Global',
+        'federation_count': 1,
+        'active_league_count': 2,
+        'total_member_clubs': 24,
+      },
+    ];
+  }
+
+  JsonMap _nationalAssociation(String countryCode) {
+    return <String, Object?>{
+      'country_code': countryCode,
+      'country_name': countryCode == 'NG' ? 'Nigeria' : countryCode,
+      'confederation_code': 'CAF',
+      'market_region': 'West Africa',
+      'federation_count': 1,
+      'active_league_count': 3,
+      'member_club_count': 18,
+      'sanction_count': 0,
+      'ranking_score': 84.2,
+      'top_federations': <Object?>[
+        <String, Object?>{
+          'federation_id': 'federation-west-africa',
+          'name': 'West Africa Federation',
+          'ranking_score': 84.2,
+          'reputation_score': 79.5,
+          'active_league_count': 3,
+          'active_member_count': 18,
+          'rules': <String, Object?>{},
+        },
+      ],
+      'national_team_oversight': <String, Object?>{
+        'country_codes': <String>[countryCode],
+        'eligibility_policy': 'country_code_match',
+      },
+    };
+  }
+
+  JsonMap _viralFeedPayload(bool following) {
+    final String feedSource = following ? 'following' : 'for_you';
+    return <String, Object?>{
+      'feed_key': 'fixture-$feedSource',
+      'feed_source': feedSource,
+      'generated_at': DateTime.utc(2026, 5, 11, 9).toIso8601String(),
+      'cache_hit': false,
+      'items': <Object?>[
+        <String, Object?>{
+          'clip_id': 'fixture-match::clip-001',
+          'match_id': 'fixture-match',
+          'highlight_id': 'clip-001',
+          'title': 'Late winner lights up GTEX',
+          'event_type': 'goal',
+          'minute': 89,
+          'viral_score': 92,
+          'ranking_score': 0.92,
+          'rank': 1,
+          'score': 0.92,
+          'feed_source': feedSource,
+          'team_name': 'Ibadan Lions',
+          'player_name': 'Ayo Striker',
+          'scoreline_label': '2-1',
+          'duration_seconds': 12,
+          'share_channel': 'whatsapp',
+          'tags': <String>['goal', 'late_drama'],
+          'caption': <String, Object?>{
+            'hook': "89' and the whole match flipped",
+            'caption': 'GTEX pressure, one loose ball, and the crowd erupts.',
+            'cta': 'Share to WhatsApp',
+            'hashtags': <String>['GTEX', 'Football'],
+          },
+          'metadata': <String, Object?>{
+            'summary_line':
+                'The fixture feed is wired through the same viral feed contract.',
+            'creator_id': 'fixture-creator',
+            'format_key': 'match_recap',
+          },
+        },
+      ],
+    };
+  }
+
   String _extractScopedId(String path, String prefix, String suffix) {
     final String trimmed = path.substring(prefix.length);
     return trimmed.substring(0, trimmed.length - suffix.length);
@@ -752,4 +970,3 @@ class _FeatureFixtureTransport implements GteTransport {
     };
   }
 }
-

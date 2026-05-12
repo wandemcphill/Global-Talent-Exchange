@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../models/player_avatar.dart';
-import 'player_avatar_widget.dart';
 
 class PlayerCardAvatar extends StatelessWidget {
   const PlayerCardAvatar({
@@ -13,28 +12,18 @@ class PlayerCardAvatar extends StatelessWidget {
     this.imageUrl,
     this.size = 56,
     this.mode = AvatarMode.card,
-    this.preferGeneratedAvatar = false,
   });
 
   final PlayerAvatar? avatar;
   final String? imageUrl;
   final double size;
   final AvatarMode mode;
-  final bool preferGeneratedAvatar;
 
   @override
   Widget build(BuildContext context) {
     final String? resolvedImage = imageUrl?.trim();
     if (resolvedImage != null && resolvedImage.isNotEmpty) {
       return _PortraitImage(url: resolvedImage, size: size);
-    }
-    if (preferGeneratedAvatar && avatar != null) {
-      return PlayerAvatarWidget(
-        avatar: avatar!,
-        size: size,
-        mode: mode,
-        withShadow: true,
-      );
     }
     return _FootballSilhouette(size: size);
   }
@@ -50,28 +39,34 @@ class _PortraitImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final BorderRadius radius = BorderRadius.circular(size * 0.18);
     final Widget fallback = _FootballSilhouette(size: size);
+    final String resolvedUrl = _resolveMediaUrl(url);
     final bool isRemote =
-        url.startsWith('http://') || url.startsWith('https://');
-    final bool isAsset = url.startsWith('assets/');
-    final bool isDataImage = url.startsWith('data:image/');
-    final bool isRelativeMedia = url.startsWith('/generated-media/');
+        resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://');
+    final bool isAsset = resolvedUrl.startsWith('assets/');
+    final bool isDataImage = resolvedUrl.startsWith('data:image/');
+    final bool isRelativeMedia = resolvedUrl.startsWith('/generated-media/');
+    if (_isSvgImage(resolvedUrl) ||
+        _isDisallowedGeneratedRegenPortrait(resolvedUrl)) {
+      return fallback;
+    }
     if (!isRemote && !isAsset && !isDataImage && !isRelativeMedia) {
       return fallback;
     }
     final Widget image;
     if (isDataImage) {
-      final int commaIndex = url.indexOf(',');
+      final int commaIndex = resolvedUrl.indexOf(',');
       if (commaIndex < 0) {
         return fallback;
       }
       late final Uint8List bytes;
       try {
-        bytes = base64Decode(url.substring(commaIndex + 1));
+        bytes = base64Decode(resolvedUrl.substring(commaIndex + 1));
       } on FormatException {
         return fallback;
       }
       image = Image.memory(
         bytes,
+        key: const Key('player-card-real-image'),
         width: size,
         height: size,
         fit: BoxFit.cover,
@@ -79,15 +74,19 @@ class _PortraitImage extends StatelessWidget {
       );
     } else if (isRemote || isRelativeMedia) {
       image = Image.network(
-        url,
+        resolvedUrl,
+        key: const Key('player-card-real-image'),
         width: size,
         height: size,
         fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => fallback,
       );
     } else {
       image = Image.asset(
-        url,
+        resolvedUrl,
+        key: const Key('player-card-real-image'),
         width: size,
         height: size,
         fit: BoxFit.cover,
@@ -107,6 +106,43 @@ class _PortraitImage extends StatelessWidget {
       ),
     );
   }
+
+  bool _isSvgImage(String resolvedUrl) {
+    final String lower = resolvedUrl.toLowerCase();
+    return lower.startsWith('data:image/svg+xml') ||
+        lower.contains('.svg?') ||
+        lower.contains('.svg#') ||
+        lower.endsWith('.svg');
+  }
+
+  bool _isDisallowedGeneratedRegenPortrait(String resolvedUrl) {
+    final String lowerPath =
+        Uri.tryParse(resolvedUrl)?.path.toLowerCase() ??
+        resolvedUrl.toLowerCase();
+    if (!lowerPath.contains('/regen_newgen_faces/') &&
+        !lowerPath.contains('/regen_portraits/') &&
+        !lowerPath.contains('/national_regen_portraits/') &&
+        !lowerPath.contains('/regen_portrait_overrides/')) {
+      return false;
+    }
+    final bool approvedBank = lowerPath.contains(
+      '/generated-media/regen_newgen_faces/script_skin_hair/',
+    );
+    final bool raster =
+        lowerPath.endsWith('.png') ||
+        lowerPath.endsWith('.jpg') ||
+        lowerPath.endsWith('.jpeg') ||
+        lowerPath.endsWith('.webp');
+    return !approvedBank || !raster;
+  }
+
+  String _resolveMediaUrl(String rawUrl) {
+    if (!rawUrl.startsWith('/generated-media/')) return rawUrl;
+    const String apiBaseUrl = String.fromEnvironment('GTE_API_BASE_URL');
+    final String trimmedBase = apiBaseUrl.trim();
+    if (trimmedBase.isEmpty) return rawUrl;
+    return '${trimmedBase.replaceFirst(RegExp(r'/+$'), '')}$rawUrl';
+  }
 }
 
 class _FootballSilhouette extends StatelessWidget {
@@ -118,6 +154,7 @@ class _FootballSilhouette extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
     return Container(
+      key: const Key('player-card-fallback-silhouette'),
       width: size,
       height: size,
       decoration: BoxDecoration(

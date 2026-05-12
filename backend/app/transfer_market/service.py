@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
@@ -35,9 +35,12 @@ from app.models.transfer_market import (
     PlayerDecisionProfile,
     TransferListing,
     TransferListingBid,
+    TransferHubOffer,
     TransferNegotiation,
+    TransferRequest,
 )
 from app.models.user import User, UserRole
+from app.notifications.service import NotificationEventMatrixService
 from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionRequest
 from app.schemas.player_lifecycle import TransferBidAcceptRequest, TransferBidCreateRequest, TransferBidRejectRequest
 from app.services.player_agency_context_service import PlayerAgencyContextService, clamp, quantize_amount
@@ -62,6 +65,9 @@ from app.transfer_market.schemas import (
     PlayerDecisionView,
     TeamDynamicsUpsertRequest,
     TransferBidderView,
+    TransferHubOfferCounterRequest,
+    TransferHubOfferCreateRequest,
+    TransferHubOfferView,
     TransferListingCreateRequest,
     TransferListingView,
     TransferMarketJobRunView,
@@ -69,6 +75,8 @@ from app.transfer_market.schemas import (
     TransferMarketStateView,
     TransferMarketStreamEventView,
     TransferNegotiationView,
+    TransferRequestCreateRequest,
+    TransferRequestView,
     WatchlistEntryCreateRequest,
 )
 
@@ -298,6 +306,20 @@ class TransferMarketService:
         status: str | None = None,
         player_id: str | None = None,
         club_id: str | None = None,
+        listing_type: str | None = None,
+        asset_type: str | None = None,
+        visibility: str | None = None,
+        min_price: Decimal | None = None,
+        max_price: Decimal | None = None,
+        min_salary: Decimal | None = None,
+        max_salary: Decimal | None = None,
+        min_contract_years: Decimal | None = None,
+        max_contract_years: Decimal | None = None,
+        position: str | None = None,
+        country_id: str | None = None,
+        league_id: str | None = None,
+        club_profile_id: str | None = None,
+        real_player_only: bool | None = None,
         reference_at: datetime | None = None,
     ) -> list[TransferListingView]:
         statement = select(TransferListing).order_by(TransferListing.created_at.desc())
@@ -309,6 +331,39 @@ class TransferMarketService:
             statement = statement.where(
                 (TransferListing.selling_club_id == club_id) | (TransferListing.highest_bidder_id == club_id)
             )
+        if listing_type is not None:
+            statement = statement.where(TransferListing.listing_type == listing_type)
+        if asset_type is not None:
+            statement = statement.where(TransferListing.asset_type == asset_type)
+        if visibility is not None:
+            statement = statement.where(TransferListing.visibility == visibility)
+        if min_price is not None:
+            statement = statement.where(TransferListing.base_price >= min_price)
+        if max_price is not None:
+            statement = statement.where(TransferListing.base_price <= max_price)
+        if min_salary is not None:
+            statement = statement.where(TransferListing.salary_amount >= min_salary)
+        if max_salary is not None:
+            statement = statement.where(TransferListing.salary_amount <= max_salary)
+        if min_contract_years is not None:
+            statement = statement.where(TransferListing.contract_years_remaining >= min_contract_years)
+        if max_contract_years is not None:
+            statement = statement.where(TransferListing.contract_years_remaining <= max_contract_years)
+        if any(
+            value is not None
+            for value in (position, country_id, league_id, club_profile_id, real_player_only)
+        ):
+            statement = statement.join(Player, Player.id == TransferListing.player_id)
+            if position is not None:
+                statement = statement.where(Player.normalized_position == position)
+            if country_id is not None:
+                statement = statement.where(Player.country_id == country_id)
+            if league_id is not None:
+                statement = statement.where(Player.internal_league_id == league_id)
+            if club_profile_id is not None:
+                statement = statement.where(Player.current_club_profile_id == club_profile_id)
+            if real_player_only is not None:
+                statement = statement.where(Player.is_real_player.is_(real_player_only))
         effective_at = self._coerce_utc(reference_at or utcnow())
         return [self.to_listing_view(item, reference_at=effective_at) for item in self.session.scalars(statement).all()]
 
@@ -361,8 +416,17 @@ class TransferMarketService:
             current_highest_bid=payload.base_price,
             highest_bidder_id=None,
             status="open",
+            listing_type=payload.listing_type,
+            asset_type=payload.asset_type,
+            visibility=payload.visibility,
             expires_at=expires_at,
             reserve_price=payload.reserve_price,
+            salary_amount=payload.salary_amount,
+            contract_years_remaining=payload.contract_years_remaining,
+            buy_clause_amount=payload.buy_clause_amount,
+            loan_terms_json=dict(payload.loan_terms),
+            swap_terms_json=dict(payload.swap_terms),
+            availability_json=dict(payload.availability),
             metadata_json={
                 "notes": payload.notes or "",
                 "drama_events": [],
@@ -378,7 +442,274 @@ class TransferMarketService:
             "listing_opened",
             {"listing_id": listing.id, "player_id": listing.player_id, "expires_at": snapshot.expires_at.isoformat()},
         )
+        self._publish_matrix_notification(
+            event_key="transfer_listing_created",
+            target_user_ids=[self._club_owner_user_id(listing.selling_club_id)],
+            resource_id=listing.id,
+            message=f"{player.full_name} has been listed on the transfer market.",
+            metadata={
+                "listing_id": listing.id,
+                "player_id": player.id,
+                "selling_club_id": listing.selling_club_id,
+                "route": "/app/market",
+            },
+        )
         return snapshot
+
+    def list_hub_offers(
+        self,
+        *,
+        listing_id: str | None = None,
+        club_id: str | None = None,
+        status: str | None = None,
+    ) -> list[TransferHubOfferView]:
+        statement = select(TransferHubOffer).order_by(TransferHubOffer.created_at.desc())
+        if listing_id is not None:
+            statement = statement.where(TransferHubOffer.listing_id == listing_id)
+        if club_id is not None:
+            statement = statement.where(
+                (TransferHubOffer.seller_club_id == club_id) | (TransferHubOffer.bidder_club_id == club_id)
+            )
+        if status is not None:
+            statement = statement.where(TransferHubOffer.status == status)
+        return [self.to_hub_offer_view(item) for item in self.session.scalars(statement).all()]
+
+    def create_hub_offer(
+        self,
+        listing_id: str,
+        payload: TransferHubOfferCreateRequest,
+        *,
+        actor: User,
+        bidder_club_id: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> TransferHubOfferView:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        listing = self._require_listing(listing_id)
+        if listing.status != "open":
+            raise TransferMarketValidationError("Offers can only be created for open Transfer Hub listings.")
+        if payload.expires_at is not None and self._coerce_utc(payload.expires_at) <= effective_at:
+            raise TransferMarketValidationError("Offer expiry must be in the future.")
+        if payload.idempotency_key:
+            existing = self.session.scalar(
+                select(TransferHubOffer).where(TransferHubOffer.idempotency_key == payload.idempotency_key)
+            )
+            if existing is not None:
+                return self.to_hub_offer_view(existing)
+        resolved_bidder_club_id = self._resolve_actor_club_id(
+            actor,
+            bidder_club_id or payload.bidder_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        if resolved_bidder_club_id == listing.selling_club_id:
+            raise TransferMarketValidationError("Selling club cannot offer on its own listing.")
+        self._require_club(resolved_bidder_club_id)
+        for player_id in payload.offered_player_ids:
+            player = self._require_player(player_id)
+            current_club_id = self._current_player_club_id(player.id, on_date=effective_at.date())
+            if current_club_id is not None and current_club_id != resolved_bidder_club_id:
+                raise TransferMarketValidationError("Swap players must belong to the bidder club.")
+        offer = TransferHubOffer(
+            listing_id=listing.id,
+            offer_type=payload.offer_type,
+            seller_club_id=listing.selling_club_id,
+            bidder_club_id=resolved_bidder_club_id,
+            cash_amount=payload.cash_amount,
+            offered_player_ids_json=list(payload.offered_player_ids),
+            loan_terms_json=dict(payload.loan_terms),
+            swap_terms_json=dict(payload.swap_terms),
+            conditional_terms_json=dict(payload.conditional_terms),
+            sell_on_percentage=payload.sell_on_percentage,
+            status="open",
+            idempotency_key=payload.idempotency_key,
+            message=payload.message,
+            expires_at=self._coerce_utc(payload.expires_at) if payload.expires_at else None,
+            metadata_json={"created_by_user_id": actor.id},
+        )
+        self.session.add(offer)
+        self.session.commit()
+        self.session.refresh(offer)
+        self._push_listing_event(
+            listing.id,
+            "offer_created",
+            {"listing_id": listing.id, "offer_id": offer.id, "offer_type": offer.offer_type},
+        )
+        self._publish_matrix_notification(
+            event_key="swap_proposed" if offer.offer_type == "swap" else "offer_received",
+            target_user_ids=[self._club_owner_user_id(listing.selling_club_id)],
+            resource_id=offer.id,
+            message=f"A {offer.offer_type} offer is waiting for review.",
+            metadata={
+                "listing_id": listing.id,
+                "offer_id": offer.id,
+                "offer_type": offer.offer_type,
+                "seller_club_id": offer.seller_club_id,
+                "bidder_club_id": offer.bidder_club_id,
+                "route": "/app/market",
+            },
+        )
+        return self.to_hub_offer_view(offer)
+
+    def accept_hub_offer(
+        self,
+        offer_id: str,
+        *,
+        actor: User,
+        reference_at: datetime | None = None,
+    ) -> TransferHubOfferView:
+        offer = self._require_hub_offer(offer_id)
+        listing = self._require_listing(offer.listing_id)
+        self._resolve_actor_club_id(
+            actor,
+            listing.selling_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        if offer.status not in {"open", "countered"}:
+            raise TransferMarketValidationError("Only open or countered offers can be accepted.")
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        offer.status = "accepted"
+        offer.resolved_at = effective_at
+        listing.status = "accepted"
+        listing.closed_at = effective_at
+        for sibling in self.session.scalars(
+            select(TransferHubOffer).where(
+                TransferHubOffer.listing_id == listing.id,
+                TransferHubOffer.id != offer.id,
+                TransferHubOffer.status.in_(["open", "countered"]),
+            )
+        ).all():
+            sibling.status = "rejected"
+            sibling.resolved_at = effective_at
+        self.session.commit()
+        self.session.refresh(offer)
+        self._push_listing_event(
+            listing.id,
+            "offer_accepted",
+            {"listing_id": listing.id, "offer_id": offer.id, "bidder_club_id": offer.bidder_club_id},
+        )
+        self._publish_matrix_notification(
+            event_key="offer_accepted",
+            target_user_ids=[
+                self._club_owner_user_id(offer.seller_club_id),
+                self._club_owner_user_id(offer.bidder_club_id),
+            ],
+            resource_id=offer.id,
+            message="A Transfer Hub offer has been accepted.",
+            metadata={
+                "listing_id": listing.id,
+                "offer_id": offer.id,
+                "seller_club_id": offer.seller_club_id,
+                "bidder_club_id": offer.bidder_club_id,
+                "route": "/app/market",
+            },
+        )
+        return self.to_hub_offer_view(offer)
+
+    def reject_hub_offer(self, offer_id: str, *, actor: User, reference_at: datetime | None = None) -> TransferHubOfferView:
+        offer = self._require_hub_offer(offer_id)
+        self._resolve_actor_club_id(
+            actor,
+            offer.seller_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        if offer.status not in {"open", "countered"}:
+            raise TransferMarketValidationError("Only open or countered offers can be rejected.")
+        offer.status = "rejected"
+        offer.resolved_at = self._coerce_utc(reference_at or utcnow())
+        self.session.commit()
+        self.session.refresh(offer)
+        return self.to_hub_offer_view(offer)
+
+    def cancel_hub_offer(self, offer_id: str, *, actor: User, reference_at: datetime | None = None) -> TransferHubOfferView:
+        offer = self._require_hub_offer(offer_id)
+        self._resolve_actor_club_id(
+            actor,
+            offer.bidder_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        if offer.status not in {"open", "countered"}:
+            raise TransferMarketValidationError("Only open or countered offers can be cancelled.")
+        offer.status = "cancelled"
+        offer.resolved_at = self._coerce_utc(reference_at or utcnow())
+        self.session.commit()
+        self.session.refresh(offer)
+        return self.to_hub_offer_view(offer)
+
+    def counter_hub_offer(
+        self,
+        offer_id: str,
+        payload: TransferHubOfferCounterRequest,
+        *,
+        actor: User,
+    ) -> TransferHubOfferView:
+        offer = self._require_hub_offer(offer_id)
+        self._resolve_actor_club_id(
+            actor,
+            offer.seller_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        if offer.status not in {"open", "countered"}:
+            raise TransferMarketValidationError("Only open or countered offers can be countered.")
+        if payload.cash_amount is not None:
+            offer.cash_amount = payload.cash_amount
+        if payload.offered_player_ids is not None:
+            offer.offered_player_ids_json = list(payload.offered_player_ids)
+        if payload.loan_terms is not None:
+            offer.loan_terms_json = dict(payload.loan_terms)
+        if payload.swap_terms is not None:
+            offer.swap_terms_json = dict(payload.swap_terms)
+        if payload.conditional_terms is not None:
+            offer.conditional_terms_json = dict(payload.conditional_terms)
+        if payload.sell_on_percentage is not None:
+            offer.sell_on_percentage = payload.sell_on_percentage
+        if payload.message is not None:
+            offer.message = payload.message
+        offer.status = "countered"
+        self.session.commit()
+        self.session.refresh(offer)
+        return self.to_hub_offer_view(offer)
+
+    def create_transfer_request(
+        self,
+        player_id: str,
+        payload: TransferRequestCreateRequest,
+        *,
+        actor: User,
+        reference_at: datetime | None = None,
+    ) -> TransferRequestView:
+        player = self._require_player(player_id)
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        current_club_id = payload.current_club_id or self._current_player_club_id(player.id, on_date=effective_at.date())
+        if current_club_id:
+            self._resolve_actor_club_id(
+                actor,
+                current_club_id,
+                allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+                forbidden_detail="transfer_market_club_access_required",
+            )
+        existing = self.session.scalar(
+            select(TransferRequest).where(TransferRequest.player_id == player.id, TransferRequest.status == "open")
+        )
+        if existing is not None:
+            return self.to_transfer_request_view(existing)
+        request = TransferRequest(
+            player_id=player.id,
+            current_club_id=current_club_id,
+            requested_by_user_id=actor.id,
+            status="open",
+            preferred_leagues_json=list(payload.preferred_leagues),
+            preferred_clubs_json=list(payload.preferred_clubs),
+            reasons_json=list(payload.reasons),
+            metadata_json=dict(payload.metadata_json),
+        )
+        self.session.add(request)
+        self.session.commit()
+        self.session.refresh(request)
+        return self.to_transfer_request_view(request)
 
     def place_bid(
         self,
@@ -1059,6 +1390,9 @@ class TransferMarketService:
             current_highest_bid=listing.current_highest_bid,
             highest_bidder_id=listing.highest_bidder_id,
             status=listing.status,
+            listing_type=listing.listing_type,
+            asset_type=listing.asset_type,
+            visibility=listing.visibility,
             expires_at=self._coerce_utc(listing.expires_at),
             time_remaining=max(0, int((self._coerce_utc(listing.expires_at) - effective_at).total_seconds())),
             player=TransferMarketPlayerView(
@@ -1068,6 +1402,9 @@ class TransferMarketService:
                 current_club_id=player.current_club_profile_id,
                 current_club_name=current_club.club_name if current_club is not None else None,
                 current_competition_id=player.current_competition_id,
+                nationality_id=player.country_id,
+                market_value=Decimal(str(player.market_value_eur)) if player.market_value_eur is not None else None,
+                is_real_player=bool(player.is_real_player),
             ),
             current_bid=current_bid,
             bidders=bids,
@@ -1077,6 +1414,47 @@ class TransferMarketService:
             market_signal=self._market_signal(listing.player_id, listing=listing, reference_at=effective_at),
             channel=f"transfer:{listing.id}",
             negotiation_id=negotiation.id if negotiation is not None else None,
+            salary_amount=listing.salary_amount,
+            contract_years_remaining=listing.contract_years_remaining,
+            buy_clause_amount=listing.buy_clause_amount,
+            loan_terms=dict(listing.loan_terms_json or {}),
+            swap_terms=dict(listing.swap_terms_json or {}),
+            availability=dict(listing.availability_json or {}),
+        )
+
+    def to_hub_offer_view(self, offer: TransferHubOffer) -> TransferHubOfferView:
+        return TransferHubOfferView(
+            id=offer.id,
+            listing_id=offer.listing_id,
+            offer_type=offer.offer_type,
+            seller_club_id=offer.seller_club_id,
+            bidder_club_id=offer.bidder_club_id,
+            cash_amount=offer.cash_amount,
+            offered_player_ids=list(offer.offered_player_ids_json or []),
+            loan_terms=dict(offer.loan_terms_json or {}),
+            swap_terms=dict(offer.swap_terms_json or {}),
+            conditional_terms=dict(offer.conditional_terms_json or {}),
+            sell_on_percentage=offer.sell_on_percentage,
+            status=offer.status,
+            idempotency_key=offer.idempotency_key,
+            message=offer.message,
+            expires_at=self._coerce_utc(offer.expires_at) if offer.expires_at else None,
+            resolved_at=self._coerce_utc(offer.resolved_at) if offer.resolved_at else None,
+            metadata_json=dict(offer.metadata_json or {}),
+        )
+
+    def to_transfer_request_view(self, request: TransferRequest) -> TransferRequestView:
+        return TransferRequestView(
+            id=request.id,
+            player_id=request.player_id,
+            current_club_id=request.current_club_id,
+            requested_by_user_id=request.requested_by_user_id,
+            status=request.status,
+            preferred_leagues=list(request.preferred_leagues_json or []),
+            preferred_clubs=list(request.preferred_clubs_json or []),
+            reasons=list(request.reasons_json or []),
+            resolved_at=self._coerce_utc(request.resolved_at) if request.resolved_at else None,
+            metadata_json=dict(request.metadata_json or {}),
         )
 
     def to_negotiation_view(self, negotiation: TransferNegotiation) -> TransferNegotiationView:
@@ -1829,6 +2207,37 @@ class TransferMarketService:
             return
         self.event_publisher.publish(DomainEvent(name=name, payload=payload))
 
+    def _publish_matrix_notification(
+        self,
+        *,
+        event_key: str,
+        target_user_ids: list[str | None],
+        resource_id: str,
+        message: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        if not self._notification_tables_available():
+            return
+        normalized_targets = [user_id for user_id in target_user_ids if user_id]
+        if not normalized_targets:
+            return
+        records = NotificationEventMatrixService(self.session).publish_event(
+            event_key=event_key,
+            target_user_ids=normalized_targets,
+            resource_id=resource_id,
+            message=message,
+            metadata_json=metadata,
+        )
+        if records:
+            self.session.commit()
+
+    def _notification_tables_available(self) -> bool:
+        inspector = inspect(self.session.connection())
+        return all(
+            inspector.has_table(table_name)
+            for table_name in ("notification_records", "notification_preferences", "users")
+        )
+
     def _sync_listing_snapshot(self, snapshot: TransferListingView) -> None:
         if self.hub is None:
             return
@@ -1950,6 +2359,12 @@ class TransferMarketService:
         if listing is None:
             raise TransferMarketNotFoundError(f"Transfer listing {listing_id} was not found.")
         return listing
+
+    def _require_hub_offer(self, offer_id: str) -> TransferHubOffer:
+        offer = self.session.get(TransferHubOffer, offer_id)
+        if offer is None:
+            raise TransferMarketNotFoundError(f"Transfer Hub offer {offer_id} was not found.")
+        return offer
 
     def _require_negotiation_by_listing(self, listing_id: str) -> TransferNegotiation:
         negotiation = self.session.scalar(

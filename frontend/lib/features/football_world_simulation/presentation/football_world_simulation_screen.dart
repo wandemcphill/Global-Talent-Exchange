@@ -565,7 +565,7 @@ class _WorldRegenDeskCard extends StatelessWidget {
               ),
               if (tracking != null)
                 GteMetricChip(
-                  label: 'Peak rating',
+                  label: 'Peak GSI',
                   value: tracking.globalPeakRating.toString(),
                 ),
             ],
@@ -625,7 +625,7 @@ class _WorldRegenDeskCard extends StatelessWidget {
                               (NationalRegenSeed seed) => Padding(
                                 padding: const EdgeInsets.only(bottom: 6),
                                 child: Text(
-                                  '${seed.displayName} • ${seed.primaryPosition} • ${seed.currentRating}/${seed.potentialRating} • ${_labelize(seed.rarityTier)}',
+                                  '${seed.displayName} • ${seed.primaryPosition} • GSI ${seed.resolvedGsi} • POT ${seed.potentialRating} • ${_labelize(seed.rarityTier)}',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                               ),
@@ -668,7 +668,7 @@ class _WorldRegenDeskCard extends StatelessWidget {
                     (RegenRisingStar star) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Text(
-                        '${star.player.name} • ${star.player.nationality} • ${star.player.currentRating}/${star.player.potential} • ${star.momentumLabel}',
+                        '${star.player.name} • ${star.player.nationality} • GSI ${star.player.resolvedGsi} • POT ${star.player.potential} • ${star.momentumLabel}',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
@@ -679,7 +679,7 @@ class _WorldRegenDeskCard extends StatelessWidget {
               Text('Tracking', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 10),
               Text(
-                'Tracked seeded players: ${tracking.totalSeededPlayers}. Peak rating reached: ${tracking.globalPeakRating}.',
+                'Tracked seeded players: ${tracking.totalSeededPlayers}. Peak GSI reached: ${tracking.globalPeakRating}.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               if (tracking.countryDistribution.isNotEmpty)

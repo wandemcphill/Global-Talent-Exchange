@@ -222,7 +222,7 @@ class NationalRegenSeedPageView(CommonSchema):
 
 class NationalRegenPreseedRequest(CommonSchema):
     country_codes: list[str] = Field(default_factory=list, max_length=64)
-    seeds_per_country: int = Field(default=10, ge=4, le=40)
+    seeds_per_country: int = Field(default=10, ge=4, le=120)
     age_band: str | None = Field(default=None, max_length=16)
     age_min: int | None = Field(default=None, ge=14, le=30)
     age_max: int | None = Field(default=None, ge=14, le=30)

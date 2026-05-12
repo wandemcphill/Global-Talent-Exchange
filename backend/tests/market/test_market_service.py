@@ -34,6 +34,7 @@ from app.market import (
 from app.market.router import (
     get_market_player_detail,
     get_market_player_history,
+    get_market_browse_catalog,
     list_market_club_players,
     list_market_league_clubs,
     list_market_leagues,
@@ -44,6 +45,7 @@ from app.market.router import (
 )
 from app.market.service import MarketPlayerQueryService
 from app.models.base import Base
+from app.models.transfer_market import TransferListing
 from app.players.read_models import PlayerSummaryReadModel
 from app.services.runtime_control_service import RuntimeControlService
 from app.value_engine.read_models import PlayerValueSnapshotRecord
@@ -99,6 +101,7 @@ def _seed_market_player_catalog(session) -> None:
         provider_external_id="competition-prem",
         name="Premier League",
         slug="premier-league",
+        domestic_level=1,
     )
     supply_tier = SupplyTier(
         id="tier-elite",
@@ -490,6 +493,70 @@ def test_duplicate_open_listing_for_same_asset_is_rejected() -> None:
         )
 
 
+def test_market_real_player_metadata_uses_summary_and_eur_value_fallback(session) -> None:
+    country = Country(
+        id="country-eng",
+        source_provider="synthetic",
+        provider_external_id="country-eng",
+        name="England",
+        alpha2_code="GB",
+        alpha3_code="ENG",
+        fifa_code="ENG",
+    )
+    player = Player(
+        id="real-player-sparse",
+        source_provider="transfermarkt",
+        provider_external_id="real-player-sparse",
+        country_id=country.id,
+        full_name="Sparse Real Player",
+        position="Forward",
+        normalized_position="forward",
+        date_of_birth=None,
+        market_value_eur=12_500_000.0,
+        current_market_reference_value=None,
+        is_real_player=True,
+        is_tradable=True,
+    )
+    session.add_all([country, player])
+    session.add(
+        PlayerSummaryReadModel(
+            player_id=player.id,
+            player_name=player.full_name,
+            current_club_id="club-summary-only",
+            current_club_name="Summary FC",
+            current_competition_id="competition-summary-only",
+            current_competition_name="Summary League",
+            last_snapshot_id=None,
+            last_snapshot_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+            current_value_credits=0.0,
+            previous_value_credits=0.0,
+            movement_pct=0.0,
+            average_rating=None,
+            market_interest_score=0,
+            summary_json={},
+        )
+    )
+    session.commit()
+
+    result = _build_market_query_service(session).list_players(search="Sparse Real")
+
+    item = result.items[0]
+    assert item.player_id == player.id
+    assert item.age is None
+    assert item.current_club_id == "club-summary-only"
+    assert item.current_club_name == "Summary FC"
+    assert item.current_competition_id == "competition-summary-only"
+    assert item.current_competition_name == "Summary League"
+    assert item.current_value_credits is not None
+    assert item.current_value_credits > 0
+
+    detail = _build_market_query_service(session).get_player_detail(player.id)
+    assert detail.identity.current_club_name == "Summary FC"
+    assert detail.identity.current_competition_name == "Summary League"
+    assert detail.value.current_value_credits == item.current_value_credits
+    assert _build_market_query_service(session).get_player_ticker(player.id).player_id == player.id
+
+
 def test_listing_offer_counter_accept_flow_completes_listing() -> None:
     engine = MarketEngine()
     listing = engine.create_listing(
@@ -629,6 +696,7 @@ def test_market_player_list_includes_primary_image_url(session) -> None:
         national_team=None,
         club=None,
         league=None,
+        division=None,
         min_age=None,
         max_age=None,
         min_value=None,
@@ -640,6 +708,92 @@ def test_market_player_list_includes_primary_image_url(session) -> None:
 
     by_id = {item.player_id: item for item in payload.items}
     assert by_id["player-1"].image_url == "https://cdn.sportmonks.test/players/player-1.png"
+    assert by_id["player-1"].nationality_code == "NGA"
+    assert by_id["player-1"].current_club_id == "club-alpha"
+    assert by_id["player-1"].current_competition_id == "competition-prem"
+    assert by_id["player-1"].current_competition_name == "Premier League"
+    assert by_id["player-1"].current_division_id == "division-1"
+    assert by_id["player-1"].current_division_name == "Division 1"
+    assert by_id["player-1"].is_tradable is True
+
+
+def test_market_player_list_filters_transfer_hub_availability_terms(session) -> None:
+    _seed_market_player_catalog(session)
+    session.add(
+        TransferListing(
+            id="listing-player-1-loan-to-buy",
+            player_id="player-1",
+            selling_club_id="club-alpha",
+            base_price=Decimal("1250000.00"),
+            status="open",
+            listing_type="loan_to_buy",
+            visibility="public",
+            expires_at=datetime(2026, 3, 18, tzinfo=timezone.utc),
+            salary_amount=Decimal("25000.00"),
+            contract_years_remaining=Decimal("2.50"),
+            buy_clause_amount=Decimal("1200000.00"),
+            loan_terms_json={"months": 12, "wage_share_pct": 60},
+            swap_terms_json={"minimum_rating": 70, "positions": ["midfielder"]},
+            availability_json={"loan": True, "swap": True, "loan_to_buy": True},
+        )
+    )
+    session.commit()
+
+    service = _build_market_query_service(session)
+
+    loan_to_buy_payload = service.list_players(availability="loan_to_buy")
+    assert [item.player_id for item in loan_to_buy_payload.items] == ["player-1"]
+    listed_player = loan_to_buy_payload.items[0]
+    assert listed_player.transfer_listing_id == "listing-player-1-loan-to-buy"
+    assert listed_player.transfer_listing_status == "open"
+    assert listed_player.selling_club_id == "club-alpha"
+    assert listed_player.availability_label == "Loan To Buy"
+    assert listed_player.asking_type == "loan_to_buy"
+    assert listed_player.salary_amount == 25000.0
+    assert listed_player.contract_years_remaining == 2.5
+    assert listed_player.buy_clause_amount == 1200000.0
+    assert listed_player.loan_terms == {"months": 12, "wage_share_pct": 60}
+    assert listed_player.swap_terms == {"minimum_rating": 70, "positions": ["midfielder"]}
+    assert listed_player.availability == {"loan": True, "swap": True, "loan_to_buy": True}
+
+    transfer_payload = service.list_players(availability="transfer")
+    assert transfer_payload.items == ()
+
+    all_players = service.list_players()
+    unlisted_player = next(item for item in all_players.items if item.player_id == "player-2")
+    assert unlisted_player.transfer_listing_id is None
+    assert unlisted_player.availability_label == "Transfer eligible"
+    assert unlisted_player.asking_type == "transfer_eligible"
+
+
+def test_market_browse_catalog_counts_full_tradeable_universe(session) -> None:
+    _seed_market_player_catalog(session)
+
+    payload = get_market_browse_catalog(service=_build_market_query_service(session))
+
+    assert payload.total == 4
+    assert [(item.id, item.label, item.count) for item in payload.countries] == [
+        ("NGA", "Nigeria", 2),
+        ("ESP", "Spain", 2),
+    ]
+    assert [(item.id, item.label, item.count) for item in payload.leagues] == [
+        ("competition-prem", "Premier League", 4),
+    ]
+    assert payload.leagues[0].country_id == "NGA"
+    assert payload.leagues[0].league_id == "competition-prem"
+    assert [(item.id, item.label, item.count) for item in payload.divisions] == [
+        ("division-1", "Division 1", 4),
+    ]
+    assert payload.divisions[0].parent_id == "competition-prem"
+    assert payload.divisions[0].league_id == "competition-prem"
+    assert payload.divisions[0].division_id == "division-1"
+    assert [(item.id, item.label, item.count) for item in payload.clubs] == [
+        ("club-alpha", "Alpha FC", 2),
+        ("club-beta", "Beta United", 2),
+    ]
+    assert payload.clubs[0].parent_id == "division-1"
+    assert payload.clubs[0].league_id == "competition-prem"
+    assert payload.clubs[0].division_id == "division-1"
 
 
 def test_market_browse_endpoints_expose_league_club_and_nationality_paths(session) -> None:
@@ -685,6 +839,24 @@ def test_market_player_list_supports_cursor_pagination(session) -> None:
     assert [item.player_id for item in second_page.items] == ["player-3", "player-4"]
     assert second_page.has_more is False
     assert second_page.next_cursor is None
+
+
+def test_market_player_list_traverses_cursor_pages_without_duplicates(session) -> None:
+    _seed_market_player_catalog(session)
+    service = _build_market_query_service(session)
+
+    seen: list[str] = []
+    cursor: str | None = None
+    has_more = True
+    while has_more:
+        page = service.list_players(limit=1, cursor=cursor)
+        assert len(page.items) == 1
+        seen.extend(item.player_id for item in page.items)
+        cursor = page.next_cursor
+        has_more = page.has_more
+
+    assert seen == ["player-1", "player-2", "player-3", "player-4"]
+    assert len(seen) == len(set(seen))
 
 
 def test_market_player_list_filters_by_position(session) -> None:
@@ -742,6 +914,14 @@ def test_market_player_list_filters_by_league(session) -> None:
 
     assert [item.player_id for item in premier_payload.items] == ["player-1", "player-2", "player-3"]
     assert [item.player_id for item in la_liga_payload.items] == ["player-4"]
+
+
+def test_market_player_list_filters_by_division(session) -> None:
+    _seed_market_player_catalog(session)
+
+    payload = _build_market_query_service(session).list_players(division="division-1")
+
+    assert [item.player_id for item in payload.items] == ["player-1", "player-2", "player-3", "player-4"]
 
 
 def test_market_player_list_filters_by_age_range(session) -> None:
@@ -825,8 +1005,12 @@ def test_market_player_list_supports_mixed_real_and_regen_with_nullable_rows(ses
 
     assert payload.total == 4
     assert by_id["player-1"].current_value_credits == 220.0
+    assert by_id["player-1"].global_scouting_index == 84.0
+    assert by_id["player-1"].previous_global_scouting_index == 79.0
+    assert by_id["player-1"].global_scouting_index_movement_pct == 6.33
     assert by_id["player-2"].current_value_credits == 180.0
-    assert by_id["player-4"].current_value_credits is None
+    assert by_id["player-4"].current_value_credits is not None
+    assert by_id["player-4"].current_value_credits > 0
     assert by_id["player-4"].movement_pct is None
     assert by_id["player-4"].market_interest_score is None
     assert by_id["player-1"].avatar.seed_token
@@ -925,6 +1109,7 @@ def test_market_player_list_rejects_invalid_sort(session) -> None:
             national_team=None,
             club=None,
             league=None,
+            division=None,
             min_age=None,
             max_age=None,
             min_value=None,

@@ -8,7 +8,31 @@ from pydantic import Field
 
 from app.common.schemas.base import CommonSchema
 
-TransferListingStatus = Literal["open", "closed", "sold"]
+TransferListingStatus = Literal[
+    "draft",
+    "open",
+    "countered",
+    "accepted",
+    "negotiated",
+    "closed",
+    "sold",
+    "rejected",
+    "cancelled",
+    "expired",
+]
+TransferHubListingType = Literal[
+    "transfer",
+    "loan",
+    "swap",
+    "swap_plus_cash",
+    "loan_to_buy",
+    "temporary_rental",
+    "open_offer",
+    "private_negotiation",
+]
+TransferHubAssetType = Literal["real_player", "regen", "academy_player"]
+TransferHubVisibility = Literal["public", "private", "shortlist", "invite_only"]
+TransferHubOfferStatus = Literal["draft", "open", "countered", "accepted", "rejected", "cancelled", "expired"]
 TransferNegotiationStatus = Literal[
     "awaiting_contract_offer",
     "player_delayed",
@@ -29,6 +53,9 @@ class TransferMarketPlayerView(CommonSchema):
     current_club_id: str | None = None
     current_club_name: str | None = None
     current_competition_id: str | None = None
+    nationality_id: str | None = None
+    market_value: Decimal | None = None
+    is_real_player: bool = False
 
 
 class TransferBidderView(CommonSchema):
@@ -94,6 +121,9 @@ class TransferListingView(CommonSchema):
     current_highest_bid: Decimal
     highest_bidder_id: str | None = None
     status: TransferListingStatus
+    listing_type: TransferHubListingType = "transfer"
+    asset_type: TransferHubAssetType = "real_player"
+    visibility: TransferHubVisibility = "public"
     expires_at: datetime
     time_remaining: int = Field(ge=0)
     player: TransferMarketPlayerView
@@ -105,6 +135,12 @@ class TransferListingView(CommonSchema):
     market_signal: str
     channel: str
     negotiation_id: str | None = None
+    salary_amount: Decimal | None = None
+    contract_years_remaining: Decimal | None = None
+    buy_clause_amount: Decimal | None = None
+    loan_terms: dict[str, Any] = Field(default_factory=dict)
+    swap_terms: dict[str, Any] = Field(default_factory=dict)
+    availability: dict[str, Any] = Field(default_factory=dict)
 
 
 class TransferMarketStreamEventView(CommonSchema):
@@ -190,6 +226,80 @@ class TransferListingCreateRequest(CommonSchema):
     window_id: str | None = Field(default=None, min_length=1, max_length=36)
     reserve_price: Decimal | None = Field(default=None, ge=0)
     notes: str | None = Field(default=None, max_length=500)
+    listing_type: TransferHubListingType = "transfer"
+    asset_type: TransferHubAssetType = "real_player"
+    visibility: TransferHubVisibility = "public"
+    salary_amount: Decimal | None = Field(default=None, ge=0)
+    contract_years_remaining: Decimal | None = Field(default=None, ge=0, le=15)
+    buy_clause_amount: Decimal | None = Field(default=None, ge=0)
+    loan_terms: dict[str, Any] = Field(default_factory=dict)
+    swap_terms: dict[str, Any] = Field(default_factory=dict)
+    availability: dict[str, Any] = Field(default_factory=dict)
+
+
+class TransferHubOfferCreateRequest(CommonSchema):
+    bidder_club_id: str | None = Field(default=None, min_length=1, max_length=36)
+    offer_type: TransferHubListingType = "transfer"
+    cash_amount: Decimal = Field(default=Decimal("0"), ge=0)
+    offered_player_ids: list[str] = Field(default_factory=list)
+    loan_terms: dict[str, Any] = Field(default_factory=dict)
+    swap_terms: dict[str, Any] = Field(default_factory=dict)
+    conditional_terms: dict[str, Any] = Field(default_factory=dict)
+    sell_on_percentage: Decimal | None = Field(default=None, ge=0, le=100)
+    message: str | None = Field(default=None, max_length=1000)
+    expires_at: datetime | None = None
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
+
+
+class TransferHubOfferCounterRequest(CommonSchema):
+    cash_amount: Decimal | None = Field(default=None, ge=0)
+    offered_player_ids: list[str] | None = None
+    loan_terms: dict[str, Any] | None = None
+    swap_terms: dict[str, Any] | None = None
+    conditional_terms: dict[str, Any] | None = None
+    sell_on_percentage: Decimal | None = Field(default=None, ge=0, le=100)
+    message: str | None = Field(default=None, max_length=1000)
+
+
+class TransferHubOfferView(CommonSchema):
+    id: str
+    listing_id: str
+    offer_type: TransferHubListingType | str
+    seller_club_id: str
+    bidder_club_id: str
+    cash_amount: Decimal
+    offered_player_ids: list[str] = Field(default_factory=list)
+    loan_terms: dict[str, Any] = Field(default_factory=dict)
+    swap_terms: dict[str, Any] = Field(default_factory=dict)
+    conditional_terms: dict[str, Any] = Field(default_factory=dict)
+    sell_on_percentage: Decimal | None = None
+    status: TransferHubOfferStatus | str
+    idempotency_key: str | None = None
+    message: str | None = None
+    expires_at: datetime | None = None
+    resolved_at: datetime | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class TransferRequestCreateRequest(CommonSchema):
+    current_club_id: str | None = Field(default=None, min_length=1, max_length=36)
+    preferred_leagues: list[str] = Field(default_factory=list)
+    preferred_clubs: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class TransferRequestView(CommonSchema):
+    id: str
+    player_id: str
+    current_club_id: str | None = None
+    requested_by_user_id: str | None = None
+    status: str
+    preferred_leagues: list[str] = Field(default_factory=list)
+    preferred_clubs: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    resolved_at: datetime | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class TransferBidPlaceRequest(CommonSchema):

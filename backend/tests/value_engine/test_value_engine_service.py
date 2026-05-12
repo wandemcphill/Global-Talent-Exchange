@@ -2,11 +2,53 @@ from datetime import datetime, timezone
 import unittest
 from unittest.mock import MagicMock
 
-from app.ingestion.models import MarketSignal
+from app.ingestion.models import MarketSignal, Player
 from app.value_engine.service import IngestionValueSnapshotRepository
 
 
 class IngestionValueSnapshotRepositoryTests(unittest.TestCase):
+    def test_real_player_reference_value_requires_imported_market_reference(self) -> None:
+        repository = IngestionValueSnapshotRepository(session=MagicMock())
+        as_of = datetime(2026, 3, 6, tzinfo=timezone.utc)
+        player = Player(
+            id="real-1",
+            full_name="Real Player",
+            is_real_player=True,
+            market_value_eur=None,
+            current_market_reference_value=None,
+            market_signals=[],
+        )
+
+        with self.assertRaisesRegex(ValueError, "missing an imported real-life market reference value"):
+            repository._estimate_reference_market_value_eur(
+                player=player,
+                season_stat=None,
+                as_of=as_of,
+                player_window=None,
+            )
+
+    def test_real_player_reference_value_prefers_current_market_reference(self) -> None:
+        repository = IngestionValueSnapshotRepository(session=MagicMock())
+        as_of = datetime(2026, 3, 6, tzinfo=timezone.utc)
+        player = Player(
+            id="real-1",
+            full_name="Real Player",
+            is_real_player=True,
+            market_value_eur=9_000_000,
+            current_market_reference_value=12_500_000,
+            market_reference_currency="EUR",
+            market_signals=[],
+        )
+
+        value = repository._estimate_reference_market_value_eur(
+            player=player,
+            season_stat=None,
+            as_of=as_of,
+            player_window=None,
+        )
+
+        self.assertEqual(value, 12_500_000)
+
     def test_build_market_pulse_parses_trade_prints_and_holder_signals(self) -> None:
         repository = IngestionValueSnapshotRepository(session=MagicMock())
         as_of = datetime(2026, 3, 6, tzinfo=timezone.utc)

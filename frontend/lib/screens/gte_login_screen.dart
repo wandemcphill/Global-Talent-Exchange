@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
+import '../ui_gtex/components/gtex_button.dart';
+import '../ui_gtex/components/gtex_panel.dart';
+import '../ui_gtex/components/gtex_status_chip.dart';
+import '../ui_gtex/layout/gtex_focus_flow_scaffold.dart';
+import '../ui_gtex/theme/gtex_colors.dart';
+import '../ui_gtex/theme/gtex_spacing.dart';
 import 'creators/creator_access_request_screen.dart';
 import 'gte_signup_screen.dart';
 import 'wallet/gte_policy_compliance_center_screen.dart';
-import '../widgets/gte_shell_theme.dart';
-import '../widgets/gte_state_panel.dart';
-import '../widgets/gte_surface_panel.dart';
-import '../widgets/gtex_branding.dart';
 
 class GteLoginScreen extends StatefulWidget {
   const GteLoginScreen({super.key, required this.controller});
@@ -39,469 +41,31 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: gteBackdropDecoration(),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1220),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: AnimatedBuilder(
-                  animation: widget.controller,
-                  builder: (BuildContext context, Widget? child) {
-                    if (widget.controller.isAuthenticated) {
-                      final GteComplianceStatus? compliance =
-                          widget.controller.complianceStatus;
-                      final bool requiresPolicyAction =
-                          compliance?.hasMissingRequiredPolicies ?? false;
-                      final bool hasRestrictedAccess =
-                          compliance != null &&
-                          (!compliance.canDeposit ||
-                              !compliance.canTradeMarket ||
-                              !compliance.canWithdrawPlatformRewards);
-                      return SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            GteStatePanel(
-                              title:
-                                  hasRestrictedAccess
-                                      ? 'Session active'
-                                      : 'You are in',
-                              message:
-                                  hasRestrictedAccess
-                                      ? 'You are signed in as ${widget.controller.session!.user.username}. Some account actions are still limited until compliance review finishes.'
-                                      : 'You are signed in as ${widget.controller.session!.user.username}. Your club, matchday, and scouting spaces are ready.',
-                              actionLabel: 'Enter GTEX',
-                              onAction: () {
-                                Navigator.of(context).pop(true);
-                              },
-                              icon: Icons.verified_user_outlined,
-                            ),
-                            const SizedBox(height: 16),
-                            if (widget.controller.isLoadingCompliance)
-                              const GteSurfacePanel(
-                                child: Text('Loading compliance status...'),
-                              )
-                            else if (widget.controller.complianceError != null)
-                              GteStatePanel(
-                                title: 'Compliance status unavailable',
-                                message: widget.controller.complianceError!,
-                                icon: Icons.warning_amber_outlined,
-                                actionLabel: 'Retry',
-                                onAction: widget.controller.refreshCompliance,
-                              )
-                            else if (compliance != null)
-                              GteSurfacePanel(
-                                accentColor:
-                                    hasRestrictedAccess
-                                        ? GteShellTheme.accentWarm
-                                        : GteShellTheme.accentCapital,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      requiresPolicyAction
-                                          ? 'Compliance action required'
-                                          : hasRestrictedAccess
-                                          ? 'Access restrictions active'
-                                          : 'Compliance status',
-                                      style:
-                                          Theme.of(
-                                            context,
-                                          ).textTheme.titleMedium,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      requiresPolicyAction
-                                          ? 'Complete the required policy acceptances to unlock deposits, withdrawals, and player-market actions.'
-                                          : hasRestrictedAccess
-                                          ? 'This session is active, but some account actions are limited for this region or review state.'
-                                          : 'All required policies are accepted. Account actions are ready.',
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Wrap(
-                                      spacing: 10,
-                                      runSpacing: 10,
-                                      children: <Widget>[
-                                        _SignalPill(
-                                          label:
-                                              'Country ${compliance.countryCode}',
-                                        ),
-                                        _SignalPill(
-                                          label:
-                                              compliance.canTradeMarket
-                                                  ? 'Player moves enabled'
-                                                  : 'Player moves limited',
-                                        ),
-                                        _SignalPill(
-                                          label:
-                                              compliance.canDeposit
-                                                  ? 'Add funds enabled'
-                                                  : 'Add funds limited',
-                                        ),
-                                        _SignalPill(
-                                          label:
-                                              'Compliance ${compliance.complianceStatus}',
-                                        ),
-                                      ],
-                                    ),
-                                    if (hasRestrictedAccess) ...<Widget>[
-                                      const SizedBox(height: 12),
-                                      if (requiresPolicyAction) ...<Widget>[
-                                        Text(
-                                          'Missing: ${compliance.requiredPolicyAcceptancesMissing} item(s)',
-                                          style:
-                                              Theme.of(
-                                                context,
-                                              ).textTheme.bodyMedium,
-                                        ),
-                                        const SizedBox(height: 10),
-                                      ],
-                                      FilledButton.tonalIcon(
-                                        onPressed: () async {
-                                          await Navigator.of(context).push(
-                                            MaterialPageRoute<void>(
-                                              builder:
-                                                  (_) =>
-                                                      GtePolicyComplianceCenterScreen(
-                                                        controller:
-                                                            widget.controller,
-                                                      ),
-                                            ),
-                                          );
-                                        },
-                                        icon: const Icon(Icons.gavel_outlined),
-                                        label: const Text(
-                                          'Open compliance center',
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return LayoutBuilder(
-                      builder: (
-                        BuildContext context,
-                        BoxConstraints constraints,
-                      ) {
-                        final bool stacked = constraints.maxWidth < 900;
-                        final Widget story = Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            const GtexWordmark(showTagline: false),
-                            const SizedBox(height: 22),
-                            Text(
-                              'Build your club. Scout the world. Step into matchday.',
-                              style: Theme.of(context).textTheme.displaySmall,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'GTEX is a football world, not a trading terminal. The app brings club-building, player discovery, competitions, and live match moments into one clear flow.',
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
-                            const SizedBox(height: 22),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: const <Widget>[
-                                _SignalPill(label: 'Build your club'),
-                                _SignalPill(label: 'Scout new talent'),
-                                _SignalPill(label: 'Play live matchday'),
-                                _SignalPill(label: 'Follow rising stars'),
-                              ],
-                            ),
-                            const SizedBox(height: 22),
-                            const GteSurfacePanel(
-                              padding: EdgeInsets.all(18),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text('Choose your starting point'),
-                                  SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 10,
-                                    runSpacing: 10,
-                                    children: <Widget>[
-                                      _OpeningMoveChip(
-                                        label:
-                                            '1. Sign in and return to your club',
-                                        accent: GteShellTheme.accent,
-                                      ),
-                                      _OpeningMoveChip(
-                                        label: '2. Scout the live player board',
-                                        accent: GteShellTheme.accentArena,
-                                      ),
-                                      _OpeningMoveChip(
-                                        label:
-                                            '3. Check matchday and world stories',
-                                        accent: GteShellTheme.accentCapital,
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 22),
-                            const GtexSignalStrip(
-                              title: 'One football world, three clear lanes',
-                              subtitle:
-                                  'Scouting, matchday, and funds each have a distinct role, but they work as one product.',
-                              tiles: <Widget>[
-                                GtexSignalTile(
-                                  label: 'Club',
-                                  value: 'YOUR CREST',
-                                  caption:
-                                      'Identity, progression, and your home base.',
-                                  icon: Icons.show_chart,
-                                  color: GteShellTheme.accent,
-                                ),
-                                GtexSignalTile(
-                                  label: 'Matchday',
-                                  value: 'LIVE STORY',
-                                  caption:
-                                      'Fixtures, highlights, and bracket energy.',
-                                  icon: Icons.stadium_outlined,
-                                  color: GteShellTheme.accentArena,
-                                ),
-                                GtexSignalTile(
-                                  label: 'Funds',
-                                  value: 'READY BALANCE',
-                                  caption:
-                                      'Balance, moves, and protected account tools.',
-                                  icon: Icons.account_balance_wallet_outlined,
-                                  color: GteShellTheme.accentCapital,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 22),
-                            const GteSurfacePanel(
-                              padding: EdgeInsets.all(18),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text('What opens after login'),
-                                  SizedBox(height: 10),
-                                  _BulletLine(
-                                    icon: Icons.shield_outlined,
-                                    text:
-                                        'Club HQ with your badge, schedule, and progression.',
-                                  ),
-                                  _BulletLine(
-                                    icon: Icons.person_search_outlined,
-                                    text:
-                                        'A player board for scouting, comparing, and making moves.',
-                                  ),
-                                  _BulletLine(
-                                    icon: Icons.stadium_outlined,
-                                    text:
-                                        'Matchday and highlights that keep the season alive.',
-                                  ),
-                                  _BulletLine(
-                                    icon: Icons.admin_panel_settings_outlined,
-                                    text:
-                                        'If your role allows it, creator and admin tools appear automatically.',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-
-                        final Widget authCard = GteSurfacePanel(
-                          emphasized: true,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  const GtexLogoMark(size: 46, compact: true),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        Text(
-                                          'Sign in',
-                                          style:
-                                              Theme.of(
-                                                context,
-                                              ).textTheme.headlineSmall,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'One sign-in for players, managers, creators, and admins. The app reveals only what this account can use.',
-                                          style:
-                                              Theme.of(
-                                                context,
-                                              ).textTheme.bodyMedium,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              TextField(
-                                controller: _emailController,
-                                enabled: !widget.controller.isSigningIn,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-                                decoration: const InputDecoration(
-                                  labelText: 'Email',
-                                  prefixIcon: Icon(Icons.alternate_email),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              TextField(
-                                controller: _passwordController,
-                                enabled: !widget.controller.isSigningIn,
-                                obscureText: true,
-                                textInputAction: TextInputAction.done,
-                                onSubmitted: (_) => _submit(),
-                                decoration: const InputDecoration(
-                                  labelText: 'Password',
-                                  prefixIcon: Icon(Icons.lock_outline),
-                                ),
-                              ),
-                              if (widget.controller.isSigningIn) ...<Widget>[
-                                const SizedBox(height: 16),
-                                const LinearProgressIndicator(),
-                              ],
-                              if (widget.controller.authError !=
-                                  null) ...<Widget>[
-                                const SizedBox(height: 14),
-                                Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(18),
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.error.withValues(alpha: 0.12),
-                                    border: Border.all(
-                                      color: Theme.of(context).colorScheme.error
-                                          .withValues(alpha: 0.32),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: <Widget>[
-                                      Icon(
-                                        Icons.error_outline,
-                                        color:
-                                            Theme.of(context).colorScheme.error,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          widget.controller.authError!,
-                                          style: TextStyle(
-                                            color:
-                                                Theme.of(
-                                                  context,
-                                                ).colorScheme.error,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 18),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  onPressed:
-                                      widget.controller.isSigningIn
-                                          ? null
-                                          : _submit,
-                                  icon: const Icon(Icons.login),
-                                  label: Text(
-                                    widget.controller.isSigningIn
-                                        ? 'Opening the gate...'
-                                        : 'Enter GTEX now',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              TextButton(
-                                onPressed:
-                                    widget.controller.isSigningIn
-                                        ? null
-                                        : () async {
-                                          await Navigator.of(
-                                            context,
-                                          ).push<void>(
-                                            MaterialPageRoute<void>(
-                                              builder:
-                                                  (BuildContext context) =>
-                                                      GteSignupScreen(
-                                                        controller:
-                                                            widget.controller,
-                                                      ),
-                                            ),
-                                          );
-                                        },
-                                child: const Text('Create a new account'),
-                              ),
-                              TextButton(
-                                onPressed:
-                                    widget.controller.isSigningIn
-                                        ? null
-                                        : () async {
-                                          await Navigator.of(
-                                            context,
-                                          ).push<void>(
-                                            MaterialPageRoute<void>(
-                                              builder:
-                                                  (BuildContext context) =>
-                                                      CreatorAccessRequestScreen(
-                                                        exchangeController:
-                                                            widget.controller,
-                                                      ),
-                                            ),
-                                          );
-                                        },
-                                child: const Text('Apply for creator access'),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        if (stacked) {
-                          return ListView(
-                            children: <Widget>[
-                              story,
-                              const SizedBox(height: 20),
-                              authCard,
-                            ],
-                          );
-                        }
-                        return Row(
-                          children: <Widget>[
-                            Expanded(flex: 6, child: story),
-                            const SizedBox(width: 20),
-                            Expanded(flex: 4, child: authCard),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (BuildContext context, Widget? child) {
+        return GtexFocusFlowScaffold(
+          title:
+              widget.controller.isAuthenticated
+                  ? 'GTEX session active'
+                  : 'Enter the football operating system',
+          subtitle:
+              widget.controller.isAuthenticated
+                  ? 'Your live account is connected. Continue into the club, market, wallet, and competition command surface.'
+                  : 'One secure sign-in opens club ownership, player trading, national rentals, creator tools, wallet operations, and admin access where your role allows it.',
+          maxWidth: 1180,
+          accent: GtexColors.pitch,
+          child:
+              widget.controller.isAuthenticated
+                  ? _AuthenticatedPanel(controller: widget.controller)
+                  : _LoginContent(
+                    controller: widget.controller,
+                    emailController: _emailController,
+                    passwordController: _passwordController,
+                    onSubmit: _submit,
+                  ),
+        );
+      },
     );
   }
 
@@ -519,73 +83,494 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
   }
 }
 
-class _SignalPill extends StatelessWidget {
-  const _SignalPill({required this.label});
-  final String label;
+class _LoginContent extends StatelessWidget {
+  const _LoginContent({
+    required this.controller,
+    required this.emailController,
+    required this.passwordController,
+    required this.onSubmit,
+  });
+
+  final GteExchangeController controller;
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final Future<void> Function() onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: Colors.white.withValues(alpha: 0.05),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool stacked = constraints.maxWidth < 860;
+        final Widget story = _AuthStory(stacked: stacked);
+        final Widget form = _LoginForm(
+          controller: controller,
+          emailController: emailController,
+          passwordController: passwordController,
+          onSubmit: onSubmit,
+        );
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              story,
+              const SizedBox(height: GtexSpacing.lg),
+              form,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(flex: 6, child: story),
+            const SizedBox(width: GtexSpacing.lg),
+            Expanded(flex: 5, child: form),
+          ],
+        );
+      },
     );
   }
 }
 
-class _OpeningMoveChip extends StatelessWidget {
-  const _OpeningMoveChip({required this.label, required this.accent});
+class _AuthStory extends StatelessWidget {
+  const _AuthStory({required this.stacked});
 
-  final String label;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: accent.withValues(alpha: 0.12),
-        border: Border.all(color: accent.withValues(alpha: 0.24)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: accent),
-      ),
-    );
-  }
-}
-
-class _BulletLine extends StatelessWidget {
-  const _BulletLine({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
+  final bool stacked;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: GteShellTheme.accent.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: GtexColors.pitch,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: <BoxShadow>[
+                  GtexColors.glow(GtexColors.pitch, opacity: 0.2),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'GT',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+              ),
             ),
-            child: Icon(icon, size: 16, color: GteShellTheme.accent),
+            const SizedBox(width: GtexSpacing.md),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'GTEX',
+                    style: TextStyle(
+                      color: GtexColors.text,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Global Football Talent Marketplace',
+                    style: TextStyle(color: GtexColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: GtexSpacing.xl),
+        Text(
+          'Own a club. Trade football assets. Read the world as it moves.',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: GtexColors.text,
+            fontWeight: FontWeight.w900,
+            height: 1.05,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        Text(
+          'The login surface now matches the GTEX command-center language: market, club, wallet, competitions, regens, news, creator, and admin all enter through one role-aware account.',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: GtexColors.textSecondary,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.lg),
+        Wrap(
+          spacing: GtexSpacing.sm,
+          runSpacing: GtexSpacing.sm,
+          children: const <Widget>[
+            GtexStatusChip(
+              label: '17K+ player market',
+              icon: Icons.groups_2_outlined,
+              tone: GtexStatusTone.success,
+            ),
+            GtexStatusChip(
+              label: 'Club ownership',
+              icon: Icons.shield_outlined,
+              tone: GtexStatusTone.premium,
+            ),
+            GtexStatusChip(
+              label: 'Wallet protected',
+              icon: Icons.account_balance_wallet_outlined,
+            ),
+          ],
+        ),
+        const SizedBox(height: GtexSpacing.lg),
+        Wrap(
+          spacing: GtexSpacing.md,
+          runSpacing: GtexSpacing.md,
+          children: <Widget>[
+            _AuthLane(
+              width: stacked ? double.infinity : 240,
+              title: 'Transfer room',
+              body: 'Country, league, division, club, player.',
+              icon: Icons.account_tree_outlined,
+              accent: GtexColors.pitch,
+            ),
+            _AuthLane(
+              width: stacked ? double.infinity : 240,
+              title: 'Club cockpit',
+              body: 'Squad, identity, finances, trophies.',
+              icon: Icons.stadium_outlined,
+              accent: GtexColors.gold,
+            ),
+            _AuthLane(
+              width: stacked ? double.infinity : 240,
+              title: 'Live world',
+              body: 'Regens, news, tournaments, alerts.',
+              icon: Icons.public_outlined,
+              accent: GtexColors.cyan,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginForm extends StatelessWidget {
+  const _LoginForm({
+    required this.controller,
+    required this.emailController,
+    required this.passwordController,
+    required this.onSubmit,
+  });
+
+  final GteExchangeController controller;
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final Future<void> Function() onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexPanel(
+      title: 'Sign in',
+      subtitle: 'Role-aware access for managers, creators, and admins.',
+      accent: GtexColors.pitch,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          TextField(
+            controller: emailController,
+            enabled: !controller.isSigningIn,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            style: const TextStyle(color: GtexColors.text),
+            decoration: _gtexInputDecoration(
+              label: 'Email',
+              icon: Icons.alternate_email,
+            ),
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          TextField(
+            controller: passwordController,
+            enabled: !controller.isSigningIn,
+            obscureText: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => onSubmit(),
+            style: const TextStyle(color: GtexColors.text),
+            decoration: _gtexInputDecoration(
+              label: 'Password',
+              icon: Icons.lock_outline,
+            ),
+          ),
+          if (controller.isSigningIn) ...<Widget>[
+            const SizedBox(height: GtexSpacing.md),
+            const LinearProgressIndicator(color: GtexColors.pitch),
+          ],
+          if (controller.authError != null) ...<Widget>[
+            const SizedBox(height: GtexSpacing.md),
+            _InlineAlert(message: controller.authError!),
+          ],
+          const SizedBox(height: GtexSpacing.lg),
+          GtexButton(
+            label: controller.isSigningIn ? 'Opening GTEX...' : 'Enter GTEX',
+            icon: Icons.login,
+            onPressed: controller.isSigningIn ? null : () => onSubmit(),
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          GtexButton(
+            label: 'Create account',
+            icon: Icons.person_add_alt_1_outlined,
+            variant: GtexButtonVariant.secondary,
+            onPressed:
+                controller.isSigningIn
+                    ? null
+                    : () async {
+                      await Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder:
+                              (BuildContext context) =>
+                                  GteSignupScreen(controller: controller),
+                        ),
+                      );
+                    },
+          ),
+          const SizedBox(height: GtexSpacing.xs),
+          TextButton.icon(
+            onPressed:
+                controller.isSigningIn
+                    ? null
+                    : () async {
+                      await Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder:
+                              (BuildContext context) =>
+                                  CreatorAccessRequestScreen(
+                                    exchangeController: controller,
+                                  ),
+                        ),
+                      );
+                    },
+            icon: const Icon(Icons.video_camera_front_outlined),
+            label: const Text('Apply for creator access'),
           ),
         ],
       ),
     );
   }
+}
+
+class _AuthenticatedPanel extends StatelessWidget {
+  const _AuthenticatedPanel({required this.controller});
+
+  final GteExchangeController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final GteComplianceStatus? compliance = controller.complianceStatus;
+    final bool requiresPolicyAction =
+        compliance?.hasMissingRequiredPolicies ?? false;
+    final bool hasRestrictedAccess =
+        compliance != null &&
+        (!compliance.canDeposit ||
+            !compliance.canTradeMarket ||
+            !compliance.canWithdrawPlatformRewards);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        GtexPanel(
+          title: hasRestrictedAccess ? 'Session active' : 'You are in',
+          subtitle:
+              hasRestrictedAccess
+                  ? 'Signed in as ${controller.session!.user.username}. Some actions remain limited until compliance review is complete.'
+                  : 'Signed in as ${controller.session!.user.username}. Your club, market, wallet, and matchday spaces are ready.',
+          accent: hasRestrictedAccess ? GtexColors.orange : GtexColors.pitch,
+          child: Wrap(
+            spacing: GtexSpacing.sm,
+            runSpacing: GtexSpacing.sm,
+            children: <Widget>[
+              GtexButton(
+                label: 'Enter GTEX',
+                icon: Icons.arrow_forward,
+                onPressed: () => Navigator.of(context).pop(true),
+              ),
+              if (requiresPolicyAction)
+                GtexButton(
+                  label: 'Open compliance',
+                  icon: Icons.gavel_outlined,
+                  variant: GtexButtonVariant.secondary,
+                  onPressed: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder:
+                            (_) => GtePolicyComplianceCenterScreen(
+                              controller: controller,
+                            ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        if (controller.isLoadingCompliance)
+          const GtexPanel(
+            accent: GtexColors.cyan,
+            child: Text(
+              'Loading compliance status...',
+              style: TextStyle(color: GtexColors.textSecondary),
+            ),
+          )
+        else if (controller.complianceError != null)
+          GtexPanel(
+            title: 'Compliance status unavailable',
+            subtitle: controller.complianceError,
+            accent: GtexColors.red,
+            child: GtexButton(
+              label: 'Retry',
+              icon: Icons.refresh,
+              variant: GtexButtonVariant.secondary,
+              onPressed: controller.refreshCompliance,
+            ),
+          )
+        else if (compliance != null)
+          GtexPanel(
+            title:
+                requiresPolicyAction
+                    ? 'Compliance action required'
+                    : hasRestrictedAccess
+                    ? 'Access restrictions active'
+                    : 'Compliance status',
+            subtitle:
+                requiresPolicyAction
+                    ? 'Complete required policy acceptances to unlock deposits, withdrawals, and player-market actions.'
+                    : hasRestrictedAccess
+                    ? 'This session is active, but some account actions are limited for this region or review state.'
+                    : 'All required policies are accepted. Account actions are ready.',
+            accent: hasRestrictedAccess ? GtexColors.orange : GtexColors.pitch,
+            child: Wrap(
+              spacing: GtexSpacing.sm,
+              runSpacing: GtexSpacing.sm,
+              children: <Widget>[
+                GtexStatusChip(label: 'Country ${compliance.countryCode}'),
+                GtexStatusChip(
+                  label:
+                      compliance.canTradeMarket
+                          ? 'Player moves enabled'
+                          : 'Player moves limited',
+                  tone:
+                      compliance.canTradeMarket
+                          ? GtexStatusTone.success
+                          : GtexStatusTone.warning,
+                ),
+                GtexStatusChip(
+                  label:
+                      compliance.canDeposit
+                          ? 'Add funds enabled'
+                          : 'Add funds limited',
+                  tone:
+                      compliance.canDeposit
+                          ? GtexStatusTone.success
+                          : GtexStatusTone.warning,
+                ),
+                GtexStatusChip(
+                  label: 'Compliance ${compliance.complianceStatus}',
+                  tone:
+                      hasRestrictedAccess
+                          ? GtexStatusTone.warning
+                          : GtexStatusTone.success,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AuthLane extends StatelessWidget {
+  const _AuthLane({
+    required this.width,
+    required this.title,
+    required this.body,
+    required this.icon,
+    required this.accent,
+  });
+
+  final double width;
+  final String title;
+  final String body;
+  final IconData icon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: GtexPanel(
+        title: title,
+        subtitle: body,
+        accent: accent,
+        trailing: Icon(icon, color: accent),
+        child: const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+class _InlineAlert extends StatelessWidget {
+  const _InlineAlert({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      decoration: BoxDecoration(
+        color: GtexColors.red.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(color: GtexColors.red.withValues(alpha: 0.38)),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.error_outline, color: GtexColors.red),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: GtexColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+InputDecoration _gtexInputDecoration({
+  required String label,
+  required IconData icon,
+}) {
+  final OutlineInputBorder border = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+    borderSide: BorderSide(color: GtexColors.line.withValues(alpha: 0.9)),
+  );
+  return InputDecoration(
+    labelText: label,
+    labelStyle: const TextStyle(color: GtexColors.textMuted),
+    prefixIcon: Icon(icon, color: GtexColors.pitch),
+    filled: true,
+    fillColor: Colors.white.withValues(alpha: 0.045),
+    border: border,
+    enabledBorder: border,
+    focusedBorder: border.copyWith(
+      borderSide: const BorderSide(color: GtexColors.pitch),
+    ),
+  );
 }

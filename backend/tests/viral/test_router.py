@@ -18,6 +18,16 @@ from app.models.creator_attention_earnings import ClipEarningsLog, CreatorWallet
 from app.models.creator_profile import CreatorProfile
 from app.models.event_backbone import EventOutbox
 from app.models.follow import Follow
+from app.models.scale_backbone import (
+    OrchestratorClipStateRecord,
+    OrchestratorConfigRecord,
+    PersonalizedFeedCacheEntryRecord,
+    PersonalizedFeedHistoryEntryRecord,
+    PersonalizedFeedSeenClipRecord,
+    ViralDispatchPoolEntryRecord,
+    ViralLeaderboardEntryRecord,
+)
+from app.models.viral_moderation import ClipModerationEvent
 from app.models.user import User, UserRole
 from app.models.user_affinity_profile import UserAffinityProfile
 from app.viral.distribution import build_clip_distribution_manager
@@ -95,10 +105,20 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session], User]:
             CreatorProfile.__table__,
             EventOutbox.__table__,
             Follow.__table__,
+            ClipModerationEvent.__table__,
             UserAffinityProfile.__table__,
+            OrchestratorClipStateRecord.__table__,
+            OrchestratorConfigRecord.__table__,
+            PersonalizedFeedCacheEntryRecord.__table__,
+            PersonalizedFeedHistoryEntryRecord.__table__,
+            PersonalizedFeedSeenClipRecord.__table__,
+            ViralDispatchPoolEntryRecord.__table__,
+            ViralLeaderboardEntryRecord.__table__,
         ],
     )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    app.state.session_factory = session_factory
+    app.state.read_session_factory = session_factory
 
     with session_factory() as session:
         current_user = User(
@@ -162,6 +182,35 @@ def test_viral_feed_router_returns_ranked_clips() -> None:
     assert body["clips"][0]["feedback"]["viral_analysis"]
 
 
+def test_viral_feed_filters_admin_blocked_clips() -> None:
+    app, session_factory, _current_user = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=58, match_id="viral-blocked"))
+    _insert_match(session_factory, replay_payload)
+
+    with TestClient(app) as client:
+        initial_response = client.get(f"/api/viral/matches/{replay_payload.match_id}/clips")
+    blocked_clip_id = initial_response.json()["clips"][0]["clip_id"]
+
+    with session_factory() as session:
+        session.add(
+            ClipModerationEvent(
+                clip_id=blocked_clip_id,
+                action="blocked",
+                status="blocked",
+                reason="test",
+                metadata_json={},
+            )
+        )
+        session.commit()
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/viral/matches/{replay_payload.match_id}/clips")
+
+    assert response.status_code == 200
+    blocked_ids = {item["clip_id"] for item in response.json()["clips"]}
+    assert blocked_clip_id not in blocked_ids
+
+
 def test_viral_variant_router_returns_variants_and_winner() -> None:
     app, session_factory, _current_user = _build_app()
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=58, match_id="viral-variants"))
@@ -204,7 +253,7 @@ def test_viral_variant_router_returns_variants_and_winner() -> None:
 
 
 def test_viral_accounts_router_returns_persona_network() -> None:
-    app, _session_factory, _current_user = _build_app()
+    app, _session_factory, current_user = _build_app()
 
     with TestClient(app) as client:
         response = client.get("/api/viral/accounts")
@@ -230,20 +279,27 @@ def test_trending_router_returns_ranked_clips() -> None:
     assert body["refreshed"] is True
     assert body["clips"]
     assert body["clips"][0]["trending_score"] >= body["clips"][-1]["trending_score"]
-    assert body["clips"][0]["trending_metrics"]["views_last_60min"] >= body["clips"][0]["trending_metrics"]["views_last_10min"]
+    assert (
+        body["clips"][0]["trending_metrics"]["views_last_60min"]
+        >= body["clips"][0]["trending_metrics"]["views_last_10min"]
+    )
     assert "velocity" in body["clips"][0]["trending_metrics"]
 
 
 def test_personalized_feed_rejects_missing_identity_context() -> None:
     app, session_factory, current_user = _build_app()
-    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=64, match_id="viral-missing-identity"))
+    replay_payload = MatchSimulationService().build_replay_payload(
+        build_request(seed=64, match_id="viral-missing-identity")
+    )
     _insert_match(session_factory, replay_payload)
     del app.dependency_overrides[require_identity]
 
     with TestClient(app) as client:
         response = client.get(
             "/feed/for-you",
-            headers={"Authorization": f"Bearer {create_access_token(current_user.id, claims={'sid': 'session-missing'})}"},
+            headers={
+                "Authorization": f"Bearer {create_access_token(current_user.id, claims={'sid': 'session-missing'})}"
+            },
         )
 
     assert response.status_code == 401
@@ -285,7 +341,9 @@ def test_clip_events_reject_mismatched_identity_context() -> None:
 
 def test_personalized_feed_router_ranks_and_caches_per_user_feed() -> None:
     app, session_factory, current_user = _build_app()
-    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=66, match_id="viral-personalized"))
+    replay_payload = MatchSimulationService().build_replay_payload(
+        build_request(seed=66, match_id="viral-personalized")
+    )
     _insert_match(session_factory, replay_payload)
 
     with session_factory() as session:
@@ -343,10 +401,11 @@ def test_personalized_feed_router_ranks_and_caches_per_user_feed() -> None:
     assert "diversity_penalty" in first_body["items"][0]["score_breakdown"]
     assert first_body["items"][0]["score_breakdown"]["orchestrator_weight"] >= 0.0
     assert first_body["items"][0]["score_breakdown"]["session_boost"] >= 1.0
-    assert first_body["items"][0]["orchestrator"]["allocated_impressions"] >= first_body["items"][0]["orchestrator"]["consumed_impressions"]
-    assert {
-        item["feed_source"] for item in first_body["items"]
-    } <= {
+    assert (
+        first_body["items"][0]["orchestrator"]["allocated_impressions"]
+        >= first_body["items"][0]["orchestrator"]["consumed_impressions"]
+    )
+    assert {item["feed_source"] for item in first_body["items"]} <= {
         PERSONALIZED_FEED_SOURCE_FOR_YOU,
         PERSONALIZED_FEED_SOURCE_FOLLOWING,
     }
@@ -459,14 +518,20 @@ def test_following_feed_router_returns_a_feed_contract() -> None:
 
 def test_trending_router_filters_capped_clip_on_second_delivery() -> None:
     app, session_factory, _current_user = _build_app()
-    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=72, match_id="viral-trending-cap"))
+    replay_payload = MatchSimulationService().build_replay_payload(
+        build_request(seed=72, match_id="viral-trending-cap")
+    )
     _insert_match(session_factory, replay_payload)
 
     with session_factory() as session:
-        clip = ViralFeedService(session).build_match_feed(
-            replay_payload.match_id,
-            allocate_impressions=False,
-        ).clips[0]
+        clip = (
+            ViralFeedService(session)
+            .build_match_feed(
+                replay_payload.match_id,
+                allocate_impressions=False,
+            )
+            .clips[0]
+        )
         manager = build_clip_distribution_manager()
         seeded = manager.refresh_distribution(
             clip_id=clip.clip_id,
@@ -492,7 +557,9 @@ def test_trending_router_filters_capped_clip_on_second_delivery() -> None:
 
 def test_personalized_feed_router_filters_capped_cached_clip_on_delivery() -> None:
     app, session_factory, current_user = _build_app()
-    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=74, match_id="viral-personalized-cap"))
+    replay_payload = MatchSimulationService().build_replay_payload(
+        build_request(seed=74, match_id="viral-personalized-cap")
+    )
     _insert_match(session_factory, replay_payload)
 
     with session_factory() as session:
@@ -553,13 +620,13 @@ def test_clip_event_ingestion_accepts_single_event_payload() -> None:
             self.received.append(events)
             return len(events)
 
-    app, _session_factory, _current_user = _build_app()
+    app, _session_factory, current_user = _build_app()
     producer = _FakeProducer()
     app.state.clip_event_ingestion_service = producer
     payload = {
         "event_id": "a243d5ca-5363-49cb-96f1-562c708db907",
         "clip_id": "clip-123",
-        "user_id": "user-1",
+        "user_id": current_user.id,
         "session_id": "session-1",
         "timestamp": "2026-03-28T12:00:00Z",
         "event_type": "view",
@@ -695,8 +762,9 @@ def test_clip_like_event_credits_creator_wallet_automatically() -> None:
         assert str(wallet.total_earnings_credit) == "0.0100"
         assert len(logs) == 1
         assert logs[0].clip_id == "clip-wallet-router-1"
-        assert logs[0].reference_key == "clip-event:4f70dbb1-5379-4279-a9af-084340d0d871"
+        assert logs[0].reference_key == f"creator-attention:like:clip-wallet-router-1:{current_user.id}"
         assert logs[0].metadata_json["creator_id"] == creator.id
+
 
 def test_clip_event_ingestion_accepts_batched_events() -> None:
     class _FakeProducer:
@@ -840,8 +908,9 @@ def test_clip_event_ingestion_rejects_invalid_event_type() -> None:
 
 
 def test_session_state_router_tracks_events_and_refresh_window() -> None:
-    app, session_factory, _current_user = _build_app()
+    app, session_factory, current_user = _build_app()
     app.state.clip_event_ingestion_service = _ReusableFakeProducer()
+    _set_test_identity(app, current_user=current_user, session_id="session-refresh")
     match_ids: list[str] = []
     for seed in (58, 62, 64):
         replay_payload = MatchSimulationService().build_replay_payload(
@@ -896,7 +965,8 @@ def test_session_state_router_tracks_events_and_refresh_window() -> None:
         session_state_body = session_state_response.json()
         assert session_state_body["clips_seen"] == refresh_after
         assert session_state_body["watch_time_ms"] == refresh_after * 1200
-        assert session_state_body["pending_refresh"] is True
+        assert session_state_body["pending_refresh"] is False
+        assert session_state_body["refresh_in_flight"] is True
         assert session_state_body["clips_until_refresh"] == 0
 
         refreshed_response = client.get(
@@ -916,8 +986,9 @@ def test_session_state_router_tracks_events_and_refresh_window() -> None:
 
 
 def test_session_aware_feed_router_applies_session_affinity() -> None:
-    app, session_factory, _current_user = _build_app()
+    app, session_factory, current_user = _build_app()
     app.state.clip_event_ingestion_service = _ReusableFakeProducer()
+    _set_test_identity(app, current_user=current_user, session_id="session-affinity")
     replay_payload = MatchSimulationService().build_replay_payload(
         build_request(seed=58, match_id="viral-session-affinity")
     )
@@ -1000,6 +1071,7 @@ def test_session_aware_feed_router_applies_session_affinity() -> None:
 def test_trust_routes_return_weighted_profile_state() -> None:
     app, _session_factory, current_user = _build_app()
     app.state.clip_event_ingestion_service = _ReusableFakeProducer()
+    _set_test_identity(app, current_user=current_user, session_id="session-trust")
     payload = {
         "events": [
             {

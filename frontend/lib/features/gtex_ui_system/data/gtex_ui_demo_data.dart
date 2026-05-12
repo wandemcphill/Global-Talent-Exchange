@@ -159,6 +159,7 @@ class GtexPlayerCardData {
     required this.storyMoments,
     required this.careerMoments,
     required this.offers,
+    this.globalScoutingIndex,
     this.liquidityLabel = 'High 🔥',
   });
 
@@ -178,9 +179,22 @@ class GtexPlayerCardData {
   final List<String> storyMoments;
   final List<String> careerMoments;
   final List<GtexOfferData> offers;
+  final int? globalScoutingIndex;
   final String liquidityLabel;
 
   double get rentalCost => price * 0.10;
+
+  int get gsi => (globalScoutingIndex ?? rating).clamp(0, 100).toInt();
+
+  String get gsiLabel => 'GSI $gsi';
+
+  String get gsiTierLabel {
+    if (gsi >= 90) return 'Elite GSI';
+    if (gsi >= 82) return 'High-grade GSI';
+    if (gsi >= 74) return 'First-team GSI';
+    if (gsi >= 66) return 'Developing GSI';
+    return 'Prospect GSI';
+  }
 }
 
 @immutable
@@ -625,16 +639,22 @@ class GtexUiUniverseFactory {
     GteMarketPlayerListItem item,
     int index,
   ) {
-    final int rating = (item.averageRating ?? 74).round().clamp(68, 94);
+    final int gsi =
+        (item.globalScoutingIndex ?? item.trendScore ?? 74)
+            .round()
+            .clamp(50, 99)
+            .toInt();
+    final int rating = gsi;
+    final int age = item.age ?? 18;
     final int potential = math.min(
       99,
-      rating + 5 + (index % 6) + (item.age < 22 ? 4 : 0),
+      rating + 5 + (index % 6) + (age < 22 ? 4 : 0),
     );
     final double price = item.currentValueCredits ?? (1.6 + index) * 1000000;
     final List<String> badges = <String>[
       if (potential >= 90) '🌟',
       if ((item.movementPct ?? 0) > 3) '🔥',
-      if (item.age <= 21) '🧬',
+      if (age <= 21) '🧬',
     ];
     final Map<String, int> attributes = <String, int>{
       'Pace': _scaledStat(rating, 6 + index),
@@ -666,7 +686,7 @@ class GtexUiUniverseFactory {
       position: position,
       country: country,
       clubName: clubName,
-      age: item.age,
+      age: age,
       rating: rating,
       potential: potential,
       price: price,
@@ -681,7 +701,7 @@ class GtexUiUniverseFactory {
       ],
       careerMoments: <String>[
         'Academy rise at $clubName.',
-        'Senior debut at age ${math.max(16, item.age - 2)}.',
+        'Senior debut at age ${math.max(16, age - 2)}.',
         'Current market value surged after three elite scouting reports.',
       ],
       offers: <GtexOfferData>[
@@ -696,6 +716,7 @@ class GtexUiUniverseFactory {
           status: 'Negotiating',
         ),
       ],
+      globalScoutingIndex: gsi,
       liquidityLabel: _liquidityLabel(item, index),
     );
   }

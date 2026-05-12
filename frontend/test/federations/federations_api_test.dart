@@ -53,6 +53,31 @@ void main() {
         GteTransportResponse(
           statusCode: 200,
           body: const <String, Object?>{
+            'country_code': 'NG',
+            'country_name': 'Nigeria',
+            'federation_count': 1,
+            'active_league_count': 3,
+            'member_club_count': 12,
+            'sanction_count': 0,
+            'ranking_score': 84,
+            'top_federations': <Object?>[],
+            'national_team_oversight': <String, Object?>{},
+          },
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: const <String, Object?>{
+            'country_code': 'NG',
+            'country_name': 'Nigeria',
+            'allowed': true,
+            'applied_rules': <Object?>[],
+            'violations': <Object?>[],
+            'federation_ids': <Object?>['west-africa'],
+          },
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: const <String, Object?>{
             'leagues': <Object?>[],
             'rules': <String, Object?>{},
             'members': <Object?>[],
@@ -73,9 +98,7 @@ void main() {
           body: const <String, Object?>{
             'status': 'active',
             'role': 'member_club',
-            'metadata_json': <String, Object?>{
-              'entry_violations': <Object?>[],
-            },
+            'metadata_json': <String, Object?>{'entry_violations': <Object?>[]},
           },
         ),
         GteTransportResponse(
@@ -111,6 +134,8 @@ void main() {
     await api.listFederations();
     await api.listRankings();
     await api.listRegionalTournaments();
+    await api.fetchNationalAssociation('ng');
+    await api.reviewNationalEligibility(countryCode: 'ng', playerId: 'p1');
     await api.fetchDashboard('west-africa');
     await api.fetchGovernance('west-africa');
     await api.fetchNarratives('west-africa');
@@ -131,6 +156,8 @@ void main() {
         '/api/v2/federations',
         '/api/v2/federations/rankings',
         '/api/v2/federations/regional-tournaments',
+        '/api/v2/federations/national-associations/NG',
+        '/api/v2/federations/national-associations/NG/eligibility-review',
         '/api/v2/federations/west-africa',
         '/api/v2/federations/west-africa/governance',
         '/api/v2/federations/west-africa/narratives',

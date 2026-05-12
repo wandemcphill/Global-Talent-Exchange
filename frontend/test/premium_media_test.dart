@@ -6,7 +6,6 @@ import 'package:gte_frontend/app/gte_frontend_app.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
-import 'package:gte_frontend/features/shared/presentation/gte_no_club_onboarding_view.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/widgets/ambient_audio_toggle_button.dart';
@@ -66,7 +65,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('cup-lift-hero')), findsNothing);
-    expect(find.byType(GteNoClubOnboardingView), findsOneWidget);
+    expect(find.text('Build your club command center'), findsOneWidget);
+    expect(find.text('Transfer Hub'), findsWidgets);
   });
 
   testWidgets('premium media assets are present in AssetManifest', (

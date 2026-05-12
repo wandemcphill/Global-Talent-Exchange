@@ -6,11 +6,12 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
     IdentityContext,
+    get_current_admin,
     get_current_user,
     require_identity,
 )
@@ -20,6 +21,7 @@ from app.core.event_backbone import defer_session_callback_until_commit
 from app.db import get_session
 from app.infinite_league.service import InfiniteLeagueRuntime, ensure_infinite_league_runtime
 from app.models.analytics_event import AnalyticsEvent
+from app.models.viral_moderation import ClipModerationEvent
 from app.models.user import User
 from app.models.user import UserRole
 from app.services.creator_attention_earnings_service import build_creator_attention_earnings_service
@@ -45,11 +47,14 @@ from app.viral.ingestion_schemas import (
 from app.viral.personalized_feed_service import build_personalized_feed_service
 from app.viral.ranking_service import build_viral_ranking_service
 from app.viral.schemas import (
+    ClipModerationEventView,
+    ClipReportRequest,
     PersonalizedFeedRefreshResponse,
     PersonalizedFeedResponse,
     ViralAccountCatalogItemView,
     ViralAccountCatalogResponse,
     ViralCascadesResponse,
+    ViralClipView,
     ViralClipVariantsResponse,
     ViralClipWinnerResponse,
     ViralFeedResponse,
@@ -213,7 +218,8 @@ def _resolve_feed(
                 )
             )
         if responses:
-            return InfiniteLeagueRuntime.merge_viral_feeds(responses, limit=max(limit, 1)), resolved_event_types
+            merged = InfiniteLeagueRuntime.merge_viral_feeds(responses, limit=max(limit, 1))
+            return _filter_blocked_feed(session=db_session, response=merged), resolved_event_types
     response = _build_feed_service(request=request, db_session=db_session).build_feed(
         limit=max(limit, 1),
         match_ids=resolved_match_ids,
@@ -221,18 +227,86 @@ def _resolve_feed(
         favorite_event_types=resolved_event_types,
     )
     if response.clips:
-        return response, resolved_event_types
-    return (
-        runtime.build_viral_feed(
-            limit=max(limit, 1),
-            favorite_team=favorite_team,
-            favorite_event_types=resolved_event_types,
-        ),
-        resolved_event_types,
+        return _filter_blocked_feed(session=db_session, response=response), resolved_event_types
+    generated = runtime.build_viral_feed(
+        limit=max(limit, 1),
+        favorite_team=favorite_team,
+        favorite_event_types=resolved_event_types,
+    )
+    return _filter_blocked_feed(session=db_session, response=generated), resolved_event_types
+
+
+def _filter_blocked_feed(*, session: Session, response: ViralFeedResponse) -> ViralFeedResponse:
+    clip_ids = [clip.clip_id for clip in response.clips]
+    if not clip_ids:
+        return response
+    if not _has_table(session, ClipModerationEvent.__tablename__):
+        return response
+    blocked_ids = set(
+        session.scalars(
+            select(ClipModerationEvent.clip_id).where(
+                ClipModerationEvent.clip_id.in_(clip_ids),
+                ClipModerationEvent.status == "blocked",
+            )
+        ).all()
+    )
+    if not blocked_ids:
+        return response
+    return response.model_copy(update={"clips": [clip for clip in response.clips if clip.clip_id not in blocked_ids]})
+
+
+def _find_clip(
+    *,
+    clip_id: str,
+    request: Request,
+    session: Session,
+) -> ViralClipView | None:
+    match_key = clip_id.split("::", 1)[0] if "::" in clip_id else None
+    if match_key:
+        try:
+            feed = _build_feed_service(request=request, db_session=session).build_match_feed(match_key)
+        except ViralFeedError:
+            generated = ensure_infinite_league_runtime(request.app).build_match_viral_feed(match_key)
+            feed = generated if generated is not None else None
+        if feed is not None:
+            for clip in feed.clips:
+                if clip.clip_id == clip_id:
+                    return clip
+    feed, _ = _resolve_feed(
+        request=request,
+        db_session=session,
+        limit=100,
+        match_ids=match_key,
+        favorite_team=None,
+        favorite_event_types=None,
+    )
+    for clip in feed.clips:
+        if clip.clip_id == clip_id:
+            return clip
+    return None
+
+
+def _moderation_event_view(event: ClipModerationEvent) -> ClipModerationEventView:
+    return ClipModerationEventView(
+        id=event.id,
+        clip_id=event.clip_id,
+        reporter_user_id=event.reporter_user_id,
+        action=event.action,
+        status=event.status,
+        reason=event.reason,
+        resolved_by_user_id=event.resolved_by_user_id,
+        metadata_json=dict(event.metadata_json or {}),
+        created_at=event.created_at,
+        updated_at=event.updated_at,
     )
 
 
-@router.post("/events/clip", response_model=ClipEventIngestionAccepted, status_code=status.HTTP_202_ACCEPTED, tags=["viral-ingestion"])
+@router.post(
+    "/events/clip",
+    response_model=ClipEventIngestionAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["viral-ingestion"],
+)
 async def ingest_clip_events(
     request: Request,
     producer: ClipEventKafkaProducer = Depends(ensure_clip_event_ingestion_service),
@@ -248,16 +322,17 @@ async def ingest_clip_events(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     normalized_events = []
     for event in events:
-        if event.user_id != identity.user_id or event.session_id != identity.session_id:
+        if (event.user_id is not None and event.user_id != identity.user_id) or event.session_id != identity.session_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Event identity does not match authenticated identity.",
             )
+        authenticated_event = event.model_copy(update={"user_id": identity.user_id})
         normalized_events.append(
-            event.model_copy(
+            authenticated_event.model_copy(
                 update={
                     "user_id": _resolve_clip_event_user_id(
-                        event=event,
+                        event=authenticated_event,
                         session=session,
                     ),
                     "session_id": identity.session_id,
@@ -323,8 +398,8 @@ async def ingest_clip_events(
         )
         defer_session_callback_until_commit(
             session,
-            callback=lambda tracker=session_tracker, resolved_session_id=identity.session_id: tracker.mark_refresh_requested(
-                session_id=resolved_session_id
+            callback=lambda tracker=session_tracker, resolved_session_id=identity.session_id: (
+                tracker.mark_refresh_requested(session_id=resolved_session_id)
             ),
         )
     session.commit()
@@ -354,7 +429,17 @@ def read_viral_accounts() -> ViralAccountCatalogResponse:
     )
 
 
-@api_router.get("/feed", response_model=ViralFeedResponse)
+@router.get(
+    "/api/viral-feed",
+    response_model=ViralFeedResponse,
+    tags=["viral"],
+    operation_id="read_viral_feed_legacy",
+)
+@api_router.get(
+    "/feed",
+    response_model=ViralFeedResponse,
+    operation_id="read_viral_feed_api",
+)
 def read_viral_feed(
     request: Request,
     limit: int = 12,
@@ -372,6 +457,94 @@ def read_viral_feed(
         favorite_event_types=favorite_event_types,
     )
     return response
+
+
+@router.get("/api/clips/{clip_id}", response_model=ViralClipView, tags=["viral"])
+def read_clip_detail(
+    clip_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> ViralClipView:
+    clip = _find_clip(clip_id=clip_id, request=request, session=session)
+    if clip is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Clip was not found.")
+    return clip
+
+
+@router.post("/api/clips/{clip_id}/report", response_model=ClipModerationEventView, tags=["viral"])
+def report_clip(
+    clip_id: str,
+    payload: ClipReportRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ClipModerationEventView:
+    event = ClipModerationEvent(
+        clip_id=clip_id,
+        reporter_user_id=current_user.id,
+        action="reported",
+        status="pending",
+        reason=payload.reason,
+        metadata_json=dict(payload.metadata or {}),
+    )
+    session.add(event)
+    session.commit()
+    session.refresh(event)
+    return _moderation_event_view(event)
+
+
+@router.get("/api/admin/clips/moderation", response_model=list[ClipModerationEventView], tags=["admin-viral"])
+def list_clip_moderation_events(
+    status_filter: str = "pending",
+    _admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> list[ClipModerationEventView]:
+    stmt = select(ClipModerationEvent)
+    if status_filter.strip().lower() != "all":
+        stmt = stmt.where(ClipModerationEvent.status == status_filter.strip().lower())
+    stmt = stmt.order_by(ClipModerationEvent.created_at.desc()).limit(200)
+    return [_moderation_event_view(event) for event in session.scalars(stmt).all()]
+
+
+@router.post("/api/admin/clips/{clip_id}/approve", response_model=ClipModerationEventView, tags=["admin-viral"])
+def approve_clip(
+    clip_id: str,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> ClipModerationEventView:
+    event = ClipModerationEvent(
+        clip_id=clip_id,
+        reporter_user_id=None,
+        action="approved",
+        status="approved",
+        reason="Admin approved clip for distribution.",
+        resolved_by_user_id=admin.id,
+        metadata_json={},
+    )
+    session.add(event)
+    session.commit()
+    session.refresh(event)
+    return _moderation_event_view(event)
+
+
+@router.post("/api/admin/clips/{clip_id}/block", response_model=ClipModerationEventView, tags=["admin-viral"])
+def block_clip(
+    clip_id: str,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> ClipModerationEventView:
+    event = ClipModerationEvent(
+        clip_id=clip_id,
+        reporter_user_id=None,
+        action="blocked",
+        status="blocked",
+        reason="Admin blocked clip from distribution.",
+        resolved_by_user_id=admin.id,
+        metadata_json={"distribution_blocked": True},
+    )
+    session.add(event)
+    session.commit()
+    session.refresh(event)
+    return _moderation_event_view(event)
 
 
 @feed_router.get("/for-you", response_model=PersonalizedFeedResponse)
@@ -490,7 +663,9 @@ def read_user_trust_profile(
     session: Session = Depends(get_session),
 ) -> TrustProfileView:
     if current_user.id != user_id and current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot inspect another user's trust profile.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="You cannot inspect another user's trust profile."
+        )
     user = session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
@@ -511,11 +686,12 @@ def read_match_viral_clips(
 ) -> ViralFeedResponse:
     resolved_event_types = [item.strip() for item in (favorite_event_types or "").split(",") if item.strip()]
     try:
-        return _build_feed_service(request=request, db_session=session).build_match_feed(
+        feed = _build_feed_service(request=request, db_session=session).build_match_feed(
             match_key,
             favorite_team=favorite_team,
             favorite_event_types=resolved_event_types,
         )
+        return _filter_blocked_feed(session=session, response=feed)
     except ViralFeedError as exc:
         generated = ensure_infinite_league_runtime(request.app).build_match_viral_feed(
             match_key,
@@ -523,7 +699,7 @@ def read_match_viral_clips(
             favorite_event_types=resolved_event_types,
         )
         if generated is not None:
-            return generated
+            return _filter_blocked_feed(session=session, response=generated)
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 

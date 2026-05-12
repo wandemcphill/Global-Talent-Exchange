@@ -199,13 +199,34 @@ class MarketPlayerListItemView(BaseModel):
     player_name: str
     position: str | None
     nationality: str | None
+    nationality_code: str | None
+    current_club_id: str | None
     current_club_name: str | None
+    current_competition_id: str | None
+    current_competition_name: str | None
+    current_division_id: str | None
+    current_division_name: str | None
     age: int | None
     current_value_credits: float | None
     movement_pct: float | None
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    global_scouting_index: float | None = None
+    previous_global_scouting_index: float | None = None
+    global_scouting_index_movement_pct: float | None = None
+    transfer_listing_id: str | None = None
+    transfer_listing_status: str | None = None
+    selling_club_id: str | None = None
+    availability_label: str = "Available now"
+    asking_type: str = "transfer"
+    salary_amount: float | None = None
+    contract_years_remaining: float | None = None
+    buy_clause_amount: float | None = None
+    loan_terms: dict[str, Any] = Field(default_factory=dict)
+    swap_terms: dict[str, Any] = Field(default_factory=dict)
+    availability: dict[str, Any] = Field(default_factory=dict)
+    is_tradable: bool
     image_url: str | None
     avatar: PlayerAvatarView
 
@@ -216,7 +237,32 @@ class MarketPlayerListView(BaseModel):
     items: list[MarketPlayerListItemView]
     limit: int
     offset: int
+    has_more: bool
+    next_cursor: str | None
     total: int
+
+
+class MarketBrowseOptionView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    label: str
+    count: int
+    subtitle: str | None = None
+    parent_id: str | None = None
+    country_id: str | None = None
+    league_id: str | None = None
+    division_id: str | None = None
+
+
+class MarketBrowseCatalogView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    total: int
+    countries: list[MarketBrowseOptionView]
+    leagues: list[MarketBrowseOptionView]
+    divisions: list[MarketBrowseOptionView]
+    clubs: list[MarketBrowseOptionView]
 
 
 class MarketPlayerIdentityView(BaseModel):

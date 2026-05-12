@@ -223,6 +223,34 @@ class FederationsApi {
         .toList(growable: false);
   }
 
+  Future<JsonMap> fetchNationalAssociation(String countryCode) {
+    return client.getMap(
+      '/api/federations/national-associations/${countryCode.trim().toUpperCase()}',
+      auth: false,
+    );
+  }
+
+  Future<JsonMap> reviewNationalEligibility({
+    required String countryCode,
+    String? playerId,
+    String? clubId,
+    String? competitionId,
+  }) {
+    return client
+        .post(
+          '/api/federations/national-associations/${countryCode.trim().toUpperCase()}/eligibility-review',
+          body: <String, Object?>{
+            if (playerId != null) 'player_id': playerId,
+            if (clubId != null) 'club_id': clubId,
+            if (competitionId != null) 'competition_id': competitionId,
+            'metadata_json': const <String, Object?>{
+              'source': 'federations_hub',
+            },
+          },
+        )
+        .then((Object? value) => jsonMap(value, label: 'eligibility review'));
+  }
+
   Future<JsonMap> fetchDashboard(String federationId) {
     return client.getMap('/api/federations/$federationId', auth: false);
   }
@@ -318,20 +346,24 @@ final Provider<FederationsApi> federationsApiProvider =
       (GteAuthedApi client) => FederationsApi(client: client),
     );
 
+Future<FederationHubData> loadFederationHubData(FederationsApi api) async {
+  final Future<List<FederationRecord>> federationsFuture =
+      api.listFederations();
+  final Future<List<FederationRankingRecord>> rankingsFuture =
+      api.listRankings();
+  final Future<List<RegionalTournamentRecord>> regionalFuture =
+      api.listRegionalTournaments();
+  return FederationHubData(
+    federations: await federationsFuture,
+    rankings: await rankingsFuture,
+    regionalTournaments: await regionalFuture,
+  );
+}
+
 final FutureProvider<FederationHubData> federationsHubProvider =
     FutureProvider<FederationHubData>((Ref ref) async {
       final FederationsApi api = ref.watch(federationsApiProvider);
-      final Future<List<FederationRecord>> federationsFuture =
-          api.listFederations();
-      final Future<List<FederationRankingRecord>> rankingsFuture =
-          api.listRankings();
-      final Future<List<RegionalTournamentRecord>> regionalFuture =
-          api.listRegionalTournaments();
-      return FederationHubData(
-        federations: await federationsFuture,
-        rankings: await rankingsFuture,
-        regionalTournaments: await regionalFuture,
-      );
+      return loadFederationHubData(api);
     });
 
 final dynamic federationDetailProvider = FutureProvider.autoDispose.family<

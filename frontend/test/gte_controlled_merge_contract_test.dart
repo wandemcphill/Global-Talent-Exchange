@@ -42,6 +42,9 @@ void main() {
         final String shellSource = _readSource(
           'lib/features/navigation/presentation/gte_navigation_shell_screen.dart',
         );
+        final String routeAdapterSource = _readSource(
+          'lib/ui_gtex/routes/gtex_current_route_adapter.dart',
+        );
 
         final int home = _indexOfOrThrow(
           shellSource,
@@ -72,7 +75,7 @@ void main() {
         expect(shellSource, contains('_buildCapitalAction()'));
         expect(shellSource, contains("tooltip: 'Club funds'"));
         expect(shellSource, contains('GteThemePickerSheet'));
-        expect(shellSource, contains('destination.label,'));
+        expect(routeAdapterSource, contains('label: destination.label,'));
       },
     );
 

@@ -627,8 +627,8 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
                     value: order.generatedPlayer!.position,
                   ),
                   GteMetricChip(
-                    label: 'Current',
-                    value: order.generatedPlayer!.currentRating.toString(),
+                    label: 'GSI',
+                    value: order.generatedPlayer!.resolvedGsi.toString(),
                   ),
                   GteMetricChip(
                     label: 'Potential',

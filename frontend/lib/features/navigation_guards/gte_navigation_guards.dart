@@ -5,6 +5,7 @@ import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
 import 'package:gte_frontend/features/shared/data/gte_feature_support.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_api_repository.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_repository.dart';
@@ -21,6 +22,7 @@ enum GteNavigationFallbackReason {
   emptyTrophyCabinet,
   noDynastyYet,
   missingIdentitySetup,
+  featureFlagBlocked,
 }
 
 class GteGuardResolution {
@@ -28,13 +30,33 @@ class GteGuardResolution {
     required this.route,
     this.fallbackReason,
     this.message,
+    this.featureGateDecision,
   });
 
   final GteAppRouteData route;
   final GteNavigationFallbackReason? fallbackReason;
   final String? message;
+  final GtexFeatureGateDecision? featureGateDecision;
 
-  bool get redirected => fallbackReason != null;
+  bool get redirected =>
+      fallbackReason != null &&
+      fallbackReason != GteNavigationFallbackReason.featureFlagBlocked;
+
+  bool get blockedByFeatureGate => featureGateDecision?.blocked ?? false;
+
+  GteGuardResolution copyWith({
+    GteAppRouteData? route,
+    GteNavigationFallbackReason? fallbackReason,
+    String? message,
+    GtexFeatureGateDecision? featureGateDecision,
+  }) {
+    return GteGuardResolution(
+      route: route ?? this.route,
+      fallbackReason: fallbackReason ?? this.fallbackReason,
+      message: message ?? this.message,
+      featureGateDecision: featureGateDecision ?? this.featureGateDecision,
+    );
+  }
 }
 
 class GteNavigationDependencies {
@@ -237,10 +259,34 @@ class GteNavigationGuardResolver {
   final GteNavigationDependencies dependencies;
 
   Future<GteGuardResolution> resolve(GteAppRouteData route) async {
+    final GteGuardResolution baseResolution;
     if (route is CompetitionWorldSuperCupRouteData) {
-      return _resolveWorldSuperCup(route);
+      baseResolution = await _resolveWorldSuperCup(route);
+    } else {
+      baseResolution = GteGuardResolution(route: route);
     }
-    return GteGuardResolution(route: route);
+    return _applyFeatureGate(baseResolution);
+  }
+
+  Future<GteGuardResolution> _applyFeatureGate(
+    GteGuardResolution resolution,
+  ) async {
+    final GtexFeatureGateDecision decision =
+        await GtexLaunchControlFeatureGate.resolveRouteData(
+          route: resolution.route,
+          baseUrl: dependencies.apiBaseUrl,
+          backendMode: dependencies.backendMode,
+          accessToken: dependencies.accessToken,
+          isAdmin: dependencies.isAdminRole,
+        );
+    if (decision.allowed) {
+      return resolution;
+    }
+    return resolution.copyWith(
+      fallbackReason: GteNavigationFallbackReason.featureFlagBlocked,
+      message: decision.message,
+      featureGateDecision: decision,
+    );
   }
 
   Future<GteGuardResolution> _resolveWorldSuperCup(

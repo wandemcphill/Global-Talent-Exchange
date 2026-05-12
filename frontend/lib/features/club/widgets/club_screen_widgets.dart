@@ -699,8 +699,8 @@ class _ReserveTile extends StatelessWidget {
           ),
           const SizedBox(width: spacingSM),
           MetricPill(
-            label: 'OVR',
-            value: '${player.rating}',
+            label: 'GSI',
+            value: '${player.resolvedGsi}',
             highlight: player.isHot,
           ),
         ],

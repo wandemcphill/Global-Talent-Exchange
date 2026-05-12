@@ -14,6 +14,7 @@ class FootballPlayerCard extends StatelessWidget {
     this.clubName,
     this.nationalityCode,
     this.rating,
+    this.ratingLabel = 'OVR',
     this.valueLabel,
     this.wageLabel,
     this.ageLabel,
@@ -30,6 +31,7 @@ class FootballPlayerCard extends StatelessWidget {
   final String? clubName;
   final String? nationalityCode;
   final int? rating;
+  final String ratingLabel;
   final String? valueLabel;
   final String? wageLabel;
   final String? ageLabel;
@@ -85,7 +87,7 @@ class FootballPlayerCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         if (rating != null) ...<Widget>[
-                          _RatingBox(rating: rating!),
+                          _RatingBox(rating: rating!, label: ratingLabel),
                           const SizedBox(width: 10),
                         ],
                         Expanded(
@@ -145,9 +147,10 @@ class FootballPlayerCard extends StatelessWidget {
 }
 
 class _RatingBox extends StatelessWidget {
-  const _RatingBox({required this.rating});
+  const _RatingBox({required this.rating, required this.label});
 
   final int rating;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +172,7 @@ class _RatingBox extends StatelessWidget {
             ),
           ),
           Text(
-            'OVR',
+            label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: colorScheme.onPrimary.withValues(alpha: 0.78),
             ),

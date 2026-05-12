@@ -37,6 +37,7 @@ class GteExchangeController extends ChangeNotifier {
 
   bool isBootstrapping = false;
   bool isLoadingMarket = false;
+  bool isLoadingMarketCatalog = false;
   bool isLoadingMoreMarket = false;
   bool isLoadingPlayer = false;
   bool isSigningIn = false;
@@ -52,6 +53,7 @@ class GteExchangeController extends ChangeNotifier {
   String selectedCandleInterval = '1h';
 
   String? marketError;
+  String? marketCatalogError;
   String? playerError;
   String? playerProfileError;
   String? authError;
@@ -63,6 +65,7 @@ class GteExchangeController extends ChangeNotifier {
 
   GteAuthSession? session;
   GteMarketPlayerListView? marketPage;
+  GteMarketBrowseCatalog? marketBrowseCatalog;
   GtePlayerMarketSnapshot? selectedPlayer;
   PlayerProfile? selectedProfile;
   GteWalletSummary? walletSummary;
@@ -88,9 +91,18 @@ class GteExchangeController extends ChangeNotifier {
   List<GteMarketPlayerListItem> get players =>
       marketPage?.items ?? const <GteMarketPlayerListItem>[];
 
+  int get marketLoadedPlayerCount => marketPage?.items.length ?? 0;
+
+  int get marketTotalPlayerCount {
+    final int loaded = marketLoadedPlayerCount;
+    final int total = marketPage?.total ?? 0;
+    return total > loaded ? total : loaded;
+  }
+
   String get marketSearch => marketFilter.search ?? '';
   String get marketClub => marketFilter.club ?? '';
   String get marketLeague => marketFilter.league ?? '';
+  String get marketDivision => marketFilter.division ?? '';
   String get marketNationalTeam => marketFilter.nationalTeam ?? '';
 
   MatchWeights get weights => _weights;
@@ -99,7 +111,10 @@ class GteExchangeController extends ChangeNotifier {
 
   bool get isAuthenticated => session != null;
 
-  bool get isAdmin => session?.user.role == 'admin';
+  bool get isAdmin {
+    final String? role = session?.user.role;
+    return role == 'admin' || role == 'super_admin';
+  }
 
   String? get accessToken => session?.accessToken;
 
@@ -146,19 +161,19 @@ class GteExchangeController extends ChangeNotifier {
         return order;
       }
     }
-    final List<GteOrderRecord> fallback =
-        _ordersById.values.toList(growable: false)
-          ..sort((GteOrderRecord left, GteOrderRecord right) {
-            final DateTime leftStamp =
-                left.updatedAt ??
-                left.createdAt ??
-                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-            final DateTime rightStamp =
-                right.updatedAt ??
-                right.createdAt ??
-                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-            return rightStamp.compareTo(leftStamp);
-          });
+    final List<GteOrderRecord> fallback = _ordersById.values.toList(
+      growable: false,
+    )..sort((GteOrderRecord left, GteOrderRecord right) {
+      final DateTime leftStamp =
+          left.updatedAt ??
+          left.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      final DateTime rightStamp =
+          right.updatedAt ??
+          right.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return rightStamp.compareTo(leftStamp);
+    });
     for (final GteOrderRecord order in fallback) {
       if (order.playerId == playerId) {
         return order;
@@ -173,13 +188,33 @@ class GteExchangeController extends ChangeNotifier {
     }
     isBootstrapping = true;
     notifyListeners();
-    final Future<void> task = loadMarket(reset: true).whenComplete(() {
+    final Future<void> task = Future.wait<void>(<Future<void>>[
+      loadMarketBrowseCatalog(),
+      loadMarket(reset: true),
+    ]).whenComplete(() {
       isBootstrapping = false;
       _bootstrapFuture = null;
       notifyListeners();
     });
     _bootstrapFuture = task;
     return task;
+  }
+
+  Future<void> loadMarketBrowseCatalog() async {
+    if (isLoadingMarketCatalog) {
+      return;
+    }
+    isLoadingMarketCatalog = true;
+    marketCatalogError = null;
+    notifyListeners();
+    try {
+      marketBrowseCatalog = await _api.fetchMarketBrowseCatalog();
+    } catch (error) {
+      marketCatalogError = AppFeedback.messageFor(error);
+    } finally {
+      isLoadingMarketCatalog = false;
+      notifyListeners();
+    }
   }
 
   bool _sessionsEquivalent(GteAuthSession? left, GteAuthSession? right) {
@@ -212,9 +247,11 @@ class GteExchangeController extends ChangeNotifier {
     PlayerFilter? filter,
     bool reset = false,
   }) async {
-    final PlayerFilter nextFilter = ((filter ?? marketFilter).copyWith(
-      search: search ?? (filter == null ? marketFilter.search : filter.search),
-    )).normalized();
+    final PlayerFilter nextFilter =
+        ((filter ?? marketFilter).copyWith(
+          search:
+              search ?? (filter == null ? marketFilter.search : filter.search),
+        )).normalized();
     final bool shouldReset =
         reset || marketPage == null || nextFilter != marketFilter;
     if ((isLoadingMarket || isLoadingMoreMarket) && !shouldReset) {
@@ -248,8 +285,11 @@ class GteExchangeController extends ChangeNotifier {
           nationalTeam: nextFilter.nationalTeam,
           club: nextFilter.club,
           league: nextFilter.league,
+          division: nextFilter.division,
           minAge: nextFilter.minAge,
           maxAge: nextFilter.maxAge,
+          minValue: nextFilter.minValue,
+          maxValue: nextFilter.maxValue,
           availability: nextFilter.availability,
         ),
       );
@@ -305,9 +345,8 @@ class GteExchangeController extends ChangeNotifier {
       hasMore: next.hasMore,
       nextCursor: next.nextCursor,
       offset: 0,
-      total: next.total > uniquePlayers.length
-          ? next.total
-          : uniquePlayers.length,
+      total:
+          next.total > uniquePlayers.length ? next.total : uniquePlayers.length,
     );
   }
 
@@ -503,9 +542,8 @@ class GteExchangeController extends ChangeNotifier {
     }
     final String resolvedClubId = clubId.trim();
     final String resolvedClubName = clubName.trim();
-    final String? resolvedClubSlug = clubSlug == null || clubSlug.trim().isEmpty
-        ? null
-        : clubSlug.trim();
+    final String? resolvedClubSlug =
+        clubSlug == null || clubSlug.trim().isEmpty ? null : clubSlug.trim();
     if (resolvedClubId.isEmpty || resolvedClubName.isEmpty) {
       return;
     }

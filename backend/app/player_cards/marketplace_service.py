@@ -6,7 +6,7 @@ from decimal import Decimal
 import json
 from typing import Any
 
-from sqlalchemy import Integer, Numeric, String, and_, case, cast, func, literal, or_, select, union_all
+from sqlalchemy import Integer, Numeric, String, and_, case, cast, func, inspect, literal, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.core.config import (
@@ -48,6 +48,7 @@ from app.models.real_world_football import PlayerDemandSignal, TrendingPlayerFla
 from app.models.risk_ops import SystemEventSeverity
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
+from app.notifications.service import NotificationEventMatrixService
 from app.player_cards.service import PlayerCardNotFoundError, PlayerCardPermissionError, PlayerCardValidationError
 from app.players.read_models import PlayerSummaryReadModel
 from app.risk_ops_engine.service import RiskOpsService
@@ -357,6 +358,35 @@ class PlayerCardMarketplaceService:
                 status_to=status_to,
                 payload_json=payload or {},
             )
+        )
+
+    def _publish_matrix_notification(
+        self,
+        *,
+        event_key: str,
+        target_user_ids: list[str | None],
+        resource_id: str,
+        message: str,
+        metadata: dict[str, object],
+    ) -> None:
+        if not self._notification_tables_available():
+            return
+        normalized_targets = [user_id for user_id in target_user_ids if user_id]
+        if not normalized_targets:
+            return
+        NotificationEventMatrixService(self.session).publish_event(
+            event_key=event_key,
+            target_user_ids=normalized_targets,
+            resource_id=resource_id,
+            message=message,
+            metadata_json=metadata,
+        )
+
+    def _notification_tables_available(self) -> bool:
+        inspector = inspect(self.session.connection())
+        return all(
+            inspector.has_table(table_name)
+            for table_name in ("notification_records", "notification_preferences", "users")
         )
 
     def _get_card_context(self, player_card_id: str, *, include_image: bool = True) -> dict[str, Any]:
@@ -2534,6 +2564,19 @@ class PlayerCardMarketplaceService:
             status_to="pending",
         )
         self.session.flush()
+        self._publish_matrix_notification(
+            event_key="card_offer_received",
+            target_user_ids=[listing.owner_user_id],
+            resource_id=negotiation.id,
+            message="A card loan offer is waiting for review.",
+            metadata={
+                "listing_id": listing.id,
+                "negotiation_id": negotiation.id,
+                "player_card_id": listing.player_card_id,
+                "borrower_user_id": actor.id,
+                "route": "/player-cards",
+            },
+        )
         return self._loan_negotiation_payload(negotiation)
 
     def counter_loan_negotiation(
@@ -2583,6 +2626,20 @@ class PlayerCardMarketplaceService:
             status_to="pending",
         )
         self.session.flush()
+        self._publish_matrix_notification(
+            event_key="card_offer_received",
+            target_user_ids=[counter.counterparty_user_id],
+            resource_id=counter.id,
+            message="A card loan counteroffer is waiting for review.",
+            metadata={
+                "listing_id": counter.listing_id,
+                "negotiation_id": counter.id,
+                "supersedes_negotiation_id": negotiation.id,
+                "player_card_id": counter.player_card_id,
+                "proposer_user_id": actor.id,
+                "route": "/player-cards",
+            },
+        )
         return self._loan_negotiation_payload(counter)
 
     def accept_loan_negotiation(self, *, actor: User, negotiation_id: str) -> dict[str, Any]:

@@ -171,7 +171,7 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                                     child: GtexListTile(
                                       title: item.displayName,
                                       subtitle:
-                                          '${item.countryName} | ${item.primaryPosition} | ${item.ageBand.toUpperCase()} | Age ${item.age ?? '--'} | OVR ${item.currentRating} | POT ${item.potentialRating} | ${item.rarityTier.toUpperCase()}',
+                                          '${item.countryName} | ${item.primaryPosition} | ${item.ageBand.toUpperCase()} | Age ${item.age ?? '--'} | GSI ${item.resolvedGsi} | POT ${item.potentialRating} | ${item.rarityTier.toUpperCase()}',
                                       leadingIcon:
                                           Icons.workspace_premium_rounded,
                                       tone: GtexSurfaceTone.warning,
@@ -396,7 +396,7 @@ class _NationalTeamCompetitionDetailScreenState
                                         fallback: 'Player',
                                       ),
                                       subtitle:
-                                          '${stringValue(player['country_code'], fallback: 'Country')} | ${stringValue(player['primary_position'], fallback: 'Position')} | OVR ${intValue(player['overall_rating'])} | Loan ${numberValue(player['loan_price_coin']).toStringAsFixed(0)} GTEX Coin',
+                                          '${stringValue(player['country_code'], fallback: 'Country')} | ${stringValue(player['primary_position'], fallback: 'Position')} | GSI ${_rentalPlayerGsi(player)} | Loan ${numberValue(player['loan_price_coin']).toStringAsFixed(0)} GTEX Coin',
                                       leadingIcon:
                                           Icons.person_pin_circle_rounded,
                                       tone: GtexSurfaceTone.warning,
@@ -1186,6 +1186,20 @@ class _EmptyState extends StatelessWidget {
       tone: GtexSurfaceTone.neutral,
     );
   }
+}
+
+int _rentalPlayerGsi(JsonMap player) {
+  final int explicit = intValue(
+    player['global_scouting_index'] ?? player['globalScoutingIndex'],
+    fallback: -1,
+  );
+  if (explicit >= 0) {
+    return explicit;
+  }
+  return intValue(
+    player['gsi'] ?? player['current_gsi'] ?? player['currentGsi'],
+    fallback: intValue(player['overall_rating'] ?? player['overallRating']),
+  );
 }
 
 class _BlockedCard extends StatelessWidget {

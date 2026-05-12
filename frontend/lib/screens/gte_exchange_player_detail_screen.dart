@@ -13,7 +13,7 @@ import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
 import '../widgets/gte_trend_strip.dart';
-import '../widgets/market/player_market_avatar.dart';
+import '../widgets/player_card_avatar.dart';
 import '../widgets/gtex_branding.dart';
 
 class GteExchangePlayerDetailScreen extends StatefulWidget {
@@ -279,8 +279,9 @@ class _GteExchangePlayerDetailScreenState
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              PlayerMarketAvatar(
+              PlayerCardAvatar(
                 avatar: avatar,
+                imageUrl: identity.imageUrl,
                 size: 108,
                 mode: AvatarMode.profile,
               ),

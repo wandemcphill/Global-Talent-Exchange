@@ -49,6 +49,7 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
   final AuthSession? authSession = ref.watch(authProvider);
   final String deviceId = ref.watch(deviceIdProvider);
   final String apiBaseUrl = ref.watch(apiBaseUrlProvider);
+  final authedApi = ref.watch(authedApiProvider);
   final EventService eventService = EventService.standard(
     baseUrl: apiBaseUrl,
     authSessionStore: ref.watch(authSessionStoreProvider),
@@ -171,7 +172,7 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             (BuildContext context, GoRouterState state) =>
                 AppMotion.slidePage<void>(
                   state: state,
-                  child: const FederationsHubScreen(),
+                  child: FederationsHubRouteScreen(client: authedApi),
                 ),
       ),
       GoRoute(
@@ -181,7 +182,10 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
               state.pathParameters['federationId'] ?? '';
           return AppMotion.slidePage<void>(
             state: state,
-            child: FederationDetailScreen(federationId: federationId),
+            child: FederationDetailRouteScreen(
+              client: authedApi,
+              federationId: federationId,
+            ),
           );
         },
       ),

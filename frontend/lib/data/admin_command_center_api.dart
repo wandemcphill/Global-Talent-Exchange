@@ -155,6 +155,21 @@ class AdminCommandCenterApi {
     return AdminWithdrawalControls.fromJson(payload);
   }
 
+  Future<AdminOperationsReadinessSnapshot> fetchOperationsReadiness() async {
+    final Map<String, dynamic> payload = await client.getMap(
+      '/api/admin/operations-readiness',
+    );
+    return AdminOperationsReadinessSnapshot.fromJson(payload);
+  }
+
+  Future<AdminOperationsReadinessDispatch>
+  notifyOperationsReadinessBlockers() async {
+    final Object? payload = await client.post(
+      '/api/admin/operations-readiness/notify-blockers',
+    );
+    return AdminOperationsReadinessDispatch.fromJson(payload);
+  }
+
   Future<AdminWithdrawalControls> updateWithdrawalControls({
     required AdminWithdrawalControls controls,
     required String reason,
@@ -261,6 +276,224 @@ class AdminCommandCenterApi {
       return null;
     }
     return <String, Object?>{'admin_notes': trimmed};
+  }
+}
+
+class AdminOperationsReadinessSnapshot {
+  const AdminOperationsReadinessSnapshot({
+    required this.status,
+    required this.totals,
+    required this.queues,
+    required this.launchGates,
+  });
+
+  final String status;
+  final Map<String, Object?> totals;
+  final List<AdminOperationsQueue> queues;
+  final List<AdminOperationsLaunchGate> launchGates;
+
+  int get alertCount => _intTotal('alerts');
+  int get blockedQueueCount => _intTotal('blocked_queues');
+  int get attentionQueueCount => _intTotal('attention_queues');
+  int get killSwitchCount => _intTotal('kill_switches');
+
+  factory AdminOperationsReadinessSnapshot.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'operations readiness',
+    );
+    final Map<String, Object?> totals = GteJson.map(
+      json['totals'],
+      label: 'operations readiness totals',
+    );
+    return AdminOperationsReadinessSnapshot(
+      status: GteJson.string(json, <String>['status'], fallback: 'ok'),
+      totals: totals,
+      queues: GteJson.typedList(json, <String>[
+        'queues',
+      ], AdminOperationsQueue.fromJson),
+      launchGates: GteJson.typedList(json, <String>[
+        'launch_gates',
+        'launchGates',
+      ], AdminOperationsLaunchGate.fromJson),
+    );
+  }
+
+  int _intTotal(String key) {
+    final Object? value = totals[key];
+    if (value is num) {
+      return value.round();
+    }
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+}
+
+class AdminOperationsReadinessDispatch {
+  const AdminOperationsReadinessDispatch({
+    required this.status,
+    required this.notificationsCreated,
+    required this.queueKeys,
+  });
+
+  final String status;
+  final int notificationsCreated;
+  final List<String> queueKeys;
+
+  bool get sent => status.toLowerCase().trim() == 'sent';
+
+  factory AdminOperationsReadinessDispatch.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'operations readiness dispatch',
+    );
+    return AdminOperationsReadinessDispatch(
+      status: GteJson.string(json, <String>['status'], fallback: 'skipped'),
+      notificationsCreated: GteJson.integer(json, <String>[
+        'notifications_created',
+        'notificationsCreated',
+      ]),
+      queueKeys: GteJson.typedList<String>(json, <String>[
+        'queue_keys',
+        'queueKeys',
+      ], (Object? value) => value?.toString() ?? ''),
+    );
+  }
+}
+
+class AdminOperationsQueue {
+  const AdminOperationsQueue({
+    required this.key,
+    required this.title,
+    required this.description,
+    required this.status,
+    required this.owner,
+    required this.alerts,
+    required this.metrics,
+    this.actionRoutes = const <String>[],
+    this.route,
+  });
+
+  final String key;
+  final String title;
+  final String description;
+  final String status;
+  final String owner;
+  final String? route;
+  final List<String> alerts;
+  final List<AdminOperationsMetric> metrics;
+  final List<String> actionRoutes;
+
+  factory AdminOperationsQueue.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'operations queue',
+    );
+    return AdminOperationsQueue(
+      key: GteJson.string(json, <String>['key']),
+      title: GteJson.string(json, <String>['title']),
+      description: GteJson.string(json, <String>['description']),
+      status: GteJson.string(json, <String>['status'], fallback: 'ok'),
+      owner: GteJson.string(json, <String>['owner'], fallback: 'operations'),
+      route: GteJson.stringOrNull(json, <String>['route']),
+      alerts: GteJson.typedList<String>(json, <String>[
+            'alerts',
+          ], (Object? value) => value?.toString() ?? '')
+          .where((String value) => value.trim().isNotEmpty)
+          .toList(growable: false),
+      metrics: GteJson.typedList(json, <String>[
+        'metrics',
+      ], AdminOperationsMetric.fromJson),
+      actionRoutes: GteJson.typedList<String>(json, <String>[
+            'action_routes',
+            'actionRoutes',
+          ], (Object? value) => value?.toString() ?? '')
+          .where((String value) => value.trim().isNotEmpty)
+          .toList(growable: false),
+    );
+  }
+}
+
+class AdminOperationsMetric {
+  const AdminOperationsMetric({
+    required this.key,
+    required this.label,
+    required this.value,
+    required this.displayValue,
+    required this.status,
+    this.unit,
+  });
+
+  final String key;
+  final String label;
+  final double value;
+  final String displayValue;
+  final String status;
+  final String? unit;
+
+  factory AdminOperationsMetric.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'operations metric',
+    );
+    return AdminOperationsMetric(
+      key: GteJson.string(json, <String>['key']),
+      label: GteJson.string(json, <String>['label']),
+      value: GteJson.number(json, <String>['value']),
+      displayValue: GteJson.string(json, <String>[
+        'display_value',
+        'displayValue',
+      ]),
+      status: GteJson.string(json, <String>['status'], fallback: 'ok'),
+      unit: GteJson.stringOrNull(json, <String>['unit']),
+    );
+  }
+}
+
+class AdminOperationsLaunchGate {
+  const AdminOperationsLaunchGate({
+    required this.featureKey,
+    required this.title,
+    required this.enabled,
+    required this.launchState,
+    required this.killSwitchEnabled,
+    required this.audience,
+    this.route,
+    this.maintenanceMessage,
+  });
+
+  final String featureKey;
+  final String title;
+  final bool enabled;
+  final String launchState;
+  final bool killSwitchEnabled;
+  final String audience;
+  final String? route;
+  final String? maintenanceMessage;
+
+  factory AdminOperationsLaunchGate.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'operations launch gate',
+    );
+    return AdminOperationsLaunchGate(
+      featureKey: GteJson.string(json, <String>['feature_key', 'featureKey']),
+      title: GteJson.string(json, <String>['title']),
+      enabled: GteJson.boolean(json, <String>['enabled']),
+      launchState: GteJson.string(json, <String>[
+        'launch_state',
+        'launchState',
+      ], fallback: 'public'),
+      killSwitchEnabled: GteJson.boolean(json, <String>[
+        'kill_switch_enabled',
+        'killSwitchEnabled',
+      ]),
+      audience: GteJson.string(json, <String>['audience'], fallback: 'global'),
+      route: GteJson.stringOrNull(json, <String>['route']),
+      maintenanceMessage: GteJson.stringOrNull(json, <String>[
+        'maintenance_message',
+        'maintenanceMessage',
+      ]),
+    );
   }
 }
 

@@ -229,9 +229,17 @@ class GtexPlayerCard extends StatelessWidget {
               children: <Widget>[
                 Expanded(
                   child: _PlayerMetaTile(
+                    label: 'GSI',
+                    value: '${player.gsi}',
+                    accent: accent,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _PlayerMetaTile(
                     label: 'Value',
                     value: gtexCompactCurrency(player.price),
-                    accent: accent,
+                    accent: tokens.accentCapital,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -316,15 +324,27 @@ class GtexRegenCard extends StatelessWidget {
             Row(
               children: <Widget>[
                 Expanded(
-                  child: Text(
-                    'Regen',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelLarge?.copyWith(color: accent),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Regen',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelLarge?.copyWith(color: accent),
+                      ),
+                      Text(
+                        player.gsiTierLabel,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Text(
-                  '${player.potential} POT',
+                  player.gsiLabel,
                   style: Theme.of(
                     context,
                   ).textTheme.titleMedium?.copyWith(color: accent),
@@ -346,6 +366,11 @@ class GtexRegenCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '${player.position} - ${player.country}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${player.potential} POT',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),

@@ -33,7 +33,7 @@ def _create_authenticated_user(
             password="SuperSecret1",
             display_name=display_name,
         )
-        token, _ = service.issue_access_token(user)
+        token, _ = service.issue_access_token(user, session=session)
         session.commit()
         session.refresh(user)
         return AuthenticatedUser(

@@ -45,6 +45,16 @@ from app.player_cards.marketplace_schemas import (
     PlayerCardMarketplaceSwapListingCreateRequest,
     PlayerCardMarketplaceSwapListingView,
 )
+from app.player_cards.collectibles_schemas import (
+    PlayerCardBurnRequest,
+    PlayerCardBurnView,
+    PlayerCardPackOpenRequest,
+    PlayerCardPackOpeningView,
+    PlayerCardPackView,
+    PlayerCardUpgradeRequest,
+    PlayerCardUpgradeView,
+)
+from app.player_cards.collectibles_service import PlayerCardCollectiblesService
 from app.player_cards.marketplace_service import PlayerCardMarketplaceService
 from app.player_cards.access_service import CardLoanService, StarterSquadRentalService
 from app.player_cards.service import (
@@ -110,6 +120,24 @@ def get_marketplace_service(request: Request, session: Session = Depends(get_ses
         wallet_service=wallet_service,
         event_publisher=event_publisher or InMemoryEventPublisher(),
         settings=get_optional_app_settings(request.app),
+    )
+
+
+def get_collectibles_service(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> PlayerCardCollectiblesService:
+    event_publisher = getattr(request.app.state, "event_publisher", None)
+    cache_backend = getattr(request.app.state, "cache_backend", None)
+    wallet_service = (
+        WalletService(event_publisher=event_publisher, cache_backend=cache_backend)
+        if event_publisher
+        else WalletService(cache_backend=cache_backend)
+    )
+    return PlayerCardCollectiblesService(
+        session=session,
+        wallet_service=wallet_service,
+        event_publisher=event_publisher or InMemoryEventPublisher(),
     )
 
 
@@ -249,6 +277,72 @@ def list_inventory(
 ) -> list[PlayerCardHoldingView]:
     inventory = service.list_inventory(actor=current_user)
     return [PlayerCardHoldingView.model_validate(item) for item in inventory]
+
+
+@router.get("/packs", response_model=list[PlayerCardPackView])
+def list_card_packs(
+    service: PlayerCardCollectiblesService = Depends(get_collectibles_service),
+) -> list[PlayerCardPackView]:
+    return [PlayerCardPackView.model_validate(item) for item in service.list_packs()]
+
+
+@router.post("/packs/{pack_key}/open", response_model=PlayerCardPackOpeningView)
+def open_card_pack(
+    pack_key: str,
+    payload: PlayerCardPackOpenRequest,
+    current_user: User = Depends(get_current_user),
+    service: PlayerCardCollectiblesService = Depends(get_collectibles_service),
+    session: Session = Depends(get_session),
+) -> PlayerCardPackOpeningView:
+    try:
+        opening = service.open_pack(actor=current_user, pack_key=pack_key, metadata_json=payload.metadata_json)
+    except PlayerCardMarketError as exc:
+        rollback_and_raise_player_card_http(session, exc)
+    except InsufficientBalanceError as exc:
+        rollback_and_raise_insufficient_balance(session, exc)
+    session.commit()
+    return PlayerCardPackOpeningView.model_validate(opening)
+
+
+@router.post("/cards/burn", response_model=PlayerCardBurnView)
+def burn_player_card(
+    payload: PlayerCardBurnRequest,
+    current_user: User = Depends(get_current_user),
+    service: PlayerCardCollectiblesService = Depends(get_collectibles_service),
+    session: Session = Depends(get_session),
+) -> PlayerCardBurnView:
+    try:
+        result = service.burn_card(
+            actor=current_user,
+            player_card_id=payload.player_card_id,
+            quantity=payload.quantity,
+            reason=payload.reason,
+            metadata_json=payload.metadata_json,
+        )
+    except PlayerCardMarketError as exc:
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
+    return PlayerCardBurnView.model_validate(result)
+
+
+@router.post("/cards/upgrade", response_model=PlayerCardUpgradeView)
+def upgrade_player_cards(
+    payload: PlayerCardUpgradeRequest,
+    current_user: User = Depends(get_current_user),
+    service: PlayerCardCollectiblesService = Depends(get_collectibles_service),
+    session: Session = Depends(get_session),
+) -> PlayerCardUpgradeView:
+    try:
+        result = service.upgrade_cards(
+            actor=current_user,
+            source_player_card_ids=payload.source_player_card_ids,
+            target_tier_code=payload.target_tier_code,
+            metadata_json=payload.metadata_json,
+        )
+    except PlayerCardMarketError as exc:
+        rollback_and_raise_player_card_http(session, exc)
+    session.commit()
+    return PlayerCardUpgradeView.model_validate(result)
 
 
 @router.get("/listings", response_model=list[PlayerCardListingView])

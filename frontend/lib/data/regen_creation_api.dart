@@ -11,12 +11,14 @@ class RegenCreationApi {
   factory RegenCreationApi.standard({
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.live,
+    String? accessToken,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return RegenCreationApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
         transport: GteHttpTransport(),
+        accessToken: accessToken,
         mode: resolvedMode,
       ),
     );

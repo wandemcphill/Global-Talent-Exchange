@@ -24,6 +24,7 @@ class CompetitionController extends ChangeNotifier {
   Future<void>? _detailFuture;
   DateTime? discoverySyncedAt;
   DateTime? detailSyncedAt;
+  bool _isDisposed = false;
 
   String _currentUserId;
   String? _currentUserName;
@@ -45,6 +46,20 @@ class CompetitionController extends ChangeNotifier {
   String? discoveryError;
   String? detailError;
   String? actionError;
+
+  @override
+  void notifyListeners() {
+    if (_isDisposed) {
+      return;
+    }
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
 
   String get currentUserId => _currentUserId;
 

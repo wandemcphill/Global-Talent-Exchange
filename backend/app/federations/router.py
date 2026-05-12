@@ -16,6 +16,9 @@ from app.federations.schemas import (
     FederationMembershipCreateRequest,
     FederationMembershipView,
     FederationNarrativeView,
+    NationalAssociationProfileView,
+    NationalEligibilityReviewRequest,
+    NationalEligibilityReviewView,
     FederationProposalCreateRequest,
     FederationProposalView,
     FederationRankingItemView,
@@ -93,6 +96,40 @@ def list_regional_tournaments(service: FederationService = Depends(_service)) ->
     return [RegionalTournamentView.model_validate(item) for item in service.list_regional_tournaments()]
 
 
+@router.get("/national-associations/{country_code}", response_model=NationalAssociationProfileView)
+def get_national_association(
+    country_code: str,
+    service: FederationService = Depends(_service),
+) -> NationalAssociationProfileView:
+    try:
+        payload = service.build_national_association_profile(country_code)
+    except FederationError as exc:
+        _raise(exc)
+    return NationalAssociationProfileView.model_validate(payload)
+
+
+@router.post("/national-associations/{country_code}/eligibility-review", response_model=NationalEligibilityReviewView)
+def review_national_eligibility(
+    country_code: str,
+    payload: NationalEligibilityReviewRequest,
+    _current_user: User = Depends(get_current_user),
+    service: FederationService = Depends(_service),
+) -> NationalEligibilityReviewView:
+    try:
+        result = service.review_national_eligibility(
+            country_code=country_code,
+            player_id=payload.player_id,
+            club_id=payload.club_id,
+            competition_id=payload.competition_id,
+            metadata_json=payload.metadata_json,
+        )
+    except FederationError as exc:
+        service.session.rollback()
+        _raise(exc)
+    service.session.commit()
+    return NationalEligibilityReviewView.model_validate(result)
+
+
 @router.get("/{federation_id}", response_model=FederationDashboardView)
 def get_federation_dashboard(
     federation_id: str,
@@ -165,7 +202,9 @@ def create_league(
 
 
 @router.get("/{federation_id}/memberships", response_model=list[FederationMembershipView])
-def list_memberships(federation_id: str, service: FederationService = Depends(_service)) -> list[FederationMembershipView]:
+def list_memberships(
+    federation_id: str, service: FederationService = Depends(_service)
+) -> list[FederationMembershipView]:
     try:
         memberships = service.list_memberships(federation_id)
     except FederationError as exc:
@@ -173,7 +212,9 @@ def list_memberships(federation_id: str, service: FederationService = Depends(_s
     return [FederationMembershipView.model_validate(item, from_attributes=True) for item in memberships]
 
 
-@router.post("/{federation_id}/memberships", response_model=FederationMembershipView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{federation_id}/memberships", response_model=FederationMembershipView, status_code=status.HTTP_201_CREATED
+)
 def create_membership(
     federation_id: str,
     payload: FederationMembershipCreateRequest,

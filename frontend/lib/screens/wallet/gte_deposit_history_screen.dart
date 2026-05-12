@@ -7,6 +7,7 @@ import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
 import 'gte_funding_flow_screen.dart';
+import 'gte_wallet_flow_scaffold.dart';
 
 class GteDepositHistoryScreen extends StatefulWidget {
   const GteDepositHistoryScreen({super.key, required this.controller});
@@ -44,19 +45,21 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Transaction History'),
-        actions: <Widget>[
-          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-        ],
-      ),
+    return GteWalletFlowScaffold(
+      title: 'Transaction History',
+      subtitle:
+          'Audit deposits, withdrawals, references, and wallet status changes from the live GTEX ledger.',
+      icon: Icons.receipt_long_outlined,
+      statusLabel: 'LIVE WALLET LEDGER',
+      actions: <Widget>[
+        IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
+      ],
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openDeposit,
         icon: const Icon(Icons.add),
         label: const Text('Deposit'),
       ),
-      body: FutureBuilder<List<GteWalletTransactionRecord>>(
+      child: FutureBuilder<List<GteWalletTransactionRecord>>(
         future: _transactionsFuture,
         builder: (
           BuildContext context,

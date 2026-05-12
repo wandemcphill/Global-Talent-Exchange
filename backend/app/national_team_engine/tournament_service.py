@@ -452,6 +452,8 @@ class NationalTeamTournamentService:
             return "u17"
         if normalized in {"u20", "under20"}:
             return "u20"
+        if normalized in {"u21", "under21"}:
+            return "u21"
         return "senior"
 
     @staticmethod
@@ -469,6 +471,8 @@ class NationalTeamTournamentService:
             return 17
         if age_band == "u20":
             return 20
+        if age_band == "u21":
+            return 21
         return None
 
     @staticmethod
@@ -484,17 +488,19 @@ class NationalTeamTournamentService:
     @staticmethod
     def _seed_age_band(seed: NationalRegenSeed) -> str:
         normalized = str(getattr(seed, "age_band", None) or "").strip().lower()
-        if normalized in {"u17", "u20", "senior"}:
+        if normalized in {"u17", "u20", "u21", "senior"}:
             return normalized
         metadata = dict(seed.metadata_json or {})
         metadata_band = str(metadata.get("age_band") or "").strip().lower()
-        if metadata_band in {"u17", "u20", "senior"}:
+        if metadata_band in {"u17", "u20", "u21", "senior"}:
             return metadata_band
         age = NationalTeamTournamentService._seed_age(seed)
         if age <= 17:
             return "u17"
         if age <= 20:
             return "u20"
+        if age <= 21:
+            return "u21"
         return "senior"
 
     @staticmethod
@@ -1062,6 +1068,8 @@ class NationalTeamTournamentService:
             return int(age) <= 17
         if normalized in {"u20", "under20", "under_20"}:
             return int(age) <= 20
+        if normalized in {"u21", "under21", "under_21"}:
+            return int(age) <= 21
         return True
 
     def auto_build_squad(

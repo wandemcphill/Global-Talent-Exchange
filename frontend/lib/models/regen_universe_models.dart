@@ -96,6 +96,7 @@ class RegenUniversePlayer {
     required this.currentRating,
     required this.growthCurve,
     required this.sourceType,
+    this.globalScoutingIndex,
     this.nationalityCode,
     this.imageUrl,
     this.clubId,
@@ -111,10 +112,14 @@ class RegenUniversePlayer {
   final String position;
   final int potential;
   final int currentRating;
+  final int? globalScoutingIndex;
   final double growthCurve;
   final String sourceType;
   final String? clubId;
   final RegenMarketAccess marketAccess;
+
+  int get resolvedGsi =>
+      (globalScoutingIndex ?? currentRating).clamp(0, 100).toInt();
 
   bool get isNationalPoolOnly => marketAccess.nationalPoolOnly;
   bool get isPreseededNationalRegen => marketAccess.isPreseededNationalRegen;
@@ -199,6 +204,13 @@ class RegenUniversePlayer {
         'current_gsi',
         'rating',
       ], fallback: 60),
+      globalScoutingIndex: GteJson.integerOrNull(json, <String>[
+        'global_scouting_index',
+        'globalScoutingIndex',
+        'gsi',
+        'current_gsi',
+        'currentGsi',
+      ]),
       growthCurve: GteJson.number(json, <String>[
         'growth_curve',
         'growthCurve',
@@ -348,6 +360,7 @@ class NationalRegenSeed {
     required this.potentialRating,
     required this.rarityTier,
     required this.metadata,
+    this.globalScoutingIndex,
     this.age,
     this.ageBand = 'senior',
     this.growthCurve = 0.5,
@@ -376,6 +389,7 @@ class NationalRegenSeed {
   final String primaryPosition;
   final int currentRating;
   final int potentialRating;
+  final int? globalScoutingIndex;
   final double growthCurve;
   final String rarityTier;
   final String status;
@@ -405,6 +419,9 @@ class NationalRegenSeed {
   );
 
   List<String> get badgeLabels => toPlayer().badgeLabels();
+
+  int get resolvedGsi =>
+      (globalScoutingIndex ?? currentRating).clamp(0, 100).toInt();
 
   factory NationalRegenSeed.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -454,6 +471,21 @@ class NationalRegenSeed {
         'current_rating',
         'currentRating',
       ], fallback: 60),
+      globalScoutingIndex:
+          GteJson.integerOrNull(json, <String>[
+            'global_scouting_index',
+            'globalScoutingIndex',
+            'gsi',
+            'current_gsi',
+            'currentGsi',
+          ]) ??
+          GteJson.integerOrNull(metadata, <String>[
+            'global_scouting_index',
+            'globalScoutingIndex',
+            'gsi',
+            'current_gsi',
+            'currentGsi',
+          ]),
       potentialRating: GteJson.integer(json, <String>[
         'potential_rating',
         'potentialRating',
@@ -517,6 +549,7 @@ class NationalRegenSeed {
       position: primaryPosition,
       potential: potentialRating,
       currentRating: currentRating,
+      globalScoutingIndex: globalScoutingIndex,
       growthCurve: growthCurve,
       sourceType: seedType,
       imageUrl: imageUrl,
@@ -633,6 +666,13 @@ class RegenAwardWinner {
       currentRating: GteJson.integer(metadata, <String>[
         'current_rating',
       ], fallback: 70),
+      globalScoutingIndex: GteJson.integerOrNull(metadata, <String>[
+        'global_scouting_index',
+        'globalScoutingIndex',
+        'gsi',
+        'current_gsi',
+        'currentGsi',
+      ]),
       growthCurve: GteJson.number(metadata, <String>[
         'growth_curve',
       ], fallback: 0.6),
@@ -842,6 +882,13 @@ RegenUniversePlayer _playerFromEntry(Map<String, Object?> json) {
       'currentRating',
       'current_gsi',
     ], fallback: 60),
+    globalScoutingIndex: GteJson.integerOrNull(profile, <String>[
+      'global_scouting_index',
+      'globalScoutingIndex',
+      'gsi',
+      'current_gsi',
+      'currentGsi',
+    ]),
     growthCurve: GteJson.number(profile, <String>[
       'growth_curve',
       'growthCurve',

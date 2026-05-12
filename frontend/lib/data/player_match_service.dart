@@ -20,12 +20,12 @@ class GteScoutMatchFilters {
   });
 
   const GteScoutMatchFilters.defaultBrief()
-      : position = 'ST',
-        minAge = 18,
-        maxAge = 27,
-        country = 'Nigeria',
-        preferredFoot = 'Right',
-        minHeightMeters = 1.75;
+    : position = 'ST',
+      minAge = 18,
+      maxAge = 27,
+      country = 'Nigeria',
+      preferredFoot = 'Right',
+      minHeightMeters = 1.75;
 
   final String? position;
   final int? minAge;
@@ -40,8 +40,9 @@ class GteScoutMatchFilters {
       minAge: _toInt(json['min_age'] ?? json['minAge']),
       maxAge: _toInt(json['max_age'] ?? json['maxAge']),
       country: _cleanString(json['country']),
-      preferredFoot:
-          _cleanString(json['preferred_foot'] ?? json['preferredFoot']),
+      preferredFoot: _cleanString(
+        json['preferred_foot'] ?? json['preferredFoot'],
+      ),
       minHeightMeters: _toDouble(json['min_height'] ?? json['minHeight']),
     );
   }
@@ -68,9 +69,7 @@ class GteScoutMatchFilters {
       if (country != null) 'countries': <String>[country!],
       if (preferredFoot != null) 'preferred_foot': <String>[preferredFoot!],
       if (minHeightMeters != null)
-        'height_cm': <String, Object?>{
-          'min': (minHeightMeters! * 100).round(),
-        },
+        'height_cm': <String, Object?>{'min': (minHeightMeters! * 100).round()},
     };
   }
 
@@ -97,13 +96,13 @@ class GteScoutMatchFilters {
   }
 
   String get cacheKey => <Object?>[
-        position?.trim().toUpperCase(),
-        minAge,
-        maxAge,
-        country?.trim().toLowerCase(),
-        preferredFoot?.trim().toLowerCase(),
-        minHeightMeters?.toStringAsFixed(2),
-      ].join('|');
+    position?.trim().toUpperCase(),
+    minAge,
+    maxAge,
+    country?.trim().toLowerCase(),
+    preferredFoot?.trim().toLowerCase(),
+    minHeightMeters?.toStringAsFixed(2),
+  ].join('|');
 
   String _ageLabel() {
     if (minAge != null && maxAge != null) {
@@ -164,9 +163,7 @@ class PlayerMatchViewModel {
 }
 
 class GtePlayerMatchResponse {
-  const GtePlayerMatchResponse({
-    required this.matches,
-  });
+  const GtePlayerMatchResponse({required this.matches});
 
   final List<GtePlayerMatchResult> matches;
 
@@ -202,9 +199,10 @@ class GtePlayerMatchResult {
   factory GtePlayerMatchResult.fromJson(Object? value) {
     final Map<Object?, Object?> json =
         value is Map<Object?, Object?> ? value : const <Object?, Object?>{};
-    final Map<Object?, Object?> player = json['player'] is Map<Object?, Object?>
-        ? json['player'] as Map<Object?, Object?>
-        : const <Object?, Object?>{};
+    final Map<Object?, Object?> player =
+        json['player'] is Map<Object?, Object?>
+            ? json['player'] as Map<Object?, Object?>
+            : const <Object?, Object?>{};
     return GtePlayerMatchResult(
       player: GteMarketPlayerListItem.fromJson(player),
       score: _toDouble(json['score']) ?? 0,
@@ -218,7 +216,8 @@ class GtePlayerMatchResult {
       heightMeters: _toHeightMeters(
         json['height_meters'] ?? json['heightMeters'] ?? player['height_cm'],
       ),
-      isFreeAgent: json['is_free_agent'] == true ||
+      isFreeAgent:
+          json['is_free_agent'] == true ||
           json['isFreeAgent'] == true ||
           player['is_free_agent'] == true,
     );
@@ -251,8 +250,9 @@ class GtePlayerMatchService {
     MatchWeights? weights,
     int limit = 20,
   }) async {
-    final List<GteMarketPlayerListItem> candidates =
-        players.toList(growable: false);
+    final List<GteMarketPlayerListItem> candidates = players.toList(
+      growable: false,
+    );
     final MatchWeights resolvedWeights =
         (weights ?? MatchWeights.defaultWeights()).normalize();
     if (candidates.isEmpty) {
@@ -314,8 +314,9 @@ class GtePlayerMatchService {
         message: 'Unexpected player match response shape.',
       );
     }
-    final MatchResponseDto dto =
-        MatchResponseDto.fromJson(Map<String, dynamic>.from(payload));
+    final MatchResponseDto dto = MatchResponseDto.fromJson(
+      Map<String, dynamic>.from(payload),
+    );
     return dto.matches.map(MatchMapper.toDomain).toList(growable: false);
   }
 
@@ -323,7 +324,8 @@ class GtePlayerMatchService {
     final GteExchangeApiClient? api = _api;
     if (api == null) {
       throw StateError(
-          'Backend player matching is unavailable without an API.');
+        'Backend player matching is unavailable without an API.',
+      );
     }
     String? accessToken;
     final GteApiRepository repository = api.repository;
@@ -353,9 +355,7 @@ class GtePlayerMatchService {
         body: <String, Object?>{
           'brief': filters.toBriefJson(),
           'weights': weights.toJson(),
-          'pagination': <String, Object?>{
-            'limit': limit,
-          },
+          'pagination': <String, Object?>{'limit': limit},
         },
         auth: backend.auth,
       );
@@ -397,10 +397,8 @@ class GtePlayerMatchService {
         if (scoreCompare != 0) {
           return scoreCompare;
         }
-        final int interestCompare =
-            (right.player.marketInterestScore ?? 0).compareTo(
-              left.player.marketInterestScore ?? 0,
-            );
+        final int interestCompare = (right.player.marketInterestScore ?? 0)
+            .compareTo(left.player.marketInterestScore ?? 0);
         if (interestCompare != 0) {
           return interestCompare;
         }
@@ -410,9 +408,9 @@ class GtePlayerMatchService {
         if (trendCompare != 0) {
           return trendCompare;
         }
-        return left.player.playerName
-            .toLowerCase()
-            .compareTo(right.player.playerName.toLowerCase());
+        return left.player.playerName.toLowerCase().compareTo(
+          right.player.playerName.toLowerCase(),
+        );
       });
 
     return GtePlayerMatchResponse(
@@ -429,8 +427,9 @@ class GtePlayerMatchService {
     if (_api != null &&
         (filters.preferredFoot != null || filters.minHeightMeters != null)) {
       try {
-        final GteMarketPlayerDetailView detail =
-            await _api.fetchPlayerDetail(player.playerId);
+        final GteMarketPlayerDetailView detail = await _api.fetchPlayerDetail(
+          player.playerId,
+        );
         preferredFoot =
             _cleanString(detail.identity.preferredFoot) ?? preferredFoot;
         final int? heightCm = detail.identity.heightCm;
@@ -511,11 +510,9 @@ class GtePlayerMatchService {
     if (filterPosition == null || filterPosition.trim().isEmpty) {
       return false;
     }
-    return _positionAliases(playerPosition)
-        .intersection(
-          _positionAliases(filterPosition),
-        )
-        .isNotEmpty;
+    return _positionAliases(
+      playerPosition,
+    ).intersection(_positionAliases(filterPosition)).isNotEmpty;
   }
 
   Set<String> _positionAliases(String? value) {
@@ -543,10 +540,13 @@ class GtePlayerMatchService {
     return <String>{normalized};
   }
 
-  double _ageFit(int age, GteScoutMatchFilters filters) {
+  double _ageFit(int? age, GteScoutMatchFilters filters) {
     final int? minAge = filters.minAge;
     final int? maxAge = filters.maxAge;
     if (minAge == null && maxAge == null) {
+      return 0;
+    }
+    if (age == null || age <= 0) {
       return 0;
     }
     if ((minAge == null || age >= minAge) &&
@@ -616,10 +616,7 @@ class GtePlayerMatchService {
 }
 
 class _BackendMatchClient {
-  const _BackendMatchClient({
-    required this.client,
-    required this.auth,
-  });
+  const _BackendMatchClient({required this.client, required this.auth});
 
   final GteAuthedApi client;
   final bool auth;

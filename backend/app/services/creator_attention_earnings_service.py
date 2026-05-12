@@ -474,11 +474,7 @@ class CreatorAttentionEarningsService:
         if self._storage_available is not None:
             return self._storage_available
         try:
-            bind = self.session.get_bind() if hasattr(self.session, "get_bind") else None
-            if bind is None:
-                self._storage_available = False
-                return False
-            inspector = inspect(bind)
+            inspector = inspect(self.session.connection())
             self._storage_available = all(
                 inspector.has_table(table_name)
                 for table_name in (CreatorWallet.__tablename__, ClipEarningsLog.__tablename__, User.__tablename__)
@@ -491,11 +487,9 @@ class CreatorAttentionEarningsService:
         if self._creator_profiles_available is not None:
             return self._creator_profiles_available
         try:
-            bind = self.session.get_bind() if hasattr(self.session, "get_bind") else None
-            if bind is None:
-                self._creator_profiles_available = False
-                return False
-            self._creator_profiles_available = bool(inspect(bind).has_table(CreatorProfile.__tablename__))
+            self._creator_profiles_available = bool(
+                inspect(self.session.connection()).has_table(CreatorProfile.__tablename__)
+            )
         except Exception:
             self._creator_profiles_available = False
         return self._creator_profiles_available

@@ -84,7 +84,7 @@ class RegenUniverseApi {
   }) {
     return client.withFallback<List<NationalRegenSeed>>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/regen-universe/national-regens',
+        _publicUnversionedUrl('/regen-universe/national-regens'),
         query: <String, Object?>{'limit': limit, 'age_max': ageMax},
         auth: false,
       );
@@ -117,6 +117,17 @@ class RegenUniverseApi {
       );
       return RegenGenerationTracking.fromJson(payload);
     }, fixtures.tracking);
+  }
+
+  String _publicUnversionedUrl(String path) {
+    final String base = client.config.baseUrl.trim().replaceFirst(
+      RegExp(r'/+$'),
+      '',
+    );
+    if (base.isEmpty) {
+      return path;
+    }
+    return '$base$path';
   }
 }
 
