@@ -56,10 +56,11 @@ class GtexLaunchControlApi {
     required bool enabled,
     String? reason,
   }) {
-    final String action = enabled ? 'enable' : 'disable';
     return client.withFallback<GtexLaunchControlFlag>(() async {
       final Object? payload = await client.post(
-        '/api/admin/feature-flags/$featureKey/$action',
+        enabled
+            ? '/api/admin/feature-flags/$featureKey/enable'
+            : '/api/admin/feature-flags/$featureKey/disable',
         body: <String, Object?>{'reason': reason},
       );
       return GtexLaunchControlFlag.fromJson(payload);
@@ -466,10 +467,9 @@ class GtexLaunchControlFixtures {
             enabled: flag.effectivelyEnabled,
             launchState: flag.launchState,
             route: flag.route,
-            maintenanceMessage:
-                flag.launchState == GtexLaunchState.maintenance
-                    ? flag.maintenanceMessage
-                    : null,
+            maintenanceMessage: flag.launchState == GtexLaunchState.maintenance
+                ? flag.maintenanceMessage
+                : null,
           ),
         )
         .toList(growable: false);
@@ -538,18 +538,17 @@ class GtexLaunchControlFixtures {
     final GtexBetaAccessGrant existing = _snapshot.betaGrants.firstWhere(
       (GtexBetaAccessGrant grant) =>
           grant.featureKey == featureKey && grant.userId == userId,
-      orElse:
-          () => GtexBetaAccessGrant(
-            id: 'grant-$featureKey-$userId',
-            featureKey: featureKey,
-            userId: userId,
-            active: true,
-            notes: null,
-            expiresAt: null,
-            grantedByUserId: 'admin-fixture',
-            createdAt: DateTime.now().toUtc(),
-            updatedAt: DateTime.now().toUtc(),
-          ),
+      orElse: () => GtexBetaAccessGrant(
+        id: 'grant-$featureKey-$userId',
+        featureKey: featureKey,
+        userId: userId,
+        active: true,
+        notes: null,
+        expiresAt: null,
+        grantedByUserId: 'admin-fixture',
+        createdAt: DateTime.now().toUtc(),
+        updatedAt: DateTime.now().toUtc(),
+      ),
     );
     final GtexBetaAccessGrant grant = existing.copyWith(active: false);
     _snapshot = _snapshot.replaceGrant(grant);

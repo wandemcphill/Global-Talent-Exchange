@@ -293,6 +293,30 @@
         "source_file": "backend/app/analytics/router.py",
         "response_model": "AnalyticsUserSegmentationView"
       },
+      "get_api_v2_admin_coin_traders": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/coin-traders",
+        "aliases": [
+          "/api/admin/coin-traders",
+          "/api/v1/admin/coin-traders",
+          "/api/v2/admin/coin-traders"
+        ],
+        "handler": "admin_list_coin_traders",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "list[CoinTraderProfileView]"
+      },
+      "get_api_v2_admin_coin_traders_orders": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/coin-traders/orders",
+        "aliases": [
+          "/api/admin/coin-traders/orders",
+          "/api/v1/admin/coin-traders/orders",
+          "/api/v2/admin/coin-traders/orders"
+        ],
+        "handler": "admin_list_coin_trade_orders",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "list[CoinTradeOrderView]"
+      },
       "get_api_v2_admin_config_liquidity_bands": {
         "method": "GET",
         "canonical_path": "/api/v2/admin/config/liquidity-bands",
@@ -816,6 +840,54 @@
         "handler": "recompute_player_matching_weights",
         "source_file": "backend/app/analytics/router.py",
         "response_model": "PlayerMatchWeightRefreshView"
+      },
+      "post_api_v2_admin_coin_traders_orders_order_id_resolve": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/coin-traders/orders/{order_id}/resolve",
+        "aliases": [
+          "/api/admin/coin-traders/orders/{order_id}/resolve",
+          "/api/v1/admin/coin-traders/orders/{order_id}/resolve",
+          "/api/v2/admin/coin-traders/orders/{order_id}/resolve"
+        ],
+        "handler": "admin_resolve_coin_trade_order",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTradeOrderView"
+      },
+      "post_api_v2_admin_coin_traders_profile_id_approve": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/coin-traders/{profile_id}/approve",
+        "aliases": [
+          "/api/admin/coin-traders/{profile_id}/approve",
+          "/api/v1/admin/coin-traders/{profile_id}/approve",
+          "/api/v2/admin/coin-traders/{profile_id}/approve"
+        ],
+        "handler": "admin_approve_coin_trader",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderProfileView"
+      },
+      "post_api_v2_admin_coin_traders_profile_id_freeze": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/coin-traders/{profile_id}/freeze",
+        "aliases": [
+          "/api/admin/coin-traders/{profile_id}/freeze",
+          "/api/v1/admin/coin-traders/{profile_id}/freeze",
+          "/api/v2/admin/coin-traders/{profile_id}/freeze"
+        ],
+        "handler": "admin_freeze_coin_trader",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderProfileView"
+      },
+      "post_api_v2_admin_coin_traders_profile_id_reject": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/coin-traders/{profile_id}/reject",
+        "aliases": [
+          "/api/admin/coin-traders/{profile_id}/reject",
+          "/api/v1/admin/coin-traders/{profile_id}/reject",
+          "/api/v2/admin/coin-traders/{profile_id}/reject"
+        ],
+        "handler": "admin_reject_coin_trader",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderProfileView"
       },
       "post_api_v2_admin_config_value_controls_recompute": {
         "method": "POST",
@@ -2621,6 +2693,19 @@
         "source_file": "backend/app/club_infra_engine/router.py",
         "response_model": "ClubInfraDashboardResponse"
       },
+      "get_api_v2_clubs_admin_club_lifecycle": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/admin/club-lifecycle",
+        "aliases": [
+          "/api/clubs/admin/club-lifecycle",
+          "/api/v1/clubs/admin/club-lifecycle",
+          "/api/v2/clubs/admin/club-lifecycle",
+          "/clubs/admin/club-lifecycle"
+        ],
+        "handler": "list_admin_club_lifecycle",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "list[ClubLifecycleView]"
+      },
       "get_api_v2_clubs_club_id_badge": {
         "method": "GET",
         "canonical_path": "/api/v2/clubs/{club_id}/badge",
@@ -2644,6 +2729,19 @@
         "handler": "list_club_challenges",
         "source_file": "backend/app/club_social/router.py",
         "response_model": "ClubChallengesView"
+      },
+      "get_api_v2_clubs_club_id_growth": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth",
+        "aliases": [
+          "/api/clubs/{club_id}/growth",
+          "/api/v1/clubs/{club_id}/growth",
+          "/api/v2/clubs/{club_id}/growth",
+          "/clubs/{club_id}/growth"
+        ],
+        "handler": "get_club_growth_dashboard",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "ClubGrowthDashboardView"
       },
       "get_api_v2_clubs_club_id_identity": {
         "method": "GET",
@@ -2669,6 +2767,32 @@
         "source_file": "backend/app/club_social/router.py",
         "response_model": "ClubIdentityMetricsView"
       },
+      "get_api_v2_clubs_club_id_lifecycle": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/{club_id}/lifecycle",
+        "aliases": [
+          "/api/clubs/{club_id}/lifecycle",
+          "/api/v1/clubs/{club_id}/lifecycle",
+          "/api/v2/clubs/{club_id}/lifecycle",
+          "/clubs/{club_id}/lifecycle"
+        ],
+        "handler": "get_club_lifecycle",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "ClubLifecycleView"
+      },
+      "get_api_v2_clubs_club_id_operating_dashboard": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/{club_id}/operating-dashboard",
+        "aliases": [
+          "/api/clubs/{club_id}/operating-dashboard",
+          "/api/v1/clubs/{club_id}/operating-dashboard",
+          "/api/v2/clubs/{club_id}/operating-dashboard",
+          "/clubs/{club_id}/operating-dashboard"
+        ],
+        "handler": "get_club_operating_dashboard",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "ClubOperatingDashboardView"
+      },
       "get_api_v2_clubs_club_id_ownership": {
         "method": "GET",
         "canonical_path": "/api/v2/clubs/{club_id}/ownership",
@@ -2681,6 +2805,19 @@
         "handler": "get_club_ownership",
         "source_file": "backend/app/club_ownership/router.py",
         "response_model": "ClubOwnershipView"
+      },
+      "get_api_v2_clubs_club_id_readiness": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/{club_id}/readiness",
+        "aliases": [
+          "/api/clubs/{club_id}/readiness",
+          "/api/v1/clubs/{club_id}/readiness",
+          "/api/v2/clubs/{club_id}/readiness",
+          "/clubs/{club_id}/readiness"
+        ],
+        "handler": "get_club_readiness",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "ClubReadinessView"
       },
       "get_api_v2_clubs_club_id_rivalries": {
         "method": "GET",
@@ -2765,6 +2902,19 @@
         "handler": "list_club_sale_market_offers",
         "source_file": "backend/app/club_sale_market/router.py",
         "response_model": "ClubSaleOfferCollectionView"
+      },
+      "get_api_v2_clubs_club_id_squad_registration": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/{club_id}/squad-registration",
+        "aliases": [
+          "/api/clubs/{club_id}/squad-registration",
+          "/api/v1/clubs/{club_id}/squad-registration",
+          "/api/v2/clubs/{club_id}/squad-registration",
+          "/clubs/{club_id}/squad-registration"
+        ],
+        "handler": "get_squad_registration",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "SquadRegistrationView | None"
       },
       "get_api_v2_clubs_club_id_treasury": {
         "method": "GET",
@@ -3050,6 +3200,19 @@
         "source_file": "backend/app/club_infra_engine/router.py",
         "response_model": "ClubInfraActionResponse"
       },
+      "post_api_v2_clubs_club_id_advance_lifecycle": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/advance-lifecycle",
+        "aliases": [
+          "/api/clubs/{club_id}/advance-lifecycle",
+          "/api/v1/clubs/{club_id}/advance-lifecycle",
+          "/api/v2/clubs/{club_id}/advance-lifecycle",
+          "/clubs/{club_id}/advance-lifecycle"
+        ],
+        "handler": "advance_club_lifecycle",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "ClubLifecycleView"
+      },
       "post_api_v2_clubs_club_id_buy_tokens": {
         "method": "POST",
         "canonical_path": "/api/v2/clubs/{club_id}/buy-tokens",
@@ -3074,6 +3237,110 @@
         "handler": "create_challenge",
         "source_file": "backend/app/club_social/router.py",
         "response_model": "ChallengePageView"
+      },
+      "post_api_v2_clubs_club_id_growth_academy_contracts_offer_id_respond": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond",
+          "/api/v1/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond",
+          "/api/v2/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond",
+          "/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond"
+        ],
+        "handler": "respond_to_academy_contract",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "AcademyContractOfferView"
+      },
+      "post_api_v2_clubs_club_id_growth_academy_generate_prospects": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/academy/generate-prospects",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/academy/generate-prospects",
+          "/api/v1/clubs/{club_id}/growth/academy/generate-prospects",
+          "/api/v2/clubs/{club_id}/growth/academy/generate-prospects",
+          "/clubs/{club_id}/growth/academy/generate-prospects"
+        ],
+        "handler": "generate_academy_prospects",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "list[AcademyProspectView]"
+      },
+      "post_api_v2_clubs_club_id_growth_academy_prospects_prospect_id_offer_contract": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
+          "/api/v1/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
+          "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
+          "/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract"
+        ],
+        "handler": "offer_academy_prospect_contract",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "AcademyContractOfferView"
+      },
+      "post_api_v2_clubs_club_id_growth_academy_prospects_prospect_id_promote": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
+          "/api/v1/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
+          "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
+          "/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote"
+        ],
+        "handler": "promote_academy_prospect",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "AcademyProspectView"
+      },
+      "post_api_v2_clubs_club_id_growth_academy_upgrade": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/academy/upgrade",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/academy/upgrade",
+          "/api/v1/clubs/{club_id}/growth/academy/upgrade",
+          "/api/v2/clubs/{club_id}/growth/academy/upgrade",
+          "/clubs/{club_id}/growth/academy/upgrade"
+        ],
+        "handler": "upgrade_academy",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "AcademyProfileView"
+      },
+      "post_api_v2_clubs_club_id_growth_staff_contracts_contract_id_accept": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
+          "/api/v1/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
+          "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
+          "/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept"
+        ],
+        "handler": "accept_staff_contract",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "StaffContractView"
+      },
+      "post_api_v2_clubs_club_id_growth_staff_contracts_contract_id_terminate": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
+          "/api/v1/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
+          "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
+          "/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate"
+        ],
+        "handler": "terminate_staff_contract",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "StaffContractView"
+      },
+      "post_api_v2_clubs_club_id_growth_staff_staff_id_offer": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/staff/{staff_id}/offer",
+          "/api/v1/clubs/{club_id}/growth/staff/{staff_id}/offer",
+          "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer",
+          "/clubs/{club_id}/growth/staff/{staff_id}/offer"
+        ],
+        "handler": "offer_staff_contract",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "StaffContractView"
       },
       "post_api_v2_clubs_club_id_identity_metrics_refresh": {
         "method": "POST",
@@ -3233,6 +3500,45 @@
         "source_file": "backend/app/club_ownership/router.py",
         "response_model": "ClubTokenTradeResultView"
       },
+      "post_api_v2_clubs_club_id_squad_registration": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/squad-registration",
+        "aliases": [
+          "/api/clubs/{club_id}/squad-registration",
+          "/api/v1/clubs/{club_id}/squad-registration",
+          "/api/v2/clubs/{club_id}/squad-registration",
+          "/clubs/{club_id}/squad-registration"
+        ],
+        "handler": "upsert_squad_registration",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "SquadRegistrationView"
+      },
+      "post_api_v2_clubs_club_id_squad_registration_lock": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/squad-registration/lock",
+        "aliases": [
+          "/api/clubs/{club_id}/squad-registration/lock",
+          "/api/v1/clubs/{club_id}/squad-registration/lock",
+          "/api/v2/clubs/{club_id}/squad-registration/lock",
+          "/clubs/{club_id}/squad-registration/lock"
+        ],
+        "handler": "lock_squad_registration",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "SquadRegistrationView"
+      },
+      "post_api_v2_clubs_club_id_squad_registration_submit": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/squad-registration/submit",
+        "aliases": [
+          "/api/clubs/{club_id}/squad-registration/submit",
+          "/api/v1/clubs/{club_id}/squad-registration/submit",
+          "/api/v2/clubs/{club_id}/squad-registration/submit",
+          "/clubs/{club_id}/squad-registration/submit"
+        ],
+        "handler": "submit_squad_registration",
+        "source_file": "backend/app/club_lifecycle/router.py",
+        "response_model": "SquadRegistrationView"
+      },
       "post_api_v2_clubs_club_id_vote": {
         "method": "POST",
         "canonical_path": "/api/v2/clubs/{club_id}/vote",
@@ -3344,6 +3650,164 @@
         "handler": "get_club",
         "source_file": "backend/app/clubs/router.py",
         "response_model": "ClubView"
+      }
+    },
+    "coin": {
+      "get_api_v2_coin_traders": {
+        "method": "GET",
+        "canonical_path": "/api/v2/coin-traders",
+        "aliases": [
+          "/api/coin-traders",
+          "/api/v1/coin-traders",
+          "/api/v2/coin-traders"
+        ],
+        "handler": "list_coin_traders",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "list[CoinTraderProfileView]"
+      },
+      "get_api_v2_coin_traders_me": {
+        "method": "GET",
+        "canonical_path": "/api/v2/coin-traders/me",
+        "aliases": [
+          "/api/coin-traders/me",
+          "/api/v1/coin-traders/me",
+          "/api/v2/coin-traders/me"
+        ],
+        "handler": "get_my_coin_trader_profile",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderProfileView"
+      },
+      "get_api_v2_coin_traders_orders": {
+        "method": "GET",
+        "canonical_path": "/api/v2/coin-traders/orders",
+        "aliases": [
+          "/api/coin-traders/orders",
+          "/api/v1/coin-traders/orders",
+          "/api/v2/coin-traders/orders"
+        ],
+        "handler": "list_my_coin_trade_orders",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "list[CoinTradeOrderView]"
+      },
+      "get_api_v2_coin_traders_profile_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/coin-traders/{profile_id}",
+        "aliases": [
+          "/api/coin-traders/{profile_id}",
+          "/api/v1/coin-traders/{profile_id}",
+          "/api/v2/coin-traders/{profile_id}"
+        ],
+        "handler": "get_coin_trader_profile",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderProfileView"
+      },
+      "post_api_v2_coin_traders_apply": {
+        "method": "POST",
+        "canonical_path": "/api/v2/coin-traders/apply",
+        "aliases": [
+          "/api/coin-traders/apply",
+          "/api/v1/coin-traders/apply",
+          "/api/v2/coin-traders/apply"
+        ],
+        "handler": "apply_for_coin_trader_profile",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderProfileView"
+      },
+      "post_api_v2_coin_traders_orders": {
+        "method": "POST",
+        "canonical_path": "/api/v2/coin-traders/orders",
+        "aliases": [
+          "/api/coin-traders/orders",
+          "/api/v1/coin-traders/orders",
+          "/api/v2/coin-traders/orders"
+        ],
+        "handler": "create_coin_trade_order",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTradeOrderView"
+      },
+      "post_api_v2_coin_traders_orders_order_id_accept": {
+        "method": "POST",
+        "canonical_path": "/api/v2/coin-traders/orders/{order_id}/accept",
+        "aliases": [
+          "/api/coin-traders/orders/{order_id}/accept",
+          "/api/v1/coin-traders/orders/{order_id}/accept",
+          "/api/v2/coin-traders/orders/{order_id}/accept"
+        ],
+        "handler": "accept_coin_trade_order",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTradeOrderView"
+      },
+      "post_api_v2_coin_traders_orders_order_id_cancel": {
+        "method": "POST",
+        "canonical_path": "/api/v2/coin-traders/orders/{order_id}/cancel",
+        "aliases": [
+          "/api/coin-traders/orders/{order_id}/cancel",
+          "/api/v1/coin-traders/orders/{order_id}/cancel",
+          "/api/v2/coin-traders/orders/{order_id}/cancel"
+        ],
+        "handler": "cancel_coin_trade_order",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTradeOrderView"
+      },
+      "post_api_v2_coin_traders_orders_order_id_confirm": {
+        "method": "POST",
+        "canonical_path": "/api/v2/coin-traders/orders/{order_id}/confirm",
+        "aliases": [
+          "/api/coin-traders/orders/{order_id}/confirm",
+          "/api/v1/coin-traders/orders/{order_id}/confirm",
+          "/api/v2/coin-traders/orders/{order_id}/confirm"
+        ],
+        "handler": "confirm_coin_trade_order",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTradeOrderView"
+      },
+      "post_api_v2_coin_traders_orders_order_id_dispute": {
+        "method": "POST",
+        "canonical_path": "/api/v2/coin-traders/orders/{order_id}/dispute",
+        "aliases": [
+          "/api/coin-traders/orders/{order_id}/dispute",
+          "/api/v1/coin-traders/orders/{order_id}/dispute",
+          "/api/v2/coin-traders/orders/{order_id}/dispute"
+        ],
+        "handler": "dispute_coin_trade_order",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTradeOrderView"
+      },
+      "post_api_v2_coin_traders_orders_order_id_proof": {
+        "method": "POST",
+        "canonical_path": "/api/v2/coin-traders/orders/{order_id}/proof",
+        "aliases": [
+          "/api/coin-traders/orders/{order_id}/proof",
+          "/api/v1/coin-traders/orders/{order_id}/proof",
+          "/api/v2/coin-traders/orders/{order_id}/proof"
+        ],
+        "handler": "submit_coin_trade_order_proof",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTradeOrderView"
+      },
+      "put_api_v2_coin_traders_me": {
+        "method": "PUT",
+        "canonical_path": "/api/v2/coin-traders/me",
+        "aliases": [
+          "/api/coin-traders/me",
+          "/api/v1/coin-traders/me",
+          "/api/v2/coin-traders/me"
+        ],
+        "handler": "update_my_coin_trader_profile",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderProfileView"
+      },
+      "put_api_v2_coin_traders_me_rates": {
+        "method": "PUT",
+        "canonical_path": "/api/v2/coin-traders/me/rates",
+        "aliases": [
+          "/api/coin-traders/me/rates",
+          "/api/v1/coin-traders/me/rates",
+          "/api/v2/coin-traders/me/rates"
+        ],
+        "handler": "upsert_my_coin_trader_rate",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderRateView"
       }
     },
     "commentary": {
@@ -5509,19 +5973,6 @@
         "source_file": "backend/app/federations/router.py",
         "response_model": "list[FederationView]"
       },
-      "get_api_v2_federations_national_associations_country_code": {
-        "method": "GET",
-        "canonical_path": "/api/v2/federations/national-associations/{country_code}",
-        "aliases": [
-          "/api/federations/national-associations/{country_code}",
-          "/api/v1/federations/national-associations/{country_code}",
-          "/api/v2/federations/national-associations/{country_code}",
-          "/federations/national-associations/{country_code}"
-        ],
-        "handler": "get_national_association",
-        "source_file": "backend/app/federations/router.py",
-        "response_model": "NationalAssociationProfileView"
-      },
       "get_api_v2_federations_federation_id": {
         "method": "GET",
         "canonical_path": "/api/v2/federations/{federation_id}",
@@ -5586,6 +6037,19 @@
         "handler": "get_narratives",
         "source_file": "backend/app/federations/router.py",
         "response_model": "list[FederationNarrativeView]"
+      },
+      "get_api_v2_federations_national_associations_country_code": {
+        "method": "GET",
+        "canonical_path": "/api/v2/federations/national-associations/{country_code}",
+        "aliases": [
+          "/api/federations/national-associations/{country_code}",
+          "/api/v1/federations/national-associations/{country_code}",
+          "/api/v2/federations/national-associations/{country_code}",
+          "/federations/national-associations/{country_code}"
+        ],
+        "handler": "get_national_association",
+        "source_file": "backend/app/federations/router.py",
+        "response_model": "NationalAssociationProfileView"
       },
       "get_api_v2_federations_rankings": {
         "method": "GET",
@@ -5652,19 +6116,6 @@
         "source_file": "backend/app/federations/router.py",
         "response_model": "FederationLeagueView"
       },
-      "post_api_v2_federations_national_associations_country_code_eligibility_review": {
-        "method": "POST",
-        "canonical_path": "/api/v2/federations/national-associations/{country_code}/eligibility-review",
-        "aliases": [
-          "/api/federations/national-associations/{country_code}/eligibility-review",
-          "/api/v1/federations/national-associations/{country_code}/eligibility-review",
-          "/api/v2/federations/national-associations/{country_code}/eligibility-review",
-          "/federations/national-associations/{country_code}/eligibility-review"
-        ],
-        "handler": "review_national_eligibility",
-        "source_file": "backend/app/federations/router.py",
-        "response_model": "NationalEligibilityReviewView"
-      },
       "post_api_v2_federations_federation_id_memberships": {
         "method": "POST",
         "canonical_path": "/api/v2/federations/{federation_id}/memberships",
@@ -5729,6 +6180,19 @@
         "handler": "validate_action",
         "source_file": "backend/app/federations/router.py",
         "response_model": "FederationValidationResultView"
+      },
+      "post_api_v2_federations_national_associations_country_code_eligibility_review": {
+        "method": "POST",
+        "canonical_path": "/api/v2/federations/national-associations/{country_code}/eligibility-review",
+        "aliases": [
+          "/api/federations/national-associations/{country_code}/eligibility-review",
+          "/api/v1/federations/national-associations/{country_code}/eligibility-review",
+          "/api/v2/federations/national-associations/{country_code}/eligibility-review",
+          "/federations/national-associations/{country_code}/eligibility-review"
+        ],
+        "handler": "review_national_eligibility",
+        "source_file": "backend/app/federations/router.py",
+        "response_model": "NationalEligibilityReviewView"
       },
       "post_api_v2_federations_proposals_proposal_id_votes": {
         "method": "POST",
@@ -5996,6 +6460,19 @@
       }
     },
     "global": {
+      "get_api_v2_admin_search": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/search",
+        "aliases": [
+          "/admin/search",
+          "/api/admin/search",
+          "/api/v1/admin/search",
+          "/api/v2/admin/search"
+        ],
+        "handler": "admin_global_search",
+        "source_file": "backend/app/global_search/router.py",
+        "response_model": "list[GlobalSearchResultView]"
+      },
       "get_api_v2_competitions": {
         "method": "GET",
         "canonical_path": "/api/v2/competitions",
@@ -6086,6 +6563,32 @@
         "handler": "get_player_history_by_path",
         "source_file": "backend/app/global_memory/router.py",
         "response_model": "PlayerHistoryResponseView"
+      },
+      "get_api_v2_search": {
+        "method": "GET",
+        "canonical_path": "/api/v2/search",
+        "aliases": [
+          "/api/search",
+          "/api/v1/search",
+          "/api/v2/search",
+          "/search"
+        ],
+        "handler": "global_search",
+        "source_file": "backend/app/global_search/router.py",
+        "response_model": "list[GlobalSearchResultView]"
+      },
+      "get_api_v2_search_suggest": {
+        "method": "GET",
+        "canonical_path": "/api/v2/search/suggest",
+        "aliases": [
+          "/api/search/suggest",
+          "/api/v1/search/suggest",
+          "/api/v2/search/suggest",
+          "/search/suggest"
+        ],
+        "handler": "global_search_suggest",
+        "source_file": "backend/app/global_search/router.py",
+        "response_model": "list[GlobalSearchSuggestionView]"
       },
       "post_api_v2_enter": {
         "method": "POST",
@@ -7702,6 +8205,164 @@
         "response_model": "BackgroundTaskView"
       }
     },
+    "launch": {
+      "delete_api_v2_admin_beta_access_feature_key_user_id": {
+        "method": "DELETE",
+        "canonical_path": "/api/v2/admin/beta-access/{feature_key}/{user_id}",
+        "aliases": [
+          "/admin/beta-access/{feature_key}/{user_id}",
+          "/api/admin/beta-access/{feature_key}/{user_id}",
+          "/api/v1/admin/beta-access/{feature_key}/{user_id}",
+          "/api/v2/admin/beta-access/{feature_key}/{user_id}"
+        ],
+        "handler": "revoke_beta_access_grant",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": null
+      },
+      "get_api_v2_admin_beta_access": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/beta-access",
+        "aliases": [
+          "/admin/beta-access",
+          "/api/admin/beta-access",
+          "/api/v1/admin/beta-access",
+          "/api/v2/admin/beta-access"
+        ],
+        "handler": "list_beta_access_grants",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "list[BetaAccessGrantView]"
+      },
+      "get_api_v2_admin_command_router": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/command-router",
+        "aliases": [
+          "/admin/command-router",
+          "/api/admin/command-router",
+          "/api/v1/admin/command-router",
+          "/api/v2/admin/command-router"
+        ],
+        "handler": "get_admin_command_router",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "list[AdminCommandRouteView]"
+      },
+      "get_api_v2_admin_feature_flags": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/feature-flags",
+        "aliases": [
+          "/admin/feature-flags",
+          "/api/admin/feature-flags",
+          "/api/v1/admin/feature-flags",
+          "/api/v2/admin/feature-flags"
+        ],
+        "handler": "list_feature_flags",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "list[LaunchControlFeatureFlagView]"
+      },
+      "get_api_v2_admin_launch_control": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/launch-control",
+        "aliases": [
+          "/admin/launch-control",
+          "/api/admin/launch-control",
+          "/api/v1/admin/launch-control",
+          "/api/v2/admin/launch-control"
+        ],
+        "handler": "get_launch_control_dashboard",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "LaunchControlDashboardView"
+      },
+      "get_api_v2_admin_modules_health": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/modules/health",
+        "aliases": [
+          "/admin/modules/health",
+          "/api/admin/modules/health",
+          "/api/v1/admin/modules/health",
+          "/api/v2/admin/modules/health"
+        ],
+        "handler": "get_admin_modules_health",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "list[ModuleHealthView]"
+      },
+      "get_api_v2_feature_flags_client": {
+        "method": "GET",
+        "canonical_path": "/api/v2/feature-flags/client",
+        "aliases": [
+          "/api/feature-flags/client",
+          "/api/v1/feature-flags/client",
+          "/api/v2/feature-flags/client",
+          "/feature-flags/client"
+        ],
+        "handler": "list_client_feature_flags",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "list[ClientFeatureFlagView]"
+      },
+      "patch_api_v2_admin_feature_flags_feature_key": {
+        "method": "PATCH",
+        "canonical_path": "/api/v2/admin/feature-flags/{feature_key}",
+        "aliases": [
+          "/admin/feature-flags/{feature_key}",
+          "/api/admin/feature-flags/{feature_key}",
+          "/api/v1/admin/feature-flags/{feature_key}",
+          "/api/v2/admin/feature-flags/{feature_key}"
+        ],
+        "handler": "update_feature_flag",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "LaunchControlFeatureFlagView"
+      },
+      "post_api_v2_admin_beta_access": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/beta-access",
+        "aliases": [
+          "/admin/beta-access",
+          "/api/admin/beta-access",
+          "/api/v1/admin/beta-access",
+          "/api/v2/admin/beta-access"
+        ],
+        "handler": "upsert_beta_access_grant",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "BetaAccessGrantView"
+      },
+      "post_api_v2_admin_feature_flags_feature_key_disable": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/feature-flags/{feature_key}/disable",
+        "aliases": [
+          "/admin/feature-flags/{feature_key}/disable",
+          "/api/admin/feature-flags/{feature_key}/disable",
+          "/api/v1/admin/feature-flags/{feature_key}/disable",
+          "/api/v2/admin/feature-flags/{feature_key}/disable"
+        ],
+        "handler": "disable_feature_flag",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "LaunchControlFeatureFlagView"
+      },
+      "post_api_v2_admin_feature_flags_feature_key_enable": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/feature-flags/{feature_key}/enable",
+        "aliases": [
+          "/admin/feature-flags/{feature_key}/enable",
+          "/api/admin/feature-flags/{feature_key}/enable",
+          "/api/v1/admin/feature-flags/{feature_key}/enable",
+          "/api/v2/admin/feature-flags/{feature_key}/enable"
+        ],
+        "handler": "enable_feature_flag",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "LaunchControlFeatureFlagView"
+      },
+      "post_api_v2_admin_feature_flags_feature_key_kill_switch": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/feature-flags/{feature_key}/kill-switch",
+        "aliases": [
+          "/admin/feature-flags/{feature_key}/kill-switch",
+          "/api/admin/feature-flags/{feature_key}/kill-switch",
+          "/api/v1/admin/feature-flags/{feature_key}/kill-switch",
+          "/api/v2/admin/feature-flags/{feature_key}/kill-switch"
+        ],
+        "handler": "set_feature_flag_kill_switch",
+        "source_file": "backend/app/launch_control/router.py",
+        "response_model": "LaunchControlFeatureFlagView"
+      }
+    },
     "leaderboards": {
       "get_api_v2_leaderboard_division_division": {
         "method": "GET",
@@ -8561,6 +9222,19 @@
       }
     },
     "market": {
+      "get_api_v2_market_browse_catalog": {
+        "method": "GET",
+        "canonical_path": "/api/v2/market/browse/catalog",
+        "aliases": [
+          "/api/market/browse/catalog",
+          "/api/v1/market/browse/catalog",
+          "/api/v2/market/browse/catalog",
+          "/market/browse/catalog"
+        ],
+        "handler": "get_market_browse_catalog",
+        "source_file": "backend/app/market/router.py",
+        "response_model": "MarketBrowseCatalogView"
+      },
       "get_api_v2_market_clubs_club_id_players": {
         "method": "GET",
         "canonical_path": "/api/v2/market/clubs/{club_id}/players",
@@ -9175,6 +9849,86 @@
         "handler": "create_match_timeline",
         "source_file": "backend/app/match_engine/api/router.py",
         "response_model": "MatchEventTimelineView"
+      }
+    },
+    "matchday": {
+      "get_api_v2_admin_matchday_economy_overview": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/matchday-economy/overview",
+        "aliases": [
+          "/admin/matchday-economy/overview",
+          "/api/admin/matchday-economy/overview",
+          "/api/v1/admin/matchday-economy/overview",
+          "/api/v2/admin/matchday-economy/overview"
+        ],
+        "handler": "read_admin_matchday_economy_overview",
+        "source_file": "backend/app/matchday_economy/router.py",
+        "response_model": "MatchdayEconomyOverviewView"
+      },
+      "get_api_v2_matchday_economy_overview": {
+        "method": "GET",
+        "canonical_path": "/api/v2/matchday-economy/overview",
+        "aliases": [
+          "/api/matchday-economy/overview",
+          "/api/v1/matchday-economy/overview",
+          "/api/v2/matchday-economy/overview",
+          "/matchday-economy/overview"
+        ],
+        "handler": "read_matchday_economy_overview",
+        "source_file": "backend/app/matchday_economy/router.py",
+        "response_model": "MatchdayEconomyOverviewView"
+      },
+      "post_api_v2_admin_matchday_economy_card_listings_listing_id_settle": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/matchday-economy/card-listings/{listing_id}/settle",
+        "aliases": [
+          "/admin/matchday-economy/card-listings/{listing_id}/settle",
+          "/api/admin/matchday-economy/card-listings/{listing_id}/settle",
+          "/api/v1/admin/matchday-economy/card-listings/{listing_id}/settle",
+          "/api/v2/admin/matchday-economy/card-listings/{listing_id}/settle"
+        ],
+        "handler": "settle_card_listing",
+        "source_file": "backend/app/matchday_economy/router.py",
+        "response_model": "MatchdayEconomyActionView"
+      },
+      "post_api_v2_admin_matchday_economy_federation_sanctions_sanction_id_resolve": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve",
+        "aliases": [
+          "/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve",
+          "/api/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve",
+          "/api/v1/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve",
+          "/api/v2/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve"
+        ],
+        "handler": "resolve_federation_sanction",
+        "source_file": "backend/app/matchday_economy/router.py",
+        "response_model": "MatchdayEconomyActionView"
+      },
+      "post_api_v2_admin_matchday_economy_predictions_fixture_id_settle_rewards": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/matchday-economy/predictions/{fixture_id}/settle-rewards",
+        "aliases": [
+          "/admin/matchday-economy/predictions/{fixture_id}/settle-rewards",
+          "/api/admin/matchday-economy/predictions/{fixture_id}/settle-rewards",
+          "/api/v1/admin/matchday-economy/predictions/{fixture_id}/settle-rewards",
+          "/api/v2/admin/matchday-economy/predictions/{fixture_id}/settle-rewards"
+        ],
+        "handler": "settle_prediction_rewards",
+        "source_file": "backend/app/matchday_economy/router.py",
+        "response_model": "MatchdayEconomyActionView"
+      },
+      "post_api_v2_admin_matchday_economy_tickets_ticket_id_check_in": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/matchday-economy/tickets/{ticket_id}/check-in",
+        "aliases": [
+          "/admin/matchday-economy/tickets/{ticket_id}/check-in",
+          "/api/admin/matchday-economy/tickets/{ticket_id}/check-in",
+          "/api/v1/admin/matchday-economy/tickets/{ticket_id}/check-in",
+          "/api/v2/admin/matchday-economy/tickets/{ticket_id}/check-in"
+        ],
+        "handler": "check_in_ticket",
+        "source_file": "backend/app/matchday_economy/router.py",
+        "response_model": "MatchdayEconomyActionView"
       }
     },
     "matches": {
@@ -10241,6 +10995,19 @@
         "source_file": "backend/app/notifications/router.py",
         "response_model": "list[PlatformAnnouncementView]"
       },
+      "get_api_v2_admin_notifications_event_matrix": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/notifications/event-matrix",
+        "aliases": [
+          "/admin/notifications/event-matrix",
+          "/api/admin/notifications/event-matrix",
+          "/api/v1/admin/notifications/event-matrix",
+          "/api/v2/admin/notifications/event-matrix"
+        ],
+        "handler": "admin_notification_event_matrix",
+        "source_file": "backend/app/notifications/router.py",
+        "response_model": "list[NotificationEventMatrixItemView]"
+      },
       "get_api_v2_notifications_announcements": {
         "method": "GET",
         "canonical_path": "/api/v2/notifications/announcements",
@@ -10305,6 +11072,19 @@
         "handler": "publish_announcement",
         "source_file": "backend/app/notifications/router.py",
         "response_model": "PlatformAnnouncementView"
+      },
+      "post_api_v2_admin_notifications_test_event": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/notifications/test-event",
+        "aliases": [
+          "/admin/notifications/test-event",
+          "/api/admin/notifications/test-event",
+          "/api/v1/admin/notifications/test-event",
+          "/api/v2/admin/notifications/test-event"
+        ],
+        "handler": "admin_test_notification_event",
+        "source_file": "backend/app/notifications/router.py",
+        "response_model": "NotificationTestEventView"
       },
       "post_api_v2_notifications_notification_id_read": {
         "method": "POST",
@@ -10372,6 +11152,34 @@
         "handler": "read_config_snapshot",
         "source_file": "backend/app/observability/router.py",
         "response_model": "ConfigSnapshotView"
+      }
+    },
+    "operations": {
+      "get_api_v2_admin_operations_readiness": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/operations-readiness",
+        "aliases": [
+          "/admin/operations-readiness",
+          "/api/admin/operations-readiness",
+          "/api/v1/admin/operations-readiness",
+          "/api/v2/admin/operations-readiness"
+        ],
+        "handler": "get_operations_readiness",
+        "source_file": "backend/app/operations_readiness/router.py",
+        "response_model": "OperationsReadinessSnapshot"
+      },
+      "post_api_v2_admin_operations_readiness_notify_blockers": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/operations-readiness/notify-blockers",
+        "aliases": [
+          "/admin/operations-readiness/notify-blockers",
+          "/api/admin/operations-readiness/notify-blockers",
+          "/api/v1/admin/operations-readiness/notify-blockers",
+          "/api/v2/admin/operations-readiness/notify-blockers"
+        ],
+        "handler": "notify_operations_readiness_blockers",
+        "source_file": "backend/app/operations_readiness/router.py",
+        "response_model": "OperationsReadinessNotificationDispatch"
       }
     },
     "orders": {
@@ -10811,19 +11619,6 @@
         "source_file": "backend/app/player_cards/router.py",
         "response_model": "list[PlayerCardHoldingView]"
       },
-      "get_api_v2_player_cards_packs": {
-        "method": "GET",
-        "canonical_path": "/api/v2/player-cards/packs",
-        "aliases": [
-          "/api/player-cards/packs",
-          "/api/v1/player-cards/packs",
-          "/api/v2/player-cards/packs",
-          "/player-cards/packs"
-        ],
-        "handler": "list_card_packs",
-        "source_file": "backend/app/player_cards/router.py",
-        "response_model": "list[PlayerCardPackView]"
-      },
       "get_api_v2_player_cards_listings": {
         "method": "GET",
         "canonical_path": "/api/v2/player-cards/listings",
@@ -10927,6 +11722,19 @@
         "handler": "list_marketplace_swaps",
         "source_file": "backend/app/player_cards/router.py",
         "response_model": "PlayerCardMarketplaceSearchResponse"
+      },
+      "get_api_v2_player_cards_packs": {
+        "method": "GET",
+        "canonical_path": "/api/v2/player-cards/packs",
+        "aliases": [
+          "/api/player-cards/packs",
+          "/api/v1/player-cards/packs",
+          "/api/v2/player-cards/packs",
+          "/player-cards/packs"
+        ],
+        "handler": "list_card_packs",
+        "source_file": "backend/app/player_cards/router.py",
+        "response_model": "list[PlayerCardPackView]"
       },
       "get_api_v2_player_cards_players": {
         "method": "GET",
@@ -11108,19 +11916,6 @@
         "handler": "upgrade_player_cards",
         "source_file": "backend/app/player_cards/router.py",
         "response_model": "PlayerCardUpgradeView"
-      },
-      "post_api_v2_player_cards_packs_pack_key_open": {
-        "method": "POST",
-        "canonical_path": "/api/v2/player-cards/packs/{pack_key}/open",
-        "aliases": [
-          "/api/player-cards/packs/{pack_key}/open",
-          "/api/v1/player-cards/packs/{pack_key}/open",
-          "/api/v2/player-cards/packs/{pack_key}/open",
-          "/player-cards/packs/{pack_key}/open"
-        ],
-        "handler": "open_card_pack",
-        "source_file": "backend/app/player_cards/router.py",
-        "response_model": "PlayerCardPackOpeningView"
       },
       "post_api_v2_player_cards_listings": {
         "method": "POST",
@@ -11368,6 +12163,19 @@
         "handler": "execute_marketplace_swap_listing",
         "source_file": "backend/app/player_cards/router.py",
         "response_model": "PlayerCardMarketplaceSwapExecutionView"
+      },
+      "post_api_v2_player_cards_packs_pack_key_open": {
+        "method": "POST",
+        "canonical_path": "/api/v2/player-cards/packs/{pack_key}/open",
+        "aliases": [
+          "/api/player-cards/packs/{pack_key}/open",
+          "/api/v1/player-cards/packs/{pack_key}/open",
+          "/api/v2/player-cards/packs/{pack_key}/open",
+          "/player-cards/packs/{pack_key}/open"
+        ],
+        "handler": "open_card_pack",
+        "source_file": "backend/app/player_cards/router.py",
+        "response_model": "PlayerCardPackOpeningView"
       },
       "post_api_v2_player_cards_starter_rental": {
         "method": "POST",
@@ -15820,6 +16628,54 @@
       }
     },
     "transfer": {
+      "get_api_v2_transfer_hub_listings": {
+        "method": "GET",
+        "canonical_path": "/api/v2/transfer-hub/listings",
+        "aliases": [
+          "/api/transfer-hub/listings",
+          "/api/v1/transfer-hub/listings",
+          "/api/v2/transfer-hub/listings"
+        ],
+        "handler": "list_transfer_market_listings",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "list[TransferListingView]"
+      },
+      "get_api_v2_transfer_hub_listings_listing_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/transfer-hub/listings/{listing_id}",
+        "aliases": [
+          "/api/transfer-hub/listings/{listing_id}",
+          "/api/v1/transfer-hub/listings/{listing_id}",
+          "/api/v2/transfer-hub/listings/{listing_id}"
+        ],
+        "handler": "get_transfer_market_listing",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferListingView"
+      },
+      "get_api_v2_transfer_hub_listings_listing_id_negotiation": {
+        "method": "GET",
+        "canonical_path": "/api/v2/transfer-hub/listings/{listing_id}/negotiation",
+        "aliases": [
+          "/api/transfer-hub/listings/{listing_id}/negotiation",
+          "/api/v1/transfer-hub/listings/{listing_id}/negotiation",
+          "/api/v2/transfer-hub/listings/{listing_id}/negotiation"
+        ],
+        "handler": "get_transfer_market_negotiation",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferNegotiationView"
+      },
+      "get_api_v2_transfer_hub_offers": {
+        "method": "GET",
+        "canonical_path": "/api/v2/transfer-hub/offers",
+        "aliases": [
+          "/api/transfer-hub/offers",
+          "/api/v1/transfer-hub/offers",
+          "/api/v2/transfer-hub/offers"
+        ],
+        "handler": "list_transfer_hub_offers",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "list[TransferHubOfferView]"
+      },
       "get_api_v2_transfer_market_listings": {
         "method": "GET",
         "canonical_path": "/api/v2/transfer-market/listings",
@@ -15855,6 +16711,138 @@
         "handler": "get_transfer_market_negotiation",
         "source_file": "backend/app/transfer_market/router.py",
         "response_model": "TransferNegotiationView"
+      },
+      "post_api_v2_transfer_hub_listings": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/listings",
+        "aliases": [
+          "/api/transfer-hub/listings",
+          "/api/v1/transfer-hub/listings",
+          "/api/v2/transfer-hub/listings"
+        ],
+        "handler": "create_transfer_market_listing",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferListingView"
+      },
+      "post_api_v2_transfer_hub_listings_listing_id_bids": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/listings/{listing_id}/bids",
+        "aliases": [
+          "/api/transfer-hub/listings/{listing_id}/bids",
+          "/api/v1/transfer-hub/listings/{listing_id}/bids",
+          "/api/v2/transfer-hub/listings/{listing_id}/bids"
+        ],
+        "handler": "place_transfer_market_bid",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferListingView"
+      },
+      "post_api_v2_transfer_hub_listings_listing_id_close": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/listings/{listing_id}/close",
+        "aliases": [
+          "/api/transfer-hub/listings/{listing_id}/close",
+          "/api/v1/transfer-hub/listings/{listing_id}/close",
+          "/api/v2/transfer-hub/listings/{listing_id}/close"
+        ],
+        "handler": "close_transfer_market_listing",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferListingView"
+      },
+      "post_api_v2_transfer_hub_listings_listing_id_contract_offer": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/listings/{listing_id}/contract-offer",
+        "aliases": [
+          "/api/transfer-hub/listings/{listing_id}/contract-offer",
+          "/api/v1/transfer-hub/listings/{listing_id}/contract-offer",
+          "/api/v2/transfer-hub/listings/{listing_id}/contract-offer"
+        ],
+        "handler": "submit_transfer_market_contract_offer",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferNegotiationView"
+      },
+      "post_api_v2_transfer_hub_listings_listing_id_offers": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/listings/{listing_id}/offers",
+        "aliases": [
+          "/api/transfer-hub/listings/{listing_id}/offers",
+          "/api/v1/transfer-hub/listings/{listing_id}/offers",
+          "/api/v2/transfer-hub/listings/{listing_id}/offers"
+        ],
+        "handler": "create_transfer_hub_offer",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferHubOfferView"
+      },
+      "post_api_v2_transfer_hub_offers_offer_id_accept": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/offers/{offer_id}/accept",
+        "aliases": [
+          "/api/transfer-hub/offers/{offer_id}/accept",
+          "/api/v1/transfer-hub/offers/{offer_id}/accept",
+          "/api/v2/transfer-hub/offers/{offer_id}/accept"
+        ],
+        "handler": "accept_transfer_hub_offer",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferHubOfferView"
+      },
+      "post_api_v2_transfer_hub_offers_offer_id_cancel": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/offers/{offer_id}/cancel",
+        "aliases": [
+          "/api/transfer-hub/offers/{offer_id}/cancel",
+          "/api/v1/transfer-hub/offers/{offer_id}/cancel",
+          "/api/v2/transfer-hub/offers/{offer_id}/cancel"
+        ],
+        "handler": "cancel_transfer_hub_offer",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferHubOfferView"
+      },
+      "post_api_v2_transfer_hub_offers_offer_id_counter": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/offers/{offer_id}/counter",
+        "aliases": [
+          "/api/transfer-hub/offers/{offer_id}/counter",
+          "/api/v1/transfer-hub/offers/{offer_id}/counter",
+          "/api/v2/transfer-hub/offers/{offer_id}/counter"
+        ],
+        "handler": "counter_transfer_hub_offer",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferHubOfferView"
+      },
+      "post_api_v2_transfer_hub_offers_offer_id_reject": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/offers/{offer_id}/reject",
+        "aliases": [
+          "/api/transfer-hub/offers/{offer_id}/reject",
+          "/api/v1/transfer-hub/offers/{offer_id}/reject",
+          "/api/v2/transfer-hub/offers/{offer_id}/reject"
+        ],
+        "handler": "reject_transfer_hub_offer",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferHubOfferView"
+      },
+      "post_api_v2_transfer_hub_players_player_id_transfer_request": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/players/{player_id}/transfer-request",
+        "aliases": [
+          "/api/transfer-hub/players/{player_id}/transfer-request",
+          "/api/v1/transfer-hub/players/{player_id}/transfer-request",
+          "/api/v2/transfer-hub/players/{player_id}/transfer-request"
+        ],
+        "handler": "create_transfer_hub_transfer_request",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "TransferRequestView"
+      },
+      "post_api_v2_transfer_hub_watchlist": {
+        "method": "POST",
+        "canonical_path": "/api/v2/transfer-hub/watchlist",
+        "aliases": [
+          "/api/transfer-hub/watchlist",
+          "/api/v1/transfer-hub/watchlist",
+          "/api/v2/transfer-hub/watchlist"
+        ],
+        "handler": "add_transfer_market_watchlist_entry",
+        "source_file": "backend/app/transfer_market/router.py",
+        "response_model": "MarketWatchlistEntryView"
       },
       "post_api_v2_transfer_market_coaches_club_id_demands": {
         "method": "POST",
@@ -16696,6 +17684,30 @@
       }
     },
     "viral": {
+      "get_api_v2_admin_clips_moderation": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/clips/moderation",
+        "aliases": [
+          "/api/admin/clips/moderation",
+          "/api/v1/admin/clips/moderation",
+          "/api/v2/admin/clips/moderation"
+        ],
+        "handler": "list_clip_moderation_events",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "list[ClipModerationEventView]"
+      },
+      "get_api_v2_clips_clip_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clips/{clip_id}",
+        "aliases": [
+          "/api/clips/{clip_id}",
+          "/api/v1/clips/{clip_id}",
+          "/api/v2/clips/{clip_id}"
+        ],
+        "handler": "read_clip_detail",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "ViralClipView"
+      },
       "get_api_v2_feed_following": {
         "method": "GET",
         "canonical_path": "/api/v2/feed/following",
@@ -16835,30 +17847,6 @@
         "source_file": "backend/app/viral/router.py",
         "response_model": "ViralFeedResponse"
       },
-      "get_api_v2_viral_feed_public": {
-        "method": "GET",
-        "canonical_path": "/api/v2/viral-feed",
-        "aliases": [
-          "/api/viral-feed",
-          "/api/v1/viral-feed",
-          "/api/v2/viral-feed"
-        ],
-        "handler": "read_viral_feed",
-        "source_file": "backend/app/viral/router.py",
-        "response_model": "ViralFeedResponse"
-      },
-      "get_api_v2_clips_clip_id": {
-        "method": "GET",
-        "canonical_path": "/api/v2/clips/{clip_id}",
-        "aliases": [
-          "/api/clips/{clip_id}",
-          "/api/v1/clips/{clip_id}",
-          "/api/v2/clips/{clip_id}"
-        ],
-        "handler": "read_clip_detail",
-        "source_file": "backend/app/viral/router.py",
-        "response_model": "ViralClipView"
-      },
       "get_api_v2_viral_feed_for_you": {
         "method": "GET",
         "canonical_path": "/api/v2/viral/feed/for-you",
@@ -16895,31 +17883,6 @@
         "source_file": "backend/app/viral/router.py",
         "response_model": "ViralSessionStateView"
       },
-      "post_api_v2_events_clip": {
-        "method": "POST",
-        "canonical_path": "/api/v2/events/clip",
-        "aliases": [
-          "/api/events/clip",
-          "/api/v1/events/clip",
-          "/api/v2/events/clip",
-          "/events/clip"
-        ],
-        "handler": "ingest_clip_events",
-        "source_file": "backend/app/viral/router.py",
-        "response_model": "ClipEventIngestionAccepted"
-      },
-      "get_api_v2_admin_clips_moderation": {
-        "method": "GET",
-        "canonical_path": "/api/v2/admin/clips/moderation",
-        "aliases": [
-          "/api/admin/clips/moderation",
-          "/api/v1/admin/clips/moderation",
-          "/api/v2/admin/clips/moderation"
-        ],
-        "handler": "list_clip_moderation_events",
-        "source_file": "backend/app/viral/router.py",
-        "response_model": "list[ClipModerationEventView]"
-      },
       "post_api_v2_admin_clips_clip_id_approve": {
         "method": "POST",
         "canonical_path": "/api/v2/admin/clips/{clip_id}/approve",
@@ -16955,6 +17918,19 @@
         "handler": "report_clip",
         "source_file": "backend/app/viral/router.py",
         "response_model": "ClipModerationEventView"
+      },
+      "post_api_v2_events_clip": {
+        "method": "POST",
+        "canonical_path": "/api/v2/events/clip",
+        "aliases": [
+          "/api/events/clip",
+          "/api/v1/events/clip",
+          "/api/v2/events/clip",
+          "/events/clip"
+        ],
+        "handler": "ingest_clip_events",
+        "source_file": "backend/app/viral/router.py",
+        "response_model": "ClipEventIngestionAccepted"
       }
     },
     "wallets": {
@@ -17791,11 +18767,16 @@
     "/api/v2/admin/analytics/summary": "get_api_v2_admin_analytics_summary",
     "/api/v2/admin/analytics/user-segments": "get_api_v2_admin_analytics_user_segments",
     "/api/v2/admin/ban-user": "post_api_v2_admin_ban_user",
+    "/api/v2/admin/beta-access": "post_api_v2_admin_beta_access",
+    "/api/v2/admin/beta-access/{feature_key}/{user_id}": "delete_api_v2_admin_beta_access_feature_key_user_id",
     "/api/v2/admin/broadcast-rights/jobs/run": "post_api_v2_admin_broadcast_rights_jobs_run",
     "/api/v2/admin/calendar-engine/events": "post_api_v2_admin_calendar_engine_events",
     "/api/v2/admin/calendar-engine/hosted-competitions/{competition_id}/launch": "post_api_v2_admin_calendar_engine_hosted_competitions_competition_id_launch",
     "/api/v2/admin/calendar-engine/national-competitions/{competition_id}/launch": "post_api_v2_admin_calendar_engine_national_competitions_competition_id_launch",
     "/api/v2/admin/calendar-engine/seasons": "post_api_v2_admin_calendar_engine_seasons",
+    "/api/v2/admin/clips/moderation": "get_api_v2_admin_clips_moderation",
+    "/api/v2/admin/clips/{clip_id}/approve": "post_api_v2_admin_clips_clip_id_approve",
+    "/api/v2/admin/clips/{clip_id}/block": "post_api_v2_admin_clips_clip_id_block",
     "/api/v2/admin/club-infra/seed": "post_api_v2_admin_club_infra_seed",
     "/api/v2/admin/clubs/academy-analytics": "get_api_v2_admin_clubs_academy_analytics",
     "/api/v2/admin/clubs/analytics": "get_api_v2_admin_clubs_analytics",
@@ -17806,6 +18787,13 @@
     "/api/v2/admin/clubs/summary": "get_api_v2_admin_clubs_summary",
     "/api/v2/admin/clubs/{club_id}": "get_api_v2_admin_clubs_club_id",
     "/api/v2/admin/clubs/{club_id}/moderate-branding": "post_api_v2_admin_clubs_club_id_moderate_branding",
+    "/api/v2/admin/coin-traders": "get_api_v2_admin_coin_traders",
+    "/api/v2/admin/coin-traders/orders": "get_api_v2_admin_coin_traders_orders",
+    "/api/v2/admin/coin-traders/orders/{order_id}/resolve": "post_api_v2_admin_coin_traders_orders_order_id_resolve",
+    "/api/v2/admin/coin-traders/{profile_id}/approve": "post_api_v2_admin_coin_traders_profile_id_approve",
+    "/api/v2/admin/coin-traders/{profile_id}/freeze": "post_api_v2_admin_coin_traders_profile_id_freeze",
+    "/api/v2/admin/coin-traders/{profile_id}/reject": "post_api_v2_admin_coin_traders_profile_id_reject",
+    "/api/v2/admin/command-router": "get_api_v2_admin_command_router",
     "/api/v2/admin/competitions": "post_api_v2_admin_competitions",
     "/api/v2/admin/competitions/reminders/dispatch": "post_api_v2_admin_competitions_reminders_dispatch",
     "/api/v2/admin/competitive-integrity/matches/{match_id}/validation": "get_api_v2_admin_competitive_integrity_matches_match_id_validation",
@@ -17852,6 +18840,11 @@
     "/api/v2/admin/fan-wars/points": "post_api_v2_admin_fan_wars_points",
     "/api/v2/admin/fan-wars/profiles": "put_api_v2_admin_fan_wars_profiles",
     "/api/v2/admin/fan-wars/profiles/{profile_id}/rivals/{rival_profile_id}": "post_api_v2_admin_fan_wars_profiles_profile_id_rivals_rival_profile_id",
+    "/api/v2/admin/feature-flags": "get_api_v2_admin_feature_flags",
+    "/api/v2/admin/feature-flags/{feature_key}": "patch_api_v2_admin_feature_flags_feature_key",
+    "/api/v2/admin/feature-flags/{feature_key}/disable": "post_api_v2_admin_feature_flags_feature_key_disable",
+    "/api/v2/admin/feature-flags/{feature_key}/enable": "post_api_v2_admin_feature_flags_feature_key_enable",
+    "/api/v2/admin/feature-flags/{feature_key}/kill-switch": "post_api_v2_admin_feature_flags_feature_key_kill_switch",
     "/api/v2/admin/federations/run-jobs": "post_api_v2_admin_federations_run_jobs",
     "/api/v2/admin/finance/account-controls": "post_api_v2_admin_finance_account_controls",
     "/api/v2/admin/finance/account-controls/{user_id}": "delete_api_v2_admin_finance_account_controls_user_id",
@@ -17898,6 +18891,7 @@
     "/api/v2/admin/jackpot/balance": "patch_api_v2_admin_jackpot_balance",
     "/api/v2/admin/jackpot/runtime": "post_api_v2_admin_jackpot_runtime",
     "/api/v2/admin/jackpot/trigger": "post_api_v2_admin_jackpot_trigger",
+    "/api/v2/admin/launch-control": "get_api_v2_admin_launch_control",
     "/api/v2/admin/leaderboard/season/archive": "post_api_v2_admin_leaderboard_season_archive",
     "/api/v2/admin/leaderboard/season/reset": "post_api_v2_admin_leaderboard_season_reset",
     "/api/v2/admin/managers/audit-log": "get_api_v2_admin_managers_audit_log",
@@ -17905,6 +18899,11 @@
     "/api/v2/admin/managers/competitions": "get_api_v2_admin_managers_competitions",
     "/api/v2/admin/managers/competitions/{code}": "patch_api_v2_admin_managers_competitions_code",
     "/api/v2/admin/managers/competitions/{code}/orchestrate": "get_api_v2_admin_managers_competitions_code_orchestrate",
+    "/api/v2/admin/matchday-economy/card-listings/{listing_id}/settle": "post_api_v2_admin_matchday_economy_card_listings_listing_id_settle",
+    "/api/v2/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve": "post_api_v2_admin_matchday_economy_federation_sanctions_sanction_id_resolve",
+    "/api/v2/admin/matchday-economy/overview": "get_api_v2_admin_matchday_economy_overview",
+    "/api/v2/admin/matchday-economy/predictions/{fixture_id}/settle-rewards": "post_api_v2_admin_matchday_economy_predictions_fixture_id_settle_rewards",
+    "/api/v2/admin/matchday-economy/tickets/{ticket_id}/check-in": "post_api_v2_admin_matchday_economy_tickets_ticket_id_check_in",
     "/api/v2/admin/media-engine/creator-league/clubs/{club_id}/stadium-level": "put_api_v2_admin_media_engine_creator_league_clubs_club_id_stadium_level",
     "/api/v2/admin/media-engine/creator-league/matches/{match_id}/analytics": "get_api_v2_admin_media_engine_creator_league_matches_match_id_analytics",
     "/api/v2/admin/media-engine/creator-league/matches/{match_id}/settlement": "post_api_v2_admin_media_engine_creator_league_matches_match_id_settlement",
@@ -17918,6 +18917,7 @@
     "/api/v2/admin/moderation/reports/summary": "get_api_v2_admin_moderation_reports_summary",
     "/api/v2/admin/moderation/reports/{report_id}/assign": "post_api_v2_admin_moderation_reports_report_id_assign",
     "/api/v2/admin/moderation/reports/{report_id}/resolve": "post_api_v2_admin_moderation_reports_report_id_resolve",
+    "/api/v2/admin/modules/health": "get_api_v2_admin_modules_health",
     "/api/v2/admin/national-team-engine/competitions": "post_api_v2_admin_national_team_engine_competitions",
     "/api/v2/admin/national-team-engine/competitions/seed-defaults": "post_api_v2_admin_national_team_engine_competitions_seed_defaults",
     "/api/v2/admin/national-team-engine/competitions/{competition_id}/ads": "post_api_v2_admin_national_team_engine_competitions_competition_id_ads",
@@ -17931,6 +18931,10 @@
     "/api/v2/admin/national-team-engine/competitions/{competition_id}/theme": "put_api_v2_admin_national_team_engine_competitions_competition_id_theme",
     "/api/v2/admin/national-team-engine/entries/{entry_id}/squad": "post_api_v2_admin_national_team_engine_entries_entry_id_squad",
     "/api/v2/admin/notifications/announcements": "post_api_v2_admin_notifications_announcements",
+    "/api/v2/admin/notifications/event-matrix": "get_api_v2_admin_notifications_event_matrix",
+    "/api/v2/admin/notifications/test-event": "post_api_v2_admin_notifications_test_event",
+    "/api/v2/admin/operations-readiness": "get_api_v2_admin_operations_readiness",
+    "/api/v2/admin/operations-readiness/notify-blockers": "post_api_v2_admin_operations_readiness_notify_blockers",
     "/api/v2/admin/ops/alerts": "get_api_v2_admin_ops_alerts",
     "/api/v2/admin/ops/audit": "get_api_v2_admin_ops_audit",
     "/api/v2/admin/ops/broadcast-expiration": "post_api_v2_admin_ops_broadcast_expiration",
@@ -17997,6 +19001,7 @@
     "/api/v2/admin/risk-ops/scan": "post_api_v2_admin_risk_ops_scan",
     "/api/v2/admin/risk-ops/signals": "post_api_v2_admin_risk_ops_signals",
     "/api/v2/admin/risk-ops/system-events": "post_api_v2_admin_risk_ops_system_events",
+    "/api/v2/admin/search": "get_api_v2_admin_search",
     "/api/v2/admin/sponsorship/analytics": "get_api_v2_admin_sponsorship_analytics",
     "/api/v2/admin/sponsorship/categories/{category}": "post_api_v2_admin_sponsorship_categories_category",
     "/api/v2/admin/sponsorship/contracts/{contract_id}/review": "post_api_v2_admin_sponsorship_contracts_contract_id_review",
@@ -18121,6 +19126,8 @@
     "/api/v2/champions-league/playoff-bracket": "post_api_v2_champions_league_playoff_bracket",
     "/api/v2/champions-league/prize-pool/preview": "post_api_v2_champions_league_prize_pool_preview",
     "/api/v2/champions-league/qualification-map": "post_api_v2_champions_league_qualification_map",
+    "/api/v2/clips/{clip_id}": "get_api_v2_clips_clip_id",
+    "/api/v2/clips/{clip_id}/report": "post_api_v2_clips_clip_id_report",
     "/api/v2/club-infra/clubs/{club_id}": "get_api_v2_club_infra_clubs_club_id",
     "/api/v2/club-infra/clubs/{club_id}/support": "post_api_v2_club_infra_clubs_club_id_support",
     "/api/v2/club-infra/my": "get_api_v2_club_infra_my",
@@ -18128,6 +19135,7 @@
     "/api/v2/club-infra/my/stadium/upgrade": "post_api_v2_club_infra_my_stadium_upgrade",
     "/api/v2/club/identity": "get_api_v2_club_identity",
     "/api/v2/clubs": "post_api_v2_clubs",
+    "/api/v2/clubs/admin/club-lifecycle": "get_api_v2_clubs_admin_club_lifecycle",
     "/api/v2/clubs/catalog": "get_api_v2_clubs_catalog",
     "/api/v2/clubs/catalog/purchase": "post_api_v2_clubs_catalog_purchase",
     "/api/v2/clubs/list": "post_api_v2_clubs_list",
@@ -18140,6 +19148,7 @@
     "/api/v2/clubs/{club_id}/academy/players/{player_id}": "patch_api_v2_clubs_club_id_academy_players_player_id",
     "/api/v2/clubs/{club_id}/academy/programs": "post_api_v2_clubs_club_id_academy_programs",
     "/api/v2/clubs/{club_id}/academy/training-cycles": "get_api_v2_clubs_club_id_academy_training_cycles",
+    "/api/v2/clubs/{club_id}/advance-lifecycle": "post_api_v2_clubs_club_id_advance_lifecycle",
     "/api/v2/clubs/{club_id}/badge": "get_api_v2_clubs_club_id_badge",
     "/api/v2/clubs/{club_id}/branding": "post_api_v2_clubs_club_id_branding",
     "/api/v2/clubs/{club_id}/buy-tokens": "post_api_v2_clubs_club_id_buy_tokens",
@@ -18153,16 +19162,28 @@
     "/api/v2/clubs/{club_id}/finances/budget": "get_api_v2_clubs_club_id_finances_budget",
     "/api/v2/clubs/{club_id}/finances/cashflow": "get_api_v2_clubs_club_id_finances_cashflow",
     "/api/v2/clubs/{club_id}/finances/ledger": "get_api_v2_clubs_club_id_finances_ledger",
+    "/api/v2/clubs/{club_id}/growth": "get_api_v2_clubs_club_id_growth",
+    "/api/v2/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond": "post_api_v2_clubs_club_id_growth_academy_contracts_offer_id_respond",
+    "/api/v2/clubs/{club_id}/growth/academy/generate-prospects": "post_api_v2_clubs_club_id_growth_academy_generate_prospects",
+    "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract": "post_api_v2_clubs_club_id_growth_academy_prospects_prospect_id_offer_contract",
+    "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote": "post_api_v2_clubs_club_id_growth_academy_prospects_prospect_id_promote",
+    "/api/v2/clubs/{club_id}/growth/academy/upgrade": "post_api_v2_clubs_club_id_growth_academy_upgrade",
+    "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept": "post_api_v2_clubs_club_id_growth_staff_contracts_contract_id_accept",
+    "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate": "post_api_v2_clubs_club_id_growth_staff_contracts_contract_id_terminate",
+    "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer": "post_api_v2_clubs_club_id_growth_staff_staff_id_offer",
     "/api/v2/clubs/{club_id}/honors-timeline": "get_api_v2_clubs_club_id_honors_timeline",
     "/api/v2/clubs/{club_id}/identity": "patch_api_v2_clubs_club_id_identity",
     "/api/v2/clubs/{club_id}/identity/metrics": "get_api_v2_clubs_club_id_identity_metrics",
     "/api/v2/clubs/{club_id}/identity/metrics/refresh": "post_api_v2_clubs_club_id_identity_metrics_refresh",
     "/api/v2/clubs/{club_id}/jerseys": "post_api_v2_clubs_club_id_jerseys",
     "/api/v2/clubs/{club_id}/jerseys/{jersey_id}": "patch_api_v2_clubs_club_id_jerseys_jersey_id",
+    "/api/v2/clubs/{club_id}/lifecycle": "get_api_v2_clubs_club_id_lifecycle",
+    "/api/v2/clubs/{club_id}/operating-dashboard": "get_api_v2_clubs_club_id_operating_dashboard",
     "/api/v2/clubs/{club_id}/ownership": "get_api_v2_clubs_club_id_ownership",
     "/api/v2/clubs/{club_id}/prestige": "get_api_v2_clubs_club_id_prestige",
     "/api/v2/clubs/{club_id}/proposals": "post_api_v2_clubs_club_id_proposals",
     "/api/v2/clubs/{club_id}/purchases": "get_api_v2_clubs_club_id_purchases",
+    "/api/v2/clubs/{club_id}/readiness": "get_api_v2_clubs_club_id_readiness",
     "/api/v2/clubs/{club_id}/reputation": "get_api_v2_clubs_club_id_reputation",
     "/api/v2/clubs/{club_id}/reputation/history": "get_api_v2_clubs_club_id_reputation_history",
     "/api/v2/clubs/{club_id}/rivalries": "get_api_v2_clubs_club_id_rivalries",
@@ -18203,12 +19224,26 @@
     "/api/v2/clubs/{club_id}/sponsorships/contracts": "post_api_v2_clubs_club_id_sponsorships_contracts",
     "/api/v2/clubs/{club_id}/sponsorships/contracts/{contract_id}": "patch_api_v2_clubs_club_id_sponsorships_contracts_contract_id",
     "/api/v2/clubs/{club_id}/squad": "get_api_v2_clubs_club_id_squad",
+    "/api/v2/clubs/{club_id}/squad-registration": "post_api_v2_clubs_club_id_squad_registration",
+    "/api/v2/clubs/{club_id}/squad-registration/lock": "post_api_v2_clubs_club_id_squad_registration_lock",
+    "/api/v2/clubs/{club_id}/squad-registration/submit": "post_api_v2_clubs_club_id_squad_registration_submit",
     "/api/v2/clubs/{club_id}/treasury": "get_api_v2_clubs_club_id_treasury",
     "/api/v2/clubs/{club_id}/trophies": "get_api_v2_clubs_club_id_trophies",
     "/api/v2/clubs/{club_id}/trophy-cabinet": "get_api_v2_clubs_club_id_trophy_cabinet",
     "/api/v2/clubs/{club_id}/valuation": "get_api_v2_clubs_club_id_valuation",
     "/api/v2/clubs/{club_id}/vote": "post_api_v2_clubs_club_id_vote",
     "/api/v2/clubs/{club_id}/youth-pipeline": "get_api_v2_clubs_club_id_youth_pipeline",
+    "/api/v2/coin-traders": "get_api_v2_coin_traders",
+    "/api/v2/coin-traders/apply": "post_api_v2_coin_traders_apply",
+    "/api/v2/coin-traders/me": "put_api_v2_coin_traders_me",
+    "/api/v2/coin-traders/me/rates": "put_api_v2_coin_traders_me_rates",
+    "/api/v2/coin-traders/orders": "post_api_v2_coin_traders_orders",
+    "/api/v2/coin-traders/orders/{order_id}/accept": "post_api_v2_coin_traders_orders_order_id_accept",
+    "/api/v2/coin-traders/orders/{order_id}/cancel": "post_api_v2_coin_traders_orders_order_id_cancel",
+    "/api/v2/coin-traders/orders/{order_id}/confirm": "post_api_v2_coin_traders_orders_order_id_confirm",
+    "/api/v2/coin-traders/orders/{order_id}/dispute": "post_api_v2_coin_traders_orders_order_id_dispute",
+    "/api/v2/coin-traders/orders/{order_id}/proof": "post_api_v2_coin_traders_orders_order_id_proof",
+    "/api/v2/coin-traders/{profile_id}": "get_api_v2_coin_traders_profile_id",
     "/api/v2/commentary/profiles": "get_api_v2_commentary_profiles",
     "/api/v2/commentary/select": "post_api_v2_commentary_select",
     "/api/v2/community/creator-clubs/{club_id}/fan-competitions": "post_api_v2_community_creator_clubs_club_id_fan_competitions",
@@ -18367,7 +19402,10 @@
     "/api/v2/fast-cups/{cup_id}/countdown": "get_api_v2_fast_cups_cup_id_countdown",
     "/api/v2/fast-cups/{cup_id}/join": "post_api_v2_fast_cups_cup_id_join",
     "/api/v2/fast-cups/{cup_id}/result-summary": "get_api_v2_fast_cups_cup_id_result_summary",
+    "/api/v2/feature-flags/client": "get_api_v2_feature_flags_client",
     "/api/v2/federations": "post_api_v2_federations",
+    "/api/v2/federations/national-associations/{country_code}": "get_api_v2_federations_national_associations_country_code",
+    "/api/v2/federations/national-associations/{country_code}/eligibility-review": "post_api_v2_federations_national_associations_country_code_eligibility_review",
     "/api/v2/federations/proposals/{proposal_id}/votes": "post_api_v2_federations_proposals_proposal_id_votes",
     "/api/v2/federations/rankings": "get_api_v2_federations_rankings",
     "/api/v2/federations/regional-tournaments": "get_api_v2_federations_regional_tournaments",
@@ -18497,6 +19535,7 @@
     "/api/v2/managers/{manager_id}/history": "get_api_v2_managers_manager_id_history",
     "/api/v2/managers/{manager_id}/release": "post_api_v2_managers_manager_id_release",
     "/api/v2/market/bid": "post_api_v2_market_bid",
+    "/api/v2/market/browse/catalog": "get_api_v2_market_browse_catalog",
     "/api/v2/market/buy": "post_api_v2_market_buy",
     "/api/v2/market/clubs/{club_id}/players": "get_api_v2_market_clubs_club_id_players",
     "/api/v2/market/leagues": "get_api_v2_market_leagues",
@@ -18547,6 +19586,7 @@
     "/api/v2/match/{match_id}/live": "get_api_v2_match_match_id_live",
     "/api/v2/match/{match_id}/unity-access": "post_api_v2_match_match_id_unity_access",
     "/api/v2/match/{match_id}/unity-access/refresh": "post_api_v2_match_match_id_unity_access_refresh",
+    "/api/v2/matchday-economy/overview": "get_api_v2_matchday_economy_overview",
     "/api/v2/matches/complete": "post_api_v2_matches_complete",
     "/api/v2/matches/live/active": "get_api_v2_matches_live_active",
     "/api/v2/matches/start": "post_api_v2_matches_start",
@@ -18659,6 +19699,8 @@
     "/api/v2/platform/switch": "post_api_v2_platform_switch",
     "/api/v2/player-cards/admin/preseeded-regens": "get_api_v2_player_cards_admin_preseeded_regens",
     "/api/v2/player-cards/admin/preseeded-regens/mint": "post_api_v2_player_cards_admin_preseeded_regens_mint",
+    "/api/v2/player-cards/cards/burn": "post_api_v2_player_cards_cards_burn",
+    "/api/v2/player-cards/cards/upgrade": "post_api_v2_player_cards_cards_upgrade",
     "/api/v2/player-cards/inventory": "get_api_v2_player_cards_inventory",
     "/api/v2/player-cards/listings": "post_api_v2_player_cards_listings",
     "/api/v2/player-cards/listings/mine": "get_api_v2_player_cards_listings_mine",
@@ -18682,6 +19724,8 @@
     "/api/v2/player-cards/marketplace/swaps": "post_api_v2_player_cards_marketplace_swaps",
     "/api/v2/player-cards/marketplace/swaps/{listing_id}/cancel": "post_api_v2_player_cards_marketplace_swaps_listing_id_cancel",
     "/api/v2/player-cards/marketplace/swaps/{listing_id}/execute": "post_api_v2_player_cards_marketplace_swaps_listing_id_execute",
+    "/api/v2/player-cards/packs": "get_api_v2_player_cards_packs",
+    "/api/v2/player-cards/packs/{pack_key}/open": "post_api_v2_player_cards_packs_pack_key_open",
     "/api/v2/player-cards/players": "get_api_v2_player_cards_players",
     "/api/v2/player-cards/players/{player_id}": "get_api_v2_player_cards_players_player_id",
     "/api/v2/player-cards/starter-rental": "post_api_v2_player_cards_starter_rental",
@@ -18823,6 +19867,8 @@
     "/api/v2/scout/report/{player_id}": "get_api_v2_scout_report_player_id",
     "/api/v2/scouts": "post_api_v2_scouts",
     "/api/v2/scouts/{scout_id}/discover": "post_api_v2_scouts_scout_id_discover",
+    "/api/v2/search": "get_api_v2_search",
+    "/api/v2/search/suggest": "get_api_v2_search_suggest",
     "/api/v2/season-pass": "get_api_v2_season_pass",
     "/api/v2/season-pass/claim": "post_api_v2_season_pass_claim",
     "/api/v2/season-pass/me": "get_api_v2_season_pass_me",
@@ -18885,6 +19931,20 @@
     "/api/v2/tournaments/{tournament_id}/matches/{match_id}/result": "post_api_v2_tournaments_tournament_id_matches_match_id_result",
     "/api/v2/tournaments/{tournament_id}/rent": "post_api_v2_tournaments_tournament_id_rent",
     "/api/v2/tournaments/{tournament_id}/squad": "post_api_v2_tournaments_tournament_id_squad",
+    "/api/v2/transfer-hub/listings": "post_api_v2_transfer_hub_listings",
+    "/api/v2/transfer-hub/listings/{listing_id}": "get_api_v2_transfer_hub_listings_listing_id",
+    "/api/v2/transfer-hub/listings/{listing_id}/bids": "post_api_v2_transfer_hub_listings_listing_id_bids",
+    "/api/v2/transfer-hub/listings/{listing_id}/close": "post_api_v2_transfer_hub_listings_listing_id_close",
+    "/api/v2/transfer-hub/listings/{listing_id}/contract-offer": "post_api_v2_transfer_hub_listings_listing_id_contract_offer",
+    "/api/v2/transfer-hub/listings/{listing_id}/negotiation": "get_api_v2_transfer_hub_listings_listing_id_negotiation",
+    "/api/v2/transfer-hub/listings/{listing_id}/offers": "post_api_v2_transfer_hub_listings_listing_id_offers",
+    "/api/v2/transfer-hub/offers": "get_api_v2_transfer_hub_offers",
+    "/api/v2/transfer-hub/offers/{offer_id}/accept": "post_api_v2_transfer_hub_offers_offer_id_accept",
+    "/api/v2/transfer-hub/offers/{offer_id}/cancel": "post_api_v2_transfer_hub_offers_offer_id_cancel",
+    "/api/v2/transfer-hub/offers/{offer_id}/counter": "post_api_v2_transfer_hub_offers_offer_id_counter",
+    "/api/v2/transfer-hub/offers/{offer_id}/reject": "post_api_v2_transfer_hub_offers_offer_id_reject",
+    "/api/v2/transfer-hub/players/{player_id}/transfer-request": "post_api_v2_transfer_hub_players_player_id_transfer_request",
+    "/api/v2/transfer-hub/watchlist": "post_api_v2_transfer_hub_watchlist",
     "/api/v2/transfer-market/clubs/{club_id}/team-dynamics": "put_api_v2_transfer_market_clubs_club_id_team_dynamics",
     "/api/v2/transfer-market/coaches/{club_id}/demands": "post_api_v2_transfer_market_coaches_club_id_demands",
     "/api/v2/transfer-market/coaches/{club_id}/profile": "put_api_v2_transfer_market_coaches_club_id_profile",
@@ -18929,6 +19989,7 @@
     "/api/v2/value-engine/snapshots/{player_id}/history": "get_api_v2_value_engine_snapshots_player_id_history",
     "/api/v2/value-engine/snapshots/{player_id}/latest": "get_api_v2_value_engine_snapshots_player_id_latest",
     "/api/v2/value-engine/snapshots/{player_id}/trend-summary": "get_api_v2_value_engine_snapshots_player_id_trend_summary",
+    "/api/v2/viral-feed": "get_api_v2_viral_feed",
     "/api/v2/viral/accounts": "get_api_v2_viral_accounts",
     "/api/v2/viral/cascades": "get_api_v2_viral_cascades",
     "/api/v2/viral/clips/trending": "get_api_v2_viral_clips_trending",
@@ -18999,12 +20060,15 @@
     "/admin/admin-engine/reward-rules": "/api/v2/admin/admin-engine/reward-rules",
     "/admin/admin-engine/schedule-preview": "/api/v2/admin/admin-engine/schedule-preview",
     "/admin/ban-user": "/api/v2/admin/ban-user",
+    "/admin/beta-access": "/api/v2/admin/beta-access",
+    "/admin/beta-access/{feature_key}/{user_id}": "/api/v2/admin/beta-access/{feature_key}/{user_id}",
     "/admin/broadcast-rights/jobs/run": "/api/v2/admin/broadcast-rights/jobs/run",
     "/admin/calendar-engine/events": "/api/v2/admin/calendar-engine/events",
     "/admin/calendar-engine/hosted-competitions/{competition_id}/launch": "/api/v2/admin/calendar-engine/hosted-competitions/{competition_id}/launch",
     "/admin/calendar-engine/national-competitions/{competition_id}/launch": "/api/v2/admin/calendar-engine/national-competitions/{competition_id}/launch",
     "/admin/calendar-engine/seasons": "/api/v2/admin/calendar-engine/seasons",
     "/admin/club-infra/seed": "/api/v2/admin/club-infra/seed",
+    "/admin/command-router": "/api/v2/admin/command-router",
     "/admin/config/liquidity-bands": "/api/v2/admin/config/liquidity-bands",
     "/admin/config/player-card-market-integrity": "/api/v2/admin/config/player-card-market-integrity",
     "/admin/config/supply-tiers": "/api/v2/admin/config/supply-tiers",
@@ -19047,6 +20111,11 @@
     "/admin/fan-wars/points": "/api/v2/admin/fan-wars/points",
     "/admin/fan-wars/profiles": "/api/v2/admin/fan-wars/profiles",
     "/admin/fan-wars/profiles/{profile_id}/rivals/{rival_profile_id}": "/api/v2/admin/fan-wars/profiles/{profile_id}/rivals/{rival_profile_id}",
+    "/admin/feature-flags": "/api/v2/admin/feature-flags",
+    "/admin/feature-flags/{feature_key}": "/api/v2/admin/feature-flags/{feature_key}",
+    "/admin/feature-flags/{feature_key}/disable": "/api/v2/admin/feature-flags/{feature_key}/disable",
+    "/admin/feature-flags/{feature_key}/enable": "/api/v2/admin/feature-flags/{feature_key}/enable",
+    "/admin/feature-flags/{feature_key}/kill-switch": "/api/v2/admin/feature-flags/{feature_key}/kill-switch",
     "/admin/federations/run-jobs": "/api/v2/admin/federations/run-jobs",
     "/admin/flags": "/api/v2/admin/flags",
     "/admin/football-events/categories": "/api/v2/admin/football-events/categories",
@@ -19067,8 +20136,14 @@
     "/admin/jackpot/balance": "/api/v2/admin/jackpot/balance",
     "/admin/jackpot/runtime": "/api/v2/admin/jackpot/runtime",
     "/admin/jackpot/trigger": "/api/v2/admin/jackpot/trigger",
+    "/admin/launch-control": "/api/v2/admin/launch-control",
     "/admin/leaderboard/season/archive": "/api/v2/admin/leaderboard/season/archive",
     "/admin/leaderboard/season/reset": "/api/v2/admin/leaderboard/season/reset",
+    "/admin/matchday-economy/card-listings/{listing_id}/settle": "/api/v2/admin/matchday-economy/card-listings/{listing_id}/settle",
+    "/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve": "/api/v2/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve",
+    "/admin/matchday-economy/overview": "/api/v2/admin/matchday-economy/overview",
+    "/admin/matchday-economy/predictions/{fixture_id}/settle-rewards": "/api/v2/admin/matchday-economy/predictions/{fixture_id}/settle-rewards",
+    "/admin/matchday-economy/tickets/{ticket_id}/check-in": "/api/v2/admin/matchday-economy/tickets/{ticket_id}/check-in",
     "/admin/media-engine/creator-league/clubs/{club_id}/stadium-level": "/api/v2/admin/media-engine/creator-league/clubs/{club_id}/stadium-level",
     "/admin/media-engine/creator-league/matches/{match_id}/analytics": "/api/v2/admin/media-engine/creator-league/matches/{match_id}/analytics",
     "/admin/media-engine/creator-league/matches/{match_id}/settlement": "/api/v2/admin/media-engine/creator-league/matches/{match_id}/settlement",
@@ -19082,6 +20157,7 @@
     "/admin/moderation/reports/summary": "/api/v2/admin/moderation/reports/summary",
     "/admin/moderation/reports/{report_id}/assign": "/api/v2/admin/moderation/reports/{report_id}/assign",
     "/admin/moderation/reports/{report_id}/resolve": "/api/v2/admin/moderation/reports/{report_id}/resolve",
+    "/admin/modules/health": "/api/v2/admin/modules/health",
     "/admin/national-team-engine/competitions": "/api/v2/admin/national-team-engine/competitions",
     "/admin/national-team-engine/competitions/seed-defaults": "/api/v2/admin/national-team-engine/competitions/seed-defaults",
     "/admin/national-team-engine/competitions/{competition_id}/ads": "/api/v2/admin/national-team-engine/competitions/{competition_id}/ads",
@@ -19095,6 +20171,10 @@
     "/admin/national-team-engine/competitions/{competition_id}/theme": "/api/v2/admin/national-team-engine/competitions/{competition_id}/theme",
     "/admin/national-team-engine/entries/{entry_id}/squad": "/api/v2/admin/national-team-engine/entries/{entry_id}/squad",
     "/admin/notifications/announcements": "/api/v2/admin/notifications/announcements",
+    "/admin/notifications/event-matrix": "/api/v2/admin/notifications/event-matrix",
+    "/admin/notifications/test-event": "/api/v2/admin/notifications/test-event",
+    "/admin/operations-readiness": "/api/v2/admin/operations-readiness",
+    "/admin/operations-readiness/notify-blockers": "/api/v2/admin/operations-readiness/notify-blockers",
     "/admin/ops/alerts": "/api/v2/admin/ops/alerts",
     "/admin/ops/audit": "/api/v2/admin/ops/audit",
     "/admin/ops/broadcast-expiration": "/api/v2/admin/ops/broadcast-expiration",
@@ -19148,6 +20228,7 @@
     "/admin/risk-ops/scan": "/api/v2/admin/risk-ops/scan",
     "/admin/risk-ops/signals": "/api/v2/admin/risk-ops/signals",
     "/admin/risk-ops/system-events": "/api/v2/admin/risk-ops/system-events",
+    "/admin/search": "/api/v2/admin/search",
     "/admin/sponsorship/analytics": "/api/v2/admin/sponsorship/analytics",
     "/admin/sponsorship/categories/{category}": "/api/v2/admin/sponsorship/categories/{category}",
     "/admin/sponsorship/contracts/{contract_id}/review": "/api/v2/admin/sponsorship/contracts/{contract_id}/review",
@@ -19211,11 +20292,16 @@
     "/api/admin/analytics/summary": "/api/v2/admin/analytics/summary",
     "/api/admin/analytics/user-segments": "/api/v2/admin/analytics/user-segments",
     "/api/admin/ban-user": "/api/v2/admin/ban-user",
+    "/api/admin/beta-access": "/api/v2/admin/beta-access",
+    "/api/admin/beta-access/{feature_key}/{user_id}": "/api/v2/admin/beta-access/{feature_key}/{user_id}",
     "/api/admin/broadcast-rights/jobs/run": "/api/v2/admin/broadcast-rights/jobs/run",
     "/api/admin/calendar-engine/events": "/api/v2/admin/calendar-engine/events",
     "/api/admin/calendar-engine/hosted-competitions/{competition_id}/launch": "/api/v2/admin/calendar-engine/hosted-competitions/{competition_id}/launch",
     "/api/admin/calendar-engine/national-competitions/{competition_id}/launch": "/api/v2/admin/calendar-engine/national-competitions/{competition_id}/launch",
     "/api/admin/calendar-engine/seasons": "/api/v2/admin/calendar-engine/seasons",
+    "/api/admin/clips/moderation": "/api/v2/admin/clips/moderation",
+    "/api/admin/clips/{clip_id}/approve": "/api/v2/admin/clips/{clip_id}/approve",
+    "/api/admin/clips/{clip_id}/block": "/api/v2/admin/clips/{clip_id}/block",
     "/api/admin/club-infra/seed": "/api/v2/admin/club-infra/seed",
     "/api/admin/clubs/academy-analytics": "/api/v2/admin/clubs/academy-analytics",
     "/api/admin/clubs/analytics": "/api/v2/admin/clubs/analytics",
@@ -19226,6 +20312,13 @@
     "/api/admin/clubs/summary": "/api/v2/admin/clubs/summary",
     "/api/admin/clubs/{club_id}": "/api/v2/admin/clubs/{club_id}",
     "/api/admin/clubs/{club_id}/moderate-branding": "/api/v2/admin/clubs/{club_id}/moderate-branding",
+    "/api/admin/coin-traders": "/api/v2/admin/coin-traders",
+    "/api/admin/coin-traders/orders": "/api/v2/admin/coin-traders/orders",
+    "/api/admin/coin-traders/orders/{order_id}/resolve": "/api/v2/admin/coin-traders/orders/{order_id}/resolve",
+    "/api/admin/coin-traders/{profile_id}/approve": "/api/v2/admin/coin-traders/{profile_id}/approve",
+    "/api/admin/coin-traders/{profile_id}/freeze": "/api/v2/admin/coin-traders/{profile_id}/freeze",
+    "/api/admin/coin-traders/{profile_id}/reject": "/api/v2/admin/coin-traders/{profile_id}/reject",
+    "/api/admin/command-router": "/api/v2/admin/command-router",
     "/api/admin/competitions": "/api/v2/admin/competitions",
     "/api/admin/competitions/reminders/dispatch": "/api/v2/admin/competitions/reminders/dispatch",
     "/api/admin/competitive-integrity/matches/{match_id}/validation": "/api/v2/admin/competitive-integrity/matches/{match_id}/validation",
@@ -19272,6 +20365,11 @@
     "/api/admin/fan-wars/points": "/api/v2/admin/fan-wars/points",
     "/api/admin/fan-wars/profiles": "/api/v2/admin/fan-wars/profiles",
     "/api/admin/fan-wars/profiles/{profile_id}/rivals/{rival_profile_id}": "/api/v2/admin/fan-wars/profiles/{profile_id}/rivals/{rival_profile_id}",
+    "/api/admin/feature-flags": "/api/v2/admin/feature-flags",
+    "/api/admin/feature-flags/{feature_key}": "/api/v2/admin/feature-flags/{feature_key}",
+    "/api/admin/feature-flags/{feature_key}/disable": "/api/v2/admin/feature-flags/{feature_key}/disable",
+    "/api/admin/feature-flags/{feature_key}/enable": "/api/v2/admin/feature-flags/{feature_key}/enable",
+    "/api/admin/feature-flags/{feature_key}/kill-switch": "/api/v2/admin/feature-flags/{feature_key}/kill-switch",
     "/api/admin/federations/run-jobs": "/api/v2/admin/federations/run-jobs",
     "/api/admin/finance/account-controls": "/api/v2/admin/finance/account-controls",
     "/api/admin/finance/account-controls/{user_id}": "/api/v2/admin/finance/account-controls/{user_id}",
@@ -19318,6 +20416,7 @@
     "/api/admin/jackpot/balance": "/api/v2/admin/jackpot/balance",
     "/api/admin/jackpot/runtime": "/api/v2/admin/jackpot/runtime",
     "/api/admin/jackpot/trigger": "/api/v2/admin/jackpot/trigger",
+    "/api/admin/launch-control": "/api/v2/admin/launch-control",
     "/api/admin/leaderboard/season/archive": "/api/v2/admin/leaderboard/season/archive",
     "/api/admin/leaderboard/season/reset": "/api/v2/admin/leaderboard/season/reset",
     "/api/admin/managers/audit-log": "/api/v2/admin/managers/audit-log",
@@ -19325,6 +20424,11 @@
     "/api/admin/managers/competitions": "/api/v2/admin/managers/competitions",
     "/api/admin/managers/competitions/{code}": "/api/v2/admin/managers/competitions/{code}",
     "/api/admin/managers/competitions/{code}/orchestrate": "/api/v2/admin/managers/competitions/{code}/orchestrate",
+    "/api/admin/matchday-economy/card-listings/{listing_id}/settle": "/api/v2/admin/matchday-economy/card-listings/{listing_id}/settle",
+    "/api/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve": "/api/v2/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve",
+    "/api/admin/matchday-economy/overview": "/api/v2/admin/matchday-economy/overview",
+    "/api/admin/matchday-economy/predictions/{fixture_id}/settle-rewards": "/api/v2/admin/matchday-economy/predictions/{fixture_id}/settle-rewards",
+    "/api/admin/matchday-economy/tickets/{ticket_id}/check-in": "/api/v2/admin/matchday-economy/tickets/{ticket_id}/check-in",
     "/api/admin/media-engine/creator-league/clubs/{club_id}/stadium-level": "/api/v2/admin/media-engine/creator-league/clubs/{club_id}/stadium-level",
     "/api/admin/media-engine/creator-league/matches/{match_id}/analytics": "/api/v2/admin/media-engine/creator-league/matches/{match_id}/analytics",
     "/api/admin/media-engine/creator-league/matches/{match_id}/settlement": "/api/v2/admin/media-engine/creator-league/matches/{match_id}/settlement",
@@ -19338,6 +20442,7 @@
     "/api/admin/moderation/reports/summary": "/api/v2/admin/moderation/reports/summary",
     "/api/admin/moderation/reports/{report_id}/assign": "/api/v2/admin/moderation/reports/{report_id}/assign",
     "/api/admin/moderation/reports/{report_id}/resolve": "/api/v2/admin/moderation/reports/{report_id}/resolve",
+    "/api/admin/modules/health": "/api/v2/admin/modules/health",
     "/api/admin/national-team-engine/competitions": "/api/v2/admin/national-team-engine/competitions",
     "/api/admin/national-team-engine/competitions/seed-defaults": "/api/v2/admin/national-team-engine/competitions/seed-defaults",
     "/api/admin/national-team-engine/competitions/{competition_id}/ads": "/api/v2/admin/national-team-engine/competitions/{competition_id}/ads",
@@ -19351,6 +20456,10 @@
     "/api/admin/national-team-engine/competitions/{competition_id}/theme": "/api/v2/admin/national-team-engine/competitions/{competition_id}/theme",
     "/api/admin/national-team-engine/entries/{entry_id}/squad": "/api/v2/admin/national-team-engine/entries/{entry_id}/squad",
     "/api/admin/notifications/announcements": "/api/v2/admin/notifications/announcements",
+    "/api/admin/notifications/event-matrix": "/api/v2/admin/notifications/event-matrix",
+    "/api/admin/notifications/test-event": "/api/v2/admin/notifications/test-event",
+    "/api/admin/operations-readiness": "/api/v2/admin/operations-readiness",
+    "/api/admin/operations-readiness/notify-blockers": "/api/v2/admin/operations-readiness/notify-blockers",
     "/api/admin/ops/alerts": "/api/v2/admin/ops/alerts",
     "/api/admin/ops/audit": "/api/v2/admin/ops/audit",
     "/api/admin/ops/broadcast-expiration": "/api/v2/admin/ops/broadcast-expiration",
@@ -19417,6 +20526,7 @@
     "/api/admin/risk-ops/scan": "/api/v2/admin/risk-ops/scan",
     "/api/admin/risk-ops/signals": "/api/v2/admin/risk-ops/signals",
     "/api/admin/risk-ops/system-events": "/api/v2/admin/risk-ops/system-events",
+    "/api/admin/search": "/api/v2/admin/search",
     "/api/admin/sponsorship/analytics": "/api/v2/admin/sponsorship/analytics",
     "/api/admin/sponsorship/categories/{category}": "/api/v2/admin/sponsorship/categories/{category}",
     "/api/admin/sponsorship/contracts/{contract_id}/review": "/api/v2/admin/sponsorship/contracts/{contract_id}/review",
@@ -19540,6 +20650,8 @@
     "/api/champions-league/playoff-bracket": "/api/v2/champions-league/playoff-bracket",
     "/api/champions-league/prize-pool/preview": "/api/v2/champions-league/prize-pool/preview",
     "/api/champions-league/qualification-map": "/api/v2/champions-league/qualification-map",
+    "/api/clips/{clip_id}": "/api/v2/clips/{clip_id}",
+    "/api/clips/{clip_id}/report": "/api/v2/clips/{clip_id}/report",
     "/api/club-infra/clubs/{club_id}": "/api/v2/club-infra/clubs/{club_id}",
     "/api/club-infra/clubs/{club_id}/support": "/api/v2/club-infra/clubs/{club_id}/support",
     "/api/club-infra/my": "/api/v2/club-infra/my",
@@ -19547,6 +20659,7 @@
     "/api/club-infra/my/stadium/upgrade": "/api/v2/club-infra/my/stadium/upgrade",
     "/api/club/identity": "/api/v2/club/identity",
     "/api/clubs": "/api/v2/clubs",
+    "/api/clubs/admin/club-lifecycle": "/api/v2/clubs/admin/club-lifecycle",
     "/api/clubs/catalog": "/api/v2/clubs/catalog",
     "/api/clubs/catalog/purchase": "/api/v2/clubs/catalog/purchase",
     "/api/clubs/marketplace": "/api/v2/clubs/marketplace",
@@ -19557,6 +20670,7 @@
     "/api/clubs/{club_id}/academy/players/{player_id}": "/api/v2/clubs/{club_id}/academy/players/{player_id}",
     "/api/clubs/{club_id}/academy/programs": "/api/v2/clubs/{club_id}/academy/programs",
     "/api/clubs/{club_id}/academy/training-cycles": "/api/v2/clubs/{club_id}/academy/training-cycles",
+    "/api/clubs/{club_id}/advance-lifecycle": "/api/v2/clubs/{club_id}/advance-lifecycle",
     "/api/clubs/{club_id}/badge": "/api/v2/clubs/{club_id}/badge",
     "/api/clubs/{club_id}/branding": "/api/v2/clubs/{club_id}/branding",
     "/api/clubs/{club_id}/buy-tokens": "/api/v2/clubs/{club_id}/buy-tokens",
@@ -19569,16 +20683,28 @@
     "/api/clubs/{club_id}/finances/budget": "/api/v2/clubs/{club_id}/finances/budget",
     "/api/clubs/{club_id}/finances/cashflow": "/api/v2/clubs/{club_id}/finances/cashflow",
     "/api/clubs/{club_id}/finances/ledger": "/api/v2/clubs/{club_id}/finances/ledger",
+    "/api/clubs/{club_id}/growth": "/api/v2/clubs/{club_id}/growth",
+    "/api/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond": "/api/v2/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond",
+    "/api/clubs/{club_id}/growth/academy/generate-prospects": "/api/v2/clubs/{club_id}/growth/academy/generate-prospects",
+    "/api/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
+    "/api/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
+    "/api/clubs/{club_id}/growth/academy/upgrade": "/api/v2/clubs/{club_id}/growth/academy/upgrade",
+    "/api/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
+    "/api/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
+    "/api/clubs/{club_id}/growth/staff/{staff_id}/offer": "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer",
     "/api/clubs/{club_id}/honors-timeline": "/api/v2/clubs/{club_id}/honors-timeline",
     "/api/clubs/{club_id}/identity": "/api/v2/clubs/{club_id}/identity",
     "/api/clubs/{club_id}/identity/metrics": "/api/v2/clubs/{club_id}/identity/metrics",
     "/api/clubs/{club_id}/identity/metrics/refresh": "/api/v2/clubs/{club_id}/identity/metrics/refresh",
     "/api/clubs/{club_id}/jerseys": "/api/v2/clubs/{club_id}/jerseys",
     "/api/clubs/{club_id}/jerseys/{jersey_id}": "/api/v2/clubs/{club_id}/jerseys/{jersey_id}",
+    "/api/clubs/{club_id}/lifecycle": "/api/v2/clubs/{club_id}/lifecycle",
+    "/api/clubs/{club_id}/operating-dashboard": "/api/v2/clubs/{club_id}/operating-dashboard",
     "/api/clubs/{club_id}/ownership": "/api/v2/clubs/{club_id}/ownership",
     "/api/clubs/{club_id}/prestige": "/api/v2/clubs/{club_id}/prestige",
     "/api/clubs/{club_id}/proposals": "/api/v2/clubs/{club_id}/proposals",
     "/api/clubs/{club_id}/purchases": "/api/v2/clubs/{club_id}/purchases",
+    "/api/clubs/{club_id}/readiness": "/api/v2/clubs/{club_id}/readiness",
     "/api/clubs/{club_id}/reputation": "/api/v2/clubs/{club_id}/reputation",
     "/api/clubs/{club_id}/reputation/history": "/api/v2/clubs/{club_id}/reputation/history",
     "/api/clubs/{club_id}/rivalries": "/api/v2/clubs/{club_id}/rivalries",
@@ -19618,12 +20744,26 @@
     "/api/clubs/{club_id}/sponsorships/catalog": "/api/v2/clubs/{club_id}/sponsorships/catalog",
     "/api/clubs/{club_id}/sponsorships/contracts": "/api/v2/clubs/{club_id}/sponsorships/contracts",
     "/api/clubs/{club_id}/sponsorships/contracts/{contract_id}": "/api/v2/clubs/{club_id}/sponsorships/contracts/{contract_id}",
+    "/api/clubs/{club_id}/squad-registration": "/api/v2/clubs/{club_id}/squad-registration",
+    "/api/clubs/{club_id}/squad-registration/lock": "/api/v2/clubs/{club_id}/squad-registration/lock",
+    "/api/clubs/{club_id}/squad-registration/submit": "/api/v2/clubs/{club_id}/squad-registration/submit",
     "/api/clubs/{club_id}/treasury": "/api/v2/clubs/{club_id}/treasury",
     "/api/clubs/{club_id}/trophies": "/api/v2/clubs/{club_id}/trophies",
     "/api/clubs/{club_id}/trophy-cabinet": "/api/v2/clubs/{club_id}/trophy-cabinet",
     "/api/clubs/{club_id}/valuation": "/api/v2/clubs/{club_id}/valuation",
     "/api/clubs/{club_id}/vote": "/api/v2/clubs/{club_id}/vote",
     "/api/clubs/{club_id}/youth-pipeline": "/api/v2/clubs/{club_id}/youth-pipeline",
+    "/api/coin-traders": "/api/v2/coin-traders",
+    "/api/coin-traders/apply": "/api/v2/coin-traders/apply",
+    "/api/coin-traders/me": "/api/v2/coin-traders/me",
+    "/api/coin-traders/me/rates": "/api/v2/coin-traders/me/rates",
+    "/api/coin-traders/orders": "/api/v2/coin-traders/orders",
+    "/api/coin-traders/orders/{order_id}/accept": "/api/v2/coin-traders/orders/{order_id}/accept",
+    "/api/coin-traders/orders/{order_id}/cancel": "/api/v2/coin-traders/orders/{order_id}/cancel",
+    "/api/coin-traders/orders/{order_id}/confirm": "/api/v2/coin-traders/orders/{order_id}/confirm",
+    "/api/coin-traders/orders/{order_id}/dispute": "/api/v2/coin-traders/orders/{order_id}/dispute",
+    "/api/coin-traders/orders/{order_id}/proof": "/api/v2/coin-traders/orders/{order_id}/proof",
+    "/api/coin-traders/{profile_id}": "/api/v2/coin-traders/{profile_id}",
     "/api/commentary/profiles": "/api/v2/commentary/profiles",
     "/api/commentary/select": "/api/v2/commentary/select",
     "/api/community/creator-clubs/{club_id}/fan-competitions": "/api/v2/community/creator-clubs/{club_id}/fan-competitions",
@@ -19795,7 +20935,10 @@
     "/api/fast-cups/{cup_id}/countdown": "/api/v2/fast-cups/{cup_id}/countdown",
     "/api/fast-cups/{cup_id}/join": "/api/v2/fast-cups/{cup_id}/join",
     "/api/fast-cups/{cup_id}/result-summary": "/api/v2/fast-cups/{cup_id}/result-summary",
+    "/api/feature-flags/client": "/api/v2/feature-flags/client",
     "/api/federations": "/api/v2/federations",
+    "/api/federations/national-associations/{country_code}": "/api/v2/federations/national-associations/{country_code}",
+    "/api/federations/national-associations/{country_code}/eligibility-review": "/api/v2/federations/national-associations/{country_code}/eligibility-review",
     "/api/federations/proposals/{proposal_id}/votes": "/api/v2/federations/proposals/{proposal_id}/votes",
     "/api/federations/rankings": "/api/v2/federations/rankings",
     "/api/federations/regional-tournaments": "/api/v2/federations/regional-tournaments",
@@ -19921,6 +21064,7 @@
     "/api/managers/{manager_id}/hire": "/api/v2/managers/{manager_id}/hire",
     "/api/managers/{manager_id}/history": "/api/v2/managers/{manager_id}/history",
     "/api/managers/{manager_id}/release": "/api/v2/managers/{manager_id}/release",
+    "/api/market/browse/catalog": "/api/v2/market/browse/catalog",
     "/api/market/buy": "/api/v2/market/buy",
     "/api/market/clubs/{club_id}/players": "/api/v2/market/clubs/{club_id}/players",
     "/api/market/leagues": "/api/v2/market/leagues",
@@ -19971,6 +21115,7 @@
     "/api/match/{match_id}/live": "/api/v2/match/{match_id}/live",
     "/api/match/{match_id}/unity-access": "/api/v2/match/{match_id}/unity-access",
     "/api/match/{match_id}/unity-access/refresh": "/api/v2/match/{match_id}/unity-access/refresh",
+    "/api/matchday-economy/overview": "/api/v2/matchday-economy/overview",
     "/api/matches/complete": "/api/v2/matches/complete",
     "/api/matches/live/active": "/api/v2/matches/live/active",
     "/api/matches/start": "/api/v2/matches/start",
@@ -20082,6 +21227,8 @@
     "/api/platform/switch": "/api/v2/platform/switch",
     "/api/player-cards/admin/preseeded-regens": "/api/v2/player-cards/admin/preseeded-regens",
     "/api/player-cards/admin/preseeded-regens/mint": "/api/v2/player-cards/admin/preseeded-regens/mint",
+    "/api/player-cards/cards/burn": "/api/v2/player-cards/cards/burn",
+    "/api/player-cards/cards/upgrade": "/api/v2/player-cards/cards/upgrade",
     "/api/player-cards/inventory": "/api/v2/player-cards/inventory",
     "/api/player-cards/listings": "/api/v2/player-cards/listings",
     "/api/player-cards/listings/mine": "/api/v2/player-cards/listings/mine",
@@ -20105,6 +21252,8 @@
     "/api/player-cards/marketplace/swaps": "/api/v2/player-cards/marketplace/swaps",
     "/api/player-cards/marketplace/swaps/{listing_id}/cancel": "/api/v2/player-cards/marketplace/swaps/{listing_id}/cancel",
     "/api/player-cards/marketplace/swaps/{listing_id}/execute": "/api/v2/player-cards/marketplace/swaps/{listing_id}/execute",
+    "/api/player-cards/packs": "/api/v2/player-cards/packs",
+    "/api/player-cards/packs/{pack_key}/open": "/api/v2/player-cards/packs/{pack_key}/open",
     "/api/player-cards/players": "/api/v2/player-cards/players",
     "/api/player-cards/players/{player_id}": "/api/v2/player-cards/players/{player_id}",
     "/api/player-cards/starter-rental": "/api/v2/player-cards/starter-rental",
@@ -20246,6 +21395,8 @@
     "/api/scout/report/{player_id}": "/api/v2/scout/report/{player_id}",
     "/api/scouts": "/api/v2/scouts",
     "/api/scouts/{scout_id}/discover": "/api/v2/scouts/{scout_id}/discover",
+    "/api/search": "/api/v2/search",
+    "/api/search/suggest": "/api/v2/search/suggest",
     "/api/season-pass": "/api/v2/season-pass",
     "/api/season-pass/claim": "/api/v2/season-pass/claim",
     "/api/season-pass/me": "/api/v2/season-pass/me",
@@ -20302,6 +21453,20 @@
     "/api/tournaments/{tournament_id}/advance": "/api/v2/tournaments/{tournament_id}/advance",
     "/api/tournaments/{tournament_id}/join": "/api/v2/tournaments/{tournament_id}/join",
     "/api/tournaments/{tournament_id}/matches/{match_id}/result": "/api/v2/tournaments/{tournament_id}/matches/{match_id}/result",
+    "/api/transfer-hub/listings": "/api/v2/transfer-hub/listings",
+    "/api/transfer-hub/listings/{listing_id}": "/api/v2/transfer-hub/listings/{listing_id}",
+    "/api/transfer-hub/listings/{listing_id}/bids": "/api/v2/transfer-hub/listings/{listing_id}/bids",
+    "/api/transfer-hub/listings/{listing_id}/close": "/api/v2/transfer-hub/listings/{listing_id}/close",
+    "/api/transfer-hub/listings/{listing_id}/contract-offer": "/api/v2/transfer-hub/listings/{listing_id}/contract-offer",
+    "/api/transfer-hub/listings/{listing_id}/negotiation": "/api/v2/transfer-hub/listings/{listing_id}/negotiation",
+    "/api/transfer-hub/listings/{listing_id}/offers": "/api/v2/transfer-hub/listings/{listing_id}/offers",
+    "/api/transfer-hub/offers": "/api/v2/transfer-hub/offers",
+    "/api/transfer-hub/offers/{offer_id}/accept": "/api/v2/transfer-hub/offers/{offer_id}/accept",
+    "/api/transfer-hub/offers/{offer_id}/cancel": "/api/v2/transfer-hub/offers/{offer_id}/cancel",
+    "/api/transfer-hub/offers/{offer_id}/counter": "/api/v2/transfer-hub/offers/{offer_id}/counter",
+    "/api/transfer-hub/offers/{offer_id}/reject": "/api/v2/transfer-hub/offers/{offer_id}/reject",
+    "/api/transfer-hub/players/{player_id}/transfer-request": "/api/v2/transfer-hub/players/{player_id}/transfer-request",
+    "/api/transfer-hub/watchlist": "/api/v2/transfer-hub/watchlist",
     "/api/transfer-market/clubs/{club_id}/team-dynamics": "/api/v2/transfer-market/clubs/{club_id}/team-dynamics",
     "/api/transfer-market/coaches/{club_id}/demands": "/api/v2/transfer-market/coaches/{club_id}/demands",
     "/api/transfer-market/coaches/{club_id}/profile": "/api/v2/transfer-market/coaches/{club_id}/profile",
@@ -20366,11 +21531,16 @@
     "/api/v1/admin/analytics/summary": "/api/v2/admin/analytics/summary",
     "/api/v1/admin/analytics/user-segments": "/api/v2/admin/analytics/user-segments",
     "/api/v1/admin/ban-user": "/api/v2/admin/ban-user",
+    "/api/v1/admin/beta-access": "/api/v2/admin/beta-access",
+    "/api/v1/admin/beta-access/{feature_key}/{user_id}": "/api/v2/admin/beta-access/{feature_key}/{user_id}",
     "/api/v1/admin/broadcast-rights/jobs/run": "/api/v2/admin/broadcast-rights/jobs/run",
     "/api/v1/admin/calendar-engine/events": "/api/v2/admin/calendar-engine/events",
     "/api/v1/admin/calendar-engine/hosted-competitions/{competition_id}/launch": "/api/v2/admin/calendar-engine/hosted-competitions/{competition_id}/launch",
     "/api/v1/admin/calendar-engine/national-competitions/{competition_id}/launch": "/api/v2/admin/calendar-engine/national-competitions/{competition_id}/launch",
     "/api/v1/admin/calendar-engine/seasons": "/api/v2/admin/calendar-engine/seasons",
+    "/api/v1/admin/clips/moderation": "/api/v2/admin/clips/moderation",
+    "/api/v1/admin/clips/{clip_id}/approve": "/api/v2/admin/clips/{clip_id}/approve",
+    "/api/v1/admin/clips/{clip_id}/block": "/api/v2/admin/clips/{clip_id}/block",
     "/api/v1/admin/club-infra/seed": "/api/v2/admin/club-infra/seed",
     "/api/v1/admin/clubs/academy-analytics": "/api/v2/admin/clubs/academy-analytics",
     "/api/v1/admin/clubs/analytics": "/api/v2/admin/clubs/analytics",
@@ -20381,6 +21551,13 @@
     "/api/v1/admin/clubs/summary": "/api/v2/admin/clubs/summary",
     "/api/v1/admin/clubs/{club_id}": "/api/v2/admin/clubs/{club_id}",
     "/api/v1/admin/clubs/{club_id}/moderate-branding": "/api/v2/admin/clubs/{club_id}/moderate-branding",
+    "/api/v1/admin/coin-traders": "/api/v2/admin/coin-traders",
+    "/api/v1/admin/coin-traders/orders": "/api/v2/admin/coin-traders/orders",
+    "/api/v1/admin/coin-traders/orders/{order_id}/resolve": "/api/v2/admin/coin-traders/orders/{order_id}/resolve",
+    "/api/v1/admin/coin-traders/{profile_id}/approve": "/api/v2/admin/coin-traders/{profile_id}/approve",
+    "/api/v1/admin/coin-traders/{profile_id}/freeze": "/api/v2/admin/coin-traders/{profile_id}/freeze",
+    "/api/v1/admin/coin-traders/{profile_id}/reject": "/api/v2/admin/coin-traders/{profile_id}/reject",
+    "/api/v1/admin/command-router": "/api/v2/admin/command-router",
     "/api/v1/admin/competitions": "/api/v2/admin/competitions",
     "/api/v1/admin/competitions/reminders/dispatch": "/api/v2/admin/competitions/reminders/dispatch",
     "/api/v1/admin/competitive-integrity/matches/{match_id}/validation": "/api/v2/admin/competitive-integrity/matches/{match_id}/validation",
@@ -20427,6 +21604,11 @@
     "/api/v1/admin/fan-wars/points": "/api/v2/admin/fan-wars/points",
     "/api/v1/admin/fan-wars/profiles": "/api/v2/admin/fan-wars/profiles",
     "/api/v1/admin/fan-wars/profiles/{profile_id}/rivals/{rival_profile_id}": "/api/v2/admin/fan-wars/profiles/{profile_id}/rivals/{rival_profile_id}",
+    "/api/v1/admin/feature-flags": "/api/v2/admin/feature-flags",
+    "/api/v1/admin/feature-flags/{feature_key}": "/api/v2/admin/feature-flags/{feature_key}",
+    "/api/v1/admin/feature-flags/{feature_key}/disable": "/api/v2/admin/feature-flags/{feature_key}/disable",
+    "/api/v1/admin/feature-flags/{feature_key}/enable": "/api/v2/admin/feature-flags/{feature_key}/enable",
+    "/api/v1/admin/feature-flags/{feature_key}/kill-switch": "/api/v2/admin/feature-flags/{feature_key}/kill-switch",
     "/api/v1/admin/federations/run-jobs": "/api/v2/admin/federations/run-jobs",
     "/api/v1/admin/finance/account-controls": "/api/v2/admin/finance/account-controls",
     "/api/v1/admin/finance/account-controls/{user_id}": "/api/v2/admin/finance/account-controls/{user_id}",
@@ -20473,6 +21655,7 @@
     "/api/v1/admin/jackpot/balance": "/api/v2/admin/jackpot/balance",
     "/api/v1/admin/jackpot/runtime": "/api/v2/admin/jackpot/runtime",
     "/api/v1/admin/jackpot/trigger": "/api/v2/admin/jackpot/trigger",
+    "/api/v1/admin/launch-control": "/api/v2/admin/launch-control",
     "/api/v1/admin/leaderboard/season/archive": "/api/v2/admin/leaderboard/season/archive",
     "/api/v1/admin/leaderboard/season/reset": "/api/v2/admin/leaderboard/season/reset",
     "/api/v1/admin/managers/audit-log": "/api/v2/admin/managers/audit-log",
@@ -20480,6 +21663,11 @@
     "/api/v1/admin/managers/competitions": "/api/v2/admin/managers/competitions",
     "/api/v1/admin/managers/competitions/{code}": "/api/v2/admin/managers/competitions/{code}",
     "/api/v1/admin/managers/competitions/{code}/orchestrate": "/api/v2/admin/managers/competitions/{code}/orchestrate",
+    "/api/v1/admin/matchday-economy/card-listings/{listing_id}/settle": "/api/v2/admin/matchday-economy/card-listings/{listing_id}/settle",
+    "/api/v1/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve": "/api/v2/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve",
+    "/api/v1/admin/matchday-economy/overview": "/api/v2/admin/matchday-economy/overview",
+    "/api/v1/admin/matchday-economy/predictions/{fixture_id}/settle-rewards": "/api/v2/admin/matchday-economy/predictions/{fixture_id}/settle-rewards",
+    "/api/v1/admin/matchday-economy/tickets/{ticket_id}/check-in": "/api/v2/admin/matchday-economy/tickets/{ticket_id}/check-in",
     "/api/v1/admin/media-engine/creator-league/clubs/{club_id}/stadium-level": "/api/v2/admin/media-engine/creator-league/clubs/{club_id}/stadium-level",
     "/api/v1/admin/media-engine/creator-league/matches/{match_id}/analytics": "/api/v2/admin/media-engine/creator-league/matches/{match_id}/analytics",
     "/api/v1/admin/media-engine/creator-league/matches/{match_id}/settlement": "/api/v2/admin/media-engine/creator-league/matches/{match_id}/settlement",
@@ -20493,6 +21681,7 @@
     "/api/v1/admin/moderation/reports/summary": "/api/v2/admin/moderation/reports/summary",
     "/api/v1/admin/moderation/reports/{report_id}/assign": "/api/v2/admin/moderation/reports/{report_id}/assign",
     "/api/v1/admin/moderation/reports/{report_id}/resolve": "/api/v2/admin/moderation/reports/{report_id}/resolve",
+    "/api/v1/admin/modules/health": "/api/v2/admin/modules/health",
     "/api/v1/admin/national-team-engine/competitions": "/api/v2/admin/national-team-engine/competitions",
     "/api/v1/admin/national-team-engine/competitions/seed-defaults": "/api/v2/admin/national-team-engine/competitions/seed-defaults",
     "/api/v1/admin/national-team-engine/competitions/{competition_id}/ads": "/api/v2/admin/national-team-engine/competitions/{competition_id}/ads",
@@ -20506,6 +21695,10 @@
     "/api/v1/admin/national-team-engine/competitions/{competition_id}/theme": "/api/v2/admin/national-team-engine/competitions/{competition_id}/theme",
     "/api/v1/admin/national-team-engine/entries/{entry_id}/squad": "/api/v2/admin/national-team-engine/entries/{entry_id}/squad",
     "/api/v1/admin/notifications/announcements": "/api/v2/admin/notifications/announcements",
+    "/api/v1/admin/notifications/event-matrix": "/api/v2/admin/notifications/event-matrix",
+    "/api/v1/admin/notifications/test-event": "/api/v2/admin/notifications/test-event",
+    "/api/v1/admin/operations-readiness": "/api/v2/admin/operations-readiness",
+    "/api/v1/admin/operations-readiness/notify-blockers": "/api/v2/admin/operations-readiness/notify-blockers",
     "/api/v1/admin/ops/alerts": "/api/v2/admin/ops/alerts",
     "/api/v1/admin/ops/audit": "/api/v2/admin/ops/audit",
     "/api/v1/admin/ops/broadcast-expiration": "/api/v2/admin/ops/broadcast-expiration",
@@ -20572,6 +21765,7 @@
     "/api/v1/admin/risk-ops/scan": "/api/v2/admin/risk-ops/scan",
     "/api/v1/admin/risk-ops/signals": "/api/v2/admin/risk-ops/signals",
     "/api/v1/admin/risk-ops/system-events": "/api/v2/admin/risk-ops/system-events",
+    "/api/v1/admin/search": "/api/v2/admin/search",
     "/api/v1/admin/sponsorship/analytics": "/api/v2/admin/sponsorship/analytics",
     "/api/v1/admin/sponsorship/categories/{category}": "/api/v2/admin/sponsorship/categories/{category}",
     "/api/v1/admin/sponsorship/contracts/{contract_id}/review": "/api/v2/admin/sponsorship/contracts/{contract_id}/review",
@@ -20695,6 +21889,8 @@
     "/api/v1/champions-league/playoff-bracket": "/api/v2/champions-league/playoff-bracket",
     "/api/v1/champions-league/prize-pool/preview": "/api/v2/champions-league/prize-pool/preview",
     "/api/v1/champions-league/qualification-map": "/api/v2/champions-league/qualification-map",
+    "/api/v1/clips/{clip_id}": "/api/v2/clips/{clip_id}",
+    "/api/v1/clips/{clip_id}/report": "/api/v2/clips/{clip_id}/report",
     "/api/v1/club-infra/clubs/{club_id}": "/api/v2/club-infra/clubs/{club_id}",
     "/api/v1/club-infra/clubs/{club_id}/support": "/api/v2/club-infra/clubs/{club_id}/support",
     "/api/v1/club-infra/my": "/api/v2/club-infra/my",
@@ -20702,6 +21898,7 @@
     "/api/v1/club-infra/my/stadium/upgrade": "/api/v2/club-infra/my/stadium/upgrade",
     "/api/v1/club/identity": "/api/v2/club/identity",
     "/api/v1/clubs": "/api/v2/clubs",
+    "/api/v1/clubs/admin/club-lifecycle": "/api/v2/clubs/admin/club-lifecycle",
     "/api/v1/clubs/catalog": "/api/v2/clubs/catalog",
     "/api/v1/clubs/catalog/purchase": "/api/v2/clubs/catalog/purchase",
     "/api/v1/clubs/marketplace": "/api/v2/clubs/marketplace",
@@ -20712,6 +21909,7 @@
     "/api/v1/clubs/{club_id}/academy/players/{player_id}": "/api/v2/clubs/{club_id}/academy/players/{player_id}",
     "/api/v1/clubs/{club_id}/academy/programs": "/api/v2/clubs/{club_id}/academy/programs",
     "/api/v1/clubs/{club_id}/academy/training-cycles": "/api/v2/clubs/{club_id}/academy/training-cycles",
+    "/api/v1/clubs/{club_id}/advance-lifecycle": "/api/v2/clubs/{club_id}/advance-lifecycle",
     "/api/v1/clubs/{club_id}/badge": "/api/v2/clubs/{club_id}/badge",
     "/api/v1/clubs/{club_id}/branding": "/api/v2/clubs/{club_id}/branding",
     "/api/v1/clubs/{club_id}/buy-tokens": "/api/v2/clubs/{club_id}/buy-tokens",
@@ -20724,16 +21922,28 @@
     "/api/v1/clubs/{club_id}/finances/budget": "/api/v2/clubs/{club_id}/finances/budget",
     "/api/v1/clubs/{club_id}/finances/cashflow": "/api/v2/clubs/{club_id}/finances/cashflow",
     "/api/v1/clubs/{club_id}/finances/ledger": "/api/v2/clubs/{club_id}/finances/ledger",
+    "/api/v1/clubs/{club_id}/growth": "/api/v2/clubs/{club_id}/growth",
+    "/api/v1/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond": "/api/v2/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond",
+    "/api/v1/clubs/{club_id}/growth/academy/generate-prospects": "/api/v2/clubs/{club_id}/growth/academy/generate-prospects",
+    "/api/v1/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
+    "/api/v1/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
+    "/api/v1/clubs/{club_id}/growth/academy/upgrade": "/api/v2/clubs/{club_id}/growth/academy/upgrade",
+    "/api/v1/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
+    "/api/v1/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
+    "/api/v1/clubs/{club_id}/growth/staff/{staff_id}/offer": "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer",
     "/api/v1/clubs/{club_id}/honors-timeline": "/api/v2/clubs/{club_id}/honors-timeline",
     "/api/v1/clubs/{club_id}/identity": "/api/v2/clubs/{club_id}/identity",
     "/api/v1/clubs/{club_id}/identity/metrics": "/api/v2/clubs/{club_id}/identity/metrics",
     "/api/v1/clubs/{club_id}/identity/metrics/refresh": "/api/v2/clubs/{club_id}/identity/metrics/refresh",
     "/api/v1/clubs/{club_id}/jerseys": "/api/v2/clubs/{club_id}/jerseys",
     "/api/v1/clubs/{club_id}/jerseys/{jersey_id}": "/api/v2/clubs/{club_id}/jerseys/{jersey_id}",
+    "/api/v1/clubs/{club_id}/lifecycle": "/api/v2/clubs/{club_id}/lifecycle",
+    "/api/v1/clubs/{club_id}/operating-dashboard": "/api/v2/clubs/{club_id}/operating-dashboard",
     "/api/v1/clubs/{club_id}/ownership": "/api/v2/clubs/{club_id}/ownership",
     "/api/v1/clubs/{club_id}/prestige": "/api/v2/clubs/{club_id}/prestige",
     "/api/v1/clubs/{club_id}/proposals": "/api/v2/clubs/{club_id}/proposals",
     "/api/v1/clubs/{club_id}/purchases": "/api/v2/clubs/{club_id}/purchases",
+    "/api/v1/clubs/{club_id}/readiness": "/api/v2/clubs/{club_id}/readiness",
     "/api/v1/clubs/{club_id}/reputation": "/api/v2/clubs/{club_id}/reputation",
     "/api/v1/clubs/{club_id}/reputation/history": "/api/v2/clubs/{club_id}/reputation/history",
     "/api/v1/clubs/{club_id}/rivalries": "/api/v2/clubs/{club_id}/rivalries",
@@ -20773,12 +21983,26 @@
     "/api/v1/clubs/{club_id}/sponsorships/catalog": "/api/v2/clubs/{club_id}/sponsorships/catalog",
     "/api/v1/clubs/{club_id}/sponsorships/contracts": "/api/v2/clubs/{club_id}/sponsorships/contracts",
     "/api/v1/clubs/{club_id}/sponsorships/contracts/{contract_id}": "/api/v2/clubs/{club_id}/sponsorships/contracts/{contract_id}",
+    "/api/v1/clubs/{club_id}/squad-registration": "/api/v2/clubs/{club_id}/squad-registration",
+    "/api/v1/clubs/{club_id}/squad-registration/lock": "/api/v2/clubs/{club_id}/squad-registration/lock",
+    "/api/v1/clubs/{club_id}/squad-registration/submit": "/api/v2/clubs/{club_id}/squad-registration/submit",
     "/api/v1/clubs/{club_id}/treasury": "/api/v2/clubs/{club_id}/treasury",
     "/api/v1/clubs/{club_id}/trophies": "/api/v2/clubs/{club_id}/trophies",
     "/api/v1/clubs/{club_id}/trophy-cabinet": "/api/v2/clubs/{club_id}/trophy-cabinet",
     "/api/v1/clubs/{club_id}/valuation": "/api/v2/clubs/{club_id}/valuation",
     "/api/v1/clubs/{club_id}/vote": "/api/v2/clubs/{club_id}/vote",
     "/api/v1/clubs/{club_id}/youth-pipeline": "/api/v2/clubs/{club_id}/youth-pipeline",
+    "/api/v1/coin-traders": "/api/v2/coin-traders",
+    "/api/v1/coin-traders/apply": "/api/v2/coin-traders/apply",
+    "/api/v1/coin-traders/me": "/api/v2/coin-traders/me",
+    "/api/v1/coin-traders/me/rates": "/api/v2/coin-traders/me/rates",
+    "/api/v1/coin-traders/orders": "/api/v2/coin-traders/orders",
+    "/api/v1/coin-traders/orders/{order_id}/accept": "/api/v2/coin-traders/orders/{order_id}/accept",
+    "/api/v1/coin-traders/orders/{order_id}/cancel": "/api/v2/coin-traders/orders/{order_id}/cancel",
+    "/api/v1/coin-traders/orders/{order_id}/confirm": "/api/v2/coin-traders/orders/{order_id}/confirm",
+    "/api/v1/coin-traders/orders/{order_id}/dispute": "/api/v2/coin-traders/orders/{order_id}/dispute",
+    "/api/v1/coin-traders/orders/{order_id}/proof": "/api/v2/coin-traders/orders/{order_id}/proof",
+    "/api/v1/coin-traders/{profile_id}": "/api/v2/coin-traders/{profile_id}",
     "/api/v1/commentary/profiles": "/api/v2/commentary/profiles",
     "/api/v1/commentary/select": "/api/v2/commentary/select",
     "/api/v1/community/creator-clubs/{club_id}/fan-competitions": "/api/v2/community/creator-clubs/{club_id}/fan-competitions",
@@ -20950,7 +22174,10 @@
     "/api/v1/fast-cups/{cup_id}/countdown": "/api/v2/fast-cups/{cup_id}/countdown",
     "/api/v1/fast-cups/{cup_id}/join": "/api/v2/fast-cups/{cup_id}/join",
     "/api/v1/fast-cups/{cup_id}/result-summary": "/api/v2/fast-cups/{cup_id}/result-summary",
+    "/api/v1/feature-flags/client": "/api/v2/feature-flags/client",
     "/api/v1/federations": "/api/v2/federations",
+    "/api/v1/federations/national-associations/{country_code}": "/api/v2/federations/national-associations/{country_code}",
+    "/api/v1/federations/national-associations/{country_code}/eligibility-review": "/api/v2/federations/national-associations/{country_code}/eligibility-review",
     "/api/v1/federations/proposals/{proposal_id}/votes": "/api/v2/federations/proposals/{proposal_id}/votes",
     "/api/v1/federations/rankings": "/api/v2/federations/rankings",
     "/api/v1/federations/regional-tournaments": "/api/v2/federations/regional-tournaments",
@@ -21076,6 +22303,7 @@
     "/api/v1/managers/{manager_id}/hire": "/api/v2/managers/{manager_id}/hire",
     "/api/v1/managers/{manager_id}/history": "/api/v2/managers/{manager_id}/history",
     "/api/v1/managers/{manager_id}/release": "/api/v2/managers/{manager_id}/release",
+    "/api/v1/market/browse/catalog": "/api/v2/market/browse/catalog",
     "/api/v1/market/buy": "/api/v2/market/buy",
     "/api/v1/market/clubs/{club_id}/players": "/api/v2/market/clubs/{club_id}/players",
     "/api/v1/market/leagues": "/api/v2/market/leagues",
@@ -21126,6 +22354,7 @@
     "/api/v1/match/{match_id}/live": "/api/v2/match/{match_id}/live",
     "/api/v1/match/{match_id}/unity-access": "/api/v2/match/{match_id}/unity-access",
     "/api/v1/match/{match_id}/unity-access/refresh": "/api/v2/match/{match_id}/unity-access/refresh",
+    "/api/v1/matchday-economy/overview": "/api/v2/matchday-economy/overview",
     "/api/v1/matches/complete": "/api/v2/matches/complete",
     "/api/v1/matches/live/active": "/api/v2/matches/live/active",
     "/api/v1/matches/start": "/api/v2/matches/start",
@@ -21237,6 +22466,8 @@
     "/api/v1/platform/switch": "/api/v2/platform/switch",
     "/api/v1/player-cards/admin/preseeded-regens": "/api/v2/player-cards/admin/preseeded-regens",
     "/api/v1/player-cards/admin/preseeded-regens/mint": "/api/v2/player-cards/admin/preseeded-regens/mint",
+    "/api/v1/player-cards/cards/burn": "/api/v2/player-cards/cards/burn",
+    "/api/v1/player-cards/cards/upgrade": "/api/v2/player-cards/cards/upgrade",
     "/api/v1/player-cards/inventory": "/api/v2/player-cards/inventory",
     "/api/v1/player-cards/listings": "/api/v2/player-cards/listings",
     "/api/v1/player-cards/listings/mine": "/api/v2/player-cards/listings/mine",
@@ -21260,6 +22491,8 @@
     "/api/v1/player-cards/marketplace/swaps": "/api/v2/player-cards/marketplace/swaps",
     "/api/v1/player-cards/marketplace/swaps/{listing_id}/cancel": "/api/v2/player-cards/marketplace/swaps/{listing_id}/cancel",
     "/api/v1/player-cards/marketplace/swaps/{listing_id}/execute": "/api/v2/player-cards/marketplace/swaps/{listing_id}/execute",
+    "/api/v1/player-cards/packs": "/api/v2/player-cards/packs",
+    "/api/v1/player-cards/packs/{pack_key}/open": "/api/v2/player-cards/packs/{pack_key}/open",
     "/api/v1/player-cards/players": "/api/v2/player-cards/players",
     "/api/v1/player-cards/players/{player_id}": "/api/v2/player-cards/players/{player_id}",
     "/api/v1/player-cards/starter-rental": "/api/v2/player-cards/starter-rental",
@@ -21401,6 +22634,8 @@
     "/api/v1/scout/report/{player_id}": "/api/v2/scout/report/{player_id}",
     "/api/v1/scouts": "/api/v2/scouts",
     "/api/v1/scouts/{scout_id}/discover": "/api/v2/scouts/{scout_id}/discover",
+    "/api/v1/search": "/api/v2/search",
+    "/api/v1/search/suggest": "/api/v2/search/suggest",
     "/api/v1/season-pass": "/api/v2/season-pass",
     "/api/v1/season-pass/claim": "/api/v2/season-pass/claim",
     "/api/v1/season-pass/me": "/api/v2/season-pass/me",
@@ -21457,6 +22692,20 @@
     "/api/v1/tournaments/{tournament_id}/advance": "/api/v2/tournaments/{tournament_id}/advance",
     "/api/v1/tournaments/{tournament_id}/join": "/api/v2/tournaments/{tournament_id}/join",
     "/api/v1/tournaments/{tournament_id}/matches/{match_id}/result": "/api/v2/tournaments/{tournament_id}/matches/{match_id}/result",
+    "/api/v1/transfer-hub/listings": "/api/v2/transfer-hub/listings",
+    "/api/v1/transfer-hub/listings/{listing_id}": "/api/v2/transfer-hub/listings/{listing_id}",
+    "/api/v1/transfer-hub/listings/{listing_id}/bids": "/api/v2/transfer-hub/listings/{listing_id}/bids",
+    "/api/v1/transfer-hub/listings/{listing_id}/close": "/api/v2/transfer-hub/listings/{listing_id}/close",
+    "/api/v1/transfer-hub/listings/{listing_id}/contract-offer": "/api/v2/transfer-hub/listings/{listing_id}/contract-offer",
+    "/api/v1/transfer-hub/listings/{listing_id}/negotiation": "/api/v2/transfer-hub/listings/{listing_id}/negotiation",
+    "/api/v1/transfer-hub/listings/{listing_id}/offers": "/api/v2/transfer-hub/listings/{listing_id}/offers",
+    "/api/v1/transfer-hub/offers": "/api/v2/transfer-hub/offers",
+    "/api/v1/transfer-hub/offers/{offer_id}/accept": "/api/v2/transfer-hub/offers/{offer_id}/accept",
+    "/api/v1/transfer-hub/offers/{offer_id}/cancel": "/api/v2/transfer-hub/offers/{offer_id}/cancel",
+    "/api/v1/transfer-hub/offers/{offer_id}/counter": "/api/v2/transfer-hub/offers/{offer_id}/counter",
+    "/api/v1/transfer-hub/offers/{offer_id}/reject": "/api/v2/transfer-hub/offers/{offer_id}/reject",
+    "/api/v1/transfer-hub/players/{player_id}/transfer-request": "/api/v2/transfer-hub/players/{player_id}/transfer-request",
+    "/api/v1/transfer-hub/watchlist": "/api/v2/transfer-hub/watchlist",
     "/api/v1/transfer-market/clubs/{club_id}/team-dynamics": "/api/v2/transfer-market/clubs/{club_id}/team-dynamics",
     "/api/v1/transfer-market/coaches/{club_id}/demands": "/api/v2/transfer-market/coaches/{club_id}/demands",
     "/api/v1/transfer-market/coaches/{club_id}/profile": "/api/v2/transfer-market/coaches/{club_id}/profile",
@@ -21533,6 +22782,7 @@
     "/api/v1/value-engine/snapshots/{player_id}/latest": "/api/v2/value-engine/snapshots/{player_id}/latest",
     "/api/v1/value-engine/snapshots/{player_id}/trend-summary": "/api/v2/value-engine/snapshots/{player_id}/trend-summary",
     "/api/v1/version": "/version",
+    "/api/v1/viral-feed": "/api/v2/viral-feed",
     "/api/v1/viral/accounts": "/api/v2/viral/accounts",
     "/api/v1/viral/cascades": "/api/v2/viral/cascades",
     "/api/v1/viral/clips/trending": "/api/v2/viral/clips/trending",
@@ -21585,6 +22835,7 @@
     "/api/v2/admin/access/permissions": "/api/v2/admin/access/permissions",
     "/api/v2/admin/analytics/funnels": "/api/v2/admin/analytics/funnels",
     "/api/v2/admin/analytics/summary": "/api/v2/admin/analytics/summary",
+    "/api/v2/admin/beta-access": "/api/v2/admin/beta-access",
     "/api/v2/admin/calendar-engine/events": "/api/v2/admin/calendar-engine/events",
     "/api/v2/admin/calendar-engine/seasons": "/api/v2/admin/calendar-engine/seasons",
     "/api/v2/admin/clubs/academy-analytics": "/api/v2/admin/clubs/academy-analytics",
@@ -21592,6 +22843,8 @@
     "/api/v2/admin/clubs/ops-summary": "/api/v2/admin/clubs/ops-summary",
     "/api/v2/admin/clubs/scouting-analytics": "/api/v2/admin/clubs/scouting-analytics",
     "/api/v2/admin/clubs/sponsorship-analytics": "/api/v2/admin/clubs/sponsorship-analytics",
+    "/api/v2/admin/coin-traders": "/api/v2/admin/coin-traders",
+    "/api/v2/admin/coin-traders/orders": "/api/v2/admin/coin-traders/orders",
     "/api/v2/admin/competitions": "/api/v2/admin/competitions",
     "/api/v2/admin/creator/fan-share-market/control": "/api/v2/admin/creator/fan-share-market/control",
     "/api/v2/admin/discovery/featured-rails": "/api/v2/admin/discovery/featured-rails",
@@ -21605,15 +22858,20 @@
     "/api/v2/admin/god-mode/withdrawal-controls": "/api/v2/admin/god-mode/withdrawal-controls",
     "/api/v2/admin/hosted-competitions": "/api/v2/admin/hosted-competitions",
     "/api/v2/admin/hosted-competitions/seed": "/api/v2/admin/hosted-competitions/seed",
+    "/api/v2/admin/launch-control": "/api/v2/admin/launch-control",
     "/api/v2/admin/managers/audit-log": "/api/v2/admin/managers/audit-log",
+    "/api/v2/admin/matchday-economy/overview": "/api/v2/admin/matchday-economy/overview",
     "/api/v2/admin/moderation/reports": "/api/v2/admin/moderation/reports",
     "/api/v2/admin/moderation/reports/summary": "/api/v2/admin/moderation/reports/summary",
     "/api/v2/admin/notifications/announcements": "/api/v2/admin/notifications/announcements",
+    "/api/v2/admin/operations-readiness": "/api/v2/admin/operations-readiness",
+    "/api/v2/admin/operations-readiness/notify-blockers": "/api/v2/admin/operations-readiness/notify-blockers",
     "/api/v2/admin/referrals/analytics/summary": "/api/v2/admin/referrals/analytics/summary",
     "/api/v2/admin/referrals/creators": "/api/v2/admin/referrals/creators",
     "/api/v2/admin/referrals/dashboard": "/api/v2/admin/referrals/dashboard",
     "/api/v2/admin/referrals/flags": "/api/v2/admin/referrals/flags",
     "/api/v2/admin/referrals/share-codes": "/api/v2/admin/referrals/share-codes",
+    "/api/v2/admin/search": "/api/v2/admin/search",
     "/api/v2/admin/sponsorship/packages": "/api/v2/admin/sponsorship/packages",
     "/api/v2/admin/story-feed": "/api/v2/admin/story-feed",
     "/api/v2/admin/streamer-tournaments/policy": "/api/v2/admin/streamer-tournaments/policy",
@@ -21633,6 +22891,10 @@
     "/api/v2/analytics/events": "/api/v2/analytics/events",
     "/api/v2/attachments": "/api/v2/attachments",
     "/api/v2/auth/me": "/api/v2/auth/me",
+    "/api/v2/awards/categories": "/api/v2/awards/categories",
+    "/api/v2/awards/ceremony": "/api/v2/awards/ceremony",
+    "/api/v2/awards/nominees": "/api/v2/awards/nominees",
+    "/api/v2/awards/winners": "/api/v2/awards/winners",
     "/api/v2/bank-accounts": "/api/v2/bank-accounts",
     "/api/v2/broadcast/channels": "/api/v2/broadcast/channels",
     "/api/v2/broadcast/home": "/api/v2/broadcast/home",
@@ -21643,6 +22905,11 @@
     "/api/v2/calendar-engine/seasons": "/api/v2/calendar-engine/seasons",
     "/api/v2/clubs": "/api/v2/clubs",
     "/api/v2/clubs/sale-market/listings": "/api/v2/clubs/sale-market/listings",
+    "/api/v2/coin-traders": "/api/v2/coin-traders",
+    "/api/v2/coin-traders/apply": "/api/v2/coin-traders/apply",
+    "/api/v2/coin-traders/me": "/api/v2/coin-traders/me",
+    "/api/v2/coin-traders/me/rates": "/api/v2/coin-traders/me/rates",
+    "/api/v2/coin-traders/orders": "/api/v2/coin-traders/orders",
     "/api/v2/commentary/profiles": "/api/v2/commentary/profiles",
     "/api/v2/community/digest": "/api/v2/community/digest",
     "/api/v2/community/live-threads": "/api/v2/community/live-threads",
@@ -21665,6 +22932,7 @@
     "/api/v2/discovery/saved-searches": "/api/v2/discovery/saved-searches",
     "/api/v2/discovery/search": "/api/v2/discovery/search",
     "/api/v2/disputes": "/api/v2/disputes",
+    "/api/v2/feature-flags/client": "/api/v2/feature-flags/client",
     "/api/v2/federations": "/api/v2/federations",
     "/api/v2/federations/rankings": "/api/v2/federations/rankings",
     "/api/v2/federations/regional-tournaments": "/api/v2/federations/regional-tournaments",
@@ -21689,10 +22957,12 @@
     "/api/v2/managers/swap": "/api/v2/managers/swap",
     "/api/v2/managers/team": "/api/v2/managers/team",
     "/api/v2/managers/trade-listings": "/api/v2/managers/trade-listings",
+    "/api/v2/market/browse/catalog": "/api/v2/market/browse/catalog",
     "/api/v2/market/leagues": "/api/v2/market/leagues",
     "/api/v2/market/national-teams": "/api/v2/market/national-teams",
     "/api/v2/market/nationalities": "/api/v2/market/nationalities",
     "/api/v2/market/players": "/api/v2/market/players",
+    "/api/v2/matchday-economy/overview": "/api/v2/matchday-economy/overview",
     "/api/v2/me/clubs/sale-market/listings": "/api/v2/me/clubs/sale-market/listings",
     "/api/v2/me/clubs/sale-market/offers": "/api/v2/me/clubs/sale-market/offers",
     "/api/v2/moderation/me/reports": "/api/v2/moderation/me/reports",
@@ -21712,6 +22982,7 @@
     "/api/v2/referrals/me/summary": "/api/v2/referrals/me/summary",
     "/api/v2/referrals/share-codes": "/api/v2/referrals/share-codes",
     "/api/v2/referrals/share-codes/me": "/api/v2/referrals/share-codes/me",
+    "/api/v2/search": "/api/v2/search",
     "/api/v2/session/bootstrap": "/api/v2/session/bootstrap",
     "/api/v2/story-feed": "/api/v2/story-feed",
     "/api/v2/story-feed/digest": "/api/v2/story-feed/digest",
@@ -21741,6 +23012,7 @@
     "/api/value-engine/snapshots/{player_id}/latest": "/api/v2/value-engine/snapshots/{player_id}/latest",
     "/api/value-engine/snapshots/{player_id}/trend-summary": "/api/v2/value-engine/snapshots/{player_id}/trend-summary",
     "/api/version": "/version",
+    "/api/viral-feed": "/api/v2/viral-feed",
     "/api/viral/accounts": "/api/v2/viral/accounts",
     "/api/viral/cascades": "/api/v2/viral/cascades",
     "/api/viral/clips/trending": "/api/v2/viral/clips/trending",
@@ -21838,12 +23110,29 @@
     "/club-infra/my/facilities/upgrade": "/api/v2/club-infra/my/facilities/upgrade",
     "/club-infra/my/stadium/upgrade": "/api/v2/club-infra/my/stadium/upgrade",
     "/club/identity": "/api/v2/club/identity",
+    "/clubs/admin/club-lifecycle": "/api/v2/clubs/admin/club-lifecycle",
     "/clubs/marketplace": "/api/v2/clubs/marketplace",
     "/clubs/{club_id}": "/api/v2/clubs/{club_id}",
+    "/clubs/{club_id}/advance-lifecycle": "/api/v2/clubs/{club_id}/advance-lifecycle",
     "/clubs/{club_id}/buy-tokens": "/api/v2/clubs/{club_id}/buy-tokens",
+    "/clubs/{club_id}/growth": "/api/v2/clubs/{club_id}/growth",
+    "/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond": "/api/v2/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond",
+    "/clubs/{club_id}/growth/academy/generate-prospects": "/api/v2/clubs/{club_id}/growth/academy/generate-prospects",
+    "/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
+    "/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
+    "/clubs/{club_id}/growth/academy/upgrade": "/api/v2/clubs/{club_id}/growth/academy/upgrade",
+    "/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
+    "/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
+    "/clubs/{club_id}/growth/staff/{staff_id}/offer": "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer",
+    "/clubs/{club_id}/lifecycle": "/api/v2/clubs/{club_id}/lifecycle",
+    "/clubs/{club_id}/operating-dashboard": "/api/v2/clubs/{club_id}/operating-dashboard",
     "/clubs/{club_id}/ownership": "/api/v2/clubs/{club_id}/ownership",
     "/clubs/{club_id}/proposals": "/api/v2/clubs/{club_id}/proposals",
+    "/clubs/{club_id}/readiness": "/api/v2/clubs/{club_id}/readiness",
     "/clubs/{club_id}/sell-tokens": "/api/v2/clubs/{club_id}/sell-tokens",
+    "/clubs/{club_id}/squad-registration": "/api/v2/clubs/{club_id}/squad-registration",
+    "/clubs/{club_id}/squad-registration/lock": "/api/v2/clubs/{club_id}/squad-registration/lock",
+    "/clubs/{club_id}/squad-registration/submit": "/api/v2/clubs/{club_id}/squad-registration/submit",
     "/clubs/{club_id}/treasury": "/api/v2/clubs/{club_id}/treasury",
     "/clubs/{club_id}/vote": "/api/v2/clubs/{club_id}/vote",
     "/commentary/profiles": "/api/v2/commentary/profiles",
@@ -21969,7 +23258,10 @@
     "/fast-cups/{cup_id}/countdown": "/api/v2/fast-cups/{cup_id}/countdown",
     "/fast-cups/{cup_id}/join": "/api/v2/fast-cups/{cup_id}/join",
     "/fast-cups/{cup_id}/result-summary": "/api/v2/fast-cups/{cup_id}/result-summary",
+    "/feature-flags/client": "/api/v2/feature-flags/client",
     "/federations": "/api/v2/federations",
+    "/federations/national-associations/{country_code}": "/api/v2/federations/national-associations/{country_code}",
+    "/federations/national-associations/{country_code}/eligibility-review": "/api/v2/federations/national-associations/{country_code}/eligibility-review",
     "/federations/proposals/{proposal_id}/votes": "/api/v2/federations/proposals/{proposal_id}/votes",
     "/federations/rankings": "/api/v2/federations/rankings",
     "/federations/regional-tournaments": "/api/v2/federations/regional-tournaments",
@@ -22074,6 +23366,7 @@
     "/managers/{manager_id}/hire": "/api/v2/managers/{manager_id}/hire",
     "/managers/{manager_id}/history": "/api/v2/managers/{manager_id}/history",
     "/managers/{manager_id}/release": "/api/v2/managers/{manager_id}/release",
+    "/market/browse/catalog": "/api/v2/market/browse/catalog",
     "/market/buy": "/api/v2/market/buy",
     "/market/clubs/{club_id}/players": "/api/v2/market/clubs/{club_id}/players",
     "/market/leagues": "/api/v2/market/leagues",
@@ -22122,6 +23415,7 @@
     "/match/{match_id}/live": "/api/v2/match/{match_id}/live",
     "/match/{match_id}/unity-access": "/api/v2/match/{match_id}/unity-access",
     "/match/{match_id}/unity-access/refresh": "/api/v2/match/{match_id}/unity-access/refresh",
+    "/matchday-economy/overview": "/api/v2/matchday-economy/overview",
     "/matches/complete": "/api/v2/matches/complete",
     "/matches/live/active": "/api/v2/matches/live/active",
     "/matches/start": "/api/v2/matches/start",
@@ -22222,6 +23516,8 @@
     "/platform/switch": "/api/v2/platform/switch",
     "/player-cards/admin/preseeded-regens": "/api/v2/player-cards/admin/preseeded-regens",
     "/player-cards/admin/preseeded-regens/mint": "/api/v2/player-cards/admin/preseeded-regens/mint",
+    "/player-cards/cards/burn": "/api/v2/player-cards/cards/burn",
+    "/player-cards/cards/upgrade": "/api/v2/player-cards/cards/upgrade",
     "/player-cards/inventory": "/api/v2/player-cards/inventory",
     "/player-cards/listings": "/api/v2/player-cards/listings",
     "/player-cards/listings/mine": "/api/v2/player-cards/listings/mine",
@@ -22245,6 +23541,8 @@
     "/player-cards/marketplace/swaps": "/api/v2/player-cards/marketplace/swaps",
     "/player-cards/marketplace/swaps/{listing_id}/cancel": "/api/v2/player-cards/marketplace/swaps/{listing_id}/cancel",
     "/player-cards/marketplace/swaps/{listing_id}/execute": "/api/v2/player-cards/marketplace/swaps/{listing_id}/execute",
+    "/player-cards/packs": "/api/v2/player-cards/packs",
+    "/player-cards/packs/{pack_key}/open": "/api/v2/player-cards/packs/{pack_key}/open",
     "/player-cards/players": "/api/v2/player-cards/players",
     "/player-cards/players/{player_id}": "/api/v2/player-cards/players/{player_id}",
     "/player-cards/starter-rental": "/api/v2/player-cards/starter-rental",
@@ -22354,6 +23652,8 @@
     "/scout/report/{player_id}": "/api/v2/scout/report/{player_id}",
     "/scouts": "/api/v2/scouts",
     "/scouts/{scout_id}/discover": "/api/v2/scouts/{scout_id}/discover",
+    "/search": "/api/v2/search",
+    "/search/suggest": "/api/v2/search/suggest",
     "/season-pass": "/api/v2/season-pass",
     "/season-pass/claim": "/api/v2/season-pass/claim",
     "/season-pass/me": "/api/v2/season-pass/me",

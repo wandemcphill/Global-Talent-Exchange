@@ -425,6 +425,42 @@
       },
       {
         "method": "GET",
+        "path": "/api/admin/coin-traders",
+        "handler": "admin_list_coin_traders",
+        "response_model": "list[CoinTraderProfileView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/coin-traders/orders",
+        "handler": "admin_list_coin_trade_orders",
+        "response_model": "list[CoinTradeOrderView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/coin-traders/orders/{order_id}/resolve",
+        "handler": "admin_resolve_coin_trade_order",
+        "response_model": "CoinTradeOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/coin-traders/{profile_id}/approve",
+        "handler": "admin_approve_coin_trader",
+        "response_model": "CoinTraderProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/coin-traders/{profile_id}/freeze",
+        "handler": "admin_freeze_coin_trader",
+        "response_model": "CoinTraderProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/coin-traders/{profile_id}/reject",
+        "handler": "admin_reject_coin_trader",
+        "response_model": "CoinTraderProfileView"
+      },
+      {
+        "method": "GET",
         "path": "/api/admin/finance/account-controls",
         "handler": "list_account_controls",
         "response_model": "list[AccountControlView]"
@@ -1509,9 +1545,21 @@
       },
       {
         "method": "GET",
+        "path": "/api/clubs/admin/club-lifecycle",
+        "handler": "list_admin_club_lifecycle",
+        "response_model": "list[ClubLifecycleView]"
+      },
+      {
+        "method": "GET",
         "path": "/api/clubs/sale-market/listings",
         "handler": "list_public_club_sale_market_listings",
         "response_model": "ClubSaleListingCollectionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/advance-lifecycle",
+        "handler": "advance_club_lifecycle",
+        "response_model": "ClubLifecycleView"
       },
       {
         "method": "GET",
@@ -1536,6 +1584,60 @@
         "path": "/api/clubs/{club_id}/challenges",
         "handler": "create_challenge",
         "response_model": "ChallengePageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/growth",
+        "handler": "get_club_growth_dashboard",
+        "response_model": "ClubGrowthDashboardView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/academy/contracts/{offer_id}/respond",
+        "handler": "respond_to_academy_contract",
+        "response_model": "AcademyContractOfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/academy/generate-prospects",
+        "handler": "generate_academy_prospects",
+        "response_model": "list[AcademyProspectView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
+        "handler": "offer_academy_prospect_contract",
+        "response_model": "AcademyContractOfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
+        "handler": "promote_academy_prospect",
+        "response_model": "AcademyProspectView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/academy/upgrade",
+        "handler": "upgrade_academy",
+        "response_model": "AcademyProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
+        "handler": "accept_staff_contract",
+        "response_model": "StaffContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
+        "handler": "terminate_staff_contract",
+        "response_model": "StaffContractView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/staff/{staff_id}/offer",
+        "handler": "offer_staff_contract",
+        "response_model": "StaffContractView"
       },
       {
         "method": "GET",
@@ -1569,6 +1671,18 @@
       },
       {
         "method": "GET",
+        "path": "/api/clubs/{club_id}/lifecycle",
+        "handler": "get_club_lifecycle",
+        "response_model": "ClubLifecycleView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/operating-dashboard",
+        "handler": "get_club_operating_dashboard",
+        "response_model": "ClubOperatingDashboardView"
+      },
+      {
+        "method": "GET",
         "path": "/api/clubs/{club_id}/ownership",
         "handler": "get_club_ownership",
         "response_model": "ClubOwnershipView"
@@ -1578,6 +1692,12 @@
         "path": "/api/clubs/{club_id}/proposals",
         "handler": "create_club_proposal",
         "response_model": "ClubGovernanceActionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/readiness",
+        "handler": "get_club_readiness",
+        "response_model": "ClubReadinessView"
       },
       {
         "method": "GET",
@@ -1692,6 +1812,30 @@
         "path": "/api/clubs/{club_id}/sell-tokens",
         "handler": "sell_club_tokens",
         "response_model": "ClubTokenTradeResultView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad-registration",
+        "handler": "get_squad_registration",
+        "response_model": "SquadRegistrationView | None"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/squad-registration",
+        "handler": "upsert_squad_registration",
+        "response_model": "SquadRegistrationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/squad-registration/lock",
+        "handler": "lock_squad_registration",
+        "response_model": "SquadRegistrationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/squad-registration/submit",
+        "handler": "submit_squad_registration",
+        "response_model": "SquadRegistrationView"
       },
       {
         "method": "GET",
@@ -1898,6 +2042,86 @@
         "path": "/clubs/{club_id}",
         "handler": "get_club",
         "response_model": "ClubView"
+      }
+    ],
+    "coin": [
+      {
+        "method": "GET",
+        "path": "/api/coin-traders",
+        "handler": "list_coin_traders",
+        "response_model": "list[CoinTraderProfileView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/coin-traders/apply",
+        "handler": "apply_for_coin_trader_profile",
+        "response_model": "CoinTraderProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/coin-traders/me",
+        "handler": "get_my_coin_trader_profile",
+        "response_model": "CoinTraderProfileView"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/coin-traders/me",
+        "handler": "update_my_coin_trader_profile",
+        "response_model": "CoinTraderProfileView"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/coin-traders/me/rates",
+        "handler": "upsert_my_coin_trader_rate",
+        "response_model": "CoinTraderRateView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/coin-traders/orders",
+        "handler": "list_my_coin_trade_orders",
+        "response_model": "list[CoinTradeOrderView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/coin-traders/orders",
+        "handler": "create_coin_trade_order",
+        "response_model": "CoinTradeOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/coin-traders/orders/{order_id}/accept",
+        "handler": "accept_coin_trade_order",
+        "response_model": "CoinTradeOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/coin-traders/orders/{order_id}/cancel",
+        "handler": "cancel_coin_trade_order",
+        "response_model": "CoinTradeOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/coin-traders/orders/{order_id}/confirm",
+        "handler": "confirm_coin_trade_order",
+        "response_model": "CoinTradeOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/coin-traders/orders/{order_id}/dispute",
+        "handler": "dispute_coin_trade_order",
+        "response_model": "CoinTradeOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/coin-traders/orders/{order_id}/proof",
+        "handler": "submit_coin_trade_order_proof",
+        "response_model": "CoinTradeOrderView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/coin-traders/{profile_id}",
+        "handler": "get_coin_trader_profile",
+        "response_model": "CoinTraderProfileView"
       }
     ],
     "commentary": [
@@ -3214,6 +3438,18 @@
         "response_model": "FederationView"
       },
       {
+        "method": "GET",
+        "path": "/api/federations/national-associations/{country_code}",
+        "handler": "get_national_association",
+        "response_model": "NationalAssociationProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/federations/national-associations/{country_code}/eligibility-review",
+        "handler": "review_national_eligibility",
+        "response_model": "NationalEligibilityReviewView"
+      },
+      {
         "method": "POST",
         "path": "/api/federations/proposals/{proposal_id}/votes",
         "handler": "cast_vote",
@@ -3453,6 +3689,24 @@
       }
     ],
     "global": [
+      {
+        "method": "GET",
+        "path": "/api/admin/search",
+        "handler": "admin_global_search",
+        "response_model": "list[GlobalSearchResultView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/search",
+        "handler": "global_search",
+        "response_model": "list[GlobalSearchResultView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/search/suggest",
+        "handler": "global_search_suggest",
+        "response_model": "list[GlobalSearchSuggestionView]"
+      },
       {
         "method": "GET",
         "path": "/competitions",
@@ -4300,6 +4554,80 @@
         "response_model": "BackgroundTaskView"
       }
     ],
+    "launch": [
+      {
+        "method": "GET",
+        "path": "/api/admin/beta-access",
+        "handler": "list_beta_access_grants",
+        "response_model": "list[BetaAccessGrantView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/beta-access",
+        "handler": "upsert_beta_access_grant",
+        "response_model": "BetaAccessGrantView"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/admin/beta-access/{feature_key}/{user_id}",
+        "handler": "revoke_beta_access_grant",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/command-router",
+        "handler": "get_admin_command_router",
+        "response_model": "list[AdminCommandRouteView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/feature-flags",
+        "handler": "list_feature_flags",
+        "response_model": "list[LaunchControlFeatureFlagView]"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/admin/feature-flags/{feature_key}",
+        "handler": "update_feature_flag",
+        "response_model": "LaunchControlFeatureFlagView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/feature-flags/{feature_key}/disable",
+        "handler": "disable_feature_flag",
+        "response_model": "LaunchControlFeatureFlagView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/feature-flags/{feature_key}/enable",
+        "handler": "enable_feature_flag",
+        "response_model": "LaunchControlFeatureFlagView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/feature-flags/{feature_key}/kill-switch",
+        "handler": "set_feature_flag_kill_switch",
+        "response_model": "LaunchControlFeatureFlagView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/launch-control",
+        "handler": "get_launch_control_dashboard",
+        "response_model": "LaunchControlDashboardView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/modules/health",
+        "handler": "get_admin_modules_health",
+        "response_model": "list[ModuleHealthView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/feature-flags/client",
+        "handler": "list_client_feature_flags",
+        "response_model": "list[ClientFeatureFlagView]"
+      }
+    ],
     "leaderboards": [
       {
         "method": "POST",
@@ -4888,6 +5216,18 @@
     ],
     "market": [
       {
+        "method": "GET",
+        "path": "/api/market/browse/catalog",
+        "handler": "get_market_browse_catalog",
+        "response_model": "MarketBrowseCatalogView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/browse/catalog",
+        "handler": "get_market_browse_catalog",
+        "response_model": "MarketBrowseCatalogView"
+      },
+      {
         "method": "POST",
         "path": "/api/market/buy",
         "handler": "buy_market_position",
@@ -5444,6 +5784,44 @@
         "response_model": "MatchEventTimelineView"
       }
     ],
+    "matchday": [
+      {
+        "method": "POST",
+        "path": "/api/admin/matchday-economy/card-listings/{listing_id}/settle",
+        "handler": "settle_card_listing",
+        "response_model": "MatchdayEconomyActionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/matchday-economy/federation-sanctions/{sanction_id}/resolve",
+        "handler": "resolve_federation_sanction",
+        "response_model": "MatchdayEconomyActionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/matchday-economy/overview",
+        "handler": "read_admin_matchday_economy_overview",
+        "response_model": "MatchdayEconomyOverviewView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/matchday-economy/predictions/{fixture_id}/settle-rewards",
+        "handler": "settle_prediction_rewards",
+        "response_model": "MatchdayEconomyActionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/matchday-economy/tickets/{ticket_id}/check-in",
+        "handler": "check_in_ticket",
+        "response_model": "MatchdayEconomyActionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/matchday-economy/overview",
+        "handler": "read_matchday_economy_overview",
+        "response_model": "MatchdayEconomyOverviewView"
+      }
+    ],
     "matches": [
       {
         "method": "POST",
@@ -5979,6 +6357,18 @@
       },
       {
         "method": "GET",
+        "path": "/api/admin/notifications/event-matrix",
+        "handler": "admin_notification_event_matrix",
+        "response_model": "list[NotificationEventMatrixItemView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/notifications/test-event",
+        "handler": "admin_test_notification_event",
+        "response_model": "NotificationTestEventView"
+      },
+      {
+        "method": "GET",
         "path": "/api/notifications/announcements",
         "handler": "list_announcements",
         "response_model": "list[PlatformAnnouncementView]"
@@ -6038,6 +6428,20 @@
         "path": "/observability/config",
         "handler": "read_config_snapshot",
         "response_model": "ConfigSnapshotView"
+      }
+    ],
+    "operations": [
+      {
+        "method": "GET",
+        "path": "/api/admin/operations-readiness",
+        "handler": "get_operations_readiness",
+        "response_model": "OperationsReadinessSnapshot"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/operations-readiness/notify-blockers",
+        "handler": "notify_operations_readiness_blockers",
+        "response_model": "OperationsReadinessNotificationDispatch"
       }
     ],
     "orders": [
@@ -6366,6 +6770,30 @@
         "response_model": "AdminPreseededRegenMintResponse"
       },
       {
+        "method": "POST",
+        "path": "/api/player-cards/cards/burn",
+        "handler": "burn_player_card",
+        "response_model": "PlayerCardBurnView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/cards/burn",
+        "handler": "burn_player_card",
+        "response_model": "PlayerCardBurnView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/cards/upgrade",
+        "handler": "upgrade_player_cards",
+        "response_model": "PlayerCardUpgradeView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/cards/upgrade",
+        "handler": "upgrade_player_cards",
+        "response_model": "PlayerCardUpgradeView"
+      },
+      {
         "method": "GET",
         "path": "/api/player-cards/inventory",
         "handler": "list_inventory",
@@ -6700,6 +7128,30 @@
         "path": "/api/player-cards/marketplace/swaps/{listing_id}/execute",
         "handler": "execute_marketplace_swap_listing",
         "response_model": "PlayerCardMarketplaceSwapExecutionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/packs",
+        "handler": "list_card_packs",
+        "response_model": "list[PlayerCardPackView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/player-cards/packs",
+        "handler": "list_card_packs",
+        "response_model": "list[PlayerCardPackView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/packs/{pack_key}/open",
+        "handler": "open_card_pack",
+        "response_model": "PlayerCardPackOpeningView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/player-cards/packs/{pack_key}/open",
+        "handler": "open_card_pack",
+        "response_model": "PlayerCardPackOpeningView"
       },
       {
         "method": "GET",
@@ -9294,6 +9746,96 @@
     ],
     "transfer": [
       {
+        "method": "GET",
+        "path": "/api/transfer-hub/listings",
+        "handler": "list_transfer_market_listings",
+        "response_model": "list[TransferListingView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/listings",
+        "handler": "create_transfer_market_listing",
+        "response_model": "TransferListingView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-hub/listings/{listing_id}",
+        "handler": "get_transfer_market_listing",
+        "response_model": "TransferListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/listings/{listing_id}/bids",
+        "handler": "place_transfer_market_bid",
+        "response_model": "TransferListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/listings/{listing_id}/close",
+        "handler": "close_transfer_market_listing",
+        "response_model": "TransferListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/listings/{listing_id}/contract-offer",
+        "handler": "submit_transfer_market_contract_offer",
+        "response_model": "TransferNegotiationView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-hub/listings/{listing_id}/negotiation",
+        "handler": "get_transfer_market_negotiation",
+        "response_model": "TransferNegotiationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/listings/{listing_id}/offers",
+        "handler": "create_transfer_hub_offer",
+        "response_model": "TransferHubOfferView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-hub/offers",
+        "handler": "list_transfer_hub_offers",
+        "response_model": "list[TransferHubOfferView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/offers/{offer_id}/accept",
+        "handler": "accept_transfer_hub_offer",
+        "response_model": "TransferHubOfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/offers/{offer_id}/cancel",
+        "handler": "cancel_transfer_hub_offer",
+        "response_model": "TransferHubOfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/offers/{offer_id}/counter",
+        "handler": "counter_transfer_hub_offer",
+        "response_model": "TransferHubOfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/offers/{offer_id}/reject",
+        "handler": "reject_transfer_hub_offer",
+        "response_model": "TransferHubOfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/players/{player_id}/transfer-request",
+        "handler": "create_transfer_hub_transfer_request",
+        "response_model": "TransferRequestView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-hub/watchlist",
+        "handler": "add_transfer_market_watchlist_entry",
+        "response_model": "MarketWatchlistEntryView"
+      },
+      {
         "method": "PUT",
         "path": "/api/transfer-market/clubs/{club_id}/team-dynamics",
         "handler": "upsert_transfer_market_team_dynamics",
@@ -9803,6 +10345,42 @@
       }
     ],
     "viral": [
+      {
+        "method": "GET",
+        "path": "/api/admin/clips/moderation",
+        "handler": "list_clip_moderation_events",
+        "response_model": "list[ClipModerationEventView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/clips/{clip_id}/approve",
+        "handler": "approve_clip",
+        "response_model": "ClipModerationEventView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/clips/{clip_id}/block",
+        "handler": "block_clip",
+        "response_model": "ClipModerationEventView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clips/{clip_id}",
+        "handler": "read_clip_detail",
+        "response_model": "ViralClipView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clips/{clip_id}/report",
+        "handler": "report_clip",
+        "response_model": "ClipModerationEventView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/viral-feed",
+        "handler": "read_viral_feed",
+        "response_model": "ViralFeedResponse"
+      },
       {
         "method": "GET",
         "path": "/api/viral/accounts",

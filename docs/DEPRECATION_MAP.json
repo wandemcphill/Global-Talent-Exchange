@@ -32,6 +32,18 @@
     },
     {
       "consumer": "frontend/lib/data/admin_command_center_api.dart",
+      "from": "/api/v2/admin/operations-readiness",
+      "to": "/api/admin/operations-readiness",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/admin_command_center_api.dart",
+      "from": "/api/v2/admin/operations-readiness/notify-blockers",
+      "to": "/api/admin/operations-readiness/notify-blockers",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/admin_command_center_api.dart",
       "from": "/api/v2/admin/wallets/market-topups/quote",
       "to": "/api/admin/wallets/market-topups/quote",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
@@ -446,6 +458,12 @@
     },
     {
       "consumer": "frontend/lib/data/gte_exchange_api_client.dart",
+      "from": "/api/v2/market/browse/catalog",
+      "to": "/api/market/browse/catalog",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/gte_exchange_api_client.dart",
       "from": "/api/v2/market/leagues",
       "to": "/api/market/leagues",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
@@ -764,24 +782,6 @@
     },
     {
       "consumer": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
-      "from": "/api/v2/transfers/windows",
-      "to": "/api/transfers/windows",
-      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
-    },
-    {
-      "consumer": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
-      "from": "/api/v2/calendar-engine/dashboard",
-      "to": "/api/calendar-engine/dashboard",
-      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
-    },
-    {
-      "consumer": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
-      "from": "/api/v2/world/narratives",
-      "to": "/api/world/narratives",
-      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
-    },
-    {
-      "consumer": "frontend/lib/features/app_routes/gte_feature_route_builders.dart",
       "from": "/api/v2/broadcast/home",
       "to": "/api/broadcast/home",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
@@ -817,6 +817,72 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/features/awards/gtex_awards_screen_v2.dart",
+      "from": "/api/v2/awards/categories",
+      "to": "/api/awards/categories",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/awards/gtex_awards_screen_v2.dart",
+      "from": "/api/v2/awards/nominees",
+      "to": "/api/awards/nominees",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/awards/gtex_awards_screen_v2.dart",
+      "from": "/api/v2/awards/winners",
+      "to": "/api/awards/winners",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/awards/gtex_awards_screen_v2.dart",
+      "from": "/api/v2/awards/ceremony",
+      "to": "/api/awards/ceremony",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "from": "/api/v2/coin-traders",
+      "to": "/api/coin-traders",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "from": "/api/v2/coin-traders/me",
+      "to": "/api/coin-traders/me",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "from": "/api/v2/coin-traders/apply",
+      "to": "/api/coin-traders/apply",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "from": "/api/v2/coin-traders/me/rates",
+      "to": "/api/coin-traders/me/rates",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "from": "/api/v2/coin-traders/orders",
+      "to": "/api/coin-traders/orders",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "from": "/api/v2/admin/coin-traders",
+      "to": "/api/admin/coin-traders",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "from": "/api/v2/admin/coin-traders/orders",
+      "to": "/api/admin/coin-traders/orders",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/features/federations/live_federations_provider.dart",
       "from": "/api/v2/federations",
       "to": "/api/federations",
@@ -835,9 +901,51 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/features/global_search_redesign/global_search_api.dart",
+      "from": "/api/v2/admin/search",
+      "to": "/api/admin/search",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/global_search_redesign/global_search_api.dart",
+      "from": "/api/v2/search",
+      "to": "/api/search",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/launch_control_redesign/launch_control_api.dart",
+      "from": "/api/v2/admin/launch-control",
+      "to": "/api/admin/launch-control",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/launch_control_redesign/launch_control_api.dart",
+      "from": "/api/v2/feature-flags/client",
+      "to": "/api/feature-flags/client",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/launch_control_redesign/launch_control_api.dart",
+      "from": "/api/v2/admin/beta-access",
+      "to": "/api/admin/beta-access",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/features/match/live_match_overview_provider.dart",
       "from": "/api/v2/broadcast/home",
       "to": "/api/broadcast/home",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart",
+      "from": "/api/v2/admin/matchday-economy/overview",
+      "to": "/api/admin/matchday-economy/overview",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart",
+      "from": "/api/v2/matchday-economy/overview",
+      "to": "/api/matchday-economy/overview",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
@@ -910,6 +1018,12 @@
       "consumer": "frontend/lib/features/world/live_world_provider.dart",
       "from": "/api/v2/federations",
       "to": "/api/federations",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "from": "/api/v2/admin/operations-readiness",
+      "to": "/api/admin/operations-readiness",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {

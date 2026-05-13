@@ -5,7 +5,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 
 ## Shared Source of Truth
 
-- Shared Flutter client files with API calls discovered: **100**
+- Shared Flutter client files with API calls discovered: **112**
 - Web and mobile therefore inherit the same endpoint usage and the same stale/legacy risks.
 
 ## Divergence Risks
@@ -85,6 +85,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/governance_api.dart -> /api/governance/proposals/$proposalId`
 - `frontend/lib/data/governance_api.dart -> /api/governance/proposals/$proposalId/vote`
 - `frontend/lib/data/governance_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/browse/catalog`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/clubs/$clubId/players`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/leagues`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/leagues/$leagueId/clubs`
@@ -131,7 +132,10 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/moderation_api.dart -> /api/moderation/reports`
 - `frontend/lib/data/moderation_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/competitions`
+- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/competitions/$competitionId/rental-entry`
+- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/competitions/$competitionId/rental-pool`
 - `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/entries/$entryId`
+- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/entries/$entryId/rentals`
 - `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/me/history`
 - `frontend/lib/data/national_team_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/notification_settings_api.dart -> /api/admin/notifications/announcements`
@@ -151,6 +155,19 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/story_feed_api.dart -> /api/story-feed`
 - `frontend/lib/data/story_feed_api.dart -> /api/story-feed/digest`
 - `frontend/lib/data/story_feed_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> /api/awards/categories`
+- `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> /api/awards/ceremony`
+- `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> /api/awards/nominees`
+- `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> /api/awards/winners`
+- `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/academy/contracts/$encodedOfferId/respond`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/academy/generate-prospects`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/academy/prospects/$encodedProspectId/offer-contract`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/academy/prospects/$encodedProspectId/promote`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/accept`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/staff/$encodedStaffId/offer`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_hub/presentation/club_hub_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/dynasty/presentation/club_dynasty_overview_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart -> http://127.0.0.1:8000`
@@ -158,10 +175,57 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/club_identity/dynasty/presentation/era_history_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/jerseys/presentation/club_identity_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/reputation/presentation/reputation_screen.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/advance-lifecycle`
+- `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/operating-dashboard`
+- `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/squad-registration`
+- `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/squad-registration/lock`
+- `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/squad-registration/submit`
+- `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/$profileId/approve`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/$profileId/freeze`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/$profileId/reject`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/orders`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/orders/$orderId/resolve`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/$profileId`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/apply`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/me`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/me/rates`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/accept`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/cancel`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/confirm`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/dispute`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/proof`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/global_search_redesign/global_search_api.dart -> /api/admin/search`
+- `frontend/lib/features/global_search_redesign/global_search_api.dart -> /api/search`
+- `frontend/lib/features/global_search_redesign/global_search_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> /api/admin/beta-access`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> /api/admin/beta-access/$encodedFeatureKey/$encodedUserId`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> /api/admin/feature-flags/$featureKey`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> /api/admin/feature-flags/$featureKey/disable`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> /api/admin/feature-flags/$featureKey/enable`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> /api/admin/feature-flags/$featureKey/kill-switch`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> /api/admin/launch-control`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> /api/feature-flags/client`
+- `frontend/lib/features/launch_control_redesign/launch_control_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> /api/admin/matchday-economy/card-listings/$encodedListingId/settle`
+- `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> /api/admin/matchday-economy/federation-sanctions/$encodedSanctionId/resolve`
+- `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> /api/admin/matchday-economy/overview`
+- `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> /api/admin/matchday-economy/predictions/$encodedFixtureId/settle-rewards`
+- `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> /api/admin/matchday-economy/tickets/$encodedTicketId/check-in`
+- `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> /api/matchday-economy/overview`
+- `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/operations-readiness`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/trust_ops_redesign/presentation/gtex_admin_trust_ops_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/academy_analytics_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/club_finance_analytics_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/club_ops_admin_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/club_sponsorship_analytics_screen.dart -> http://127.0.0.1:8000`
+- `frontend/lib/screens/admin/gtex_admin_trust_ops_screen_v2.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/scouting_analytics_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/clubs/academy_overview_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/clubs/academy_player_detail_screen.dart -> http://127.0.0.1:8000`
@@ -183,3 +247,4 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/screens/clubs/scouting_prospects_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/clubs/youth_pipeline_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/competitions/competition_discovery_screen.dart -> http://127.0.0.1:8000`
+- `frontend/lib/screens/wallet/gtex_wallet_overview_screen_v2.dart -> http://127.0.0.1:8000`
