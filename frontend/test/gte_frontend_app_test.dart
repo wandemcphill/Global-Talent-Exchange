@@ -45,7 +45,7 @@ void main() {
 
     expect(find.text('Home'), findsWidgets);
     expect(find.textContaining('matchday'), findsWidgets);
-    expect(find.text('App-wide sync'), findsOneWidget);
+    expect(find.text('Home sync'), findsOneWidget);
     expect(find.text('Studio'), findsWidgets);
     expect(find.text('Club'), findsWidgets);
   });
@@ -83,7 +83,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Market'), findsWidgets);
+    expect(find.text('Transfer Hub'), findsWidgets);
     expect(find.text('Matchday'), findsWidgets);
     expect(find.text('Transfer desk'), findsNothing);
   });

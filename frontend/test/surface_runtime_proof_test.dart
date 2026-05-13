@@ -793,6 +793,29 @@ class _SurfaceRuntimeTransport implements GteTransport {
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) async {
     final String path = request.uri.path;
+    if (request.method == 'GET' && path.endsWith('/federations')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'id': _FakeFederationsApi.id,
+            'name': 'West Africa Federation',
+            'ranking_score': 94.2,
+            'reputation_score': 91.4,
+            'audience_size': 420000,
+            'treasury_balance': 1250000,
+            'members_json': <Map<String, Object?>>[
+              <String, Object?>{
+                'club_id': 'ibadan-lions',
+                'status': 'active',
+              },
+            ],
+            'is_public': true,
+            'default_reality_mode': 'hybrid',
+          },
+        ],
+      );
+    }
     if (request.method == 'GET' &&
         path.contains('/national-team-engine/competitions/') &&
         path.endsWith('/rental-pool')) {
@@ -817,6 +840,107 @@ class _SurfaceRuntimeTransport implements GteTransport {
           ],
           'total': 2,
         },
+      );
+    }
+    if (request.method == 'GET' && path.endsWith('/federations/rankings')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'federation_id': _FakeFederationsApi.id,
+            'name': 'West Africa Federation',
+            'ranking_score': 94.2,
+            'reputation_score': 91.4,
+            'audience_size': 420000,
+            'activity_score': 88.0,
+            'competitiveness_score': 86.5,
+          },
+        ],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/federations/regional-tournaments')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'region_code': 'west_africa',
+            'region_label': 'West Africa',
+            'federation_count': 1,
+            'active_league_count': 2,
+            'total_member_clubs': 12,
+          },
+        ],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/federations/${_FakeFederationsApi.id}')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'leagues': <Map<String, Object?>>[
+            <String, Object?>{
+              'name': 'WAF Nations League',
+              'competition_type': 'league',
+              'status': 'active',
+              'season_label': '2030',
+            },
+          ],
+          'rules': <String, Object?>{
+            'salary_cap': 'enabled',
+            'foreign_limit': 5,
+          },
+          'members': <Map<String, Object?>>[
+            <String, Object?>{
+              'club_id': 'ibadan-lions',
+              'status': 'active',
+            },
+          ],
+          'reputation': <String, Object?>{
+            'score': 91.4,
+            'ranking_score': 94.2,
+            'audience_size': 420000,
+          },
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/federations/${_FakeFederationsApi.id}/governance')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'proposals': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'proposal-1',
+              'title': 'Expand regional qualifiers',
+              'summary':
+                  'Increase the federation qualifier slots for the next cycle.',
+              'status': 'open',
+              'yes_votes': 7,
+              'no_votes': 2,
+              'abstain_votes': 1,
+            },
+          ],
+          'votes': <Map<String, Object?>>[],
+          'sanctions': <Map<String, Object?>>[
+            <String, Object?>{
+              'sanction_type': 'fine',
+              'reason': 'Late registration paperwork.',
+            },
+          ],
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/federations/${_FakeFederationsApi.id}/narratives')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'headline': 'West Africa race tightens',
+            'body': 'Three clubs are separated by two points.',
+          },
+        ],
       );
     }
     if (request.method == 'GET' &&

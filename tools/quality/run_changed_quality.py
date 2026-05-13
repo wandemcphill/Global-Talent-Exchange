@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import shutil
 import shlex
 import subprocess
 import sys
@@ -51,6 +52,7 @@ SECRET_SCAN_FILENAMES = {
     "dockerfile",
     "docker-compose.yml",
 }
+NPM_EXECUTABLE = shutil.which("npm") or shutil.which("npm.cmd")
 UNTRACKED_SKIP_PREFIXES = (
     ".tmp",
     "tmp/",
@@ -133,6 +135,18 @@ def run_check(label: str, command: list[str], files: list[str]) -> None:
     subprocess.run(full_command, cwd=REPO_ROOT, check=True)
 
 
+def ensure_javascript_dependencies() -> None:
+    if NPM_EXECUTABLE is None:
+        raise RuntimeError("npm is required to run JavaScript quality gates.")
+    if (REPO_ROOT / "package-lock.json").is_file():
+        command = [NPM_EXECUTABLE, "ci"]
+    else:
+        command = [NPM_EXECUTABLE, "install"]
+    print("[quality] Installing JavaScript quality dependencies")
+    print(f"[quality] $ {shlex.join(command)}")
+    subprocess.run(command, cwd=REPO_ROOT, check=True)
+
+
 def main() -> int:
     args = parse_args()
     files = existing_files(changed_files(args.base, args.head))
@@ -144,6 +158,8 @@ def main() -> int:
     python_files = select_files(files, PYTHON_EXTENSIONS)
     javascript_files = select_files(files, JAVASCRIPT_EXTENSIONS)
     secret_scan_files = [path for path in files if is_secret_scan_file(path)]
+    if javascript_files:
+        ensure_javascript_dependencies()
 
     run_check(
         "Python format check",
@@ -157,12 +173,12 @@ def main() -> int:
     )
     run_check(
         "JavaScript format check",
-        ["npm", "exec", "--", "prettier", "--check"],
+        [NPM_EXECUTABLE or "npm", "exec", "--", "prettier", "--check"],
         javascript_files,
     )
     run_check(
         "JavaScript lint",
-        ["npm", "exec", "--", "eslint", "--max-warnings=0"],
+        [NPM_EXECUTABLE or "npm", "exec", "--", "eslint", "--max-warnings=0"],
         javascript_files,
     )
     secret_scan_command = [sys.executable, "-m", "detect_secrets.pre_commit_hook", "--no-verify"]

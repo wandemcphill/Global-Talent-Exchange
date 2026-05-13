@@ -145,7 +145,7 @@ void main() {
       expect(transport.lastRequest!.uri.queryParameters['max_age'], '28');
       expect(
         transport.lastRequest!.uri.queryParameters['availability'],
-        isNull,
+        'free_agent',
       );
     },
   );

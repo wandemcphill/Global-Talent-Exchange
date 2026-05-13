@@ -123,12 +123,12 @@ void main() {
       expect(find.text('You are in'), findsNothing);
       expect(
         find.text(
-          'You are signed in as fixture-user. Some account actions are still limited until compliance review finishes.',
+          'Signed in as fixture-user. Some actions remain limited until compliance review is complete.',
         ),
         findsOneWidget,
       );
       expect(find.text('Compliance action required'), findsOneWidget);
-      expect(find.text('Open compliance center'), findsOneWidget);
+      expect(find.text('Open compliance'), findsOneWidget);
     },
   );
 }
