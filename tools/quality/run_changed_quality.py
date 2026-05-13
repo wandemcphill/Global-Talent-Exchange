@@ -139,9 +139,9 @@ def ensure_javascript_dependencies() -> None:
     if NPM_EXECUTABLE is None:
         raise RuntimeError("npm is required to run JavaScript quality gates.")
     if (REPO_ROOT / "package-lock.json").is_file():
-        command = [NPM_EXECUTABLE, "ci"]
+        command = [NPM_EXECUTABLE, "ci", "--include=dev"]
     else:
-        command = [NPM_EXECUTABLE, "install"]
+        command = [NPM_EXECUTABLE, "install", "--include=dev"]
     print("[quality] Installing JavaScript quality dependencies")
     print(f"[quality] $ {shlex.join(command)}")
     subprocess.run(command, cwd=REPO_ROOT, check=True)
