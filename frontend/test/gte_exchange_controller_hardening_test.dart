@@ -70,6 +70,17 @@ void main() {
     },
   );
 
+  test('bootstrap keeps a warm market page instead of reloading it', () async {
+    final _OverlappingMarketApiClient api = _OverlappingMarketApiClient();
+    final GteExchangeController controller = GteExchangeController(api: api);
+
+    await controller.bootstrap();
+    await controller.bootstrap();
+
+    expect(api.queries, hasLength(1));
+    expect(controller.players, isNotEmpty);
+  });
+
   test('loadMarket resets the market page when filters change', () async {
     final _FilterResetMarketApiClient api = _FilterResetMarketApiClient();
     final GteExchangeController controller = GteExchangeController(api: api);

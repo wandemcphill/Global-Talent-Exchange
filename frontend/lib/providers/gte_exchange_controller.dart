@@ -11,7 +11,7 @@ import '../data/gte_exchange_api_client.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/gte_models.dart';
 
-const int _marketPageSize = 500;
+const int _marketPageSize = 96;
 
 class GteExchangeController extends ChangeNotifier {
   GteExchangeController({required GteExchangeApiClient api}) : _api = api;
@@ -186,12 +186,24 @@ class GteExchangeController extends ChangeNotifier {
     if (_bootstrapFuture != null) {
       return _bootstrapFuture!;
     }
+    if (marketBrowseCatalog != null && marketPage != null) {
+      return Future<void>.value();
+    }
     isBootstrapping = true;
     notifyListeners();
-    final Future<void> task = Future.wait<void>(<Future<void>>[
-      loadMarketBrowseCatalog(),
-      loadMarket(reset: true),
-    ]).whenComplete(() {
+    final List<Future<void>> startupTasks = <Future<void>>[];
+    if (marketBrowseCatalog == null && !isLoadingMarketCatalog) {
+      startupTasks.add(loadMarketBrowseCatalog());
+    }
+    if (marketPage == null && !isLoadingMarket && !isLoadingMoreMarket) {
+      startupTasks.add(loadMarket(reset: true));
+    }
+    if (startupTasks.isEmpty) {
+      isBootstrapping = false;
+      notifyListeners();
+      return Future<void>.value();
+    }
+    final Future<void> task = Future.wait<void>(startupTasks).whenComplete(() {
       isBootstrapping = false;
       _bootstrapFuture = null;
       notifyListeners();
@@ -247,6 +259,7 @@ class GteExchangeController extends ChangeNotifier {
     PlayerFilter? filter,
     bool reset = false,
   }) async {
+    final PlayerFilter previousFilter = marketFilter;
     final PlayerFilter nextFilter =
         ((filter ?? marketFilter).copyWith(
           search:
@@ -265,7 +278,9 @@ class GteExchangeController extends ChangeNotifier {
     marketFilter = nextFilter;
     if (shouldReset) {
       isLoadingMarket = true;
-      marketPage = null;
+      if (marketPage == null || nextFilter != previousFilter) {
+        marketPage = null;
+      }
     } else {
       isLoadingMoreMarket = true;
     }

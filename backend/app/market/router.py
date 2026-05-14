@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_trading_user, get_current_user
 from app.auth.dependencies import get_session
+from app.core.app_state import get_optional_app_settings
 from app.core.cache_namespaces import PLAYER_MARKETS_CACHE_NAMESPACE
 from app.core.response_cache import get_response_cache
 from app.gtex.runtime import ensure_gtex_runtime
@@ -188,6 +189,7 @@ def get_market_summary(
 
 @router.get("/players", response_model=MarketPlayerListView)
 def list_market_players(
+    request: Request = None,  # type: ignore[assignment]
     limit: int = Query(default=100, ge=1, le=500),
     cursor: str | None = Query(default=None),
     offset: int | None = Query(default=None, ge=0, deprecated=True),
@@ -207,6 +209,15 @@ def list_market_players(
     sort: str = Query(default="current_value"),
     service: MarketPlayerQueryService = Depends(get_market_player_query_service),
 ) -> MarketPlayerListView:
+    settings = get_optional_app_settings(request.app) if request is not None else None
+    if settings is not None and settings.api_cache_enabled:
+        cached_payload = get_response_cache(request.app).get_json(
+            namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+        )
+        if cached_payload is not None:
+            return MarketPlayerListView.model_validate(cached_payload)
     try:
         country_value = country if isinstance(country, str) else None
         result = service.list_players(
@@ -231,14 +242,42 @@ def list_market_players(
     except MarketError as exc:
         raise_market_http_exception(exc)
 
-    return MarketPlayerListView.model_validate(result)
+    response = MarketPlayerListView.model_validate(result)
+    if settings is not None and settings.api_cache_enabled and request is not None:
+        get_response_cache(request.app).set_json(
+            namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+            payload=response.model_dump(mode="json"),
+            ttl_seconds=settings.player_markets_cache_ttl_seconds,
+        )
+    return response
 
 
 @router.get("/browse/catalog", response_model=MarketBrowseCatalogView)
 def get_market_browse_catalog(
+    request: Request = None,  # type: ignore[assignment]
     service: MarketPlayerQueryService = Depends(get_market_player_query_service),
 ) -> MarketBrowseCatalogView:
-    return MarketBrowseCatalogView.model_validate(service.browse_catalog())
+    settings = get_optional_app_settings(request.app) if request is not None else None
+    if settings is not None and settings.api_cache_enabled:
+        cached_payload = get_response_cache(request.app).get_json(
+            namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+        )
+        if cached_payload is not None:
+            return MarketBrowseCatalogView.model_validate(cached_payload)
+    response = MarketBrowseCatalogView.model_validate(service.browse_catalog())
+    if settings is not None and settings.api_cache_enabled and request is not None:
+        get_response_cache(request.app).set_json(
+            namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+            payload=response.model_dump(mode="json"),
+            ttl_seconds=settings.player_markets_cache_ttl_seconds,
+        )
+    return response
 
 
 @router.get("/leagues")

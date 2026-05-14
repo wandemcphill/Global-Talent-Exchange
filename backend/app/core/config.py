@@ -55,7 +55,7 @@ class SettingsSource(BaseModel):
     redis_realtime_channel: str = Field(default="gtex.realtime", validation_alias="GTE_REDIS_REALTIME_CHANNEL")
     api_cache_enabled: bool = Field(default=True, validation_alias="GTE_API_CACHE_ENABLED")
     player_markets_cache_ttl_seconds: int = Field(
-        default=5,
+        default=30,
         validation_alias="GTE_PLAYER_MARKETS_CACHE_TTL_SECONDS",
     )
     competitions_cache_ttl_seconds: int = Field(
