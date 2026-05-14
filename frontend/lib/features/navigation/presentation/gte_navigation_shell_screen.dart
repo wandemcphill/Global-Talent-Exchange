@@ -1762,7 +1762,7 @@ class _GtexUserWorkspaceHomeEntry extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               GtexPanel(
-                title: 'Workspace command',
+                title: 'Build your club command center',
                 subtitle: '$userLabel - $roleLabel',
                 accent: GtexColors.pitch,
                 trailing: const Icon(
@@ -1783,6 +1783,12 @@ class _GtexUserWorkspaceHomeEntry extends StatelessWidget {
                       icon: Icons.storefront_outlined,
                       variant: GtexButtonVariant.secondary,
                       onPressed: onOpenMarket,
+                    ),
+                    GtexButton(
+                      label: 'Create club',
+                      icon: Icons.shield_outlined,
+                      variant: GtexButtonVariant.secondary,
+                      onPressed: onCreateClub,
                     ),
                     GtexButton(
                       label: 'Profile',
