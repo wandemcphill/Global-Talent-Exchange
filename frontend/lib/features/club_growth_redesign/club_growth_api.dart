@@ -14,15 +14,18 @@ class GtexClubGrowthApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteAuthedApi? client,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return GtexClubGrowthApi(
-      client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
-        accessToken: accessToken,
-        mode: resolvedMode,
-      ),
+      client:
+          client ??
+          GteAuthedApi(
+            config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
+            transport: GteHttpTransport(),
+            accessToken: accessToken,
+            mode: resolvedMode,
+          ),
       fixtures: GtexClubGrowthFixtures.seed(),
     );
   }

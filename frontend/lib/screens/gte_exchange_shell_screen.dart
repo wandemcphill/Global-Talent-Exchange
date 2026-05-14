@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../data/gte_api_repository.dart';
 import '../features/navigation/presentation/gte_navigation_shell_screen.dart';
+import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../services/ambient_audio_controller.dart';
 
@@ -13,6 +14,7 @@ class GteExchangeShellScreen extends StatelessWidget {
     required this.backendMode,
     this.ambientAudioController,
     this.initialPath = '/app/home',
+    this.navigationDependencies,
   });
 
   factory GteExchangeShellScreen.fromPath({
@@ -22,6 +24,7 @@ class GteExchangeShellScreen extends StatelessWidget {
     required GteBackendMode backendMode,
     AmbientAudioState? ambientAudioController,
     required String initialPath,
+    GteNavigationDependencies? navigationDependencies,
   }) {
     return GteExchangeShellScreen(
       key: key,
@@ -30,6 +33,7 @@ class GteExchangeShellScreen extends StatelessWidget {
       backendMode: backendMode,
       ambientAudioController: ambientAudioController,
       initialPath: initialPath,
+      navigationDependencies: navigationDependencies,
     );
   }
 
@@ -38,6 +42,7 @@ class GteExchangeShellScreen extends StatelessWidget {
   final GteBackendMode backendMode;
   final AmbientAudioState? ambientAudioController;
   final String initialPath;
+  final GteNavigationDependencies? navigationDependencies;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +52,7 @@ class GteExchangeShellScreen extends StatelessWidget {
       backendMode: backendMode,
       ambientAudioController: ambientAudioController,
       initialPath: initialPath,
+      navigationDependencies: navigationDependencies,
     );
   }
 }

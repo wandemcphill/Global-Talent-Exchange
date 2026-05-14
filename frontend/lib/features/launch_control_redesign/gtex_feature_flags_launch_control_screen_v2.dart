@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/gte_authed_api.dart';
 import '../../data/gte_api_repository.dart';
 import '../../ui_gtex/ui_gtex.dart';
 import 'launch_control_api.dart';
@@ -13,12 +14,14 @@ class GtexFeatureFlagsLaunchControlScreenV2 extends StatefulWidget {
     required this.accessToken,
     required this.backendMode,
     this.controller,
+    this.authedApi,
   });
 
   final String baseUrl;
   final String? accessToken;
   final GteBackendMode backendMode;
   final GtexLaunchControlController? controller;
+  final GteAuthedApi? authedApi;
 
   @override
   State<GtexFeatureFlagsLaunchControlScreenV2> createState() =>
@@ -41,6 +44,7 @@ class _GtexFeatureFlagsLaunchControlScreenV2State
             baseUrl: widget.baseUrl,
             accessToken: widget.accessToken,
             mode: widget.backendMode,
+            client: widget.authedApi,
           ),
         );
     _controller.load();

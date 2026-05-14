@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/app_feedback.dart';
 import '../../data/admin_command_center_api.dart';
 import '../../data/gte_api_repository.dart';
+import '../../data/gte_authed_api.dart';
 import '../../data/gte_models.dart';
 import '../../features/app_routes/gte_navigation_helpers.dart';
 import '../../features/app_routes/gte_route_data.dart';
@@ -24,12 +25,14 @@ class AdminCommandCenterScreen extends StatefulWidget {
     required this.accessToken,
     required this.backendMode,
     this.api,
+    this.authedApi,
   });
 
   final String baseUrl;
   final String accessToken;
   final GteBackendMode backendMode;
   final AdminCommandCenterApi? api;
+  final GteAuthedApi? authedApi;
 
   @override
   State<AdminCommandCenterScreen> createState() =>
@@ -118,6 +121,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           baseUrl: widget.baseUrl,
           accessToken: widget.accessToken,
           mode: widget.backendMode,
+          client: widget.authedApi,
         );
     _load();
     if (!_isTestBinding) {

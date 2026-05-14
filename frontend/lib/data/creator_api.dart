@@ -21,15 +21,18 @@ class CreatorApi {
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
     GteTransport? transport,
+    GteAuthedApi? client,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return CreatorApi(
-      client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: transport ?? createModeAwareTransport(resolvedMode),
-        accessToken: accessToken,
-        mode: resolvedMode,
-      ),
+      client:
+          client ??
+          GteAuthedApi(
+            config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
+            transport: transport ?? createModeAwareTransport(resolvedMode),
+            accessToken: accessToken,
+            mode: resolvedMode,
+          ),
       baseUrl: baseUrl,
       fixtures: _CreatorFixtures.seed(baseUrl),
     );

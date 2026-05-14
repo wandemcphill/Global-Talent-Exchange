@@ -14,15 +14,18 @@ class GtexLaunchControlApi {
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteAuthedApi? client,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return GtexLaunchControlApi(
-      client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
-        accessToken: accessToken,
-        mode: resolvedMode,
-      ),
+      client:
+          client ??
+          GteAuthedApi(
+            config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
+            transport: GteHttpTransport(),
+            accessToken: accessToken,
+            mode: resolvedMode,
+          ),
       fixtures: GtexLaunchControlFixtures.seed(),
     );
   }
@@ -467,9 +470,10 @@ class GtexLaunchControlFixtures {
             enabled: flag.effectivelyEnabled,
             launchState: flag.launchState,
             route: flag.route,
-            maintenanceMessage: flag.launchState == GtexLaunchState.maintenance
-                ? flag.maintenanceMessage
-                : null,
+            maintenanceMessage:
+                flag.launchState == GtexLaunchState.maintenance
+                    ? flag.maintenanceMessage
+                    : null,
           ),
         )
         .toList(growable: false);
@@ -538,17 +542,18 @@ class GtexLaunchControlFixtures {
     final GtexBetaAccessGrant existing = _snapshot.betaGrants.firstWhere(
       (GtexBetaAccessGrant grant) =>
           grant.featureKey == featureKey && grant.userId == userId,
-      orElse: () => GtexBetaAccessGrant(
-        id: 'grant-$featureKey-$userId',
-        featureKey: featureKey,
-        userId: userId,
-        active: true,
-        notes: null,
-        expiresAt: null,
-        grantedByUserId: 'admin-fixture',
-        createdAt: DateTime.now().toUtc(),
-        updatedAt: DateTime.now().toUtc(),
-      ),
+      orElse:
+          () => GtexBetaAccessGrant(
+            id: 'grant-$featureKey-$userId',
+            featureKey: featureKey,
+            userId: userId,
+            active: true,
+            notes: null,
+            expiresAt: null,
+            grantedByUserId: 'admin-fixture',
+            createdAt: DateTime.now().toUtc(),
+            updatedAt: DateTime.now().toUtc(),
+          ),
     );
     final GtexBetaAccessGrant grant = existing.copyWith(active: false);
     _snapshot = _snapshot.replaceGrant(grant);

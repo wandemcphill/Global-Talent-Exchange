@@ -12,14 +12,17 @@ class AdminCommandCenterApi {
     required String baseUrl,
     required String accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteAuthedApi? client,
   }) {
     return AdminCommandCenterApi(
-      client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
-        transport: GteHttpTransport(),
-        accessToken: accessToken,
-        mode: mode,
-      ),
+      client:
+          client ??
+          GteAuthedApi(
+            config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
+            transport: GteHttpTransport(),
+            accessToken: accessToken,
+            mode: mode,
+          ),
     );
   }
 

@@ -13,6 +13,7 @@ class GtexCoinTraderMarketplacePanel extends StatefulWidget {
     required this.accessToken,
     required this.isAuthenticated,
     this.onOpenLogin,
+    this.onTopUp,
     this.api,
   });
 
@@ -21,6 +22,7 @@ class GtexCoinTraderMarketplacePanel extends StatefulWidget {
   final String? accessToken;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
+  final VoidCallback? onTopUp;
   final GtexCoinTraderApi? api;
 
   @override
@@ -272,6 +274,7 @@ class GtexCoinTraderDashboardPanel extends StatefulWidget {
     required this.accessToken,
     required this.isAuthenticated,
     this.onOpenLogin,
+    this.onTopUp,
     this.api,
   });
 
@@ -280,6 +283,7 @@ class GtexCoinTraderDashboardPanel extends StatefulWidget {
   final String? accessToken;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
+  final VoidCallback? onTopUp;
   final GtexCoinTraderApi? api;
 
   @override
@@ -389,21 +393,33 @@ class _GtexCoinTraderDashboardPanelState
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return GtexEmptyState(
-        title: 'Trader dashboard unavailable',
-        message: _error!,
-        icon: Icons.currency_exchange_outlined,
-        accent: GtexColors.gold,
-        actionLabel: 'Retry',
-        onAction: _load,
+      return ListView(
+        children: <Widget>[
+          _TraderLiquidityTopUpPanel(onTopUp: widget.onTopUp),
+          const SizedBox(height: GtexSpacing.md),
+          GtexEmptyState(
+            title: 'Trader dashboard unavailable',
+            message: _error!,
+            icon: Icons.currency_exchange_outlined,
+            accent: GtexColors.gold,
+            actionLabel: 'Retry',
+            onAction: _load,
+          ),
+        ],
       );
     }
     if (_profile == null || _canApply) {
-      return _TraderApplyPanel(api: _api, onApplied: _load);
+      return _TraderApplyPanel(
+        api: _api,
+        onApplied: _load,
+        onTopUp: widget.onTopUp,
+      );
     }
 
     return ListView(
       children: <Widget>[
+        _TraderLiquidityTopUpPanel(onTopUp: widget.onTopUp),
+        const SizedBox(height: GtexSpacing.md),
         _ProfileSummaryPanel(profile: _profile!),
         const SizedBox(height: GtexSpacing.md),
         _RateEditorPanel(api: _api, profile: _profile!, onSaved: _load),
@@ -439,6 +455,40 @@ class GtexCoinTraderAdminScreen extends StatefulWidget {
   @override
   State<GtexCoinTraderAdminScreen> createState() =>
       _GtexCoinTraderAdminScreenState();
+}
+
+class _TraderLiquidityTopUpPanel extends StatelessWidget {
+  const _TraderLiquidityTopUpPanel({this.onTopUp});
+
+  final VoidCallback? onTopUp;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexPanel(
+      title: 'Trader liquidity',
+      subtitle:
+          'Fund your wallet through the same reviewed bank transfer rail.',
+      accent: GtexColors.gold,
+      child: Wrap(
+        spacing: GtexSpacing.sm,
+        runSpacing: GtexSpacing.sm,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: <Widget>[
+          const GtexStatusChip(
+            label: 'Manual bank transfer',
+            icon: Icons.account_balance_outlined,
+            color: GtexColors.gold,
+          ),
+          GtexActionButton(
+            label: 'Request bank transfer top-up',
+            icon: Icons.receipt_long_outlined,
+            accent: GtexColors.gold,
+            onPressed: onTopUp,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _GtexCoinTraderAdminScreenState extends State<GtexCoinTraderAdminScreen> {
@@ -1047,10 +1097,15 @@ class _CreateCoinTradeOrderSheetState
 }
 
 class _TraderApplyPanel extends StatefulWidget {
-  const _TraderApplyPanel({required this.api, required this.onApplied});
+  const _TraderApplyPanel({
+    required this.api,
+    required this.onApplied,
+    this.onTopUp,
+  });
 
   final GtexCoinTraderApi api;
   final VoidCallback onApplied;
+  final VoidCallback? onTopUp;
 
   @override
   State<_TraderApplyPanel> createState() => _TraderApplyPanelState();
@@ -1084,6 +1139,8 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
   Widget build(BuildContext context) {
     return ListView(
       children: <Widget>[
+        _TraderLiquidityTopUpPanel(onTopUp: widget.onTopUp),
+        const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Trader application',
           subtitle: 'Applications require admin approval before trading.',
@@ -2323,6 +2380,9 @@ class _ChipWrap extends StatelessWidget {
 
 String _messageFor(Object error) {
   if (error is GteApiException) {
+    if (error.type == GteApiErrorType.unauthorized) {
+      return 'Your session expired. Sign in again to continue.';
+    }
     return error.message;
   }
   return error.toString();

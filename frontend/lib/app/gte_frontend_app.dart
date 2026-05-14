@@ -15,6 +15,7 @@ import '../router/app_router.dart';
 import '../services/ambient_audio_controller.dart';
 import '../services/match_3d_monetization_service.dart';
 import '../services/reliability/reliable_event_queue.dart';
+import '../shared/auth/auth_identity_store.dart';
 import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
 import '../theme/gte_theme_controller.dart';
@@ -47,6 +48,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   late final GteThemeController _themeController;
   late final bool _ownsThemeController;
   late final AmbientAudioController _ambientAudioController;
+  late final MemoryAuthSessionStore _fallbackAuthSessionStore;
   late final GoRouter _router;
   ProviderContainer? _providerContainer;
   ProviderContainer? _ownedProviderContainer;
@@ -59,6 +61,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   void initState() {
     super.initState();
     _config = widget.config ?? GteAppConfig.fromRuntimeEnvironment();
+    _fallbackAuthSessionStore = MemoryAuthSessionStore();
     final GteBackendMode activeBackendMode = _config.activeShellBackendMode;
     _ownsController = widget.controller == null;
     _ownsThemeController = widget.themeController == null;
@@ -164,6 +167,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   GteNavigationDependencies _buildNavigationDependencies(BuildContext context) {
     final GteSessionIdentity identity =
         GteSessionIdentity.fromExchangeController(_controller);
+    final ProviderContainer? container = _providerContainer;
     return GteNavigationDependencies(
       apiBaseUrl: _config.apiBaseUrl,
       backendMode: _config.activeShellBackendMode,
@@ -202,6 +206,25 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
             premiumCameraAccess: _controller.isAuthenticated,
             fastReplayAccess: _controller.isAuthenticated,
           ),
+      authSessionStore: container?.read(authSessionStoreProvider),
+      fallbackAuthSessionStore: _fallbackAuthSessionStore,
+      onAuthSessionChanged: (AuthSession? session) async {
+        final ProviderContainer? activeContainer = _providerContainer;
+        if (activeContainer != null) {
+          await activeContainer
+              .read(appSessionControllerProvider.notifier)
+              .updateSession(session);
+          return;
+        }
+        _syncProviderSessionIntoController(session);
+      },
+      deviceIdProvider: () {
+        final ProviderContainer? activeContainer = _providerContainer;
+        if (activeContainer == null) {
+          return 'gtex-local-device';
+        }
+        return activeContainer.read(deviceIdProvider);
+      },
     );
   }
 

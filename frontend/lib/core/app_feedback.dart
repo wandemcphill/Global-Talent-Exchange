@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 import '../data/gte_api_repository.dart';
 
 class AppFeedback {
-  static String messageFor(Object error, {String fallback = 'Something went wrong. Please try again.'}) {
+  static String messageFor(
+    Object error, {
+    String fallback = 'Something went wrong. Please try again.',
+  }) {
     if (error is GteApiException) {
+      if (error.type == GteApiErrorType.unauthorized) {
+        return 'Your session expired. Sign in again to continue.';
+      }
       final String message = error.message.trim();
       return message.isEmpty ? fallback : _clean(message);
     }
@@ -21,12 +27,16 @@ class AppFeedback {
   }
 
   static void showSuccess(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_clean(message))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_clean(message))));
   }
 
-  static void showError(BuildContext context, Object error, {String fallback = 'Something went wrong. Please try again.'}) {
+  static void showError(
+    BuildContext context,
+    Object error, {
+    String fallback = 'Something went wrong. Please try again.',
+  }) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(messageFor(error, fallback: fallback))),
     );

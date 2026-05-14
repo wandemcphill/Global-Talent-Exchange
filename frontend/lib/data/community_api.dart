@@ -14,15 +14,18 @@ class CommunityApi {
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
     GteTransport? transport,
+    GteAuthedApi? client,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return CommunityApi(
-      client: GteAuthedApi(
-        config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: transport ?? GteHttpTransport(),
-        accessToken: accessToken,
-        mode: resolvedMode,
-      ),
+      client:
+          client ??
+          GteAuthedApi(
+            config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
+            transport: transport ?? GteHttpTransport(),
+            accessToken: accessToken,
+            mode: resolvedMode,
+          ),
       fixtures: _CommunityFixtures.seed(),
     );
   }

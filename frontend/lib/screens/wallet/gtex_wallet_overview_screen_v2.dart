@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/gte_authed_api.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_models.dart';
 import '../../features/coin_trader_redesign/coin_trader_redesign.dart';
@@ -33,6 +34,7 @@ class GtexWalletOverviewScreenV2 extends StatelessWidget {
     this.initialModule = GtexWalletDeskModule.wallet,
     this.baseUrl = 'http://127.0.0.1:8000',
     this.backendMode = GteBackendMode.live,
+    this.authedApi,
   });
 
   final GteExchangeController? controller;
@@ -44,6 +46,7 @@ class GtexWalletOverviewScreenV2 extends StatelessWidget {
   final GtexWalletDeskModule initialModule;
   final String baseUrl;
   final GteBackendMode backendMode;
+  final GteAuthedApi? authedApi;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +68,7 @@ class GtexWalletOverviewScreenV2 extends StatelessWidget {
       initialModule: initialModule,
       baseUrl: baseUrl,
       backendMode: backendMode,
+      authedApi: authedApi,
     );
   }
 }
@@ -80,6 +84,7 @@ class _GtexLiveWalletOverview extends StatefulWidget {
     required this.initialModule,
     required this.baseUrl,
     required this.backendMode,
+    this.authedApi,
   });
 
   final GteExchangeController controller;
@@ -91,6 +96,7 @@ class _GtexLiveWalletOverview extends StatefulWidget {
   final GtexWalletDeskModule initialModule;
   final String baseUrl;
   final GteBackendMode backendMode;
+  final GteAuthedApi? authedApi;
 
   @override
   State<_GtexLiveWalletOverview> createState() =>
@@ -99,6 +105,9 @@ class _GtexLiveWalletOverview extends StatefulWidget {
 
 class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
   late GtexWalletDeskModule _module;
+  List<GteDepositRequest> _depositRequests = const <GteDepositRequest>[];
+  bool _isLoadingDeposits = false;
+  String? _depositError;
 
   @override
   void initState() {
@@ -108,7 +117,7 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
       if (!mounted || !widget.controller.isAuthenticated) {
         return;
       }
-      widget.controller.refreshAccount();
+      _refreshCapitalDesk();
     });
   }
 
@@ -117,6 +126,57 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialModule != widget.initialModule) {
       setState(() => _module = widget.initialModule);
+    }
+  }
+
+  Future<void> _refreshCapitalDesk() async {
+    await Future.wait<void>(<Future<void>>[
+      widget.controller.refreshAccount(),
+      _loadDepositRequests(),
+    ]);
+  }
+
+  Future<void> _loadDepositRequests() async {
+    if (!widget.controller.isAuthenticated) {
+      if (mounted) {
+        setState(() {
+          _depositRequests = const <GteDepositRequest>[];
+          _depositError = null;
+          _isLoadingDeposits = false;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _isLoadingDeposits = true;
+      _depositError = null;
+    });
+    try {
+      final List<GteDepositRequest> deposits =
+          await widget.controller.api.listDepositRequests();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _depositRequests = deposits;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _depositError =
+            error is GteApiException &&
+                    error.type == GteApiErrorType.unauthorized
+                ? 'Sign in again to sync bank transfer requests.'
+                : error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingDeposits = false;
+        });
+      }
     }
   }
 
@@ -186,7 +246,7 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
           actions: <Widget>[
             IconButton.filledTonal(
               tooltip: 'Refresh wallet',
-              onPressed: widget.controller.refreshAccount,
+              onPressed: _refreshCapitalDesk,
               icon: const Icon(Icons.sync),
             ),
           ],
@@ -196,6 +256,9 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
             controller: widget.controller,
             onTopUp: widget.onTopUp,
             onWithdraw: widget.onWithdraw,
+            deposits: _depositRequests,
+            isLoadingDeposits: _isLoadingDeposits,
+            depositError: _depositError,
           ),
         );
       },
@@ -315,6 +378,10 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
           accessToken: widget.controller.accessToken,
           isAuthenticated: widget.controller.isAuthenticated,
           onOpenLogin: widget.onOpenLogin,
+          api:
+              widget.authedApi == null
+                  ? null
+                  : GtexCoinTraderApi(client: widget.authedApi!),
         );
       case GtexWalletDeskModule.traderDashboard:
         return GtexCoinTraderDashboardPanel(
@@ -323,6 +390,11 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
           accessToken: widget.controller.accessToken,
           isAuthenticated: widget.controller.isAuthenticated,
           onOpenLogin: widget.onOpenLogin,
+          onTopUp: widget.onTopUp,
+          api:
+              widget.authedApi == null
+                  ? null
+                  : GtexCoinTraderApi(client: widget.authedApi!),
         );
     }
   }
@@ -665,11 +737,17 @@ class _WalletRightRail extends StatelessWidget {
     required this.controller,
     this.onTopUp,
     this.onWithdraw,
+    this.deposits = const <GteDepositRequest>[],
+    this.isLoadingDeposits = false,
+    this.depositError,
   });
 
   final GteExchangeController controller;
   final VoidCallback? onTopUp;
   final VoidCallback? onWithdraw;
+  final List<GteDepositRequest> deposits;
+  final bool isLoadingDeposits;
+  final String? depositError;
 
   @override
   Widget build(BuildContext context) {
@@ -719,6 +797,37 @@ class _WalletRightRail extends StatelessWidget {
                 label: '${controller.portfolio?.holdings.length ?? 0} holdings',
                 color: GtexColors.pitch,
               ),
+              const SizedBox(height: GtexSpacing.xs),
+              GtexStatusChip(
+                label:
+                    isLoadingDeposits
+                        ? 'syncing bank transfers'
+                        : '${_activeDepositCount(deposits)} active bank transfers',
+                color: GtexColors.cyan,
+              ),
+              if (deposits.isNotEmpty) ...<Widget>[
+                const SizedBox(height: GtexSpacing.sm),
+                ...deposits
+                    .take(2)
+                    .map(
+                      (GteDepositRequest deposit) => Padding(
+                        padding: const EdgeInsets.only(bottom: GtexSpacing.xs),
+                        child: Text(
+                          '${deposit.reference} - ${_statusLabelForDeposit(deposit.status)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: GtexColors.textMuted),
+                        ),
+                      ),
+                    ),
+              ],
+              if (depositError != null) ...<Widget>[
+                const SizedBox(height: GtexSpacing.sm),
+                Text(
+                  depositError!,
+                  style: const TextStyle(color: GtexColors.textMuted),
+                ),
+              ],
             ],
           ),
         ),
@@ -738,6 +847,36 @@ class _WalletRightRail extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+int _activeDepositCount(List<GteDepositRequest> deposits) {
+  return deposits
+      .where(
+        (GteDepositRequest deposit) =>
+            deposit.status == GteDepositStatus.awaitingPayment ||
+            deposit.status == GteDepositStatus.paymentSubmitted ||
+            deposit.status == GteDepositStatus.underReview,
+      )
+      .length;
+}
+
+String _statusLabelForDeposit(GteDepositStatus status) {
+  switch (status) {
+    case GteDepositStatus.awaitingPayment:
+      return 'Awaiting payment';
+    case GteDepositStatus.paymentSubmitted:
+      return 'Payment submitted';
+    case GteDepositStatus.underReview:
+      return 'Under review';
+    case GteDepositStatus.confirmed:
+      return 'Confirmed';
+    case GteDepositStatus.rejected:
+      return 'Rejected';
+    case GteDepositStatus.expired:
+      return 'Expired';
+    case GteDepositStatus.disputed:
+      return 'Disputed';
   }
 }
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/club_controller.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.dart';
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
 import 'package:gte_frontend/features/club_redesign/club_redesign.dart';
@@ -20,6 +21,7 @@ class GtexClubOwnerDashboardScreenV2 extends StatefulWidget {
     this.baseUrl,
     this.backendMode,
     this.accessToken,
+    this.authedApi,
     this.ownerName,
     this.walletCredits = 0,
     this.isAuthenticated = true,
@@ -31,6 +33,7 @@ class GtexClubOwnerDashboardScreenV2 extends StatefulWidget {
   final String? baseUrl;
   final GteBackendMode? backendMode;
   final String? accessToken;
+  final GteAuthedApi? authedApi;
   final String? ownerName;
   final int walletCredits;
   final bool isAuthenticated;
@@ -59,7 +62,8 @@ class _GtexClubOwnerDashboardScreenV2State
     if (oldWidget.clubId != widget.clubId ||
         oldWidget.baseUrl != widget.baseUrl ||
         oldWidget.backendMode != widget.backendMode ||
-        oldWidget.accessToken != widget.accessToken) {
+        oldWidget.accessToken != widget.accessToken ||
+        oldWidget.authedApi != widget.authedApi) {
       _disposeControllers();
       _createController();
     }
@@ -111,6 +115,7 @@ class _GtexClubOwnerDashboardScreenV2State
             baseUrl: baseUrl,
             accessToken: widget.accessToken,
             mode: backendMode,
+            client: widget.authedApi,
           ),
           clubId: widget.clubId,
         );
@@ -121,6 +126,7 @@ class _GtexClubOwnerDashboardScreenV2State
         baseUrl: baseUrl,
         accessToken: widget.accessToken,
         mode: backendMode,
+        client: widget.authedApi,
       ),
       clubId: widget.clubId,
     );

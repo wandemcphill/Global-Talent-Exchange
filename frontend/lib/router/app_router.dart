@@ -90,6 +90,7 @@ GoRouter buildGtexAppRouter({
                     ambientAudioController: ambientAudioController,
                     config: config,
                     initialPath: state.uri.toString(),
+                    dependenciesBuilder: dependenciesBuilder,
                   ),
                 ),
       ),
@@ -104,6 +105,7 @@ GoRouter buildGtexAppRouter({
                     ambientAudioController: ambientAudioController,
                     config: config,
                     initialPath: state.uri.toString(),
+                    dependenciesBuilder: dependenciesBuilder,
                   ),
                 ),
       ),
@@ -119,6 +121,7 @@ GoRouter buildGtexAppRouter({
                     ambientAudioController: ambientAudioController,
                     config: config,
                     initialPath: state.uri.toString(),
+                    dependenciesBuilder: dependenciesBuilder,
                   ),
                 ),
         routes: <RouteBase>[
@@ -134,12 +137,17 @@ GoRouter buildGtexAppRouter({
                         ambientAudioController: ambientAudioController,
                         config: config,
                         initialPath: state.uri.toString(),
+                        dependenciesBuilder: dependenciesBuilder,
                       ),
                     ),
           ),
         ],
       ),
-      ..._buildLegacyAliasRoutes(controller: controller, config: config),
+      ..._buildLegacyAliasRoutes(
+        controller: controller,
+        config: config,
+        dependenciesBuilder: dependenciesBuilder,
+      ),
       ..._buildFeatureRoutes(dependenciesBuilder: dependenciesBuilder),
     ],
     errorBuilder:
@@ -161,12 +169,15 @@ class _GtexLaunchControlledShellRoute extends StatefulWidget {
     required this.config,
     required this.ambientAudioController,
     required this.initialPath,
+    required this.dependenciesBuilder,
   });
 
   final GteExchangeController controller;
   final GteAppConfig config;
   final AmbientAudioState ambientAudioController;
   final String initialPath;
+  final GteNavigationDependencies Function(BuildContext context)
+  dependenciesBuilder;
 
   @override
   State<_GtexLaunchControlledShellRoute> createState() =>
@@ -237,12 +248,15 @@ class _GtexLaunchControlledShellRouteState
             icon: Icons.lock_clock_outlined,
           );
         }
+        final GteNavigationDependencies dependencies = widget
+            .dependenciesBuilder(context);
         return GteExchangeShellScreen.fromPath(
           controller: widget.controller,
           apiBaseUrl: widget.config.apiBaseUrl,
           backendMode: widget.config.activeShellBackendMode,
           ambientAudioController: widget.ambientAudioController,
           initialPath: widget.initialPath,
+          navigationDependencies: dependencies,
         );
       },
     );
@@ -252,6 +266,8 @@ class _GtexLaunchControlledShellRouteState
 List<RouteBase> _buildLegacyAliasRoutes({
   required GteExchangeController controller,
   required GteAppConfig config,
+  required GteNavigationDependencies Function(BuildContext context)
+  dependenciesBuilder,
 }) {
   return <RouteBase>[
     GoRoute(
@@ -577,6 +593,7 @@ List<RouteBase> _buildLegacyAliasRoutes({
                       baseUrl: config.apiBaseUrl,
                       accessToken: controller.session!.accessToken,
                       backendMode: config.activeShellBackendMode,
+                      authedApi: dependenciesBuilder(context).createAuthedApi(),
                     )
                     : GteRouteIntegrityScreen.blocked(
                       title: 'Admin access required',
@@ -674,6 +691,9 @@ List<RouteBase> _buildLegacyAliasRoutes({
                       accessToken: controller.session!.accessToken,
                       backendMode: config.activeShellBackendMode,
                       isAdmin: controller.isAdmin,
+                      api: GtexCoinTraderApi(
+                        client: dependenciesBuilder(context).createAuthedApi(),
+                      ),
                     )
                     : GteRouteIntegrityScreen.blocked(
                       title: 'Admin access required',
@@ -698,6 +718,7 @@ List<RouteBase> _buildLegacyAliasRoutes({
                       baseUrl: config.apiBaseUrl,
                       accessToken: controller.session!.accessToken,
                       backendMode: config.activeShellBackendMode,
+                      authedApi: dependenciesBuilder(context).createAuthedApi(),
                     )
                     : GteRouteIntegrityScreen.blocked(
                       title: 'Admin access required',

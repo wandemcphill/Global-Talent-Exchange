@@ -16,6 +16,8 @@ import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
+import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
 
 enum GteNavigationFallbackReason {
   inactiveWorldSuperCup,
@@ -93,6 +95,11 @@ class GteNavigationDependencies {
     this.hasApprovedCreatorAccessProvider,
     this.canHostCompetitionsProvider,
     this.match3dEntitlementProvider,
+    this.authSessionStore,
+    this.fallbackAuthSessionStore,
+    this.onAuthSessionChanged,
+    this.deviceId,
+    this.deviceIdProvider,
   }) : _currentUserId = currentUserId,
        _currentUserName = currentUserName,
        _currentUserRole = currentUserRole,
@@ -137,6 +144,11 @@ class GteNavigationDependencies {
   final bool Function()? hasApprovedCreatorAccessProvider;
   final bool Function()? canHostCompetitionsProvider;
   final Match3dEntitlementProvider? match3dEntitlementProvider;
+  final AuthSessionStore? authSessionStore;
+  final AuthSessionStore? fallbackAuthSessionStore;
+  final Future<void> Function(AuthSession? session)? onAuthSessionChanged;
+  final String? deviceId;
+  final String? Function()? deviceIdProvider;
 
   String get currentUserId => currentUserIdProvider?.call() ?? _currentUserId;
 
@@ -197,6 +209,11 @@ class GteNavigationDependencies {
       hasApprovedCreatorAccessProvider: hasApprovedCreatorAccessProvider,
       canHostCompetitionsProvider: canHostCompetitionsProvider,
       match3dEntitlementProvider: match3dEntitlementProvider,
+      authSessionStore: authSessionStore,
+      fallbackAuthSessionStore: fallbackAuthSessionStore,
+      onAuthSessionChanged: onAuthSessionChanged,
+      deviceId: deviceId,
+      deviceIdProvider: deviceIdProvider,
     );
   }
 
@@ -248,6 +265,10 @@ class GteNavigationDependencies {
       config: GteRepositoryConfig(baseUrl: apiBaseUrl, mode: backendMode),
       transport: createModeAwareTransport(backendMode),
       accessToken: overrideAccessToken ?? accessToken,
+      authSessionStore: authSessionStore,
+      fallbackAuthSessionStore: fallbackAuthSessionStore,
+      onSessionChanged: onAuthSessionChanged,
+      deviceId: deviceIdProvider?.call() ?? deviceId,
       mode: backendMode,
     );
   }
