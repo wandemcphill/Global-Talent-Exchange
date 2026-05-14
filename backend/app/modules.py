@@ -858,6 +858,7 @@ DOMAIN_MODULES = (
     _module(
         "gtex",
         router_path="app.gtex.router:router",
+        with_api_alias=True,
         on_startup=("app.gtex.runtime:bind_gtex_runtime",),
         on_shutdown=("app.gtex.runtime:shutdown_gtex_runtime",),
     ),

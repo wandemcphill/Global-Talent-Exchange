@@ -476,6 +476,7 @@ class JackpotService(GtexBaseService):
             entry_fee=entry_fee,
             contribution_amount=resolved_contribution_amount,
             eligibility_score=eligibility_score,
+            fund_lottery_pool=False,
             metadata=metadata,
         )
 
@@ -490,24 +491,53 @@ class JackpotService(GtexBaseService):
         contribution_amount: Decimal | None = None,
         eligibility_score: Decimal = Decimal("1.0000"),
         metadata: dict[str, Any] | None = None,
+        fund_lottery_pool: bool | None = None,
     ) -> GtexJackpotContribution:
         current_round = self.ensure_open_round(session)
+        try:
+            resolved_source_type = GtexContributionSourceType(str(source_type))
+        except ValueError as exc:
+            raise GtexValidationError("Unsupported jackpot contribution source type.") from exc
+        should_fund_lottery_pool = (
+            resolved_source_type == GtexContributionSourceType.PLATFORM_ACTIVITY
+            if fund_lottery_pool is None
+            else fund_lottery_pool
+        )
+        normalized_source_id = source_id.strip() if source_id else None
+        if normalized_source_id:
+            existing_contribution = session.scalar(
+                select(GtexJackpotContribution)
+                .where(
+                    GtexJackpotContribution.source_type == resolved_source_type,
+                    GtexJackpotContribution.source_id == normalized_source_id,
+                    GtexJackpotContribution.participant_user_id == participant_user_id,
+                )
+                .order_by(GtexJackpotContribution.created_at.desc())
+            )
+            if existing_contribution is not None:
+                return existing_contribution
         resolved_amount = self._amount(
             contribution_amount or (self._amount(entry_fee) * self.settings.jackpot_contribution_rate)
         )
+        if resolved_amount <= Decimal("0.0000"):
+            raise GtexValidationError("Jackpot contribution amount must be greater than zero.")
+        resolved_metadata = dict(metadata or {})
+        resolved_metadata["ledger_funded"] = bool(should_fund_lottery_pool)
         contribution = GtexJackpotContribution(
             round_id=current_round.id,
             participant_user_id=participant_user_id,
-            source_type=GtexContributionSourceType(str(source_type)),
-            source_id=source_id,
+            source_type=resolved_source_type,
+            source_id=normalized_source_id,
             entry_fee=self._amount(entry_fee),
             contribution_amount=resolved_amount,
             eligibility_score=self._amount(eligibility_score),
-            metadata_json=dict(metadata or {}),
+            metadata_json=resolved_metadata,
         )
         current_round.current_balance = self._amount(current_round.current_balance + resolved_amount)
         session.add(contribution)
         session.flush()
+        if should_fund_lottery_pool:
+            self._fund_lottery_pool_for_contribution(session, contribution=contribution)
         self._schedule_round_cache(session, current_round)
         if participant_user_id:
             defer_session_callback_until_commit(
@@ -771,6 +801,54 @@ class JackpotService(GtexBaseService):
             if cumulative >= pick:
                 return item
         return eligible[-1]
+
+    def _fund_lottery_pool_for_contribution(
+        self,
+        session: Session,
+        *,
+        contribution: GtexJackpotContribution,
+    ) -> None:
+        amount = self._amount(contribution.contribution_amount)
+        if amount <= Decimal("0.0000"):
+            return
+        platform_clearing = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
+        idempotency_material = (
+            "gtex-jackpot-contribution-funding:"
+            f"{contribution.source_type.value}:"
+            f"{contribution.source_id or contribution.id}:"
+            f"{contribution.participant_user_id or 'platform'}"
+        )
+        idempotency_key = f"gtex-jackpot-fund:{sha256(idempotency_material.encode('utf-8')).hexdigest()[:40]}"
+        self.wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=platform_clearing,
+                    amount=-amount,
+                    source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                ),
+                LedgerPosting(
+                    account=lottery_pool,
+                    amount=amount,
+                    source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+            transaction_type=LedgerTransactionType.ADJUSTMENT,
+            reference=f"gtex-jackpot-contribution-funding:{contribution.id}",
+            description="Funded GTEX jackpot lottery pool contribution",
+            external_reference=contribution.source_id,
+            idempotency_key=idempotency_key,
+            metadata={
+                "round_id": contribution.round_id,
+                "contribution_id": contribution.id,
+                "source_type": contribution.source_type.value,
+                "source_id": contribution.source_id,
+                "participant_user_id": contribution.participant_user_id,
+            },
+        )
 
     def _roll_round(
         self,

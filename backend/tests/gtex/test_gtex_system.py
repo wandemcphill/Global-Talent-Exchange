@@ -13,7 +13,7 @@ from app.gtex.worker_runtime import AiBrainWorker, AiMatchmakerWorker, JackpotWo
 from app.global_memory.constants import MATCH_COMPLETED
 from app.global_memory.models import GlobalProjectionCheckpoint, UserDynasty
 from app.models.base import utcnow
-from app.models.gtex_economy import GtexCreatorTrade
+from app.models.gtex_economy import GtexContributionSourceType, GtexCreatorTrade
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.models.wallet import LedgerTransaction
@@ -212,6 +212,83 @@ def test_admin_jackpot_runtime_update_and_manual_trigger(
         },
     )
     assert reset_runtime_response.status_code == 200, reset_runtime_response.text
+
+
+def test_jackpot_routes_resolve_root_api_and_versioned_aliases(client, bootstrap_admin_headers):
+    root_response = client.get("/jackpot/state")
+    assert root_response.status_code == 200, root_response.text
+
+    api_response = client.get("/api/jackpot/state")
+    assert api_response.status_code == 200, api_response.text
+    assert api_response.json()["round_id"] == root_response.json()["round_id"]
+
+    versioned_response = client.get("/api/v2/jackpot/state", headers={"X-API-Version": "2"})
+    assert versioned_response.status_code == 200, versioned_response.text
+    versioned_payload = versioned_response.json()
+    assert versioned_payload["success"] is True
+    assert versioned_payload["data"]["round_id"] == root_response.json()["round_id"]
+
+    admin_response = client.get("/api/admin/jackpot/runtime", headers=bootstrap_admin_headers)
+    assert admin_response.status_code == 200, admin_response.text
+
+    versioned_admin_response = client.get(
+        "/api/v2/admin/jackpot/runtime",
+        headers={**bootstrap_admin_headers, "X-API-Version": "2"},
+    )
+    assert versioned_admin_response.status_code == 200, versioned_admin_response.text
+    assert versioned_admin_response.json()["success"] is True
+
+
+def test_platform_jackpot_contribution_funds_lottery_pool_and_pays_winner(
+    app,
+    app_session_factory,
+):
+    runtime = ensure_gtex_runtime(app)
+    user, _headers = _register_user(app_session_factory, label="jackpot-platform")
+    source_id = "ticketing-jackpot-platform-contribution"
+
+    with app_session_factory() as session:
+        current_round = runtime.jackpot.ensure_open_round(session)
+        current_round.threshold_amount = Decimal("10.0000")
+        contribution = runtime.jackpot.record_contribution(
+            session,
+            participant_user_id=user.id,
+            source_type=GtexContributionSourceType.PLATFORM_ACTIVITY,
+            source_id=source_id,
+            entry_fee=Decimal("100.0000"),
+            contribution_amount=Decimal("10.0000"),
+            eligibility_score=Decimal("1.0000"),
+            fund_lottery_pool=True,
+            metadata={"scenario": "platform_jackpot_contribution"},
+        )
+        duplicate = runtime.jackpot.record_contribution(
+            session,
+            participant_user_id=user.id,
+            source_type=GtexContributionSourceType.PLATFORM_ACTIVITY,
+            source_id=source_id,
+            entry_fee=Decimal("100.0000"),
+            contribution_amount=Decimal("10.0000"),
+            eligibility_score=Decimal("1.0000"),
+            fund_lottery_pool=True,
+            metadata={"scenario": "platform_jackpot_contribution_retry"},
+        )
+        assert duplicate.id == contribution.id
+
+        wallet_service = WalletService()
+        lottery_pool = wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
+        assert wallet_service.get_balance(session, lottery_pool) == Decimal("10.0000")
+
+        runtime.jackpot.manual_trigger(session)
+        session.commit()
+
+    with app_session_factory() as session:
+        wallet_service = WalletService()
+        lottery_pool = wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
+        user_model = session.get(User, user.id)
+        assert user_model is not None
+        user_account = wallet_service.get_user_account(session, user_model, LedgerUnit.COIN)
+        assert wallet_service.get_balance(session, lottery_pool) == Decimal("0.0000")
+        assert wallet_service.get_balance(session, user_account) == Decimal("10.0000")
 
 
 def test_gtex_runtime_uses_shared_wallet_cache_backend() -> None:
