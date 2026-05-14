@@ -300,6 +300,8 @@ class GtexAdminCommandController extends ChangeNotifier {
         return GtexAdminModuleType.launchControl;
       case 'production_data_diagnostics':
         return GtexAdminModuleType.operationsReadiness;
+      case 'infrastructure_payment_rails':
+        return GtexAdminModuleType.systemHealth;
       case 'ledger_worker_health':
         return GtexAdminModuleType.systemHealth;
       default:

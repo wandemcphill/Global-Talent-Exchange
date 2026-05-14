@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import json
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -10,9 +11,10 @@ import pytest
 from app.auth.service import AuthService
 from app.models import Base, CountryFeaturePolicy, KycStatus, LedgerEntryReason, LedgerUnit, TreasuryAuditEvent
 from app.models.risk_ops import AmlCase, SystemEvent
-from app.models.treasury import RateDirection, TreasuryWithdrawalStatus
+from app.models.treasury import PaymentMode, RateDirection, TreasuryWithdrawalStatus
 from app.models.withdrawal_review import WithdrawalReview
 from app.models.wallet import PayoutRequest, PayoutStatus
+from app.policies.service import PolicyService
 from app.treasury.service import TreasuryService
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -58,6 +60,21 @@ def _seed_policy(session) -> None:
     session.commit()
 
 
+def _accept_required_policies(session, user) -> None:
+    service = PolicyService(session)
+    service.seed_defaults()
+    service.ensure_user_region_profile(user=user, region_code="NG")
+    for version in service.list_missing_acceptances(user_id=user.id):
+        service.accept_document(
+            user_id=user.id,
+            document_key=version.document.document_key,
+            version_label=version.version_label,
+            ip_address=None,
+            device_id=None,
+        )
+    session.commit()
+
+
 def _seed_balance(session, *, user, amount: Decimal) -> None:
     wallet_service = WalletService()
     user_account = wallet_service.get_user_account(session, user, LedgerUnit.COIN)
@@ -91,6 +108,7 @@ def test_withdrawal_review_creates_review_and_audit(session) -> None:
     admin = _create_user(session, email="admin@example.com", username="adminuser")
     user.kyc_status = KycStatus.FULLY_VERIFIED
     session.commit()
+    _accept_required_policies(session, user)
     _configure_withdrawal_settings(session)
     _seed_balance(session, user=user, amount=Decimal("100.0000"))
 
@@ -138,10 +156,52 @@ def test_withdrawal_review_creates_review_and_audit(session) -> None:
     assert review.fee_amount == withdrawal.fee_amount
     assert review.net_amount == withdrawal.net_amount
 
-    audit = session.scalar(
-        select(TreasuryAuditEvent).where(TreasuryAuditEvent.resource_id == withdrawal.id)
-    )
+    audit = session.scalar(select(TreasuryAuditEvent).where(TreasuryAuditEvent.resource_id == withdrawal.id))
     assert audit is not None
+
+
+def test_hybrid_withdrawal_request_persists_manual_bank_transfer_mode(session) -> None:
+    _seed_policy(session)
+    user = _create_user(session, email="hybrid-withdrawal@example.com", username="hybridwithdrawal")
+    user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+    _accept_required_policies(session, user)
+    _configure_withdrawal_settings(session)
+    settings = TreasuryService().ensure_settings(session)
+    settings.withdrawal_mode = PaymentMode.HYBRID
+    session.commit()
+    _seed_balance(session, user=user, amount=Decimal("100.0000"))
+
+    treasury = TreasuryService()
+    bank_account = treasury.create_user_bank_account(
+        session,
+        user=user,
+        bank_name="Hybrid Bank",
+        account_number="2222222222",
+        account_name="Hybrid User",
+        bank_code="004",
+        currency_code="NGN",
+        set_active=True,
+    )
+    session.commit()
+
+    withdrawal = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("10.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="hybrid payout",
+    )
+    session.commit()
+
+    payout_request = session.get(PayoutRequest, withdrawal.payout_request_id)
+    assert withdrawal.processor_mode == "manual_bank_transfer"
+    assert withdrawal.payout_channel == "bank_transfer"
+    assert payout_request is not None
+    payout_meta = json.loads(payout_request.notes or "{}")
+    assert payout_meta["processor_mode"] == "manual_bank_transfer"
+    assert payout_meta["payout_channel"] == "bank_transfer"
 
 
 def test_withdrawal_risk_flags_and_dispute_event(session) -> None:
@@ -150,6 +210,7 @@ def test_withdrawal_risk_flags_and_dispute_event(session) -> None:
     admin = _create_user(session, email="riskadmin@example.com", username="riskadmin")
     user.kyc_status = KycStatus.FULLY_VERIFIED
     session.commit()
+    _accept_required_policies(session, user)
     _configure_withdrawal_settings(session)
     _seed_balance(session, user=user, amount=Decimal("7000.0000"))
 
@@ -188,9 +249,7 @@ def test_withdrawal_risk_flags_and_dispute_event(session) -> None:
     )
     session.commit()
 
-    system_event = session.scalar(
-        select(SystemEvent).where(SystemEvent.subject_id == withdrawal.id)
-    )
+    system_event = session.scalar(select(SystemEvent).where(SystemEvent.subject_id == withdrawal.id))
     assert system_event is not None
 
 
@@ -200,6 +259,7 @@ def test_withdrawal_batching_moves_approved_requests_to_processing(session) -> N
     admin = _create_user(session, email="batch-admin@example.com", username="batchadmin")
     user.kyc_status = KycStatus.FULLY_VERIFIED
     session.commit()
+    _accept_required_policies(session, user)
     _configure_withdrawal_settings(session)
     _seed_balance(session, user=user, amount=Decimal("250.0000"))
 
@@ -291,7 +351,5 @@ def test_withdrawal_batching_moves_approved_requests_to_processing(session) -> N
     assert listed["statuses"] == [TreasuryWithdrawalStatus.PROCESSING]
     assert listed["notes"] == "first payout run"
 
-    audit = session.scalar(
-        select(TreasuryAuditEvent).where(TreasuryAuditEvent.resource_id == batch["batch_id"])
-    )
+    audit = session.scalar(select(TreasuryAuditEvent).where(TreasuryAuditEvent.resource_id == batch["batch_id"]))
     assert audit is not None

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/gte_api_repository.dart';
+import '../../shared/providers/auth_provider.dart';
 import '../app_routes/gte_navigation_helpers.dart';
 import '../app_routes/gte_route_data.dart';
 import '../navigation_guards/gte_navigation_guards.dart';
@@ -31,6 +33,8 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final bool allowFixtureFallback =
+        ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture;
     final AsyncValue<LiveMatchOverview> overview = ref.watch(
       liveMatchOverviewProvider,
     );
@@ -41,7 +45,10 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
         appBar: AppBar(title: const Text('Matchday desk')),
         body: overview.when(
           data: (LiveMatchOverview value) {
-            final List<_MatchLaneEntry> entries = _resolvedEntries(value);
+            final List<_MatchLaneEntry> entries = _resolvedEntries(
+              value,
+              allowFixtureFallback: allowFixtureFallback,
+            );
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
               children: <Widget>[
@@ -62,7 +69,12 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                           ),
                           GteMetricChip(
                             label: 'Live lanes',
-                            value: entries.isEmpty ? 'FALLBACK' : 'ACTIVE',
+                            value:
+                                entries.isEmpty
+                                    ? 'WAITING'
+                                    : allowFixtureFallback
+                                    ? 'FIXTURE'
+                                    : 'ACTIVE',
                             positive: entries.isNotEmpty,
                           ),
                         ],
@@ -86,7 +98,9 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                             label: 'Runtime',
                             value:
                                 value.entries.isEmpty
-                                    ? 'Fallback signal'
+                                    ? allowFixtureFallback
+                                        ? 'Fixture signal'
+                                        : 'Awaiting live feed'
                                     : 'Live matchday',
                           ),
                           GteMetricChip(
@@ -151,19 +165,28 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                GtexLiveTickerBar(
-                  accentColor: GteShellTheme.accentArena,
-                  items: <String>[
-                    if (entries.isEmpty)
-                      'Arena pulse is scouting the next live fixture stream',
-                    if (entries.isNotEmpty)
+                if (entries.isEmpty)
+                  const GteStatePanel(
+                    eyebrow: 'MATCHDAY HUB',
+                    title: 'No live lanes available',
+                    message:
+                        'The live matchday feed has not returned a routed match-viewer lane yet. Production stays blocked until the backend supplies a real match key.',
+                    icon: Icons.stadium_outlined,
+                    accentColor: GteShellTheme.accentArena,
+                  )
+                else
+                  GtexLiveTickerBar(
+                    accentColor: GteShellTheme.accentArena,
+                    items: <String>[
                       '${entries.length} matchday lanes are primed for broadcast',
-                    if (entries.any((_MatchLaneEntry entry) => entry.isLive))
-                      'A live fixture is already pushing through the stadium control room',
-                    if (entries.every((_MatchLaneEntry entry) => !entry.isLive))
-                      'Floodlights are on and the next kickoff is loading into the desk',
-                  ],
-                ),
+                      if (entries.any((_MatchLaneEntry entry) => entry.isLive))
+                        'A live fixture is already pushing through the stadium control room',
+                      if (entries.every(
+                        (_MatchLaneEntry entry) => !entry.isLive,
+                      ))
+                        'Floodlights are on and the next kickoff is loading into the desk',
+                    ],
+                  ),
                 const SizedBox(height: 18),
                 ...entries.map(
                   (_MatchLaneEntry entry) => Padding(
@@ -195,46 +218,65 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
                 ),
               ),
           error:
-              (Object _, StackTrace __) => ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-                children: <Widget>[
-                  GteSurfacePanel(
-                    emphasized: true,
-                    accentColor: GteShellTheme.accentWarm,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Live matchday feed degraded',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'The shell stays usable by falling back to the routed 2D matchday lane directly.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _MatchLaneCard(
-                    entry: _fallbackEntries(_resolvedClubName).first,
-                    onOpenTwoD:
-                        () => _openRouteScreen(
-                          context,
-                          const MatchViewerRouteScreen(
-                            matchKey: 'fallback-matchday-lane',
+              (Object _, StackTrace __) =>
+                  allowFixtureFallback
+                      ? ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+                        children: <Widget>[
+                          GteSurfacePanel(
+                            emphasized: true,
+                            accentColor: GteShellTheme.accentWarm,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  'Live matchday feed degraded',
+                                  style:
+                                      Theme.of(context).textTheme.headlineSmall,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'The shell stays usable by falling back to the routed 2D matchday lane directly.',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                  ),
-                ],
-              ),
+                          const SizedBox(height: 16),
+                          _MatchLaneCard(
+                            entry: _fallbackEntries(_resolvedClubName).first,
+                            onOpenTwoD:
+                                () => _openRouteScreen(
+                                  context,
+                                  const MatchViewerRouteScreen(
+                                    matchKey: 'fallback-matchday-lane',
+                                  ),
+                                ),
+                          ),
+                        ],
+                      )
+                      : ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+                        children: <Widget>[
+                          GteStatePanel(
+                            eyebrow: 'MATCHDAY HUB',
+                            title: 'Live matchday feed unavailable',
+                            message:
+                                'The production route could not load live match lanes. Demo fallback is available only in explicit fixture mode.',
+                            icon: Icons.error_outline_rounded,
+                            accentColor: GteShellTheme.accentWarm,
+                          ),
+                        ],
+                      ),
         ),
       ),
     );
   }
 
-  List<_MatchLaneEntry> _resolvedEntries(LiveMatchOverview overview) {
+  List<_MatchLaneEntry> _resolvedEntries(
+    LiveMatchOverview overview, {
+    required bool allowFixtureFallback,
+  }) {
     final List<_MatchLaneEntry> entries = overview.entries
         .map(
           (LiveMatchOverviewEntry entry) => _MatchLaneEntry(
@@ -250,7 +292,10 @@ class GteLiveMatchHubRouteScreen extends ConsumerWidget {
     if (entries.isNotEmpty) {
       return entries;
     }
-    return _fallbackEntries(_resolvedClubName);
+    if (allowFixtureFallback) {
+      return _fallbackEntries(_resolvedClubName);
+    }
+    return const <_MatchLaneEntry>[];
   }
 
   List<_MatchLaneEntry> _fallbackEntries(String resolvedClubName) {

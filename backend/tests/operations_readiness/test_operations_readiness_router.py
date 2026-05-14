@@ -207,6 +207,7 @@ def test_operations_readiness_combines_ops_queues(client: TestClient) -> None:
         "risk_compliance",
         "moderation_disputes",
         "policy_launch_control",
+        "infrastructure_payment_rails",
         "production_data_diagnostics",
         "ledger_worker_health",
     }
@@ -216,6 +217,11 @@ def test_operations_readiness_combines_ops_queues(client: TestClient) -> None:
     assert _metric(queues["moderation_disputes"], "critical_reports") == 1
     assert _metric(queues["moderation_disputes"], "open_disputes") == 1
     assert _metric(queues["policy_launch_control"], "kill_switches") == 1
+    assert _metric(queues["infrastructure_payment_rails"], "worker_broker_configured") == 0
+    assert _metric(queues["infrastructure_payment_rails"], "pending_outbox_events") == 1
+    assert _metric(queues["infrastructure_payment_rails"], "dead_outbox_events") == 1
+    assert _metric(queues["infrastructure_payment_rails"], "failed_jobs") == 1
+    assert _metric(queues["infrastructure_payment_rails"], "payment_provider_stubbed_count") >= 1
     assert _metric(queues["production_data_diagnostics"], "academy_prospects") == 1
     assert _metric(queues["production_data_diagnostics"], "club_lifecycles") == 1
     assert _metric(queues["production_data_diagnostics"], "club_readiness") == 1
@@ -281,9 +287,7 @@ def test_operations_readiness_can_notify_admins_about_blockers(
     }.issubset(set(payload["queue_keys"]))
     records = list(
         session.scalars(
-            select(NotificationRecord).where(
-                NotificationRecord.resource_type == "operations_readiness_blocked"
-            )
+            select(NotificationRecord).where(NotificationRecord.resource_type == "operations_readiness_blocked")
         ).all()
     )
     assert len(records) == payload["notifications_created"]

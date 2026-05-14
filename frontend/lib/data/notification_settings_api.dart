@@ -184,6 +184,48 @@ class NotificationSettingsApi {
       ),
     );
   }
+
+  Future<List<NotificationEventMatrixItem>> adminListEventMatrix() {
+    return client.withFallback<List<NotificationEventMatrixItem>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/api/admin/notifications/event-matrix',
+      );
+      return payload
+          .map(NotificationEventMatrixItem.fromJson)
+          .toList(growable: false);
+    }, fixtures.eventMatrix);
+  }
+
+  Future<NotificationTestEventResult> adminPublishTestEvent({
+    required String eventKey,
+    required String targetUserId,
+    String? resourceId,
+    String? message,
+  }) {
+    return client.withFallback<NotificationTestEventResult>(
+      () async {
+        final Object? payload = await client.post(
+          '/api/admin/notifications/test-event',
+          body: <String, Object?>{
+            'event_key': eventKey.trim(),
+            'target_user_id': targetUserId.trim(),
+            if (resourceId != null && resourceId.trim().isNotEmpty)
+              'resource_id': resourceId.trim(),
+            if (message != null && message.trim().isNotEmpty)
+              'message': message.trim(),
+            'metadata_json': const <String, Object?>{},
+          },
+        );
+        return NotificationTestEventResult.fromJson(payload);
+      },
+      () async => fixtures.publishTestEvent(
+        eventKey: eventKey,
+        targetUserId: targetUserId,
+        resourceId: resourceId,
+        message: message,
+      ),
+    );
+  }
 }
 
 class _NotificationFixtures {
@@ -191,11 +233,13 @@ class _NotificationFixtures {
     this._preference,
     this._subscriptions,
     this._announcements,
+    this._eventMatrix,
   );
 
   NotificationPreference _preference;
   final List<NotificationSubscription> _subscriptions;
   final List<PlatformAnnouncement> _announcements;
+  final List<NotificationEventMatrixItem> _eventMatrix;
 
   static _NotificationFixtures seed() {
     return _NotificationFixtures(
@@ -235,6 +279,74 @@ class _NotificationFixtures {
           deliverAsNotification: true,
           publishedAt: DateTime.parse('2026-01-15T09:30:00Z'),
           metadata: const <String, Object?>{},
+        ),
+      ],
+      const <NotificationEventMatrixItem>[
+        NotificationEventMatrixItem(
+          eventKey: 'transfer_offer_received',
+          topic: 'market',
+          templateKey: 'transfer.offer.received',
+          title: 'Transfer offer received',
+          defaultMessage: 'A club has sent you a transfer offer.',
+          audience: 'club_owner',
+          deepLinkRoute: '/football/transfer-center',
+          preferenceKey: 'allow_market',
+          metadata: <String, Object?>{'source': 'fixture'},
+        ),
+        NotificationEventMatrixItem(
+          eventKey: 'coin_trader_order_accepted',
+          topic: 'wallet',
+          templateKey: 'coin_trader.order.accepted',
+          title: 'Coin trader order accepted',
+          defaultMessage: 'A coin trader accepted your order.',
+          audience: 'user',
+          deepLinkRoute: '/app/coin-traders',
+          preferenceKey: 'allow_wallet',
+          metadata: <String, Object?>{'source': 'fixture'},
+        ),
+        NotificationEventMatrixItem(
+          eventKey: 'academy_regen_generated',
+          topic: 'club',
+          templateKey: 'academy.regen.generated',
+          title: 'Academy regen generated',
+          defaultMessage: 'Your academy has discovered a new prospect.',
+          audience: 'club_owner',
+          deepLinkRoute: '/club/academy',
+          preferenceKey: 'allow_competition',
+          metadata: <String, Object?>{'source': 'fixture'},
+        ),
+        NotificationEventMatrixItem(
+          eventKey: 'sponsorship_paid',
+          topic: 'wallet',
+          templateKey: 'sponsorship.paid',
+          title: 'Sponsorship paid',
+          defaultMessage: 'A sponsorship payout reached your club wallet.',
+          audience: 'club_owner',
+          deepLinkRoute: '/club/sponsorships',
+          preferenceKey: 'allow_wallet',
+          metadata: <String, Object?>{'source': 'fixture'},
+        ),
+        NotificationEventMatrixItem(
+          eventKey: 'ticket_purchased',
+          topic: 'ticketing',
+          templateKey: 'ticket.purchased',
+          title: 'Ticket purchased',
+          defaultMessage: 'Your match ticket has been confirmed.',
+          audience: 'fan',
+          deepLinkRoute: '/app/tickets',
+          preferenceKey: 'allow_competition',
+          metadata: <String, Object?>{'source': 'fixture'},
+        ),
+        NotificationEventMatrixItem(
+          eventKey: 'kill_switch_enabled',
+          topic: 'admin',
+          templateKey: 'launch.kill_switch.enabled',
+          title: 'Kill switch enabled',
+          defaultMessage: 'A launch-control kill switch was enabled.',
+          audience: 'admin',
+          deepLinkRoute: '/admin/launch-control',
+          preferenceKey: null,
+          metadata: <String, Object?>{'source': 'fixture'},
         ),
       ],
     );
@@ -289,6 +401,31 @@ class _NotificationFixtures {
 
   Future<List<PlatformAnnouncement>> announcements() async =>
       List<PlatformAnnouncement>.of(_announcements, growable: false);
+
+  Future<List<NotificationEventMatrixItem>> eventMatrix() async =>
+      List<NotificationEventMatrixItem>.of(_eventMatrix, growable: false);
+
+  Future<NotificationTestEventResult> publishTestEvent({
+    required String eventKey,
+    required String targetUserId,
+    String? resourceId,
+    String? message,
+  }) async {
+    final String normalized = eventKey.trim().toLowerCase();
+    final NotificationEventMatrixItem item = _eventMatrix.firstWhere(
+      (NotificationEventMatrixItem entry) => entry.eventKey == normalized,
+      orElse: () => _eventMatrix.first,
+    );
+    return NotificationTestEventResult(
+      notificationId:
+          'fixture-${item.eventKey}-${targetUserId.trim().isEmpty ? 'user' : targetUserId.trim()}',
+      message:
+          message != null && message.trim().isNotEmpty
+              ? message.trim()
+              : item.defaultMessage,
+      matrixItem: item,
+    );
+  }
 
   Future<PlatformAnnouncement> publishAnnouncement({
     required String key,

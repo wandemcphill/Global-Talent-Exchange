@@ -37,6 +37,7 @@ from app.models.wallet import (
     PayoutRequest,
     PayoutStatus,
 )
+from app.wallets.providers.registry import provider_runtime_statuses
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 COIN_TO_CREDIT_RATE = Decimal("100.0000")
@@ -1197,7 +1198,7 @@ class WalletService:
             )
             or 0
         )
-        provider_status = {provider.value: "available" for provider in PaymentProvider}
+        provider_status = provider_runtime_statuses(include_stubbed=True)
         insights: list[dict[str, str]] = []
         if summary.available_balance <= Decimal("0.0000"):
             insights.append(

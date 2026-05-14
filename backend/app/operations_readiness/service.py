@@ -76,6 +76,12 @@ from app.operations_readiness.schemas import (
     OperationsReadinessQueue,
     OperationsReadinessSnapshot,
 )
+from app.wallets.providers.registry import (
+    is_production_environment,
+    list_provider_registrations,
+    provider_runtime_statuses,
+    provider_webhook_secret_configured,
+)
 
 
 class OperationsReadinessService:
@@ -91,6 +97,7 @@ class OperationsReadinessService:
             self._moderation_disputes_queue(),
             self._policy_launch_queue(),
             self._data_diagnostics_queue(),
+            self._infrastructure_payment_queue(),
             self._ledger_worker_queue(),
         ]
         gates = self._launch_gates()
@@ -113,11 +120,7 @@ class OperationsReadinessService:
 
     def notify_blockers(self, *, actor: User) -> OperationsReadinessNotificationDispatch:
         snapshot = self.snapshot()
-        queues = [
-            queue
-            for queue in snapshot.queues
-            if queue.status in {"blocked", "attention"} and queue.alerts
-        ]
+        queues = [queue for queue in snapshot.queues if queue.status in {"blocked", "attention"} and queue.alerts]
         if not queues or not self._notification_tables_available():
             return OperationsReadinessNotificationDispatch(
                 status="skipped",
@@ -185,7 +188,9 @@ class OperationsReadinessService:
             alerts.append(f"{critical_events} critical system event(s) are open.")
         if active_actions:
             alerts.append(f"{active_actions} active user risk action(s) are in force.")
-        status = "blocked" if critical_events else "attention" if alerts or pending_kyc or open_aml or open_fraud else "ok"
+        status = (
+            "blocked" if critical_events else "attention" if alerts or pending_kyc or open_aml or open_fraud else "ok"
+        )
         return OperationsReadinessQueue(
             key="risk_compliance",
             title="Risk, KYC And Compliance",
@@ -197,10 +202,19 @@ class OperationsReadinessService:
             alerts=alerts,
             metrics=[
                 self._metric("pending_kyc", "Pending KYC", pending_kyc, status="attention" if pending_kyc else "ok"),
-                self._metric("rejected_kyc", "Rejected KYC", rejected_kyc, status="attention" if rejected_kyc else "ok"),
+                self._metric(
+                    "rejected_kyc", "Rejected KYC", rejected_kyc, status="attention" if rejected_kyc else "ok"
+                ),
                 self._metric("open_aml_cases", "Open AML cases", open_aml, status="attention" if open_aml else "ok"),
-                self._metric("open_fraud_cases", "Open fraud cases", open_fraud, status="attention" if open_fraud else "ok"),
-                self._metric("active_risk_actions", "Active risk actions", active_actions, status="attention" if active_actions else "ok"),
+                self._metric(
+                    "open_fraud_cases", "Open fraud cases", open_fraud, status="attention" if open_fraud else "ok"
+                ),
+                self._metric(
+                    "active_risk_actions",
+                    "Active risk actions",
+                    active_actions,
+                    status="attention" if active_actions else "ok",
+                ),
                 self._metric("risk_signals", "Risk signals", risk_signals),
             ],
         )
@@ -241,11 +255,30 @@ class OperationsReadinessService:
             action_routes=["/admin/moderation", "/admin/disputes"],
             alerts=alerts,
             metrics=[
-                self._metric("open_reports", "Open reports", open_reports, status="attention" if open_reports else "ok"),
-                self._metric("critical_reports", "Critical reports", critical_reports, status="blocked" if critical_reports else "ok"),
-                self._metric("high_priority_reports", "High-priority reports", high_reports, status="attention" if high_reports else "ok"),
-                self._metric("open_disputes", "Open disputes", open_disputes, status="attention" if open_disputes else "ok"),
-                self._metric("awaiting_admin_disputes", "Awaiting admin", awaiting_admin, status="attention" if awaiting_admin else "ok"),
+                self._metric(
+                    "open_reports", "Open reports", open_reports, status="attention" if open_reports else "ok"
+                ),
+                self._metric(
+                    "critical_reports",
+                    "Critical reports",
+                    critical_reports,
+                    status="blocked" if critical_reports else "ok",
+                ),
+                self._metric(
+                    "high_priority_reports",
+                    "High-priority reports",
+                    high_reports,
+                    status="attention" if high_reports else "ok",
+                ),
+                self._metric(
+                    "open_disputes", "Open disputes", open_disputes, status="attention" if open_disputes else "ok"
+                ),
+                self._metric(
+                    "awaiting_admin_disputes",
+                    "Awaiting admin",
+                    awaiting_admin,
+                    status="attention" if awaiting_admin else "ok",
+                ),
             ],
         )
 
@@ -277,13 +310,25 @@ class OperationsReadinessService:
             metrics=[
                 self._metric("enabled_flags", "Enabled flags", enabled_flags),
                 self._metric("beta_flags", "Beta flags", beta_flags, status="gated" if beta_flags else "ok"),
-                self._metric("maintenance_flags", "Maintenance flags", maintenance_flags, status="attention" if maintenance_flags else "ok"),
-                self._metric("kill_switches", "Kill switches", kill_switches, status="blocked" if kill_switches else "ok"),
+                self._metric(
+                    "maintenance_flags",
+                    "Maintenance flags",
+                    maintenance_flags,
+                    status="attention" if maintenance_flags else "ok",
+                ),
+                self._metric(
+                    "kill_switches", "Kill switches", kill_switches, status="blocked" if kill_switches else "ok"
+                ),
                 self._metric("active_policy_documents", "Active policy docs", active_documents),
                 self._metric("published_policy_versions", "Published versions", published_versions),
                 self._metric("policy_acceptances", "Policy acceptances", acceptances),
                 self._metric("country_policies", "Country policies", active_country_policies),
-                self._metric("active_beta_grants", "Beta grants", active_beta_grants, status="gated" if active_beta_grants else "ok"),
+                self._metric(
+                    "active_beta_grants",
+                    "Beta grants",
+                    active_beta_grants,
+                    status="gated" if active_beta_grants else "ok",
+                ),
             ],
         )
 
@@ -371,63 +416,155 @@ class OperationsReadinessService:
             alerts=alerts,
             metrics=[
                 self._metric("players", "Players", players),
-                self._metric("player_images", "Player images", player_images, status="attention" if players and player_images < players else "ok"),
+                self._metric(
+                    "player_images",
+                    "Player images",
+                    player_images,
+                    status="attention" if players and player_images < players else "ok",
+                ),
                 self._metric("real_players", "Real players", real_players),
                 self._metric("leagues", "Leagues", leagues),
                 self._metric("clubs", "Clubs", clubs),
                 self._metric("regens", "Regens", regens),
-                self._metric("regen_visuals", "Regen portraits", regen_visuals, status="attention" if regens and regen_visuals < regens else "ok"),
+                self._metric(
+                    "regen_visuals",
+                    "Regen portraits",
+                    regen_visuals,
+                    status="attention" if regens and regen_visuals < regens else "ok",
+                ),
                 self._metric("national_regen_seeds", "National regen seeds", national_regen_seeds),
                 self._metric("academy_prospects", "Academy prospects", academy_prospects),
                 self._metric("club_lifecycles", "Club lifecycles", club_lifecycles),
                 self._metric("club_readiness", "Club readiness", club_readiness),
                 self._metric("squad_registrations", "Squad registrations", squad_registrations),
-                self._metric("locked_squad_registrations", "Locked squads", locked_squad_registrations, status="live" if locked_squad_registrations else "ok"),
+                self._metric(
+                    "locked_squad_registrations",
+                    "Locked squads",
+                    locked_squad_registrations,
+                    status="live" if locked_squad_registrations else "ok",
+                ),
                 self._metric("eligibility_flags", "Eligibility flags", eligibility_flags),
-                self._metric("blocked_eligibility_flags", "Blocked eligibility flags", blocked_eligibility_flags, status="attention" if blocked_eligibility_flags else "ok"),
+                self._metric(
+                    "blocked_eligibility_flags",
+                    "Blocked eligibility flags",
+                    blocked_eligibility_flags,
+                    status="attention" if blocked_eligibility_flags else "ok",
+                ),
                 self._metric("club_operating_statuses", "Club operating dashboards", operating_statuses),
                 self._metric("staff_profiles", "Staff profiles", staff_profiles),
-                self._metric("active_staff_contracts", "Active staff contracts", active_staff_contracts, status="live" if active_staff_contracts else "ok"),
-                self._metric("active_staff_assignments", "Active staff assignments", active_staff_assignments, status="live" if active_staff_assignments else "ok"),
+                self._metric(
+                    "active_staff_contracts",
+                    "Active staff contracts",
+                    active_staff_contracts,
+                    status="live" if active_staff_contracts else "ok",
+                ),
+                self._metric(
+                    "active_staff_assignments",
+                    "Active staff assignments",
+                    active_staff_assignments,
+                    status="live" if active_staff_assignments else "ok",
+                ),
                 self._metric("academy_profiles", "Academy profiles", academy_profiles),
-                self._metric("active_academy_training_plans", "Active training plans", active_academy_training_plans, status="live" if active_academy_training_plans else "ok"),
-                self._metric("academy_contract_offers", "Academy contract offers", academy_contract_offers, status="attention" if academy_contract_offers else "ok"),
+                self._metric(
+                    "active_academy_training_plans",
+                    "Active training plans",
+                    active_academy_training_plans,
+                    status="live" if active_academy_training_plans else "ok",
+                ),
+                self._metric(
+                    "academy_contract_offers",
+                    "Academy contract offers",
+                    academy_contract_offers,
+                    status="attention" if academy_contract_offers else "ok",
+                ),
                 self._metric("academy_generation_runs", "Academy generation runs", academy_generation_runs),
                 self._metric("sponsorship_packages", "Sponsorship packages", sponsorship_packages),
                 self._metric("active_sponsorship_packages", "Active sponsorship packages", active_sponsorship_packages),
-                self._metric("active_sponsorship_contracts", "Active sponsorship contracts", active_sponsorship_contracts, status="live" if active_sponsorship_contracts else "ok"),
+                self._metric(
+                    "active_sponsorship_contracts",
+                    "Active sponsorship contracts",
+                    active_sponsorship_contracts,
+                    status="live" if active_sponsorship_contracts else "ok",
+                ),
                 self._metric("visible_sponsorship_assets", "Visible sponsor assets", visible_sponsorship_assets),
-                self._metric("pending_sponsorship_payouts", "Pending sponsor payouts", pending_sponsorship_payouts, status="attention" if pending_sponsorship_payouts else "ok"),
+                self._metric(
+                    "pending_sponsorship_payouts",
+                    "Pending sponsor payouts",
+                    pending_sponsorship_payouts,
+                    status="attention" if pending_sponsorship_payouts else "ok",
+                ),
                 self._metric("federations", "Federations", federations),
                 self._metric("federation_memberships", "Federation memberships", federation_memberships),
-                self._metric("open_federation_proposals", "Open federation votes", open_federation_proposals, status="attention" if open_federation_proposals else "ok"),
-                self._metric("federation_sanctions", "Federation sanctions", federation_sanctions, status="attention" if federation_sanctions else "ok"),
+                self._metric(
+                    "open_federation_proposals",
+                    "Open federation votes",
+                    open_federation_proposals,
+                    status="attention" if open_federation_proposals else "ok",
+                ),
+                self._metric(
+                    "federation_sanctions",
+                    "Federation sanctions",
+                    federation_sanctions,
+                    status="attention" if federation_sanctions else "ok",
+                ),
                 self._metric("fan_prediction_fixtures", "Prediction fixtures", fan_prediction_fixtures),
                 self._metric("fan_prediction_submissions", "Prediction submissions", fan_prediction_submissions),
                 self._metric("fan_war_profiles", "Fan war profiles", fan_war_profiles),
                 self._metric("fan_war_points", "Fan war points", fan_war_points),
                 self._metric("fanbase_rankings", "Fanbase rankings", fanbase_rankings),
                 self._metric("broadcast_rights", "Broadcast rights", broadcast_rights),
-                self._metric("broadcast_auctions", "Broadcast auctions", broadcast_auctions, status="live" if broadcast_auctions else "ok"),
+                self._metric(
+                    "broadcast_auctions",
+                    "Broadcast auctions",
+                    broadcast_auctions,
+                    status="live" if broadcast_auctions else "ok",
+                ),
                 self._metric("broadcast_access_grants", "Broadcast grants", broadcast_access_grants),
                 self._metric("broadcast_view_sessions", "Broadcast views", broadcast_view_sessions),
                 self._metric("clip_variants", "Clip variants", clip_variants),
-                self._metric("winning_clip_variants", "Winning clips", winning_clip_variants, status="live" if winning_clip_variants else "ok"),
+                self._metric(
+                    "winning_clip_variants",
+                    "Winning clips",
+                    winning_clip_variants,
+                    status="live" if winning_clip_variants else "ok",
+                ),
                 self._metric("sponsored_clips", "Sponsored clips", sponsored_clips),
-                self._metric("active_sponsored_clips", "Active sponsored clips", active_sponsored_clips, status="live" if active_sponsored_clips else "ok"),
+                self._metric(
+                    "active_sponsored_clips",
+                    "Active sponsored clips",
+                    active_sponsored_clips,
+                    status="live" if active_sponsored_clips else "ok",
+                ),
                 self._metric("creator_clip_revenue_rows", "Clip revenue rows", creator_clip_revenue_rows),
                 self._metric("transfer_listings", "Transfer listings", transfer_listings),
-                self._metric("active_transfer_listings", "Active transfer listings", active_transfer_listings, status="live" if active_transfer_listings else "ok"),
+                self._metric(
+                    "active_transfer_listings",
+                    "Active transfer listings",
+                    active_transfer_listings,
+                    status="live" if active_transfer_listings else "ok",
+                ),
                 self._metric("coin_trader_orders", "Coin trader orders", coin_trader_orders),
                 self._metric("coin_trader_liquidity", "Coin trader liquidity", coin_trader_liquidity, unit="coins"),
                 self._metric("ticket_events", "Ticket events", ticket_events),
                 self._metric("stadium_tickets", "Stadium tickets", stadium_tickets),
-                self._metric("resale_tickets", "Resale tickets", resale_tickets, status="live" if resale_tickets else "ok"),
+                self._metric(
+                    "resale_tickets", "Resale tickets", resale_tickets, status="live" if resale_tickets else "ok"
+                ),
                 self._metric("player_cards", "Player cards", player_cards),
                 self._metric("player_card_listings", "Card listings", player_card_listings),
-                self._metric("active_player_card_listings", "Active card listings", active_player_card_listings, status="live" if active_player_card_listings else "ok"),
+                self._metric(
+                    "active_player_card_listings",
+                    "Active card listings",
+                    active_player_card_listings,
+                    status="live" if active_player_card_listings else "ok",
+                ),
                 self._metric("notification_records", "Notification records", notification_records),
-                self._metric("unread_notifications", "Unread notifications", unread_notifications, status="attention" if unread_notifications else "ok"),
+                self._metric(
+                    "unread_notifications",
+                    "Unread notifications",
+                    unread_notifications,
+                    status="attention" if unread_notifications else "ok",
+                ),
                 self._metric("active_real_data_providers", "Active providers", providers),
                 self._metric(
                     "sportmonks_last_sync_seen",
@@ -448,7 +585,9 @@ class OperationsReadinessService:
         pending_outbox = self._count(EventOutbox, EventOutbox.status == "pending")
         dead_outbox = self._count(EventOutbox, EventOutbox.status == "dead_lettered")
         queued_jobs = self._count(CompetitionQueueRecord, CompetitionQueueRecord.status == "queued")
-        failed_jobs = self._count(CompetitionQueueRecord, CompetitionQueueRecord.status.in_(["failed", "dead_lettered"]))
+        failed_jobs = self._count(
+            CompetitionQueueRecord, CompetitionQueueRecord.status.in_(["failed", "dead_lettered"])
+        )
         feature_flag_audits = self._count(AdminFeatureFlagAuditLog)
         audit_logs_24h = self._count(AuditLog, AuditLog.created_at >= since)
         running_sync_jobs = self._count(RealDataSyncJob, RealDataSyncJob.status == "running")
@@ -463,7 +602,11 @@ class OperationsReadinessService:
             alerts.append(f"{failed_sync_jobs} real-data sync job(s) failed.")
         if pending_wallet_transactions:
             alerts.append(f"{pending_wallet_transactions} wallet transaction(s) remain pending.")
-        status = "blocked" if dead_outbox or failed_jobs else "attention" if pending_wallet_transactions or pending_outbox or failed_sync_jobs else "ok"
+        status = (
+            "blocked"
+            if dead_outbox or failed_jobs
+            else "attention" if pending_wallet_transactions or pending_outbox or failed_sync_jobs else "ok"
+        )
         return OperationsReadinessQueue(
             key="ledger_worker_health",
             title="Ledger And Worker Health",
@@ -477,13 +620,35 @@ class OperationsReadinessService:
                 self._metric("ledger_entries_24h", "Ledger entries 24h", ledger_entries_24h),
                 self._metric("user_wallets", "User wallets", user_wallets),
                 self._metric("wallet_transactions", "Wallet transactions", wallet_transactions),
-                self._metric("pending_wallet_transactions", "Pending wallet tx", pending_wallet_transactions, status="attention" if pending_wallet_transactions else "ok"),
-                self._metric("pending_outbox_events", "Pending outbox", pending_outbox, status="attention" if pending_outbox else "ok"),
-                self._metric("dead_outbox_events", "Dead outbox", dead_outbox, status="blocked" if dead_outbox else "ok"),
+                self._metric(
+                    "pending_wallet_transactions",
+                    "Pending wallet tx",
+                    pending_wallet_transactions,
+                    status="attention" if pending_wallet_transactions else "ok",
+                ),
+                self._metric(
+                    "pending_outbox_events",
+                    "Pending outbox",
+                    pending_outbox,
+                    status="attention" if pending_outbox else "ok",
+                ),
+                self._metric(
+                    "dead_outbox_events", "Dead outbox", dead_outbox, status="blocked" if dead_outbox else "ok"
+                ),
                 self._metric("queued_jobs", "Queued jobs", queued_jobs),
                 self._metric("failed_jobs", "Failed jobs", failed_jobs, status="blocked" if failed_jobs else "ok"),
-                self._metric("running_sync_jobs", "Running sync jobs", running_sync_jobs, status="live" if running_sync_jobs else "ok"),
-                self._metric("failed_sync_jobs", "Failed sync jobs", failed_sync_jobs, status="attention" if failed_sync_jobs else "ok"),
+                self._metric(
+                    "running_sync_jobs",
+                    "Running sync jobs",
+                    running_sync_jobs,
+                    status="live" if running_sync_jobs else "ok",
+                ),
+                self._metric(
+                    "failed_sync_jobs",
+                    "Failed sync jobs",
+                    failed_sync_jobs,
+                    status="attention" if failed_sync_jobs else "ok",
+                ),
                 self._metric("feature_flag_audits", "Flag audits", feature_flag_audits),
                 self._metric("audit_logs_24h", "Audit logs 24h", audit_logs_24h),
                 self._metric(
@@ -493,6 +658,188 @@ class OperationsReadinessService:
                     status="ok" if build_commit else "attention",
                     metadata={"commit": build_commit},
                 ),
+            ],
+        )
+
+    def _infrastructure_payment_queue(self) -> OperationsReadinessQueue:
+        pending_outbox = self._count(EventOutbox, EventOutbox.status == "pending")
+        dead_outbox = self._count(EventOutbox, EventOutbox.status == "dead_lettered")
+        queued_jobs = self._count(CompetitionQueueRecord, CompetitionQueueRecord.status == "queued")
+        failed_jobs = self._count(
+            CompetitionQueueRecord, CompetitionQueueRecord.status.in_(["failed", "dead_lettered"])
+        )
+        redis_configured = self._env_present("GTE_REDIS_URL")
+        kafka_configured = self._env_present("GTE_KAFKA_BROKERS")
+        broker_configured = redis_configured or kafka_configured
+        outbox_relay_enabled = self._env_truthy("GTE_OUTBOX_RELAY_ENABLED", default=False)
+        projection_workers_enabled = self._env_truthy("GTE_PROJECTION_WORKERS_ENABLED", default=False)
+        task_queue_enabled = self._env_truthy("GTE_TASK_QUEUE_ENABLED", default=False)
+        viral_worker_enabled = self._env_truthy("GTE_VIRAL_RANKING_WORKER_ENABLED", default=True)
+        payment_statuses = provider_runtime_statuses(include_stubbed=True)
+        registrations = list_provider_registrations()
+        live_provider_statuses = {
+            provider: status for provider, status in payment_statuses.items() if registrations[provider].is_live
+        }
+        stubbed_providers = sorted(
+            provider for provider, registration in registrations.items() if not registration.is_live
+        )
+        unavailable_live = sorted(
+            provider for provider, status in live_provider_statuses.items() if status in {"unavailable", "blocked"}
+        )
+        missing_webhooks = sorted(
+            provider
+            for provider, status in live_provider_statuses.items()
+            if status == "ready" and not provider_webhook_secret_configured(provider)
+        )
+
+        alerts: list[str] = []
+        if not broker_configured:
+            alerts.append("No Redis or Kafka broker environment variable is configured for workers.")
+        if pending_outbox and not outbox_relay_enabled:
+            alerts.append(f"{pending_outbox} outbox event(s) are pending while the outbox relay is disabled.")
+        if outbox_relay_enabled and not kafka_configured:
+            alerts.append("Outbox relay is enabled but GTE_KAFKA_BROKERS is not configured.")
+        if task_queue_enabled and not redis_configured:
+            alerts.append("Task queue is enabled but GTE_REDIS_URL is not configured.")
+        if dead_outbox:
+            alerts.append(f"{dead_outbox} dead-lettered outbox event(s) need inspection.")
+        if failed_jobs:
+            alerts.append(f"{failed_jobs} failed queue job(s) are present.")
+        if unavailable_live:
+            alerts.append(
+                "Live payment provider secret(s) are missing or blocked: "
+                + ", ".join(self._provider_label(provider) for provider in unavailable_live)
+                + "."
+            )
+        if missing_webhooks:
+            alerts.append(
+                "Webhook signing secret(s) are missing for live provider(s): "
+                + ", ".join(self._provider_label(provider) for provider in missing_webhooks)
+                + "."
+            )
+        if stubbed_providers:
+            alerts.append(
+                f"{len(stubbed_providers)} payment provider adapter(s) remain stubbed: "
+                + ", ".join(self._provider_label(provider) for provider in stubbed_providers)
+                + "."
+            )
+
+        production_blocked = is_production_environment() and (
+            unavailable_live
+            or not broker_configured
+            or dead_outbox
+            or failed_jobs
+            or (outbox_relay_enabled and not kafka_configured)
+        )
+        status = "blocked" if production_blocked else "attention" if alerts else "ok"
+        provider_metrics = [
+            self._metric(
+                f"provider_{provider}_status",
+                f"{self._provider_label(provider)} status",
+                self._provider_metric_value(status_value),
+                status=self._provider_metric_status(status_value),
+                metadata={"provider": provider, "runtime_status": status_value},
+            )
+            for provider, status_value in payment_statuses.items()
+        ]
+        return OperationsReadinessQueue(
+            key="infrastructure_payment_rails",
+            title="Infrastructure And Payment Rails",
+            description="Redis/Kafka worker configuration, outbox relay posture, and live/stubbed payment provider readiness.",
+            status=status,
+            route="/admin",
+            owner="platform_infrastructure",
+            action_routes=["/admin", "/admin/launch-control", "/admin/trust-ops"],
+            alerts=alerts,
+            metrics=[
+                self._metric(
+                    "redis_configured",
+                    "Redis configured",
+                    1 if redis_configured else 0,
+                    status="ok" if redis_configured else "attention",
+                ),
+                self._metric(
+                    "kafka_configured",
+                    "Kafka configured",
+                    1 if kafka_configured else 0,
+                    status="ok" if kafka_configured else "attention",
+                ),
+                self._metric(
+                    "worker_broker_configured",
+                    "Worker broker",
+                    1 if broker_configured else 0,
+                    status="ok" if broker_configured else "attention",
+                ),
+                self._metric(
+                    "outbox_relay_enabled",
+                    "Outbox relay",
+                    1 if outbox_relay_enabled else 0,
+                    status="ok" if outbox_relay_enabled else ("attention" if pending_outbox else "ok"),
+                ),
+                self._metric(
+                    "projection_workers_enabled",
+                    "Projection workers",
+                    1 if projection_workers_enabled else 0,
+                    status="ok" if projection_workers_enabled else "attention",
+                ),
+                self._metric(
+                    "task_queue_enabled",
+                    "Task queue",
+                    1 if task_queue_enabled else 0,
+                    status="ok" if task_queue_enabled else "attention",
+                ),
+                self._metric(
+                    "viral_worker_enabled",
+                    "Viral worker",
+                    1 if viral_worker_enabled else 0,
+                    status="ok" if viral_worker_enabled else "attention",
+                ),
+                self._metric(
+                    "pending_outbox_events",
+                    "Pending outbox",
+                    pending_outbox,
+                    status="attention" if pending_outbox else "ok",
+                ),
+                self._metric(
+                    "dead_outbox_events",
+                    "Dead outbox",
+                    dead_outbox,
+                    status="blocked" if dead_outbox else "ok",
+                ),
+                self._metric("queued_jobs", "Queued jobs", queued_jobs),
+                self._metric(
+                    "failed_jobs",
+                    "Failed jobs",
+                    failed_jobs,
+                    status="blocked" if failed_jobs else "ok",
+                ),
+                self._metric(
+                    "payment_provider_live_count",
+                    "Live providers",
+                    sum(1 for registration in registrations.values() if registration.is_live),
+                ),
+                self._metric(
+                    "payment_provider_ready_count",
+                    "Ready providers",
+                    sum(1 for status_value in live_provider_statuses.values() if status_value in {"ready", "mock"}),
+                    status="attention" if unavailable_live else "ok",
+                    metadata={"statuses": live_provider_statuses},
+                ),
+                self._metric(
+                    "payment_provider_stubbed_count",
+                    "Stubbed providers",
+                    len(stubbed_providers),
+                    status="attention" if stubbed_providers else "ok",
+                    metadata={"providers": stubbed_providers},
+                ),
+                self._metric(
+                    "payment_webhook_missing_count",
+                    "Missing webhook secrets",
+                    len(missing_webhooks),
+                    status="attention" if missing_webhooks else "ok",
+                    metadata={"providers": missing_webhooks},
+                ),
+                *provider_metrics,
             ],
         )
 
@@ -604,9 +951,7 @@ class OperationsReadinessService:
         if not self._has_table(User):
             return []
         statement = (
-            select(User.id)
-            .where(User.role.in_([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
-            .order_by(User.created_at.asc())
+            select(User.id).where(User.role.in_([UserRole.ADMIN, UserRole.SUPER_ADMIN])).order_by(User.created_at.asc())
         )
         return [item for item in self.session.scalars(statement).all() if item]
 
@@ -626,3 +971,41 @@ class OperationsReadinessService:
             if value and value.strip():
                 return value.strip()[:12]
         return None
+
+    @staticmethod
+    def _env_present(*names: str) -> bool:
+        return any((os.getenv(name) or "").strip() for name in names)
+
+    @staticmethod
+    def _env_truthy(name: str, *, default: bool = False) -> bool:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        normalized = value.strip().lower()
+        if not normalized:
+            return default
+        return normalized in {"1", "true", "yes", "y", "on", "enabled"}
+
+    @staticmethod
+    def _provider_label(provider: str) -> str:
+        return provider.replace("_", " ").title()
+
+    @staticmethod
+    def _provider_metric_value(status: str) -> int:
+        return {
+            "ready": 3,
+            "mock": 2,
+            "stubbed": 1,
+            "blocked": 0,
+            "unavailable": 0,
+        }.get(status, 0)
+
+    @staticmethod
+    def _provider_metric_status(status: str) -> str:
+        if status == "ready":
+            return "ok"
+        if status == "mock":
+            return "attention"
+        if status in {"blocked", "unavailable"}:
+            return "blocked"
+        return "attention"

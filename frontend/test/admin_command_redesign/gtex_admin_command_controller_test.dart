@@ -78,6 +78,24 @@ void main() {
               },
             ],
           },
+          <String, Object?>{
+            'key': 'infrastructure_payment_rails',
+            'title': 'Infrastructure And Payment Rails',
+            'description': 'Redis, Kafka, worker and payment rail posture.',
+            'status': 'blocked',
+            'route': '/admin',
+            'owner': 'platform_infrastructure',
+            'alerts': <Object?>['KoraPay secret is missing.'],
+            'metrics': <Object?>[
+              <String, Object?>{
+                'key': 'payment_provider_stubbed_count',
+                'label': 'Stubbed providers',
+                'value': 5,
+                'display_value': '5',
+                'status': 'attention',
+              },
+            ],
+          },
         ],
         'launch_gates': <Object?>[
           <String, Object?>{
@@ -104,11 +122,17 @@ void main() {
     );
     expect(
       controller.snapshot.modules.any(
+        (module) => module.type == GtexAdminModuleType.systemHealth,
+      ),
+      isTrue,
+    );
+    expect(
+      controller.snapshot.modules.any(
         (module) => module.type == GtexAdminModuleType.broadcast,
       ),
       isTrue,
     );
-    expect(controller.snapshot.queues.single.ownerLabel, 'diagnostics');
+    expect(controller.snapshot.queues.first.ownerLabel, 'diagnostics');
     expect(
       controller.snapshot.healthSignals.last.severity,
       GtexAdminSeverity.critical,

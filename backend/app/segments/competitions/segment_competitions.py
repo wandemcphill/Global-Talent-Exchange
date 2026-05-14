@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
-from app.auth.dependencies import get_current_admin, get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user
 from app.competitions.creator_league_router import router as creator_league_router
 from app.common.enums.competition_format import CompetitionFormat
 from app.models.user import User, UserRole
@@ -125,6 +125,31 @@ def _user_competition_payload(payload: CompetitionCreateRequest, actor: User) ->
     )
 
 
+def _legacy_user_competition_payload(
+    payload: CompetitionCreateRequest,
+    actor: User | None,
+) -> CompetitionCreateRequest:
+    creator_id = actor.id if actor is not None else payload.creator_id
+    if creator_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication credentials or creator_id are required.",
+        )
+    creator_name = payload.creator_name
+    if not creator_name:
+        creator_name = _display_name_for(actor) if actor is not None else creator_id
+    return payload.model_copy(
+        update={
+            "creator_id": creator_id,
+            "creator_name": creator_name,
+            "host_type": CompetitionHostType.USER_HOSTED,
+            "source_type": CompetitionHostType.USER_HOSTED.value,
+            "type": CompetitionHostType.USER_HOSTED.value,
+            "currency": "credit",
+        }
+    )
+
+
 def _admin_competition_payload(payload: CompetitionCreateRequest, actor: User) -> CompetitionCreateRequest:
     host_type = payload.host_type or CompetitionHostType.GTEX_HOSTED
     if host_type is CompetitionHostType.GTEX_HOSTED:
@@ -172,10 +197,10 @@ def create_competition(
 )
 def create_competition_alias(
     payload: CompetitionCreateRequest,
-    actor: User = Depends(get_current_user),
+    actor: User | None = Depends(get_optional_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    resolved = _user_competition_payload(payload, actor)
+    resolved = _legacy_user_competition_payload(payload, actor)
     return _handle_competition_errors(lambda: orchestrator.create(resolved))
 
 

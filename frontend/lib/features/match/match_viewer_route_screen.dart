@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/gte_api_repository.dart';
 import '../../data/match_gift_api.dart';
 import '../../models/match_view_state.dart';
 import '../../screens/match/gtex_match_viewer_screen.dart';
@@ -17,6 +18,8 @@ class MatchViewerRouteScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final String resolvedMatchKey = matchKey.trim();
+    final bool allowFixtureFallback =
+        ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture;
     if (resolvedMatchKey.isEmpty) {
       return const MatchRouteBlockedScreen(
         title: '2D Match Viewer',
@@ -63,11 +66,25 @@ class MatchViewerRouteScreen extends ConsumerWidget {
             capability: MatchViewerCapability.twoD,
           ),
       error:
-          (Object _, StackTrace __) => MatchRouteCapabilityOverlay(
-            capability: MatchViewerCapability.twoD,
-            status: DataSourceStatus.demo,
-            child: _FallbackMatchViewerRouteView(matchKey: resolvedMatchKey),
-          ),
+          (Object _, StackTrace __) =>
+              allowFixtureFallback
+                  ? MatchRouteCapabilityOverlay(
+                    capability: MatchViewerCapability.twoD,
+                    status: DataSourceStatus.demo,
+                    child: _FallbackMatchViewerRouteView(
+                      matchKey: resolvedMatchKey,
+                    ),
+                  )
+                  : MatchRouteBlockedScreen(
+                    title: '2D Match Viewer',
+                    subtitle:
+                        'This 2D route opens only after the live match-viewer session confirms the selected match.',
+                    reason:
+                        'The live match-viewer endpoint did not return a usable session for "$resolvedMatchKey". Demo fallback is available only in explicit fixture mode.',
+                    detailTitle: 'Live match unavailable',
+                    detailSubtitle:
+                        'Production keeps the 2D route blocked until a real match-viewer payload is available.',
+                  ),
     );
   }
 }

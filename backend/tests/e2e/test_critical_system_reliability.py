@@ -630,6 +630,13 @@ def test_competition_join_records_entry_and_match_simulation_saves_result(
     assert events_response.status_code == 200, events_response.text
     assert len(events_response.json()) > 0
 
+    viewer_response = client.get(f"/api/match-viewer/{fixtures[0]['id']}")
+    assert viewer_response.status_code == 200, viewer_response.text
+    viewer_payload = viewer_response.json()
+    assert viewer_payload["match_id"] == fixtures[0]["id"]
+    assert viewer_payload["source"] == "simulation"
+    assert viewer_payload["frames"]
+
     with app_session_factory() as session:
         entries = session.scalars(
             select(CompetitionEntry).where(CompetitionEntry.competition_id == competition_id)
@@ -646,6 +653,7 @@ def test_competition_join_records_entry_and_match_simulation_saves_result(
         assert match.status == "completed"
         assert match.home_score is not None
         assert match.away_score is not None
+        assert (match.metadata_json or {}).get("match_viewer") is not None
         if match.home_score != match.away_score:
             assert match.winner_club_id is not None
 

@@ -17,6 +17,7 @@ from app.models.wallet import LedgerUnit
 from app.policies.service import PolicyService
 from app.treasury.service import TreasuryService
 from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
+from app.wallets.providers.registry import provider_runtime_statuses
 from app.wallets.rail_service import WalletRailError, WalletRailService
 from app.wallets.service import WalletService
 
@@ -267,24 +268,11 @@ class WalletFundingService:
         gateway_enabled: bool = True,
         enabled_providers: set[str] | None = None,
     ) -> dict[str, str]:
-        if not gateway_enabled:
-            return {
-                "paystack": "blocked",
-                "korapay": "blocked",
-            }
-        paystack_secret = self._paystack_secret()
-        status_by_provider = {
-            "paystack": (
-                "ready" if paystack_secret else ("unavailable" if self._is_production_environment() else "mock")
-            ),
-            "korapay": "ready" if self._korapay_secret() else "unavailable",
-        }
-        if enabled_providers is not None:
-            normalized_enabled = {provider.strip().lower() for provider in enabled_providers}
-            for provider in status_by_provider:
-                if provider not in normalized_enabled:
-                    status_by_provider[provider] = "blocked"
-        return status_by_provider
+        return provider_runtime_statuses(
+            gateway_enabled=gateway_enabled,
+            enabled_providers=enabled_providers,
+            include_stubbed=True,
+        )
 
     def _initialize_paystack_transaction(
         self,

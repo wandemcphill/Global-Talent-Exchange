@@ -36,6 +36,8 @@ void main() {
       expect(find.text('Notify blockers'), findsOneWidget);
       expect(find.text('Launch Control'), findsWidgets);
       expect(find.text('Matchday economy'), findsOneWidget);
+      expect(find.text('Coin trader ops'), findsOneWidget);
+      expect(find.text('Notification matrix'), findsOneWidget);
 
       await tester.tap(find.text('Notify blockers'));
       await tester.pumpAndSettle();

@@ -113,6 +113,42 @@ void main() {
               'metadata_json': <String, Object?>{},
             },
           ),
+          GteTransportResponse(
+            statusCode: 200,
+            body: const <Object?>[
+              <String, Object?>{
+                'event_key': 'transfer_offer_received',
+                'topic': 'market',
+                'template_key': 'transfer.offer.received',
+                'title': 'Transfer offer received',
+                'default_message': 'A club has sent you a transfer offer.',
+                'audience': 'club_owner',
+                'deep_link_route': '/football/transfer-center',
+                'preference_key': 'allow_market',
+                'metadata': <String, Object?>{},
+              },
+            ],
+          ),
+          GteTransportResponse(
+            statusCode: 200,
+            body: const <String, Object?>{
+              'notification': <String, Object?>{
+                'notification_id': 'notif-1',
+                'message': 'Test sent.',
+              },
+              'matrix_item': <String, Object?>{
+                'event_key': 'transfer_offer_received',
+                'topic': 'market',
+                'template_key': 'transfer.offer.received',
+                'title': 'Transfer offer received',
+                'default_message': 'A club has sent you a transfer offer.',
+                'audience': 'club_owner',
+                'deep_link_route': '/football/transfer-center',
+                'preference_key': 'allow_market',
+                'metadata': <String, Object?>{},
+              },
+            },
+          ),
         ],
       );
       final NotificationSettingsApi api = NotificationSettingsApi.standard(
@@ -152,6 +188,17 @@ void main() {
         title: 'Creator Cup',
         body: 'Registration is live.',
       );
+      final List<NotificationEventMatrixItem> matrix =
+          await api.adminListEventMatrix();
+      final NotificationTestEventResult testEvent = await api
+          .adminPublishTestEvent(
+            eventKey: 'transfer_offer_received',
+            targetUserId: 'user-1',
+            message: 'Test sent.',
+          );
+
+      expect(matrix.single.eventKey, 'transfer_offer_received');
+      expect(testEvent.notificationId, 'notif-1');
 
       expect(
         transport.requests.map(
@@ -166,6 +213,8 @@ void main() {
           '/api/v2/notifications/announcements',
           '/api/v2/admin/notifications/announcements',
           '/api/v2/admin/notifications/announcements',
+          '/api/v2/admin/notifications/event-matrix',
+          '/api/v2/admin/notifications/test-event',
         ],
       );
     },

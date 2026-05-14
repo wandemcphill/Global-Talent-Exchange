@@ -80,6 +80,25 @@ def _create_user(session):
     return user
 
 
+def test_adaptive_overview_uses_registry_provider_status(session, monkeypatch) -> None:
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("GTE_APP_ENV", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+    user = _create_user(session)
+    overview = WalletService().get_adaptive_overview(session, user)
+
+    assert overview["payment_provider_status"]["paystack"] == "mock"
+    assert overview["payment_provider_status"]["korapay"] == "unavailable"
+    assert overview["payment_provider_status"]["cards"] == "stubbed"
+    assert "monnify" not in overview["payment_provider_status"]
+    assert "flutterwave" not in overview["payment_provider_status"]
+
+
 def test_append_transaction_requires_balanced_postings(session) -> None:
     user = _create_user(session)
     service = WalletService()

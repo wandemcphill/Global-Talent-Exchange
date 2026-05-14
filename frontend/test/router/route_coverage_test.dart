@@ -28,6 +28,7 @@ import 'package:gte_frontend/features/viral_feed/presentation/viral_feed_screen.
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/gte_market_players_screen_v2.dart';
+import 'package:gte_frontend/screens/admin/gtex_admin_notification_matrix_screen.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_trust_ops_screen_v2.dart';
 import 'package:gte_frontend/screens/gtex_public_landing_screen_v2.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
@@ -59,6 +60,10 @@ void main() {
         'GtexSocialFanHubScreenV2',
         'DemoRepository',
         '.demo(',
+        '.fixture(',
+        'FixtureRepository',
+        'FixtureTransport',
+        'GteMockApi(',
       ];
 
       for (final File file in routeHostFiles) {
@@ -71,6 +76,60 @@ void main() {
           );
         }
       }
+    });
+
+    test('route registry and router paths do not collide accidentally', () {
+      final Set<String> routeNames = <String>{};
+      final Set<String> duplicateNames = <String>{};
+      final Set<String> catalogPaths = <String>{};
+      final Set<String> duplicateCatalogPaths = <String>{};
+
+      for (final GteAppRouteRegistration registration
+          in GteAppRouteCatalog.registrations) {
+        if (!routeNames.add(registration.name)) {
+          duplicateNames.add(registration.name);
+        }
+        if (!catalogPaths.add(registration.path)) {
+          duplicateCatalogPaths.add(registration.path);
+        }
+      }
+
+      expect(duplicateNames, isEmpty);
+      expect(duplicateCatalogPaths, isEmpty);
+
+      final String appRouterSource =
+          File('lib/router/app_router.dart').readAsStringSync();
+      final Iterable<String> directRouterPaths = RegExp("path:\\s*'([^']+)'")
+          .allMatches(appRouterSource)
+          .map((RegExpMatch match) => match.group(1)!)
+          .where((String path) => path.startsWith('/'));
+
+      final Set<String> seenDirectPaths = <String>{};
+      final Set<String> duplicateDirectPaths = <String>{};
+      for (final String path in directRouterPaths) {
+        if (!seenDirectPaths.add(path)) {
+          duplicateDirectPaths.add(path);
+        }
+      }
+      expect(duplicateDirectPaths, isEmpty);
+
+      const Set<String> intentionallyShellOwnedCatalogPaths = <String>{
+        '/competitions',
+        '/player-cards',
+        '/world',
+        '/world/regens',
+        '/national-team',
+        '/football/transfer-center',
+        '/streamer-tournaments',
+      };
+      final Set<String> directCatalogCollisions =
+          seenDirectPaths.where(catalogPaths.contains).toSet();
+      expect(
+        directCatalogCollisions,
+        intentionallyShellOwnedCatalogPaths,
+        reason:
+            'Any catalog route also declared directly in app_router.dart must be intentionally shell-owned.',
+      );
     });
 
     test('production-facing V2 wrappers default to live backend mode', () {
@@ -191,6 +250,7 @@ void main() {
             '/admin': GteRouteIntegrityScreen,
             '/admin/launch-control': GteRouteIntegrityScreen,
             '/admin/coin-traders': GteRouteIntegrityScreen,
+            '/admin/notifications': GteRouteIntegrityScreen,
             '/admin/trust-ops': GteRouteIntegrityScreen,
             '/admin/matchday-economy': GteRouteIntegrityScreen,
           }.entries) {
@@ -358,6 +418,38 @@ void main() {
       expect(find.byType(GtexMatchdayEconomyAdminScreen), findsOneWidget);
       expect(find.text('Matchday economy'), findsOneWidget);
       expect(find.text('Federation Governance'), findsOneWidget);
+    });
+
+    testWidgets('admin notification matrix route mounts for admin sessions', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1600, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.syncSession(_adminSession());
+
+      await tester.pumpWidget(
+        GteFrontendApp(
+          controller: controller,
+          config: const GteAppConfig(
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+          ),
+          initialPath: '/admin/notifications',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(GtexAdminNotificationMatrixScreen), findsOneWidget);
+      expect(find.text('Admin Notification Matrix'), findsOneWidget);
+      expect(find.text('Test dispatch'), findsOneWidget);
     });
 
     testWidgets(

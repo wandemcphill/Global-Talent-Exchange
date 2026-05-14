@@ -1132,7 +1132,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   Widget _buildOperationsReadinessPanel(BuildContext context) {
     final AdminOperationsReadinessSnapshot snapshot = _operationsReadiness!;
     final List<AdminOperationsQueue> queues = snapshot.queues
-        .take(5)
+        .take(6)
         .toList(growable: false);
     final List<AdminOperationsLaunchGate> launchGates = snapshot.launchGates
         .where(
@@ -1152,7 +1152,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           _SectionHeader(
             title: 'Operations readiness',
             subtitle:
-                'Live trust, risk, policy, diagnostics, ledger and worker signals collected from existing GTEX engines.',
+                'Live trust, risk, policy, diagnostics, infrastructure, payment rails, ledger and worker signals collected from existing GTEX engines.',
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -1340,6 +1340,16 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 onPressed: () => context.go('/admin/matchday-economy'),
                 icon: const Icon(Icons.query_stats_outlined),
                 label: const Text('Matchday economy'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/admin/coin-traders'),
+                icon: const Icon(Icons.currency_exchange_outlined),
+                label: const Text('Coin trader ops'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/admin/notifications'),
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: const Text('Notification matrix'),
               ),
               _buildRouteLauncher(
                 context: context,

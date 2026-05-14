@@ -14,6 +14,7 @@ import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
 import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
+import 'package:gte_frontend/screens/admin/gtex_admin_notification_matrix_screen.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_trust_ops_screen_v2.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/screens/gte_signup_screen.dart';
@@ -630,6 +631,30 @@ List<RouteBase> _buildLegacyAliasRoutes({
                       message:
                           'Matchday economy operations combine fan rewards, federation, ticketing, broadcast and collectibles signals for authenticated admins.',
                       icon: Icons.query_stats_outlined,
+                      actionLabel: 'Back to GTEX',
+                      onAction:
+                          () =>
+                              context.go(const GteNavigationRoute.home().path),
+                    ),
+          ),
+    ),
+    GoRoute(
+      path: '/admin/notifications',
+      pageBuilder:
+          (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child:
+                controller.isAdmin && controller.session != null
+                    ? GtexAdminNotificationMatrixScreen(
+                      baseUrl: config.apiBaseUrl,
+                      accessToken: controller.session!.accessToken,
+                      backendMode: config.activeShellBackendMode,
+                    )
+                    : GteRouteIntegrityScreen.blocked(
+                      title: 'Admin access required',
+                      message:
+                          'Notification matrix test events and template coverage only open for authenticated admin sessions.',
+                      icon: Icons.notifications_active_outlined,
                       actionLabel: 'Back to GTEX',
                       onAction:
                           () =>
