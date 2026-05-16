@@ -49,6 +49,20 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   final TextEditingController _depositRateController = TextEditingController();
   final TextEditingController _withdrawalRateController =
       TextEditingController();
+  final TextEditingController _minTraderBuyRateController =
+      TextEditingController();
+  final TextEditingController _maxTraderBuyRateController =
+      TextEditingController();
+  final TextEditingController _minTraderSellRateController =
+      TextEditingController();
+  final TextEditingController _maxTraderSellRateController =
+      TextEditingController();
+  final TextEditingController _maxTraderSpreadController =
+      TextEditingController();
+  final TextEditingController _maxBuyAboveWithdrawalController =
+      TextEditingController();
+  final TextEditingController _maxSellBelowDepositController =
+      TextEditingController();
   final TextEditingController _minDepositController = TextEditingController();
   final TextEditingController _maxDepositController = TextEditingController();
   final TextEditingController _minWithdrawalController =
@@ -137,6 +151,13 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     _liveRefreshTimer?.cancel();
     _depositRateController.dispose();
     _withdrawalRateController.dispose();
+    _minTraderBuyRateController.dispose();
+    _maxTraderBuyRateController.dispose();
+    _minTraderSellRateController.dispose();
+    _maxTraderSellRateController.dispose();
+    _maxTraderSpreadController.dispose();
+    _maxBuyAboveWithdrawalController.dispose();
+    _maxSellBelowDepositController.dispose();
     _minDepositController.dispose();
     _maxDepositController.dispose();
     _minWithdrawalController.dispose();
@@ -267,6 +288,20 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     _activeBankAccountId = settings.activeBankAccount?.id;
     _depositRateController.text = settings.depositRateValue.toStringAsFixed(2);
     _withdrawalRateController.text = settings.withdrawalRateValue
+        .toStringAsFixed(2);
+    _minTraderBuyRateController.text = settings.minTraderBuyRateFiat
+        .toStringAsFixed(2);
+    _maxTraderBuyRateController.text = settings.maxTraderBuyRateFiat
+        .toStringAsFixed(2);
+    _minTraderSellRateController.text = settings.minTraderSellRateFiat
+        .toStringAsFixed(2);
+    _maxTraderSellRateController.text = settings.maxTraderSellRateFiat
+        .toStringAsFixed(2);
+    _maxTraderSpreadController.text = settings.maxTraderSpreadFiat
+        .toStringAsFixed(2);
+    _maxBuyAboveWithdrawalController.text = settings.maxBuyAboveWithdrawalFiat
+        .toStringAsFixed(2);
+    _maxSellBelowDepositController.text = settings.maxSellBelowDepositFiat
         .toStringAsFixed(2);
     _minDepositController.text = settings.minDeposit.toStringAsFixed(2);
     _maxDepositController.text = settings.maxDeposit.toStringAsFixed(2);
@@ -542,6 +577,27 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   Future<void> _saveTreasurySettings() async {
     final double? depositRate = _parseDouble(_depositRateController.text);
     final double? withdrawalRate = _parseDouble(_withdrawalRateController.text);
+    final double? minTraderBuyRate = _parseDouble(
+      _minTraderBuyRateController.text,
+    );
+    final double? maxTraderBuyRate = _parseDouble(
+      _maxTraderBuyRateController.text,
+    );
+    final double? minTraderSellRate = _parseDouble(
+      _minTraderSellRateController.text,
+    );
+    final double? maxTraderSellRate = _parseDouble(
+      _maxTraderSellRateController.text,
+    );
+    final double? maxTraderSpread = _parseDouble(
+      _maxTraderSpreadController.text,
+    );
+    final double? maxBuyAboveWithdrawal = _parseDouble(
+      _maxBuyAboveWithdrawalController.text,
+    );
+    final double? maxSellBelowDeposit = _parseDouble(
+      _maxSellBelowDepositController.text,
+    );
     final double? minDeposit = _parseDouble(_minDepositController.text);
     final double? maxDeposit = _parseDouble(_maxDepositController.text);
     final double? minWithdrawal = _parseDouble(_minWithdrawalController.text);
@@ -549,6 +605,13 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     if (<double?>[
       depositRate,
       withdrawalRate,
+      minTraderBuyRate,
+      maxTraderBuyRate,
+      minTraderSellRate,
+      maxTraderSellRate,
+      maxTraderSpread,
+      maxBuyAboveWithdrawal,
+      maxSellBelowDeposit,
       minDeposit,
       maxDeposit,
       minWithdrawal,
@@ -568,6 +631,13 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         GteTreasurySettingsUpdate(
           depositRateValue: depositRate,
           withdrawalRateValue: withdrawalRate,
+          minTraderBuyRateFiat: minTraderBuyRate,
+          maxTraderBuyRateFiat: maxTraderBuyRate,
+          minTraderSellRateFiat: minTraderSellRate,
+          maxTraderSellRateFiat: maxTraderSellRate,
+          maxTraderSpreadFiat: maxTraderSpread,
+          maxBuyAboveWithdrawalFiat: maxBuyAboveWithdrawal,
+          maxSellBelowDepositFiat: maxSellBelowDeposit,
           minDeposit: minDeposit,
           maxDeposit: maxDeposit,
           minWithdrawal: minWithdrawal,
@@ -1596,6 +1666,69 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     ),
                     decoration: const InputDecoration(
                       labelText: 'Withdrawal rate',
+                    ),
+                  ),
+                  TextField(
+                    controller: _minTraderBuyRateController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Trader buy min',
+                    ),
+                  ),
+                  TextField(
+                    controller: _maxTraderBuyRateController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Trader buy max',
+                    ),
+                  ),
+                  TextField(
+                    controller: _minTraderSellRateController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Trader sell min',
+                    ),
+                  ),
+                  TextField(
+                    controller: _maxTraderSellRateController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Trader sell max',
+                    ),
+                  ),
+                  TextField(
+                    controller: _maxTraderSpreadController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Max trader spread',
+                    ),
+                  ),
+                  TextField(
+                    controller: _maxBuyAboveWithdrawalController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Buy above withdrawal limit',
+                    ),
+                  ),
+                  TextField(
+                    controller: _maxSellBelowDepositController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Sell below deposit limit',
                     ),
                   ),
                   TextField(

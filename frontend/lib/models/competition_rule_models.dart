@@ -127,8 +127,16 @@ class CompetitionDraft {
     required this.hostFeePct,
     required this.rules,
     required this.beginnerFriendly,
+    required this.competitionMode,
+    required this.prizeMode,
+    required this.payoutMode,
+    required this.isRanked,
+    required this.hostFundedPrizeTotal,
+    required this.fixedPrizes,
+    required this.eligibilityRules,
     this.competitionId,
     this.scheduledStartAt,
+    this.registrationDeadline,
     this.passcode,
     this.specialRules,
   });
@@ -147,7 +155,15 @@ class CompetitionDraft {
   final double hostFeePct;
   final CompetitionRuleSet rules;
   final bool beginnerFriendly;
+  final String competitionMode;
+  final String prizeMode;
+  final String payoutMode;
+  final bool isRanked;
+  final double hostFundedPrizeTotal;
+  final Map<String, double> fixedPrizes;
+  final Map<String, Object?> eligibilityRules;
   final DateTime? scheduledStartAt;
+  final DateTime? registrationDeadline;
   final String? passcode;
   final String? specialRules;
 
@@ -165,10 +181,17 @@ class CompetitionDraft {
       creatorId: creatorId,
       creatorName: creatorName,
       payoutRules: defaultPayoutRules(winnerCount: 3),
-      platformFeePct: 0.10,
+      platformFeePct: 0.20,
       hostFeePct: 0.00,
       rules: CompetitionRuleSet.defaults(CompetitionFormat.league),
       beginnerFriendly: true,
+      competitionMode: 'league',
+      prizeMode: 'entry_funded',
+      payoutMode: 'percentage_split',
+      isRanked: true,
+      hostFundedPrizeTotal: 0,
+      fixedPrizes: const <String, double>{},
+      eligibilityRules: const <String, Object?>{},
     );
   }
 
@@ -191,7 +214,15 @@ class CompetitionDraft {
   double get projectedHostFee => grossPoolAtCapacity * hostFeePct;
 
   double get projectedPrizePool =>
-      grossPoolAtCapacity - projectedPlatformFee - projectedHostFee;
+      prizeMode == 'host_funded_fixed'
+          ? hostFundedPrizeTotal
+          : grossPoolAtCapacity - projectedPlatformFee - projectedHostFee;
+
+  double get hostFundingRequired =>
+      hostFundedPrizeTotal <= 0 ? 0 : hostFundedPrizeTotal / 0.80;
+
+  double get hostPlatformFee =>
+      hostFundingRequired <= 0 ? 0 : hostFundingRequired - hostFundedPrizeTotal;
 
   String get rulesSummary => rules.summary(format);
 
@@ -227,6 +258,11 @@ class CompetitionDraft {
     if ((payoutTotal - 1).abs() > 0.0001) {
       errors.add('Payout percentages must total 100% of the prize pool.');
     }
+    if (prizeMode == 'host_funded_fixed' && hostFundedPrizeTotal <= 0) {
+      errors.add(
+        'Host-funded competitions must advertise a positive prize pool.',
+      );
+    }
     return errors;
   }
 
@@ -245,7 +281,15 @@ class CompetitionDraft {
     double? hostFeePct,
     CompetitionRuleSet? rules,
     bool? beginnerFriendly,
+    String? competitionMode,
+    String? prizeMode,
+    String? payoutMode,
+    bool? isRanked,
+    double? hostFundedPrizeTotal,
+    Map<String, double>? fixedPrizes,
+    Map<String, Object?>? eligibilityRules,
     DateTime? scheduledStartAt,
+    DateTime? registrationDeadline,
     String? passcode,
     String? specialRules,
   }) {
@@ -269,7 +313,19 @@ class CompetitionDraft {
       hostFeePct: _clampDouble(hostFeePct ?? this.hostFeePct, 0, 0.15),
       rules: rules ?? this.rules,
       beginnerFriendly: beginnerFriendly ?? this.beginnerFriendly,
+      competitionMode: competitionMode ?? this.competitionMode,
+      prizeMode: prizeMode ?? this.prizeMode,
+      payoutMode: payoutMode ?? this.payoutMode,
+      isRanked: isRanked ?? this.isRanked,
+      hostFundedPrizeTotal: _clampDouble(
+        hostFundedPrizeTotal ?? this.hostFundedPrizeTotal,
+        0,
+        1000000,
+      ),
+      fixedPrizes: fixedPrizes ?? this.fixedPrizes,
+      eligibilityRules: eligibilityRules ?? this.eligibilityRules,
       scheduledStartAt: scheduledStartAt ?? this.scheduledStartAt,
+      registrationDeadline: registrationDeadline ?? this.registrationDeadline,
       passcode: passcode ?? this.passcode,
       specialRules: specialRules ?? this.specialRules,
     );
@@ -287,6 +343,21 @@ class CompetitionDraft {
       'max_players': capacity,
       'creator_id': creatorId,
       'source_type': 'user_hosted',
+      'competition_mode': competitionMode,
+      'prize_mode': prizeMode,
+      'payout_mode': payoutMode,
+      'is_ranked': isRanked,
+      if (registrationDeadline != null)
+        'registration_deadline':
+            registrationDeadline!.toUtc().toIso8601String(),
+      if (hostFundedPrizeTotal > 0)
+        'host_funded_prize_total': hostFundedPrizeTotal.toStringAsFixed(2),
+      if (fixedPrizes.isNotEmpty)
+        'fixed_prizes': fixedPrizes.map(
+          (String place, double amount) =>
+              MapEntry<String, Object?>(place, amount.toStringAsFixed(2)),
+        ),
+      ...eligibilityRules,
       if (scheduledStartAt != null)
         'scheduled_start_at': scheduledStartAt!.toUtc().toIso8601String(),
       if (passcode != null && passcode!.trim().isNotEmpty)

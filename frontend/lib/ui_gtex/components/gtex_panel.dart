@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'gtex_page_surface.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
 
@@ -33,30 +34,11 @@ class GtexPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final BorderRadius radius = BorderRadius.circular(GtexSpacing.radiusLg);
     final String? supportText = subtitle ?? helper;
-    final Widget content = AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
+    final Widget content = GtexPageSurface(
       margin: margin,
       padding: padding,
-      decoration: BoxDecoration(
-        color:
-            isSelected
-                ? Color.alphaBlend(
-                  accent.withValues(alpha: 0.08),
-                  GtexColors.panel,
-                )
-                : GtexColors.panel.withValues(alpha: 0.88),
-        borderRadius: radius,
-        border: Border.all(
-          color:
-              isSelected
-                  ? accent.withValues(alpha: 0.78)
-                  : GtexColors.line.withValues(alpha: 0.78),
-        ),
-        boxShadow: <BoxShadow>[
-          if (isSelected) GtexColors.glow(accent, opacity: 0.2),
-        ],
-      ),
+      accent: accent,
+      isSelected: isSelected,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

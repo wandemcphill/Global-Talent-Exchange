@@ -17,6 +17,7 @@ from app.live_matches.service import ensure_live_match_hub
 from app.models.base import Base
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
+from app.models.fast_match import FastMatchEntitlement, FastMatchSession, FastMatchSettlement
 from app.replay_archive.persistence import InMemoryReplayArchiveRepository
 from app.replay_archive.policy import SpectatorVisibilityPolicyService
 from app.replay_archive.service import ReplayArchiveService
@@ -41,7 +42,13 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
     )
     Base.metadata.create_all(
         engine,
-        tables=[UserCompetition.__table__, CompetitionMatch.__table__],
+        tables=[
+            UserCompetition.__table__,
+            CompetitionMatch.__table__,
+            FastMatchEntitlement.__table__,
+            FastMatchSettlement.__table__,
+            FastMatchSession.__table__,
+        ],
     )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 

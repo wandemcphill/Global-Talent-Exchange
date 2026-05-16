@@ -302,6 +302,17 @@ void main() {
     expect(profile.paymentMethodLabels, contains('Bank transfer'));
     expect(profile.bankAccountLabels, contains('GTBank'));
     expect(profile.termLabels, contains('Same Name Account Only'));
+    expect(profile.verificationLevel, 'standard');
+    expect(profile.completedVolumeFiat, 12400000);
+    expect(profile.disputeScore, 0.2);
+    expect(profile.rates.single.spreadFiat, 30);
+    expect(profile.rates.single.treasuryDepositRateFiat, 900);
+    expect(profile.rates.single.treasuryWithdrawalRateFiat, 880);
+    expect(profile.rates.single.minTraderBuyRateFiat, 820);
+    expect(profile.rates.single.maxTraderSellRateFiat, 980);
+    expect(profile.rates.single.maxTraderSpreadFiat, 120);
+    expect(profile.rates.single.governanceStatus, 'compliant');
+    expect(profile.rates.single.isRestricted, isFalse);
   });
 }
 
@@ -327,9 +338,12 @@ Map<String, Object?> _profileBody() {
     'country_code': 'NG',
     'status': 'approved',
     'tier': 'gold',
+    'verification_level': 'standard',
     'completion_rate': 98,
     'average_release_minutes': 7,
     'rating': 4.8,
+    'completed_volume_fiat': 12400000,
+    'dispute_score': 0.2,
     'terms': <String, Object?>{'same_name_account_only': true},
     'payment_methods': <Object?>[
       <String, Object?>{'label': 'Bank transfer', 'type': 'bank_transfer'},
@@ -350,6 +364,16 @@ Map<String, Object?> _profileBody() {
         'max_coin_amount': 100000,
         'available_liquidity': 50000,
         'is_active': true,
+        'spread_fiat': 30,
+        'treasury_deposit_rate_fiat': 900,
+        'treasury_withdrawal_rate_fiat': 880,
+        'min_trader_buy_rate_fiat': 820,
+        'max_trader_buy_rate_fiat': 890,
+        'min_trader_sell_rate_fiat': 900,
+        'max_trader_sell_rate_fiat': 980,
+        'max_trader_spread_fiat': 120,
+        'governance_status': 'compliant',
+        'governance_reasons': <Object?>[],
       },
     ],
     'metadata_json': <String, Object?>{},
@@ -368,6 +392,9 @@ Map<String, Object?> _rateBody() {
     'max_coin_amount': 10000,
     'available_liquidity': 50000,
     'is_active': false,
+    'spread_fiat': 0.2,
+    'governance_status': 'compliant',
+    'governance_reasons': <Object?>[],
     'metadata_json': <String, Object?>{},
   };
 }

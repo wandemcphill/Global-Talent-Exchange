@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from hashlib import sha256
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
@@ -9,6 +9,7 @@ from uuid import NAMESPACE_URL, uuid5
 from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
+from app.ingestion.models import ImageModerationStatus, Player, PlayerImageMetadata
 from app.models.base import utcnow
 from app.models.club_growth import (
     AcademyGenerationRun,
@@ -24,6 +25,12 @@ from app.models.club_growth import (
 from app.models.club_profile import ClubProfile
 from app.models.user import User
 from app.notifications.service import NotificationEventMatrixService
+from app.services.regen_portrait_service import (
+    FACE_RECIPE_VERSION,
+    NEWGEN_FACE_BANK_COLLECTION,
+    NEWGEN_FACE_BANK_PROVIDER,
+    RegenPortraitService,
+)
 from app.sponsorship_engine.service import SponsorshipEngineService
 
 from .schemas import (
@@ -340,6 +347,10 @@ class ClubGrowthService:
             personality = PERSONALITIES[int(digest[2:4], 16) % len(PERSONALITIES)]
             ability = 32 + (int(digest[4:6], 16) % 20) + academy.level
             potential = min(99, ability + 18 + (int(digest[6:8], 16) % 24))
+            portrait_asset_ref = self._select_academy_portrait_asset_ref(
+                seed=f"{seed}:{index}",
+                nationality=club.country_code,
+            )
             prospect = AcademyProspect(
                 club_id=club_id,
                 academy_profile_id=academy.id,
@@ -350,11 +361,13 @@ class ClubGrowthService:
                 personality_json=dict(personality),
                 current_ability=ability,
                 potential=potential,
-                portrait_asset_ref=None,
+                portrait_asset_ref=portrait_asset_ref,
                 status="discovered",
                 metadata_json={
                     "generation_seed": seed,
                     "portrait_policy": "newgen_bank_only",
+                    "portrait_source_provider": NEWGEN_FACE_BANK_PROVIDER,
+                    "portrait_source_collection": NEWGEN_FACE_BANK_COLLECTION,
                     "source": "academy_to_regen_batch_26",
                 },
             )
@@ -451,30 +464,169 @@ class ClubGrowthService:
 
     def promote_prospect(self, *, actor: User, club_id: str, prospect_id: str) -> AcademyProspectView:
         prospect = self._get_prospect(club_id=club_id, prospect_id=prospect_id)
+        existing_history = self._promotion_history(prospect_id=prospect.id)
+        if prospect.status == "promoted_to_senior" and existing_history is not None and existing_history.senior_player_id:
+            return self._academy_prospect_view(prospect)
         if prospect.status != "youth_signed":
             raise ClubGrowthError("prospect_not_promotable")
+        if not prospect.portrait_asset_ref:
+            prospect.portrait_asset_ref = self._select_academy_portrait_asset_ref(
+                seed=prospect.id,
+                nationality=prospect.nationality,
+            )
+        senior_player = self._ensure_senior_player_for_prospect(club_id=club_id, prospect=prospect)
         previous = {"status": prospect.status}
         prospect.status = "promoted_to_senior"
-        self.session.add(
-            AcademyPromotionHistory(
+        history = existing_history
+        if history is None:
+            history = AcademyPromotionHistory(
                 club_id=club_id,
                 prospect_id=prospect.id,
-                senior_player_id=None,
+                senior_player_id=senior_player.id,
                 metadata_json={
-                    "promotion_policy": "senior_roster_link_pending",
+                    "promotion_policy": "canonical_senior_player_created",
                     "portrait_policy": "newgen_bank_only",
+                    "portrait_asset_ref": prospect.portrait_asset_ref,
                 },
             )
-        )
+            self.session.add(history)
+        else:
+            history.senior_player_id = senior_player.id
+            history.metadata_json = {
+                **dict(history.metadata_json or {}),
+                "promotion_policy": "canonical_senior_player_created",
+                "portrait_asset_ref": prospect.portrait_asset_ref,
+            }
         self._audit(
             actor=actor,
             club_id=club_id,
             action="academy_prospect_promoted",
             previous_json=previous,
-            next_json={"prospect_id": prospect.id, "status": prospect.status},
+            next_json={
+                "prospect_id": prospect.id,
+                "status": prospect.status,
+                "senior_player_id": senior_player.id,
+                "portrait_asset_ref": prospect.portrait_asset_ref,
+            },
         )
         self.session.flush()
         return self._academy_prospect_view(prospect)
+
+    def _select_academy_portrait_asset_ref(self, *, seed: str, nationality: str | None) -> str:
+        service = RegenPortraitService(self.session)
+        groups = RegenPortraitService._portrait_ethnicity_groups(nationality)
+        recipe = {
+            "portraitEthnicityGroups": list(groups),
+            "portraitEthnicity": groups[0] if groups else "Mixed",
+        }
+        asset = service._select_regen_face_bank_asset(seed=seed, recipe=recipe)
+        if asset is None:
+            raise ClubGrowthError("academy_portrait_asset_missing")
+        return str(asset["storage_key"])
+
+    def _promotion_history(self, *, prospect_id: str) -> AcademyPromotionHistory | None:
+        return self.session.scalar(
+            select(AcademyPromotionHistory)
+            .where(AcademyPromotionHistory.prospect_id == prospect_id)
+            .order_by(AcademyPromotionHistory.created_at.desc())
+        )
+
+    def _ensure_senior_player_for_prospect(self, *, club_id: str, prospect: AcademyProspect) -> Player:
+        provider_external_id = f"academy:{prospect.id}"
+        existing = self.session.scalar(
+            select(Player).where(
+                Player.source_provider == "gtex_academy_regen",
+                Player.provider_external_id == provider_external_id,
+            )
+        )
+        if existing is not None:
+            self._ensure_player_portrait_metadata(player=existing, prospect=prospect)
+            return existing
+
+        current_year = utcnow().year
+        player = Player(
+            source_provider="gtex_academy_regen",
+            provider_external_id=provider_external_id,
+            current_club_profile_id=club_id,
+            full_name=prospect.display_name,
+            first_name=prospect.display_name.split(" ", 1)[0],
+            last_name=prospect.display_name.split(" ", 1)[1] if " " in prospect.display_name else None,
+            short_name=prospect.display_name,
+            position=prospect.position,
+            normalized_position=prospect.position,
+            date_of_birth=date(max(1970, current_year - prospect.age), 7, 1),
+            is_tradable=False,
+            is_real_player=False,
+            canonical_display_name=prospect.display_name,
+            identity_confidence_score=0.96,
+            profile_completeness_score=0.82,
+            current_market_reference_value=float(max(prospect.current_ability, prospect.potential) * 1000),
+            market_reference_currency="GTEX",
+            normalization_profile_version="academy_regen_v1",
+            dna_profile={
+                "generationSource": "academy",
+                "academyProspectId": prospect.id,
+                "academyClubId": club_id,
+                "currentAbility": prospect.current_ability,
+                "potential": prospect.potential,
+                "personality": dict(prospect.personality_json or {}),
+                "portraitStatus": "ready_newgen_face_bank",
+                "portraitRecipeVersion": FACE_RECIPE_VERSION,
+                "portraitSourceProvider": NEWGEN_FACE_BANK_PROVIDER,
+                "portraitSourceCollection": NEWGEN_FACE_BANK_COLLECTION,
+                "portraitStorageKey": prospect.portrait_asset_ref,
+            },
+            last_synced_at=utcnow(),
+        )
+        self.session.add(player)
+        self.session.flush()
+        self._ensure_player_portrait_metadata(player=player, prospect=prospect)
+        return player
+
+    def _ensure_player_portrait_metadata(self, *, player: Player, prospect: AcademyProspect) -> None:
+        if not prospect.portrait_asset_ref:
+            raise ClubGrowthError("academy_portrait_asset_missing")
+        service = RegenPortraitService(self.session)
+        asset = service._face_bank_asset_by_storage_key(prospect.portrait_asset_ref)
+        if asset is None:
+            raise ClubGrowthError("academy_portrait_asset_missing")
+        image = self.session.scalar(
+            select(PlayerImageMetadata).where(
+                PlayerImageMetadata.player_id == player.id,
+                PlayerImageMetadata.image_role == "portrait",
+            )
+        )
+        if image is None:
+            image = PlayerImageMetadata(
+                source_provider=NEWGEN_FACE_BANK_PROVIDER,
+                provider_external_id=f"{NEWGEN_FACE_BANK_PROVIDER}:{prospect.portrait_asset_ref}",
+                player_id=player.id,
+                image_role="portrait",
+            )
+            self.session.add(image)
+        image.source_provider = NEWGEN_FACE_BANK_PROVIDER
+        image.provider_external_id = f"{NEWGEN_FACE_BANK_PROVIDER}:{prospect.portrait_asset_ref}"
+        image.source_url = service._generated_media_url(prospect.portrait_asset_ref)
+        image.storage_key = prospect.portrait_asset_ref
+        image.width = RegenPortraitService._optional_int(asset.get("width")) or 512
+        image.height = RegenPortraitService._optional_int(asset.get("height")) or 512
+        image.mime_type = service._mime_type_for_storage_key(prospect.portrait_asset_ref)
+        image.file_size_bytes = RegenPortraitService._optional_int(asset.get("bytes"))
+        image.checksum_sha256 = str(asset.get("sha256") or "") or None
+        image.moderation_status = ImageModerationStatus.APPROVED.value
+        image.rights_cleared = True
+        image.is_primary = True
+        image.last_processed_at = utcnow()
+        player.dna_profile = {
+            **dict(player.dna_profile or {}),
+            "portraitStatus": "ready_newgen_face_bank",
+            "portraitRecipeVersion": FACE_RECIPE_VERSION,
+            "portraitSourceProvider": NEWGEN_FACE_BANK_PROVIDER,
+            "portraitSourceCollection": NEWGEN_FACE_BANK_COLLECTION,
+            "portraitStorageKey": prospect.portrait_asset_ref,
+            "portraitUrl": image.source_url,
+        }
+        self.session.flush()
 
     def _ensure_club(self, club_id: str) -> ClubProfile:
         club = self.session.get(ClubProfile, club_id)
@@ -639,6 +791,7 @@ class ClubGrowthService:
         )
 
     def _academy_prospect_view(self, prospect: AcademyProspect) -> AcademyProspectView:
+        history = self._promotion_history(prospect_id=prospect.id)
         return AcademyProspectView(
             id=prospect.id,
             club_id=prospect.club_id,
@@ -650,6 +803,7 @@ class ClubGrowthService:
             current_ability=prospect.current_ability,
             potential=prospect.potential,
             portrait_asset_ref=prospect.portrait_asset_ref,
+            senior_player_id=history.senior_player_id if history is not None else None,
             status=prospect.status,
             metadata=dict(prospect.metadata_json or {}),
             updated_at=prospect.updated_at,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_session
@@ -11,6 +12,7 @@ from app.infinite_league.service import ensure_infinite_league_runtime
 from app.live_matches.service import ensure_live_match_hub
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
+from app.models.fast_match import FastMatchSession
 from app.replay_archive.service import ensure_replay_archive
 from app.schemas.match_viewer import MatchMode, MatchViewerSessionView, MatchViewStateView
 from app.services.ads.engine import AdDecisionEngine
@@ -273,6 +275,29 @@ def _resolve_match_viewer_context(
         return _ResolvedMatchViewerContext(
             canonical_view=service.build_from_archive_record(record),
             metadata_json={},
+            fairness_metadata=None,
+            match=None,
+        )
+
+    fast_match = session.scalar(
+        select(FastMatchSession).where(
+            (FastMatchSession.live_match_key == match_key) | (FastMatchSession.match_id == match_key)
+        )
+    )
+    if fast_match is not None and isinstance(fast_match.viewer_payload_json, dict) and fast_match.viewer_payload_json:
+        return _ResolvedMatchViewerContext(
+            canonical_view=MatchViewStateView.model_validate(fast_match.viewer_payload_json),
+            metadata_json={
+                **dict(fast_match.metadata_json or {}),
+                "fast_match": {
+                    "match_id": fast_match.match_id,
+                    "live_match_key": fast_match.live_match_key,
+                    "entry_currency": fast_match.entry_currency,
+                    "fan_coin_entry_fee": str(fast_match.fan_coin_entry_fee),
+                    "charge_required_now": fast_match.charge_required_now,
+                    "result": fast_match.result,
+                },
+            },
             fairness_metadata=None,
             match=None,
         )

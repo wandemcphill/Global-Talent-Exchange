@@ -5,9 +5,10 @@ import os
 from backend.tests.support.secrets import TEST_PASSWORD
 
 
-def _create_competition(client, *, name: str) -> str:
+def _create_competition(client, *, host: dict[str, str], name: str) -> str:
     response = client.post(
         "/api/competitions",
+        headers=host["headers"],
         json={
             "name": name,
             "format": "league",
@@ -93,13 +94,14 @@ def _create_scoped_admin_headers(
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_authenticated_join_rejects_payload_user_spoofing(client) -> None:
-    competition_id = _create_competition(client, name="join-auth-guard")
-    headers, _user_id = _register_user(client, suffix="join-auth-user")
+def test_authenticated_join_rejects_payload_user_spoofing(client, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="join-auth-host")
+    entrant = auth_user_factory(suffix="join-auth-user")
+    competition_id = _create_competition(client, host=host, name="join-auth-guard")
 
     response = client.post(
         f"/api/competitions/{competition_id}/join",
-        headers=headers,
+        headers=entrant["headers"],
         json={"user_id": "someone-else"},
     )
 
@@ -107,8 +109,9 @@ def test_authenticated_join_rejects_payload_user_spoofing(client) -> None:
     assert _error_message(response) == "Authenticated user does not match competition join payload."
 
 
-def test_anonymous_join_is_rejected(client, competition_admin_headers) -> None:
-    competition_id = _create_competition(client, name="join-anon-blocked")
+def test_anonymous_join_is_rejected(client, competition_admin_headers, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="join-anon-host")
+    competition_id = _create_competition(client, host=host, name="join-anon-blocked")
 
     publish = client.post(
         f"/api/competitions/{competition_id}/publish",
@@ -122,14 +125,16 @@ def test_anonymous_join_is_rejected(client, competition_admin_headers) -> None:
         json={"user_id": "anonymous-user"},
     )
 
-    assert response.status_code == 403
-    assert _error_message(response) == "Authenticated user does not match competition join payload."
+    assert response.status_code == 401
+    assert _error_message(response) == "Authentication credentials were not provided."
 
 
 def test_authenticated_scoped_admin_without_manage_competitions_cannot_publish_or_launch(
     client,
+    auth_user_factory,
 ) -> None:
-    competition_id = _create_competition(client, name="publish-auth-guard")
+    host = auth_user_factory(suffix="publish-auth-host")
+    competition_id = _create_competition(client, host=host, name="publish-auth-guard")
     headers = _create_scoped_admin_headers(
         client,
         suffix="competition-blocked-admin",
@@ -152,20 +157,22 @@ def test_authenticated_scoped_admin_without_manage_competitions_cannot_publish_o
     assert _error_message(launch) == "Permission manage_competitions is required for this action."
 
 
-def test_anonymous_publish_is_rejected(client) -> None:
-    competition_id = _create_competition(client, name="publish-anon-blocked")
+def test_anonymous_publish_is_rejected(client, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="publish-anon-host")
+    competition_id = _create_competition(client, host=host, name="publish-anon-blocked")
 
     response = client.post(
         f"/api/competitions/{competition_id}/publish",
         json={"open_for_join": True},
     )
 
-    assert response.status_code == 403
-    assert _error_message(response) == "Admin access is required for this action."
+    assert response.status_code == 401
+    assert _error_message(response) == "Authentication credentials were not provided."
 
 
-def test_authenticated_scoped_admin_with_manage_competitions_can_publish(client) -> None:
-    competition_id = _create_competition(client, name="publish-auth-live")
+def test_authenticated_scoped_admin_with_manage_competitions_can_publish(client, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="publish-live-host")
+    competition_id = _create_competition(client, host=host, name="publish-auth-live")
     headers = _create_scoped_admin_headers(
         client,
         suffix="competition-live-admin",
@@ -183,7 +190,8 @@ def test_authenticated_scoped_admin_with_manage_competitions_can_publish(client)
 
 
 def test_anonymous_launch_is_rejected(client, competition_admin_headers, auth_user_factory) -> None:
-    competition_id = _create_competition(client, name="launch-anon-blocked")
+    host = auth_user_factory(suffix="launch-anon-host")
+    competition_id = _create_competition(client, host=host, name="launch-anon-blocked")
     entrant_a = auth_user_factory(suffix="launch-anon-a")
     entrant_b = auth_user_factory(suffix="launch-anon-b")
 
@@ -204,11 +212,12 @@ def test_anonymous_launch_is_rejected(client, competition_admin_headers, auth_us
 
     seed = client.post(
         f"/api/competitions/{competition_id}/seed",
+        headers=competition_admin_headers,
         json={"seed_method": "random"},
     )
     assert seed.status_code == 200, seed.text
 
     response = client.post(f"/api/competitions/{competition_id}/launch")
 
-    assert response.status_code == 403
-    assert _error_message(response) == "Admin access is required for this action."
+    assert response.status_code == 401
+    assert _error_message(response) == "Authentication credentials were not provided."

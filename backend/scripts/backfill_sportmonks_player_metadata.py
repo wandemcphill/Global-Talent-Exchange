@@ -11,7 +11,7 @@ import time
 from typing import Any, Sequence
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import case, exists, func, or_, select, text
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -107,6 +107,140 @@ _COUNTRY_LEAGUE_LABEL_OVERRIDES: dict[tuple[str, str], str] = {
     ("russia", "premier league"): "Russian Premier League",
 }
 
+_DEFAULT_API_TARGET_FIELDS: tuple[str, ...] = ("country", "club", "competition", "date_of_birth")
+_API_TARGET_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "all": (*_DEFAULT_API_TARGET_FIELDS, "photo"),
+    "metadata": _DEFAULT_API_TARGET_FIELDS,
+    "facts": _DEFAULT_API_TARGET_FIELDS,
+    "country": ("country",),
+    "nationality": ("country",),
+    "club": ("club",),
+    "team": ("club",),
+    "competition": ("competition",),
+    "league": ("competition",),
+    "dob": ("date_of_birth",),
+    "birth": ("date_of_birth",),
+    "date_of_birth": ("date_of_birth",),
+    "date-of-birth": ("date_of_birth",),
+    "photo": ("photo",),
+    "image": ("photo",),
+    "portrait": ("photo",),
+}
+
+_DEFAULT_PRIORITY_LEAGUES: tuple[str, ...] = (
+    "Premier League",
+    "La Liga",
+    "Italian Serie A",
+    "French Ligue 1",
+    "Bundesliga",
+    "Super Lig",
+)
+
+_PRIORITY_LEAGUE_ALIASES: dict[str, tuple[str, ...]] = {
+    "top": _DEFAULT_PRIORITY_LEAGUES,
+    "top_europe": _DEFAULT_PRIORITY_LEAGUES,
+    "top-first-divisions": _DEFAULT_PRIORITY_LEAGUES,
+    "top_first_divisions": _DEFAULT_PRIORITY_LEAGUES,
+    "priority": _DEFAULT_PRIORITY_LEAGUES,
+    "epl": ("Premier League",),
+    "english_premier_league": ("Premier League",),
+    "premier_league": ("Premier League",),
+    "premier league": ("Premier League",),
+    "la_liga": ("La Liga",),
+    "la liga": ("La Liga",),
+    "spanish_first_division": ("La Liga",),
+    "spanish first division": ("La Liga",),
+    "italian_first_division": ("Italian Serie A",),
+    "italian first division": ("Italian Serie A",),
+    "italian_serie_a": ("Italian Serie A",),
+    "serie_a": ("Italian Serie A",),
+    "serie a": ("Italian Serie A",),
+    "french_first_division": ("French Ligue 1",),
+    "french first division": ("French Ligue 1",),
+    "french_ligue_1": ("French Ligue 1",),
+    "ligue_1": ("French Ligue 1",),
+    "ligue 1": ("French Ligue 1",),
+    "german_first_division": ("Bundesliga",),
+    "german first division": ("Bundesliga",),
+    "german_bundesliga": ("Bundesliga",),
+    "bundesliga": ("Bundesliga",),
+    "turkish_first_division": ("Super Lig",),
+    "turkish first division": ("Super Lig",),
+    "turkish_super_lig": ("Super Lig",),
+    "super_lig": ("Super Lig",),
+    "super lig": ("Super Lig",),
+    "süper_lig": ("Super Lig",),
+    "süper lig": ("Super Lig",),
+}
+
+_PRIORITY_LEAGUE_MATCH_LABELS: dict[str, tuple[str, ...]] = {
+    "Premier League": ("Premier League", "English Premier League"),
+    "La Liga": ("La Liga", "Spanish La Liga"),
+    "Italian Serie A": ("Italian Serie A",),
+    "French Ligue 1": ("French Ligue 1", "Ligue 1"),
+    "Bundesliga": ("Bundesliga", "German Bundesliga"),
+    "Super Lig": ("Super Lig", "Süper Lig", "Turkish Super Lig"),
+}
+
+
+def _parse_api_target_fields(value: str | Sequence[str] | None) -> tuple[str, ...]:
+    if value is None:
+        return _DEFAULT_API_TARGET_FIELDS
+    if isinstance(value, str):
+        raw_items = [
+            item.strip().lower().replace(" ", "_")
+            for chunk in value.split(";")
+            for item in chunk.split(",")
+        ]
+    else:
+        raw_items = [str(item).strip().lower().replace(" ", "_") for item in value]
+    fields: list[str] = []
+    for item in raw_items:
+        if not item:
+            continue
+        aliases = _API_TARGET_FIELD_ALIASES.get(item)
+        if aliases is None:
+            valid = ", ".join(sorted(_API_TARGET_FIELD_ALIASES))
+            raise argparse.ArgumentTypeError(f"unknown API target field '{item}'. Valid values: {valid}")
+        for alias in aliases:
+            if alias not in fields:
+                fields.append(alias)
+    return tuple(fields) or _DEFAULT_API_TARGET_FIELDS
+
+
+def _parse_priority_leagues(value: str | Sequence[str] | None) -> tuple[str, ...]:
+    if value is None:
+        return tuple()
+    if isinstance(value, str):
+        raw_items = [
+            item.strip().lower().replace("-", "_").replace(" ", "_")
+            for chunk in value.split(";")
+            for item in chunk.split(",")
+        ]
+    else:
+        raw_items = [str(item).strip().lower().replace("-", "_").replace(" ", "_") for item in value]
+    leagues: list[str] = []
+    for item in raw_items:
+        if not item:
+            continue
+        aliases = _PRIORITY_LEAGUE_ALIASES.get(item)
+        if aliases is None:
+            valid = ", ".join(sorted(_PRIORITY_LEAGUE_ALIASES))
+            raise argparse.ArgumentTypeError(f"unknown priority league '{item}'. Valid values: {valid}")
+        for alias in aliases:
+            if alias not in leagues:
+                leagues.append(alias)
+    return tuple(leagues)
+
+
+def _priority_league_match_labels(leagues: Sequence[str]) -> tuple[str, ...]:
+    labels: list[str] = []
+    for league in leagues:
+        for label in _PRIORITY_LEAGUE_MATCH_LABELS.get(league, (league,)):
+            if label not in labels:
+                labels.append(label)
+    return tuple(labels)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -140,6 +274,24 @@ def build_parser() -> argparse.ArgumentParser:
             "Use 0 to disable."
         ),
     )
+    parser.add_argument(
+        "--target-fields",
+        type=_parse_api_target_fields,
+        default=_DEFAULT_API_TARGET_FIELDS,
+        help=(
+            "For API mode, select players missing these fields. Comma-separated values: "
+            "metadata, country, club, competition, dob, photo, or all."
+        ),
+    )
+    parser.add_argument(
+        "--priority-leagues",
+        type=_parse_priority_leagues,
+        default=tuple(),
+        help=(
+            "For API mode, restrict selection to priority league players. Use top-first-divisions for "
+            "Premier League, La Liga, Italian Serie A, French Ligue 1, Bundesliga, and Super Lig."
+        ),
+    )
     parser.add_argument("--db-retry-attempts", type=int, default=4)
     parser.add_argument("--db-retry-base-seconds", type=float, default=4.0)
     parser.add_argument(
@@ -169,6 +321,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         limit = max(int(args.limit), 1)
         chunk_size = max(int(args.chunk_size), 1)
+        target_fields = tuple(args.target_fields)
+        priority_leagues = tuple(args.priority_leagues)
         if args.apply and args.source == "api" and limit > chunk_size:
             stats = _backfill_api_in_committed_chunks(
                 session_factory,
@@ -179,6 +333,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 update_names=bool(args.update_names),
                 pause_ms=max(int(args.pause_ms), 0),
                 skip_recent_hours=max(int(args.skip_recent_hours), 0),
+                target_fields=target_fields,
+                priority_leagues=priority_leagues,
                 db_retry_attempts=max(int(args.db_retry_attempts), 1),
                 db_retry_base_seconds=max(float(args.db_retry_base_seconds), 0.0),
                 provider_fetch_attempts=max(int(args.provider_fetch_attempts), 1),
@@ -197,6 +353,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     update_names=bool(args.update_names),
                     pause_ms=max(int(args.pause_ms), 0),
                     skip_recent_hours=max(int(args.skip_recent_hours), 0),
+                    target_fields=target_fields,
+                    priority_leagues=priority_leagues,
                     provider_fetch_attempts=max(int(args.provider_fetch_attempts), 1),
                     provider_retry_base_ms=max(int(args.provider_retry_base_ms), 0),
                     sample_size=max(int(args.sample_size), 0),
@@ -214,6 +372,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "force": bool(args.force),
             "update_names": bool(args.update_names),
             "skip_recent_hours": max(int(args.skip_recent_hours), 0),
+            "target_fields": list(target_fields),
+            "priority_leagues": list(priority_leagues),
             "db_retry_attempts": max(int(args.db_retry_attempts), 1),
             "db_retry_base_seconds": max(float(args.db_retry_base_seconds), 0.0),
             "provider_fetch_attempts": max(int(args.provider_fetch_attempts), 1),
@@ -235,6 +395,8 @@ def _backfill_api_in_committed_chunks(
     update_names: bool,
     pause_ms: int,
     skip_recent_hours: int,
+    target_fields: Sequence[str],
+    priority_leagues: Sequence[str],
     db_retry_attempts: int,
     db_retry_base_seconds: float,
     provider_fetch_attempts: int,
@@ -254,6 +416,8 @@ def _backfill_api_in_committed_chunks(
             update_names=update_names,
             pause_ms=pause_ms,
             skip_recent_hours=skip_recent_hours,
+            target_fields=target_fields,
+            priority_leagues=priority_leagues,
             provider_fetch_attempts=provider_fetch_attempts,
             provider_retry_base_ms=provider_retry_base_ms,
             sample_size=sample_size,
@@ -280,6 +444,8 @@ def _run_api_chunk_with_retries(
     update_names: bool,
     pause_ms: int,
     skip_recent_hours: int,
+    target_fields: Sequence[str],
+    priority_leagues: Sequence[str],
     provider_fetch_attempts: int,
     provider_retry_base_ms: int,
     sample_size: int,
@@ -300,6 +466,8 @@ def _run_api_chunk_with_retries(
                     update_names=update_names,
                     pause_ms=pause_ms,
                     skip_recent_hours=skip_recent_hours,
+                    target_fields=target_fields,
+                    priority_leagues=priority_leagues,
                     provider_fetch_attempts=provider_fetch_attempts,
                     provider_retry_base_ms=provider_retry_base_ms,
                     sample_size=sample_size,
@@ -371,6 +539,8 @@ def backfill_metadata(
     update_names: bool,
     pause_ms: int,
     skip_recent_hours: int = 24,
+    target_fields: Sequence[str] = _DEFAULT_API_TARGET_FIELDS,
+    priority_leagues: Sequence[str] = (),
     provider_fetch_attempts: int = 2,
     provider_retry_base_ms: int = 250,
     sample_size: int,
@@ -394,6 +564,8 @@ def backfill_metadata(
         offset=offset,
         force=force,
         skip_recent_hours=skip_recent_hours,
+        target_fields=target_fields,
+        priority_leagues=priority_leagues,
     )
     stats.selected = len(players)
     if not players:
@@ -613,6 +785,8 @@ def _select_players(
     offset: int,
     force: bool,
     skip_recent_hours: int = 24,
+    target_fields: Sequence[str] = _DEFAULT_API_TARGET_FIELDS,
+    priority_leagues: Sequence[str] = (),
 ) -> list[Player]:
     if source == "staging":
         missing_filter = (
@@ -663,15 +837,36 @@ def _select_players(
         Player.is_tradable.is_(True),
         func.lower(Player.source_provider) == "sportmonks",
     ]
-    if not force:
-        criteria.append(
-            or_(
-                Player.country_id.is_(None),
-                Player.current_club_id.is_(None),
-                Player.current_competition_id.is_(None),
-                Player.date_of_birth.is_(None),
-            )
+    if priority_leagues:
+        criteria.append(_priority_league_filter(priority_leagues))
+    normalized_targets = _parse_api_target_fields(target_fields)
+    missing_conditions = []
+    missing_order_terms = []
+    if "country" in normalized_targets:
+        missing_conditions.append(Player.country_id.is_(None))
+        missing_order_terms.append(case((Player.country_id.is_(None), 1), else_=0))
+    if "club" in normalized_targets:
+        missing_conditions.append(Player.current_club_id.is_(None))
+        missing_order_terms.append(case((Player.current_club_id.is_(None), 1), else_=0))
+    if "competition" in normalized_targets:
+        missing_conditions.append(Player.current_competition_id.is_(None))
+        missing_order_terms.append(case((Player.current_competition_id.is_(None), 1), else_=0))
+    if "date_of_birth" in normalized_targets:
+        missing_conditions.append(Player.date_of_birth.is_(None))
+        missing_order_terms.append(case((Player.date_of_birth.is_(None), 1), else_=0))
+    if "photo" in normalized_targets:
+        portrait_exists = exists().where(
+            PlayerImageMetadata.player_id == Player.id,
+            PlayerImageMetadata.image_role == "portrait",
+            func.lower(PlayerImageMetadata.source_provider) == "sportmonks",
+            PlayerImageMetadata.moderation_status == "approved",
+            PlayerImageMetadata.source_url.is_not(None),
+            func.length(func.trim(PlayerImageMetadata.source_url)) > 0,
         )
+        missing_conditions.append(~portrait_exists)
+        missing_order_terms.append(case((~portrait_exists, 1), else_=0))
+    if not force and missing_conditions:
+        criteria.append(or_(*missing_conditions))
         if skip_recent_hours > 0:
             cutoff = datetime.now(UTC) - timedelta(hours=skip_recent_hours)
             criteria.append(
@@ -680,14 +875,45 @@ def _select_players(
                     Player.source_last_refreshed_at < cutoff,
                 )
             )
+    missing_score = sum(missing_order_terms[1:], missing_order_terms[0]) if missing_order_terms else None
+    order_by = []
+    if missing_score is not None:
+        order_by.append(missing_score.desc())
+    order_by.extend(
+        [
+            case((Player.source_last_refreshed_at.is_(None), 0), else_=1).asc(),
+            Player.source_last_refreshed_at.asc(),
+            Player.full_name.asc(),
+            Player.id.asc(),
+        ]
+    )
     return list(
         session.scalars(
             select(Player)
             .where(*criteria)
-            .order_by(Player.full_name.asc(), Player.id.asc())
+            .order_by(*order_by)
             .offset(offset)
             .limit(limit)
         )
+    )
+
+
+def _priority_league_filter(priority_leagues: Sequence[str]):
+    labels = tuple(label.lower() for label in _priority_league_match_labels(priority_leagues))
+    summary_match = exists().where(
+        PlayerSummaryReadModel.player_id == Player.id,
+        func.lower(PlayerSummaryReadModel.current_competition_name).in_(labels),
+    )
+    profile_match = exists().where(
+        RealPlayerProfile.source_name == Player.source_provider,
+        RealPlayerProfile.source_player_key == Player.provider_external_id,
+        func.lower(RealPlayerProfile.current_league_name).in_(labels),
+    )
+    return or_(
+        func.lower(Player.real_world_league_name).in_(labels),
+        Player.current_competition.has(func.lower(Competition.name).in_(labels)),
+        summary_match,
+        profile_match,
     )
 
 

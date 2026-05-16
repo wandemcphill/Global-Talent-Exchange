@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
 
@@ -144,13 +145,39 @@ class MatchSimulationBridgeView(CommonSchema):
 
 class QuickGameResponse(CommonSchema):
     match_id: str
+    live_match_key: str | None = None
+    viewer_route: str | None = None
     opponent: SimulationGameProfileView
     match_context: MatchContextView
     simulation_bridge: MatchSimulationBridgeView
     free_matches_remaining: int = Field(default=10, ge=0, le=10)
+    free_matches_used: int = Field(default=0, ge=0, le=10)
     charge_on_loss: bool = True
+    charge_required_now: bool = False
     entry_currency: str = "credit"
+    entry_currency_label: str = "Fan Coin"
+    fan_coin_entry_fee: Decimal = Field(default=Decimal("0"), ge=0)
+    entitlement_status: str = "free_run_active"
+    settlement_status: str | None = None
+    result: str | None = None
     rules_copy: str = "Play free until you lose or reach 10 matches."
+
+
+class FastMatchEntitlementResponse(CommonSchema):
+    free_match_limit: int = Field(default=10, ge=0)
+    free_matches_used: int = Field(default=0, ge=0)
+    free_matches_remaining: int = Field(default=10, ge=0)
+    wins_count: int = Field(default=0, ge=0)
+    losses_count: int = Field(default=0, ge=0)
+    draws_count: int = Field(default=0, ge=0)
+    current_streak: int = Field(default=0, ge=0)
+    has_lost_free_run: bool = False
+    free_eligibility_exhausted: bool = False
+    charge_required_now: bool = False
+    entry_currency: str = "credit"
+    entry_currency_label: str = "Fan Coin"
+    fan_coin_entry_fee: Decimal = Field(default=Decimal("0"), ge=0)
+    entitlement_status: str = "free_run_active"
 
 
 class QuickTournamentPreferences(CommonSchema):

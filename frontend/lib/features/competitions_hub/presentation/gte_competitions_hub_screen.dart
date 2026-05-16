@@ -1058,6 +1058,19 @@ class _CompetitionCard extends StatelessWidget {
                 color: Colors.transparent,
                 child: Chip(label: Text(competition.safeFormatLabel)),
               ),
+              Material(
+                color: Colors.transparent,
+                child: Chip(label: Text(competition.rankingLabel)),
+              ),
+              Material(
+                color: Colors.transparent,
+                child: Chip(label: Text(competition.prizeModeLabel)),
+              ),
+              if (competition.onlineNow)
+                const Material(
+                  color: Colors.transparent,
+                  child: Chip(label: Text('Online now')),
+                ),
               if (competition.beginnerFriendly == true)
                 const Material(
                   color: Colors.transparent,
@@ -1108,11 +1121,18 @@ class _CompetitionCard extends StatelessWidget {
               ),
               _StatPill(
                 label:
-                    competition.hasDynamicPrizePool ? 'Jackpot' : 'Prize pool',
+                    competition.hasDynamicPrizePool ? 'Jackpot' : 'Net payout',
                 value: gteFormatCompetitionAmount(
-                  competition.prizePool,
+                  competition.netPayoutPot > 0
+                      ? competition.netPayoutPot
+                      : competition.prizePool,
                   competition.currency,
                 ),
+              ),
+              _StatPill(
+                label: 'Platform fee',
+                value:
+                    '${(competition.platformFeePct * 100).toStringAsFixed(0)}%',
               ),
               _StatPill(
                 label: 'Fill',

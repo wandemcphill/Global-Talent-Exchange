@@ -1631,6 +1631,26 @@ class GteMockApi implements GteApiRepository {
       withdrawalRateDirection:
           request.withdrawalRateDirection ??
           _treasurySettings.withdrawalRateDirection,
+      minTraderBuyRateFiat:
+          request.minTraderBuyRateFiat ??
+          _treasurySettings.minTraderBuyRateFiat,
+      maxTraderBuyRateFiat:
+          request.maxTraderBuyRateFiat ??
+          _treasurySettings.maxTraderBuyRateFiat,
+      minTraderSellRateFiat:
+          request.minTraderSellRateFiat ??
+          _treasurySettings.minTraderSellRateFiat,
+      maxTraderSellRateFiat:
+          request.maxTraderSellRateFiat ??
+          _treasurySettings.maxTraderSellRateFiat,
+      maxTraderSpreadFiat:
+          request.maxTraderSpreadFiat ?? _treasurySettings.maxTraderSpreadFiat,
+      maxBuyAboveWithdrawalFiat:
+          request.maxBuyAboveWithdrawalFiat ??
+          _treasurySettings.maxBuyAboveWithdrawalFiat,
+      maxSellBelowDepositFiat:
+          request.maxSellBelowDepositFiat ??
+          _treasurySettings.maxSellBelowDepositFiat,
       minDeposit: request.minDeposit ?? _treasurySettings.minDeposit,
       maxDeposit: request.maxDeposit ?? _treasurySettings.maxDeposit,
       minWithdrawal: request.minWithdrawal ?? _treasurySettings.minWithdrawal,
@@ -3674,6 +3694,13 @@ final GteTreasurySettings _seedTreasurySettings = GteTreasurySettings(
   depositRateDirection: GteRateDirection.fiatPerCoin,
   withdrawalRateValue: 880,
   withdrawalRateDirection: GteRateDirection.fiatPerCoin,
+  minTraderBuyRateFiat: 820,
+  maxTraderBuyRateFiat: 890,
+  minTraderSellRateFiat: 900,
+  maxTraderSellRateFiat: 980,
+  maxTraderSpreadFiat: 120,
+  maxBuyAboveWithdrawalFiat: 10,
+  maxSellBelowDepositFiat: 0,
   minDeposit: 1000,
   maxDeposit: 500000,
   minWithdrawal: 2000,

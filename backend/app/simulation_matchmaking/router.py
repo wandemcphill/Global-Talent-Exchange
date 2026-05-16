@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
+from app.auth.dependencies import get_current_user
+from app.core.database import get_session
+from app.models.user import User
 from app.simulation_matchmaking.schemas import (
+    FastMatchEntitlementResponse,
     HostedCompetitionPreviewRequest,
     HostedCompetitionPreviewResponse,
     QuickGameRequest,
@@ -17,6 +22,7 @@ from app.simulation_matchmaking.service import (
     ProfileNotFoundError,
     SimulationMatchmakingService,
 )
+from app.wallets.service import InsufficientBalanceError
 
 router = APIRouter(tags=["simulation-matchmaking"])
 legacy_router = APIRouter(prefix="/simulation-matchmaking")
@@ -59,14 +65,35 @@ def get_simulation_profile(
 @api_router.post("/quick-game", response_model=QuickGameResponse)
 def create_quick_game(
     payload: QuickGameRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
     service: SimulationMatchmakingService = Depends(get_simulation_matchmaking_service),
 ) -> QuickGameResponse:
     try:
-        return service.create_quick_game(payload)
+        response = service.create_quick_game(payload, actor=current_user, session=session)
+        session.commit()
+        return response
     except ProfileNotFoundError as exc:
+        session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except MatchmakingUnavailableError as exc:
+        session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except InsufficientBalanceError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)) from exc
+
+
+@legacy_router.get("/fast-match/entitlement", response_model=FastMatchEntitlementResponse)
+@api_router.get("/fast-match/entitlement", response_model=FastMatchEntitlementResponse)
+def get_fast_match_entitlement(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: SimulationMatchmakingService = Depends(get_simulation_matchmaking_service),
+) -> FastMatchEntitlementResponse:
+    response = service.get_fast_match_entitlement(actor=current_user, session=session)
+    session.commit()
+    return response
 
 
 @legacy_router.post("/quick-tournament", response_model=QuickTournamentResponse)

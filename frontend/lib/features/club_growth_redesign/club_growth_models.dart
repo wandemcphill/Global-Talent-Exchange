@@ -218,6 +218,7 @@ class GtexAcademyProspect {
     required this.status,
     required this.metadata,
     required this.updatedAt,
+    this.seniorPlayerId,
   });
 
   final String id;
@@ -233,6 +234,7 @@ class GtexAcademyProspect {
   final String status;
   final Map<String, Object?> metadata;
   final DateTime? updatedAt;
+  final String? seniorPlayerId;
 
   bool get contractEligible =>
       status == 'discovered' ||
@@ -240,6 +242,8 @@ class GtexAcademyProspect {
       status == 'academy' ||
       status == 'contract_rejected';
   bool get promotable => status == 'youth_signed';
+  bool get promoted => status == 'promoted_to_senior';
+  bool get hasApprovedPortrait => portraitAssetRef?.trim().isNotEmpty == true;
 
   factory GtexAcademyProspect.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -279,6 +283,10 @@ class GtexAcademyProspect {
       updatedAt: GteJson.dateTimeOrNull(json, const <String>[
         'updated_at',
         'updatedAt',
+      ]),
+      seniorPlayerId: GteJson.stringOrNull(json, const <String>[
+        'senior_player_id',
+        'seniorPlayerId',
       ]),
     );
   }

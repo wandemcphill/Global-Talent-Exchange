@@ -24,9 +24,11 @@ def _error_detail(response):
     return payload.get("detail") or payload.get("message")
 
 
-def test_user_competition_cannot_use_gtex_name(client) -> None:
+def test_user_competition_cannot_use_gtex_name(client, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="reserved-name-host")
     response = client.post(
         "/api/competitions",
+        headers=host["headers"],
         json=_base_payload(name="GTEX Weekend Cup"),
     )
 
@@ -34,7 +36,7 @@ def test_user_competition_cannot_use_gtex_name(client) -> None:
     assert _error_detail(response) == "reserved_gtex_name"
 
 
-def test_admin_can_create_free_gtex_competition(client, competition_admin_headers) -> None:
+def test_admin_can_create_gtex_hosted_competition_with_entry_fee(client, competition_admin_headers) -> None:
     response = client.post(
         "/api/admin/competitions",
         headers=competition_admin_headers,
@@ -49,13 +51,15 @@ def test_admin_can_create_free_gtex_competition(client, competition_admin_header
     assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["host_type"] == "gtex_hosted"
-    assert float(payload["entry_fee"]) == 0.0
+    assert float(payload["entry_fee"]) == 25.0
     assert payload["currency"] == "coin"
 
 
 def test_passcode_and_start_lock_join_rules(client, competition_admin_headers, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="passcode-host")
     create_response = client.post(
         "/api/competitions",
+        headers=host["headers"],
         json=_base_payload(
             name="Private Manager Cup",
             entry_fee="0.00",
@@ -90,6 +94,7 @@ def test_passcode_and_start_lock_join_rules(client, competition_admin_headers, a
 
     late_response = client.post(
         "/api/competitions",
+        headers=host["headers"],
         json=_base_payload(
             name="Started Manager Cup",
             entry_fee="0.00",

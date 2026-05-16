@@ -7,6 +7,7 @@ from app.fast_cups.services.ecosystem import (
     build_default_fast_cup_ecosystem,
     build_fast_cup_ecosystem_for_session,
 )
+from app.fast_cups.services.finance import FastCupFinanceError, FastCupFinanceService
 from app.fast_cups.services.payouts import FastCupRewardPayoutService
 from app.fast_cups.services.registration import FastCupRegistrationService
 
@@ -14,6 +15,8 @@ __all__ = [
     "FastCupBracketService",
     "FastCupCompetitionEngineService",
     "FastCupEcosystemService",
+    "FastCupFinanceError",
+    "FastCupFinanceService",
     "FastCupRegistrationService",
     "FastCupRewardPayoutService",
     "RecurringFastCupCreationService",

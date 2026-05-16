@@ -644,13 +644,15 @@ class _StaffMarketplacePanel extends StatelessWidget {
       children: <Widget>[
         _SectionHeader(
           title: 'Staff marketplace',
-          subtitle: 'Hire staff into live club contracts and assignments.',
+          subtitle:
+              'Hire managers, agents, scouts, and coaches into Fan Coin payroll contracts.',
           icon: Icons.badge_outlined,
         ),
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Staff effects',
-          subtitle: 'Contracted staff influence academy, negotiation and prep.',
+          subtitle:
+              'Employment contracts settle in Fan Coin; manager card trades stay in the GTEX Coin market.',
           accent: GtexColors.pitch,
           trailing: IconButton(
             tooltip: 'Refresh staff',
@@ -695,7 +697,8 @@ class _StaffMarketplacePanel extends StatelessWidget {
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Available staff',
-          subtitle: 'These records come from the Batch 25 club growth API.',
+          subtitle:
+              'Salary and commission are staff-contract terms, not manager card prices.',
           accent: GtexColors.gold,
           child: Column(
             children: current.staffMarket
@@ -981,7 +984,7 @@ class _StaffContractRow extends StatelessWidget {
         ),
       ),
       subtitle: Text(
-        '${contract.staffProfile.staffType} - ${contract.durationDays} days',
+        '${contract.staffProfile.staffType} - ${contract.durationDays} days - ${_formatFanCoinMinor(contract.salaryMinor)} payroll',
         style: const TextStyle(color: GtexColors.textMuted),
       ),
       trailing: GtexStatusChip(
@@ -1017,7 +1020,7 @@ class _StaffProfileRow extends StatelessWidget {
         ),
       ),
       subtitle: Text(
-        '${profile.staffType} - rating ${profile.rating} - ${profile.skills.join(', ')}',
+        '${profile.staffType} - rating ${profile.rating} - ${_formatFanCoinMinor(profile.salaryMinor)} salary - ${profile.skills.join(', ')}',
         style: const TextStyle(color: GtexColors.textMuted),
       ),
       trailing: GtexActionButton(
@@ -1060,7 +1063,7 @@ class _AcademyProspectRow extends StatelessWidget {
         ),
       ),
       subtitle: Text(
-        '${prospect.position} - age ${prospect.age} - CA ${prospect.currentAbility} / PA ${prospect.potential}',
+        '${prospect.position} - age ${prospect.age} - CA ${prospect.currentAbility} / PA ${prospect.potential} - portrait ${prospect.hasApprovedPortrait ? 'assigned' : 'missing'}',
         style: const TextStyle(color: GtexColors.textMuted),
       ),
       trailing: Wrap(
@@ -1074,6 +1077,21 @@ class _AcademyProspectRow extends StatelessWidget {
                     ? GtexStatusTone.success
                     : GtexStatusTone.neutral,
           ),
+          GtexStatusChip(
+            label:
+                prospect.hasApprovedPortrait ? 'portrait bank' : 'no portrait',
+            icon: Icons.portrait_outlined,
+            tone:
+                prospect.hasApprovedPortrait
+                    ? GtexStatusTone.premium
+                    : GtexStatusTone.warning,
+          ),
+          if (prospect.seniorPlayerId?.trim().isNotEmpty == true)
+            GtexStatusChip(
+              label: 'senior linked',
+              icon: Icons.link_outlined,
+              tone: GtexStatusTone.success,
+            ),
           if (prospect.contractEligible)
             GtexActionButton(
               label: 'Contract',
@@ -1108,6 +1126,12 @@ String _growthLabel(String value) {
     return value;
   }
   return normalized[0].toUpperCase() + normalized.substring(1);
+}
+
+String _formatFanCoinMinor(int value) {
+  final double amount = value / 100;
+  final bool whole = amount == amount.roundToDouble();
+  return '${amount.toStringAsFixed(whole ? 0 : 2)} Fan Coin';
 }
 
 class _LifecycleReadinessPanel extends StatelessWidget {

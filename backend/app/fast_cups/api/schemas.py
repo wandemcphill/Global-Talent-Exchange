@@ -21,11 +21,6 @@ class ClubCompetitionWindowRequest(BaseModel):
 
 class JoinFastCupRequest(BaseModel):
     club_id: str
-    club_name: str
-    division: FastCupDivision
-    rating: int = Field(ge=0)
-    registered_at: datetime | None = None
-    existing_windows: list[ClubCompetitionWindowRequest] = Field(default_factory=list)
 
 
 class FastCupEntrantView(BaseModel):
@@ -70,6 +65,10 @@ class JoinFastCupResponse(BaseModel):
     cup: FastCupPreviewView
     entrants_registered: int
     slots_remaining: int
+    registration_id: str | None = None
+    escrow_status: str | None = None
+    entry_fee_amount: Decimal | None = None
+    entry_fee_currency: str | None = None
 
 
 class FastCupMatchView(BaseModel):

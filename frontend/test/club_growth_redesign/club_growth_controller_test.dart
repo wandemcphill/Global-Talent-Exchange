@@ -42,8 +42,9 @@ void main() {
             'personality': <String, Object?>{'temperament': 'focused'},
             'current_ability': 42,
             'potential': 78,
-            'portrait_asset_ref': null,
+            'portrait_asset_ref': 'newgen/ng-academy-001',
             'status': 'discovered',
+            'senior_player_id': null,
             'metadata': <String, Object?>{
               'portrait_policy': 'newgen_bank_only',
             },
@@ -65,6 +66,7 @@ void main() {
     expect(dashboard.staffMarket.single.staffType, 'scout');
     expect(dashboard.academyProfile.level, 2);
     expect(dashboard.academyProspects.single.contractEligible, isTrue);
+    expect(dashboard.academyProspects.single.hasApprovedPortrait, isTrue);
     expect(dashboard.sponsorship.outstandingPayoutMinor, 75000);
   });
 
@@ -91,6 +93,7 @@ void main() {
       final GtexAcademyProspect prospect =
           controller.dashboard!.academyProspects.first;
       expect(prospect.metadata['portrait_policy'], 'newgen_bank_only');
+      expect(prospect.portraitAssetRef, isNotNull);
 
       await controller.offerAndAcceptProspectContract(prospect.id);
 
@@ -104,6 +107,10 @@ void main() {
       expect(
         controller.dashboard!.academyProspects.first.status,
         'promoted_to_senior',
+      );
+      expect(
+        controller.dashboard!.academyProspects.first.seniorPlayerId,
+        isNotNull,
       );
     },
   );

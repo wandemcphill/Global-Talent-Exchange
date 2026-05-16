@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 from enum import Enum
 from hashlib import sha256
 from secrets import token_hex
@@ -23,15 +23,17 @@ from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.competition_visibility import CompetitionVisibility
 from app.common.enums.fixture_window import FixtureWindow
 from app.common.enums.match_status import MatchStatus
-from app.config.competition_constants import USER_COMPETITION_MIN_PARTICIPANTS
+from app.config.competition_constants import USER_COMPETITION_MAX_PLATFORM_FEE_BPS, USER_COMPETITION_MIN_PARTICIPANTS
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.models.competition import Competition
+from app.models.competition_escrow import CompetitionEscrow
 from app.models.competition_entry import CompetitionEntry
 from app.models.competition_invite import CompetitionInvite
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_participant import CompetitionParticipant
 from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_progress_profile import CompetitionProgressProfile
 from app.models.competition_reward import CompetitionReward
 from app.models.competition_reward_pool import CompetitionRewardPool
 from app.models.competition_round import CompetitionRound
@@ -72,8 +74,13 @@ from app.schemas.competition_requests import (
 from app.schemas.competition_responses import (
     CompetitionFinancialSummaryView,
     CompetitionHistoryEntryView,
+    ClubCompetitionLeaderboardEntry,
+    ClubCompetitionLeaderboardResponse,
     CompetitionFeesView,
     CompetitionProgressionView,
+    CompetitionParticipantView,
+    CompetitionParticipantsResponse,
+    CompetitionPotView,
     DynamicPrizePoolView,
     CompetitionInviteView,
     CompetitionInvitesResponse,
@@ -82,6 +89,7 @@ from app.schemas.competition_responses import (
     CompetitionRewardsResponse,
     CompetitionSummaryView,
     JoinEligibilityView,
+    RandomCompetitionQuoteView,
 )
 from app.schemas.competition_rules import CompetitionRuleSetPayload, CupRuleSetPayload, LeagueRuleSetPayload
 from app.services.competition_creation_service import CompetitionCreationService
@@ -241,16 +249,35 @@ class CompetitionOrchestrator:
             default_platform_fee_pct=self.fee_service.default_platform_fee_pct,
         )
         if is_platform_competition:
-            domain_payload.financials.entry_fee_minor = 0
-            domain_payload.financials.platform_fee_bps = 0
+            if payload.platform_fee_pct is None:
+                domain_payload.financials.platform_fee_bps = 0
             domain_payload.financials.host_creation_fee_minor = 0
             domain_payload.financials.currency = "coin"
+        else:
+            domain_payload.financials.platform_fee_bps = USER_COMPETITION_MAX_PLATFORM_FEE_BPS
         creation = self.creation_service.build_competition(domain_payload)
         competition = creation.competition
         competition.competition_type = payload.competition_type or competition.format
+        competition.competition_mode = payload.competition_mode or self._competition_mode_for_payload(payload)
+        competition.is_ranked = bool(payload.is_ranked)
+        competition.registration_deadline = payload.registration_deadline
+        competition.prize_mode = self._prize_mode_for_payload(payload)
+        competition.payout_mode = payload.payout_mode or self._payout_mode_for_payload(payload)
+        competition.fixed_prizes_json = self._fixed_prizes_minor(payload)
+        competition.eligibility_rules_json = self._eligibility_rules_for_payload(payload)
+        competition.ranking_policy_json = {
+            "ranked": bool(payload.is_ranked),
+            "source": "club_ladder" if payload.is_ranked else "unranked",
+        }
+        competition.featured = bool(payload.featured)
+        competition.manual_approval_required = bool(payload.manual_approval_required)
+        competition.online_now = bool(payload.online_now)
         competition.source_type = payload.source_type
         competition.source_id = payload.source_id
+        if host_type is CompetitionHostType.USER_HOSTED:
+            competition.platform_fee_bps = USER_COMPETITION_MAX_PLATFORM_FEE_BPS
         competition.host_fee_bps = self._pct_to_bps(payload.host_fee_pct)
+        self._apply_host_funded_prize_configuration(competition, payload)
         if payload.scheduled_start_at:
             competition.scheduled_start_at = payload.scheduled_start_at
         if payload.rules_summary:
@@ -263,6 +290,15 @@ class CompetitionOrchestrator:
         competition.metadata_json = {
             **(competition.metadata_json or {}),
             "host_type": host_type.value,
+            "competition_mode": competition.competition_mode,
+            "prize_mode": competition.prize_mode,
+            "payout_mode": competition.payout_mode,
+            "is_ranked": competition.is_ranked,
+            "registration_deadline": (
+                competition.registration_deadline.isoformat() if competition.registration_deadline else None
+            ),
+            "eligibility_rules": competition.eligibility_rules_json,
+            "ranking_policy": competition.ranking_policy_json,
             "special_rules": payload.special_rules,
             _REQUIRES_PASSCODE_METADATA_KEY: bool(payload.passcode),
             **({_PASSCODE_METADATA_KEY: self._hash_passcode(payload.passcode)} if payload.passcode else {}),
@@ -299,14 +335,24 @@ class CompetitionOrchestrator:
         pool_amount_minor = (
             dynamic_prize_pool.total_pool_minor
             if dynamic_prize_pool is not None
-            else self._projected_reward_pool_minor(
-                competition=competition,
-                rule_set=rule_set,
+            else (
+                competition.host_funded_prize_total_minor
+                if competition.prize_mode == "host_funded_fixed"
+                else self._projected_reward_pool_minor(
+                    competition=competition,
+                    rule_set=rule_set,
+                )
             )
         )
         reward_pool = CompetitionRewardPool(
             competition_id=competition.id,
-            pool_type="promo_pool" if is_platform_competition else "entry_fee",
+            pool_type=(
+                "promo_pool"
+                if is_platform_competition
+                and competition.entry_fee_minor <= 0
+                and competition.prize_mode != "host_funded_fixed"
+                else "host_funded" if competition.prize_mode == "host_funded_fixed" else "entry_fee"
+            ),
             currency=competition.currency,
             amount_minor=pool_amount_minor,
             status="planned",
@@ -381,8 +427,27 @@ class CompetitionOrchestrator:
             }
         if payload.scheduled_start_at is not None:
             competition.scheduled_start_at = payload.scheduled_start_at
+        if payload.registration_deadline is not None:
+            competition.registration_deadline = payload.registration_deadline
+        if payload.is_ranked is not None:
+            competition.is_ranked = payload.is_ranked
+            competition.ranking_policy_json = {
+                **dict(competition.ranking_policy_json or {}),
+                "ranked": payload.is_ranked,
+                "source": "club_ladder" if payload.is_ranked else "unranked",
+            }
+        if payload.competition_mode is not None:
+            competition.competition_mode = payload.competition_mode
+        if payload.prize_mode is not None:
+            competition.prize_mode = payload.prize_mode
+        if payload.payout_mode is not None:
+            competition.payout_mode = payload.payout_mode
         if payload.competition_type is not None:
             competition.competition_type = payload.competition_type
+        if payload.fixed_prizes is not None:
+            competition.fixed_prizes_json = self._fixed_prizes_minor(payload)
+        if payload.host_funded_prize_total is not None or payload.fixed_prizes is not None:
+            self._apply_host_funded_prize_configuration(competition, payload)
 
         rule_set = self._rule_set(competition.id)
         if payload.capacity is not None:
@@ -393,8 +458,8 @@ class CompetitionOrchestrator:
         is_platform_competition = self._is_platform_competition(competition.source_type)
         if payload.entry_fee is not None and not is_platform_competition:
             competition.entry_fee_minor = self._to_minor_units(payload.entry_fee)
-        if payload.platform_fee_pct is not None and not is_platform_competition:
-            competition.platform_fee_bps = self._pct_to_bps(payload.platform_fee_pct)
+        if not is_platform_competition:
+            competition.platform_fee_bps = USER_COMPETITION_MAX_PLATFORM_FEE_BPS
         if payload.host_fee_pct is not None:
             competition.host_fee_bps = self._pct_to_bps(payload.host_fee_pct)
 
@@ -448,6 +513,7 @@ class CompetitionOrchestrator:
             CompetitionStatus.SETTLED,
         }:
             return self._to_summary(competition)
+        self._ensure_host_funded_prize_escrowed(competition)
         competition.status = CompetitionStatus.OPEN.value
         competition.opened_at = datetime.now(timezone.utc)
         competition.stage = "registration"
@@ -489,6 +555,15 @@ class CompetitionOrchestrator:
         sort: str = "trending",
         creator_id: str | None = None,
         beginner_friendly: bool | None = None,
+        reward_filter: str | None = None,
+        ranked: bool | None = None,
+        host_type: str | None = None,
+        availability: str | None = None,
+        starts: str | None = None,
+        start_from: datetime | None = None,
+        start_to: datetime | None = None,
+        min_entry_fee: float | None = None,
+        max_entry_fee: float | None = None,
         filters: CompetitionDiscoveryFilter | None = None,
     ) -> CompetitionListResponse:
         if filters is not None:
@@ -509,6 +584,58 @@ class CompetitionOrchestrator:
             stmt = stmt.where(Competition.entry_fee_minor == 0)
         elif fee_filter == "paid":
             stmt = stmt.where(Competition.entry_fee_minor > 0)
+        if ranked is not None:
+            stmt = stmt.where(Competition.is_ranked.is_(ranked))
+        if host_type:
+            normalized_host = host_type.strip().lower()
+            if normalized_host in {"user", "user_hosted", "creator"}:
+                stmt = stmt.where(Competition.source_type == CompetitionHostType.USER_HOSTED.value)
+            elif normalized_host in {"admin", "gtex", "gtex_hosted", "official"}:
+                stmt = stmt.where(Competition.source_type == CompetitionHostType.GTEX_HOSTED.value)
+            elif normalized_host in {"national", "national_team"}:
+                stmt = stmt.where(Competition.competition_type.ilike("%national%"))
+        if reward_filter:
+            normalized_reward = reward_filter.strip().lower()
+            if normalized_reward in {"has_rewards", "rewards", "prize"}:
+                stmt = stmt.where(
+                    (Competition.prize_mode != "none")
+                    | (Competition.net_prize_pool_minor > 0)
+                    | (Competition.host_funded_prize_total_minor > 0)
+                )
+            elif normalized_reward in {"no_rewards", "none"}:
+                stmt = stmt.where(
+                    Competition.prize_mode == "none",
+                    Competition.net_prize_pool_minor == 0,
+                    Competition.host_funded_prize_total_minor == 0,
+                )
+            elif normalized_reward in {"host_funded", "fixed"}:
+                stmt = stmt.where(Competition.prize_mode == "host_funded_fixed")
+            elif normalized_reward in {"entry_funded", "pot"}:
+                stmt = stmt.where(Competition.prize_mode == "entry_funded")
+        if min_entry_fee is not None:
+            stmt = stmt.where(Competition.entry_fee_minor >= self._to_minor_units(Decimal(str(min_entry_fee))))
+        if max_entry_fee is not None:
+            stmt = stmt.where(Competition.entry_fee_minor <= self._to_minor_units(Decimal(str(max_entry_fee))))
+        if availability == "open_slots":
+            stmt = stmt.where(
+                Competition.status.in_([CompetitionStatus.OPEN.value, CompetitionStatus.OPEN_FOR_JOIN.value])
+            )
+        if starts:
+            now = datetime.now(timezone.utc)
+            normalized_starts = starts.strip().lower()
+            if normalized_starts == "online_now":
+                stmt = stmt.where(Competition.online_now.is_(True))
+            elif normalized_starts == "today":
+                day_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+                stmt = stmt.where(Competition.scheduled_start_at >= now, Competition.scheduled_start_at <= day_end)
+            elif normalized_starts == "week":
+                stmt = stmt.where(
+                    Competition.scheduled_start_at >= now, Competition.scheduled_start_at <= now + timedelta(days=7)
+                )
+        if start_from is not None:
+            stmt = stmt.where(Competition.scheduled_start_at >= start_from)
+        if start_to is not None:
+            stmt = stmt.where(Competition.scheduled_start_at <= start_to)
         if sort == "new":
             stmt = stmt.order_by(Competition.created_at.desc())
         competitions = list(self.session.scalars(stmt).all())
@@ -565,6 +692,7 @@ class CompetitionOrchestrator:
         user_id: str,
         user_name: str | None,
         invite_code: str | None,
+        club_id: str | None = None,
         club_name: str | None = None,
         passcode: str | None = None,
     ) -> CompetitionSummaryView | None:
@@ -573,7 +701,7 @@ class CompetitionOrchestrator:
             return None
 
         rule_set = self._rule_set(competition.id)
-        club = self._resolve_join_club(competition, user_id=user_id, club_name=club_name)
+        club = self._resolve_join_club(competition, user_id=user_id, club_id=club_id, club_name=club_name)
         participant_key = club.id if club is not None else user_id
         club_identity = self._club_identity_payload(club) if club is not None else {}
         participant = self._participant(competition.id, participant_key)
@@ -589,9 +717,9 @@ class CompetitionOrchestrator:
             visibility_context=club_identity,
         )
         if not join_decision.eligible:
-            return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
+            return self._to_summary(competition, user_id=user_id, invite_code=invite_code, club_id=participant_key)
         if participant is not None:
-            return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
+            return self._to_summary(competition, user_id=user_id, invite_code=invite_code, club_id=participant_key)
 
         invite_used = None
         if invite_code:
@@ -602,7 +730,7 @@ class CompetitionOrchestrator:
                 consume=False,
             )
             if invite_used is None and join_decision.requires_invite:
-                return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
+                return self._to_summary(competition, user_id=user_id, invite_code=invite_code, club_id=participant_key)
 
         entry = CompetitionEntry(
             competition_id=competition.id,
@@ -631,9 +759,12 @@ class CompetitionOrchestrator:
         participant = CompetitionParticipant(
             competition_id=competition.id,
             club_id=participant_key,
+            user_id=user_id,
             entry_id=entry.id,
             status="joined",
             paid_entry_fee_minor=competition.entry_fee_minor,
+            entry_fee_currency=competition.currency,
+            escrow_status="pending" if competition.entry_fee_minor > 0 else "none",
         )
         participant_savepoint = self.session.begin_nested()
         try:
@@ -668,6 +799,17 @@ class CompetitionOrchestrator:
             "entry_fee_reason": fee_result.reason,
         }
         participant.paid_at = datetime.now(timezone.utc) if fee_result.status == "settled" else None
+        participant.escrow_status = "escrowed" if fee_result.status == "settled" else "none"
+        participant.wallet_ledger_id = fee_result.transaction_id
+        self._upsert_competition_escrow(
+            competition=competition,
+            user_id=user_id,
+            club_id=participant_key,
+            amount_minor=competition.entry_fee_minor,
+            status=participant.escrow_status,
+            ledger_id=fee_result.transaction_id,
+            joined_at=participant.joined_at,
+        )
         self._audit_competition_action(
             actor_user_id=user_id,
             action_key="competition.joined",
@@ -696,7 +838,7 @@ class CompetitionOrchestrator:
             competition=competition,
             extra={"user_id": user_id, **club_identity},
         )
-        return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
+        return self._to_summary(competition, user_id=user_id, invite_code=invite_code, club_id=participant_key)
 
     def leave(self, competition_id: str, *, user_id: str) -> CompetitionSummaryView | None:
         competition = self.session.get(Competition, competition_id)
@@ -736,6 +878,14 @@ class CompetitionOrchestrator:
                     "entry_fee_refund_transaction_id": refund_result.transaction_id,
                     "entry_fee_refund_reason": refund_result.reason,
                 }
+                participant.escrow_status = "refunded"
+                participant.refunded_at = datetime.now(timezone.utc)
+                self._mark_competition_escrow_refunded(
+                    competition_id=competition.id,
+                    user_id=user_id,
+                    club_id=participant.club_id,
+                    ledger_id=refund_result.transaction_id,
+                )
             entry.status = "withdrawn"
             entry.responded_at = datetime.now(timezone.utc)
         self.session.delete(participant)
@@ -837,12 +987,21 @@ class CompetitionOrchestrator:
         resolved_user_id = actor_user_id or payload.user_id
         if resolved_user_id is None:
             raise CompetitionActionError("Authenticated user is required.", reason="user_required")
-        club = self._resolve_join_club(competition, user_id=resolved_user_id, club_name=payload.club_name)
+        club = self._resolve_join_club(
+            competition,
+            user_id=resolved_user_id,
+            club_id=payload.club_id,
+            club_name=payload.club_name,
+        )
         club_id = club.id if club is not None else self._normalized_string(payload.club_id)
         if not club_id:
-            raise CompetitionActionError("A club is required to accept this competition invite.", reason="club_required")
+            raise CompetitionActionError(
+                "A club is required to accept this competition invite.", reason="club_required"
+            )
         if payload.club_id and club is not None and payload.club_id != club.id:
-            raise CompetitionActionError("Invite club does not belong to the authenticated user.", reason="club_owner_required")
+            raise CompetitionActionError(
+                "Invite club does not belong to the authenticated user.", reason="club_owner_required"
+            )
         club_identity = self._club_identity_payload(club) if club is not None else {}
         participant_count = self._participant_count(competition.id)
         participant = self._participant(competition.id, club_id)
@@ -879,9 +1038,12 @@ class CompetitionOrchestrator:
         participant = CompetitionParticipant(
             competition_id=competition.id,
             club_id=club_id,
+            user_id=resolved_user_id,
             entry_id=entry.id,
             status="joined",
             paid_entry_fee_minor=competition.entry_fee_minor,
+            entry_fee_currency=competition.currency,
+            escrow_status="pending" if competition.entry_fee_minor > 0 else "none",
         )
         participant_savepoint = self.session.begin_nested()
         try:
@@ -915,6 +1077,17 @@ class CompetitionOrchestrator:
             "entry_fee_reason": fee_result.reason,
         }
         participant.paid_at = datetime.now(timezone.utc) if fee_result.status == "settled" else None
+        participant.escrow_status = "escrowed" if fee_result.status == "settled" else "none"
+        participant.wallet_ledger_id = fee_result.transaction_id
+        self._upsert_competition_escrow(
+            competition=competition,
+            user_id=resolved_user_id,
+            club_id=club_id,
+            amount_minor=competition.entry_fee_minor,
+            status=participant.escrow_status,
+            ledger_id=fee_result.transaction_id,
+            joined_at=participant.joined_at,
+        )
         self._audit_competition_action(
             actor_user_id=resolved_user_id,
             action_key="competition.invite.accepted",
@@ -938,7 +1111,7 @@ class CompetitionOrchestrator:
         self.auto_runner.run_until_idle(competition)
         self.session.commit()
         self.session.refresh(competition)
-        return self._to_summary(competition, user_id=resolved_user_id, invite_code=invite.invite_code)
+        return self._to_summary(competition, user_id=resolved_user_id, invite_code=invite.invite_code, club_id=club_id)
 
     def financials(self, competition_id: str) -> CompetitionFinancialSummaryView | None:
         competition = self.session.get(Competition, competition_id)
@@ -946,9 +1119,10 @@ class CompetitionOrchestrator:
             return None
         participant_count = self._participant_count(competition.id)
         rule_set = self._rule_set(competition.id)
+        capacity = self._summary_capacity(rule_set)
         fees = self._fees_for(competition, participant_count=participant_count)
         dynamic_prize_pool = self._dynamic_prize_pool(competition, rule_set=rule_set)
-        prize_pool = dynamic_prize_pool.total_pool if dynamic_prize_pool is not None else fees.prize_pool
+        prize_pool = self._visible_prize_pool(competition, fees, dynamic_prize_pool)
         payout_structure = self._payout_breakdown(
             competition=competition,
             prize_pool=prize_pool,
@@ -966,6 +1140,12 @@ class CompetitionOrchestrator:
             payout_structure=payout_structure,
             dynamic_prize_pool=self._dynamic_prize_pool_view(dynamic_prize_pool),
             currency=competition.currency,
+            prize_mode=getattr(competition, "prize_mode", None) or "entry_funded",
+            is_ranked=bool(getattr(competition, "is_ranked", True)),
+            remaining_slots=max(capacity - participant_count, 0),
+            host_funded_prize_total=self._to_decimal(getattr(competition, "host_funded_prize_total_minor", 0)),
+            host_funding_required=self._to_decimal(getattr(competition, "host_funding_required_minor", 0)),
+            host_funding_escrowed=self._to_decimal(getattr(competition, "host_funding_escrowed_minor", 0)),
         )
 
     def rewards(self, competition_id: str) -> CompetitionRewardsResponse | None:
@@ -983,6 +1163,250 @@ class CompetitionOrchestrator:
             competition_id=competition_id,
             rewards=tuple(self._reward_view(item) for item in rewards),
         )
+
+    def participants(self, competition_id: str) -> CompetitionParticipantsResponse | None:
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        participants = list(
+            self.session.scalars(
+                select(CompetitionParticipant)
+                .where(CompetitionParticipant.competition_id == competition_id)
+                .order_by(CompetitionParticipant.joined_at.asc(), CompetitionParticipant.created_at.asc())
+            ).all()
+        )
+        entries = (
+            {
+                item.id: item
+                for item in self.session.scalars(
+                    select(CompetitionEntry).where(
+                        CompetitionEntry.id.in_(tuple(p.entry_id for p in participants if p.entry_id))
+                    )
+                ).all()
+            }
+            if participants
+            else {}
+        )
+        clubs = (
+            {
+                item.id: item
+                for item in self.session.scalars(
+                    select(ClubProfile).where(ClubProfile.id.in_(tuple(p.club_id for p in participants if p.club_id)))
+                ).all()
+            }
+            if participants
+            else {}
+        )
+        return CompetitionParticipantsResponse(
+            competition_id=competition_id,
+            participants=tuple(
+                CompetitionParticipantView(
+                    participant_id=participant.id,
+                    competition_id=competition_id,
+                    user_id=participant.user_id
+                    or (entries.get(participant.entry_id).user_id if participant.entry_id in entries else None),
+                    club_id=participant.club_id,
+                    club_name=clubs.get(participant.club_id).club_name if participant.club_id in clubs else None,
+                    status=participant.status,
+                    entry_fee_amount=self._to_decimal(participant.paid_entry_fee_minor),
+                    entry_fee_currency=participant.entry_fee_currency or competition.currency,
+                    escrow_status=participant.escrow_status or "none",
+                    wallet_ledger_id=participant.wallet_ledger_id,
+                    joined_at=participant.joined_at,
+                    refunded_at=participant.refunded_at,
+                )
+                for participant in participants
+            ),
+        )
+
+    def pot(self, competition_id: str) -> CompetitionPotView | None:
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        participant_count = self._participant_count(competition.id)
+        rule_set = self._rule_set(competition.id)
+        capacity = self._summary_capacity(rule_set)
+        fees = self._fees_for(competition, participant_count=participant_count)
+        dynamic_prize_pool = self._dynamic_prize_pool(competition, rule_set=rule_set)
+        prize_pool = self._visible_prize_pool(competition, fees, dynamic_prize_pool)
+        return CompetitionPotView(
+            competition_id=competition.id,
+            currency=competition.currency,
+            participant_count=participant_count,
+            capacity=capacity,
+            remaining_slots=max(capacity - participant_count, 0),
+            entry_fee=fees.entry_fee,
+            gross_pot=(fees.entry_fee * Decimal(participant_count)).quantize(_FOUR_PLACES, rounding=ROUND_HALF_UP),
+            platform_fee_pct=fees.platform_fee_pct,
+            platform_fee_amount=fees.platform_fee_amount,
+            host_fee_pct=fees.host_fee_pct,
+            host_fee_amount=fees.host_fee_amount,
+            net_payout_pot=prize_pool,
+            prize_mode=competition.prize_mode,
+            payout_mode=competition.payout_mode,
+            fixed_prizes=self._fixed_prizes_decimal(competition.fixed_prizes_json or {}),
+            payout_structure=self._payout_breakdown(competition=competition, prize_pool=prize_pool),
+        )
+
+    def cancel(self, competition_id: str, *, actor_user_id: str | None = None) -> CompetitionSummaryView | None:
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        if CompetitionStatus(competition.status) in {CompetitionStatus.CANCELLED, CompetitionStatus.SETTLED}:
+            return self._to_summary(competition)
+        participants = list(
+            self.session.scalars(
+                select(CompetitionParticipant).where(CompetitionParticipant.competition_id == competition.id)
+            ).all()
+        )
+        for participant in participants:
+            participant_user_id = self._participant_user_id(participant)
+            if not participant_user_id or participant.paid_entry_fee_minor <= 0:
+                continue
+            if participant.escrow_status == "refunded":
+                continue
+            refund_result = self.competition_wallet_service.refund_entry_fee(
+                competition=competition,
+                participant_user_id=participant_user_id,
+                amount_minor=participant.paid_entry_fee_minor,
+            )
+            participant.escrow_status = "refunded"
+            participant.refunded_at = datetime.now(timezone.utc)
+            self._mark_competition_escrow_refunded(
+                competition_id=competition.id,
+                user_id=participant_user_id,
+                club_id=participant.club_id,
+                ledger_id=refund_result.transaction_id,
+            )
+        if competition.prize_mode == "host_funded_fixed" and int(competition.host_funding_escrowed_minor or 0) > 0:
+            try:
+                self.competition_wallet_service.refund_host_funding(
+                    competition=competition,
+                    host_user_id=competition.host_user_id,
+                    amount_minor=competition.host_funding_escrowed_minor,
+                )
+            except InsufficientBalanceError as exc:
+                raise CompetitionActionError(
+                    "Competition escrow balance is lower than the host-funded prize refund.",
+                    reason="host_prize_refund_unavailable",
+                ) from exc
+            competition.host_funding_escrowed_minor = 0
+        competition.status = CompetitionStatus.CANCELLED.value
+        competition.stage = "cancelled"
+        self._audit_competition_action(
+            actor_user_id=actor_user_id or competition.host_user_id,
+            action_key="competition.cancelled",
+            competition=competition,
+            detail="Competition cancelled and refundable entry escrow released.",
+        )
+        self.session.commit()
+        self.session.refresh(competition)
+        return self._to_summary(competition)
+
+    def settle_payouts(self, competition_id: str) -> CompetitionRewardsResponse | None:
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        self.lifecycle_service.finalize_competition(competition, settle=True)
+        self._release_competition_escrows(competition.id)
+        self.session.commit()
+        return self.rewards(competition_id)
+
+    def random_quote(
+        self,
+        *,
+        mode: str = "one_v_one",
+        club_id: str | None = None,
+        user_id: str | None = None,
+    ) -> RandomCompetitionQuoteView | None:
+        normalized_mode = (mode or "one_v_one").strip().lower()
+        stmt = (
+            select(Competition)
+            .where(
+                Competition.status.in_([CompetitionStatus.OPEN.value, CompetitionStatus.OPEN_FOR_JOIN.value]),
+                Competition.visibility == CompetitionVisibility.PUBLIC.value,
+            )
+            .order_by(Competition.featured.desc(), Competition.online_now.desc(), Competition.scheduled_start_at.asc())
+        )
+        if normalized_mode in {"one_v_one", "1v1", "duel", "random_match"}:
+            stmt = stmt.where(Competition.competition_mode.in_(["one_v_one", "random_one_v_one", "fast_match"]))
+        elif normalized_mode in {"cup", "group", "random_cup"}:
+            stmt = stmt.where(Competition.format.in_([CompetitionFormat.CUP.value, CompetitionFormat.LEAGUE.value]))
+        for competition in self.session.scalars(stmt).all():
+            participant_count = self._participant_count(competition.id)
+            rule_set = self._rule_set(competition.id)
+            capacity = self._summary_capacity(rule_set)
+            if participant_count >= capacity:
+                continue
+            club = self.session.get(ClubProfile, club_id) if club_id else None
+            decision = self._join_decision_for(
+                competition,
+                user_id=user_id,
+                club_id=club_id,
+                participant_count=participant_count,
+                visibility_context=self._club_identity_payload(club),
+            )
+            if not decision.eligible:
+                continue
+            fees = self._fees_for(competition, participant_count=participant_count + 1)
+            return RandomCompetitionQuoteView(
+                competition_id=competition.id,
+                competition_name=competition.name,
+                mode=competition.competition_mode,
+                currency=competition.currency,
+                entry_fee=fees.entry_fee,
+                gross_pot=(fees.entry_fee * Decimal(participant_count + 1)).quantize(
+                    _FOUR_PLACES,
+                    rounding=ROUND_HALF_UP,
+                ),
+                platform_fee_amount=fees.platform_fee_amount,
+                net_payout_pot=fees.prize_pool,
+                ranked=bool(competition.is_ranked),
+                starts_at=competition.scheduled_start_at,
+            )
+        return None
+
+    def club_leaderboard(self, *, limit: int = 50) -> ClubCompetitionLeaderboardResponse:
+        profiles = list(
+            self.session.scalars(
+                select(CompetitionProgressProfile)
+                .order_by(
+                    CompetitionProgressProfile.ranking_points.desc(), CompetitionProgressProfile.updated_at.desc()
+                )
+                .limit(limit)
+            ).all()
+        )
+        clubs = (
+            {
+                item.id: item
+                for item in self.session.scalars(
+                    select(ClubProfile).where(ClubProfile.id.in_(tuple(profile.subject_id for profile in profiles)))
+                ).all()
+            }
+            if profiles
+            else {}
+        )
+        entries = []
+        for rank, profile in enumerate(profiles, start=1):
+            club = clubs.get(profile.subject_id)
+            ranking_points = int(profile.ranking_points or 0)
+            entries.append(
+                ClubCompetitionLeaderboardEntry(
+                    rank=rank,
+                    club_id=profile.subject_id,
+                    club_name=club.club_name if club is not None else profile.display_name or profile.subject_id,
+                    owner_user_id=club.owner_user_id if club is not None else profile.resolved_user_id,
+                    ranking_points=ranking_points,
+                    wins=int(profile.total_wins or 0),
+                    draws=int((profile.metadata_json or {}).get("draws") or 0),
+                    losses=int((profile.metadata_json or {}).get("losses") or 0),
+                    trophies=int(profile.total_championships or 0),
+                    recent_form=str((profile.metadata_json or {}).get("recent_form") or ""),
+                    eligibility_tier=self._eligibility_tier_for_points(ranking_points),
+                    gtex_hosted_eligible=ranking_points >= 250,
+                )
+            )
+        return ClubCompetitionLeaderboardResponse(entries=tuple(entries))
 
     def progression(self, subject_id: str) -> CompetitionProgressionView | None:
         profile = self.progression_service.profile_for_subject(subject_id)
@@ -1299,6 +1723,7 @@ class CompetitionOrchestrator:
         *,
         user_id: str | None = None,
         invite_code: str | None = None,
+        club_id: str | None = None,
         participant_count: int | None = None,
         rule_set: CompetitionRuleSet | None = None,
         prize_rule: CompetitionPrizeRule | None = None,
@@ -1315,9 +1740,7 @@ class CompetitionOrchestrator:
             if dynamic_prize_pool is _DYNAMIC_PRIZE_POOL_UNSET
             else dynamic_prize_pool
         )
-        prize_pool = (
-            resolved_dynamic_prize_pool.total_pool if resolved_dynamic_prize_pool is not None else fees.prize_pool
-        )
+        prize_pool = self._visible_prize_pool(competition, fees, resolved_dynamic_prize_pool)
         payout_structure = self._payout_breakdown(
             competition=competition,
             prize_pool=prize_pool,
@@ -1331,9 +1754,12 @@ class CompetitionOrchestrator:
             invite_code=invite_code,
         )
         capacity = self._summary_capacity(rule_set)
+        gross_pot = (fees.entry_fee * Decimal(participant_count)).quantize(_FOUR_PLACES, rounding=ROUND_HALF_UP)
+        net_payout_pot = prize_pool.quantize(_FOUR_PLACES, rounding=ROUND_HALF_UP)
         join_decision = self._join_decision_for(
             competition,
             user_id=context.viewer_user_id,
+            club_id=club_id,
             invite_code=context.invite_code,
             participant_count=participant_count,
             rule_set=rule_set,
@@ -1349,12 +1775,16 @@ class CompetitionOrchestrator:
             match_type=self._match_type_for(competition),
             type=self._match_type_for(competition),
             host_type=host_type.value,
+            competition_type=competition.competition_type,
             creator_id=context.creator_id,
             creator_name=metadata.get("creator_name"),
             participant_count=participant_count,
             capacity=capacity,
+            remaining_slots=max(capacity - participant_count, 0),
             currency=self._normalized_string(competition.currency) or "credit",
             entry_fee=fees.entry_fee,
+            gross_pot=gross_pot,
+            net_payout_pot=net_payout_pot,
             platform_fee_pct=fees.platform_fee_pct,
             host_fee_pct=fees.host_fee_pct,
             platform_fee_amount=fees.platform_fee_amount,
@@ -1369,6 +1799,21 @@ class CompetitionOrchestrator:
                 requires_passcode=join_decision.requires_passcode or self._requires_passcode(competition),
             ),
             dynamic_prize_pool=self._dynamic_prize_pool_view(resolved_dynamic_prize_pool),
+            competition_mode=getattr(competition, "competition_mode", None) or "competition",
+            prize_mode=getattr(competition, "prize_mode", None) or "entry_funded",
+            payout_mode=getattr(competition, "payout_mode", None) or "winner_takes_all",
+            is_ranked=bool(getattr(competition, "is_ranked", True)),
+            registration_deadline=getattr(competition, "registration_deadline", None),
+            host_funded_prize_total=self._to_decimal(getattr(competition, "host_funded_prize_total_minor", 0)),
+            host_funding_required=self._to_decimal(getattr(competition, "host_funding_required_minor", 0)),
+            host_funding_escrowed=self._to_decimal(getattr(competition, "host_funding_escrowed_minor", 0)),
+            host_platform_fee=self._to_decimal(getattr(competition, "host_platform_fee_minor", 0)),
+            fixed_prizes=self._fixed_prizes_decimal(getattr(competition, "fixed_prizes_json", {}) or {}),
+            eligibility_rules=dict(getattr(competition, "eligibility_rules_json", {}) or {}),
+            ranking_policy=dict(getattr(competition, "ranking_policy_json", {}) or {}),
+            featured=bool(getattr(competition, "featured", False)),
+            manual_approval_required=bool(getattr(competition, "manual_approval_required", False)),
+            online_now=bool(getattr(competition, "online_now", False)),
             beginner_friendly=metadata.get("beginner_friendly"),
             requires_passcode=self._requires_passcode(competition),
             scheduled_start_at=competition.scheduled_start_at,
@@ -1428,6 +1873,16 @@ class CompetitionOrchestrator:
             active_users_5min=snapshot.active_users_5min,
             trade_volume_5min=snapshot.trade_volume_5min,
         )
+
+    def _visible_prize_pool(self, competition: Competition, fees: CompetitionFeesView, dynamic_snapshot) -> Decimal:
+        if getattr(competition, "prize_mode", None) == "host_funded_fixed":
+            return self._to_decimal(getattr(competition, "host_funded_prize_total_minor", 0)).quantize(
+                _FOUR_PLACES,
+                rounding=ROUND_HALF_UP,
+            )
+        if dynamic_snapshot is not None:
+            return dynamic_snapshot.total_pool
+        return fees.prize_pool
 
     def _payout_breakdown(
         self,
@@ -1647,7 +2102,9 @@ class CompetitionOrchestrator:
             except CompetitionActionError:
                 return JoinDecision(eligible=False, reason="club_required")
             club_id = resolved_club.id if resolved_club is not None else None
-            visibility_context = self._club_identity_payload(resolved_club) if resolved_club is not None else visibility_context
+            visibility_context = (
+                self._club_identity_payload(resolved_club) if resolved_club is not None else visibility_context
+            )
         participant_count = (
             participant_count if participant_count is not None else self._participant_count(competition.id)
         )
@@ -1669,6 +2126,10 @@ class CompetitionOrchestrator:
             invite_valid=invite_valid,
             scheduled_start_at=competition.scheduled_start_at,
         )
+        registration_deadline = _as_utc(getattr(competition, "registration_deadline", None))
+        if join_decision.eligible and not already_joined and registration_deadline is not None:
+            if datetime.now(timezone.utc) >= registration_deadline:
+                return JoinDecision(eligible=False, reason="registration_closed")
         if (
             join_decision.eligible
             and not already_joined
@@ -1767,6 +2228,206 @@ class CompetitionOrchestrator:
             dynamic_prize_pool_context=dynamic_prize_pool_context,
         )
 
+    def _upsert_competition_escrow(
+        self,
+        *,
+        competition: Competition,
+        user_id: str,
+        club_id: str,
+        amount_minor: int,
+        status: str,
+        ledger_id: str | None,
+        joined_at: datetime,
+    ) -> CompetitionEscrow:
+        escrow = self.session.scalar(
+            select(CompetitionEscrow).where(
+                CompetitionEscrow.competition_id == competition.id,
+                CompetitionEscrow.user_id == user_id,
+                CompetitionEscrow.club_id == club_id,
+            )
+        )
+        if escrow is None:
+            escrow = CompetitionEscrow(
+                competition_id=competition.id,
+                user_id=user_id,
+                club_id=club_id,
+                joined_at=joined_at,
+            )
+            self.session.add(escrow)
+        escrow.amount_minor = max(int(amount_minor or 0), 0)
+        escrow.currency = competition.currency
+        escrow.escrow_status = status
+        escrow.ledger_id = ledger_id
+        escrow.metadata_json = {
+            **dict(escrow.metadata_json or {}),
+            "source": "competition_join",
+            "entry_fee_minor": max(int(amount_minor or 0), 0),
+        }
+        self.session.flush()
+        return escrow
+
+    def _mark_competition_escrow_refunded(
+        self,
+        *,
+        competition_id: str,
+        user_id: str,
+        club_id: str,
+        ledger_id: str | None,
+    ) -> None:
+        escrow = self.session.scalar(
+            select(CompetitionEscrow).where(
+                CompetitionEscrow.competition_id == competition_id,
+                CompetitionEscrow.user_id == user_id,
+                CompetitionEscrow.club_id == club_id,
+            )
+        )
+        if escrow is None:
+            return
+        escrow.escrow_status = "refunded"
+        escrow.refunded_at = datetime.now(timezone.utc)
+        escrow.ledger_id = ledger_id or escrow.ledger_id
+
+    def _release_competition_escrows(self, competition_id: str) -> None:
+        escrow_by_club = {
+            escrow.club_id: escrow
+            for escrow in self.session.scalars(
+                select(CompetitionEscrow).where(CompetitionEscrow.competition_id == competition_id)
+            ).all()
+        }
+        rewards = list(
+            self.session.scalars(
+                select(CompetitionReward).where(CompetitionReward.competition_id == competition_id)
+            ).all()
+        )
+        for reward in rewards:
+            if reward.club_id and reward.club_id in escrow_by_club:
+                escrow = escrow_by_club[reward.club_id]
+                reward.escrow_id = escrow.id
+                reward.payout_idempotency_key = reward.payout_idempotency_key or f"competition-payout:{reward.id}"
+                if reward.status == "settled":
+                    escrow.escrow_status = "released"
+                    escrow.payout_id = reward.id
+        for escrow in escrow_by_club.values():
+            if escrow.escrow_status == "escrowed":
+                escrow.escrow_status = "forfeited"
+
+    def _participant_user_id(self, participant: CompetitionParticipant) -> str | None:
+        if participant.user_id:
+            return participant.user_id
+        if participant.entry_id:
+            entry = self.session.get(CompetitionEntry, participant.entry_id)
+            if entry is not None:
+                return entry.user_id
+        return None
+
+    def _apply_host_funded_prize_configuration(self, competition: Competition, payload: object) -> None:
+        fixed_prizes_minor = self._fixed_prizes_minor(payload)
+        explicit_total = getattr(payload, "host_funded_prize_total", None)
+        prize_total_minor = self._to_minor_units(explicit_total) if explicit_total is not None else 0
+        if fixed_prizes_minor:
+            prize_total_minor = sum(int(value or 0) for value in fixed_prizes_minor.values())
+        prize_mode = getattr(competition, "prize_mode", None) or getattr(payload, "prize_mode", None)
+        if prize_total_minor <= 0 and prize_mode != "host_funded_fixed":
+            return
+        competition.prize_mode = "host_funded_fixed"
+        competition.fixed_prizes_json = fixed_prizes_minor
+        competition.host_funded_prize_total_minor = prize_total_minor
+        required = self._gross_up_host_funding(prize_total_minor)
+        competition.host_funding_required_minor = required
+        competition.host_platform_fee_minor = max(required - prize_total_minor, 0)
+
+    def _ensure_host_funded_prize_escrowed(self, competition: Competition) -> None:
+        if competition.prize_mode != "host_funded_fixed":
+            return
+        required = int(competition.host_funding_required_minor or 0)
+        if required <= 0:
+            raise CompetitionActionError(
+                "Host-funded competitions must advertise a positive fixed prize pool.",
+                reason="host_prize_required",
+            )
+        if int(competition.host_funding_escrowed_minor or 0) >= required:
+            return
+        try:
+            result = self.competition_wallet_service.escrow_host_funding(
+                competition=competition,
+                host_user_id=competition.host_user_id,
+                amount_minor=required,
+            )
+        except InsufficientBalanceError as exc:
+            raise CompetitionActionError(
+                "Host wallet balance is lower than the advertised prize pool plus platform fee.",
+                reason="host_prize_insufficient_balance",
+            ) from exc
+        if result.status != "settled":
+            raise CompetitionActionError(
+                "Host-funded prize escrow could not be validated.",
+                reason="host_prize_escrow_unverified",
+            )
+        competition.host_funding_escrowed_minor = required
+
+    def _competition_mode_for_payload(self, payload: CompetitionCreateRequest) -> str:
+        if payload.format == CompetitionFormat.CUP:
+            return "knockout_cup"
+        if payload.format == CompetitionFormat.LEAGUE:
+            return "league"
+        return payload.format.value
+
+    def _prize_mode_for_payload(self, payload: CompetitionCreateRequest) -> str:
+        if payload.prize_mode:
+            return payload.prize_mode
+        if payload.fixed_prizes or payload.host_funded_prize_total:
+            return "host_funded_fixed"
+        if payload.entry_fee > 0:
+            return "entry_funded"
+        return "none"
+
+    def _payout_mode_for_payload(self, payload: CompetitionCreateRequest) -> str:
+        if payload.payout_mode:
+            return payload.payout_mode
+        if payload.fixed_prizes:
+            return "fixed_prizes"
+        if payload.payout_structure and len(payload.payout_structure) > 1:
+            return "percentage_split"
+        return "winner_takes_all"
+
+    def _eligibility_rules_for_payload(self, payload: CompetitionCreateRequest) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in {
+                "min_club_ranking": payload.min_club_ranking,
+                "max_club_ranking": payload.max_club_ranking,
+                "division": payload.division,
+                "region": payload.region,
+                "country_code": payload.country_code,
+            }.items()
+            if value is not None
+        }
+
+    def _fixed_prizes_minor(self, payload: object) -> dict[str, int]:
+        raw = getattr(payload, "fixed_prizes", None)
+        if not raw:
+            return {}
+        return {str(place): self._to_minor_units(Decimal(value)) for place, value in raw.items()}
+
+    def _fixed_prizes_decimal(self, raw: dict[str, Any]) -> dict[str, Decimal]:
+        return {str(place): self._to_decimal(int(value or 0)) for place, value in dict(raw or {}).items()}
+
+    @staticmethod
+    def _gross_up_host_funding(net_prize_total_minor: int) -> int:
+        if net_prize_total_minor <= 0:
+            return 0
+        return int((Decimal(net_prize_total_minor) / Decimal("0.80")).to_integral_value(rounding=ROUND_CEILING))
+
+    @staticmethod
+    def _eligibility_tier_for_points(points: int) -> str:
+        if points >= 1000:
+            return "elite"
+        if points >= 500:
+            return "pro"
+        if points >= 250:
+            return "qualified"
+        return "ladder"
+
     def _summary_context(
         self,
         competition: Competition,
@@ -1828,21 +2489,27 @@ class CompetitionOrchestrator:
         competition: Competition,
         *,
         user_id: str,
+        club_id: str | None = None,
         club_name: str | None = None,
     ) -> ClubProfile | None:
         if not self._requires_club_entry(competition):
             return None
+        normalized_club_id = self._normalized_string(club_id)
         normalized_name = self._normalized_string(club_name)
         stmt = select(ClubProfile).where(ClubProfile.owner_user_id == user_id)
+        if normalized_club_id:
+            stmt = stmt.where(ClubProfile.id == normalized_club_id)
         if normalized_name:
             stmt = stmt.where(func.lower(ClubProfile.club_name) == normalized_name.lower())
         clubs = list(self.session.scalars(stmt.order_by(ClubProfile.created_at.asc())).all())
         if not clubs:
+            if normalized_club_id is None and normalized_name is None:
+                return None
             raise CompetitionActionError(
-                "You need a club before entering club competitions.",
-                reason="club_required",
+                "You need an eligible owned club before entering club competitions.",
+                reason="club_owner_required" if normalized_club_id else "club_required",
             )
-        if normalized_name is None and len(clubs) > 1:
+        if normalized_club_id is None and normalized_name is None and len(clubs) > 1:
             raise CompetitionActionError(
                 "Choose the club name you want to enter with.",
                 reason="club_name_required",
@@ -1877,9 +2544,7 @@ class CompetitionOrchestrator:
         participant = self._participant(competition.id, user_id)
         if participant is not None or not self._requires_club_entry(competition):
             return participant
-        club_ids = tuple(
-            self.session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == user_id)).all()
-        )
+        club_ids = tuple(self.session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == user_id)).all())
         if not club_ids:
             return None
         return self.session.scalar(
@@ -1957,10 +2622,11 @@ class CompetitionOrchestrator:
         *,
         participant_count: int | None = None,
     ) -> None:
-        if self._is_platform_competition(competition.source_type):
-            competition.entry_fee_minor = 0
-            competition.platform_fee_bps = 0
-            competition.host_fee_bps = 0
+        if (
+            self._is_platform_competition(competition.source_type)
+            and competition.entry_fee_minor <= 0
+            and competition.prize_mode != "host_funded_fixed"
+        ):
             competition.gross_pool_minor = 0
             competition.net_prize_pool_minor = 0
             reward_pool = self.session.scalar(
@@ -1997,7 +2663,11 @@ class CompetitionOrchestrator:
             .order_by(CompetitionRewardPool.created_at.desc())
         )
         if reward_pool is not None and reward_pool.status in {"planned", "projected", "pending"}:
-            reward_pool.amount_minor = competition.net_prize_pool_minor
+            reward_pool.amount_minor = (
+                competition.host_funded_prize_total_minor
+                if competition.prize_mode == "host_funded_fixed"
+                else competition.net_prize_pool_minor
+            )
 
     def _schedule_counts(
         self,

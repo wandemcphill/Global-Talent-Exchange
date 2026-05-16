@@ -2785,6 +2785,13 @@ class GteTreasurySettings {
     required this.depositRateDirection,
     required this.withdrawalRateValue,
     required this.withdrawalRateDirection,
+    required this.minTraderBuyRateFiat,
+    required this.maxTraderBuyRateFiat,
+    required this.minTraderSellRateFiat,
+    required this.maxTraderSellRateFiat,
+    required this.maxTraderSpreadFiat,
+    required this.maxBuyAboveWithdrawalFiat,
+    required this.maxSellBelowDepositFiat,
     required this.minDeposit,
     required this.maxDeposit,
     required this.minWithdrawal,
@@ -2805,6 +2812,13 @@ class GteTreasurySettings {
   final GteRateDirection depositRateDirection;
   final double withdrawalRateValue;
   final GteRateDirection withdrawalRateDirection;
+  final double minTraderBuyRateFiat;
+  final double maxTraderBuyRateFiat;
+  final double minTraderSellRateFiat;
+  final double maxTraderSellRateFiat;
+  final double maxTraderSpreadFiat;
+  final double maxBuyAboveWithdrawalFiat;
+  final double maxSellBelowDepositFiat;
   final double minDeposit;
   final double maxDeposit;
   final double minWithdrawal;
@@ -2852,6 +2866,34 @@ class GteTreasurySettings {
           'withdrawalRateDirection',
         ], fallback: 'fiat_per_coin'),
       ),
+      minTraderBuyRateFiat: GteJson.number(json, <String>[
+        'min_trader_buy_rate_fiat',
+        'minTraderBuyRateFiat',
+      ], fallback: 820),
+      maxTraderBuyRateFiat: GteJson.number(json, <String>[
+        'max_trader_buy_rate_fiat',
+        'maxTraderBuyRateFiat',
+      ], fallback: 890),
+      minTraderSellRateFiat: GteJson.number(json, <String>[
+        'min_trader_sell_rate_fiat',
+        'minTraderSellRateFiat',
+      ], fallback: 900),
+      maxTraderSellRateFiat: GteJson.number(json, <String>[
+        'max_trader_sell_rate_fiat',
+        'maxTraderSellRateFiat',
+      ], fallback: 980),
+      maxTraderSpreadFiat: GteJson.number(json, <String>[
+        'max_trader_spread_fiat',
+        'maxTraderSpreadFiat',
+      ], fallback: 120),
+      maxBuyAboveWithdrawalFiat: GteJson.number(json, <String>[
+        'max_buy_above_withdrawal_fiat',
+        'maxBuyAboveWithdrawalFiat',
+      ], fallback: 10),
+      maxSellBelowDepositFiat: GteJson.number(json, <String>[
+        'max_sell_below_deposit_fiat',
+        'maxSellBelowDepositFiat',
+      ], fallback: 0),
       minDeposit: GteJson.number(json, <String>['min_deposit', 'minDeposit']),
       maxDeposit: GteJson.number(json, <String>['max_deposit', 'maxDeposit']),
       minWithdrawal: GteJson.number(json, <String>[
@@ -2907,6 +2949,13 @@ class GteTreasurySettingsUpdate {
     this.depositRateDirection,
     this.withdrawalRateValue,
     this.withdrawalRateDirection,
+    this.minTraderBuyRateFiat,
+    this.maxTraderBuyRateFiat,
+    this.minTraderSellRateFiat,
+    this.maxTraderSellRateFiat,
+    this.maxTraderSpreadFiat,
+    this.maxBuyAboveWithdrawalFiat,
+    this.maxSellBelowDepositFiat,
     this.minDeposit,
     this.maxDeposit,
     this.minWithdrawal,
@@ -2923,6 +2972,13 @@ class GteTreasurySettingsUpdate {
   final GteRateDirection? depositRateDirection;
   final double? withdrawalRateValue;
   final GteRateDirection? withdrawalRateDirection;
+  final double? minTraderBuyRateFiat;
+  final double? maxTraderBuyRateFiat;
+  final double? minTraderSellRateFiat;
+  final double? maxTraderSellRateFiat;
+  final double? maxTraderSpreadFiat;
+  final double? maxBuyAboveWithdrawalFiat;
+  final double? maxSellBelowDepositFiat;
   final double? minDeposit;
   final double? maxDeposit;
   final double? minWithdrawal;
@@ -2944,6 +3000,20 @@ class GteTreasurySettingsUpdate {
       'withdrawal_rate_direction': _rateDirectionToString(
         withdrawalRateDirection!,
       ),
+    if (minTraderBuyRateFiat != null)
+      'min_trader_buy_rate_fiat': minTraderBuyRateFiat,
+    if (maxTraderBuyRateFiat != null)
+      'max_trader_buy_rate_fiat': maxTraderBuyRateFiat,
+    if (minTraderSellRateFiat != null)
+      'min_trader_sell_rate_fiat': minTraderSellRateFiat,
+    if (maxTraderSellRateFiat != null)
+      'max_trader_sell_rate_fiat': maxTraderSellRateFiat,
+    if (maxTraderSpreadFiat != null)
+      'max_trader_spread_fiat': maxTraderSpreadFiat,
+    if (maxBuyAboveWithdrawalFiat != null)
+      'max_buy_above_withdrawal_fiat': maxBuyAboveWithdrawalFiat,
+    if (maxSellBelowDepositFiat != null)
+      'max_sell_below_deposit_fiat': maxSellBelowDepositFiat,
     if (minDeposit != null) 'min_deposit': minDeposit,
     if (maxDeposit != null) 'max_deposit': maxDeposit,
     if (minWithdrawal != null) 'min_withdrawal': minWithdrawal,

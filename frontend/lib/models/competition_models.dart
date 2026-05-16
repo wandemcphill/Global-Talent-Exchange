@@ -186,6 +186,188 @@ class CompetitionDynamicPrizePool {
   }
 }
 
+class FastMatchEntitlementView {
+  const FastMatchEntitlementView({
+    required this.freeMatchesRemaining,
+    required this.freeMatchesUsed,
+    required this.chargeOnLoss,
+    required this.chargeRequiredNow,
+    required this.entryCurrency,
+    required this.entryCurrencyLabel,
+    required this.fanCoinEntryFee,
+    required this.entitlementStatus,
+    this.matchId,
+    this.liveMatchKey,
+    this.viewerRoute,
+    this.settlementStatus,
+    this.result,
+  });
+
+  final int freeMatchesRemaining;
+  final int freeMatchesUsed;
+  final bool chargeOnLoss;
+  final bool chargeRequiredNow;
+  final String entryCurrency;
+  final String entryCurrencyLabel;
+  final double fanCoinEntryFee;
+  final String entitlementStatus;
+  final String? matchId;
+  final String? liveMatchKey;
+  final String? viewerRoute;
+  final String? settlementStatus;
+  final String? result;
+
+  String get entryFeeLabel =>
+      _formatUnitAmount(fanCoinEntryFee, entryCurrencyLabel);
+
+  String get serverRuleLabel {
+    if (chargeRequiredNow) {
+      return '$entryFeeLabel required before kickoff.';
+    }
+    return '$freeMatchesRemaining free matches remaining; $freeMatchesUsed used.';
+  }
+
+  factory FastMatchEntitlementView.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'fast match entitlement',
+    );
+    return FastMatchEntitlementView(
+      freeMatchesRemaining: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['free_matches_remaining', 'freeMatchesRemaining'],
+        fallback: 0,
+      ),
+      freeMatchesUsed: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['free_matches_used', 'freeMatchesUsed'],
+        fallback: 0,
+      ),
+      chargeOnLoss: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['charge_on_loss', 'chargeOnLoss'],
+        fallback: true,
+      ),
+      chargeRequiredNow: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['charge_required_now', 'chargeRequiredNow'],
+        fallback: false,
+      ),
+      entryCurrency: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['entry_currency', 'entryCurrency'],
+        fallback: 'credit',
+      ),
+      entryCurrencyLabel: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['entry_currency_label', 'entryCurrencyLabel'],
+        fallback: 'Fan Coin',
+      ),
+      fanCoinEntryFee: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['fan_coin_entry_fee', 'fanCoinEntryFee', 'entry_fee'],
+        fallback: 0,
+      ),
+      entitlementStatus: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['entitlement_status', 'entitlementStatus', 'status'],
+        fallback: 'unknown',
+      ),
+      matchId: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['match_id', 'matchId'],
+      ),
+      liveMatchKey: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['live_match_key', 'liveMatchKey'],
+      ),
+      viewerRoute: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['viewer_route', 'viewerRoute'],
+      ),
+      settlementStatus: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['settlement_status', 'settlementStatus'],
+      ),
+      result: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['result'],
+      ),
+    );
+  }
+}
+
+class FastCupRegistrationView {
+  const FastCupRegistrationView({
+    required this.registrationId,
+    required this.escrowStatus,
+    required this.entryFeeAmount,
+    required this.entryFeeCurrency,
+    this.payoutStatus,
+    this.walletLedgerId,
+  });
+
+  final String? registrationId;
+  final String escrowStatus;
+  final double entryFeeAmount;
+  final String entryFeeCurrency;
+  final String? payoutStatus;
+  final String? walletLedgerId;
+
+  bool get isEscrowBacked => <String>{
+    'reserved',
+    'escrowed',
+    'released',
+  }.contains(escrowStatus.trim().toLowerCase());
+
+  String get entryFeeLabel =>
+      _formatUnitAmount(entryFeeAmount, _currencyLabel(entryFeeCurrency));
+
+  String get escrowStatusLabel =>
+      _sentenceCase(escrowStatus.trim().isEmpty ? 'pending' : escrowStatus);
+
+  factory FastCupRegistrationView.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'fast cup registration',
+    );
+    return FastCupRegistrationView(
+      registrationId: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['registration_id', 'registrationId', 'id'],
+      ),
+      escrowStatus: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['escrow_status', 'escrowStatus'],
+        fallback: 'pending',
+      ),
+      entryFeeAmount: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['entry_fee_amount', 'entryFeeAmount', 'entry_fee', 'entryFee'],
+        fallback: 0,
+      ),
+      entryFeeCurrency: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>[
+          'entry_fee_currency',
+          'entryFeeCurrency',
+          'currency',
+          'entry_currency',
+        ],
+        fallback: 'credit',
+      ),
+      payoutStatus: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['payout_status', 'payoutStatus'],
+      ),
+      walletLedgerId: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['wallet_ledger_id', 'walletLedgerId'],
+      ),
+    );
+  }
+}
+
 class CompetitionSummary {
   const CompetitionSummary({
     required this.id,
@@ -197,8 +379,11 @@ class CompetitionSummary {
     required this.creatorName,
     required this.participantCount,
     required this.capacity,
+    this.remainingSlots = 0,
     required this.currency,
     required this.entryFee,
+    this.grossPot = 0,
+    this.netPayoutPot = 0,
     required this.platformFeePct,
     required this.hostFeePct,
     required this.platformFeeAmount,
@@ -211,10 +396,27 @@ class CompetitionSummary {
     required this.beginnerFriendly,
     required this.createdAt,
     required this.updatedAt,
+    this.competitionMode = 'competition',
+    this.prizeMode = 'entry_funded',
+    this.payoutMode = 'winner_takes_all',
+    this.isRanked = true,
+    this.registrationDeadline,
+    this.hostFundedPrizeTotal = 0,
+    this.hostFundingRequired = 0,
+    this.hostFundingEscrowed = 0,
+    this.hostPlatformFee = 0,
+    this.fixedPrizes = const <String, double>{},
+    this.eligibilityRules = const <String, Object?>{},
+    this.rankingPolicy = const <String, Object?>{},
+    this.featured = false,
+    this.manualApprovalRequired = false,
+    this.onlineNow = false,
     this.dynamicPrizePool,
     this.requiresPasscode = false,
     this.scheduledStartAt,
     this.specialRules,
+    this.fastMatchEntitlement,
+    this.fastCupRegistration,
   });
 
   final String id;
@@ -226,8 +428,11 @@ class CompetitionSummary {
   final String? creatorName;
   final int participantCount;
   final int capacity;
+  final int remainingSlots;
   final String currency;
   final double entryFee;
+  final double grossPot;
+  final double netPayoutPot;
   final double platformFeePct;
   final double hostFeePct;
   final double platformFeeAmount;
@@ -238,10 +443,27 @@ class CompetitionSummary {
   final MatchType matchType;
   final CompetitionJoinEligibility joinEligibility;
   final CompetitionDynamicPrizePool? dynamicPrizePool;
+  final String competitionMode;
+  final String prizeMode;
+  final String payoutMode;
+  final bool isRanked;
+  final DateTime? registrationDeadline;
+  final double hostFundedPrizeTotal;
+  final double hostFundingRequired;
+  final double hostFundingEscrowed;
+  final double hostPlatformFee;
+  final Map<String, double> fixedPrizes;
+  final Map<String, Object?> eligibilityRules;
+  final Map<String, Object?> rankingPolicy;
+  final bool featured;
+  final bool manualApprovalRequired;
+  final bool onlineNow;
   final bool? beginnerFriendly;
   final bool requiresPasscode;
   final DateTime? scheduledStartAt;
   final String? specialRules;
+  final FastMatchEntitlementView? fastMatchEntitlement;
+  final FastCupRegistrationView? fastCupRegistration;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -265,6 +487,42 @@ class CompetitionSummary {
 
   bool get hasDynamicPrizePool => dynamicPrizePool?.enabled == true;
 
+  bool get isNationalCompetition {
+    final String text =
+        '$competitionMode ${eligibilityRules['competition_scope'] ?? ''} '
+                '$rulesSummary $name'
+            .toLowerCase();
+    return text.contains('national') ||
+        text.contains('country team') ||
+        text.contains('international');
+  }
+
+  bool get hasRewards =>
+      prizePool > 0.0001 ||
+      netPayoutPot > 0.0001 ||
+      hostFundedPrizeTotal > 0.0001 ||
+      fixedPrizes.isNotEmpty;
+
+  bool get isHostFundedPrize => prizeMode == 'host_funded_fixed';
+
+  bool get isEntryFundedPrize => prizeMode == 'entry_funded';
+
+  String get rankingLabel =>
+      isRanked ? 'Ranked competition' : 'Unranked competition';
+
+  String get prizeModeLabel {
+    switch (prizeMode) {
+      case 'host_funded_fixed':
+        return 'Host-funded fixed prize';
+      case 'entry_funded':
+        return isFreeToJoin ? 'No entry pot yet' : 'Entry-funded pot';
+      case 'none':
+        return 'No prize';
+      default:
+        return _sentenceCase(prizeMode);
+    }
+  }
+
   String get safeFormatLabel =>
       format == CompetitionFormat.league ? 'Skill league' : 'Skill cup';
 
@@ -285,13 +543,24 @@ class CompetitionSummary {
   String get entryButtonLabel => matchType.actionLabel;
 
   String get economyNotice {
+    final FastMatchEntitlementView? entitlement = fastMatchEntitlement;
+    final FastCupRegistrationView? registration = fastCupRegistration;
     switch (matchType) {
       case MatchType.gtexHosted:
         return 'GTEX competitions are free to join. Win real money on verified results.';
       case MatchType.userHosted:
+        if (registration != null) {
+          return 'Fast Cup entry is ${registration.entryFeeLabel}; escrow is ${registration.escrowStatusLabel.toLowerCase()} by the server before payouts settle.';
+        }
         return 'User competitions use Fan Coin for buy-ins, entries, and prize pools.';
       case MatchType.fastMatch:
-        return 'Play free until you lose or reach 10 matches. Fan Coin is charged only after a loss.';
+        if (entitlement != null) {
+          if (entitlement.chargeRequiredNow) {
+            return 'Fast Match is paid for this account now: ${entitlement.entryFeeLabel} is required before kickoff.';
+          }
+          return 'Server entitlement: ${entitlement.freeMatchesRemaining} free matches remaining (${entitlement.freeMatchesUsed} used). Draws count; a loss ends the free run.';
+        }
+        return 'Fast Match entitlement loads from the server before kickoff. Fan Coin is used when a paid entry is required.';
     }
   }
 
@@ -355,6 +624,11 @@ class CompetitionSummary {
         <String>['capacity', 'max_participants', 'maxParticipants'],
         fallback: 2,
       ),
+      remainingSlots: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['remaining_slots', 'remainingSlots'],
+        fallback: 0,
+      ),
       currency: _stringFrom(
         <Map<String, Object?>>[json, financials],
         <String>['currency'],
@@ -365,10 +639,20 @@ class CompetitionSummary {
         <String>['entry_fee', 'entryFee'],
         fallback: 0,
       ),
+      grossPot: _doubleFrom(
+        <Map<String, Object?>>[json, financials],
+        <String>['gross_pot', 'grossPot', 'gross_pool', 'grossPool'],
+        fallback: 0,
+      ),
+      netPayoutPot: _doubleFrom(
+        <Map<String, Object?>>[json, financials],
+        <String>['net_payout_pot', 'netPayoutPot', 'prize_pool', 'prizePool'],
+        fallback: 0,
+      ),
       platformFeePct: _doubleFrom(
         <Map<String, Object?>>[json, financials],
         <String>['platform_fee_pct', 'platformFeePct'],
-        fallback: 0.10,
+        fallback: 0.20,
       ),
       hostFeePct: _doubleFrom(
         <Map<String, Object?>>[json, financials],
@@ -431,6 +715,83 @@ class CompetitionSummary {
           fallback: 0,
         ),
       ),
+      competitionMode: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['competition_mode', 'competitionMode'],
+        fallback: 'competition',
+      ),
+      prizeMode: _stringFrom(
+        <Map<String, Object?>>[json, financials],
+        <String>['prize_mode', 'prizeMode'],
+        fallback: 'entry_funded',
+      ),
+      payoutMode: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['payout_mode', 'payoutMode'],
+        fallback: 'winner_takes_all',
+      ),
+      isRanked: _boolFrom(
+        <Map<String, Object?>>[json, financials],
+        <String>['is_ranked', 'isRanked', 'ranked'],
+        fallback: true,
+      ),
+      registrationDeadline: _dateFrom(
+        <Map<String, Object?>>[json],
+        <String>['registration_deadline', 'registrationDeadline'],
+      ),
+      hostFundedPrizeTotal: _doubleFrom(
+        <Map<String, Object?>>[json, financials],
+        <String>['host_funded_prize_total', 'hostFundedPrizeTotal'],
+        fallback: 0,
+      ),
+      hostFundingRequired: _doubleFrom(
+        <Map<String, Object?>>[json, financials],
+        <String>['host_funding_required', 'hostFundingRequired'],
+        fallback: 0,
+      ),
+      hostFundingEscrowed: _doubleFrom(
+        <Map<String, Object?>>[json, financials],
+        <String>['host_funding_escrowed', 'hostFundingEscrowed'],
+        fallback: 0,
+      ),
+      hostPlatformFee: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['host_platform_fee', 'hostPlatformFee'],
+        fallback: 0,
+      ),
+      fixedPrizes: _doubleMapFrom(
+        _firstValue(
+          <Map<String, Object?>>[json],
+          <String>['fixed_prizes', 'fixedPrizes'],
+        ),
+      ),
+      eligibilityRules: _mapOrEmpty(
+        _firstValue(
+          <Map<String, Object?>>[json],
+          <String>['eligibility_rules', 'eligibilityRules'],
+        ),
+      ),
+      rankingPolicy: _mapOrEmpty(
+        _firstValue(
+          <Map<String, Object?>>[json],
+          <String>['ranking_policy', 'rankingPolicy'],
+        ),
+      ),
+      featured: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['featured'],
+        fallback: false,
+      ),
+      manualApprovalRequired: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['manual_approval_required', 'manualApprovalRequired'],
+        fallback: false,
+      ),
+      onlineNow: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['online_now', 'onlineNow'],
+        fallback: false,
+      ),
       beginnerFriendly: _boolOrNullFrom(
         <Map<String, Object?>>[json],
         <String>['beginner_friendly', 'beginnerFriendly'],
@@ -448,6 +809,13 @@ class CompetitionSummary {
         <Map<String, Object?>>[json],
         <String>['special_rules', 'specialRules'],
       ),
+      fastMatchEntitlement: _fastMatchEntitlementFromMaps(
+        <Map<String, Object?>>[json, financials],
+      ),
+      fastCupRegistration: _fastCupRegistrationFromMaps(<Map<String, Object?>>[
+        json,
+        financials,
+      ]),
       createdAt:
           _dateFrom(
             <Map<String, Object?>>[json],
@@ -473,8 +841,11 @@ class CompetitionSummary {
     String? creatorName,
     int? participantCount,
     int? capacity,
+    int? remainingSlots,
     String? currency,
     double? entryFee,
+    double? grossPot,
+    double? netPayoutPot,
     double? platformFeePct,
     double? hostFeePct,
     double? platformFeeAmount,
@@ -485,10 +856,27 @@ class CompetitionSummary {
     MatchType? matchType,
     CompetitionJoinEligibility? joinEligibility,
     CompetitionDynamicPrizePool? dynamicPrizePool,
+    String? competitionMode,
+    String? prizeMode,
+    String? payoutMode,
+    bool? isRanked,
+    DateTime? registrationDeadline,
+    double? hostFundedPrizeTotal,
+    double? hostFundingRequired,
+    double? hostFundingEscrowed,
+    double? hostPlatformFee,
+    Map<String, double>? fixedPrizes,
+    Map<String, Object?>? eligibilityRules,
+    Map<String, Object?>? rankingPolicy,
+    bool? featured,
+    bool? manualApprovalRequired,
+    bool? onlineNow,
     bool? beginnerFriendly,
     bool? requiresPasscode,
     DateTime? scheduledStartAt,
     String? specialRules,
+    FastMatchEntitlementView? fastMatchEntitlement,
+    FastCupRegistrationView? fastCupRegistration,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -502,8 +890,11 @@ class CompetitionSummary {
       creatorName: creatorName ?? this.creatorName,
       participantCount: participantCount ?? this.participantCount,
       capacity: capacity ?? this.capacity,
+      remainingSlots: remainingSlots ?? this.remainingSlots,
       currency: currency ?? this.currency,
       entryFee: entryFee ?? this.entryFee,
+      grossPot: grossPot ?? this.grossPot,
+      netPayoutPot: netPayoutPot ?? this.netPayoutPot,
       platformFeePct: platformFeePct ?? this.platformFeePct,
       hostFeePct: hostFeePct ?? this.hostFeePct,
       platformFeeAmount: platformFeeAmount ?? this.platformFeeAmount,
@@ -514,10 +905,28 @@ class CompetitionSummary {
       matchType: matchType ?? this.matchType,
       joinEligibility: joinEligibility ?? this.joinEligibility,
       dynamicPrizePool: dynamicPrizePool ?? this.dynamicPrizePool,
+      competitionMode: competitionMode ?? this.competitionMode,
+      prizeMode: prizeMode ?? this.prizeMode,
+      payoutMode: payoutMode ?? this.payoutMode,
+      isRanked: isRanked ?? this.isRanked,
+      registrationDeadline: registrationDeadline ?? this.registrationDeadline,
+      hostFundedPrizeTotal: hostFundedPrizeTotal ?? this.hostFundedPrizeTotal,
+      hostFundingRequired: hostFundingRequired ?? this.hostFundingRequired,
+      hostFundingEscrowed: hostFundingEscrowed ?? this.hostFundingEscrowed,
+      hostPlatformFee: hostPlatformFee ?? this.hostPlatformFee,
+      fixedPrizes: fixedPrizes ?? this.fixedPrizes,
+      eligibilityRules: eligibilityRules ?? this.eligibilityRules,
+      rankingPolicy: rankingPolicy ?? this.rankingPolicy,
+      featured: featured ?? this.featured,
+      manualApprovalRequired:
+          manualApprovalRequired ?? this.manualApprovalRequired,
+      onlineNow: onlineNow ?? this.onlineNow,
       beginnerFriendly: beginnerFriendly ?? this.beginnerFriendly,
       requiresPasscode: requiresPasscode ?? this.requiresPasscode,
       scheduledStartAt: scheduledStartAt ?? this.scheduledStartAt,
       specialRules: specialRules ?? this.specialRules,
+      fastMatchEntitlement: fastMatchEntitlement ?? this.fastMatchEntitlement,
+      fastCupRegistration: fastCupRegistration ?? this.fastCupRegistration,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -621,6 +1030,12 @@ class CompetitionFinancialSummary {
     required this.payoutStructure,
     required this.currency,
     this.dynamicPrizePool,
+    this.prizeMode = 'entry_funded',
+    this.isRanked = true,
+    this.remainingSlots = 0,
+    this.hostFundedPrizeTotal = 0,
+    this.hostFundingRequired = 0,
+    this.hostFundingEscrowed = 0,
   });
 
   final String competitionId;
@@ -633,6 +1048,12 @@ class CompetitionFinancialSummary {
   final List<CompetitionPayoutBreakdown> payoutStructure;
   final String currency;
   final CompetitionDynamicPrizePool? dynamicPrizePool;
+  final String prizeMode;
+  final bool isRanked;
+  final int remainingSlots;
+  final double hostFundedPrizeTotal;
+  final double hostFundingRequired;
+  final double hostFundingEscrowed;
 
   factory CompetitionFinancialSummary.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -698,6 +1119,36 @@ class CompetitionFinancialSummary {
         <String>['currency'],
         fallback: 'credit',
       ),
+      prizeMode: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['prize_mode', 'prizeMode'],
+        fallback: 'entry_funded',
+      ),
+      isRanked: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['is_ranked', 'isRanked', 'ranked'],
+        fallback: true,
+      ),
+      remainingSlots: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['remaining_slots', 'remainingSlots'],
+        fallback: 0,
+      ),
+      hostFundedPrizeTotal: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['host_funded_prize_total', 'hostFundedPrizeTotal'],
+        fallback: 0,
+      ),
+      hostFundingRequired: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['host_funding_required', 'hostFundingRequired'],
+        fallback: 0,
+      ),
+      hostFundingEscrowed: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['host_funding_escrowed', 'hostFundingEscrowed'],
+        fallback: 0,
+      ),
     );
   }
 
@@ -712,6 +1163,12 @@ class CompetitionFinancialSummary {
     List<CompetitionPayoutBreakdown>? payoutStructure,
     String? currency,
     CompetitionDynamicPrizePool? dynamicPrizePool,
+    String? prizeMode,
+    bool? isRanked,
+    int? remainingSlots,
+    double? hostFundedPrizeTotal,
+    double? hostFundingRequired,
+    double? hostFundingEscrowed,
   }) {
     return CompetitionFinancialSummary(
       competitionId: competitionId ?? this.competitionId,
@@ -724,6 +1181,467 @@ class CompetitionFinancialSummary {
       payoutStructure: payoutStructure ?? this.payoutStructure,
       currency: currency ?? this.currency,
       dynamicPrizePool: dynamicPrizePool ?? this.dynamicPrizePool,
+      prizeMode: prizeMode ?? this.prizeMode,
+      isRanked: isRanked ?? this.isRanked,
+      remainingSlots: remainingSlots ?? this.remainingSlots,
+      hostFundedPrizeTotal: hostFundedPrizeTotal ?? this.hostFundedPrizeTotal,
+      hostFundingRequired: hostFundingRequired ?? this.hostFundingRequired,
+      hostFundingEscrowed: hostFundingEscrowed ?? this.hostFundingEscrowed,
+    );
+  }
+}
+
+class CompetitionParticipant {
+  const CompetitionParticipant({
+    required this.participantId,
+    required this.competitionId,
+    required this.clubId,
+    required this.status,
+    required this.entryFeeAmount,
+    required this.entryFeeCurrency,
+    required this.escrowStatus,
+    required this.joinedAt,
+    this.userId,
+    this.clubName,
+    this.walletLedgerId,
+    this.refundedAt,
+  });
+
+  final String participantId;
+  final String competitionId;
+  final String? userId;
+  final String clubId;
+  final String? clubName;
+  final String status;
+  final double entryFeeAmount;
+  final String entryFeeCurrency;
+  final String escrowStatus;
+  final String? walletLedgerId;
+  final DateTime joinedAt;
+  final DateTime? refundedAt;
+
+  String get entryFeeLabel =>
+      _formatUnitAmount(entryFeeAmount, _currencyLabel(entryFeeCurrency));
+
+  factory CompetitionParticipant.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition participant',
+    );
+    return CompetitionParticipant(
+      participantId: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['participant_id', 'participantId', 'id'],
+      ),
+      competitionId: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['competition_id', 'competitionId'],
+      ),
+      userId: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['user_id', 'userId'],
+      ),
+      clubId: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['club_id', 'clubId'],
+      ),
+      clubName: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['club_name', 'clubName'],
+      ),
+      status: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['status'],
+        fallback: 'joined',
+      ),
+      entryFeeAmount: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['entry_fee_amount', 'entryFeeAmount'],
+        fallback: 0,
+      ),
+      entryFeeCurrency: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['entry_fee_currency', 'entryFeeCurrency', 'currency'],
+        fallback: 'credit',
+      ),
+      escrowStatus: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['escrow_status', 'escrowStatus'],
+        fallback: 'none',
+      ),
+      walletLedgerId: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['wallet_ledger_id', 'walletLedgerId'],
+      ),
+      joinedAt:
+          _dateFrom(
+            <Map<String, Object?>>[json],
+            <String>['joined_at', 'joinedAt'],
+          ) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      refundedAt: _dateFrom(
+        <Map<String, Object?>>[json],
+        <String>['refunded_at', 'refundedAt'],
+      ),
+    );
+  }
+}
+
+class CompetitionParticipantsResponse {
+  const CompetitionParticipantsResponse({
+    required this.competitionId,
+    required this.participants,
+  });
+
+  final String competitionId;
+  final List<CompetitionParticipant> participants;
+
+  factory CompetitionParticipantsResponse.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition participants',
+    );
+    return CompetitionParticipantsResponse(
+      competitionId: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['competition_id', 'competitionId'],
+      ),
+      participants: GteJson.list(
+        _firstValue(<Map<String, Object?>>[json], <String>['participants']) ??
+            const <Object?>[],
+      ).map(CompetitionParticipant.fromJson).toList(growable: false),
+    );
+  }
+}
+
+class CompetitionPot {
+  const CompetitionPot({
+    required this.competitionId,
+    required this.currency,
+    required this.participantCount,
+    required this.capacity,
+    required this.remainingSlots,
+    required this.entryFee,
+    required this.grossPot,
+    required this.platformFeePct,
+    required this.platformFeeAmount,
+    required this.hostFeePct,
+    required this.hostFeeAmount,
+    required this.netPayoutPot,
+    required this.prizeMode,
+    required this.payoutMode,
+    required this.fixedPrizes,
+    required this.payoutStructure,
+  });
+
+  final String competitionId;
+  final String currency;
+  final int participantCount;
+  final int capacity;
+  final int remainingSlots;
+  final double entryFee;
+  final double grossPot;
+  final double platformFeePct;
+  final double platformFeeAmount;
+  final double hostFeePct;
+  final double hostFeeAmount;
+  final double netPayoutPot;
+  final String prizeMode;
+  final String payoutMode;
+  final Map<String, double> fixedPrizes;
+  final List<CompetitionPayoutBreakdown> payoutStructure;
+
+  factory CompetitionPot.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition pot',
+    );
+    return CompetitionPot(
+      competitionId: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['competition_id', 'competitionId'],
+      ),
+      currency: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['currency'],
+        fallback: 'credit',
+      ),
+      participantCount: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['participant_count', 'participantCount'],
+        fallback: 0,
+      ),
+      capacity: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['capacity'],
+        fallback: 2,
+      ),
+      remainingSlots: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['remaining_slots', 'remainingSlots'],
+        fallback: 0,
+      ),
+      entryFee: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['entry_fee', 'entryFee'],
+        fallback: 0,
+      ),
+      grossPot: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['gross_pot', 'grossPot'],
+        fallback: 0,
+      ),
+      platformFeePct: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['platform_fee_pct', 'platformFeePct'],
+        fallback: 0.20,
+      ),
+      platformFeeAmount: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['platform_fee_amount', 'platformFeeAmount'],
+        fallback: 0,
+      ),
+      hostFeePct: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['host_fee_pct', 'hostFeePct'],
+        fallback: 0,
+      ),
+      hostFeeAmount: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['host_fee_amount', 'hostFeeAmount'],
+        fallback: 0,
+      ),
+      netPayoutPot: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['net_payout_pot', 'netPayoutPot'],
+        fallback: 0,
+      ),
+      prizeMode: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['prize_mode', 'prizeMode'],
+        fallback: 'entry_funded',
+      ),
+      payoutMode: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['payout_mode', 'payoutMode'],
+        fallback: 'winner_takes_all',
+      ),
+      fixedPrizes: _doubleMapFrom(
+        _firstValue(
+          <Map<String, Object?>>[json],
+          <String>['fixed_prizes', 'fixedPrizes'],
+        ),
+      ),
+      payoutStructure: _payoutsFrom(
+        _firstValue(
+          <Map<String, Object?>>[json],
+          <String>['payout_structure', 'payoutStructure'],
+        ),
+      ),
+    );
+  }
+}
+
+class ClubCompetitionLeaderboardEntry {
+  const ClubCompetitionLeaderboardEntry({
+    required this.rank,
+    required this.clubId,
+    required this.clubName,
+    required this.rankingPoints,
+    required this.wins,
+    required this.draws,
+    required this.losses,
+    required this.trophies,
+    required this.recentForm,
+    required this.eligibilityTier,
+    required this.gtexHostedEligible,
+    this.ownerUserId,
+  });
+
+  final int rank;
+  final String clubId;
+  final String clubName;
+  final String? ownerUserId;
+  final int rankingPoints;
+  final int wins;
+  final int draws;
+  final int losses;
+  final int trophies;
+  final String recentForm;
+  final String eligibilityTier;
+  final bool gtexHostedEligible;
+
+  factory ClubCompetitionLeaderboardEntry.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'club competition leaderboard entry',
+    );
+    return ClubCompetitionLeaderboardEntry(
+      rank: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['rank'],
+        fallback: 0,
+      ),
+      clubId: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['club_id', 'clubId'],
+      ),
+      clubName: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['club_name', 'clubName'],
+      ),
+      ownerUserId: _stringOrNullFrom(
+        <Map<String, Object?>>[json],
+        <String>['owner_user_id', 'ownerUserId'],
+      ),
+      rankingPoints: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['ranking_points', 'rankingPoints'],
+        fallback: 0,
+      ),
+      wins: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['wins'],
+        fallback: 0,
+      ),
+      draws: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['draws'],
+        fallback: 0,
+      ),
+      losses: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['losses'],
+        fallback: 0,
+      ),
+      trophies: _intFrom(
+        <Map<String, Object?>>[json],
+        <String>['trophies'],
+        fallback: 0,
+      ),
+      recentForm: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['recent_form', 'recentForm'],
+        fallback: '',
+      ),
+      eligibilityTier: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['eligibility_tier', 'eligibilityTier'],
+        fallback: 'ladder',
+      ),
+      gtexHostedEligible: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['gtex_hosted_eligible', 'gtexHostedEligible'],
+        fallback: false,
+      ),
+    );
+  }
+}
+
+class ClubCompetitionLeaderboardResponse {
+  const ClubCompetitionLeaderboardResponse({required this.entries});
+
+  final List<ClubCompetitionLeaderboardEntry> entries;
+
+  factory ClubCompetitionLeaderboardResponse.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'club competition leaderboard',
+    );
+    return ClubCompetitionLeaderboardResponse(
+      entries: GteJson.list(
+        _firstValue(<Map<String, Object?>>[json], <String>['entries']) ??
+            const <Object?>[],
+      ).map(ClubCompetitionLeaderboardEntry.fromJson).toList(growable: false),
+    );
+  }
+}
+
+class RandomCompetitionQuote {
+  const RandomCompetitionQuote({
+    required this.competitionId,
+    required this.competitionName,
+    required this.mode,
+    required this.currency,
+    required this.entryFee,
+    required this.grossPot,
+    required this.platformFeeAmount,
+    required this.netPayoutPot,
+    required this.ranked,
+    required this.confirmationRequired,
+    this.startsAt,
+  });
+
+  final String competitionId;
+  final String competitionName;
+  final String mode;
+  final String currency;
+  final double entryFee;
+  final double grossPot;
+  final double platformFeeAmount;
+  final double netPayoutPot;
+  final bool ranked;
+  final DateTime? startsAt;
+  final bool confirmationRequired;
+
+  factory RandomCompetitionQuote.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'random competition quote',
+    );
+    return RandomCompetitionQuote(
+      competitionId: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['competition_id', 'competitionId'],
+      ),
+      competitionName: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['competition_name', 'competitionName'],
+      ),
+      mode: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['mode'],
+        fallback: 'one_v_one',
+      ),
+      currency: _stringFrom(
+        <Map<String, Object?>>[json],
+        <String>['currency'],
+        fallback: 'credit',
+      ),
+      entryFee: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['entry_fee', 'entryFee'],
+        fallback: 0,
+      ),
+      grossPot: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['gross_pot', 'grossPot'],
+        fallback: 0,
+      ),
+      platformFeeAmount: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['platform_fee_amount', 'platformFeeAmount'],
+        fallback: 0,
+      ),
+      netPayoutPot: _doubleFrom(
+        <Map<String, Object?>>[json],
+        <String>['net_payout_pot', 'netPayoutPot'],
+        fallback: 0,
+      ),
+      ranked: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['ranked', 'is_ranked', 'isRanked'],
+        fallback: true,
+      ),
+      startsAt: _dateFrom(
+        <Map<String, Object?>>[json],
+        <String>['starts_at', 'startsAt'],
+      ),
+      confirmationRequired: _boolFrom(
+        <Map<String, Object?>>[json],
+        <String>['confirmation_required', 'confirmationRequired'],
+        fallback: true,
+      ),
     );
   }
 }
@@ -829,6 +1747,77 @@ CompetitionDynamicPrizePool? _dynamicPrizePoolFromMaps(
   return null;
 }
 
+FastMatchEntitlementView? _fastMatchEntitlementFromMaps(
+  Iterable<Map<String, Object?>> sources,
+) {
+  final Object? nested = _firstValue(sources, <String>[
+    'fast_match_entitlement',
+    'fastMatchEntitlement',
+    'entitlement',
+    'fast_match',
+    'fastMatch',
+  ]);
+  if (nested != null) {
+    try {
+      return FastMatchEntitlementView.fromJson(nested);
+    } on GteParsingException {
+      return null;
+    }
+  }
+  if (_firstValue(sources, <String>[
+        'free_matches_remaining',
+        'freeMatchesRemaining',
+        'charge_required_now',
+        'chargeRequiredNow',
+        'fan_coin_entry_fee',
+        'fanCoinEntryFee',
+      ]) ==
+      null) {
+    return null;
+  }
+  final Map<String, Object?> merged = <String, Object?>{};
+  for (final Map<String, Object?> source in sources) {
+    merged.addAll(source);
+  }
+  return FastMatchEntitlementView.fromJson(merged);
+}
+
+FastCupRegistrationView? _fastCupRegistrationFromMaps(
+  Iterable<Map<String, Object?>> sources,
+) {
+  final Object? nested = _firstValue(sources, <String>[
+    'fast_cup_registration',
+    'fastCupRegistration',
+    'registration',
+    'cup_registration',
+    'cupRegistration',
+    'payment',
+  ]);
+  if (nested != null) {
+    try {
+      return FastCupRegistrationView.fromJson(nested);
+    } on GteParsingException {
+      return null;
+    }
+  }
+  if (_firstValue(sources, <String>[
+        'escrow_status',
+        'escrowStatus',
+        'entry_fee_amount',
+        'entryFeeAmount',
+        'registration_id',
+        'registrationId',
+      ]) ==
+      null) {
+    return null;
+  }
+  final Map<String, Object?> merged = <String, Object?>{};
+  for (final Map<String, Object?> source in sources) {
+    merged.addAll(source);
+  }
+  return FastCupRegistrationView.fromJson(merged);
+}
+
 MatchType _matchTypeFromString(
   String value, {
   required String creatorId,
@@ -872,6 +1861,42 @@ MatchType _matchTypeFromString(
     return MatchType.gtexHosted;
   }
   return MatchType.userHosted;
+}
+
+String _currencyLabel(String currency) {
+  final String normalized = currency.trim().toLowerCase();
+  if (<String>{
+    'credit',
+    'credits',
+    'fan_coin',
+    'fancoin',
+    'fan coin',
+  }.contains(normalized)) {
+    return 'Fan Coin';
+  }
+  if (<String>{
+    'coin',
+    'coins',
+    'gtex',
+    'gtex_coin',
+    'gtex coin',
+  }.contains(normalized)) {
+    return 'GTEX Coin';
+  }
+  return currency.trim().isEmpty ? 'Fan Coin' : currency.trim().toUpperCase();
+}
+
+String _formatUnitAmount(double value, String unitLabel) {
+  final bool whole = value == value.roundToDouble();
+  return '${value.toStringAsFixed(whole ? 0 : 2)} $unitLabel';
+}
+
+String _sentenceCase(String value) {
+  final String normalized = value.replaceAll('_', ' ').trim();
+  if (normalized.isEmpty) {
+    return value;
+  }
+  return normalized[0].toUpperCase() + normalized.substring(1);
 }
 
 Object? _firstValue(Iterable<Map<String, Object?>> sources, List<String> keys) {
@@ -999,6 +2024,24 @@ Map<String, Object?> _mapOrEmpty(Object? value) {
   } on GteParsingException {
     return const <String, Object?>{};
   }
+}
+
+Map<String, double> _doubleMapFrom(Object? value) {
+  final Map<String, Object?> json = _mapOrEmpty(value);
+  if (json.isEmpty) {
+    return const <String, double>{};
+  }
+  return json.map(
+    (String key, Object? raw) =>
+        MapEntry<String, double>(key, _doubleValue(raw)),
+  );
+}
+
+double _doubleValue(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 List<CompetitionPayoutBreakdown> _payoutsFrom(Object? value) {

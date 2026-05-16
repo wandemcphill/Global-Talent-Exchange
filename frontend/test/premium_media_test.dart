@@ -81,6 +81,10 @@ void main() {
     expect(assets, contains('assets/media/gtex_cup_lift_hero.mp4'));
     expect(assets, contains('assets/media/gtex_cup_lift_poster.webp'));
     expect(assets, contains('assets/media/gtex_matchday_wallpaper.png'));
+    expect(
+      assets,
+      contains('assets/media/gtex_living_football_os_wallpaper.svg'),
+    );
   });
 }
 

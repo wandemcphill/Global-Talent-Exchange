@@ -294,10 +294,12 @@ class GtexClubGrowthFixtures {
         },
         currentAbility: 38 + index,
         potential: 72 + index,
-        portraitAssetRef: null,
+        portraitAssetRef:
+            'newgen/ng-academy-${(offset + index + 1).toString().padLeft(3, '0')}',
         status: 'discovered',
         metadata: const <String, Object?>{
           'portrait_policy': 'newgen_bank_only',
+          'portrait_source_pack': 'approved_newgen_fixture_bank',
         },
         updatedAt: now,
       ),
@@ -431,6 +433,10 @@ class GtexClubGrowthFixtures {
               status: status,
               metadata: item.metadata,
               updatedAt: DateTime.now().toUtc(),
+              seniorPlayerId:
+                  status == 'promoted_to_senior'
+                      ? item.seniorPlayerId ?? 'senior-${item.id}'
+                      : item.seniorPlayerId,
             );
           })
           .toList(growable: false),

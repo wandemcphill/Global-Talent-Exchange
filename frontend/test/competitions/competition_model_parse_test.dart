@@ -91,4 +91,75 @@ void main() {
     expect(summary.joinEligibility.reason, 'competition_full');
     expect(summary.joinEligibility.requiresInvite, isTrue);
   });
+
+  test('parses Fast Match entitlement and Fast Cup escrow metadata', () {
+    final CompetitionSummary summary = CompetitionSummary.fromJson(
+      <String, Object?>{
+        'id': 'fast-cup-1',
+        'name': 'Fast Cup Flash',
+        'format': 'cup',
+        'visibility': 'public',
+        'status': 'open_for_join',
+        'creator_id': 'gtex-fastlane',
+        'creator_name': 'GTEX Fast Lane',
+        'participant_count': 0,
+        'capacity': 8,
+        'currency': 'credit',
+        'entry_fee': 12,
+        'platform_fee_pct': 0.10,
+        'host_fee_pct': 0.02,
+        'prize_pool': 0,
+        'match_type': 'fast_match',
+        'fast_match_entitlement': <String, Object?>{
+          'free_matches_remaining': 7,
+          'free_matches_used': 3,
+          'charge_on_loss': true,
+          'charge_required_now': false,
+          'entry_currency': 'credit',
+          'entry_currency_label': 'Fan Coin',
+          'fan_coin_entry_fee': 12,
+          'entitlement_status': 'free_run',
+        },
+        'fast_cup_registration': <String, Object?>{
+          'registration_id': 'registration-1',
+          'escrow_status': 'escrowed',
+          'entry_fee_amount': 12,
+          'entry_fee_currency': 'credit',
+          'wallet_ledger_id': 'ledger-1',
+        },
+        'join_eligibility': <String, Object?>{'eligible': true},
+        'created_at': '2026-05-16T12:00:00Z',
+        'updated_at': '2026-05-16T12:00:00Z',
+      },
+    );
+
+    expect(summary.isFastMatch, isTrue);
+    expect(summary.fastMatchEntitlement!.freeMatchesRemaining, 7);
+    expect(summary.fastMatchEntitlement!.entryCurrencyLabel, 'Fan Coin');
+    expect(summary.economyNotice, contains('Server entitlement'));
+    expect(summary.fastCupRegistration!.isEscrowBacked, isTrue);
+    expect(summary.fastCupRegistration!.entryFeeLabel, '12 Fan Coin');
+  });
+
+  test('parses quick-game response as Fast Match start metadata', () {
+    final FastMatchEntitlementView entitlement =
+        FastMatchEntitlementView.fromJson(<String, Object?>{
+          'match_id': 'match-1',
+          'live_match_key': 'live-1',
+          'viewer_route': '/match-viewer/live-1',
+          'free_matches_remaining': 0,
+          'free_matches_used': 10,
+          'charge_on_loss': true,
+          'charge_required_now': true,
+          'entry_currency': 'credit',
+          'entry_currency_label': 'Fan Coin',
+          'fan_coin_entry_fee': 12,
+          'entitlement_status': 'paid_required',
+          'settlement_status': 'pending',
+        });
+
+    expect(entitlement.liveMatchKey, 'live-1');
+    expect(entitlement.chargeRequiredNow, isTrue);
+    expect(entitlement.entryFeeLabel, '12 Fan Coin');
+  });
 }

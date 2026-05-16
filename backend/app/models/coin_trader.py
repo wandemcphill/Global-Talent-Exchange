@@ -59,9 +59,16 @@ class CoinTraderProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="applied", server_default="applied", index=True)
     tier: Mapped[str] = mapped_column(String(32), nullable=False, default="bronze", server_default="bronze", index=True)
+    verification_level: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="standard", server_default="standard", index=True
+    )
     completion_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     average_release_minutes: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     rating: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    completed_volume_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    dispute_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     terms_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     payment_methods_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     bank_accounts_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)

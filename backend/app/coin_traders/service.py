@@ -20,6 +20,7 @@ from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.notifications.service import NotificationEventMatrixService
 from app.wallets.service import LedgerPosting, WalletService
+from app.coin_traders.governance import CoinTraderPricingGovernanceService
 from app.coin_traders.schemas import (
     CoinTradeAdminResolutionRequest,
     CoinTradeDisputeRequest,
@@ -141,6 +142,27 @@ class CoinTraderService:
 
     def upsert_rate(self, payload: CoinTraderRateUpsertRequest, *, actor: User) -> CoinTraderRateView:
         profile = self._require_approved_profile_for_user(actor)
+        governance = CoinTraderPricingGovernanceService(self.session)
+        result = governance.evaluate_values(
+            coin_unit=payload.coin_unit,
+            buy_rate_fiat=payload.buy_rate_fiat,
+            sell_rate_fiat=payload.sell_rate_fiat,
+        )
+        try:
+            governance.block_if_invalid(
+                result=result,
+                actor=actor,
+                trader_profile=profile,
+                proposed_rate_payload={
+                    "coin_unit": payload.coin_unit.value,
+                    "fiat_currency": payload.fiat_currency.upper(),
+                    "buy_rate_fiat": str(payload.buy_rate_fiat),
+                    "sell_rate_fiat": str(payload.sell_rate_fiat),
+                },
+                action="upsert",
+            )
+        except ValueError as exc:
+            raise CoinTraderValidationError(str(exc)) from exc
         rate = self.session.scalar(
             select(CoinTraderRate).where(
                 CoinTraderRate.trader_profile_id == profile.id,
@@ -184,6 +206,24 @@ class CoinTraderService:
             raise CoinTraderValidationError("Traders cannot create orders against their own desk.")
         direction = self._direction_value(payload.direction)
         rate = self._active_rate(profile.id, payload.coin_unit, payload.fiat_currency)
+        governance = CoinTraderPricingGovernanceService(self.session)
+        result = governance.evaluate_rate(rate)
+        try:
+            governance.block_if_invalid(
+                result=result,
+                actor=actor,
+                trader_profile=profile,
+                proposed_rate_payload={
+                    "coin_unit": rate.coin_unit.value,
+                    "fiat_currency": rate.fiat_currency,
+                    "buy_rate_fiat": str(rate.buy_rate_fiat),
+                    "sell_rate_fiat": str(rate.sell_rate_fiat),
+                    "order_coin_amount": str(payload.coin_amount),
+                },
+                action="order",
+            )
+        except ValueError as exc:
+            raise CoinTraderValidationError(str(exc)) from exc
         quoted_rate = rate.sell_rate_fiat if direction == CoinTradeDirection.USER_BUYS.value else rate.buy_rate_fiat
         if quoted_rate <= Decimal("0"):
             raise CoinTraderValidationError("Coin trader rate is not available.")
@@ -622,9 +662,12 @@ class CoinTraderService:
             country_code=profile.country_code,
             status=profile.status,
             tier=profile.tier,
+            verification_level=profile.verification_level,
             completion_rate=profile.completion_rate,
             average_release_minutes=profile.average_release_minutes,
             rating=profile.rating,
+            completed_volume_fiat=profile.completed_volume_fiat,
+            dispute_score=profile.dispute_score,
             terms=dict(profile.terms_json or {}),
             payment_methods=list(profile.payment_methods_json or []),
             bank_accounts=list(profile.bank_accounts_json or []),
@@ -634,6 +677,7 @@ class CoinTraderService:
         )
 
     def to_rate_view(self, rate: CoinTraderRate) -> CoinTraderRateView:
+        governance_result = CoinTraderPricingGovernanceService(self.session).evaluate_rate(rate)
         return CoinTraderRateView(
             id=rate.id,
             trader_profile_id=rate.trader_profile_id,
@@ -645,6 +689,16 @@ class CoinTraderService:
             max_coin_amount=rate.max_coin_amount,
             available_liquidity=rate.available_liquidity,
             is_active=rate.is_active,
+            spread_fiat=governance_result.spread_fiat,
+            treasury_deposit_rate_fiat=governance_result.treasury_deposit_rate_fiat,
+            treasury_withdrawal_rate_fiat=governance_result.treasury_withdrawal_rate_fiat,
+            min_trader_buy_rate_fiat=governance_result.min_trader_buy_rate_fiat,
+            max_trader_buy_rate_fiat=governance_result.max_trader_buy_rate_fiat,
+            min_trader_sell_rate_fiat=governance_result.min_trader_sell_rate_fiat,
+            max_trader_sell_rate_fiat=governance_result.max_trader_sell_rate_fiat,
+            max_trader_spread_fiat=governance_result.max_trader_spread_fiat,
+            governance_status=governance_result.governance_status,
+            governance_reasons=list(governance_result.governance_reasons),
             metadata_json=dict(rate.metadata_json or {}),
         )
 

@@ -129,8 +129,8 @@ class CompetitionRulesEngine:
             errors.append("cup competitions must be single elimination")
         errors.extend(self._validate_participant_bounds(rules.min_participants, rules.max_participants))
         allowed_sizes = rules.allowed_participant_sizes or list(CUP_ALLOWED_PARTICIPANT_SIZES)
-        if any(size <= 1 or not self._is_power_of_two(size) for size in allowed_sizes):
-            errors.append("cup allowed participant sizes must be powers of two")
+        if any(size <= 1 for size in allowed_sizes):
+            errors.append("cup allowed participant sizes must be greater than one")
         if any(size not in CUP_ALLOWED_PARTICIPANT_SIZES for size in allowed_sizes):
             errors.append("cup allowed participant sizes must use the supported bracket sizes")
         if rules.min_participants not in allowed_sizes:

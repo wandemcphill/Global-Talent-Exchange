@@ -5,9 +5,12 @@ class GtexCoinTraderProfile {
     required this.displayName,
     required this.status,
     required this.tier,
+    this.verificationLevel = 'standard',
     required this.completionRate,
     required this.averageReleaseMinutes,
     required this.rating,
+    this.completedVolumeFiat = 0,
+    this.disputeScore = 0,
     required this.rates,
     this.countryCode,
     this.terms = const <String, Object?>{},
@@ -23,9 +26,12 @@ class GtexCoinTraderProfile {
   final String? countryCode;
   final String status;
   final String tier;
+  final String verificationLevel;
   final double completionRate;
   final double averageReleaseMinutes;
   final double rating;
+  final double completedVolumeFiat;
+  final double disputeScore;
   final Map<String, Object?> terms;
   final List<Map<String, Object?>> paymentMethods;
   final List<Map<String, Object?>> bankAccounts;
@@ -42,9 +48,15 @@ class GtexCoinTraderProfile {
       countryCode: _stringOrNull(json['country_code']),
       status: _string(json['status'], fallback: 'applied'),
       tier: _string(json['tier'], fallback: 'bronze'),
+      verificationLevel: _string(
+        json['verification_level'],
+        fallback: 'standard',
+      ),
       completionRate: _double(json['completion_rate']),
       averageReleaseMinutes: _double(json['average_release_minutes']),
       rating: _double(json['rating']),
+      completedVolumeFiat: _double(json['completed_volume_fiat']),
+      disputeScore: _double(json['dispute_score']),
       terms: _map(json['terms']),
       paymentMethods: _mapList(json['payment_methods']),
       bankAccounts: _mapList(json['bank_accounts']),
@@ -145,6 +157,16 @@ class GtexCoinTraderRate {
     required this.maxCoinAmount,
     required this.availableLiquidity,
     required this.isActive,
+    this.spreadFiat = 0,
+    this.treasuryDepositRateFiat,
+    this.treasuryWithdrawalRateFiat,
+    this.minTraderBuyRateFiat,
+    this.maxTraderBuyRateFiat,
+    this.minTraderSellRateFiat,
+    this.maxTraderSellRateFiat,
+    this.maxTraderSpreadFiat,
+    this.governanceStatus = 'compliant',
+    this.governanceReasons = const <String>[],
     this.metadata = const <String, Object?>{},
   });
 
@@ -158,6 +180,16 @@ class GtexCoinTraderRate {
   final double maxCoinAmount;
   final double availableLiquidity;
   final bool isActive;
+  final double spreadFiat;
+  final double? treasuryDepositRateFiat;
+  final double? treasuryWithdrawalRateFiat;
+  final double? minTraderBuyRateFiat;
+  final double? maxTraderBuyRateFiat;
+  final double? minTraderSellRateFiat;
+  final double? maxTraderSellRateFiat;
+  final double? maxTraderSpreadFiat;
+  final String governanceStatus;
+  final List<String> governanceReasons;
   final Map<String, Object?> metadata;
 
   factory GtexCoinTraderRate.fromJson(Object? raw) {
@@ -173,11 +205,46 @@ class GtexCoinTraderRate {
       maxCoinAmount: _double(json['max_coin_amount']),
       availableLiquidity: _double(json['available_liquidity']),
       isActive: _bool(json['is_active'], fallback: true),
+      spreadFiat: _double(json['spread_fiat']),
+      treasuryDepositRateFiat: _doubleOrNull(
+        json['treasury_deposit_rate_fiat'],
+      ),
+      treasuryWithdrawalRateFiat: _doubleOrNull(
+        json['treasury_withdrawal_rate_fiat'],
+      ),
+      minTraderBuyRateFiat: _doubleOrNull(json['min_trader_buy_rate_fiat']),
+      maxTraderBuyRateFiat: _doubleOrNull(json['max_trader_buy_rate_fiat']),
+      minTraderSellRateFiat: _doubleOrNull(json['min_trader_sell_rate_fiat']),
+      maxTraderSellRateFiat: _doubleOrNull(json['max_trader_sell_rate_fiat']),
+      maxTraderSpreadFiat: _doubleOrNull(json['max_trader_spread_fiat']),
+      governanceStatus: _string(
+        json['governance_status'],
+        fallback: 'compliant',
+      ),
+      governanceReasons: _list(
+        json['governance_reasons'],
+      ).map((Object? value) => value.toString()).toList(growable: false),
       metadata: _map(json['metadata_json']),
     );
   }
 
   String get coinLabel => coinUnit == 'CREDIT' ? 'Fan Coin' : 'GTEX Coin';
+
+  bool get isGovernanceCompliant =>
+      governanceStatus.toLowerCase() == 'compliant';
+
+  bool get isRestricted => !isGovernanceCompliant;
+
+  String get governanceLabel {
+    switch (governanceStatus.toLowerCase()) {
+      case 'arbitrage_risk':
+        return 'Arbitrage risk';
+      case 'out_of_bounds':
+        return 'Out of bounds';
+      default:
+        return 'Compliant';
+    }
+  }
 }
 
 class GtexCoinTradeOrder {
@@ -363,6 +430,16 @@ double _double(Object? value, {double fallback = 0}) {
     return value.toDouble();
   }
   return double.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+double? _doubleOrNull(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value.toString());
 }
 
 bool _bool(Object? value, {bool fallback = false}) {

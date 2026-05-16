@@ -70,6 +70,27 @@ class TreasurySettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=RateDirection.FIAT_PER_COIN,
     )
+    min_trader_buy_rate_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("820.0000"), server_default="820.0000"
+    )
+    max_trader_buy_rate_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("890.0000"), server_default="890.0000"
+    )
+    min_trader_sell_rate_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("900.0000"), server_default="900.0000"
+    )
+    max_trader_sell_rate_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("980.0000"), server_default="980.0000"
+    )
+    max_trader_spread_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("120.0000"), server_default="120.0000"
+    )
+    max_buy_above_withdrawal_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("10.0000"), server_default="10.0000"
+    )
+    max_sell_below_deposit_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
+    )
 
     min_deposit: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"))
     max_deposit: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"))

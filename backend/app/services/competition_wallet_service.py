@@ -138,6 +138,130 @@ class CompetitionWalletService:
         )
         return CompetitionWalletResult(status="refunded", transaction_id=transaction_id)
 
+    def escrow_host_funding(
+        self,
+        *,
+        competition: Competition,
+        host_user_id: str,
+        amount_minor: int,
+    ) -> CompetitionWalletResult:
+        amount_minor = max(int(amount_minor or 0), 0)
+        if amount_minor <= 0:
+            return CompetitionWalletResult(status="skipped", reason="zero_amount")
+        existing = self._existing_competition_ledger(competition.id, "host_funded_prize_escrow")
+        if existing is not None:
+            payload = dict(existing.payload_json or {})
+            return CompetitionWalletResult(
+                status=str(payload.get("status") or "settled"),
+                transaction_id=(
+                    payload.get("transaction_id") if isinstance(payload.get("transaction_id"), str) else None
+                ),
+                escrow_used_minor=amount_minor,
+            )
+        user = self.session.get(User, host_user_id)
+        if user is None or not user.is_active:
+            raise InsufficientBalanceError("Host-funded competitions require an active host wallet.")
+        unit = self._ledger_unit_for_currency(competition.currency)
+        amount = self._minor_to_decimal(amount_minor)
+        user_account = self.wallet_service.get_user_account(self.session, user, unit)
+        if self.wallet_service.get_balance(self.session, user_account) < amount:
+            raise InsufficientBalanceError("Host wallet balance is lower than the advertised prize funding.")
+        escrow_account = self.ensure_competition_escrow_account(competition)
+        entries = self.wallet_service.append_transaction(
+            self.session,
+            postings=[
+                LedgerPosting(
+                    account=user_account,
+                    amount=-amount,
+                    source_tag=LedgerSourceTag.HOSTING_FEE_SPEND,
+                ),
+                LedgerPosting(
+                    account=escrow_account,
+                    amount=amount,
+                    source_tag=LedgerSourceTag.HOSTING_FEE_SPEND,
+                ),
+            ],
+            reason=LedgerEntryReason.COMPETITION_ENTRY,
+            source_tag=LedgerSourceTag.HOSTING_FEE_SPEND,
+            reference=f"competition-host-funding:{competition.id}:{user.id}",
+            description=f"Host-funded prize escrow for {competition.name}",
+            external_reference=f"competition-host-funding:{competition.id}:{user.id}",
+            actor=user,
+            idempotency_key=f"competition-host-funding:{competition.id}:{user.id}",
+        )
+        transaction_id = entries[0].transaction_id if entries else None
+        self._record_competition_ledger(
+            competition_id=competition.id,
+            entry_type="host_funded_prize_escrow",
+            amount_minor=amount_minor,
+            currency=competition.currency,
+            reference_id=host_user_id,
+            payload_json={"status": "settled", "transaction_id": transaction_id},
+        )
+        return CompetitionWalletResult(status="settled", transaction_id=transaction_id, escrow_used_minor=amount_minor)
+
+    def refund_host_funding(
+        self,
+        *,
+        competition: Competition,
+        host_user_id: str,
+        amount_minor: int,
+    ) -> CompetitionWalletResult:
+        amount_minor = max(int(amount_minor or 0), 0)
+        if amount_minor <= 0:
+            return CompetitionWalletResult(status="skipped", reason="zero_amount")
+        existing = self._existing_competition_ledger(competition.id, "host_funded_prize_refund")
+        if existing is not None:
+            payload = dict(existing.payload_json or {})
+            return CompetitionWalletResult(
+                status=str(payload.get("status") or "refunded"),
+                transaction_id=(
+                    payload.get("transaction_id") if isinstance(payload.get("transaction_id"), str) else None
+                ),
+                escrow_used_minor=amount_minor,
+            )
+        user = self.session.get(User, host_user_id)
+        if user is None or not user.is_active:
+            return CompetitionWalletResult(status="unavailable", reason="missing_wallet_user")
+        unit = self._ledger_unit_for_currency(competition.currency)
+        amount = self._minor_to_decimal(amount_minor)
+        escrow_account = self.ensure_competition_escrow_account(competition)
+        recipient_account = self.wallet_service.get_user_account(self.session, user, unit)
+        if self.wallet_service.get_balance(self.session, escrow_account) < amount:
+            raise InsufficientBalanceError("Competition escrow balance is lower than the host-funded prize refund.")
+        entries = self.wallet_service.append_transaction(
+            self.session,
+            postings=[
+                LedgerPosting(
+                    account=recipient_account,
+                    amount=amount,
+                    source_tag=LedgerSourceTag.HOSTING_FEE_SPEND,
+                ),
+                LedgerPosting(
+                    account=escrow_account,
+                    amount=-amount,
+                    source_tag=LedgerSourceTag.HOSTING_FEE_SPEND,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.HOSTING_FEE_SPEND,
+            reference=f"competition-host-funding-refund:{competition.id}:{user.id}",
+            description=f"Host-funded prize refund for {competition.name}",
+            external_reference=f"competition-host-funding-refund:{competition.id}:{user.id}",
+            actor=user,
+            idempotency_key=f"competition-host-funding-refund:{competition.id}:{user.id}",
+        )
+        transaction_id = entries[0].transaction_id if entries else None
+        self._record_competition_ledger(
+            competition_id=competition.id,
+            entry_type="host_funded_prize_refund",
+            amount_minor=amount_minor,
+            currency=competition.currency,
+            reference_id=host_user_id,
+            payload_json={"status": "refunded", "transaction_id": transaction_id},
+        )
+        return CompetitionWalletResult(status="refunded", transaction_id=transaction_id)
+
     def settle_reward(
         self,
         *,
@@ -159,6 +283,8 @@ class CompetitionWalletService:
             amount_minor=amount_minor,
             target_account=target_account,
         )
+        if self._is_user_hosted_competition(competition) and backstop_minor > 0:
+            raise InsufficientBalanceError("Competition escrow balance is lower than the reward amount.")
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
@@ -199,7 +325,9 @@ class CompetitionWalletService:
             platform_backstop_minor=backstop_minor,
         )
 
-    def settle_fee_distribution(self, *, competition: Competition, entry_type: str, amount_minor: int) -> CompetitionWalletResult:
+    def settle_fee_distribution(
+        self, *, competition: Competition, entry_type: str, amount_minor: int
+    ) -> CompetitionWalletResult:
         amount_minor = max(int(amount_minor or 0), 0)
         if amount_minor <= 0:
             return CompetitionWalletResult(status="skipped", reason="zero_amount")
@@ -368,6 +496,11 @@ class CompetitionWalletService:
             if unit is LedgerUnit.CREDIT
             else LedgerSourceTag.PLATFORM_COMPETITION_REWARD
         )
+
+    @staticmethod
+    def _is_user_hosted_competition(competition: Competition) -> bool:
+        normalized = (competition.source_type or "").strip().lower()
+        return normalized in {"user", "user_hosted", "creator", "creator_hosted"}
 
     @staticmethod
     def _minor_to_decimal(amount_minor: int) -> Decimal:

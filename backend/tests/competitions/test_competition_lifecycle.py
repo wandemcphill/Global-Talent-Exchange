@@ -15,6 +15,7 @@ from app.models.competition_wallet_ledger import CompetitionWalletLedger
 def _create_competition(
     client,
     *,
+    host: dict[str, str],
     name: str,
     format: str,
     capacity: int,
@@ -30,12 +31,12 @@ def _create_competition(
             "entry_fee": entry_fee,
             "currency": currency,
             "capacity": capacity,
-            "creator_id": f"host-{name}",
             "payout_structure": [{"place": 1, "percent": "1.00"}],
             "scheduled_start_at": datetime(2035, 3, 20, tzinfo=timezone.utc).isoformat(),
         },
+        headers=host["headers"],
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     return response.json()["id"]
 
 
@@ -52,17 +53,33 @@ def _publish_and_join(
         join = client.post(
             f"/api/competitions/{competition_id}/join",
             headers=entrant["headers"],
-            json={"user_id": entrant["user_id"]},
+            json={"club_id": entrant["club_id"]},
         )
-        assert join.status_code == 200
+        assert join.status_code == 200, join.text
 
 
-def test_league_round_and_fixture_generation(client, competition_admin_headers, auth_user_factory) -> None:
-    competition_id = _create_competition(client, name="League Fixtures", format="league", capacity=4)
-    entrants = [auth_user_factory(suffix=f"league-fixture-{index}") for index in range(1, 5)]
+def test_league_round_and_fixture_generation(
+    client,
+    competition_admin_headers,
+    auth_user_factory,
+    competition_club_factory,
+) -> None:
+    host = auth_user_factory(suffix="league-fixtures-host")
+    competition_id = _create_competition(
+        client, host=host, name="League Fixtures", format="league", capacity=4
+    )
+    entrants = []
+    for index in range(1, 5):
+        entrant = auth_user_factory(suffix=f"league-fixture-{index}")
+        entrant["club_id"] = competition_club_factory(owner_user_id=entrant["user_id"])
+        entrants.append(entrant)
     _publish_and_join(client, competition_id, competition_admin_headers, entrants)
 
-    seed = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"})
+    seed = client.post(
+        f"/api/competitions/{competition_id}/seed",
+        headers=competition_admin_headers,
+        json={"seed_method": "random"},
+    )
     assert seed.status_code == 200
     launch = client.post(
         f"/api/competitions/{competition_id}/launch",
@@ -78,12 +95,28 @@ def test_league_round_and_fixture_generation(client, competition_admin_headers, 
     assert {match["stage"] for match in fixtures} == {"league"}
 
 
-def test_standings_update_after_match_completion(client, competition_admin_headers, auth_user_factory) -> None:
-    competition_id = _create_competition(client, name="League Standings", format="league", capacity=2)
-    entrants = [auth_user_factory(suffix=f"league-standings-{index}") for index in range(1, 3)]
+def test_standings_update_after_match_completion(
+    client,
+    competition_admin_headers,
+    auth_user_factory,
+    competition_club_factory,
+) -> None:
+    host = auth_user_factory(suffix="league-standings-host")
+    competition_id = _create_competition(
+        client, host=host, name="League Standings", format="league", capacity=2
+    )
+    entrants = []
+    for index in range(1, 3):
+        entrant = auth_user_factory(suffix=f"league-standings-{index}")
+        entrant["club_id"] = competition_club_factory(owner_user_id=entrant["user_id"])
+        entrants.append(entrant)
     _publish_and_join(client, competition_id, competition_admin_headers, entrants)
 
-    seed = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"})
+    seed = client.post(
+        f"/api/competitions/{competition_id}/seed",
+        headers=competition_admin_headers,
+        json={"seed_method": "random"},
+    )
     assert seed.status_code == 200
     launch = client.post(
         f"/api/competitions/{competition_id}/launch",
@@ -97,12 +130,14 @@ def test_standings_update_after_match_completion(client, competition_admin_heade
 
     event = client.post(
         f"/api/competitions/{competition_id}/matches/{match['id']}/events",
+        headers=competition_admin_headers,
         json={"event_type": "goal", "minute": 12, "club_id": match["home_club_id"], "highlight": True},
     )
     assert event.status_code == 201
 
     result = client.post(
         f"/api/competitions/{competition_id}/matches/{match['id']}/result",
+        headers=competition_admin_headers,
         json={"home_score": 2, "away_score": 1},
     )
     assert result.status_code == 200
@@ -114,12 +149,26 @@ def test_standings_update_after_match_completion(client, competition_admin_heade
     assert leader["wins"] == 1
 
 
-def test_cup_playoff_progression_and_settlement(client, competition_admin_headers, auth_user_factory) -> None:
-    competition_id = _create_competition(client, name="Cup Progression", format="cup", capacity=4)
-    entrants = [auth_user_factory(suffix=f"cup-progression-{index}") for index in range(1, 5)]
+def test_cup_playoff_progression_and_settlement(
+    client,
+    competition_admin_headers,
+    auth_user_factory,
+    competition_club_factory,
+) -> None:
+    host = auth_user_factory(suffix="cup-progression-host")
+    competition_id = _create_competition(client, host=host, name="Cup Progression", format="cup", capacity=4)
+    entrants = []
+    for index in range(1, 5):
+        entrant = auth_user_factory(suffix=f"cup-progression-{index}")
+        entrant["club_id"] = competition_club_factory(owner_user_id=entrant["user_id"])
+        entrants.append(entrant)
     _publish_and_join(client, competition_id, competition_admin_headers, entrants)
 
-    seeded = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"}).json()
+    seeded = client.post(
+        f"/api/competitions/{competition_id}/seed",
+        headers=competition_admin_headers,
+        json={"seed_method": "random"},
+    ).json()
     assert seeded["status"] == "seeded"
 
     launched = client.post(
@@ -133,11 +182,16 @@ def test_cup_playoff_progression_and_settlement(client, competition_admin_header
     for match in fixtures:
         result = client.post(
             f"/api/competitions/{competition_id}/matches/{match['id']}/result",
+            headers=competition_admin_headers,
             json={"home_score": 1, "away_score": 0, "winner_club_id": match["home_club_id"]},
         )
         assert result.status_code == 200
 
-    advanced = client.post(f"/api/competitions/{competition_id}/advance", json={"force": False}).json()
+    advanced = client.post(
+        f"/api/competitions/{competition_id}/advance",
+        headers=competition_admin_headers,
+        json={"force": False},
+    ).json()
     assert advanced["status"] in {"live", "completed"}
 
     fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()
@@ -147,17 +201,26 @@ def test_cup_playoff_progression_and_settlement(client, competition_admin_header
     final_match = final_matches[0]
     client.post(
         f"/api/competitions/{competition_id}/matches/{final_match['id']}/result",
+        headers=competition_admin_headers,
         json={"home_score": 2, "away_score": 0, "winner_club_id": final_match["home_club_id"]},
     )
 
-    completed = client.post(f"/api/competitions/{competition_id}/advance", json={"force": False}).json()
+    completed = client.post(
+        f"/api/competitions/{competition_id}/advance",
+        headers=competition_admin_headers,
+        json={"force": False},
+    ).json()
     assert completed["status"] == "completed"
 
-    settled = client.post(f"/api/competitions/{competition_id}/finalize", json={"settle": True}).json()
+    settled = client.post(
+        f"/api/competitions/{competition_id}/finalize",
+        headers=competition_admin_headers,
+        json={"settle": True},
+    ).json()
     assert settled["status"] == "settled"
 
 
-def test_schedule_blackout_avoids_exclusive_window(client, app_session_factory) -> None:
+def test_schedule_blackout_avoids_exclusive_window(client, app_session_factory, auth_user_factory) -> None:
     blocked_date = date(2026, 3, 20)
     with app_session_factory() as session:
         session.add(
@@ -174,9 +237,11 @@ def test_schedule_blackout_avoids_exclusive_window(client, app_session_factory) 
         )
         session.commit()
 
-    competition_id = _create_competition(client, name="Blackout League", format="league", capacity=4)
+    host = auth_user_factory(suffix="blackout-host")
+    competition_id = _create_competition(client, host=host, name="Blackout League", format="league", capacity=4)
     preview = client.post(
         f"/api/competitions/{competition_id}/schedule/preview",
+        headers=host["headers"],
         json={"start_date": blocked_date.isoformat()},
     )
     assert preview.status_code == 200
@@ -190,12 +255,22 @@ def test_launch_applies_tournament_lock_metadata(
     app_session_factory,
     competition_admin_headers,
     auth_user_factory,
+    competition_club_factory,
 ) -> None:
-    competition_id = _create_competition(client, name="Locked League", format="league", capacity=4)
-    entrants = [auth_user_factory(suffix=f"locked-league-{index}") for index in range(1, 5)]
+    host = auth_user_factory(suffix="locked-league-host")
+    competition_id = _create_competition(client, host=host, name="Locked League", format="league", capacity=4)
+    entrants = []
+    for index in range(1, 5):
+        entrant = auth_user_factory(suffix=f"locked-league-{index}")
+        entrant["club_id"] = competition_club_factory(owner_user_id=entrant["user_id"])
+        entrants.append(entrant)
     _publish_and_join(client, competition_id, competition_admin_headers, entrants)
 
-    seed = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"})
+    seed = client.post(
+        f"/api/competitions/{competition_id}/seed",
+        headers=competition_admin_headers,
+        json={"seed_method": "random"},
+    )
     assert seed.status_code == 200
     launch = client.post(
         f"/api/competitions/{competition_id}/launch",
@@ -219,9 +294,12 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
     app_session_factory,
     competition_admin_headers,
     auth_user_factory,
+    competition_club_factory,
 ) -> None:
+    host = auth_user_factory(suffix="paid-join-host")
     competition_id = _create_competition(
         client,
+        host=host,
         name="Paid Join Guard",
         format="league",
         capacity=2,
@@ -229,6 +307,7 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
         currency="credit",
     )
     entrant = auth_user_factory(suffix="paid-join-guard", funded_credit=Decimal("100.0000"))
+    entrant["club_id"] = competition_club_factory(owner_user_id=entrant["user_id"])
 
     publish = client.post(
         f"/api/competitions/{competition_id}/publish",
@@ -240,14 +319,14 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
     first_join = client.post(
         f"/api/competitions/{competition_id}/join",
         headers=entrant["headers"],
-        json={"user_id": entrant["user_id"]},
+        json={"club_id": entrant["club_id"]},
     )
     assert first_join.status_code == 200, first_join.text
 
     second_join = client.post(
         f"/api/competitions/{competition_id}/join",
         headers=entrant["headers"],
-        json={"user_id": entrant["user_id"]},
+        json={"club_id": entrant["club_id"]},
     )
     assert second_join.status_code == 200, second_join.text
 
@@ -257,7 +336,7 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
             .select_from(CompetitionParticipant)
             .where(
                 CompetitionParticipant.competition_id == competition_id,
-                CompetitionParticipant.club_id == entrant["user_id"],
+                CompetitionParticipant.club_id == entrant["club_id"],
             )
         )
         entry_count = session.scalar(
@@ -265,7 +344,7 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
             .select_from(CompetitionEntry)
             .where(
                 CompetitionEntry.competition_id == competition_id,
-                CompetitionEntry.club_id == entrant["user_id"],
+                CompetitionEntry.club_id == entrant["club_id"],
             )
         )
         fee_collection_count = session.scalar(
@@ -280,7 +359,7 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
         participant = session.scalar(
             select(CompetitionParticipant).where(
                 CompetitionParticipant.competition_id == competition_id,
-                CompetitionParticipant.club_id == entrant["user_id"],
+                CompetitionParticipant.club_id == entrant["club_id"],
             )
         )
 

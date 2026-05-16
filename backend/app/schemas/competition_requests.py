@@ -42,6 +42,31 @@ class CompetitionCreateRequest(CommonSchema):
         validation_alias=AliasChoices("buy_in_amount", "buyInAmount"),
     )
     currency: str = Field(default="credit", min_length=1, max_length=12)
+    competition_mode: str | None = Field(
+        default=None,
+        max_length=32,
+        validation_alias=AliasChoices("competition_mode", "competitionMode"),
+    )
+    is_ranked: bool = Field(default=True, validation_alias=AliasChoices("is_ranked", "isRanked", "ranked"))
+    registration_deadline: datetime | None = Field(
+        default=None,
+        validation_alias=AliasChoices("registration_deadline", "registrationDeadline"),
+    )
+    prize_mode: str | None = Field(
+        default=None, max_length=32, validation_alias=AliasChoices("prize_mode", "prizeMode")
+    )
+    payout_mode: str | None = Field(
+        default=None, max_length=32, validation_alias=AliasChoices("payout_mode", "payoutMode")
+    )
+    host_funded_prize_total: Decimal | None = Field(
+        default=None,
+        ge=0,
+        validation_alias=AliasChoices("host_funded_prize_total", "hostFundedPrizeTotal"),
+    )
+    fixed_prizes: dict[str, Decimal] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("fixed_prizes", "fixedPrizes"),
+    )
     capacity: int = Field(default=20, ge=2, le=USER_COMPETITION_MAX_PARTICIPANTS)
     max_players: int | None = Field(
         default=None,
@@ -69,6 +94,23 @@ class CompetitionCreateRequest(CommonSchema):
         validation_alias=AliasChoices("special_rules", "specialRules"),
     )
     beginner_friendly: bool | None = None
+    min_club_ranking: int | None = Field(
+        default=None, ge=0, validation_alias=AliasChoices("min_club_ranking", "minClubRanking")
+    )
+    max_club_ranking: int | None = Field(
+        default=None, ge=0, validation_alias=AliasChoices("max_club_ranking", "maxClubRanking")
+    )
+    division: str | None = Field(default=None, max_length=64)
+    region: str | None = Field(default=None, max_length=64)
+    country_code: str | None = Field(
+        default=None, max_length=8, validation_alias=AliasChoices("country_code", "countryCode")
+    )
+    featured: bool = False
+    manual_approval_required: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("manual_approval_required", "manualApprovalRequired"),
+    )
+    online_now: bool = Field(default=False, validation_alias=AliasChoices("online_now", "onlineNow"))
     scheduled_start_at: datetime | None = Field(
         default=None,
         validation_alias=AliasChoices("scheduled_start_at", "startDateTime", "start_date_time"),
@@ -124,6 +166,29 @@ class CompetitionUpdateRequest(CommonSchema):
     name: str | None = Field(default=None, min_length=3, max_length=120)
     visibility: CompetitionVisibility | None = None
     entry_fee: Decimal | None = Field(default=None, ge=0)
+    is_ranked: bool | None = Field(default=None, validation_alias=AliasChoices("is_ranked", "isRanked", "ranked"))
+    registration_deadline: datetime | None = Field(
+        default=None,
+        validation_alias=AliasChoices("registration_deadline", "registrationDeadline"),
+    )
+    competition_mode: str | None = Field(
+        default=None, max_length=32, validation_alias=AliasChoices("competition_mode", "competitionMode")
+    )
+    prize_mode: str | None = Field(
+        default=None, max_length=32, validation_alias=AliasChoices("prize_mode", "prizeMode")
+    )
+    payout_mode: str | None = Field(
+        default=None, max_length=32, validation_alias=AliasChoices("payout_mode", "payoutMode")
+    )
+    host_funded_prize_total: Decimal | None = Field(
+        default=None,
+        ge=0,
+        validation_alias=AliasChoices("host_funded_prize_total", "hostFundedPrizeTotal"),
+    )
+    fixed_prizes: dict[str, Decimal] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("fixed_prizes", "fixedPrizes"),
+    )
     capacity: int | None = Field(default=None, ge=2, le=USER_COMPETITION_MAX_PARTICIPANTS)
     payout_structure: tuple[PayoutRuleRequest, ...] | None = None
     platform_fee_pct: Decimal | None = Field(default=None, ge=0, le=_ONE_HUNDRED)
@@ -151,8 +216,11 @@ class CompetitionPublishRequest(CommonSchema):
 
 
 class CompetitionJoinRequest(CommonSchema):
-    user_id: str = Field(min_length=1, max_length=36)
+    user_id: str | None = Field(default=None, min_length=1, max_length=36)
     user_name: str | None = Field(default=None, min_length=1, max_length=120)
+    club_id: str | None = Field(
+        default=None, min_length=1, max_length=36, validation_alias=AliasChoices("club_id", "clubId")
+    )
     club_name: str | None = Field(default=None, min_length=2, max_length=120)
     invite_code: str | None = Field(default=None, min_length=4, max_length=32)
     passcode: str | None = Field(default=None, min_length=3, max_length=64)
@@ -164,6 +232,14 @@ class CompetitionJoinActionRequest(CompetitionJoinRequest):
 
 class CompetitionLeaveRequest(CommonSchema):
     user_id: str = Field(min_length=1, max_length=36)
+
+
+class RandomCompetitionRequest(CommonSchema):
+    mode: str = Field(default="one_v_one", max_length=32)
+    club_id: str | None = Field(
+        default=None, min_length=1, max_length=36, validation_alias=AliasChoices("club_id", "clubId")
+    )
+    confirm: bool = False
 
 
 class CompetitionInviteCreateRequest(CommonSchema):

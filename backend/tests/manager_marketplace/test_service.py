@@ -9,9 +9,22 @@ from sqlalchemy.pool import StaticPool
 from app.manager_marketplace.service import ManagerMarketplaceService
 from app.models.club_profile import ClubProfile
 from app.models.competition_match import CompetitionMatch
+from app.models.event_backbone import EventOutbox
 from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerControlMode, ManagerProfile
+from app.models.risk_ops import AuditLog
 from app.models.user import KycStatus, User, UserRole
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerBalanceProjection,
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransaction,
+    LedgerTransactionType,
+    LedgerUnit,
+)
 from app.replay_archive.persistence import ReplayArchiveRecordRow
+from app.wallets.service import LedgerPosting, WalletService
 
 
 def _build_session() -> Session:
@@ -21,6 +34,12 @@ def _build_session() -> Session:
         poolclass=StaticPool,
     )
     User.__table__.create(engine)
+    LedgerAccount.__table__.create(engine)
+    LedgerBalanceProjection.__table__.create(engine)
+    LedgerTransaction.__table__.create(engine)
+    LedgerEntry.__table__.create(engine)
+    EventOutbox.__table__.create(engine)
+    AuditLog.__table__.create(engine)
     ClubProfile.__table__.create(engine)
     ManagerProfile.__table__.create(engine)
     ManagerContract.__table__.create(engine)
@@ -73,6 +92,34 @@ def _seed_marketplace(session: Session) -> tuple[User, ManagerProfile]:
         is_available=True,
     )
     session.add_all([owner, manager, club, profile])
+    session.flush()
+    wallet = WalletService()
+    owner_account = wallet.get_user_account(session, owner, LedgerUnit.CREDIT)
+    platform_account = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
+    wallet.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(
+                account=platform_account,
+                amount=Decimal("-1000.00"),
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                transaction_type=LedgerTransactionType.ADJUSTMENT,
+            ),
+            LedgerPosting(
+                account=owner_account,
+                amount=Decimal("1000.00"),
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                transaction_type=LedgerTransactionType.ADJUSTMENT,
+            ),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+        reference="seed-manager-hire-fancoin",
+        description="Seed manager marketplace Fan Coin",
+        actor=owner,
+        idempotency_key="seed-manager-hire-fancoin",
+        transaction_type=LedgerTransactionType.ADJUSTMENT,
+    )
     session.commit()
     return owner, profile
 

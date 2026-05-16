@@ -1,15 +1,88 @@
 from __future__ import annotations
 
+import os
+
+import pytest
+from sqlalchemy import create_engine
+
+from app.core.module import DomainModule
+
+
+@pytest.fixture(scope="module")
+def test_settings(tmp_path_factory: pytest.TempPathFactory):
+    from app.core.config import load_settings, reset_settings_cache
+
+    database_path = tmp_path_factory.mktemp("gte-create-publish-app") / "gte_app.db"
+    media_root = tmp_path_factory.mktemp("gte-create-publish-media")
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+    managed_env = {
+        "DATABASE_URL": database_url,
+        "GTE_DATABASE_URL": database_url,
+        "GTE_MEDIA_STORAGE_ROOT": str(media_root),
+        "GTE_INGESTION_PROVIDER": "mock",
+        "GTE_REAL_PLAYER_IMPORT_PROVIDER": "mock",
+        "GTE_RUN_STARTUP_SEEDING": "0",
+        "GTE_TASK_QUEUE_ENABLED": "0",
+    }
+    previous_env = {key: os.environ.get(key) for key in managed_env}
+
+    try:
+        for key, value in managed_env.items():
+            os.environ[key] = value
+        reset_settings_cache()
+        yield load_settings()
+    finally:
+        reset_settings_cache()
+        for key, previous_value in previous_env.items():
+            if previous_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous_value
+        reset_settings_cache()
+
+
+@pytest.fixture(scope="module")
+def app(test_settings):
+    from app.main import create_app
+
+    modules = (
+        DomainModule("auth", router_path="app.auth.router:router"),
+        DomainModule("competitions", router_path="app.routes.competitions:router"),
+    )
+    engine = create_engine(test_settings.database_url, connect_args={"check_same_thread": False})
+    application = create_app(
+        settings=test_settings,
+        engine=engine,
+        modules=modules,
+        run_migration_check=True,
+    )
+    yield application
+    startup_thread = getattr(application.state, "deferred_startup_thread", None)
+    if startup_thread is not None and startup_thread.is_alive():
+        startup_thread.join(timeout=5)
+    engine.dispose()
+
 
 def _error_message(response) -> str:
     payload = response.json()
     return payload.get("message") or payload.get("detail")
 
 
-def test_create_patch_publish_join_leave_flow(client, competition_admin_headers, auth_user_factory) -> None:
+def test_create_patch_publish_join_leave_flow(
+    client,
+    auth_user_factory,
+    competition_club_factory,
+) -> None:
+    host = auth_user_factory(suffix="create-publish-host")
     entrant = auth_user_factory(suffix="create-publish-join-leave", funded_credit="25.00")
+    entrant_club_id = competition_club_factory(
+        owner_user_id=entrant["user_id"],
+        slug="create-publish-join-leave-club",
+        name="Create Publish Join Leave Club",
+    )
     create_response = client.post(
         "/api/competitions",
+        headers=host["headers"],
         json={
             "name": "Weekend Skills League",
             "format": "league",
@@ -35,20 +108,22 @@ def test_create_patch_publish_join_leave_flow(client, competition_admin_headers,
     competition_id = created["id"]
     assert created["status"] == "draft"
     assert created["name"] == "Weekend Skills League"
-    assert created["creator_id"] == "host-1"
+    assert created["creator_id"] == host["user_id"]
     assert created["participant_count"] == 0
     assert created["entry_fee"] == "12.50"
-    assert created["platform_fee_pct"] == "0.10"
+    assert created["platform_fee_pct"] == "0.20"
     assert created["host_fee_pct"] == "0.05"
     assert created["prize_pool"] == "0.0000"
     assert created["join_eligibility"] == {
         "eligible": False,
         "reason": "competition_not_open",
         "requires_invite": False,
+        "requires_passcode": False,
     }
 
     patch_response = client.patch(
         f"/api/competitions/{competition_id}",
+        headers=host["headers"],
         json={
             "name": "Weekend Skills League Reloaded",
             "capacity": 16,
@@ -63,7 +138,7 @@ def test_create_patch_publish_join_leave_flow(client, competition_admin_headers,
 
     publish_response = client.post(
         f"/api/competitions/{competition_id}/publish",
-        headers=competition_admin_headers,
+        headers=host["headers"],
         json={"open_for_join": True},
     )
     assert publish_response.status_code == 200
@@ -73,7 +148,7 @@ def test_create_patch_publish_join_leave_flow(client, competition_admin_headers,
     join_response = client.post(
         f"/api/competitions/{competition_id}/join",
         headers=entrant["headers"],
-        json={"user_id": entrant["user_id"], "user_name": "Club 22"},
+        json={"club_id": entrant_club_id, "user_name": "Club 22"},
     )
     assert join_response.status_code == 200
     joined = join_response.json()
@@ -82,8 +157,9 @@ def test_create_patch_publish_join_leave_flow(client, competition_admin_headers,
         "eligible": True,
         "reason": "already_joined",
         "requires_invite": False,
+        "requires_passcode": False,
     }
-    assert joined["prize_pool"] == "10.6250"
+    assert joined["prize_pool"] == "9.3750"
 
     detail_response = client.get(f"/api/competitions/{competition_id}")
     assert detail_response.status_code == 200
@@ -100,6 +176,7 @@ def test_create_patch_publish_join_leave_flow(client, competition_admin_headers,
 
     leave_response = client.post(
         f"/api/competitions/{competition_id}/leave",
+        headers=entrant["headers"],
         json={"user_id": entrant["user_id"]},
     )
     assert leave_response.status_code == 200
@@ -108,10 +185,17 @@ def test_create_patch_publish_join_leave_flow(client, competition_admin_headers,
     assert left["status"] == "open"
 
 
-def test_join_returns_conflict_before_publish(client, auth_user_factory) -> None:
+def test_join_returns_conflict_before_publish(client, auth_user_factory, competition_club_factory) -> None:
+    host = auth_user_factory(suffix="join-before-publish-host")
     entrant = auth_user_factory(suffix="join-before-publish")
+    entrant_club_id = competition_club_factory(
+        owner_user_id=entrant["user_id"],
+        slug="join-before-publish-club",
+        name="Join Before Publish Club",
+    )
     create_response = client.post(
         "/api/competitions",
+        headers=host["headers"],
         json={
             "name": "Private Draft Cup",
             "format": "cup",
@@ -132,7 +216,7 @@ def test_join_returns_conflict_before_publish(client, auth_user_factory) -> None
     join_response = client.post(
         f"/api/competitions/{competition_id}/join",
         headers=entrant["headers"],
-        json={"user_id": entrant["user_id"]},
+        json={"club_id": entrant_club_id},
     )
     assert join_response.status_code == 409
     assert _error_message(join_response) == "competition_not_open"

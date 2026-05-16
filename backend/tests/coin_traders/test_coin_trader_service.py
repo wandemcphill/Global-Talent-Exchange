@@ -21,8 +21,9 @@ from app.coin_traders.schemas import (
 )
 from app.coin_traders.service import CoinTraderPermissionError, CoinTraderService, CoinTraderValidationError
 from app.models.base import Base
-from app.models.coin_trader import CoinTradeOrderStatus, CoinTraderProfileStatus
+from app.models.coin_trader import CoinTradeOrderStatus, CoinTraderProfileStatus, CoinTraderRate
 from app.models.notification_record import NotificationRecord
+from app.models.risk_ops import SystemEvent
 from app.models.user import KycStatus, User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.wallets.service import WalletService
@@ -108,12 +109,14 @@ def _approve_trader_with_rate(
         CoinTraderAdminDecisionRequest(tier="gold", note="verified liquidity"),
         admin=users["admin"],
     )
+    buy_rate = Decimal("860") if coin_unit == LedgerUnit.COIN else Decimal("0.90")
+    sell_rate = Decimal("920") if coin_unit == LedgerUnit.COIN else Decimal("1.05")
     service.upsert_rate(
         CoinTraderRateUpsertRequest(
             coin_unit=coin_unit,
             fiat_currency="NGN",
-            buy_rate_fiat=Decimal("0.90"),
-            sell_rate_fiat=Decimal("1.05"),
+            buy_rate_fiat=buy_rate,
+            sell_rate_fiat=sell_rate,
             min_coin_amount=Decimal("1000"),
             max_coin_amount=Decimal("50000"),
             available_liquidity=available_liquidity,
@@ -155,7 +158,7 @@ def test_coin_trader_buy_order_locks_and_releases_escrow(coin_trader_session: Se
         ),
         actor=users["buyer"],
     )
-    assert order.fiat_total == Decimal("5250.0000")
+    assert order.fiat_total == Decimal("4600000")
 
     accepted = service.accept_order(order.id, actor=users["trader"])
     assert accepted.status == CoinTradeOrderStatus.PAYMENT_PENDING.value
@@ -330,6 +333,153 @@ def test_coin_trader_sell_order_locks_user_coin_and_releases_to_trader(coin_trad
     trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.CREDIT)
     assert seller_summary.reserved_balance == Decimal("0.0000")
     assert trader_summary.available_balance == Decimal("4000.0000")
+
+
+def test_coin_trader_rate_view_includes_governance_status(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    service = CoinTraderService(coin_trader_session, wallet_service=WalletService())
+    profile = _approve_trader_with_rate(service, users)
+
+    profile_view = service.get_my_profile(users["trader"])
+    rate_view = profile_view.rates[0]
+
+    assert profile_view.verification_level == "standard"
+    assert profile_view.completed_volume_fiat == Decimal("0.0000")
+    assert profile.id == rate_view.trader_profile_id
+    assert rate_view.buy_rate_fiat == Decimal("860")
+    assert rate_view.sell_rate_fiat == Decimal("920")
+    assert rate_view.spread_fiat == Decimal("60.0000")
+    assert rate_view.treasury_deposit_rate_fiat == Decimal("900.0000")
+    assert rate_view.treasury_withdrawal_rate_fiat == Decimal("880.0000")
+    assert rate_view.min_trader_buy_rate_fiat == Decimal("820.0000")
+    assert rate_view.max_trader_buy_rate_fiat == Decimal("890.0000")
+    assert rate_view.min_trader_sell_rate_fiat == Decimal("900.0000")
+    assert rate_view.max_trader_sell_rate_fiat == Decimal("980.0000")
+    assert rate_view.max_trader_spread_fiat == Decimal("120.0000")
+    assert rate_view.governance_status == "compliant"
+    assert rate_view.governance_reasons == []
+
+
+def test_coin_trader_invalid_sell_rate_is_blocked_and_risk_flagged(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    service = CoinTraderService(coin_trader_session, wallet_service=WalletService())
+    _approve_trader_with_rate(service, users)
+
+    with pytest.raises(CoinTraderValidationError, match="undercuts treasury deposit"):
+        service.upsert_rate(
+            CoinTraderRateUpsertRequest(
+                coin_unit=LedgerUnit.COIN,
+                fiat_currency="NGN",
+                buy_rate_fiat=Decimal("860"),
+                sell_rate_fiat=Decimal("890"),
+                min_coin_amount=Decimal("1000"),
+                max_coin_amount=Decimal("50000"),
+                available_liquidity=Decimal("50000"),
+            ),
+            actor=users["trader"],
+        )
+
+    event = coin_trader_session.scalar(
+        select(SystemEvent).where(SystemEvent.event_type == "coin_trader_pricing_governance")
+    )
+    assert event is not None
+    assert event.subject_type == "coin_trader_profile"
+    assert event.metadata_json["action"] == "upsert"
+    assert event.metadata_json["status"] == "arbitrage_risk"
+    assert "undercuts treasury deposit" in " ".join(event.metadata_json["reasons"])
+
+
+def test_coin_trader_invalid_buy_rate_and_spread_are_blocked(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    service = CoinTraderService(coin_trader_session, wallet_service=WalletService())
+    _approve_trader_with_rate(service, users)
+
+    with pytest.raises(CoinTraderValidationError, match="exceeds treasury withdrawal"):
+        service.upsert_rate(
+            CoinTraderRateUpsertRequest(
+                coin_unit=LedgerUnit.COIN,
+                fiat_currency="NGN",
+                buy_rate_fiat=Decimal("900"),
+                sell_rate_fiat=Decimal("960"),
+                min_coin_amount=Decimal("1000"),
+                max_coin_amount=Decimal("50000"),
+                available_liquidity=Decimal("50000"),
+            ),
+            actor=users["trader"],
+        )
+
+    with pytest.raises(CoinTraderValidationError, match="exceeds maximum"):
+        service.upsert_rate(
+            CoinTraderRateUpsertRequest(
+                coin_unit=LedgerUnit.COIN,
+                fiat_currency="NGN",
+                buy_rate_fiat=Decimal("820"),
+                sell_rate_fiat=Decimal("980"),
+                min_coin_amount=Decimal("1000"),
+                max_coin_amount=Decimal("50000"),
+                available_liquidity=Decimal("50000"),
+            ),
+            actor=users["trader"],
+        )
+
+
+def test_existing_out_of_bounds_coin_trader_rate_is_readable_but_cannot_order(
+    coin_trader_session: Session,
+) -> None:
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["trader"],
+        amount=Decimal("100000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:trader-invalid-rate-liquidity",
+        description="Seed trader liquidity",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    coin_trader_session.commit()
+    profile = _approve_trader_with_rate(service, users)
+    rate = coin_trader_session.scalar(select(CoinTraderRate).where(CoinTraderRate.trader_profile_id == profile.id))
+    assert rate is not None
+    rate.sell_rate_fiat = Decimal("700")
+    coin_trader_session.commit()
+
+    profile_view = service.get_my_profile(users["trader"])
+    assert profile_view.rates[0].governance_status == "arbitrage_risk"
+    assert profile_view.rates[0].governance_reasons
+
+    with pytest.raises(CoinTraderValidationError, match="undercuts treasury deposit"):
+        service.create_order(
+            CoinTradeOrderCreateRequest(
+                trader_profile_id=profile.id,
+                direction="user_buys",
+                coin_unit=LedgerUnit.COIN,
+                coin_amount=Decimal("5000"),
+                fiat_currency="NGN",
+                payment_method="bank_transfer",
+                idempotency_key="invalid-rate-order-key-123",
+            ),
+            actor=users["buyer"],
+        )
+
+
+def test_fan_coin_rates_stay_separate_from_gtex_coin_guardrails(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    service = CoinTraderService(coin_trader_session, wallet_service=WalletService())
+    _approve_trader_with_rate(
+        service,
+        users,
+        coin_unit=LedgerUnit.CREDIT,
+        available_liquidity=Decimal("0"),
+    )
+
+    rate_view = service.get_my_profile(users["trader"]).rates[0]
+    assert rate_view.coin_unit == LedgerUnit.CREDIT
+    assert rate_view.governance_status == "compliant"
+    assert rate_view.treasury_deposit_rate_fiat is None
+    assert rate_view.treasury_withdrawal_rate_fiat is None
 
 
 def test_disputed_coin_trade_requires_admin_resolution(coin_trader_session: Session) -> None:

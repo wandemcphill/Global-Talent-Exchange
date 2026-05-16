@@ -27,6 +27,10 @@ class ManagerContractView(CommonSchema):
     start_date: date
     end_date: date
     agreed_fee: Decimal = Field(ge=0)
+    payment_unit: str = "credit"
+    payment_unit_label: str = "Fan Coin"
+    settlement_status: str = "pending"
+    ledger_transaction_id: str | None = None
     status: ManagerContractStatus
 
 

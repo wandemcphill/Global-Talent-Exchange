@@ -83,6 +83,18 @@ _VALUE_ONLY_COMPETITIONS: tuple[CompetitionSpec, ...] = (
     CompetitionSpec("Turkish Super Lig", "TR1", "super-lig", "elite"),
     CompetitionSpec("Czech First League", "TS1", "chance-liga", "elite"),
     CompetitionSpec("Portuguese Primeira Liga", "PO1", "liga-nos", "elite"),
+    CompetitionSpec("Nigeria Professional Football League", "NPFL", "nigeria-professional-football-league", "elite"),
+    CompetitionSpec("Egyptian Premier League", "EGY1", "egyptian-premier-league", "elite"),
+    CompetitionSpec("Liga MX", "MEX1", "liga-mx-clausura", "elite"),
+    CompetitionSpec("Russian Premier League", "RU1", "premier-liga", "elite"),
+    CompetitionSpec("Scottish Premiership", "SC1", "scottish-premiership", "elite"),
+    CompetitionSpec("Ekstraklasa", "PL1", "pko-bp-ekstraklasa", "elite"),
+    CompetitionSpec("French Ligue 2", "FR2", "ligue-2", "second_tier"),
+    CompetitionSpec("2. Bundesliga", "L2", "2-bundesliga", "second_tier"),
+    CompetitionSpec("Allsvenskan", "SE1", "allsvenskan", "elite"),
+    CompetitionSpec("Eliteserien", "NO1", "eliteserien", "elite"),
+    CompetitionSpec("South Africa Premier League", "SFA1", "absa-premiership", "elite"),
+    CompetitionSpec("Ukraine Premier League", "UKR1", "premier-liga", "elite"),
 )
 
 _LEAGUE_LABEL_ALIASES: tuple[tuple[str, ...], ...] = (
@@ -99,6 +111,15 @@ _LEAGUE_LABEL_ALIASES: tuple[tuple[str, ...], ...] = (
     ("swiss super league", "brack super league", "super league switzerland"),
     ("danish superliga", "superliga", "3f superliga", "superligaen"),
     ("turkish super lig", "super lig", "sueper lig", "trendyol super lig"),
+    ("nigeria professional football league", "npfl"),
+    ("egyptian premier league", "egypt premier league"),
+    ("liga mx", "liga mx clausura", "liga mx apertura"),
+    ("russian premier league", "premier liga russia"),
+    ("scottish premiership", "premiership"),
+    ("ekstraklasa", "pko bp ekstraklasa", "pko ekstraklasa"),
+    ("2 bundesliga", "second bundesliga"),
+    ("south africa premier league", "betway premiership", "absa premiership"),
+    ("ukraine premier league", "ukrainian premier league", "premier liga ukraine"),
 )
 
 
@@ -421,14 +442,23 @@ def _select_value_competitions(requested_leagues: list[str]) -> tuple[Competitio
     selected = tuple(
         spec
         for spec in _VALUE_ONLY_COMPETITIONS
-        if _normalize_label(spec.name) in requested
-        or _normalize_label(spec.competition_code) in requested
-        or _normalize_label(spec.slug) in requested
+        if _spec_selection_labels(spec) & requested
     )
     if not selected:
         available = ", ".join(spec.name for spec in _VALUE_ONLY_COMPETITIONS)
         raise ValueError(f"None of the requested leagues matched value-only competitions. Available: {available}")
     return selected
+
+
+def _spec_selection_labels(spec: CompetitionSpec) -> set[str]:
+    labels: set[str] = set()
+    for raw_label in (spec.name, spec.competition_code, spec.slug):
+        normalized = _normalize_label(raw_label)
+        if not normalized:
+            continue
+        labels.add(normalized)
+        labels.update(_equivalent_labels(normalized))
+    return labels
 
 
 def _index_candidates(candidates: Iterable[ExistingPlayerCandidate]) -> dict[str, list[ExistingPlayerCandidate]]:

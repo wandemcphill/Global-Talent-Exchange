@@ -9,10 +9,12 @@ def _error_message(response) -> str:
 
 
 def test_invite_generation_listing_and_join_flow(client, competition_admin_headers, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="invite-host")
     blocked_user = auth_user_factory(suffix="invite-blocked")
     invited_user = auth_user_factory(suffix="invite-accepted", funded_credit="100.0000")
     created = client.post(
         "/api/competitions",
+        headers=host["headers"],
         json={
             "name": "Invite Only League",
             "format": "league",
@@ -20,7 +22,6 @@ def test_invite_generation_listing_and_join_flow(client, competition_admin_heade
             "entry_fee": "10.00",
             "currency": "credit",
             "capacity": 10,
-            "creator_id": "host-11",
         },
     ).json()
     competition_id = created["id"]
@@ -32,8 +33,9 @@ def test_invite_generation_listing_and_join_flow(client, competition_admin_heade
 
     invite_response = client.post(
         f"/api/competitions/{competition_id}/invites",
+        headers=host["headers"],
         json={
-            "issued_by": "host-11",
+            "issued_by": host["user_id"],
             "max_uses": 2,
             "expires_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
             "note": "Alpha clubs",
@@ -42,7 +44,7 @@ def test_invite_generation_listing_and_join_flow(client, competition_admin_heade
     assert invite_response.status_code == 201
     invite = invite_response.json()
     invite_code = invite["invite_code"]
-    assert invite["issued_by"] == "host-11"
+    assert invite["issued_by"] == host["user_id"]
     assert invite["max_uses"] == 2
     assert invite["uses"] == 0
 
@@ -84,9 +86,12 @@ def test_invite_generation_listing_and_join_flow(client, competition_admin_heade
     assert refreshed_invites[0]["uses"] == 1
 
 
-def test_only_creator_can_issue_invites(client) -> None:
+def test_only_creator_can_issue_invites(client, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="invite-owner")
+    intruder = auth_user_factory(suffix="invite-intruder")
     created = client.post(
         "/api/competitions",
+        headers=host["headers"],
         json={
             "name": "Restricted Cup",
             "format": "cup",
@@ -94,14 +99,14 @@ def test_only_creator_can_issue_invites(client) -> None:
             "entry_fee": "0.00",
             "currency": "credit",
             "capacity": 8,
-            "creator_id": "host-22",
         },
     ).json()
     competition_id = created["id"]
 
     forbidden_response = client.post(
         f"/api/competitions/{competition_id}/invites",
-        json={"issued_by": "host-23", "max_uses": 1},
+        headers=intruder["headers"],
+        json={"issued_by": intruder["user_id"], "max_uses": 1},
     )
     assert forbidden_response.status_code == 403
     assert _error_message(forbidden_response) == "invite_forbidden"

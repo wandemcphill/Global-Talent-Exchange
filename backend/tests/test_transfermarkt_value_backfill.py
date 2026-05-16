@@ -86,12 +86,49 @@ def test_value_competition_selector_includes_expanded_context_leagues() -> None:
     assert [spec.competition_code for spec in selected] == ["A1", "C1", "DK1", "TR1"]
 
 
+def test_value_competition_selector_includes_new_high_gap_leagues() -> None:
+    selected = _select_value_competitions(
+        [
+            "Npfl",
+            "Egypt Premier League",
+            "Liga MX",
+            "Russian Premier League",
+            "Premiership",
+            "Ekstraklasa",
+            "French Ligue 2",
+            "2. Bundesliga",
+            "Allsvenskan",
+            "Eliteserien",
+            "South Africa Premier League",
+            "Ukraine Premier League",
+        ]
+    )
+
+    assert [spec.competition_code for spec in selected] == [
+        "NPFL",
+        "EGY1",
+        "MEX1",
+        "RU1",
+        "SC1",
+        "PL1",
+        "FR2",
+        "L2",
+        "SE1",
+        "NO1",
+        "SFA1",
+        "UKR1",
+    ]
+
+
 def test_league_aliases_bridge_provider_label_variants() -> None:
     assert "argentinian primera division" in _equivalent_labels(_normalize_label("Liga Profesional de Fútbol"))
     assert "czech first league" in _equivalent_labels(_normalize_label("Chance Liga"))
     assert "portuguese primeira liga" in _equivalent_labels(_normalize_label("Liga Portugal"))
     assert "austrian bundesliga" in _equivalent_labels(_normalize_label("Admiral Bundesliga"))
     assert "danish superliga" in _equivalent_labels(_normalize_label("3F Superliga"))
+    assert "nigeria professional football league" in _equivalent_labels(_normalize_label("NPFL"))
+    assert "egyptian premier league" in _equivalent_labels(_normalize_label("Egypt Premier League"))
+    assert "scottish premiership" in _equivalent_labels(_normalize_label("Premiership"))
 
 
 def test_match_fact_uses_league_aliases_for_safe_unique_match() -> None:

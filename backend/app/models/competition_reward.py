@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -11,6 +11,10 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 class CompetitionReward(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "competition_rewards"
+    __table_args__ = (
+        Index("ix_competition_rewards_payout_idempotency_key", "payout_idempotency_key", unique=True),
+        Index("ix_competition_rewards_escrow_id", "escrow_id"),
+    )
 
     competition_id: Mapped[str] = mapped_column(
         String(36),
@@ -37,6 +41,14 @@ class CompetitionReward(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     amount_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", server_default="pending")
     ledger_transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    payout_idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    payout_source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="competition_escrow",
+        server_default="competition_escrow",
+    )
+    escrow_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 

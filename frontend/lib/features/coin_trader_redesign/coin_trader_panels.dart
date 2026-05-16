@@ -748,8 +748,12 @@ class _TraderList extends StatelessWidget {
                       [
                         trader.countryCode ?? 'Global',
                         _titleCase(trader.tier),
-                        if (rate != null)
-                          '${_money(rate.sellRateFiat)} ${rate.fiatCurrency}',
+                        _titleCase(trader.verificationLevel),
+                        if (rate != null) ...<String>[
+                          'Buy ${_money(rate.sellRateFiat)} ${rate.fiatCurrency}',
+                          'Sell ${_money(rate.buyRateFiat)} ${rate.fiatCurrency}',
+                          if (rate.isRestricted) rate.governanceLabel,
+                        ],
                       ].join(' - '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -810,11 +814,13 @@ class _TraderDetail extends StatelessWidget {
               '${trader.completionRate.toStringAsFixed(0)}%',
             ),
             _metric(
-              'Avg speed',
+              'Payout speed',
               '${trader.averageReleaseMinutes.toStringAsFixed(0)}m',
             ),
             _metric('Rating', trader.rating.toStringAsFixed(1)),
             _metric('Liquidity', _coin(trader.totalLiquidity)),
+            _metric('Volume', _money(trader.completedVolumeFiat)),
+            _metric('Dispute score', trader.disputeScore.toStringAsFixed(1)),
           ],
         ),
       ),
@@ -822,20 +828,57 @@ class _TraderDetail extends StatelessWidget {
       if (rate != null) ...<Widget>[
         GtexPanel(
           title: rate.coinLabel,
-          subtitle: '${rate.fiatCurrency} live OTC quote',
+          subtitle: '${rate.fiatCurrency} controlled football liquidity quote',
           accent: GtexColors.gold,
+          trailing: GtexStatusChip(
+            label: rate.governanceLabel,
+            icon:
+                rate.isRestricted
+                    ? Icons.warning_amber_outlined
+                    : Icons.verified_user_outlined,
+            tone:
+                rate.isRestricted
+                    ? GtexStatusTone.danger
+                    : GtexStatusTone.success,
+            compact: true,
+          ),
           child: Wrap(
             spacing: GtexSpacing.md,
             runSpacing: GtexSpacing.md,
             children: <Widget>[
-              _metric('Trader buys', _money(rate.buyRateFiat)),
-              _metric('Trader sells', _money(rate.sellRateFiat)),
+              _metric(
+                'Buy ${rate.coinLabel} from trader',
+                _money(rate.sellRateFiat),
+              ),
+              _metric(
+                'Sell ${rate.coinLabel} to trader',
+                _money(rate.buyRateFiat),
+              ),
+              _metric('Spread', _money(rate.spreadFiat)),
+              _metric(
+                'Treasury top-up',
+                _nullableMoney(rate.treasuryDepositRateFiat),
+              ),
+              _metric(
+                'Treasury withdrawal',
+                _nullableMoney(rate.treasuryWithdrawalRateFiat),
+              ),
               _metric('Min', _coin(rate.minCoinAmount)),
               _metric('Max', _coin(rate.maxCoinAmount)),
               _metric('Available', _coin(rate.availableLiquidity)),
             ],
           ),
         ),
+        if (rate.isRestricted) ...<Widget>[
+          const SizedBox(height: GtexSpacing.sm),
+          GtexPanel(
+            accent: GtexColors.red,
+            child: _ChipWrap(
+              labels: rate.governanceReasons,
+              fallback: 'This trader quote is restricted by treasury policy.',
+            ),
+          ),
+        ],
         const SizedBox(height: GtexSpacing.md),
       ],
       GtexPanel(
@@ -856,16 +899,29 @@ class _TraderDetail extends StatelessWidget {
         runSpacing: GtexSpacing.sm,
         children: <Widget>[
           GtexActionButton(
-            label: isAuthenticated ? 'Buy coins' : 'Sign in',
+            label:
+                isAuthenticated
+                    ? 'Buy ${rate?.coinLabel ?? 'coins'} from trader'
+                    : 'Sign in',
             icon: isAuthenticated ? Icons.call_received : Icons.login,
             accent: GtexColors.gold,
-            onPressed: isAuthenticated ? onBuy : onOpenLogin,
+            onPressed:
+                rate?.isRestricted == true
+                    ? null
+                    : isAuthenticated
+                    ? onBuy
+                    : onOpenLogin,
           ),
           GtexButton(
-            label: 'Sell coins',
+            label: 'Sell ${rate?.coinLabel ?? 'coins'} to trader',
             icon: Icons.call_made,
             variant: GtexButtonVariant.secondary,
-            onPressed: isAuthenticated ? onSell : onOpenLogin,
+            onPressed:
+                rate?.isRestricted == true
+                    ? null
+                    : isAuthenticated
+                    ? onSell
+                    : onOpenLogin,
           ),
         ],
       ),
@@ -951,6 +1007,8 @@ class _CreateCoinTradeOrderSheetState
             ? rate?.buyRateFiat ?? 0
             : rate?.sellRateFiat ?? 0;
     final double fiatTotal = amount * quotedRate;
+    final bool rateRestricted = rate?.isRestricted == true;
+    final String coinLabel = rate?.coinLabel ?? 'coins';
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -964,7 +1022,9 @@ class _CreateCoinTradeOrderSheetState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              widget.direction == 'user_sells' ? 'Sell coins' : 'Buy coins',
+              widget.direction == 'user_sells'
+                  ? 'Sell $coinLabel to trader'
+                  : 'Buy $coinLabel from trader',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 color: GtexColors.text,
                 fontWeight: FontWeight.w900,
@@ -987,6 +1047,18 @@ class _CreateCoinTradeOrderSheetState
                     compact: true,
                   ),
                   GtexStatusChip(
+                    label: rate.governanceLabel,
+                    icon:
+                        rateRestricted
+                            ? Icons.warning_amber_outlined
+                            : Icons.verified_user_outlined,
+                    tone:
+                        rateRestricted
+                            ? GtexStatusTone.danger
+                            : GtexStatusTone.success,
+                    compact: true,
+                  ),
+                  GtexStatusChip(
                     label:
                         'Limits ${_coin(rate.minCoinAmount)}-${_coin(rate.maxCoinAmount)}',
                     icon: Icons.rule_outlined,
@@ -1001,6 +1073,15 @@ class _CreateCoinTradeOrderSheetState
                 ],
               ),
               const SizedBox(height: GtexSpacing.sm),
+              if (rateRestricted) ...<Widget>[
+                Text(
+                  rate.governanceReasons.isEmpty
+                      ? 'This trader quote is restricted by treasury policy.'
+                      : rate.governanceReasons.join(' '),
+                  style: const TextStyle(color: GtexColors.red),
+                ),
+                const SizedBox(height: GtexSpacing.sm),
+              ],
             ],
             TextField(
               controller: _amountController,
@@ -1045,10 +1126,15 @@ class _CreateCoinTradeOrderSheetState
                 ),
                 const Spacer(),
                 GtexActionButton(
-                  label: _submitting ? 'Creating' : 'Create order',
+                  label:
+                      rateRestricted
+                          ? 'Rate restricted'
+                          : _submitting
+                          ? 'Creating'
+                          : 'Create order',
                   icon: Icons.lock_clock_outlined,
                   accent: GtexColors.gold,
-                  onPressed: _submitting ? null : _submit,
+                  onPressed: _submitting || rateRestricted ? null : _submit,
                 ),
               ],
             ),
@@ -1059,6 +1145,19 @@ class _CreateCoinTradeOrderSheetState
   }
 
   Future<void> _submit() async {
+    final GtexCoinTraderRate? rate = widget.trader.primaryRateFor(
+      widget.coinUnit,
+    );
+    if (rate?.isRestricted == true) {
+      setState(
+        () =>
+            _error =
+                rate!.governanceReasons.isEmpty
+                    ? 'This trader quote is restricted by treasury policy.'
+                    : rate.governanceReasons.join(' '),
+      );
+      return;
+    }
     final double? amount = double.tryParse(_amountController.text.trim());
     if (amount == null || amount <= 0) {
       setState(() => _error = 'Enter a valid coin amount.');
@@ -1309,6 +1408,9 @@ class _ProfileSummaryPanel extends StatelessWidget {
             '${profile.averageReleaseMinutes.toStringAsFixed(0)}m',
           ),
           _metric('Rating', profile.rating.toStringAsFixed(1)),
+          _metric('Verification', _titleCase(profile.verificationLevel)),
+          _metric('Volume', _money(profile.completedVolumeFiat)),
+          _metric('Dispute score', profile.disputeScore.toStringAsFixed(1)),
           _metric('Liquidity', _coin(profile.totalLiquidity)),
         ],
       ),
@@ -1410,6 +1512,10 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final GtexCoinTraderRate? selectedRate = widget.profile.primaryRateFor(
+      _coinUnit,
+    );
+    final List<String> guardrailLabels = _guardrailLabels(selectedRate);
     return GtexPanel(
       title: 'Rates and liquidity',
       accent: GtexColors.gold,
@@ -1429,6 +1535,16 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
             },
           ),
           const SizedBox(height: GtexSpacing.md),
+          if (guardrailLabels.isNotEmpty) ...<Widget>[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _ChipWrap(
+                labels: guardrailLabels,
+                fallback: 'No treasury guardrails published yet.',
+              ),
+            ),
+            const SizedBox(height: GtexSpacing.md),
+          ],
           Wrap(
             spacing: GtexSpacing.sm,
             runSpacing: GtexSpacing.sm,
@@ -1440,8 +1556,8 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
                   decoration: const InputDecoration(labelText: 'Fiat'),
                 ),
               ),
-              _numberField(_buyController, 'Buy rate'),
-              _numberField(_sellController, 'Sell rate'),
+              _numberField(_buyController, 'Buy rate from user'),
+              _numberField(_sellController, 'Sell rate to user'),
               _numberField(_minController, 'Min order'),
               _numberField(_maxController, 'Max order'),
               _numberField(_liquidityController, 'Liquidity'),
@@ -1481,6 +1597,44 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
         decoration: InputDecoration(labelText: label),
       ),
     );
+  }
+
+  List<String> _guardrailLabels(GtexCoinTraderRate? rate) {
+    if (_coinUnit != 'COIN') {
+      return const <String>['Fan Coin rates are separate from GTEX Coin'];
+    }
+    final List<String> labels = <String>[];
+    final GtexCoinTraderRate? selectedRate = rate;
+    final double? minBuy = selectedRate?.minTraderBuyRateFiat;
+    final double? maxBuy = selectedRate?.maxTraderBuyRateFiat;
+    final double? minSell = selectedRate?.minTraderSellRateFiat;
+    final double? maxSell = selectedRate?.maxTraderSellRateFiat;
+    final double? maxSpread = selectedRate?.maxTraderSpreadFiat;
+    final double? treasuryDeposit = selectedRate?.treasuryDepositRateFiat;
+    final double? treasuryWithdrawal = selectedRate?.treasuryWithdrawalRateFiat;
+    if (minBuy != null && maxBuy != null) {
+      labels.add('Buy from user ${_money(minBuy)}-${_money(maxBuy)}');
+    }
+    if (minSell != null && maxSell != null) {
+      labels.add('Sell to user ${_money(minSell)}-${_money(maxSell)}');
+    }
+    if (maxSpread != null) {
+      labels.add('Max spread ${_money(maxSpread)}');
+    }
+    if (treasuryDeposit != null) {
+      labels.add('Treasury top-up ${_money(treasuryDeposit)}');
+    }
+    if (treasuryWithdrawal != null) {
+      labels.add('Treasury withdrawal ${_money(treasuryWithdrawal)}');
+    }
+    if (labels.isEmpty) {
+      labels.addAll(const <String>[
+        'Default buy from user 820-890',
+        'Default sell to user 900-980',
+        'Default max spread 120',
+      ]);
+    }
+    return labels;
   }
 
   Future<void> _save() async {
@@ -2391,6 +2545,13 @@ String _messageFor(Object error) {
 String _money(double value) {
   final bool whole = value == value.roundToDouble();
   return value.toStringAsFixed(whole ? 0 : 2);
+}
+
+String _nullableMoney(double? value) {
+  if (value == null) {
+    return 'n/a';
+  }
+  return _money(value);
 }
 
 String _coin(double value) {

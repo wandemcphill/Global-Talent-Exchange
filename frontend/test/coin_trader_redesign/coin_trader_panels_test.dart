@@ -32,6 +32,9 @@ void main() {
     expect(find.text('My coin orders'), findsOneWidget);
     expect(find.text('Payment Pending'), findsOneWidget);
     expect(find.text('Verified'), findsWidgets);
+    expect(find.text('BUY GTEX COIN FROM TRADER'), findsWidgets);
+    expect(find.text('SELL GTEX COIN TO TRADER'), findsWidgets);
+    expect(find.text('TREASURY TOP-UP'), findsWidgets);
   });
 
   testWidgets('coin trader dashboard panel renders profile and rate tools', (
@@ -60,6 +63,7 @@ void main() {
 
     expect(find.text('Lagos OTC Desk'), findsWidgets);
     expect(find.text('Rates and liquidity'), findsOneWidget);
+    expect(find.textContaining('Buy from user 820-890'), findsOneWidget);
     expect(find.text('Trader orders', skipOffstage: false), findsOneWidget);
   });
 
@@ -143,9 +147,12 @@ GtexCoinTraderProfile _profile({String status = 'approved'}) {
     countryCode: 'NG',
     status: status,
     tier: 'gold',
+    verificationLevel: 'standard',
     completionRate: 98,
     averageReleaseMinutes: 7,
     rating: 4.8,
+    completedVolumeFiat: 12400000,
+    disputeScore: 0.2,
     terms: const <String, Object?>{
       'same_name_account_only': true,
       'payment_proof_required': true,
@@ -162,12 +169,21 @@ GtexCoinTraderProfile _profile({String status = 'approved'}) {
         traderProfileId: 'trader-profile-1',
         coinUnit: 'COIN',
         fiatCurrency: 'NGN',
-        buyRateFiat: 0.9,
-        sellRateFiat: 1.05,
+        buyRateFiat: 860,
+        sellRateFiat: 920,
         minCoinAmount: 100,
         maxCoinAmount: 50000,
         availableLiquidity: 100000,
         isActive: true,
+        spreadFiat: 60,
+        treasuryDepositRateFiat: 900,
+        treasuryWithdrawalRateFiat: 880,
+        minTraderBuyRateFiat: 820,
+        maxTraderBuyRateFiat: 890,
+        minTraderSellRateFiat: 900,
+        maxTraderSellRateFiat: 980,
+        maxTraderSpreadFiat: 120,
+        governanceStatus: 'compliant',
       ),
     ],
   );
@@ -181,8 +197,8 @@ GtexCoinTradeOrder _order({required String status}) {
     direction: 'user_buys',
     coinUnit: 'COIN',
     coinAmount: 500,
-    quotedRateFiat: 1.05,
-    fiatTotal: 525,
+    quotedRateFiat: 920,
+    fiatTotal: 460000,
     fiatCurrency: 'NGN',
     status: status,
     paymentMethod: 'bank_transfer',

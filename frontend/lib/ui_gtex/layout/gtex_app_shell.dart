@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../backgrounds/living_football_os_background.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
 
@@ -44,14 +45,7 @@ class GtexAppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool compact = GtexBreakpoints.isCompact(context);
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: GtexColors.heroGradient,
-        ),
-      ),
+    return LivingFootballOSBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(

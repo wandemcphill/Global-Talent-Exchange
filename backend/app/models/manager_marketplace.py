@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, Enum, Float, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -116,6 +116,11 @@ class ManagerContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     agreed_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0.00"), server_default="0")
+    payment_unit: Mapped[str] = mapped_column(String(16), nullable=False, default="credit", server_default="credit")
+    settlement_status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", server_default="pending")
+    ledger_transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    settlement_metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[ManagerContractStatus] = mapped_column(
         Enum(ManagerContractStatus, name="manager_contract_status", native_enum=False),
         nullable=False,

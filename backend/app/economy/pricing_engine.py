@@ -70,11 +70,8 @@ class PricingEngine:
         if gtex_amount <= Decimal('0.0000') and fancoin_amount <= Decimal('0.0000'):
             raise PricingEngineError(f'Service pricing rule {service_key} does not define a GTex or Fan Coin price.')
 
-        if gtex_amount <= Decimal('0.0000'):
-            gtex_amount = self.wallet_service.quote_conversion(
-                source_unit=LedgerUnit.CREDIT,
-                amount=fancoin_amount,
-            ).target_amount
+        if gtex_amount <= Decimal('0.0000') and fancoin_amount > Decimal('0.0000'):
+            gtex_amount = Decimal('0.0000')
         if fancoin_amount <= Decimal('0.0000'):
             fancoin_amount = self.wallet_service.quote_conversion(
                 source_unit=LedgerUnit.COIN,

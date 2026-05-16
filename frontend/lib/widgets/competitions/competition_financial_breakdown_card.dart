@@ -16,6 +16,11 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
     required this.prizePool,
     required this.currency,
     this.matchType,
+    this.grossPot,
+    this.netPayoutPot,
+    this.prizeMode = 'entry_funded',
+    this.isRanked = true,
+    this.remainingSlots,
     this.projected = false,
     this.lockNotice,
   });
@@ -30,12 +35,18 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
   final double prizePool;
   final String currency;
   final Object? matchType;
+  final double? grossPot;
+  final double? netPayoutPot;
+  final String prizeMode;
+  final bool isRanked;
+  final int? remainingSlots;
   final bool projected;
   final String? lockNotice;
 
   @override
   Widget build(BuildContext context) {
-    final double grossPool = entryFee * participantCount;
+    final double grossPool = grossPot ?? entryFee * participantCount;
+    final double resolvedPrizePool = netPayoutPot ?? prizePool;
     return GteSurfacePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,7 +56,7 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
           Text(
             projected
                 ? 'Projected fees at full capacity with transparent payout and secure escrow wording.'
-                : 'Live fee summary for this creator competition.',
+                : 'Live pot, platform fee, escrow, and ranking summary for this competition.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 18),
@@ -67,11 +78,20 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
               label: 'Host fee (${(hostFeePct * 100).toStringAsFixed(0)}%)',
               value: _formatAmount(hostFeeAmount, currency),
             ),
+          if (remainingSlots != null)
+            _MoneyRow(label: 'Remaining slots', value: '$remainingSlots'),
           const Divider(height: 28),
           _MoneyRow(
-            label: 'Prize pool',
-            value: _formatAmount(prizePool, currency),
+            label:
+                prizeMode == 'host_funded_fixed'
+                    ? 'Advertised net prizes'
+                    : 'Net payout pot',
+            value: _formatAmount(resolvedPrizePool, currency),
             emphasize: true,
+          ),
+          _MoneyRow(
+            label: 'Ranking impact',
+            value: isRanked ? 'Club ladder ranked' : 'Unranked',
           ),
           const SizedBox(height: 14),
           Row(

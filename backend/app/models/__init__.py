@@ -123,6 +123,20 @@ from app.models.coin_trader import (
     CoinTraderRate,
     CoinTraderTier,
 )
+from app.models.fast_cup_finance import (
+    FastCupEscrowStatus,
+    FastCupPayout,
+    FastCupPayoutStatus,
+    FastCupRegistration,
+)
+from app.models.fast_match import (
+    FastMatchEntitlement,
+    FastMatchResult,
+    FastMatchSession,
+    FastMatchSessionStatus,
+    FastMatchSettlement,
+    FastMatchSettlementStatus,
+)
 from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
 from app.models.club_social import (
     ChallengeShareEvent,
@@ -165,6 +179,7 @@ from app.models.clip_variant import ClipVariant
 from app.models.viral_moderation import ClipModerationEvent
 from app.models.competition import Competition, UserCompetition
 from app.models.competition_autofill_rule import CompetitionAutofillRule
+from app.models.competition_escrow import CompetitionEscrow
 from app.models.competition_entry import CompetitionEntry
 from app.models.competition_history_entry import CompetitionHistoryEntry
 from app.models.competition_invite import CompetitionInvite

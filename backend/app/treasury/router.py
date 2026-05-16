@@ -15,7 +15,6 @@ from app.models.treasury import (
     DepositStatus,
     KycProfile,
     TreasuryBankAccount,
-    TreasurySettings,
     TreasuryWithdrawalRequest,
     TreasuryWithdrawalStatus,
 )
@@ -361,6 +360,17 @@ def update_treasury_settings(
     )
     if "deposit_rate_value" in data or "withdrawal_rate_value" in data:
         service.track_event(session, "admin_rate_changed", user_id=actor.id, metadata=data)
+    trader_guardrail_keys = {
+        "min_trader_buy_rate_fiat",
+        "max_trader_buy_rate_fiat",
+        "min_trader_sell_rate_fiat",
+        "max_trader_sell_rate_fiat",
+        "max_trader_spread_fiat",
+        "max_buy_above_withdrawal_fiat",
+        "max_sell_below_deposit_fiat",
+    }
+    if trader_guardrail_keys.intersection(data):
+        service.track_event(session, "admin_trader_rate_guardrails_changed", user_id=actor.id, metadata=data)
     if "deposit_mode" in data or "withdrawal_mode" in data:
         service.track_event(session, "admin_payment_mode_changed", user_id=actor.id, metadata=data)
     session.commit()

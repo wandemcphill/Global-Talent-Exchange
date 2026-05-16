@@ -1,18 +1,88 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
+from app.auth.dependencies import get_current_user
+from app.core.database import get_session
+from app.models.admin_rules import AdminRewardRule
+from app.models.economy_config import ServicePricingRule
+from app.models.economy_governor import EconomyGovernorPolicy
+from app.models.event_backbone import EventOutbox
+from app.models.fast_match import FastMatchEntitlement, FastMatchSession, FastMatchSettlement
+from app.models.risk_ops import AuditLog
+from app.models.user import KycStatus, User, UserRole
+from app.models.wallet import LedgerAccount, LedgerBalanceProjection, LedgerEntry, LedgerTransaction
 from app.simulation_matchmaking.router import router
+
+
+def _build_session() -> Session:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    User.__table__.create(engine)
+    AdminRewardRule.__table__.create(engine)
+    ServicePricingRule.__table__.create(engine)
+    EconomyGovernorPolicy.__table__.create(engine)
+    LedgerAccount.__table__.create(engine)
+    LedgerBalanceProjection.__table__.create(engine)
+    LedgerTransaction.__table__.create(engine)
+    LedgerEntry.__table__.create(engine)
+    EventOutbox.__table__.create(engine)
+    AuditLog.__table__.create(engine)
+    FastMatchEntitlement.__table__.create(engine)
+    FastMatchSettlement.__table__.create(engine)
+    FastMatchSession.__table__.create(engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    return SessionLocal()
 
 
 @pytest.fixture()
 def client() -> TestClient:
+    session = _build_session()
+    user = User(
+        id="user_123",
+        email="user123@example.com",
+        username="user123",
+        display_name="Lagos United Owner",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
+    session.add_all(
+        [
+            user,
+            ServicePricingRule(
+                service_key="fast-match-entry",
+                title="Fast Match entry",
+                description="Fan Coin entry fee after free run",
+                price_coin=Decimal("0.0000"),
+                price_fancoin_equivalent=Decimal("25.0000"),
+                active=True,
+            ),
+        ]
+    )
+    session.commit()
+
+    def override_session():
+        yield session
+
     application = FastAPI()
+    application.dependency_overrides[get_session] = override_session
+    application.dependency_overrides[get_current_user] = lambda: session.get(User, "user_123")
     application.include_router(router)
     with TestClient(application) as test_client:
         yield test_client
+    application.dependency_overrides.clear()
+    session.close()
 
 
 def _profile(
@@ -174,7 +244,55 @@ def test_quick_game_falls_back_to_ai_when_queue_empty(client: TestClient, prefix
     assert body["match_context"]["queue_source"] == "bot"
     assert body["charge_on_loss"] is True
     assert body["entry_currency"] == "credit"
+    assert body["entry_currency_label"] == "Fan Coin"
+    assert body["fan_coin_entry_fee"] == "25.0000"
+    assert body["free_matches_used"] == 1
+    assert body["live_match_key"].startswith("fast-match:")
     assert body["rules_copy"] == "Play free until you lose or reach 10 matches."
+
+
+@pytest.mark.parametrize("prefix", ["/simulation-matchmaking", "/api/simulation-matchmaking"])
+def test_fast_match_entitlement_endpoint_tracks_persisted_free_usage(
+    client: TestClient,
+    prefix: str,
+) -> None:
+    _register_profiles(
+        client,
+        prefix,
+        _profile(
+            "user_123",
+            "club_abc",
+            "Lagos United",
+            manager_rating=1420,
+            style="possession",
+            pressing="high",
+            tempo="fast",
+            squad_strength=78,
+            squad_depth=65,
+        ),
+    )
+
+    before = client.get(f"{prefix}/fast-match/entitlement")
+    assert before.status_code == 200
+    assert before.json()["free_matches_remaining"] == 10
+
+    response = client.post(
+        f"{prefix}/quick-game",
+        json={
+            "mode": "quick_game",
+            "user_id": "user_123",
+            "include_bots": True,
+        },
+    )
+    assert response.status_code == 200
+
+    after = client.get(f"{prefix}/fast-match/entitlement")
+    assert after.status_code == 200
+    body = after.json()
+    assert body["free_matches_used"] == 1
+    assert body["free_matches_remaining"] == 9
+    assert body["entry_currency"] == "credit"
+    assert body["entry_currency_label"] == "Fan Coin"
 
 
 @pytest.mark.parametrize("prefix", ["/simulation-matchmaking", "/api/simulation-matchmaking"])

@@ -55,6 +55,16 @@ class CoinTraderRateView(CommonSchema):
     max_coin_amount: Decimal
     available_liquidity: Decimal
     is_active: bool
+    spread_fiat: Decimal = Decimal("0.0000")
+    treasury_deposit_rate_fiat: Decimal | None = None
+    treasury_withdrawal_rate_fiat: Decimal | None = None
+    min_trader_buy_rate_fiat: Decimal | None = None
+    max_trader_buy_rate_fiat: Decimal | None = None
+    min_trader_sell_rate_fiat: Decimal | None = None
+    max_trader_sell_rate_fiat: Decimal | None = None
+    max_trader_spread_fiat: Decimal | None = None
+    governance_status: str = "compliant"
+    governance_reasons: list[str] = Field(default_factory=list)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -65,9 +75,12 @@ class CoinTraderProfileView(CommonSchema):
     country_code: str | None = None
     status: CoinTraderProfileStatus | CoinTraderStatusLiteral | str
     tier: CoinTraderTier | str
+    verification_level: str = "standard"
     completion_rate: float
     average_release_minutes: float
     rating: float
+    completed_volume_fiat: Decimal = Decimal("0.0000")
+    dispute_score: float = 0.0
     terms: dict[str, Any] = Field(default_factory=dict)
     payment_methods: list[dict[str, Any]] = Field(default_factory=list)
     bank_accounts: list[dict[str, Any]] = Field(default_factory=list)

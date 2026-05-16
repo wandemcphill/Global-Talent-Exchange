@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from hashlib import sha256
 from math import log2
 from uuid import uuid4
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.economy.economy_service import EconomyService
+from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.match_engine.schemas import (
     MatchClubContextInput,
     MatchCompetitionContextInput,
@@ -14,10 +20,24 @@ from app.match_engine.schemas import (
     TeamTacticalPlanInput,
 )
 from app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
+from app.models.base import utcnow
+from app.models.club_profile import ClubProfile
+from app.models.fast_match import (
+    FastMatchEntitlement,
+    FastMatchResult,
+    FastMatchSession,
+    FastMatchSessionStatus,
+    FastMatchSettlement,
+    FastMatchSettlementStatus,
+)
+from app.models.user import User
+from app.models.wallet import LedgerUnit
+from app.services.match_timeline_service import MatchTimelineService
 from app.simulation_matchmaking.schemas import (
     AvailabilityStatus,
     BotClubProfile,
     ConnectionQuality,
+    FastMatchEntitlementResponse,
     HostedCompetitionPreviewRequest,
     HostedCompetitionPreviewResponse,
     HostedCompetitionType,
@@ -52,6 +72,11 @@ class ProfileNotFoundError(SimulationMatchmakingError):
 
 class MatchmakingUnavailableError(SimulationMatchmakingError):
     pass
+
+
+FAST_MATCH_ENTRY_SERVICE_KEY = "fast-match-entry"
+FAST_MATCH_CURRENCY = LedgerUnit.CREDIT
+FAST_MATCH_CURRENCY_LABEL = "Fan Coin"
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,8 +122,29 @@ class SimulationMatchmakingService:
             raise ProfileNotFoundError(f"Simulation profile '{user_id}' was not found.")
         return profile
 
-    def create_quick_game(self, payload: QuickGameRequest) -> QuickGameResponse:
-        requester = self.get_profile(payload.user_id)
+    def get_fast_match_entitlement(
+        self,
+        *,
+        actor: User,
+        session: Session,
+    ) -> FastMatchEntitlementResponse:
+        entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
+        quote = EconomyService(session).quote_match_entry(
+            payment_unit=FAST_MATCH_CURRENCY,
+            service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
+        )
+        return self._entitlement_response(entitlement, fee=quote.gross_amount)
+
+    def create_quick_game(
+        self,
+        payload: QuickGameRequest,
+        *,
+        actor: User | None = None,
+        session: Session | None = None,
+    ) -> QuickGameResponse:
+        if actor is not None:
+            payload = payload.model_copy(update={"user_id": actor.id})
+        requester = self._profile_for_quick_game(payload, actor=actor, session=session)
         human_candidates = self._eligible_quick_game_candidates(requester, include_bots=False)
         exact_matches = [
             candidate
@@ -122,6 +168,7 @@ class SimulationMatchmakingService:
         )
         best = ranked[0]
         match_id = f"match_{uuid4().hex[:10]}"
+        live_match_key = f"fast-match:{match_id}"
         queue_source = "bot" if best.profile.is_bot else "player"
         context_type = self._match_context_type(best.tactical_contrast, queue_source=queue_source)
         recommended_mode = payload.preferences.preferred_execution_mode or self._recommended_mode(
@@ -129,8 +176,105 @@ class SimulationMatchmakingService:
             best.profile,
             latency_score=best.latency_score,
         )
+        match_engine_request = self._build_match_engine_request(
+            match_id=match_id,
+            home=requester,
+            away=best.profile,
+            competition_type=MatchCompetitionType.LEAGUE,
+            stage="quick_game",
+            requires_winner=False,
+        )
+        free_matches_remaining = 10
+        free_matches_used = 0
+        charge_required_now = False
+        fan_coin_entry_fee = Decimal("0.0000")
+        entitlement_status = "free_run_active"
+        settlement_status: str | None = None
+        result_label: str | None = None
+
+        if actor is not None and session is not None:
+            entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
+            quote = EconomyService(session).quote_match_entry(
+                payment_unit=FAST_MATCH_CURRENCY,
+                service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
+            )
+            fan_coin_entry_fee = quote.gross_amount
+            charge_required_now = self._charge_required(entitlement)
+            wallet_ledger_id: str | None = None
+            if charge_required_now and fan_coin_entry_fee > Decimal("0.0000"):
+                payment = EconomyService(session).collect_match_entry(
+                    user=actor,
+                    payment_unit=FAST_MATCH_CURRENCY,
+                    service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
+                    reference=f"fast-match-entry:{match_id}",
+                    external_reference=live_match_key,
+                    description="Fast Match Fan Coin entry fee",
+                    actor=actor,
+                    idempotency_key=f"fast-match-entry:{actor.id}:{match_id}",
+                    metadata={
+                        "fast_match": {
+                            "match_id": match_id,
+                            "live_match_key": live_match_key,
+                            "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
+                        }
+                    },
+                )
+                wallet_ledger_id = payment.transaction_id
+
+            replay_payload = MatchSimulationService().build_replay_payload(match_engine_request)
+            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload).model_dump(mode="json")
+            result = self._result_for_requester(replay_payload.summary.winner_team_id, requester=requester)
+            result_label = result.value
+            settlement = self._settle_fast_match(
+                session=session,
+                actor=actor,
+                entitlement=entitlement,
+                match_id=match_id,
+                live_match_key=live_match_key,
+                result=result,
+                was_free=not charge_required_now,
+                fan_coin_charged=fan_coin_entry_fee if charge_required_now else Decimal("0.0000"),
+                wallet_ledger_id=wallet_ledger_id,
+            )
+            settlement_status = (
+                settlement.settlement_status.value
+                if hasattr(settlement.settlement_status, "value")
+                else str(settlement.settlement_status)
+            )
+            session.add(
+                FastMatchSession(
+                    user_id=actor.id,
+                    match_id=match_id,
+                    live_match_key=live_match_key,
+                    opponent_user_id=best.profile.user_id,
+                    home_club_id=requester.club_id,
+                    away_club_id=best.profile.club_id,
+                    entitlement_id=entitlement.id,
+                    settlement_id=settlement.id,
+                    status=FastMatchSessionStatus.SETTLED,
+                    charge_required_now=charge_required_now,
+                    entry_currency=FAST_MATCH_CURRENCY.value,
+                    fan_coin_entry_fee=fan_coin_entry_fee,
+                    wallet_ledger_id=wallet_ledger_id,
+                    result=result.value,
+                    viewer_payload_json=viewer_payload,
+                    simulation_request_json=match_engine_request.model_dump(mode="json"),
+                    metadata_json={
+                        "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
+                        "queue_source": queue_source,
+                        "viewer_mode_hint": "twoD",
+                    },
+                )
+            )
+            session.flush()
+            free_matches_remaining = entitlement.free_matches_remaining
+            free_matches_used = entitlement.free_matches_used
+            entitlement_status = self._entitlement_status(entitlement)
+
         return QuickGameResponse(
             match_id=match_id,
+            live_match_key=live_match_key,
+            viewer_route=f"/api/match-viewer/{live_match_key}",
             opponent=best.profile,
             match_context=MatchContextView(
                 type=context_type,
@@ -150,18 +294,18 @@ class SimulationMatchmakingService:
                 live_supported=True,
                 async_supported=True,
                 marketplace_feedback_enabled=True,
-                match_engine_request=self._build_match_engine_request(
-                    match_id=match_id,
-                    home=requester,
-                    away=best.profile,
-                    competition_type=MatchCompetitionType.LEAGUE,
-                    stage="quick_game",
-                    requires_winner=False,
-                ),
+                match_engine_request=match_engine_request,
             ),
-            free_matches_remaining=10,
+            free_matches_remaining=free_matches_remaining,
+            free_matches_used=free_matches_used,
             charge_on_loss=True,
-            entry_currency="credit",
+            charge_required_now=charge_required_now,
+            entry_currency=FAST_MATCH_CURRENCY.value,
+            entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
+            fan_coin_entry_fee=fan_coin_entry_fee,
+            entitlement_status=entitlement_status,
+            settlement_status=settlement_status,
+            result=result_label,
             rules_copy="Play free until you lose or reach 10 matches.",
         )
 
@@ -505,6 +649,184 @@ class SimulationMatchmakingService:
                     break
                 _append(profile)
         return selected[:target_count]
+
+    def _profile_for_quick_game(
+        self,
+        payload: QuickGameRequest,
+        *,
+        actor: User | None,
+        session: Session | None,
+    ) -> SimulationGameProfileView:
+        try:
+            return self.get_profile(payload.user_id)
+        except ProfileNotFoundError:
+            if actor is None:
+                raise
+            profile = self._default_profile_for_actor(actor=actor, session=session)
+            self.profiles[profile.user_id] = profile
+            return profile
+
+    def _default_profile_for_actor(self, *, actor: User, session: Session | None) -> SimulationGameProfileView:
+        club = None
+        if session is not None:
+            club = session.scalar(
+                select(ClubProfile)
+                .where(ClubProfile.owner_user_id == actor.id)
+                .order_by(ClubProfile.created_at.asc())
+            )
+        club_id = club.id if club is not None else f"user-club:{actor.id}"
+        club_name = club.club_name if club is not None else (getattr(actor, "display_name", None) or "GTEX Fast Match FC")
+        return SimulationGameProfileView(
+            user_id=actor.id,
+            club_id=club_id,
+            club_name=club_name,
+            manager_rating=1400,
+            tactical_profile=TacticalProfileInput(
+                style=TacticalStyleProfile.BALANCED,
+                pressing=PressingProfile.MEDIUM,
+                tempo=TempoProfile.NORMAL,
+            ),
+            squad_strength=64,
+            squad_depth=62,
+            preferred_match_type=[SimulationMatchType.QUICK],
+            connection_quality=ConnectionQuality.GOOD,
+            region="GLOBAL",
+            availability=AvailabilityStatus.ONLINE,
+        )
+
+    def _get_or_create_fast_match_entitlement(self, *, actor: User, session: Session) -> FastMatchEntitlement:
+        entitlement = session.scalar(
+            select(FastMatchEntitlement).where(
+                FastMatchEntitlement.user_id == actor.id,
+                FastMatchEntitlement.season_id.is_(None),
+            )
+        )
+        if entitlement is not None:
+            return entitlement
+        entitlement = FastMatchEntitlement(user_id=actor.id, season_id=None)
+        session.add(entitlement)
+        session.flush()
+        return entitlement
+
+    def _charge_required(self, entitlement: FastMatchEntitlement) -> bool:
+        return bool(
+            entitlement.charge_required
+            or entitlement.free_eligibility_exhausted
+            or entitlement.has_lost_free_run
+            or entitlement.free_matches_remaining <= 0
+            or entitlement.free_matches_used >= entitlement.free_match_limit
+        )
+
+    def _result_for_requester(
+        self,
+        winner_team_id: str | None,
+        *,
+        requester: SimulationGameProfileView,
+    ) -> FastMatchResult:
+        if winner_team_id is None:
+            return FastMatchResult.DRAW
+        return FastMatchResult.WIN if winner_team_id == f"{requester.club_id}-home" else FastMatchResult.LOSS
+
+    def _settle_fast_match(
+        self,
+        *,
+        session: Session,
+        actor: User,
+        entitlement: FastMatchEntitlement,
+        match_id: str,
+        live_match_key: str,
+        result: FastMatchResult,
+        was_free: bool,
+        fan_coin_charged: Decimal,
+        wallet_ledger_id: str | None,
+    ) -> FastMatchSettlement:
+        idempotency_key = f"fast-match-settlement:{actor.id}:{match_id}"
+        existing = session.scalar(
+            select(FastMatchSettlement).where(
+                (FastMatchSettlement.match_id == match_id)
+                | (FastMatchSettlement.idempotency_key == idempotency_key)
+            )
+        )
+        if existing is not None:
+            return existing
+
+        self._apply_fast_match_result(entitlement=entitlement, match_id=match_id, result=result, was_free=was_free)
+        settlement = FastMatchSettlement(
+            user_id=actor.id,
+            match_id=match_id,
+            entitlement_id=entitlement.id,
+            result=result,
+            was_free=was_free,
+            fan_coin_charged=fan_coin_charged,
+            settlement_status=FastMatchSettlementStatus.SETTLED,
+            idempotency_key=idempotency_key,
+            wallet_ledger_id=wallet_ledger_id,
+            metadata_json={
+                "live_match_key": live_match_key,
+                "entry_currency": FAST_MATCH_CURRENCY.value,
+                "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
+            },
+            settled_at=utcnow(),
+        )
+        session.add(settlement)
+        session.flush()
+        return settlement
+
+    def _apply_fast_match_result(
+        self,
+        *,
+        entitlement: FastMatchEntitlement,
+        match_id: str,
+        result: FastMatchResult,
+        was_free: bool,
+    ) -> None:
+        if was_free:
+            entitlement.free_matches_used = min(entitlement.free_match_limit, entitlement.free_matches_used + 1)
+            entitlement.free_matches_remaining = max(0, entitlement.free_match_limit - entitlement.free_matches_used)
+
+        if result == FastMatchResult.WIN:
+            entitlement.wins_count += 1
+            entitlement.current_streak += 1
+        elif result == FastMatchResult.DRAW:
+            entitlement.draws_count += 1
+        else:
+            entitlement.losses_count += 1
+            entitlement.current_streak = 0
+            if was_free:
+                entitlement.has_lost_free_run = True
+                entitlement.free_eligibility_exhausted = True
+                entitlement.charge_required = True
+
+        if entitlement.free_matches_used >= entitlement.free_match_limit:
+            entitlement.free_eligibility_exhausted = True
+            entitlement.charge_required = True
+            entitlement.free_matches_remaining = 0
+        entitlement.last_match_id = match_id
+
+    def _entitlement_response(self, entitlement: FastMatchEntitlement, *, fee: Decimal) -> FastMatchEntitlementResponse:
+        return FastMatchEntitlementResponse(
+            free_match_limit=entitlement.free_match_limit,
+            free_matches_used=entitlement.free_matches_used,
+            free_matches_remaining=entitlement.free_matches_remaining,
+            wins_count=entitlement.wins_count,
+            losses_count=entitlement.losses_count,
+            draws_count=entitlement.draws_count,
+            current_streak=entitlement.current_streak,
+            has_lost_free_run=entitlement.has_lost_free_run,
+            free_eligibility_exhausted=entitlement.free_eligibility_exhausted,
+            charge_required_now=self._charge_required(entitlement),
+            entry_currency=FAST_MATCH_CURRENCY.value,
+            entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
+            fan_coin_entry_fee=fee,
+            entitlement_status=self._entitlement_status(entitlement),
+        )
+
+    def _entitlement_status(self, entitlement: FastMatchEntitlement) -> str:
+        if entitlement.has_lost_free_run:
+            return "free_run_lost"
+        if entitlement.free_eligibility_exhausted:
+            return "free_run_exhausted"
+        return "free_run_active"
 
     def _build_match_engine_request(
         self,

@@ -867,7 +867,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
             _sectionHeader(
               'Trade listings',
               subtitle:
-                  'Peer-to-peer manager trades settle immediately in GTEX Coin. Scarcity, fit, and reputation make this feel like a dugout bazaar instead of a flat card shop.',
+                  'Manager card trades settle immediately in GTEX Coin. Staff employment contracts and salaries settle separately in Fan Coin/payroll.',
               trailing: Text('${_listings.length} live'),
             ),
             const SizedBox(height: 12),

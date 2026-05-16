@@ -73,9 +73,14 @@ class CompetitionProgressionService:
                 self.session.add(history_entry)
             badge_code = self._badge_for_placement(placement)
             title_awarded = self._title_for_placement(placement)
-            ranking_points_delta = self._ranking_points_for_placement(
-                placement=placement,
-                field_size=len(standings_list),
+            is_ranked = bool(getattr(competition, "is_ranked", True))
+            ranking_points_delta = (
+                self._ranking_points_for_placement(
+                    placement=placement,
+                    field_size=len(standings_list),
+                )
+                if is_ranked
+                else 0
             )
             display_name = self._display_name_for(participant=participant, resolved_user=resolved_user)
             history_entry.participant_id = participant.id
@@ -99,6 +104,7 @@ class CompetitionProgressionService:
             history_entry.metadata_json = {
                 **dict(history_entry.metadata_json or {}),
                 "display_name": display_name,
+                "ranked": is_ranked,
                 "goal_diff": participant.goal_diff,
                 "goals_for": participant.goals_for,
                 "goals_against": participant.goals_against,

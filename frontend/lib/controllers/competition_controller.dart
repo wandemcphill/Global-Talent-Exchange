@@ -92,8 +92,11 @@ class CompetitionController extends ChangeNotifier {
       creatorName: draft.creatorName,
       participantCount: 0,
       capacity: draft.capacity,
+      remainingSlots: draft.capacity,
       currency: draft.currency,
       entryFee: draft.entryFee,
+      grossPot: draft.grossPoolAtCapacity,
+      netPayoutPot: draft.projectedPrizePool,
       platformFeePct: draft.platformFeePct,
       hostFeePct: draft.hostFeePct,
       platformFeeAmount: draft.projectedPlatformFee,
@@ -106,6 +109,21 @@ class CompetitionController extends ChangeNotifier {
         eligible: false,
         reason: 'competition_not_open',
       ),
+      competitionMode: draft.competitionMode,
+      prizeMode: draft.prizeMode,
+      payoutMode: draft.payoutMode,
+      isRanked: draft.isRanked,
+      registrationDeadline: draft.registrationDeadline,
+      hostFundedPrizeTotal: draft.hostFundedPrizeTotal,
+      hostFundingRequired: draft.hostFundingRequired,
+      hostFundingEscrowed: 0,
+      hostPlatformFee: draft.hostPlatformFee,
+      fixedPrizes: draft.fixedPrizes,
+      eligibilityRules: draft.eligibilityRules,
+      rankingPolicy: <String, Object?>{
+        'ranked': draft.isRanked,
+        'source': draft.isRanked ? 'club_ladder' : 'unranked',
+      },
       beginnerFriendly: draft.beginnerFriendly,
       createdAt: DateTime.now().toUtc(),
       updatedAt: DateTime.now().toUtc(),
@@ -398,6 +416,7 @@ class CompetitionController extends ChangeNotifier {
   }
 
   Future<CompetitionSummary?> joinSelectedCompetition({
+    String? clubId,
     String? inviteCode,
     String? passcode,
   }) async {
@@ -413,6 +432,7 @@ class CompetitionController extends ChangeNotifier {
         current.id,
         userId: _currentUserId,
         userName: _currentUserName,
+        clubId: clubId,
         inviteCode: inviteCode,
         passcode: passcode,
       );

@@ -36,6 +36,13 @@ class TreasurySettingsView(BaseModel):
     deposit_rate_direction: RateDirection
     withdrawal_rate_value: Decimal
     withdrawal_rate_direction: RateDirection
+    min_trader_buy_rate_fiat: Decimal
+    max_trader_buy_rate_fiat: Decimal
+    min_trader_sell_rate_fiat: Decimal
+    max_trader_sell_rate_fiat: Decimal
+    max_trader_spread_fiat: Decimal
+    max_buy_above_withdrawal_fiat: Decimal
+    max_sell_below_deposit_fiat: Decimal
     min_deposit: Decimal
     max_deposit: Decimal
     min_withdrawal: Decimal
@@ -57,6 +64,13 @@ class TreasurySettingsUpdate(BaseModel):
     deposit_rate_direction: RateDirection | None = None
     withdrawal_rate_value: Decimal | None = None
     withdrawal_rate_direction: RateDirection | None = None
+    min_trader_buy_rate_fiat: Decimal | None = None
+    max_trader_buy_rate_fiat: Decimal | None = None
+    min_trader_sell_rate_fiat: Decimal | None = None
+    max_trader_sell_rate_fiat: Decimal | None = None
+    max_trader_spread_fiat: Decimal | None = None
+    max_buy_above_withdrawal_fiat: Decimal | None = None
+    max_sell_below_deposit_fiat: Decimal | None = None
     min_deposit: Decimal | None = None
     max_deposit: Decimal | None = None
     min_withdrawal: Decimal | None = None
@@ -66,6 +80,38 @@ class TreasurySettingsUpdate(BaseModel):
     maintenance_message: str | None = Field(default=None, max_length=255)
     whatsapp_number: str | None = Field(default=None, max_length=32)
     active_bank_account_id: str | None = None
+
+    @field_validator(
+        "min_trader_buy_rate_fiat",
+        "max_trader_buy_rate_fiat",
+        "min_trader_sell_rate_fiat",
+        "max_trader_sell_rate_fiat",
+        "max_trader_spread_fiat",
+        "max_buy_above_withdrawal_fiat",
+        "max_sell_below_deposit_fiat",
+        mode="after",
+    )
+    @classmethod
+    def validate_non_negative_guardrail(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and value < 0:
+            raise ValueError("Trader pricing guardrails must be non-negative.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_trader_guardrail_pairs(self) -> "TreasurySettingsUpdate":
+        if (
+            self.min_trader_buy_rate_fiat is not None
+            and self.max_trader_buy_rate_fiat is not None
+            and self.min_trader_buy_rate_fiat > self.max_trader_buy_rate_fiat
+        ):
+            raise ValueError("Minimum trader buy rate cannot exceed maximum trader buy rate.")
+        if (
+            self.min_trader_sell_rate_fiat is not None
+            and self.max_trader_sell_rate_fiat is not None
+            and self.min_trader_sell_rate_fiat > self.max_trader_sell_rate_fiat
+        ):
+            raise ValueError("Minimum trader sell rate cannot exceed maximum trader sell rate.")
+        return self
 
 
 class TreasuryBankAccountCreate(BaseModel):

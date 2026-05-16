@@ -51,11 +51,39 @@ class CompetitionApi {
     );
   }
 
-  Future<CompetitionListResponse> fetchCompetitions({String? userId}) {
+  Future<CompetitionListResponse> fetchCompetitions({
+    String? userId,
+    String? rewardFilter,
+    bool? ranked,
+    String? hostType,
+    String? availability,
+    String? starts,
+    double? minEntryFee,
+    double? maxEntryFee,
+    String? feeFilter,
+    String? sort,
+  }) {
     return _withFallback<CompetitionListResponse>(() async {
-      final Object? payload = await _sendBest('GET', const <String>[
-        '/api/competitions',
-      ]);
+      final Object? payload = await _sendBest(
+        'GET',
+        const <String>['/api/competitions'],
+        query: <String, Object?>{
+          if (rewardFilter != null && rewardFilter.trim().isNotEmpty)
+            'reward_filter': rewardFilter.trim(),
+          if (ranked != null) 'ranked': ranked,
+          if (hostType != null && hostType.trim().isNotEmpty)
+            'host_type': hostType.trim(),
+          if (availability != null && availability.trim().isNotEmpty)
+            'availability': availability.trim(),
+          if (starts != null && starts.trim().isNotEmpty)
+            'starts': starts.trim(),
+          if (minEntryFee != null) 'min_entry_fee': minEntryFee,
+          if (maxEntryFee != null) 'max_entry_fee': maxEntryFee,
+          if (feeFilter != null && feeFilter.trim().isNotEmpty)
+            'fee_filter': feeFilter.trim(),
+          if (sort != null && sort.trim().isNotEmpty) 'sort': sort.trim(),
+        },
+      );
       return CompetitionListResponse.fromJson(payload);
     }, () async => _fixtureStore.list(userId: userId));
   }
@@ -98,6 +126,26 @@ class CompetitionApi {
     }, () async => _fixtureStore.financials(competitionId));
   }
 
+  Future<CompetitionParticipantsResponse> fetchParticipants(
+    String competitionId,
+  ) {
+    return _withFallback<CompetitionParticipantsResponse>(() async {
+      final Object? payload = await _sendBest('GET', <String>[
+        '/api/competitions/$competitionId/participants',
+      ]);
+      return CompetitionParticipantsResponse.fromJson(payload);
+    }, () async => _fixtureStore.participants(competitionId));
+  }
+
+  Future<CompetitionPot> fetchPot(String competitionId) {
+    return _withFallback<CompetitionPot>(() async {
+      final Object? payload = await _sendBest('GET', <String>[
+        '/api/competitions/$competitionId/pot',
+      ]);
+      return CompetitionPot.fromJson(payload);
+    }, () async => _fixtureStore.pot(competitionId));
+  }
+
   Future<CompetitionSummary> createCompetition(CompetitionDraft draft) {
     return _withFallback<CompetitionSummary>(() async {
       final Object? payload = await _sendBest(
@@ -137,6 +185,7 @@ class CompetitionApi {
     String competitionId, {
     required String userId,
     String? userName,
+    String? clubId,
     String? inviteCode,
     String? passcode,
   }) {
@@ -151,6 +200,8 @@ class CompetitionApi {
           body: <String, Object?>{
             'competition_id': competitionId,
             'user_id': userId,
+            if (clubId != null && clubId.trim().isNotEmpty)
+              'club_id': clubId.trim(),
             if (userName != null && userName.trim().isNotEmpty)
               'user_name': userName.trim(),
             if (inviteCode != null && inviteCode.trim().isNotEmpty)
@@ -166,10 +217,120 @@ class CompetitionApi {
         competitionId,
         userId: userId,
         userName: userName,
+        clubId: clubId,
         inviteCode: inviteCode,
         passcode: passcode,
       ),
     );
+  }
+
+  Future<CompetitionSummary> cancelCompetition(String competitionId) {
+    return _withFallback<CompetitionSummary>(() async {
+      final Object? payload = await _sendBest('POST', <String>[
+        '/api/competitions/$competitionId/cancel',
+      ], auth: true);
+      return CompetitionSummary.fromJson(payload);
+    }, () async => _fixtureStore.cancel(competitionId));
+  }
+
+  Future<ClubCompetitionLeaderboardResponse> fetchClubLeaderboard({
+    int limit = 50,
+  }) {
+    return _withFallback<ClubCompetitionLeaderboardResponse>(() async {
+      final Object? payload = await _sendBest(
+        'GET',
+        const <String>['/api/competitions/leaderboard/clubs'],
+        query: <String, Object?>{'limit': limit},
+      );
+      return ClubCompetitionLeaderboardResponse.fromJson(payload);
+    }, () async => _fixtureStore.clubLeaderboard(limit: limit));
+  }
+
+  Future<RandomCompetitionQuote> quoteRandomCompetition({
+    String mode = 'one_v_one',
+    String? clubId,
+  }) {
+    return _withFallback<RandomCompetitionQuote>(() async {
+      final Object? payload = await _sendBest(
+        'POST',
+        const <String>['/api/competitions/random/quote'],
+        body: <String, Object?>{
+          'mode': mode,
+          if (clubId != null && clubId.trim().isNotEmpty)
+            'club_id': clubId.trim(),
+        },
+        auth: true,
+      );
+      return RandomCompetitionQuote.fromJson(payload);
+    }, () async => _fixtureStore.randomQuote(mode: mode));
+  }
+
+  Future<CompetitionSummary> joinRandomCompetition({
+    String mode = 'one_v_one',
+    String? clubId,
+  }) {
+    return _withFallback<CompetitionSummary>(() async {
+      final Object? payload = await _sendBest(
+        'POST',
+        const <String>['/api/competitions/random/join'],
+        body: <String, Object?>{
+          'mode': mode,
+          'confirm': true,
+          if (clubId != null && clubId.trim().isNotEmpty)
+            'club_id': clubId.trim(),
+        },
+        auth: true,
+      );
+      return CompetitionSummary.fromJson(payload);
+    }, () async => _fixtureStore.joinRandom(mode: mode));
+  }
+
+  Future<FastMatchEntitlementView> fetchFastMatchEntitlement() {
+    return _withFallback<FastMatchEntitlementView>(() async {
+      final Object? payload = await _sendBest('GET', const <String>[
+        '/api/simulation-matchmaking/fast-match/entitlement',
+        '/simulation-matchmaking/fast-match/entitlement',
+      ], auth: true);
+      return FastMatchEntitlementView.fromJson(payload);
+    }, () async => _fixtureStore.fastMatchEntitlement());
+  }
+
+  Future<FastMatchEntitlementView> startFastMatch({required String userId}) {
+    return _withFallback<FastMatchEntitlementView>(() async {
+      final Object? payload = await _sendBest(
+        'POST',
+        const <String>[
+          '/api/simulation-matchmaking/quick-game',
+          '/simulation-matchmaking/quick-game',
+        ],
+        body: <String, Object?>{
+          'user_id': userId,
+          'mode': 'quick_game',
+          'include_bots': true,
+        },
+        auth: true,
+      );
+      return FastMatchEntitlementView.fromJson(payload);
+    }, () async => _fixtureStore.startFastMatch());
+  }
+
+  Future<FastCupRegistrationView> joinFastCup({
+    required String cupId,
+    required String clubId,
+  }) {
+    return _withFallback<FastCupRegistrationView>(() async {
+      final String encodedCupId = Uri.encodeComponent(cupId);
+      final Object? payload = await _sendBest(
+        'POST',
+        <String>[
+          '/api/fast-cups/$encodedCupId/join',
+          '/fast-cups/$encodedCupId/join',
+        ],
+        body: <String, Object?>{'club_id': clubId},
+        auth: true,
+      );
+      return FastCupRegistrationView.fromJson(payload);
+    }, () async => _fixtureStore.joinFastCup(cupId: cupId, clubId: clubId));
   }
 
   Future<CompetitionInviteView> createInvite(
@@ -413,6 +574,53 @@ class _CompetitionFixtureStore {
     );
   }
 
+  CompetitionParticipantsResponse participants(String competitionId) {
+    final _CompetitionRecord record = _requireRecord(competitionId);
+    return CompetitionParticipantsResponse(
+      competitionId: competitionId,
+      participants: record.participantIds
+          .map(
+            (String id) => CompetitionParticipant(
+              participantId: 'fixture-participant-$id',
+              competitionId: competitionId,
+              userId: id,
+              clubId: id,
+              clubName: 'Club $id',
+              status: 'joined',
+              entryFeeAmount: record.summary.entryFee,
+              entryFeeCurrency: record.summary.currency,
+              escrowStatus: record.summary.entryFee > 0 ? 'escrowed' : 'none',
+              walletLedgerId:
+                  record.summary.entryFee > 0 ? 'fixture-ledger-$id' : null,
+              joinedAt: record.summary.updatedAt,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  CompetitionPot pot(String competitionId) {
+    final CompetitionSummary summary = _requireRecord(competitionId).summary;
+    return CompetitionPot(
+      competitionId: summary.id,
+      currency: summary.currency,
+      participantCount: summary.participantCount,
+      capacity: summary.capacity,
+      remainingSlots: summary.remainingSlots,
+      entryFee: summary.entryFee,
+      grossPot: summary.grossPot,
+      platformFeePct: summary.platformFeePct,
+      platformFeeAmount: summary.platformFeeAmount,
+      hostFeePct: summary.hostFeePct,
+      hostFeeAmount: summary.hostFeeAmount,
+      netPayoutPot: summary.netPayoutPot,
+      prizeMode: summary.prizeMode,
+      payoutMode: summary.payoutMode,
+      fixedPrizes: summary.fixedPrizes,
+      payoutStructure: summary.payoutStructure,
+    );
+  }
+
   CompetitionSummary create(CompetitionDraft draft) {
     final String id = 'ugc-${_idSequence++}';
     final DateTime now = DateTime.now().toUtc();
@@ -426,8 +634,11 @@ class _CompetitionFixtureStore {
       creatorName: draft.creatorName,
       participantCount: 0,
       capacity: draft.capacity,
+      remainingSlots: draft.capacity,
       currency: draft.currency,
       entryFee: draft.entryFee,
+      grossPot: draft.grossPoolAtCapacity,
+      netPayoutPot: draft.projectedPrizePool,
       platformFeePct: draft.platformFeePct,
       hostFeePct: draft.hostFeePct,
       platformFeeAmount: 0,
@@ -448,6 +659,21 @@ class _CompetitionFixtureStore {
         eligible: false,
         reason: 'competition_not_open',
       ),
+      competitionMode: draft.competitionMode,
+      prizeMode: draft.prizeMode,
+      payoutMode: draft.payoutMode,
+      isRanked: draft.isRanked,
+      registrationDeadline: draft.registrationDeadline,
+      hostFundedPrizeTotal: draft.hostFundedPrizeTotal,
+      hostFundingRequired: draft.hostFundingRequired,
+      hostFundingEscrowed: 0,
+      hostPlatformFee: draft.hostPlatformFee,
+      fixedPrizes: draft.fixedPrizes,
+      eligibilityRules: draft.eligibilityRules,
+      rankingPolicy: <String, Object?>{
+        'ranked': draft.isRanked,
+        'source': draft.isRanked ? 'club_ladder' : 'unranked',
+      },
       beginnerFriendly: draft.beginnerFriendly,
       createdAt: now,
       updatedAt: now,
@@ -482,6 +708,7 @@ class _CompetitionFixtureStore {
     String competitionId, {
     required String userId,
     String? userName,
+    String? clubId,
     String? inviteCode,
     String? passcode,
   }) {
@@ -495,7 +722,7 @@ class _CompetitionFixtureStore {
     if (!eligibility.eligible) {
       return record.summary.copyWith(joinEligibility: eligibility);
     }
-    record.participantIds.add(userId);
+    record.participantIds.add(clubId ?? userId);
     final int participantCount = record.participantIds.length;
     record.summary = _recalculateFinancials(
       record.summary.copyWith(
@@ -508,6 +735,107 @@ class _CompetitionFixtureStore {
       ),
     );
     return _viewFor(record, userId: userId, inviteCode: inviteCode);
+  }
+
+  CompetitionSummary cancel(String competitionId) {
+    final _CompetitionRecord record = _requireRecord(competitionId);
+    record.summary = record.summary.copyWith(
+      status: CompetitionStatus.cancelled,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    return record.summary;
+  }
+
+  ClubCompetitionLeaderboardResponse clubLeaderboard({int limit = 50}) {
+    final List<ClubCompetitionLeaderboardEntry> entries = _records.values
+        .take(limit)
+        .toList(growable: false)
+        .asMap()
+        .entries
+        .map(
+          (MapEntry<int, _CompetitionRecord> entry) =>
+              ClubCompetitionLeaderboardEntry(
+                rank: entry.key + 1,
+                clubId: 'fixture-club-${entry.key + 1}',
+                clubName: entry.value.summary.creatorLabel,
+                ownerUserId: entry.value.summary.creatorId,
+                rankingPoints: 250 - (entry.key * 10),
+                wins: entry.value.summary.participantCount,
+                draws: 0,
+                losses: 0,
+                trophies: entry.key == 0 ? 1 : 0,
+                recentForm: 'W',
+                eligibilityTier: entry.key == 0 ? 'qualified' : 'ladder',
+                gtexHostedEligible: entry.key == 0,
+              ),
+        )
+        .toList(growable: false);
+    return ClubCompetitionLeaderboardResponse(entries: entries);
+  }
+
+  RandomCompetitionQuote randomQuote({String mode = 'one_v_one'}) {
+    final CompetitionSummary summary = _records.values.first.summary;
+    return RandomCompetitionQuote(
+      competitionId: summary.id,
+      competitionName: summary.name,
+      mode: mode,
+      currency: summary.currency,
+      entryFee: summary.entryFee,
+      grossPot: summary.grossPot + summary.entryFee,
+      platformFeeAmount: summary.platformFeeAmount,
+      netPayoutPot: summary.netPayoutPot,
+      ranked: summary.isRanked,
+      startsAt: summary.scheduledStartAt,
+      confirmationRequired: true,
+    );
+  }
+
+  CompetitionSummary joinRandom({String mode = 'one_v_one'}) {
+    final CompetitionSummary summary = _records.values.first.summary;
+    return join(summary.id, userId: 'fixture-random-user');
+  }
+
+  FastMatchEntitlementView fastMatchEntitlement() {
+    return const FastMatchEntitlementView(
+      freeMatchesRemaining: 10,
+      freeMatchesUsed: 0,
+      chargeOnLoss: true,
+      chargeRequiredNow: false,
+      entryCurrency: 'credit',
+      entryCurrencyLabel: 'Fan Coin',
+      fanCoinEntryFee: 12,
+      entitlementStatus: 'free_run',
+    );
+  }
+
+  FastMatchEntitlementView startFastMatch() {
+    return const FastMatchEntitlementView(
+      freeMatchesRemaining: 9,
+      freeMatchesUsed: 1,
+      chargeOnLoss: true,
+      chargeRequiredNow: false,
+      entryCurrency: 'credit',
+      entryCurrencyLabel: 'Fan Coin',
+      fanCoinEntryFee: 12,
+      entitlementStatus: 'free_run',
+      matchId: 'fixture-fast-match',
+      liveMatchKey: 'fixture-fast-match-live',
+      viewerRoute: '/match-viewer/fixture-fast-match-live',
+      settlementStatus: 'pending',
+    );
+  }
+
+  FastCupRegistrationView joinFastCup({
+    required String cupId,
+    required String clubId,
+  }) {
+    return const FastCupRegistrationView(
+      registrationId: 'fixture-fast-cup-registration',
+      escrowStatus: 'escrowed',
+      entryFeeAmount: 12,
+      entryFeeCurrency: 'credit',
+      walletLedgerId: 'fixture-fast-cup-ledger',
+    );
   }
 
   CompetitionInviteView createInvite(
@@ -639,6 +967,9 @@ class _CompetitionFixtureStore {
         )
         .toList(growable: false);
     return summary.copyWith(
+      remainingSlots: max(summary.capacity - summary.participantCount, 0),
+      grossPot: grossPool,
+      netPayoutPot: prizePool,
       platformFeeAmount: platformFee,
       hostFeeAmount: hostFee,
       prizePool: prizePool,
@@ -878,6 +1209,22 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
     rulesSummary:
         'Fast cup queue with instant wallet commitment. Entry fees clear before the slot is locked and payouts follow the published bracket.',
     matchType: MatchType.fastMatch,
+    fastMatchEntitlement: const FastMatchEntitlementView(
+      freeMatchesRemaining: 10,
+      freeMatchesUsed: 0,
+      chargeOnLoss: true,
+      chargeRequiredNow: false,
+      entryCurrency: 'credit',
+      entryCurrencyLabel: 'Fan Coin',
+      fanCoinEntryFee: 12,
+      entitlementStatus: 'free_run',
+    ),
+    fastCupRegistration: const FastCupRegistrationView(
+      registrationId: null,
+      escrowStatus: 'pending',
+      entryFeeAmount: 12,
+      entryFeeCurrency: 'credit',
+    ),
     joinEligibility: CompetitionJoinEligibility(
       eligible: false,
       reason: 'competition_not_open',

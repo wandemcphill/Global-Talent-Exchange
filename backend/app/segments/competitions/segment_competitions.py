@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -35,16 +35,21 @@ from app.schemas.competition_requests import (
     CompetitionJoinRequest,
     CompetitionLeaveRequest,
     CompetitionPublishRequest,
+    RandomCompetitionRequest,
     CompetitionUpdateRequest,
 )
 from app.schemas.competition_responses import (
+    ClubCompetitionLeaderboardResponse,
     CompetitionFinancialSummaryView,
+    CompetitionParticipantsResponse,
+    CompetitionPotView,
     CompetitionProgressionView,
     CompetitionInviteView,
     CompetitionInvitesResponse,
     CompetitionListResponse,
     CompetitionRewardsResponse,
     CompetitionSummaryView,
+    RandomCompetitionQuoteView,
 )
 from app.services.competition_orchestrator import (
     CompetitionActionError,
@@ -160,8 +165,6 @@ def _admin_competition_payload(payload: CompetitionCreateRequest, actor: User) -
                 "host_type": CompetitionHostType.GTEX_HOSTED,
                 "source_type": CompetitionHostType.GTEX_HOSTED.value,
                 "type": CompetitionHostType.GTEX_HOSTED.value,
-                "entry_fee": Decimal("0"),
-                "buy_in_amount": Decimal("0"),
                 "currency": "coin",
             }
         )
@@ -254,7 +257,9 @@ def publish_competition(
     if competition is None:
         raise _not_found(competition_id)
     _require_manage_competitions_or_creator(request, actor, competition)
-    result = orchestrator.publish(competition_id, open_for_join=payload.open_for_join)
+    result = _handle_competition_errors(
+        lambda: orchestrator.publish(competition_id, open_for_join=payload.open_for_join)
+    )
     if result is None:
         raise _not_found(competition_id)
     return result
@@ -274,6 +279,44 @@ def get_competition_progression(
             detail=f"Competition progression for {subject_id} was not found",
         )
     return result
+
+
+@router.get("/leaderboard/clubs", response_model=ClubCompetitionLeaderboardResponse)
+def get_club_competition_leaderboard(
+    limit: int = Query(default=50, ge=1, le=200),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> ClubCompetitionLeaderboardResponse:
+    return orchestrator.club_leaderboard(limit=limit)
+
+
+@router.post("/random/quote", response_model=RandomCompetitionQuoteView, response_model_exclude_none=True)
+def quote_random_competition(
+    payload: RandomCompetitionRequest,
+    current_user: User = Depends(get_current_user),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> RandomCompetitionQuoteView:
+    result = orchestrator.random_quote(mode=payload.mode, club_id=payload.club_id, user_id=current_user.id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No eligible random competition was found.")
+    return result
+
+
+@router.post("/random/join", response_model=CompetitionSummaryView, response_model_exclude_none=True)
+def join_random_competition(
+    payload: RandomCompetitionRequest,
+    current_user: User = Depends(get_current_user),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    quote = orchestrator.random_quote(mode=payload.mode, club_id=payload.club_id, user_id=current_user.id)
+    if quote is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No eligible random competition was found.")
+    join_payload = CompetitionJoinRequest(user_id=current_user.id, club_id=payload.club_id)
+    return _join_competition_response(
+        quote.competition_id,
+        join_payload,
+        current_user=current_user,
+        orchestrator=orchestrator,
+    )
 
 
 @router.get("/{competition_id}", response_model=CompetitionSummaryView, response_model_exclude_none=True)
@@ -297,6 +340,15 @@ def list_competitions(
     sort: Literal["trending", "new", "prize_pool", "fill_rate"] = Query(default="trending"),
     creator_id: str | None = Query(default=None),
     beginner_friendly: bool | None = Query(default=None),
+    reward_filter: str | None = Query(default=None),
+    ranked: bool | None = Query(default=None),
+    host_type: str | None = Query(default=None),
+    availability: str | None = Query(default=None),
+    starts: str | None = Query(default=None),
+    start_from: datetime | None = Query(default=None),
+    start_to: datetime | None = Query(default=None),
+    min_entry_fee: float | None = Query(default=None, ge=0),
+    max_entry_fee: float | None = Query(default=None, ge=0),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionListResponse:
     return orchestrator.list(
@@ -306,6 +358,15 @@ def list_competitions(
         sort=sort,
         creator_id=creator_id,
         beginner_friendly=beginner_friendly,
+        reward_filter=reward_filter,
+        ranked=ranked,
+        host_type=host_type,
+        availability=availability,
+        starts=starts,
+        start_from=start_from,
+        start_to=start_to,
+        min_entry_fee=min_entry_fee,
+        max_entry_fee=max_entry_fee,
     )
 
 
@@ -345,7 +406,7 @@ def _join_competition_response(
     current_user: User,
     orchestrator: CompetitionOrchestrator,
 ) -> CompetitionSummaryView:
-    if payload.user_id != current_user.id:
+    if payload.user_id is not None and payload.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Authenticated user does not match competition join payload.",
@@ -357,6 +418,7 @@ def _join_competition_response(
             competition_id,
             user_id=resolved_user_id,
             user_name=resolved_user_name,
+            club_id=payload.club_id,
             club_name=payload.club_name,
             invite_code=payload.invite_code,
             passcode=payload.passcode,
@@ -459,6 +521,62 @@ def get_competition_financials(
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionFinancialSummaryView:
     result = orchestrator.financials(competition_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/participants", response_model=CompetitionParticipantsResponse)
+def get_competition_participants(
+    competition_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionParticipantsResponse:
+    result = orchestrator.participants(competition_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/pot", response_model=CompetitionPotView)
+def get_competition_pot(
+    competition_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionPotView:
+    result = orchestrator.pot(competition_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/cancel", response_model=CompetitionSummaryView, response_model_exclude_none=True)
+def cancel_competition(
+    competition_id: str,
+    request: Request,
+    actor: User = Depends(get_current_user),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
+    result = orchestrator.cancel(competition_id, actor_user_id=actor.id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/settle-payouts", response_model=CompetitionRewardsResponse)
+def settle_competition_payouts(
+    competition_id: str,
+    request: Request,
+    actor: User = Depends(get_current_user),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionRewardsResponse:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
+    result = orchestrator.settle_payouts(competition_id)
     if result is None:
         raise _not_found(competition_id)
     return result

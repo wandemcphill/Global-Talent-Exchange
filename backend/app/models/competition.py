@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Index, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.enums.competition_format import CompetitionFormat
@@ -19,6 +19,11 @@ class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_user_competitions_visibility_created_at", "visibility", "created_at"),
         Index("ix_user_competitions_format_visibility_created_at", "format", "visibility", "created_at"),
         Index("ix_user_competitions_host_user_id_created_at", "host_user_id", "created_at"),
+        Index("ix_user_competitions_ranked_status", "is_ranked", "status"),
+        Index("ix_user_competitions_mode_status", "competition_mode", "status"),
+        Index("ix_user_competitions_prize_mode", "prize_mode"),
+        Index("ix_user_competitions_registration_deadline", "registration_deadline"),
+        Index("ix_user_competitions_featured_status", "featured", "status"),
     )
 
     host_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
@@ -52,6 +57,7 @@ class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=CompetitionStartMode.SCHEDULED.value,
     )
     scheduled_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    registration_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     seeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     launched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -71,6 +77,26 @@ class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     host_creation_fee_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     gross_pool_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     net_prize_pool_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    is_ranked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    competition_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="competition", server_default="competition"
+    )
+    prize_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="entry_funded", server_default="entry_funded"
+    )
+    payout_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="winner_takes_all", server_default="winner_takes_all"
+    )
+    host_funded_prize_total_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    host_funding_required_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    host_funding_escrowed_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    host_platform_fee_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    fixed_prizes_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    eligibility_rules_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    ranking_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    manual_approval_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    online_now: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     def format_enum(self) -> CompetitionFormat:

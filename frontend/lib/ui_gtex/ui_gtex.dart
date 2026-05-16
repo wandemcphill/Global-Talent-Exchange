@@ -1,5 +1,6 @@
 export 'theme/gtex_colors.dart';
 export 'theme/gtex_spacing.dart';
+export 'backgrounds/living_football_os_background.dart';
 export 'layout/gtex_app_shell.dart';
 export 'layout/gtex_focus_flow_scaffold.dart';
 export 'layout/gtex_master_detail_scaffold.dart';
@@ -11,6 +12,7 @@ export 'components/gtex_card.dart';
 export 'components/gtex_empty_state.dart';
 export 'components/gtex_metric_tile.dart';
 export 'components/gtex_panel.dart';
+export 'components/gtex_page_surface.dart';
 export 'components/gtex_search_field.dart';
 export 'components/gtex_status_chip.dart';
 export 'commerce/gtex_shortlist_basket.dart';

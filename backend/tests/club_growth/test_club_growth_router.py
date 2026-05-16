@@ -15,7 +15,7 @@ from app.auth.dependencies import get_current_user, get_session
 from app.club_growth.router import router as club_growth_router
 from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
 from app.common.enums.sponsorship_status import SponsorshipStatus
-from app.ingestion.models import Player
+from app.ingestion.models import Player, PlayerImageMetadata
 from app.models.access_control import AccessAuditLog, Organization, OrganizationMembership
 from app.models.base import Base, utcnow
 from app.models.club_growth import (
@@ -57,6 +57,7 @@ def session() -> Iterator[Session]:
             OrganizationMembership.__table__,
             AccessAuditLog.__table__,
             Player.__table__,
+            PlayerImageMetadata.__table__,
             PlayerShareMarket.__table__,
             ClubStaffProfile.__table__,
             ClubStaffContract.__table__,
@@ -254,7 +255,12 @@ def test_academy_prospect_contract_and_promotion_flow(client: TestClient, sessio
     promoted = client.post(f"/api/clubs/{club.id}/growth/academy/prospects/{prospect_id}/promote")
     assert promoted.status_code == 200, promoted.text
     assert promoted.json()["status"] == "promoted_to_senior"
-    assert session.scalar(select(AcademyPromotionHistory).where(AcademyPromotionHistory.prospect_id == prospect_id))
+    assert promoted.json()["portrait_asset_ref"]
+    assert promoted.json()["senior_player_id"]
+    history = session.scalar(select(AcademyPromotionHistory).where(AcademyPromotionHistory.prospect_id == prospect_id))
+    assert history
+    assert history.senior_player_id == promoted.json()["senior_player_id"]
+    assert session.get(Player, promoted.json()["senior_player_id"]) is not None
     audit_actions = list(session.scalars(select(ClubGrowthAuditEvent.action)).all())
     assert "academy_prospects_generated" in audit_actions
     assert "academy_contract_offered" in audit_actions

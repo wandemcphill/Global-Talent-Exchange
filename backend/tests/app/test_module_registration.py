@@ -219,7 +219,7 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert season_pass_response.status_code == 401
     assert live_events_response.status_code == 401
     assert managers_response.status_code == 200
-    assert simulation_matchmaking_response.status_code == 422
+    assert simulation_matchmaking_response.status_code == 401
     assert ultimate_league_tiers_response.status_code == 200
     assert ultimate_league_tournament_response.status_code == 422
     assert competitive_integrity_response.status_code == 401

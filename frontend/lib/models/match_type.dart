@@ -46,7 +46,7 @@ extension MatchTypeX on MatchType {
       case MatchType.userHosted:
         return 'User-hosted matches require an entry fee before your place is confirmed.';
       case MatchType.fastMatch:
-        return 'Play free until you lose or reach 10 matches. Fan Coin is charged only after a loss.';
+        return 'Fast Match entitlement is checked by the server before kickoff. Fan Coin applies only when the backend marks the account paid.';
     }
   }
 }

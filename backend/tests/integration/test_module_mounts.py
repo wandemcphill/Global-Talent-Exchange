@@ -65,7 +65,7 @@ def test_integrated_read_routes_are_reachable(integration_client, demo_auth_head
 
     assert fast_cups_response.status_code == 200
     assert world_super_cup_response.status_code == 200
-    assert simulation_matchmaking_response.status_code == 422
+    assert simulation_matchmaking_response.status_code == 401
     assert match_start_response.status_code == 422
     assert match_complete_response.status_code == 422
     assert match_replay_response.status_code == 404

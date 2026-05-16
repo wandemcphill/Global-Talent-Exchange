@@ -18,7 +18,9 @@ from app.models.manager_marketplace import (
     ManagerProfile,
 )
 from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.replay_archive.persistence import ReplayArchiveRecordRow
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 from .schemas import (
     ManagerCardView,
@@ -109,16 +111,75 @@ class ManagerMarketplaceService:
             raise ManagerMarketplaceError("AI managers cannot control GTEX competition matches.")
         if manager_user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
             raise ManagerMarketplaceError("Administrative accounts cannot be hired as match managers.")
-        self._require_no_active_club_contract(actor.id)
+        if manager_user.id == actor.id:
+            raise ManagerMarketplaceError("A club cannot hire its own account as match manager.")
+        active_contract = self._active_contract_for_club_user(actor.id)
+        if active_contract is not None:
+            if active_contract.manager_id == profile.manager_id:
+                return ManagerHireResponse(profile=self._profile_view(profile), contract=self._contract_view(active_contract))
+            raise ManagerMarketplaceError("Only one active manager can be assigned to a club at a time.")
         self._require_manager_available(profile)
 
         today = datetime.now(UTC).date()
+        agreed_fee = self._normalized_fee(profile.hourly_fee)
+        transaction_id: str | None = None
+        settlement_status = "settled"
+        if agreed_fee > Decimal("0.00"):
+            try:
+                user_account = WalletService().get_user_account(self.session, actor, LedgerUnit.CREDIT)
+                manager_account = WalletService().get_user_account(self.session, manager_user, LedgerUnit.CREDIT)
+                entries = WalletService().append_transaction(
+                    self.session,
+                    postings=[
+                        LedgerPosting(
+                            account=user_account,
+                            amount=-agreed_fee,
+                            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                            transaction_type=LedgerTransactionType.ADJUSTMENT,
+                        ),
+                        LedgerPosting(
+                            account=manager_account,
+                            amount=agreed_fee,
+                            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                            transaction_type=LedgerTransactionType.ADJUSTMENT,
+                        ),
+                    ],
+                    reason=LedgerEntryReason.ADJUSTMENT,
+                    source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                    reference=f"manager-contract-hire:{actor.id}:{profile.manager_id}",
+                    external_reference=profile.id,
+                    description="Manager contract Fan Coin settlement",
+                    actor=actor,
+                    idempotency_key=f"manager-contract-hire:{actor.id}:{profile.manager_id}",
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                    metadata={
+                        "manager_contract": {
+                            "profile_id": profile.id,
+                            "manager_user_id": profile.manager_id,
+                            "club_user_id": actor.id,
+                            "currency": LedgerUnit.CREDIT.value,
+                            "currency_label": "Fan Coin",
+                            "agreed_fee": str(agreed_fee),
+                        }
+                    },
+                )
+            except InsufficientBalanceError as exc:
+                raise ManagerMarketplaceError("Insufficient Fan Coin balance to hire this manager.") from exc
+            transaction_id = entries[0].transaction_id
         contract = ManagerContract(
             manager_id=profile.manager_id,
             club_user_id=actor.id,
             start_date=today,
             end_date=end_date or (today + timedelta(days=30)),
-            agreed_fee=profile.hourly_fee,
+            agreed_fee=agreed_fee,
+            payment_unit=LedgerUnit.CREDIT.value,
+            settlement_status=settlement_status,
+            ledger_transaction_id=transaction_id,
+            settled_at=datetime.now(UTC),
+            settlement_metadata_json={
+                "currency_label": "Fan Coin",
+                "product_boundary": "manager_marketplace_staff_contract",
+            },
             status=ManagerContractStatus.ACTIVE,
         )
         profile.is_available = False
@@ -348,7 +409,19 @@ class ManagerMarketplaceService:
 
     @staticmethod
     def _contract_view(contract: ManagerContract) -> ManagerContractView:
-        return ManagerContractView.model_validate(contract, from_attributes=True)
+        return ManagerContractView(
+            id=contract.id,
+            manager_id=contract.manager_id,
+            club_user_id=contract.club_user_id,
+            start_date=contract.start_date,
+            end_date=contract.end_date,
+            agreed_fee=contract.agreed_fee,
+            payment_unit=contract.payment_unit,
+            payment_unit_label="Fan Coin" if contract.payment_unit == LedgerUnit.CREDIT.value else "GTEX Coin",
+            settlement_status=contract.settlement_status,
+            ledger_transaction_id=contract.ledger_transaction_id,
+            status=contract.status,
+        )
 
     def _availability(self, profile: ManagerProfile) -> bool:
         if profile.gtex_ai_id is not None or profile.manager_id is None:

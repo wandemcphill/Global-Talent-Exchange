@@ -116,7 +116,12 @@ class CompetitionLifecycleService:
         if fixtures.playoffs:
             self.session.add_all(fixtures.playoffs)
         ownership_map = OwnershipGroupService(self.session).ownership_map(
-            [club_id for club_id in {match.home_club_id for match in fixtures.matches} | {match.away_club_id for match in fixtures.matches} if club_id]
+            [
+                club_id
+                for club_id in {match.home_club_id for match in fixtures.matches}
+                | {match.away_club_id for match in fixtures.matches}
+                if club_id
+            ]
         )
         for match in fixtures.matches:
             home_group = ownership_map.get(match.home_club_id)
@@ -133,7 +138,11 @@ class CompetitionLifecycleService:
 
         competition.status = CompetitionStatus.LIVE.value
         competition.launched_at = datetime.now(timezone.utc)
-        competition.stage = "group" if rule_set.group_stage_enabled else ("league" if competition.format == CompetitionFormat.LEAGUE.value else "knockout")
+        competition.stage = (
+            "group"
+            if rule_set.group_stage_enabled
+            else ("league" if competition.format == CompetitionFormat.LEAGUE.value else "knockout")
+        )
         CompetitionLockService(self.session).activate_live_lock(competition)
         StoryFeedService(self.session).publish(
             story_type="competition_launch",
@@ -185,7 +194,11 @@ class CompetitionLifecycleService:
         latest_round = self._latest_knockout_round(matches)
         if latest_round is None:
             return None
-        latest_matches = [match for match in matches if match.stage == latest_round.stage and match.round_number == latest_round.round_number]
+        latest_matches = [
+            match
+            for match in matches
+            if match.stage == latest_round.stage and match.round_number == latest_round.round_number
+        ]
         if not self._all_matches_complete(latest_matches) and not force:
             return None
         winners = self._winners_from_matches(latest_matches)
@@ -248,7 +261,12 @@ class CompetitionLifecycleService:
             )
             self.session.add(reward_pools[-1])
         is_platform = self._is_platform_competition(competition.source_type)
-        if is_platform and any(pool.pool_type != "promo_pool" for pool in reward_pools):
+        if (
+            is_platform
+            and competition.entry_fee_minor <= 0
+            and getattr(competition, "prize_mode", None) != "host_funded_fixed"
+            and any(pool.pool_type != "promo_pool" for pool in reward_pools)
+        ):
             raise ValueError("GTEX-hosted competitions must use promo_pool reward pools.")
         if not is_platform and any(pool.pool_type == "promo_pool" for pool in reward_pools):
             raise ValueError("User-hosted competitions cannot use promo_pool reward pools.")
@@ -294,10 +312,7 @@ class CompetitionLifecycleService:
             self._settle_platform_rewards(competition, rewards)
         if settle and not is_platform:
             self._settle_user_hosted_rewards(competition, rewards)
-        resolved_users = {
-            participant.id: self._resolve_reward_user(participant)
-            for participant in standings
-        }
+        resolved_users = {participant.id: self._resolve_reward_user(participant) for participant in standings}
         self.progression_service.sync_competition_results(
             competition=competition,
             standings=standings,
@@ -310,9 +325,7 @@ class CompetitionLifecycleService:
             for pool in reward_pools:
                 pool.status = "settled"
         competition.status = (
-            CompetitionStatus.SETTLED.value
-            if settle and fully_settled
-            else CompetitionStatus.COMPLETED.value
+            CompetitionStatus.SETTLED.value if settle and fully_settled else CompetitionStatus.COMPLETED.value
         )
         competition.completed_at = competition.completed_at or now
         competition.settled_at = now if settle and fully_settled else None
@@ -385,7 +398,9 @@ class CompetitionLifecycleService:
             if amount <= Decimal("0.0000"):
                 reward.metadata_json = {**(reward.metadata_json or {}), "settlement_skipped": "zero_amount"}
                 continue
-            participant = self.session.get(CompetitionParticipant, reward.participant_id) if reward.participant_id else None
+            participant = (
+                self.session.get(CompetitionParticipant, reward.participant_id) if reward.participant_id else None
+            )
             if participant is None:
                 reward.status = "pending"
                 reward.settled_at = None
@@ -446,7 +461,9 @@ class CompetitionLifecycleService:
             if amount <= Decimal("0.0000"):
                 reward.metadata_json = {**(reward.metadata_json or {}), "settlement_skipped": "zero_amount"}
                 continue
-            participant = self.session.get(CompetitionParticipant, reward.participant_id) if reward.participant_id else None
+            participant = (
+                self.session.get(CompetitionParticipant, reward.participant_id) if reward.participant_id else None
+            )
             if participant is None:
                 reward.status = "pending"
                 reward.settled_at = None
@@ -473,8 +490,12 @@ class CompetitionLifecycleService:
                 "escrow_used_minor": settlement.escrow_used_minor,
                 "platform_backstop_minor": settlement.platform_backstop_minor,
             }
-        platform_fee_minor = competition.gross_pool_minor * competition.platform_fee_bps // 10_000
-        host_fee_minor = competition.gross_pool_minor * competition.host_fee_bps // 10_000
+        if getattr(competition, "prize_mode", None) == "host_funded_fixed":
+            platform_fee_minor = max(int(getattr(competition, "host_platform_fee_minor", 0) or 0), 0)
+            host_fee_minor = 0
+        else:
+            platform_fee_minor = competition.gross_pool_minor * competition.platform_fee_bps // 10_000
+            host_fee_minor = competition.gross_pool_minor * competition.host_fee_bps // 10_000
         if platform_fee_minor > 0:
             self.competition_wallet_service.settle_fee_distribution(
                 competition=competition,
@@ -608,7 +629,9 @@ class CompetitionLifecycleService:
         ordered = sorted(participants, key=lambda item: item.seed or 9999)
         group_size = rule_set.group_size or max(2, min(4, len(ordered)))
         group_count = rule_set.group_count or max(1, int((len(ordered) + group_size - 1) / group_size))
-        ownership_map = OwnershipGroupService(self.session).ownership_map([participant.club_id for participant in ordered])
+        ownership_map = OwnershipGroupService(self.session).ownership_map(
+            [participant.club_id for participant in ordered]
+        )
         grouped: dict[str, list[CompetitionParticipant]] = {f"g{index:02d}": [] for index in range(1, group_count + 1)}
         for index, participant in enumerate(ordered):
             preferred_keys = [f"g{((index + offset) % group_count) + 1:02d}" for offset in range(group_count)]

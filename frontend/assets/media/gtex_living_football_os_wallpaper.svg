@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" role="img" aria-label="GTEX tactical football command background">
+  <defs>
+    <radialGradient id="lightLeft" cx="18%" cy="14%" r="48%">
+      <stop offset="0" stop-color="#65D9FF" stop-opacity="0.18"/>
+      <stop offset="0.45" stop-color="#65D9FF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#65D9FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lightRight" cx="84%" cy="12%" r="46%">
+      <stop offset="0" stop-color="#B9FF2C" stop-opacity="0.18"/>
+      <stop offset="0.48" stop-color="#B9FF2C" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#B9FF2C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#B9FF2C" stop-opacity="0.16"/>
+      <stop offset="0.52" stop-color="#63F4B1" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#65D9FF" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020506"/>
+      <stop offset="0.42" stop-color="#061316"/>
+      <stop offset="0.74" stop-color="#092014"/>
+      <stop offset="1" stop-color="#030607"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#base)"/>
+  <rect width="1600" height="1000" fill="url(#lightLeft)"/>
+  <rect width="1600" height="1000" fill="url(#lightRight)"/>
+  <path d="M-80 310 C180 220 330 380 560 300 C780 230 980 270 1160 220 C1350 170 1490 230 1680 180 L1680 430 C1390 470 1210 390 1030 440 C820 500 680 420 470 470 C240 520 90 430 -80 500 Z" fill="url(#aurora)" opacity="0.46"/>
+  <path d="M-80 345 C210 275 360 415 590 340 C790 275 990 308 1190 260 C1380 215 1500 275 1680 230 L1680 410 C1390 445 1215 370 1040 416 C830 470 690 396 480 445 C240 495 90 410 -80 480 Z" fill="url(#aurora)" opacity="0.28"/>
+  <g fill="none" stroke="#F4FFF2" stroke-opacity="0.06" stroke-width="2">
+    <rect x="190" y="200" width="1220" height="610" rx="24"/>
+    <line x1="800" y1="200" x2="800" y2="810"/>
+    <circle cx="800" cy="505" r="92"/>
+    <rect x="190" y="350" width="195" height="310"/>
+    <rect x="1215" y="350" width="195" height="310"/>
+    <rect x="190" y="420" width="86" height="170"/>
+    <rect x="1324" y="420" width="86" height="170"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-width="3">
+    <path d="M410 640 Q620 300 980 405" stroke="#B9FF2C" stroke-opacity="0.18"/>
+    <path d="M540 345 Q820 170 1240 545" stroke="#65D9FF" stroke-opacity="0.14"/>
+    <path d="M360 505 Q710 760 1120 690" stroke="#FFD65A" stroke-opacity="0.12"/>
+  </g>
+  <g fill="#B9FF2C" opacity="0.32">
+    <circle cx="410" cy="640" r="5"/>
+    <circle cx="980" cy="405" r="6"/>
+    <circle cx="540" cy="345" r="5"/>
+    <circle cx="1240" cy="545" r="6"/>
+    <circle cx="360" cy="505" r="5"/>
+    <circle cx="1120" cy="690" r="6"/>
+    <circle cx="710" cy="285" r="4"/>
+    <circle cx="920" cy="725" r="4"/>
+    <circle cx="1340" cy="330" r="4"/>
+    <circle cx="260" cy="760" r="4"/>
+  </g>
+  <rect width="1600" height="1000" fill="#030607" opacity="0.34"/>
+</svg>

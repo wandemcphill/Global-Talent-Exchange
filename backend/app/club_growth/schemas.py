@@ -91,6 +91,7 @@ class AcademyProspectView(BaseModel):
     current_ability: int
     potential: int
     portrait_asset_ref: str | None = None
+    senior_player_id: str | None = None
     status: AcademyProspectStatus
     metadata: dict[str, Any] = Field(default_factory=dict)
     updated_at: datetime
