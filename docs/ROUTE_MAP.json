@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1551,
+  "route_count": 1560,
   "routes": [
     {
       "method": "POST",
@@ -13598,6 +13598,7 @@
         "parameters": [
           "cup_id",
           "now",
+          "session",
           "ecosystem"
         ]
       },
@@ -13624,8 +13625,11 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "cup_id",
           "payload",
+          "current_user",
+          "session",
           "ecosystem"
         ]
       },
@@ -15210,7 +15214,8 @@
       "method": "GET",
       "path": "/admin/flags",
       "effective_paths": [
-        "/admin/flags"
+        "/admin/flags",
+        "/api/admin/flags"
       ],
       "file": "backend/app/gtex/router.py",
       "handler": "list_admin_flags",
@@ -15242,7 +15247,8 @@
       "method": "GET",
       "path": "/admin/jackpot/runtime",
       "effective_paths": [
-        "/admin/jackpot/runtime"
+        "/admin/jackpot/runtime",
+        "/api/admin/jackpot/runtime"
       ],
       "file": "backend/app/gtex/router.py",
       "handler": "get_admin_jackpot_runtime",
@@ -15269,7 +15275,8 @@
       "method": "GET",
       "path": "/ai/leagues",
       "effective_paths": [
-        "/ai/leagues"
+        "/ai/leagues",
+        "/api/ai/leagues"
       ],
       "file": "backend/app/gtex/router.py",
       "handler": "list_ai_leagues",
@@ -15295,7 +15302,8 @@
       "method": "GET",
       "path": "/ai/match/{match_id}",
       "effective_paths": [
-        "/ai/match/{match_id}"
+        "/ai/match/{match_id}",
+        "/api/ai/match/{match_id}"
       ],
       "file": "backend/app/gtex/router.py",
       "handler": "get_ai_match",
@@ -15376,6 +15384,7 @@
       "method": "GET",
       "path": "/jackpot/history",
       "effective_paths": [
+        "/api/jackpot/history",
         "/jackpot/history"
       ],
       "file": "backend/app/gtex/router.py",
@@ -15405,6 +15414,7 @@
       "method": "GET",
       "path": "/jackpot/state",
       "effective_paths": [
+        "/api/jackpot/state",
         "/jackpot/state"
       ],
       "file": "backend/app/gtex/router.py",
@@ -15460,6 +15470,7 @@
       "method": "GET",
       "path": "/market/trending",
       "effective_paths": [
+        "/api/market/trending",
         "/market/trending"
       ],
       "file": "backend/app/gtex/router.py",
@@ -15629,6 +15640,7 @@
       "method": "GET",
       "path": "/players/{player_id}",
       "effective_paths": [
+        "/api/players/{player_id}",
         "/players/{player_id}"
       ],
       "file": "backend/app/gtex/router.py",
@@ -15713,7 +15725,8 @@
       "method": "PATCH",
       "path": "/admin/jackpot/balance",
       "effective_paths": [
-        "/admin/jackpot/balance"
+        "/admin/jackpot/balance",
+        "/api/admin/jackpot/balance"
       ],
       "file": "backend/app/gtex/router.py",
       "handler": "update_admin_jackpot_balance",
@@ -15741,7 +15754,8 @@
       "method": "POST",
       "path": "/admin/ban-user",
       "effective_paths": [
-        "/admin/ban-user"
+        "/admin/ban-user",
+        "/api/admin/ban-user"
       ],
       "file": "backend/app/gtex/router.py",
       "handler": "ban_user_account",
@@ -15768,7 +15782,8 @@
       "method": "POST",
       "path": "/admin/jackpot/runtime",
       "effective_paths": [
-        "/admin/jackpot/runtime"
+        "/admin/jackpot/runtime",
+        "/api/admin/jackpot/runtime"
       ],
       "file": "backend/app/gtex/router.py",
       "handler": "update_admin_jackpot_runtime",
@@ -15796,7 +15811,8 @@
       "method": "POST",
       "path": "/admin/jackpot/trigger",
       "effective_paths": [
-        "/admin/jackpot/trigger"
+        "/admin/jackpot/trigger",
+        "/api/admin/jackpot/trigger"
       ],
       "file": "backend/app/gtex/router.py",
       "handler": "trigger_admin_jackpot_round",
@@ -16049,6 +16065,7 @@
       "method": "POST",
       "path": "/gtex/market/buy",
       "effective_paths": [
+        "/api/gtex/market/buy",
         "/gtex/market/buy"
       ],
       "file": "backend/app/gtex/router.py",
@@ -16078,6 +16095,7 @@
       "method": "POST",
       "path": "/gtex/market/sell",
       "effective_paths": [
+        "/api/gtex/market/sell",
         "/gtex/market/sell"
       ],
       "file": "backend/app/gtex/router.py",
@@ -16107,6 +16125,7 @@
       "method": "POST",
       "path": "/jackpot/contribute",
       "effective_paths": [
+        "/api/jackpot/contribute",
         "/jackpot/contribute"
       ],
       "file": "backend/app/gtex/router.py",
@@ -16135,6 +16154,7 @@
       "method": "POST",
       "path": "/match/find",
       "effective_paths": [
+        "/api/match/find",
         "/match/find"
       ],
       "file": "backend/app/gtex/router.py",
@@ -21297,7 +21317,8 @@
       ],
       "request_shape": {
         "parameters": [
-          "service"
+          "request",
+          "# type"
         ]
       },
       "response_shape": {
@@ -21603,7 +21624,8 @@
       ],
       "request_shape": {
         "parameters": [
-          "limit",
+          "request",
+          "# type",
           "ge",
           "le",
           "cursor",
@@ -33703,12 +33725,49 @@
           "\"fill_rate\"]",
           "creator_id",
           "beginner_friendly",
+          "reward_filter",
+          "ranked",
+          "host_type",
+          "availability",
+          "starts",
+          "start_from",
+          "start_to",
+          "min_entry_fee",
+          "ge",
+          "max_entry_fee",
+          "ge",
           "orchestrator"
         ]
       },
       "response_shape": {
         "response_model": "CompetitionListResponse",
         "returns": "CompetitionListResponse"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/leaderboard/clubs",
+      "effective_paths": [
+        "/api/competitions/leaderboard/clubs"
+      ],
+      "file": "backend/app/segments/competitions/segment_competitions.py",
+      "handler": "get_club_competition_leaderboard",
+      "router_variable": "router",
+      "module_path": "app.segments.competitions.segment_competitions",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "limit",
+          "ge",
+          "le",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubCompetitionLeaderboardResponse",
+        "returns": "ClubCompetitionLeaderboardResponse"
       },
       "version": "canonical",
       "domain": "segment"
@@ -33856,6 +33915,54 @@
       "response_shape": {
         "response_model": "tuple[CompetitionMatchEventView",
         "returns": "tuple[CompetitionMatchEventView, ...]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/{competition_id}/participants",
+      "effective_paths": [
+        "/api/competitions/{competition_id}/participants"
+      ],
+      "file": "backend/app/segments/competitions/segment_competitions.py",
+      "handler": "get_competition_participants",
+      "router_variable": "router",
+      "module_path": "app.segments.competitions.segment_competitions",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CompetitionParticipantsResponse",
+        "returns": "CompetitionParticipantsResponse"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/{competition_id}/pot",
+      "effective_paths": [
+        "/api/competitions/{competition_id}/pot"
+      ],
+      "file": "backend/app/segments/competitions/segment_competitions.py",
+      "handler": "get_competition_pot",
+      "router_variable": "router",
+      "module_path": "app.segments.competitions.segment_competitions",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CompetitionPotView",
+        "returns": "CompetitionPotView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -35459,6 +35566,56 @@
     },
     {
       "method": "POST",
+      "path": "/api/competitions/random/join",
+      "effective_paths": [
+        "/api/competitions/random/join"
+      ],
+      "file": "backend/app/segments/competitions/segment_competitions.py",
+      "handler": "join_random_competition",
+      "router_variable": "router",
+      "module_path": "app.segments.competitions.segment_competitions",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CompetitionSummaryView",
+        "returns": "CompetitionSummaryView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/random/quote",
+      "effective_paths": [
+        "/api/competitions/random/quote"
+      ],
+      "file": "backend/app/segments/competitions/segment_competitions.py",
+      "handler": "quote_random_competition",
+      "router_variable": "router",
+      "module_path": "app.segments.competitions.segment_competitions",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RandomCompetitionQuoteView",
+        "returns": "RandomCompetitionQuoteView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
       "path": "/api/competitions/{competition_id}/advance",
       "effective_paths": [
         "/api/competitions/{competition_id}/advance"
@@ -35473,6 +35630,32 @@
           "competition_id",
           "payload",
           "_",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CompetitionSummaryView",
+        "returns": "CompetitionSummaryView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/{competition_id}/cancel",
+      "effective_paths": [
+        "/api/competitions/{competition_id}/cancel"
+      ],
+      "file": "backend/app/segments/competitions/segment_competitions.py",
+      "handler": "cancel_competition",
+      "router_variable": "router",
+      "module_path": "app.segments.competitions.segment_competitions",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "request",
+          "actor",
           "orchestrator"
         ]
       },
@@ -35794,6 +35977,32 @@
       "response_shape": {
         "response_model": "CompetitionSummaryView",
         "returns": "CompetitionSummaryView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/{competition_id}/settle-payouts",
+      "effective_paths": [
+        "/api/competitions/{competition_id}/settle-payouts"
+      ],
+      "file": "backend/app/segments/competitions/segment_competitions.py",
+      "handler": "settle_competition_payouts",
+      "router_variable": "router",
+      "module_path": "app.segments.competitions.segment_competitions",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "request",
+          "actor",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CompetitionRewardsResponse",
+        "returns": "CompetitionRewardsResponse"
       },
       "version": "canonical",
       "domain": "segment"
@@ -36286,6 +36495,33 @@
     },
     {
       "method": "GET",
+      "path": "/api/simulation-matchmaking/fast-match/entitlement",
+      "effective_paths": [
+        "/api/simulation-matchmaking/fast-match/entitlement"
+      ],
+      "file": "backend/app/simulation_matchmaking/router.py",
+      "handler": "get_fast_match_entitlement",
+      "router_variable": "api_router",
+      "module_path": "app.simulation_matchmaking.router",
+      "module_mounts": [
+        "simulation_matchmaking"
+      ],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "session",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "FastMatchEntitlementResponse",
+        "returns": "FastMatchEntitlementResponse"
+      },
+      "version": "canonical",
+      "domain": "simulation"
+    },
+    {
+      "method": "GET",
       "path": "/api/simulation-matchmaking/profiles/{user_id}",
       "effective_paths": [
         "/api/simulation-matchmaking/profiles/{user_id}"
@@ -36306,6 +36542,33 @@
       "response_shape": {
         "response_model": "SimulationGameProfileView",
         "returns": "SimulationGameProfileView"
+      },
+      "version": "canonical",
+      "domain": "simulation"
+    },
+    {
+      "method": "GET",
+      "path": "/simulation-matchmaking/fast-match/entitlement",
+      "effective_paths": [
+        "/simulation-matchmaking/fast-match/entitlement"
+      ],
+      "file": "backend/app/simulation_matchmaking/router.py",
+      "handler": "get_fast_match_entitlement",
+      "router_variable": "legacy_router",
+      "module_path": "app.simulation_matchmaking.router",
+      "module_mounts": [
+        "simulation_matchmaking"
+      ],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "session",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "FastMatchEntitlementResponse",
+        "returns": "FastMatchEntitlementResponse"
       },
       "version": "canonical",
       "domain": "simulation"
@@ -36378,6 +36641,8 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
+          "session",
           "service"
         ]
       },
@@ -36456,6 +36721,8 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
+          "session",
           "service"
         ]
       },

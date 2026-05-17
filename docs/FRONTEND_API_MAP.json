@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 565,
+  "call_count": 576,
   "calls": [
     {
       "file": "frontend/lib/data/admin_command_center_api.dart",
@@ -821,6 +821,18 @@
     {
       "file": "frontend/lib/data/competition_api.dart",
       "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/competitions/$competitionId/cancel",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
       "method": "GET",
       "endpoint": "/api/competitions/$competitionId/financials",
       "expected_shape": null,
@@ -857,6 +869,30 @@
     {
       "file": "frontend/lib/data/competition_api.dart",
       "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/competitions/$competitionId/participants",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/competitions/$competitionId/pot",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
       "method": "POST",
       "endpoint": "/api/competitions/$competitionId/publish",
       "expected_shape": null,
@@ -871,6 +907,78 @@
       "transport_call": "string_reference",
       "method": "POST",
       "endpoint": "/api/competitions/join",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/competitions/leaderboard/clubs",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/competitions/random/join",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/competitions/random/quote",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/fast-cups/$encodedCupId/join",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "GET",
+      "endpoint": "/api/simulation-matchmaking/fast-match/entitlement",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/competition_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/simulation-matchmaking/quick-game",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -3031,6 +3139,30 @@
       "transport_call": "string_reference",
       "method": "POST",
       "endpoint": "/api/admin/notifications/announcements",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/notifications/event-matrix",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/notification_settings_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/notifications/test-event",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [

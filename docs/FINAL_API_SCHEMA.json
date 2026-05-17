@@ -3814,6 +3814,18 @@
         "response_model": "AdminBanUserView"
       },
       {
+        "method": "POST",
+        "path": "/admin/ban-user",
+        "handler": "ban_user_account",
+        "response_model": "AdminBanUserView"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/flags",
+        "handler": "list_admin_flags",
+        "response_model": "list[AdminFlagView]"
+      },
+      {
         "method": "GET",
         "path": "/admin/flags",
         "handler": "list_admin_flags",
@@ -3823,6 +3835,18 @@
         "method": "PATCH",
         "path": "/admin/jackpot/balance",
         "handler": "update_admin_jackpot_balance",
+        "response_model": "JackpotAdminRuntimeView"
+      },
+      {
+        "method": "PATCH",
+        "path": "/admin/jackpot/balance",
+        "handler": "update_admin_jackpot_balance",
+        "response_model": "JackpotAdminRuntimeView"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/jackpot/runtime",
+        "handler": "get_admin_jackpot_runtime",
         "response_model": "JackpotAdminRuntimeView"
       },
       {
@@ -3839,6 +3863,18 @@
       },
       {
         "method": "POST",
+        "path": "/admin/jackpot/runtime",
+        "handler": "update_admin_jackpot_runtime",
+        "response_model": "JackpotAdminRuntimeView"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/jackpot/trigger",
+        "handler": "trigger_admin_jackpot_round",
+        "response_model": "JackpotAdminActionView"
+      },
+      {
+        "method": "POST",
         "path": "/admin/jackpot/trigger",
         "handler": "trigger_admin_jackpot_round",
         "response_model": "JackpotAdminActionView"
@@ -3851,9 +3887,105 @@
       },
       {
         "method": "GET",
+        "path": "/ai/leagues",
+        "handler": "list_ai_leagues",
+        "response_model": "AiLeaguesView"
+      },
+      {
+        "method": "GET",
         "path": "/ai/match/{match_id}",
         "handler": "get_ai_match",
         "response_model": "AiMatchView"
+      },
+      {
+        "method": "GET",
+        "path": "/ai/match/{match_id}",
+        "handler": "get_ai_match",
+        "response_model": "AiMatchView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/gtex/market/buy",
+        "handler": "buy_creator_shares",
+        "response_model": "CreatorTradeView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/gtex/market/buy",
+        "handler": "buy_creator_shares",
+        "response_model": "CreatorTradeView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/gtex/market/sell",
+        "handler": "sell_creator_shares",
+        "response_model": "CreatorTradeView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/gtex/market/sell",
+        "handler": "sell_creator_shares",
+        "response_model": "CreatorTradeView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/jackpot/contribute",
+        "handler": "create_jackpot_contribution",
+        "response_model": "JackpotContributionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/jackpot/contribute",
+        "handler": "create_jackpot_contribution",
+        "response_model": "JackpotContributionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/jackpot/history",
+        "handler": "get_jackpot_history",
+        "response_model": "list[JackpotHistoryItemView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/jackpot/history",
+        "handler": "get_jackpot_history",
+        "response_model": "list[JackpotHistoryItemView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/jackpot/state",
+        "handler": "get_jackpot_state",
+        "response_model": "JackpotStateView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/jackpot/state",
+        "handler": "get_jackpot_state",
+        "response_model": "JackpotStateView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/trending",
+        "handler": "get_market_trending",
+        "response_model": "MarketTrendingView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/trending",
+        "handler": "get_market_trending",
+        "response_model": "MarketTrendingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/match/find",
+        "handler": "find_match",
+        "response_model": "MatchFindResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/match/find",
+        "handler": "find_match",
+        "response_model": "MatchFindResponse"
       },
       {
         "method": "GET",
@@ -3872,6 +4004,18 @@
         "path": "/api/news/personalized",
         "handler": "get_personalized_news",
         "response_model": "DailyNewsResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/players/{player_id}",
+        "handler": "get_creator_player",
+        "response_model": "CreatorPlayerView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/players/{player_id}",
+        "handler": "get_creator_player",
+        "response_model": "CreatorPlayerView"
       },
       {
         "method": "POST",
@@ -3940,52 +4084,10 @@
         "response_model": "FanTribeView"
       },
       {
-        "method": "POST",
-        "path": "/gtex/market/buy",
-        "handler": "buy_creator_shares",
-        "response_model": "CreatorTradeView"
-      },
-      {
-        "method": "POST",
-        "path": "/gtex/market/sell",
-        "handler": "sell_creator_shares",
-        "response_model": "CreatorTradeView"
-      },
-      {
-        "method": "POST",
-        "path": "/jackpot/contribute",
-        "handler": "create_jackpot_contribution",
-        "response_model": "JackpotContributionView"
-      },
-      {
-        "method": "GET",
-        "path": "/jackpot/history",
-        "handler": "get_jackpot_history",
-        "response_model": "list[JackpotHistoryItemView]"
-      },
-      {
-        "method": "GET",
-        "path": "/jackpot/state",
-        "handler": "get_jackpot_state",
-        "response_model": "JackpotStateView"
-      },
-      {
         "method": "GET",
         "path": "/legacy/board",
         "handler": "get_legacy_board",
         "response_model": "LegacyBoardView"
-      },
-      {
-        "method": "GET",
-        "path": "/market/trending",
-        "handler": "get_market_trending",
-        "response_model": "MarketTrendingView"
-      },
-      {
-        "method": "POST",
-        "path": "/match/find",
-        "handler": "find_match",
-        "response_model": "MatchFindResponse"
       },
       {
         "method": "POST",
@@ -4016,12 +4118,6 @@
         "path": "/matches/{match_id}/tickets",
         "handler": "purchase_match_ticket",
         "response_model": "FanExperienceTicketView"
-      },
-      {
-        "method": "GET",
-        "path": "/players/{player_id}",
-        "handler": "get_creator_player",
-        "response_model": "CreatorPlayerView"
       },
       {
         "method": "GET",
@@ -8897,9 +8993,27 @@
       },
       {
         "method": "GET",
+        "path": "/api/competitions/leaderboard/clubs",
+        "handler": "get_club_competition_leaderboard",
+        "response_model": "ClubCompetitionLeaderboardResponse"
+      },
+      {
+        "method": "GET",
         "path": "/api/competitions/players/{subject_id}/progression",
         "handler": "get_competition_progression",
         "response_model": "CompetitionProgressionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions/random/join",
+        "handler": "join_random_competition",
+        "response_model": "CompetitionSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions/random/quote",
+        "handler": "quote_random_competition",
+        "response_model": "RandomCompetitionQuoteView"
       },
       {
         "method": "GET",
@@ -8917,6 +9031,12 @@
         "method": "POST",
         "path": "/api/competitions/{competition_id}/advance",
         "handler": "advance_competition",
+        "response_model": "CompetitionSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions/{competition_id}/cancel",
+        "handler": "cancel_competition",
         "response_model": "CompetitionSummaryView"
       },
       {
@@ -8992,6 +9112,18 @@
         "response_model": "CompetitionMatchView"
       },
       {
+        "method": "GET",
+        "path": "/api/competitions/{competition_id}/participants",
+        "handler": "get_competition_participants",
+        "response_model": "CompetitionParticipantsResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/competitions/{competition_id}/pot",
+        "handler": "get_competition_pot",
+        "response_model": "CompetitionPotView"
+      },
+      {
         "method": "POST",
         "path": "/api/competitions/{competition_id}/publish",
         "handler": "publish_competition",
@@ -9038,6 +9170,12 @@
         "path": "/api/competitions/{competition_id}/seed",
         "handler": "seed_competition",
         "response_model": "CompetitionSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions/{competition_id}/settle-payouts",
+        "handler": "settle_competition_payouts",
+        "response_model": "CompetitionRewardsResponse"
       },
       {
         "method": "GET",
@@ -9336,6 +9474,12 @@
     ],
     "simulation": [
       {
+        "method": "GET",
+        "path": "/api/simulation-matchmaking/fast-match/entitlement",
+        "handler": "get_fast_match_entitlement",
+        "response_model": "FastMatchEntitlementResponse"
+      },
+      {
         "method": "POST",
         "path": "/api/simulation-matchmaking/hosted-competitions/preview",
         "handler": "preview_hosted_competition",
@@ -9364,6 +9508,12 @@
         "path": "/api/simulation-matchmaking/quick-tournament",
         "handler": "create_quick_tournament",
         "response_model": "QuickTournamentResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/simulation-matchmaking/fast-match/entitlement",
+        "handler": "get_fast_match_entitlement",
+        "response_model": "FastMatchEntitlementResponse"
       },
       {
         "method": "POST",

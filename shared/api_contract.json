@@ -14760,6 +14760,30 @@
         "source_file": "backend/app/segments/competitions/segment_competitions.py",
         "response_model": "tuple[CompetitionMatchEventView"
       },
+      "get_api_v2_competitions_competition_id_participants": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/{competition_id}/participants",
+        "aliases": [
+          "/api/competitions/{competition_id}/participants",
+          "/api/v1/competitions/{competition_id}/participants",
+          "/api/v2/competitions/{competition_id}/participants"
+        ],
+        "handler": "get_competition_participants",
+        "source_file": "backend/app/segments/competitions/segment_competitions.py",
+        "response_model": "CompetitionParticipantsResponse"
+      },
+      "get_api_v2_competitions_competition_id_pot": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/{competition_id}/pot",
+        "aliases": [
+          "/api/competitions/{competition_id}/pot",
+          "/api/v1/competitions/{competition_id}/pot",
+          "/api/v2/competitions/{competition_id}/pot"
+        ],
+        "handler": "get_competition_pot",
+        "source_file": "backend/app/segments/competitions/segment_competitions.py",
+        "response_model": "CompetitionPotView"
+      },
       "get_api_v2_competitions_competition_id_rewards": {
         "method": "GET",
         "canonical_path": "/api/v2/competitions/{competition_id}/rewards",
@@ -14831,6 +14855,18 @@
         "handler": "get_competition_summary",
         "source_file": "backend/app/segments/competitions/segment_competitions.py",
         "response_model": "CompetitionSummaryView"
+      },
+      "get_api_v2_competitions_leaderboard_clubs": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/leaderboard/clubs",
+        "aliases": [
+          "/api/competitions/leaderboard/clubs",
+          "/api/v1/competitions/leaderboard/clubs",
+          "/api/v2/competitions/leaderboard/clubs"
+        ],
+        "handler": "get_club_competition_leaderboard",
+        "source_file": "backend/app/segments/competitions/segment_competitions.py",
+        "response_model": "ClubCompetitionLeaderboardResponse"
       },
       "get_api_v2_competitions_players_subject_id_progression": {
         "method": "GET",
@@ -15505,6 +15541,18 @@
         "source_file": "backend/app/segments/competitions/segment_competitions.py",
         "response_model": "CompetitionSummaryView"
       },
+      "post_api_v2_competitions_competition_id_cancel": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/{competition_id}/cancel",
+        "aliases": [
+          "/api/competitions/{competition_id}/cancel",
+          "/api/v1/competitions/{competition_id}/cancel",
+          "/api/v2/competitions/{competition_id}/cancel"
+        ],
+        "handler": "cancel_competition",
+        "source_file": "backend/app/segments/competitions/segment_competitions.py",
+        "response_model": "CompetitionSummaryView"
+      },
       "post_api_v2_competitions_competition_id_finalize": {
         "method": "POST",
         "canonical_path": "/api/v2/competitions/{competition_id}/finalize",
@@ -15649,6 +15697,18 @@
         "source_file": "backend/app/segments/competitions/segment_competitions.py",
         "response_model": "CompetitionSummaryView"
       },
+      "post_api_v2_competitions_competition_id_settle_payouts": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/{competition_id}/settle-payouts",
+        "aliases": [
+          "/api/competitions/{competition_id}/settle-payouts",
+          "/api/v1/competitions/{competition_id}/settle-payouts",
+          "/api/v2/competitions/{competition_id}/settle-payouts"
+        ],
+        "handler": "settle_competition_payouts",
+        "source_file": "backend/app/segments/competitions/segment_competitions.py",
+        "response_model": "CompetitionRewardsResponse"
+      },
       "post_api_v2_competitions_create": {
         "method": "POST",
         "canonical_path": "/api/v2/competitions/create",
@@ -15672,6 +15732,30 @@
         "handler": "join_competition_alias",
         "source_file": "backend/app/segments/competitions/segment_competitions.py",
         "response_model": "CompetitionSummaryView"
+      },
+      "post_api_v2_competitions_random_join": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/random/join",
+        "aliases": [
+          "/api/competitions/random/join",
+          "/api/v1/competitions/random/join",
+          "/api/v2/competitions/random/join"
+        ],
+        "handler": "join_random_competition",
+        "source_file": "backend/app/segments/competitions/segment_competitions.py",
+        "response_model": "CompetitionSummaryView"
+      },
+      "post_api_v2_competitions_random_quote": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/random/quote",
+        "aliases": [
+          "/api/competitions/random/quote",
+          "/api/v1/competitions/random/quote",
+          "/api/v2/competitions/random/quote"
+        ],
+        "handler": "quote_random_competition",
+        "source_file": "backend/app/segments/competitions/segment_competitions.py",
+        "response_model": "RandomCompetitionQuoteView"
       },
       "post_api_v2_creators_me_copilot_analyze": {
         "method": "POST",
@@ -15892,6 +15976,19 @@
       }
     },
     "simulation": {
+      "get_api_v2_simulation_matchmaking_fast_match_entitlement": {
+        "method": "GET",
+        "canonical_path": "/api/v2/simulation-matchmaking/fast-match/entitlement",
+        "aliases": [
+          "/api/simulation-matchmaking/fast-match/entitlement",
+          "/api/v1/simulation-matchmaking/fast-match/entitlement",
+          "/api/v2/simulation-matchmaking/fast-match/entitlement",
+          "/simulation-matchmaking/fast-match/entitlement"
+        ],
+        "handler": "get_fast_match_entitlement",
+        "source_file": "backend/app/simulation_matchmaking/router.py",
+        "response_model": "FastMatchEntitlementResponse"
+      },
       "get_api_v2_simulation_matchmaking_profiles_user_id": {
         "method": "GET",
         "canonical_path": "/api/v2/simulation-matchmaking/profiles/{user_id}",
@@ -19287,6 +19384,7 @@
     "/api/v2/competitions/join": "post_api_v2_competitions_join",
     "/api/v2/competitions/leaderboard/clubs": "get_api_v2_competitions_leaderboard_clubs",
     "/api/v2/competitions/players/{subject_id}/progression": "get_api_v2_competitions_players_subject_id_progression",
+    "/api/v2/competitions/random/join": "post_api_v2_competitions_random_join",
     "/api/v2/competitions/random/quote": "post_api_v2_competitions_random_quote",
     "/api/v2/competitions/records/{competition_id}": "get_api_v2_competitions_records_competition_id",
     "/api/v2/competitions/runtime/{code}": "get_api_v2_competitions_runtime_code",
@@ -19312,6 +19410,7 @@
     "/api/v2/competitions/{competition_id}/schedule/jobs/{job_id}": "get_api_v2_competitions_competition_id_schedule_jobs_job_id",
     "/api/v2/competitions/{competition_id}/schedule/preview": "post_api_v2_competitions_competition_id_schedule_preview",
     "/api/v2/competitions/{competition_id}/seed": "post_api_v2_competitions_competition_id_seed",
+    "/api/v2/competitions/{competition_id}/settle-payouts": "post_api_v2_competitions_competition_id_settle_payouts",
     "/api/v2/competitions/{competition_id}/standings": "get_api_v2_competitions_competition_id_standings",
     "/api/v2/competitions/{competition_id}/summary": "get_api_v2_competitions_competition_id_summary",
     "/api/v2/competitive-integrity/fast-game/runs": "post_api_v2_competitive_integrity_fast_game_runs",
@@ -20813,6 +20912,7 @@
     "/api/competitions/join": "/api/v2/competitions/join",
     "/api/competitions/leaderboard/clubs": "/api/v2/competitions/leaderboard/clubs",
     "/api/competitions/players/{subject_id}/progression": "/api/v2/competitions/players/{subject_id}/progression",
+    "/api/competitions/random/join": "/api/v2/competitions/random/join",
     "/api/competitions/random/quote": "/api/v2/competitions/random/quote",
     "/api/competitions/records/{competition_id}": "/api/v2/competitions/records/{competition_id}",
     "/api/competitions/runtime/{code}": "/api/v2/competitions/runtime/{code}",
@@ -20838,6 +20938,7 @@
     "/api/competitions/{competition_id}/schedule/jobs/{job_id}": "/api/v2/competitions/{competition_id}/schedule/jobs/{job_id}",
     "/api/competitions/{competition_id}/schedule/preview": "/api/v2/competitions/{competition_id}/schedule/preview",
     "/api/competitions/{competition_id}/seed": "/api/v2/competitions/{competition_id}/seed",
+    "/api/competitions/{competition_id}/settle-payouts": "/api/v2/competitions/{competition_id}/settle-payouts",
     "/api/competitions/{competition_id}/standings": "/api/v2/competitions/{competition_id}/standings",
     "/api/competitions/{competition_id}/summary": "/api/v2/competitions/{competition_id}/summary",
     "/api/competitive-integrity/fast-game/runs": "/api/v2/competitive-integrity/fast-game/runs",
@@ -22056,11 +22157,15 @@
     "/api/v1/competitions/creator-league/tiers": "/api/v2/competitions/creator-league/tiers",
     "/api/v1/competitions/creator-league/tiers/{tier_id}": "/api/v2/competitions/creator-league/tiers/{tier_id}",
     "/api/v1/competitions/join": "/api/v2/competitions/join",
+    "/api/v1/competitions/leaderboard/clubs": "/api/v2/competitions/leaderboard/clubs",
     "/api/v1/competitions/players/{subject_id}/progression": "/api/v2/competitions/players/{subject_id}/progression",
+    "/api/v1/competitions/random/join": "/api/v2/competitions/random/join",
+    "/api/v1/competitions/random/quote": "/api/v2/competitions/random/quote",
     "/api/v1/competitions/records/{competition_id}": "/api/v2/competitions/records/{competition_id}",
     "/api/v1/competitions/runtime/{code}": "/api/v2/competitions/runtime/{code}",
     "/api/v1/competitions/{competition_id}": "/api/v2/competitions/{competition_id}",
     "/api/v1/competitions/{competition_id}/advance": "/api/v2/competitions/{competition_id}/advance",
+    "/api/v1/competitions/{competition_id}/cancel": "/api/v2/competitions/{competition_id}/cancel",
     "/api/v1/competitions/{competition_id}/finalize": "/api/v2/competitions/{competition_id}/finalize",
     "/api/v1/competitions/{competition_id}/financials": "/api/v2/competitions/{competition_id}/financials",
     "/api/v1/competitions/{competition_id}/fixtures": "/api/v2/competitions/{competition_id}/fixtures",
@@ -22071,6 +22176,8 @@
     "/api/v1/competitions/{competition_id}/leave": "/api/v2/competitions/{competition_id}/leave",
     "/api/v1/competitions/{competition_id}/matches/{match_id}/events": "/api/v2/competitions/{competition_id}/matches/{match_id}/events",
     "/api/v1/competitions/{competition_id}/matches/{match_id}/result": "/api/v2/competitions/{competition_id}/matches/{match_id}/result",
+    "/api/v1/competitions/{competition_id}/participants": "/api/v2/competitions/{competition_id}/participants",
+    "/api/v1/competitions/{competition_id}/pot": "/api/v2/competitions/{competition_id}/pot",
     "/api/v1/competitions/{competition_id}/publish": "/api/v2/competitions/{competition_id}/publish",
     "/api/v1/competitions/{competition_id}/rewards": "/api/v2/competitions/{competition_id}/rewards",
     "/api/v1/competitions/{competition_id}/rounds": "/api/v2/competitions/{competition_id}/rounds",
@@ -22078,6 +22185,7 @@
     "/api/v1/competitions/{competition_id}/schedule/jobs/{job_id}": "/api/v2/competitions/{competition_id}/schedule/jobs/{job_id}",
     "/api/v1/competitions/{competition_id}/schedule/preview": "/api/v2/competitions/{competition_id}/schedule/preview",
     "/api/v1/competitions/{competition_id}/seed": "/api/v2/competitions/{competition_id}/seed",
+    "/api/v1/competitions/{competition_id}/settle-payouts": "/api/v2/competitions/{competition_id}/settle-payouts",
     "/api/v1/competitions/{competition_id}/standings": "/api/v2/competitions/{competition_id}/standings",
     "/api/v1/competitions/{competition_id}/summary": "/api/v2/competitions/{competition_id}/summary",
     "/api/v1/competitive-integrity/fast-game/runs": "/api/v2/competitive-integrity/fast-game/runs",
@@ -22658,6 +22766,7 @@
     "/api/v1/shows/debate": "/api/v2/shows/debate",
     "/api/v1/shows/post-match/{match_id}": "/api/v2/shows/post-match/{match_id}",
     "/api/v1/shows/pre-match/{match_id}": "/api/v2/shows/pre-match/{match_id}",
+    "/api/v1/simulation-matchmaking/fast-match/entitlement": "/api/v2/simulation-matchmaking/fast-match/entitlement",
     "/api/v1/simulation-matchmaking/hosted-competitions/preview": "/api/v2/simulation-matchmaking/hosted-competitions/preview",
     "/api/v1/simulation-matchmaking/profiles/{user_id}": "/api/v2/simulation-matchmaking/profiles/{user_id}",
     "/api/v1/simulation-matchmaking/quick-game": "/api/v2/simulation-matchmaking/quick-game",
@@ -22876,6 +22985,8 @@
     "/api/v2/admin/moderation/reports": "/api/v2/admin/moderation/reports",
     "/api/v2/admin/moderation/reports/summary": "/api/v2/admin/moderation/reports/summary",
     "/api/v2/admin/notifications/announcements": "/api/v2/admin/notifications/announcements",
+    "/api/v2/admin/notifications/event-matrix": "/api/v2/admin/notifications/event-matrix",
+    "/api/v2/admin/notifications/test-event": "/api/v2/admin/notifications/test-event",
     "/api/v2/admin/operations-readiness": "/api/v2/admin/operations-readiness",
     "/api/v2/admin/operations-readiness/notify-blockers": "/api/v2/admin/operations-readiness/notify-blockers",
     "/api/v2/admin/referrals/analytics/summary": "/api/v2/admin/referrals/analytics/summary",
@@ -22930,6 +23041,9 @@
     "/api/v2/competitions": "/api/v2/competitions",
     "/api/v2/competitions/admin": "/api/v2/competitions/admin",
     "/api/v2/competitions/join": "/api/v2/competitions/join",
+    "/api/v2/competitions/leaderboard/clubs": "/api/v2/competitions/leaderboard/clubs",
+    "/api/v2/competitions/random/join": "/api/v2/competitions/random/join",
+    "/api/v2/competitions/random/quote": "/api/v2/competitions/random/quote",
     "/api/v2/creator/application": "/api/v2/creator/application",
     "/api/v2/creator/apply": "/api/v2/creator/apply",
     "/api/v2/creator/verify-email": "/api/v2/creator/verify-email",
@@ -22996,6 +23110,8 @@
     "/api/v2/referrals/share-codes/me": "/api/v2/referrals/share-codes/me",
     "/api/v2/search": "/api/v2/search",
     "/api/v2/session/bootstrap": "/api/v2/session/bootstrap",
+    "/api/v2/simulation-matchmaking/fast-match/entitlement": "/api/v2/simulation-matchmaking/fast-match/entitlement",
+    "/api/v2/simulation-matchmaking/quick-game": "/api/v2/simulation-matchmaking/quick-game",
     "/api/v2/story-feed": "/api/v2/story-feed",
     "/api/v2/story-feed/digest": "/api/v2/story-feed/digest",
     "/api/v2/streamer-tournaments": "/api/v2/streamer-tournaments",
@@ -23675,6 +23791,7 @@
     "/shows/debate": "/api/v2/shows/debate",
     "/shows/post-match/{match_id}": "/api/v2/shows/post-match/{match_id}",
     "/shows/pre-match/{match_id}": "/api/v2/shows/pre-match/{match_id}",
+    "/simulation-matchmaking/fast-match/entitlement": "/api/v2/simulation-matchmaking/fast-match/entitlement",
     "/simulation-matchmaking/hosted-competitions/preview": "/api/v2/simulation-matchmaking/hosted-competitions/preview",
     "/simulation-matchmaking/profiles/{user_id}": "/api/v2/simulation-matchmaking/profiles/{user_id}",
     "/simulation-matchmaking/quick-game": "/api/v2/simulation-matchmaking/quick-game",

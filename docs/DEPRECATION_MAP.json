@@ -151,6 +151,36 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/data/competition_api.dart",
+      "from": "/api/v2/competitions/leaderboard/clubs",
+      "to": "/api/competitions/leaderboard/clubs",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/competition_api.dart",
+      "from": "/api/v2/competitions/random/quote",
+      "to": "/api/competitions/random/quote",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/competition_api.dart",
+      "from": "/api/v2/competitions/random/join",
+      "to": "/api/competitions/random/join",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/competition_api.dart",
+      "from": "/api/v2/simulation-matchmaking/fast-match/entitlement",
+      "to": "/api/simulation-matchmaking/fast-match/entitlement",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/competition_api.dart",
+      "from": "/api/v2/simulation-matchmaking/quick-game",
+      "to": "/api/simulation-matchmaking/quick-game",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/data/competition_control_repository.dart",
       "from": "/api/v2/competitions/admin",
       "to": "/api/competitions/admin",
@@ -640,6 +670,18 @@
       "consumer": "frontend/lib/data/notification_settings_api.dart",
       "from": "/api/v2/admin/notifications/announcements",
       "to": "/api/admin/notifications/announcements",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/notification_settings_api.dart",
+      "from": "/api/v2/admin/notifications/event-matrix",
+      "to": "/api/admin/notifications/event-matrix",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/notification_settings_api.dart",
+      "from": "/api/v2/admin/notifications/test-event",
+      "to": "/api/admin/notifications/test-event",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
