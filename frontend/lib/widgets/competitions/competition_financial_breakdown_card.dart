@@ -85,7 +85,7 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
             label:
                 prizeMode == 'host_funded_fixed'
                     ? 'Advertised net prizes'
-                    : 'Net payout pot',
+                    : 'Prize pool',
             value: _formatAmount(resolvedPrizePool, currency),
             emphasize: true,
           ),

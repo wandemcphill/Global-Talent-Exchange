@@ -565,11 +565,14 @@ const Set<String> gteApiCanonicalPaths = <String>{
   '/api/v2/competitions/creator-league/tiers',
   '/api/v2/competitions/creator-league/tiers/{tier_id}',
   '/api/v2/competitions/join',
+  '/api/v2/competitions/leaderboard/clubs',
   '/api/v2/competitions/players/{subject_id}/progression',
+  '/api/v2/competitions/random/quote',
   '/api/v2/competitions/records/{competition_id}',
   '/api/v2/competitions/runtime/{code}',
   '/api/v2/competitions/{competition_id}',
   '/api/v2/competitions/{competition_id}/advance',
+  '/api/v2/competitions/{competition_id}/cancel',
   '/api/v2/competitions/{competition_id}/finalize',
   '/api/v2/competitions/{competition_id}/financials',
   '/api/v2/competitions/{competition_id}/fixtures',
@@ -580,6 +583,8 @@ const Set<String> gteApiCanonicalPaths = <String>{
   '/api/v2/competitions/{competition_id}/leave',
   '/api/v2/competitions/{competition_id}/matches/{match_id}/events',
   '/api/v2/competitions/{competition_id}/matches/{match_id}/result',
+  '/api/v2/competitions/{competition_id}/participants',
+  '/api/v2/competitions/{competition_id}/pot',
   '/api/v2/competitions/{competition_id}/publish',
   '/api/v2/competitions/{competition_id}/rewards',
   '/api/v2/competitions/{competition_id}/rounds',
@@ -1159,6 +1164,7 @@ const Set<String> gteApiCanonicalPaths = <String>{
   '/api/v2/shows/debate',
   '/api/v2/shows/post-match/{match_id}',
   '/api/v2/shows/pre-match/{match_id}',
+  '/api/v2/simulation-matchmaking/fast-match/entitlement',
   '/api/v2/simulation-matchmaking/hosted-competitions/preview',
   '/api/v2/simulation-matchmaking/profiles/{user_id}',
   '/api/v2/simulation-matchmaking/quick-game',
@@ -2489,9 +2495,14 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/competitions/records/{competition_id}':
       '/api/v2/competitions/records/{competition_id}',
   '/api/competitions/runtime/{code}': '/api/v2/competitions/runtime/{code}',
+  '/api/competitions/leaderboard/clubs':
+      '/api/v2/competitions/leaderboard/clubs',
+  '/api/competitions/random/quote': '/api/v2/competitions/random/quote',
   '/api/competitions/{competition_id}': '/api/v2/competitions/{competition_id}',
   '/api/competitions/{competition_id}/advance':
       '/api/v2/competitions/{competition_id}/advance',
+  '/api/competitions/{competition_id}/cancel':
+      '/api/v2/competitions/{competition_id}/cancel',
   '/api/competitions/{competition_id}/finalize':
       '/api/v2/competitions/{competition_id}/finalize',
   '/api/competitions/{competition_id}/financials':
@@ -2512,6 +2523,10 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/competitions/{competition_id}/matches/{match_id}/events',
   '/api/competitions/{competition_id}/matches/{match_id}/result':
       '/api/v2/competitions/{competition_id}/matches/{match_id}/result',
+  '/api/competitions/{competition_id}/participants':
+      '/api/v2/competitions/{competition_id}/participants',
+  '/api/competitions/{competition_id}/pot':
+      '/api/v2/competitions/{competition_id}/pot',
   '/api/competitions/{competition_id}/publish':
       '/api/v2/competitions/{competition_id}/publish',
   '/api/competitions/{competition_id}/rewards':
@@ -3350,6 +3365,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/shows/debate': '/api/v2/shows/debate',
   '/api/shows/post-match/{match_id}': '/api/v2/shows/post-match/{match_id}',
   '/api/shows/pre-match/{match_id}': '/api/v2/shows/pre-match/{match_id}',
+  '/api/simulation-matchmaking/fast-match/entitlement':
+      '/api/v2/simulation-matchmaking/fast-match/entitlement',
   '/api/simulation-matchmaking/hosted-competitions/preview':
       '/api/v2/simulation-matchmaking/hosted-competitions/preview',
   '/api/simulation-matchmaking/profiles/{user_id}':
@@ -6419,10 +6436,15 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/v2/competitions/records/{competition_id}':
       '/api/v2/competitions/records/{competition_id}',
   '/api/v2/competitions/runtime/{code}': '/api/v2/competitions/runtime/{code}',
+  '/api/v2/competitions/leaderboard/clubs':
+      '/api/v2/competitions/leaderboard/clubs',
+  '/api/v2/competitions/random/quote': '/api/v2/competitions/random/quote',
   '/api/v2/competitions/{competition_id}':
       '/api/v2/competitions/{competition_id}',
   '/api/v2/competitions/{competition_id}/advance':
       '/api/v2/competitions/{competition_id}/advance',
+  '/api/v2/competitions/{competition_id}/cancel':
+      '/api/v2/competitions/{competition_id}/cancel',
   '/api/v2/competitions/{competition_id}/finalize':
       '/api/v2/competitions/{competition_id}/finalize',
   '/api/v2/competitions/{competition_id}/financials':
@@ -6443,6 +6465,10 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/competitions/{competition_id}/matches/{match_id}/events',
   '/api/v2/competitions/{competition_id}/matches/{match_id}/result':
       '/api/v2/competitions/{competition_id}/matches/{match_id}/result',
+  '/api/v2/competitions/{competition_id}/participants':
+      '/api/v2/competitions/{competition_id}/participants',
+  '/api/v2/competitions/{competition_id}/pot':
+      '/api/v2/competitions/{competition_id}/pot',
   '/api/v2/competitions/{competition_id}/publish':
       '/api/v2/competitions/{competition_id}/publish',
   '/api/v2/competitions/{competition_id}/rewards':
@@ -7295,6 +7321,8 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
   '/api/v2/shows/debate': '/api/v2/shows/debate',
   '/api/v2/shows/post-match/{match_id}': '/api/v2/shows/post-match/{match_id}',
   '/api/v2/shows/pre-match/{match_id}': '/api/v2/shows/pre-match/{match_id}',
+  '/api/v2/simulation-matchmaking/fast-match/entitlement':
+      '/api/v2/simulation-matchmaking/fast-match/entitlement',
   '/api/v2/simulation-matchmaking/hosted-competitions/preview':
       '/api/v2/simulation-matchmaking/hosted-competitions/preview',
   '/api/v2/simulation-matchmaking/profiles/{user_id}':
@@ -9758,9 +9786,14 @@ const Map<String, String> gteApiDeprecatedAliases = <String, String>{
   '/api/competitions/records/{competition_id}':
       '/api/v2/competitions/records/{competition_id}',
   '/api/competitions/runtime/{code}': '/api/v2/competitions/runtime/{code}',
+  '/api/competitions/leaderboard/clubs':
+      '/api/v2/competitions/leaderboard/clubs',
+  '/api/competitions/random/quote': '/api/v2/competitions/random/quote',
   '/api/competitions/{competition_id}': '/api/v2/competitions/{competition_id}',
   '/api/competitions/{competition_id}/advance':
       '/api/v2/competitions/{competition_id}/advance',
+  '/api/competitions/{competition_id}/cancel':
+      '/api/v2/competitions/{competition_id}/cancel',
   '/api/competitions/{competition_id}/finalize':
       '/api/v2/competitions/{competition_id}/finalize',
   '/api/competitions/{competition_id}/financials':
@@ -9781,6 +9814,10 @@ const Map<String, String> gteApiDeprecatedAliases = <String, String>{
       '/api/v2/competitions/{competition_id}/matches/{match_id}/events',
   '/api/competitions/{competition_id}/matches/{match_id}/result':
       '/api/v2/competitions/{competition_id}/matches/{match_id}/result',
+  '/api/competitions/{competition_id}/participants':
+      '/api/v2/competitions/{competition_id}/participants',
+  '/api/competitions/{competition_id}/pot':
+      '/api/v2/competitions/{competition_id}/pot',
   '/api/competitions/{competition_id}/publish':
       '/api/v2/competitions/{competition_id}/publish',
   '/api/competitions/{competition_id}/rewards':
@@ -10619,6 +10656,8 @@ const Map<String, String> gteApiDeprecatedAliases = <String, String>{
   '/api/shows/debate': '/api/v2/shows/debate',
   '/api/shows/post-match/{match_id}': '/api/v2/shows/post-match/{match_id}',
   '/api/shows/pre-match/{match_id}': '/api/v2/shows/pre-match/{match_id}',
+  '/api/simulation-matchmaking/fast-match/entitlement':
+      '/api/v2/simulation-matchmaking/fast-match/entitlement',
   '/api/simulation-matchmaking/hosted-competitions/preview':
       '/api/v2/simulation-matchmaking/hosted-competitions/preview',
   '/api/simulation-matchmaking/profiles/{user_id}':
