@@ -55,7 +55,6 @@ from backend.scripts.import_transfermarkt_real_players import (
     _resolve_youth_team_reference,
 )
 
-
 DEFAULT_COUNTRIES = (
     "Denmark",
     "Poland",
@@ -463,20 +462,28 @@ def _apply_youth_fact(
     stats.matched_players += 1
     stats.matched_by_national_team_context += int("national_team" in confidence)
     player = candidate.player
-    country = _resolve_country_by_name(
-        session,
-        fact.nationality,
-        cache=cache,
-        stats=stats,
-        apply=False,
-    ) if player.country_id is None else None
-    club = _resolve_transfermarkt_club_without_competition(
-        session,
-        fact=fact,
-        cache=cache,
-        stats=stats,
-        apply=create_clubs,
-    ) if player.current_club_id is None else None
+    country = (
+        _resolve_country_by_name(
+            session,
+            fact.nationality,
+            cache=cache,
+            stats=stats,
+            apply=False,
+        )
+        if player.country_id is None
+        else None
+    )
+    club = (
+        _resolve_transfermarkt_club_without_competition(
+            session,
+            fact=fact,
+            cache=cache,
+            stats=stats,
+            apply=create_clubs,
+        )
+        if player.current_club_id is None
+        else None
+    )
 
     desired_updates = {
         "country": player.country_id is None and country is not None,
@@ -501,7 +508,9 @@ def _apply_youth_fact(
         player.source_last_refreshed_at = now
         player.last_synced_at = now
         _update_profiles(candidate.profiles, fact=fact, as_of=now, stats=stats)
-        _update_summary(candidate.summary, fact=fact, competition=None, club=club, confidence=confidence, as_of=now, stats=stats)
+        _update_summary(
+            candidate.summary, fact=fact, competition=None, club=club, confidence=confidence, as_of=now, stats=stats
+        )
 
     stats.players_updated += 1
     stats.country_fixed += int(desired_updates["country"])
