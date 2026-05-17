@@ -1,23 +1,52 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, get_session
 from app.gift_engine.schemas import (
+    GiftCatalogItemView,
     GiftComboEventView,
     GiftComboSummaryView,
     GiftEngineSummaryView,
     GiftSendRequest,
+    GiftStatsView,
     GiftTransactionView,
 )
 from app.gift_engine.service import GiftEngineError, GiftEngineService
+from app.models.economy_config import GiftCatalogItem
+from app.models.gift_transaction import GiftStats
 from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_transaction import GiftTransaction
 from app.models.user import User
 from app.wallets.service import InsufficientBalanceError
 
-router = APIRouter(prefix='/gift-engine', tags=['gift-engine'])
+router = APIRouter(prefix="/gift-engine", tags=["gift-engine"])
+gifts_router = APIRouter(prefix="/gifts", tags=["gifts"])
+gift_stats_router = APIRouter(tags=["gifts"])
+
+
+def _map_catalog_item(item: GiftCatalogItem) -> GiftCatalogItemView:
+    return GiftCatalogItemView(
+        id=item.id,
+        code=item.key,
+        display_name=item.display_name,
+        fallback_display_name=item.fallback_display_name,
+        description=item.description,
+        cost_amount=item.fancoin_price,
+        currency=item.currency,
+        currency_label="Fan Coin" if item.currency == "credit" else "GTEX Coin",
+        rarity=item.rarity,
+        tier=item.tier,
+        animation_key=item.animation_key,
+        sound_key=item.sound_key,
+        duration_ms=item.duration_ms,
+        is_active=item.active,
+        is_award_pack=item.is_award_pack,
+        legal_status=item.legal_status,
+        sort_order=item.sort_order,
+    )
 
 
 def _map_transaction(item: GiftTransaction) -> GiftTransactionView:
@@ -28,17 +57,72 @@ def _map_transaction(item: GiftTransaction) -> GiftTransactionView:
         recipient_user_id=item.recipient_user_id,
         gift_key=gift_item.key,
         gift_display_name=gift_item.display_name,
+        fallback_gift_name=gift_item.fallback_display_name,
+        rarity=gift_item.rarity,
         quantity=item.quantity,
         unit_price=item.unit_price,
         gross_amount=item.gross_amount,
         platform_rake_amount=item.platform_rake_amount,
         recipient_net_amount=item.recipient_net_amount,
+        recipient_type=item.recipient_type,
+        recipient_entity_id=item.recipient_entity_id,
+        chat_thread_id=item.chat_thread_id,
+        discussion_thread_id=item.discussion_thread_id,
+        discussion_reply_id=item.discussion_reply_id,
+        match_id=item.match_id,
+        competition_id=item.competition_id,
         source_scope=item.source_scope,
         ledger_unit=item.ledger_unit.value,
+        currency_label="Fan Coin" if item.ledger_unit.value == "credit" else "GTEX Coin",
         ledger_transaction_id=item.ledger_transaction_id,
+        wallet_debit_ledger_id=item.wallet_debit_ledger_id,
+        wallet_credit_ledger_id=item.wallet_credit_ledger_id,
+        platform_fee_ledger_id=item.platform_fee_ledger_id,
+        idempotency_key=item.idempotency_key,
+        animation_key=item.animation_key,
+        sound_key=item.sound_key,
+        duration_ms=gift_item.duration_ms,
+        abuse_status=item.abuse_status,
+        animation_payload={
+            "event_type": "gift.sent",
+            "gift_code": gift_item.key,
+            "gift_name": gift_item.display_name,
+            "fallback_gift_name": gift_item.fallback_display_name,
+            "rarity": gift_item.rarity,
+            "animation_key": item.animation_key or gift_item.animation_key,
+            "sound_key": item.sound_key or gift_item.sound_key,
+            "amount": str(item.gross_amount),
+            "currency_label": "Fan Coin" if item.ledger_unit.value == "credit" else "GTEX Coin",
+            "duration_ms": gift_item.duration_ms,
+            "chat_thread_id": item.chat_thread_id,
+            "discussion_thread_id": item.discussion_thread_id,
+            "match_id": item.match_id,
+            "competition_id": item.competition_id,
+        },
         note=item.note,
         status=item.status.value,
         created_at=item.created_at,
+    )
+
+
+def _map_stats(item: GiftStats | None, *, entity_type: str, entity_id: str) -> GiftStatsView:
+    if item is None:
+        return GiftStatsView(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            total_gifts_received=0,
+            total_fan_coin_received=0,
+            total_unique_senders=0,
+            mythic_gifts_received=0,
+        )
+    return GiftStatsView(
+        entity_type=item.entity_type,
+        entity_id=item.entity_id,
+        total_gifts_received=item.total_gifts_received,
+        total_fan_coin_received=item.total_fan_coin_received,
+        total_unique_senders=item.total_unique_senders,
+        top_gift_code=item.top_gift_code,
+        mythic_gifts_received=item.mythic_gifts_received,
     )
 
 
@@ -60,8 +144,10 @@ def _map_combo_event(item: GiftComboEvent) -> GiftComboEventView:
     )
 
 
-@router.post('/send', response_model=GiftTransactionView)
-def send_gift(payload: GiftSendRequest, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> GiftTransactionView:
+@router.post("/send", response_model=GiftTransactionView)
+def send_gift(
+    payload: GiftSendRequest, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> GiftTransactionView:
     service = GiftEngineService(session)
     try:
         item = service.send_gift(
@@ -71,9 +157,17 @@ def send_gift(payload: GiftSendRequest, current_user: User = Depends(get_current
             quantity=payload.quantity,
             note=payload.note,
             source_scope=payload.source_scope,
+            idempotency_key=payload.idempotency_key,
+            chat_thread_id=payload.chat_thread_id,
+            discussion_thread_id=payload.discussion_thread_id,
+            discussion_reply_id=payload.discussion_reply_id,
+            match_id=payload.match_id,
+            competition_id=payload.competition_id,
         )
     except GiftEngineError as exc:
-        status_code = status.HTTP_409_CONFLICT if exc.reason == "spending_controls_blocked" else status.HTTP_400_BAD_REQUEST
+        status_code = (
+            status.HTTP_409_CONFLICT if exc.reason == "spending_controls_blocked" else status.HTTP_400_BAD_REQUEST
+        )
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     except InsufficientBalanceError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -82,25 +176,29 @@ def send_gift(payload: GiftSendRequest, current_user: User = Depends(get_current
     return _map_transaction(item)
 
 
-@router.get('/me/transactions', response_model=list[GiftTransactionView])
-def list_my_gifts(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> list[GiftTransactionView]:
+@router.get("/me/transactions", response_model=list[GiftTransactionView])
+def list_my_gifts(
+    current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> list[GiftTransactionView]:
     service = GiftEngineService(session)
     return [_map_transaction(item) for item in service.list_transactions_for_user(user=current_user)]
 
 
-@router.get('/me/summary', response_model=GiftEngineSummaryView)
-def get_my_gift_summary(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> GiftEngineSummaryView:
+@router.get("/me/summary", response_model=GiftEngineSummaryView)
+def get_my_gift_summary(
+    current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> GiftEngineSummaryView:
     service = GiftEngineService(session)
     data = service.summary_for_user(user=current_user)
     return GiftEngineSummaryView(
-        sent_total=data['sent_total'],
-        received_total=data['received_total'],
-        rake_total=data['rake_total'],
-        recent_transactions=[_map_transaction(item) for item in data['recent_transactions']],
+        sent_total=data["sent_total"],
+        received_total=data["received_total"],
+        rake_total=data["rake_total"],
+        recent_transactions=[_map_transaction(item) for item in data["recent_transactions"]],
     )
 
 
-@router.get('/me/combos', response_model=GiftComboSummaryView)
+@router.get("/me/combos", response_model=GiftComboSummaryView)
 def get_my_combo_summary(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -116,3 +214,86 @@ def get_my_combo_summary(
         total_bonus_amount=data["total_bonus_amount"],
         recent_combos=[_map_combo_event(item) for item in data["recent_combos"]],
     )
+
+
+@gifts_router.get("/catalog", response_model=list[GiftCatalogItemView])
+def list_gift_catalog(session: Session = Depends(get_session)) -> list[GiftCatalogItemView]:
+    service = GiftEngineService(session)
+    items = service.list_catalog(active_only=True)
+    session.commit()
+    return [_map_catalog_item(item) for item in items]
+
+
+@gifts_router.get("/award-packs", response_model=list[GiftCatalogItemView])
+def list_award_gift_packs(session: Session = Depends(get_session)) -> list[GiftCatalogItemView]:
+    service = GiftEngineService(session)
+    items = service.list_catalog(active_only=True, award_only=True)
+    session.commit()
+    return [_map_catalog_item(item) for item in items]
+
+
+@gifts_router.post("/send", response_model=GiftTransactionView)
+def send_public_gift(
+    payload: GiftSendRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> GiftTransactionView:
+    service = GiftEngineService(session)
+    try:
+        item = service.send_gift(
+            sender=current_user,
+            recipient_user_id=payload.recipient_user_id,
+            gift_key=payload.gift_key,
+            quantity=payload.quantity,
+            note=payload.note,
+            source_scope="user_hosted",
+            idempotency_key=payload.idempotency_key,
+            chat_thread_id=payload.chat_thread_id,
+            discussion_thread_id=payload.discussion_thread_id,
+            discussion_reply_id=payload.discussion_reply_id,
+            match_id=payload.match_id,
+            competition_id=payload.competition_id,
+        )
+    except GiftEngineError as exc:
+        status_code = (
+            status.HTTP_409_CONFLICT if exc.reason == "spending_controls_blocked" else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=exc.detail) from exc
+    except InsufficientBalanceError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    session.commit()
+    session.refresh(item)
+    return _map_transaction(item)
+
+
+@gifts_router.get("/events", response_model=list[GiftTransactionView])
+def list_my_gift_events(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[GiftTransactionView]:
+    service = GiftEngineService(session)
+    return [_map_transaction(item) for item in service.list_transactions_for_user(user=current_user)]
+
+
+@gifts_router.get("/users/{user_id}/gift-stats", response_model=GiftStatsView)
+def get_user_gift_stats(user_id: str, session: Session = Depends(get_session)) -> GiftStatsView:
+    item = session.scalar(select(GiftStats).where(GiftStats.entity_type == "user", GiftStats.entity_id == user_id))
+    return _map_stats(item, entity_type="user", entity_id=user_id)
+
+
+@gifts_router.get("/discussions/threads/{thread_id}/gift-stats", response_model=GiftStatsView)
+def get_discussion_thread_gift_stats(thread_id: str, session: Session = Depends(get_session)) -> GiftStatsView:
+    item = session.scalar(
+        select(GiftStats).where(GiftStats.entity_type == "discussion_thread", GiftStats.entity_id == thread_id)
+    )
+    return _map_stats(item, entity_type="discussion_thread", entity_id=thread_id)
+
+
+@gift_stats_router.get("/users/{user_id}/gift-stats", response_model=GiftStatsView)
+def get_user_gift_stats_alias(user_id: str, session: Session = Depends(get_session)) -> GiftStatsView:
+    return get_user_gift_stats(user_id=user_id, session=session)
+
+
+@gift_stats_router.get("/discussions/threads/{thread_id}/gift-stats", response_model=GiftStatsView)
+def get_discussion_thread_gift_stats_alias(thread_id: str, session: Session = Depends(get_session)) -> GiftStatsView:
+    return get_discussion_thread_gift_stats(thread_id=thread_id, session=session)

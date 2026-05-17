@@ -46,8 +46,13 @@ class LiveThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "live_threads"
 
     thread_key: Mapped[str] = mapped_column(String(140), nullable=False, unique=True)
+    thread_type: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="live_thread", server_default="live_thread"
+    )
+    category: Mapped[str] = mapped_column(String(80), nullable=False, default="general", server_default="general")
     competition_key: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     created_by_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -55,6 +60,13 @@ class LiveThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         SqlEnum(LiveThreadStatus, name="livethreadstatus"), nullable=False, default=LiveThreadStatus.OPEN
     )
     pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    visibility: Mapped[str] = mapped_column(String(32), nullable=False, default="public", server_default="public")
+    moderation_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="visible", server_default="visible"
+    )
+    trend_score: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    locked_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
@@ -66,9 +78,14 @@ class LiveThreadMessage(Base, UUIDPrimaryKeyMixin):
         ForeignKey("live_threads.id", ondelete="CASCADE"), nullable=False, index=True
     )
     author_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    message_type: Mapped[str] = mapped_column(String(32), nullable=False, default="reply", server_default="reply")
     body: Mapped[str] = mapped_column(Text, nullable=False)
     visibility: Mapped[MessageVisibility] = mapped_column(
         SqlEnum(MessageVisibility, name="communitymessagevisibility"), nullable=False, default=MessageVisibility.PUBLIC
+    )
+    moderation_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="visible", server_default="visible"
     )
     like_count: Mapped[int] = mapped_column(nullable=False, default=0)
     reply_count: Mapped[int] = mapped_column(nullable=False, default=0)
@@ -115,5 +132,35 @@ class PrivateMessage(Base, UUIDPrimaryKeyMixin):
     )
     sender_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    visibility: Mapped[MessageVisibility] = mapped_column(
+        SqlEnum(MessageVisibility, name="communitymessagevisibility"),
+        nullable=False,
+        default=MessageVisibility.PUBLIC,
+        server_default=MessageVisibility.PUBLIC.name,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class CommunityUserBlock(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "community_user_blocks"
+    __table_args__ = (UniqueConstraint("blocker_user_id", "blocked_user_id", name="uq_community_user_blocks_pair"),)
+
+    blocker_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    blocked_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    reason: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class CommunityReaction(Base, UUIDPrimaryKeyMixin):
+    __tablename__ = "community_reactions"
+    __table_args__ = (
+        UniqueConstraint("entity_type", "entity_id", "user_id", "reaction_type", name="uq_community_reaction_once"),
+    )
+
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    entity_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    reaction_type: Mapped[str] = mapped_column(String(32), nullable=False, default="like", server_default="like")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)

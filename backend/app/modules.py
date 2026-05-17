@@ -497,6 +497,8 @@ DOMAIN_MODULES = (
     ),
     _module("economy_admin", router_path="app.economy.router:admin_router"),
     _module("gift_engine", router_path="app.gift_engine.router:router", api_only=True),
+    _module("football_gifts_phase3", router_path="app.gift_engine.router:gifts_router", api_only=True),
+    _module("gift_stats_phase3", router_path="app.gift_engine.router:gift_stats_router", api_only=True),
     _module("reward_engine", router_path="app.reward_engine.router:router", api_only=True),
     _module(
         "reward_engine_admin",
@@ -605,6 +607,7 @@ DOMAIN_MODULES = (
     _module("club_ownership", router_path="app.club_ownership.router:router"),
     _module("player_import", router_path="app.player_import_engine.router:router"),
     _module("community_engine", router_path="app.community_engine.router:router", api_only=True),
+    _module("community_social_phase2", router_path="app.community_engine.social_router:router", api_only=True),
     _module(
         "history_engagement",
         router_path="app.history_engagement.router:router",
@@ -771,6 +774,7 @@ DOMAIN_MODULES = (
     _module("admin_clubs", router_path="app.routes.admin_clubs:router"),
     _module("club_ops", router_path="app.routes.club_ops:router"),
     _module("competitions", router_path="app.routes.competitions:router"),
+    _module("ranking_integrity", router_path="app.ranking_integrity.router:router"),
     _module("tournaments", router_path="app.tournaments.router:router"),
     _module("creators", router_path="app.routes.creators:router"),
     _module("referrals", router_path="app.routes.referrals:router"),

@@ -135,6 +135,9 @@ class CompetitionMatchResultRequest(CommonSchema):
     away_score: int = Field(ge=0)
     decided_by_penalties: bool = False
     winner_club_id: str | None = Field(default=None, max_length=36)
+    result_type: str = Field(default="played", pattern="^(played|forfeit|abandoned)$")
+    forfeit_reason: str | None = Field(default=None, max_length=255)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class CompetitionStandingView(CommonSchema):

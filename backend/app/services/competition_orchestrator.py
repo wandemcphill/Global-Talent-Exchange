@@ -104,6 +104,7 @@ from app.services.competition_auto_runner import CompetitionAutoRunner
 from app.services.competition_validation_service import CompetitionValidationService
 from app.services.competition_visibility_service import CompetitionVisibilityService
 from app.services.competition_wallet_service import CompetitionWalletService
+from app.services.club_ranking_integrity_service import ClubRankingIntegrityService
 from app.services.dynamic_prize_pool_service import DynamicPrizePoolListContext, DynamicPrizePoolService
 from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.service import InsufficientBalanceError
@@ -165,6 +166,7 @@ class CompetitionOrchestrator:
     lifecycle_service: CompetitionLifecycleService = field(init=False)
     competition_wallet_service: CompetitionWalletService = field(init=False)
     progression_service: CompetitionProgressionService = field(init=False)
+    ranking_integrity_service: ClubRankingIntegrityService = field(init=False)
     auto_runner: CompetitionAutoRunner = field(init=False)
     event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
 
@@ -172,6 +174,7 @@ class CompetitionOrchestrator:
         self.lifecycle_service = CompetitionLifecycleService(self.session, event_publisher=self.event_publisher)
         self.competition_wallet_service = CompetitionWalletService(self.session)
         self.progression_service = CompetitionProgressionService(self.session)
+        self.ranking_integrity_service = ClubRankingIntegrityService(self.session)
         self.auto_runner = CompetitionAutoRunner(self.session)
 
     def _publish_competition_update(
@@ -1308,6 +1311,7 @@ class CompetitionOrchestrator:
         if competition is None:
             return None
         self.lifecycle_service.finalize_competition(competition, settle=True)
+        self._record_competition_ranking_placements(competition)
         self._release_competition_escrows(competition.id)
         self.session.commit()
         return self.rewards(competition_id)
@@ -1367,6 +1371,29 @@ class CompetitionOrchestrator:
         return None
 
     def club_leaderboard(self, *, limit: int = 50) -> ClubCompetitionLeaderboardResponse:
+        if self.ranking_integrity_service.has_ranking_events():
+            rows = self.ranking_integrity_service.leaderboard_rows(limit=limit)
+            entries = []
+            for rank, row in enumerate(rows, start=1):
+                ranking_points = int(Decimal(row["ranking_points"]).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+                entries.append(
+                    ClubCompetitionLeaderboardEntry(
+                        rank=rank,
+                        club_id=str(row["club_id"]),
+                        club_name=str(row.get("club_name") or row["club_id"]),
+                        owner_user_id=row.get("owner_user_id"),
+                        ranking_points=ranking_points,
+                        wins=int(row.get("wins") or 0),
+                        draws=int(row.get("draws") or 0),
+                        losses=int(row.get("losses") or 0),
+                        trophies=int(row.get("trophies") or 0),
+                        recent_form=str(row.get("recent_form") or ""),
+                        eligibility_tier=self._eligibility_tier_for_points(ranking_points),
+                        gtex_hosted_eligible=ranking_points >= 250,
+                    )
+                )
+            return ClubCompetitionLeaderboardResponse(entries=tuple(entries))
+
         profiles = list(
             self.session.scalars(
                 select(CompetitionProgressProfile)
@@ -1568,11 +1595,26 @@ class CompetitionOrchestrator:
             return None
         try:
             self.lifecycle_service.finalize_competition(competition, settle=payload.settle)
+            self._record_competition_ranking_placements(competition)
         except ValueError as exc:
             raise CompetitionActionError(str(exc), reason="competition_finalize_blocked") from exc
         self.session.commit()
         self.session.refresh(competition)
         return self._to_summary(competition)
+
+    def _record_competition_ranking_placements(self, competition: Competition) -> None:
+        try:
+            rule_set = self._rule_set(competition.id)
+            standings = self.lifecycle_service.match_service.standings(
+                competition_id=competition.id,
+                rule_set=rule_set,
+            )
+        except ValueError:
+            return
+        self.ranking_integrity_service.record_competition_placements(
+            competition=competition,
+            standings=standings,
+        )
 
     def schedule_preview(
         self,
@@ -1696,12 +1738,28 @@ class CompetitionOrchestrator:
         match = self._match(competition_id, match_id)
         if match is None:
             return None
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        metadata = dict(match.metadata_json or {})
+        metadata["result_type"] = payload.result_type
+        if payload.forfeit_reason:
+            metadata["forfeit_reason"] = payload.forfeit_reason
+        if payload.metadata_json:
+            metadata["result_metadata"] = dict(payload.metadata_json)
+        match.metadata_json = metadata
         updated = self.lifecycle_service.complete_match(
             match=match,
             home_score=payload.home_score,
             away_score=payload.away_score,
             decided_by_penalties=payload.decided_by_penalties,
             winner_club_id=payload.winner_club_id,
+        )
+        self.ranking_integrity_service.record_match_result(
+            competition=competition,
+            match=updated,
+            result_type=payload.result_type,
+            forfeit_reason=payload.forfeit_reason,
         )
         self.session.commit()
         return self._match_view(updated)

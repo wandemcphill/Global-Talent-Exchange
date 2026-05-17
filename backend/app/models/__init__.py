@@ -185,6 +185,7 @@ from app.models.competition_history_entry import CompetitionHistoryEntry
 from app.models.competition_invite import CompetitionInvite
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.club_ranking_integrity import ClubRankingAbuseFlag, ClubRankingEvent, CompetitionIntegrityScore
 from app.models.highlight_event import HighlightEvent
 from app.models.commentary_event import CommentaryEvent
 from app.models.commentator_profile import CommentaryProfileSelection, CommentatorProfile
@@ -313,6 +314,8 @@ from app.models.streamer_tournament import (
     StreamerTournamentType,
 )
 from app.models.community_engine import (
+    CommunityReaction,
+    CommunityUserBlock,
     CompetitionWatchlist,
     LiveThread,
     LiveThreadMessage,
@@ -350,7 +353,7 @@ from app.models.fan_experience import (
 )
 from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_combo_rule import GiftComboRule
-from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
+from app.models.gift_transaction import GiftAbuseFlag, GiftStats, GiftTransaction, GiftTransactionStatus
 from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.player_rivalry import PlayerRivalry
 from app.models.player_fan_reaction import PlayerFanReaction
@@ -876,6 +879,9 @@ __all__ = [
     "CompetitionSeedRule",
     "CompetitionVisibilityRule",
     "CompetitionWalletLedger",
+    "ClubRankingAbuseFlag",
+    "ClubRankingEvent",
+    "CompetitionIntegrityScore",
     "Tournament",
     "TournamentGameType",
     "TournamentMatch",
@@ -944,6 +950,8 @@ __all__ = [
     "CreatorSquad",
     "CreatorTacticalAdviceStatus",
     "CreatorTacticalAdviceType",
+    "CommunityReaction",
+    "CommunityUserBlock",
     "CompetitionWatchlist",
     "FanExperienceTicket",
     "FanProfile",
@@ -985,6 +993,8 @@ __all__ = [
     "NotificationPreference",
     "NotificationSubscription",
     "PlatformAnnouncement",
+    "GiftAbuseFlag",
+    "GiftStats",
     "GiftTransaction",
     "GiftTransactionStatus",
     "KycStatus",

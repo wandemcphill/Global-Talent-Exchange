@@ -17,13 +17,22 @@ class GiftCatalogItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    fallback_display_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     tier: Mapped[str] = mapped_column(String(32), nullable=False, default="standard", server_default="standard")
+    rarity: Mapped[str] = mapped_column(String(32), nullable=False, default="common", server_default="common")
+    currency: Mapped[str] = mapped_column(String(16), nullable=False, default="credit", server_default="credit")
     fancoin_price: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False, default=0, server_default="0.0000")
     animation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sound_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=2500, server_default="2500")
+    legal_status: Mapped[str] = mapped_column(String(32), nullable=False, default="safe", server_default="safe")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    is_award_pack: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    updated_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     updated_by_user: Mapped["User | None"] = relationship()
 
@@ -36,8 +45,12 @@ class ServicePricingRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     price_coin: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False, default=0, server_default="0.0000")
-    price_fancoin_equivalent: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False, default=0, server_default="0.0000")
+    price_fancoin_equivalent: Mapped[float] = mapped_column(
+        Numeric(18, 4), nullable=False, default=0, server_default="0.0000"
+    )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    updated_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     updated_by_user: Mapped["User | None"] = relationship()
