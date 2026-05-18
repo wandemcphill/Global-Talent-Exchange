@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 576,
+  "call_count": 589,
   "calls": [
     {
       "file": "frontend/lib/data/admin_command_center_api.dart",
@@ -764,6 +764,102 @@
       "method": "DELETE",
       "endpoint": "/api/community/watchlist/$competitionKey",
       "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/discussions/categories",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/discussions/threads",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/discussions/threads",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/discussions/threads/$threadId/replies",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/discussions/threads/$threadId/replies",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/gifts/award-packs",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/gifts/catalog",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/community_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/gifts/send",
+      "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
         "web",
@@ -5360,6 +5456,66 @@
       "method": "INFERRED",
       "endpoint": "/api/world/narratives",
       "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/gifts/abuse-flags",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/gifts/catalog",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/gifts/events",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/gifts/events/$eventId/refund",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/gifts/catalog",
+      "expected_shape": "list",
       "base_url_source": "injected",
       "platforms": [
         "web",

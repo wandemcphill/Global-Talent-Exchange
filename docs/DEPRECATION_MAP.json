@@ -139,6 +139,36 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/data/community_api.dart",
+      "from": "/api/v2/discussions/categories",
+      "to": "/api/discussions/categories",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/community_api.dart",
+      "from": "/api/v2/discussions/threads",
+      "to": "/api/discussions/threads",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/community_api.dart",
+      "from": "/api/v2/gifts/catalog",
+      "to": "/api/gifts/catalog",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/community_api.dart",
+      "from": "/api/v2/gifts/award-packs",
+      "to": "/api/gifts/award-packs",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/community_api.dart",
+      "from": "/api/v2/gifts/send",
+      "to": "/api/gifts/send",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/data/competition_api.dart",
       "from": "/api/v2/competitions",
       "to": "/api/competitions",
@@ -1144,6 +1174,30 @@
       "consumer": "frontend/lib/features/jackpot/presentation/gtex_jackpot_route_screen.dart",
       "from": "/api/v2/wallets/summary",
       "to": "/api/wallets/summary",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "from": "/api/v2/gifts/catalog",
+      "to": "/api/gifts/catalog",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "from": "/api/v2/admin/gifts/catalog",
+      "to": "/api/admin/gifts/catalog",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "from": "/api/v2/admin/gifts/events",
+      "to": "/api/admin/gifts/events",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/gift_economy_admin/data/gift_economy_admin_repository.dart",
+      "from": "/api/v2/admin/gifts/abuse-flags",
+      "to": "/api/admin/gifts/abuse-flags",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {

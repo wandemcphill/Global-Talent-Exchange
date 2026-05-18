@@ -539,6 +539,36 @@
       },
       {
         "method": "GET",
+        "path": "/api/admin/gifts/abuse-flags",
+        "handler": "admin_list_gift_abuse_flags",
+        "response_model": "list[GiftAbuseFlagView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/gifts/catalog",
+        "handler": "admin_upsert_gift_catalog_item",
+        "response_model": "GiftCatalogItemView"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/admin/gifts/catalog/{gift_id}",
+        "handler": "admin_patch_gift_catalog_item",
+        "response_model": "GiftCatalogItemView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/gifts/events",
+        "handler": "admin_list_gift_events",
+        "response_model": "list[GiftTransactionView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/gifts/events/{event_id}/refund",
+        "handler": "admin_refund_gift_event",
+        "response_model": "GiftTransactionView"
+      },
+      {
+        "method": "GET",
         "path": "/api/admin/god-mode/audit-events",
         "handler": "read_audit_events",
         "response_model": "list[AuditEventView]"
@@ -2152,6 +2182,90 @@
     ],
     "community": [
       {
+        "method": "POST",
+        "path": "/api/admin/chat/messages/{message_id}/hide",
+        "handler": "admin_hide_chat_message",
+        "response_model": "PrivateMessageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/chat/reports",
+        "handler": "list_chat_reports",
+        "response_model": "list[ModerationReportView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/discussions/replies/{reply_id}/hide",
+        "handler": "admin_hide_discussion_reply",
+        "response_model": "LiveThreadMessageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/discussions/reports",
+        "handler": "list_discussion_reports",
+        "response_model": "list[ModerationReportView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/discussions/threads/{thread_id}/lock",
+        "handler": "admin_lock_discussion_thread",
+        "response_model": "LiveThreadView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/chats/messages/{message_id}/report",
+        "handler": "report_chat_message",
+        "response_model": "ModerationReportView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/chats/threads",
+        "handler": "list_chat_threads",
+        "response_model": "list[PrivateMessageThreadView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/chats/threads",
+        "handler": "create_chat_thread",
+        "response_model": "PrivateMessageThreadView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/chats/threads/{thread_id}",
+        "handler": "get_chat_thread",
+        "response_model": "PrivateMessageThreadView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/chats/threads/{thread_id}/messages",
+        "handler": "list_chat_messages",
+        "response_model": "list[PrivateMessageView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/chats/threads/{thread_id}/messages",
+        "handler": "post_chat_message",
+        "response_model": "PrivateMessageView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/chats/threads/{thread_id}/mute",
+        "handler": "mute_chat_thread",
+        "response_model": "PrivateMessageParticipantView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/chats/threads/{thread_id}/read",
+        "handler": "mark_chat_thread_read",
+        "response_model": "PrivateMessageThreadView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/chats/users/{user_id}/block",
+        "handler": "block_chat_user",
+        "response_model": "dict[str"
+      },
+      {
         "method": "GET",
         "path": "/api/community/creator-clubs/{club_id}/fan-competitions",
         "handler": "list_creator_fan_competitions",
@@ -2330,6 +2444,66 @@
         "path": "/api/community/watchlist/{competition_key}",
         "handler": "remove_watchlist",
         "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/discussions/categories",
+        "handler": "list_discussion_categories",
+        "response_model": "list[DiscussionCategoryView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/discussions/replies/{reply_id}/react",
+        "handler": "react_discussion_reply",
+        "response_model": "DiscussionReactionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/discussions/replies/{reply_id}/report",
+        "handler": "report_discussion_reply",
+        "response_model": "ModerationReportView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/discussions/threads",
+        "handler": "list_discussion_threads",
+        "response_model": "list[LiveThreadView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/discussions/threads",
+        "handler": "create_discussion_thread",
+        "response_model": "LiveThreadView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/discussions/threads/{thread_id}",
+        "handler": "get_discussion_thread",
+        "response_model": "LiveThreadView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/discussions/threads/{thread_id}/react",
+        "handler": "react_discussion_thread",
+        "response_model": "DiscussionReactionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/discussions/threads/{thread_id}/replies",
+        "handler": "list_discussion_replies",
+        "response_model": "list[LiveThreadMessageView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/discussions/threads/{thread_id}/replies",
+        "handler": "post_discussion_reply",
+        "response_model": "LiveThreadMessageView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/discussions/threads/{thread_id}/report",
+        "handler": "report_discussion_thread",
+        "response_model": "ModerationReportView"
       }
     ],
     "competitions": [
@@ -3651,6 +3825,42 @@
       },
       {
         "method": "GET",
+        "path": "/api/gifts/award-packs",
+        "handler": "list_award_gift_packs",
+        "response_model": "list[GiftCatalogItemView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/gifts/catalog",
+        "handler": "list_gift_catalog",
+        "response_model": "list[GiftCatalogItemView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/gifts/discussions/threads/{thread_id}/gift-stats",
+        "handler": "get_discussion_thread_gift_stats",
+        "response_model": "GiftStatsView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/gifts/events",
+        "handler": "list_my_gift_events",
+        "response_model": "list[GiftTransactionView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/gifts/send",
+        "handler": "send_public_gift",
+        "response_model": "GiftTransactionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/gifts/users/{user_id}/gift-stats",
+        "handler": "get_user_gift_stats",
+        "response_model": "GiftStatsView"
+      },
+      {
+        "method": "GET",
         "path": "/api/media",
         "handler": "list_media_events",
         "response_model": "list[MediaEventView]"
@@ -3663,6 +3873,12 @@
       }
     ],
     "gift": [
+      {
+        "method": "GET",
+        "path": "/api/discussions/threads/{thread_id}/gift-stats",
+        "handler": "get_discussion_thread_gift_stats_alias",
+        "response_model": "GiftStatsView"
+      },
       {
         "method": "GET",
         "path": "/api/gift-engine/me/combos",
@@ -3686,6 +3902,12 @@
         "path": "/api/gift-engine/send",
         "handler": "send_gift",
         "response_model": "GiftTransactionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/users/{user_id}/gift-stats",
+        "handler": "get_user_gift_stats_alias",
+        "response_model": "GiftStatsView"
       }
     ],
     "global": [
@@ -7670,6 +7892,26 @@
         "path": "/shows/pre-match/{match_id}",
         "handler": "read_pre_match_show",
         "response_model": "PunditShowResponse"
+      }
+    ],
+    "ranking": [
+      {
+        "method": "GET",
+        "path": "/api/admin/ranking/events",
+        "handler": "list_admin_ranking_events",
+        "response_model": "ClubRankingEventsResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/ranking/flags",
+        "handler": "list_admin_ranking_flags",
+        "response_model": "ClubRankingAbuseFlagsResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/ranking-events",
+        "handler": "list_club_ranking_events",
+        "response_model": "ClubRankingEventsResponse"
       }
     ],
     "real": [

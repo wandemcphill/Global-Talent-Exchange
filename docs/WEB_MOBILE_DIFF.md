@@ -5,7 +5,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 
 ## Shared Source of Truth
 
-- Shared Flutter client files with API calls discovered: **112**
+- Shared Flutter client files with API calls discovered: **113**
 - Web and mobile therefore inherit the same endpoint usage and the same stale/legacy risks.
 
 ## Divergence Risks
@@ -49,6 +49,12 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/community_api.dart -> /api/community/private-messages/threads/$threadId/messages`
 - `frontend/lib/data/community_api.dart -> /api/community/watchlist`
 - `frontend/lib/data/community_api.dart -> /api/community/watchlist/$competitionKey`
+- `frontend/lib/data/community_api.dart -> /api/discussions/categories`
+- `frontend/lib/data/community_api.dart -> /api/discussions/threads`
+- `frontend/lib/data/community_api.dart -> /api/discussions/threads/$threadId/replies`
+- `frontend/lib/data/community_api.dart -> /api/gifts/award-packs`
+- `frontend/lib/data/community_api.dart -> /api/gifts/catalog`
+- `frontend/lib/data/community_api.dart -> /api/gifts/send`
 - `frontend/lib/data/community_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/competition_api.dart -> /api/competitions`
 - `frontend/lib/data/competition_api.dart -> /api/competitions/$competitionId`

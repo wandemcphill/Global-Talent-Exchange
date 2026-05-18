@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1560,
+  "route_count": 1600,
   "routes": [
     {
       "method": "POST",
@@ -619,6 +619,67 @@
       "response_shape": {
         "response_model": "ValueRunHistoryResponse",
         "returns": "ValueRunHistoryResponse"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/gifts/abuse-flags",
+      "effective_paths": [
+        "/api/admin/gifts/abuse-flags"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "admin_list_gift_abuse_flags",
+      "router_variable": "admin_gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "admin_gifts_phase5"
+      ],
+      "request_shape": {
+        "parameters": [
+          "status_filter",
+          "alias",
+          "limit",
+          "ge",
+          "le",
+          "_",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[GiftAbuseFlagView]",
+        "returns": "list[GiftAbuseFlagView]"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/gifts/events",
+      "effective_paths": [
+        "/api/admin/gifts/events"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "admin_list_gift_events",
+      "router_variable": "admin_gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "admin_gifts_phase5"
+      ],
+      "request_shape": {
+        "parameters": [
+          "abuse_status",
+          "limit",
+          "ge",
+          "le",
+          "_",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[GiftTransactionView]",
+        "returns": "list[GiftTransactionView]"
       },
       "version": "canonical",
       "domain": "admin"
@@ -1617,6 +1678,34 @@
     },
     {
       "method": "PATCH",
+      "path": "/admin/gifts/catalog/{gift_id}",
+      "effective_paths": [
+        "/api/admin/gifts/catalog/{gift_id}"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "admin_patch_gift_catalog_item",
+      "router_variable": "admin_gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "admin_gifts_phase5"
+      ],
+      "request_shape": {
+        "parameters": [
+          "gift_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "GiftCatalogItemView",
+        "returns": "GiftCatalogItemView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "PATCH",
       "path": "/api/admin/god-mode/withdrawals/{payout_request_id}",
       "effective_paths": [
         "/api/admin/god-mode/withdrawals/{payout_request_id}"
@@ -1777,6 +1866,60 @@
       "response_shape": {
         "response_model": "ValueSnapshotBatchResponse",
         "returns": "ValueSnapshotBatchResponse"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/gifts/catalog",
+      "effective_paths": [
+        "/api/admin/gifts/catalog"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "admin_upsert_gift_catalog_item",
+      "router_variable": "admin_gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "admin_gifts_phase5"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "GiftCatalogItemView",
+        "returns": "GiftCatalogItemView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/gifts/events/{event_id}/refund",
+      "effective_paths": [
+        "/api/admin/gifts/events/{event_id}/refund"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "admin_refund_gift_event",
+      "router_variable": "admin_gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "admin_gifts_phase5"
+      ],
+      "request_shape": {
+        "parameters": [
+          "event_id",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "GiftTransactionView",
+        "returns": "GiftTransactionView"
       },
       "version": "canonical",
       "domain": "admin"
@@ -9032,6 +9175,138 @@
     },
     {
       "method": "GET",
+      "path": "/admin/chat/reports",
+      "effective_paths": [
+        "/api/admin/chat/reports"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "list_chat_reports",
+      "router_variable": "admin_chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[ModerationReportView]",
+        "returns": "list[ModerationReportView]"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/discussions/reports",
+      "effective_paths": [
+        "/api/admin/discussions/reports"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "list_discussion_reports",
+      "router_variable": "admin_discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[ModerationReportView]",
+        "returns": "list[ModerationReportView]"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "GET",
+      "path": "/chats/threads",
+      "effective_paths": [
+        "/api/chats/threads"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "list_chat_threads",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[PrivateMessageThreadView]",
+        "returns": "list[PrivateMessageThreadView]"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "GET",
+      "path": "/chats/threads/{thread_id}",
+      "effective_paths": [
+        "/api/chats/threads/{thread_id}"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "get_chat_thread",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PrivateMessageThreadView",
+        "returns": "PrivateMessageThreadView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "GET",
+      "path": "/chats/threads/{thread_id}/messages",
+      "effective_paths": [
+        "/api/chats/threads/{thread_id}/messages"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "list_chat_messages",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[PrivateMessageView]",
+        "returns": "list[PrivateMessageView]"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "GET",
       "path": "/community/creator-clubs/{club_id}/fan-competitions",
       "effective_paths": [
         "/api/community/creator-clubs/{club_id}/fan-competitions"
@@ -9453,6 +9728,356 @@
       "domain": "community"
     },
     {
+      "method": "GET",
+      "path": "/discussions/categories",
+      "effective_paths": [
+        "/api/discussions/categories"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "list_discussion_categories",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[DiscussionCategoryView]",
+        "returns": "list[DiscussionCategoryView]"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "GET",
+      "path": "/discussions/threads",
+      "effective_paths": [
+        "/api/discussions/threads"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "list_discussion_threads",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "category",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[LiveThreadView]",
+        "returns": "list[LiveThreadView]"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "GET",
+      "path": "/discussions/threads/{thread_id}",
+      "effective_paths": [
+        "/api/discussions/threads/{thread_id}"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "get_discussion_thread",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveThreadView",
+        "returns": "LiveThreadView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "GET",
+      "path": "/discussions/threads/{thread_id}/replies",
+      "effective_paths": [
+        "/api/discussions/threads/{thread_id}/replies"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "list_discussion_replies",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[LiveThreadMessageView]",
+        "returns": "list[LiveThreadMessageView]"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/chat/messages/{message_id}/hide",
+      "effective_paths": [
+        "/api/admin/chat/messages/{message_id}/hide"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "admin_hide_chat_message",
+      "router_variable": "admin_chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "message_id",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PrivateMessageView",
+        "returns": "PrivateMessageView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/discussions/replies/{reply_id}/hide",
+      "effective_paths": [
+        "/api/admin/discussions/replies/{reply_id}/hide"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "admin_hide_discussion_reply",
+      "router_variable": "admin_discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "reply_id",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveThreadMessageView",
+        "returns": "LiveThreadMessageView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/discussions/threads/{thread_id}/lock",
+      "effective_paths": [
+        "/api/admin/discussions/threads/{thread_id}/lock"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "admin_lock_discussion_thread",
+      "router_variable": "admin_discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "admin",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveThreadView",
+        "returns": "LiveThreadView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/chats/messages/{message_id}/report",
+      "effective_paths": [
+        "/api/chats/messages/{message_id}/report"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "report_chat_message",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "message_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ModerationReportView",
+        "returns": "ModerationReportView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/chats/threads",
+      "effective_paths": [
+        "/api/chats/threads"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "create_chat_thread",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PrivateMessageThreadView",
+        "returns": "PrivateMessageThreadView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/chats/threads/{thread_id}/messages",
+      "effective_paths": [
+        "/api/chats/threads/{thread_id}/messages"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "post_chat_message",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PrivateMessageView",
+        "returns": "PrivateMessageView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/chats/threads/{thread_id}/mute",
+      "effective_paths": [
+        "/api/chats/threads/{thread_id}/mute"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "mute_chat_thread",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PrivateMessageParticipantView",
+        "returns": "PrivateMessageParticipantView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/chats/threads/{thread_id}/read",
+      "effective_paths": [
+        "/api/chats/threads/{thread_id}/read"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "mark_chat_thread_read",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PrivateMessageThreadView",
+        "returns": "PrivateMessageThreadView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/chats/users/{user_id}/block",
+      "effective_paths": [
+        "/api/chats/users/{user_id}/block"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "block_chat_user",
+      "router_variable": "chat_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "dict[str",
+        "returns": "dict[str, str]"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
       "method": "POST",
       "path": "/community/creator-clubs/{club_id}/fan-competitions",
       "effective_paths": [
@@ -9781,6 +10406,173 @@
       "response_shape": {
         "response_model": "CompetitionWatchlistView",
         "returns": "CompetitionWatchlistView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/discussions/replies/{reply_id}/react",
+      "effective_paths": [
+        "/api/discussions/replies/{reply_id}/react"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "react_discussion_reply",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "reply_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "DiscussionReactionView",
+        "returns": "DiscussionReactionView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/discussions/replies/{reply_id}/report",
+      "effective_paths": [
+        "/api/discussions/replies/{reply_id}/report"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "report_discussion_reply",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "reply_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ModerationReportView",
+        "returns": "ModerationReportView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/discussions/threads",
+      "effective_paths": [
+        "/api/discussions/threads"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "create_discussion_thread",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveThreadView",
+        "returns": "LiveThreadView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/discussions/threads/{thread_id}/react",
+      "effective_paths": [
+        "/api/discussions/threads/{thread_id}/react"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "react_discussion_thread",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "DiscussionReactionView",
+        "returns": "DiscussionReactionView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/discussions/threads/{thread_id}/replies",
+      "effective_paths": [
+        "/api/discussions/threads/{thread_id}/replies"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "post_discussion_reply",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveThreadMessageView",
+        "returns": "LiveThreadMessageView"
+      },
+      "version": "canonical",
+      "domain": "community"
+    },
+    {
+      "method": "POST",
+      "path": "/discussions/threads/{thread_id}/report",
+      "effective_paths": [
+        "/api/discussions/threads/{thread_id}/report"
+      ],
+      "file": "backend/app/community_engine/social_router.py",
+      "handler": "report_discussion_thread",
+      "router_variable": "discussion_router",
+      "module_path": "app.community_engine.social_router",
+      "module_mounts": [
+        "community_social_phase2"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ModerationReportView",
+        "returns": "ModerationReportView"
       },
       "version": "canonical",
       "domain": "community"
@@ -14348,6 +15140,134 @@
     },
     {
       "method": "GET",
+      "path": "/gifts/award-packs",
+      "effective_paths": [
+        "/api/gifts/award-packs"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "list_award_gift_packs",
+      "router_variable": "gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "football_gifts_phase3"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[GiftCatalogItemView]",
+        "returns": "list[GiftCatalogItemView]"
+      },
+      "version": "canonical",
+      "domain": "football"
+    },
+    {
+      "method": "GET",
+      "path": "/gifts/catalog",
+      "effective_paths": [
+        "/api/gifts/catalog"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "list_gift_catalog",
+      "router_variable": "gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "football_gifts_phase3"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[GiftCatalogItemView]",
+        "returns": "list[GiftCatalogItemView]"
+      },
+      "version": "canonical",
+      "domain": "football"
+    },
+    {
+      "method": "GET",
+      "path": "/gifts/discussions/threads/{thread_id}/gift-stats",
+      "effective_paths": [
+        "/api/gifts/discussions/threads/{thread_id}/gift-stats"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "get_discussion_thread_gift_stats",
+      "router_variable": "gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "football_gifts_phase3"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "GiftStatsView",
+        "returns": "GiftStatsView"
+      },
+      "version": "canonical",
+      "domain": "football"
+    },
+    {
+      "method": "GET",
+      "path": "/gifts/events",
+      "effective_paths": [
+        "/api/gifts/events"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "list_my_gift_events",
+      "router_variable": "gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "football_gifts_phase3"
+      ],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[GiftTransactionView]",
+        "returns": "list[GiftTransactionView]"
+      },
+      "version": "canonical",
+      "domain": "football"
+    },
+    {
+      "method": "GET",
+      "path": "/gifts/users/{user_id}/gift-stats",
+      "effective_paths": [
+        "/api/gifts/users/{user_id}/gift-stats"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "get_user_gift_stats",
+      "router_variable": "gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "football_gifts_phase3"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user_id",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "GiftStatsView",
+        "returns": "GiftStatsView"
+      },
+      "version": "canonical",
+      "domain": "football"
+    },
+    {
+      "method": "GET",
       "path": "/media",
       "effective_paths": [
         "/api/media",
@@ -14569,6 +15489,59 @@
       "domain": "football"
     },
     {
+      "method": "POST",
+      "path": "/gifts/send",
+      "effective_paths": [
+        "/api/gifts/send"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "send_public_gift",
+      "router_variable": "gifts_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "football_gifts_phase3"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "GiftTransactionView",
+        "returns": "GiftTransactionView"
+      },
+      "version": "canonical",
+      "domain": "football"
+    },
+    {
+      "method": "GET",
+      "path": "/discussions/threads/{thread_id}/gift-stats",
+      "effective_paths": [
+        "/api/discussions/threads/{thread_id}/gift-stats"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "get_discussion_thread_gift_stats_alias",
+      "router_variable": "gift_stats_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "gift_stats_phase3"
+      ],
+      "request_shape": {
+        "parameters": [
+          "thread_id",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "GiftStatsView",
+        "returns": "GiftStatsView"
+      },
+      "version": "canonical",
+      "domain": "gift"
+    },
+    {
       "method": "GET",
       "path": "/gift-engine/me/combos",
       "effective_paths": [
@@ -14643,6 +15616,32 @@
       "response_shape": {
         "response_model": "list[GiftTransactionView]",
         "returns": "list[GiftTransactionView]"
+      },
+      "version": "canonical",
+      "domain": "gift"
+    },
+    {
+      "method": "GET",
+      "path": "/users/{user_id}/gift-stats",
+      "effective_paths": [
+        "/api/users/{user_id}/gift-stats"
+      ],
+      "file": "backend/app/gift_engine/router.py",
+      "handler": "get_user_gift_stats_alias",
+      "router_variable": "gift_stats_router",
+      "module_path": "app.gift_engine.router",
+      "module_mounts": [
+        "gift_stats_phase3"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user_id",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "GiftStatsView",
+        "returns": "GiftStatsView"
       },
       "version": "canonical",
       "domain": "gift"
@@ -29650,6 +30649,95 @@
       },
       "version": "canonical",
       "domain": "pundits"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/ranking/events",
+      "effective_paths": [
+        "/api/admin/ranking/events"
+      ],
+      "file": "backend/app/ranking_integrity/router.py",
+      "handler": "list_admin_ranking_events",
+      "router_variable": "router",
+      "module_path": "app.ranking_integrity.router",
+      "module_mounts": [
+        "ranking_integrity"
+      ],
+      "request_shape": {
+        "parameters": [
+          "limit",
+          "ge",
+          "le",
+          "status",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubRankingEventsResponse",
+        "returns": "ClubRankingEventsResponse"
+      },
+      "version": "canonical",
+      "domain": "ranking"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/ranking/flags",
+      "effective_paths": [
+        "/api/admin/ranking/flags"
+      ],
+      "file": "backend/app/ranking_integrity/router.py",
+      "handler": "list_admin_ranking_flags",
+      "router_variable": "router",
+      "module_path": "app.ranking_integrity.router",
+      "module_mounts": [
+        "ranking_integrity"
+      ],
+      "request_shape": {
+        "parameters": [
+          "limit",
+          "ge",
+          "le",
+          "status",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubRankingAbuseFlagsResponse",
+        "returns": "ClubRankingAbuseFlagsResponse"
+      },
+      "version": "canonical",
+      "domain": "ranking"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/ranking-events",
+      "effective_paths": [
+        "/api/clubs/{club_id}/ranking-events"
+      ],
+      "file": "backend/app/ranking_integrity/router.py",
+      "handler": "list_club_ranking_events",
+      "router_variable": "router",
+      "module_path": "app.ranking_integrity.router",
+      "module_mounts": [
+        "ranking_integrity"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "limit",
+          "ge",
+          "le",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubRankingEventsResponse",
+        "returns": "ClubRankingEventsResponse"
+      },
+      "version": "canonical",
+      "domain": "ranking"
     },
     {
       "method": "GET",
