@@ -15,6 +15,8 @@ class GtexNationalTeamRentalScreen extends StatefulWidget {
     this.players = GtexNationalTeamRentalDemoData.players,
     this.isLoading = false,
     this.error,
+    this.warning,
+    this.diagnostics = const <String>[],
     this.isAuthenticated = false,
     this.onOpenLogin,
     this.onRefresh,
@@ -30,6 +32,8 @@ class GtexNationalTeamRentalScreen extends StatefulWidget {
   final List<GtexRentalPlayerView> players;
   final bool isLoading;
   final String? error;
+  final String? warning;
+  final List<String> diagnostics;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
   final VoidCallback? onRefresh;
@@ -151,6 +155,8 @@ class _GtexNationalTeamRentalScreenState
         basketState: _basketState,
         isLoading: widget.isLoading,
         error: widget.error,
+        warning: widget.warning,
+        diagnostics: widget.diagnostics,
         selectedCountryName: country?.countryName,
         selectedTeamName: team?.name,
         onSelectPlayer: _selectPlayer,

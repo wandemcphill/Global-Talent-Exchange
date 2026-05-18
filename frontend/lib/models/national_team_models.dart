@@ -82,6 +82,11 @@ class NationalTeamRentalPlayer {
     required this.isRegen,
     required this.isPreseededNationalRegen,
     required this.marketEligible,
+    this.imageUrl,
+    this.portraitUrl,
+    this.portraitStatus,
+    this.portraitSource,
+    this.portraitMissingReason,
   });
 
   final String playerId;
@@ -101,6 +106,11 @@ class NationalTeamRentalPlayer {
   final bool isRegen;
   final bool isPreseededNationalRegen;
   final bool marketEligible;
+  final String? imageUrl;
+  final String? portraitUrl;
+  final String? portraitStatus;
+  final String? portraitSource;
+  final String? portraitMissingReason;
 
   factory NationalTeamRentalPlayer.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -159,6 +169,23 @@ class NationalTeamRentalPlayer {
         'market_eligible',
         'marketEligible',
       ], fallback: true),
+      imageUrl: GteJson.stringOrNull(json, <String>['image_url', 'imageUrl']),
+      portraitUrl: GteJson.stringOrNull(json, <String>[
+        'portrait_url',
+        'portraitUrl',
+      ]),
+      portraitStatus: GteJson.stringOrNull(json, <String>[
+        'portrait_status',
+        'portraitStatus',
+      ]),
+      portraitSource: GteJson.stringOrNull(json, <String>[
+        'portrait_source',
+        'portraitSource',
+      ]),
+      portraitMissingReason: GteJson.stringOrNull(json, <String>[
+        'portrait_missing_reason',
+        'portraitMissingReason',
+      ]),
     );
   }
 }
@@ -167,36 +194,125 @@ class NationalTeamRentalPlayerCollection {
   const NationalTeamRentalPlayerCollection({
     required this.total,
     required this.items,
+    this.partial = false,
+    this.failedCount = 0,
+    this.warnings = const <String>[],
+    this.sourceCounts = const <String, int>{},
   });
 
   final int total;
   final List<NationalTeamRentalPlayer> items;
+  final bool partial;
+  final int failedCount;
+  final List<String> warnings;
+  final Map<String, int> sourceCounts;
 
   factory NationalTeamRentalPlayerCollection.fromJson(Object? value) {
     if (value is List || value is List<Object?>) {
-      final List<NationalTeamRentalPlayer> items = GteJson.list(
+      final _RentalPlayerParseResult parsed = _parseRentalPlayers(
         value,
         label: 'national team rental players',
-      ).map(NationalTeamRentalPlayer.fromJson).toList(growable: false);
+      );
       return NationalTeamRentalPlayerCollection(
-        total: items.length,
-        items: items,
+        total: parsed.items.length,
+        items: parsed.items,
+        partial: parsed.failedCount > 0,
+        failedCount: parsed.failedCount,
+        warnings: parsed.warnings,
       );
     }
     final Map<String, Object?> json = GteJson.map(
       value,
       label: 'national team rental player collection',
     );
-    final List<NationalTeamRentalPlayer> items = GteJson.typedList(
-      json,
-      <String>['items'],
-      NationalTeamRentalPlayer.fromJson,
+    final _RentalPlayerParseResult parsed = _parseRentalPlayers(
+      json['items'],
+      label: 'national team rental players',
+      backendWarnings: _stringList(json['warnings']),
     );
+    final Map<String, int> sourceCounts = <String, int>{};
+    final Object? countsPayload = json['source_counts'] ?? json['sourceCounts'];
+    if (countsPayload is Map) {
+      countsPayload.forEach((Object? key, Object? value) {
+        final int? count =
+            value is num ? value.round() : int.tryParse('$value');
+        if (key != null && count != null) {
+          sourceCounts['$key'] = count;
+        }
+      });
+    }
+    final int backendFailedCount = GteJson.integer(json, <String>[
+      'failed_count',
+      'failedCount',
+    ], fallback: 0);
     return NationalTeamRentalPlayerCollection(
-      total: GteJson.integer(json, <String>['total'], fallback: items.length),
-      items: items,
+      total: GteJson.integer(json, <String>[
+        'total',
+      ], fallback: parsed.items.length),
+      items: parsed.items,
+      partial:
+          GteJson.boolean(json, <String>['partial'], fallback: false) ||
+          backendFailedCount > 0 ||
+          parsed.failedCount > 0,
+      failedCount: backendFailedCount + parsed.failedCount,
+      warnings: parsed.warnings,
+      sourceCounts: sourceCounts,
     );
   }
+}
+
+class _RentalPlayerParseResult {
+  const _RentalPlayerParseResult({
+    required this.items,
+    required this.failedCount,
+    required this.warnings,
+  });
+
+  final List<NationalTeamRentalPlayer> items;
+  final int failedCount;
+  final List<String> warnings;
+}
+
+_RentalPlayerParseResult _parseRentalPlayers(
+  Object? value, {
+  required String label,
+  List<String> backendWarnings = const <String>[],
+}) {
+  if (value == null) {
+    return _RentalPlayerParseResult(
+      items: const <NationalTeamRentalPlayer>[],
+      failedCount: 0,
+      warnings: backendWarnings,
+    );
+  }
+  final List<Object?> rawItems = GteJson.list(value, label: label);
+  final List<NationalTeamRentalPlayer> items = <NationalTeamRentalPlayer>[];
+  final List<String> warnings = <String>[...backendWarnings];
+  int failedCount = 0;
+  for (int index = 0; index < rawItems.length; index += 1) {
+    try {
+      items.add(NationalTeamRentalPlayer.fromJson(rawItems[index]));
+    } catch (_) {
+      failedCount += 1;
+      warnings.add('Skipped invalid rental player ${index + 1}.');
+    }
+  }
+  return _RentalPlayerParseResult(
+    items: items,
+    failedCount: failedCount,
+    warnings: warnings,
+  );
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) {
+    return const <String>[];
+  }
+  return value
+      .whereType<Object>()
+      .map((Object item) => item.toString().trim())
+      .where((String item) => item.isNotEmpty)
+      .toList(growable: false);
 }
 
 class NationalTeamEntry {

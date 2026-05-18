@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.ingestion.models import Country
+from app.global_memory.models import NationalTeamCountryRanking
 from app.models import Base
 from app.models.competition import UserCompetition
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
@@ -27,6 +28,7 @@ def _build_session_factory(database_path: Path) -> sessionmaker:
             User.__table__,
             UserCompetition.__table__,
             Country.__table__,
+            NationalTeamCountryRanking.__table__,
             NationalTeamCompetition.__table__,
             NationalTeamCompetitionEntry.__table__,
         ],
@@ -60,7 +62,9 @@ def _seed_country(session, *, name: str, alpha2: str, fifa: str, confederation: 
     )
 
 
-def _payload(country_code: str, country_name: str, ages: tuple[int, int], ratings: tuple[int, int]) -> NationalTeamCompetitionEntrySubmitRequest:
+def _payload(
+    country_code: str, country_name: str, ages: tuple[int, int], ratings: tuple[int, int]
+) -> NationalTeamCompetitionEntrySubmitRequest:
     return NationalTeamCompetitionEntrySubmitRequest(
         country_code=country_code,
         country_name=country_name,

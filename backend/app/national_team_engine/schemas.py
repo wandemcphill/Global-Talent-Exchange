@@ -116,6 +116,11 @@ class NationalTeamUserHistoryResponse(BaseModel):
 class NationalTeamRentalPlayerView(BaseModel):
     player_id: str
     player_name: str
+    image_url: str | None = None
+    portrait_url: str | None = None
+    portrait_status: str | None = None
+    portrait_source: str | None = None
+    portrait_missing_reason: str | None = None
     overall_rating: int
     primary_position: str | None = None
     current_club_name: str | None = None
@@ -146,6 +151,10 @@ class NationalTeamRentalPlayerView(BaseModel):
 class NationalTeamRentalPlayerCollectionResponse(BaseModel):
     total: int
     items: list[NationalTeamRentalPlayerView] = Field(default_factory=list)
+    partial: bool = False
+    failed_count: int = 0
+    warnings: list[str] = Field(default_factory=list)
+    source_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class NationalTeamRentalCreateRequest(BaseModel):

@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.global_memory.models import NationalTeamCountryRanking
 from app.ingestion.models import Country
 from app.models import Base
 from app.models.competition import UserCompetition
@@ -25,6 +26,7 @@ def _build_app(database_path: Path) -> tuple[TestClient, sessionmaker, dict[str,
             User.__table__,
             UserCompetition.__table__,
             Country.__table__,
+            NationalTeamCountryRanking.__table__,
             NationalTeamCompetition.__table__,
             NationalTeamCompetitionEntry.__table__,
         ],
@@ -124,13 +126,17 @@ def _build_app(database_path: Path) -> tuple[TestClient, sessionmaker, dict[str,
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_current_admin] = override_get_current_admin
     client = TestClient(app)
-    return client, SessionLocal, {
-        "admin": admin,
-        "user_one": user_one,
-        "user_two": user_two,
-        "competition": competition,
-        "holder": current_user_holder,
-    }
+    return (
+        client,
+        SessionLocal,
+        {
+            "admin": admin,
+            "user_one": user_one,
+            "user_two": user_two,
+            "competition": competition,
+            "holder": current_user_holder,
+        },
+    )
 
 
 def test_lifecycle_routes_submit_lock_advance_and_read(tmp_path: Path) -> None:

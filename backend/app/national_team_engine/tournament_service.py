@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -38,8 +39,11 @@ from app.integrity_engine.service import IntegrityEngineService
 from app.national_team_engine.competition_profiles import seeded_competition_definitions
 from app.players.read_models import PlayerSummaryReadModel
 from app.services.competition_lock_service import CompetitionLockError, CompetitionLockService
+from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
 from app.story_feed_engine.service import StoryFeedService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+
+logger = logging.getLogger(__name__)
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_MINIMUM_SQUAD_SIZE = 18
@@ -527,11 +531,249 @@ class NationalTeamTournamentService:
             "national_pool_only": bool(item.get("national_pool_only", False)),
         }
 
+    @staticmethod
+    def _first_string(payload: dict[str, Any] | None, *keys: str) -> str | None:
+        if not payload:
+            return None
+        for key in keys:
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
+    @classmethod
+    def _image_url_from_payload(cls, payload: dict[str, Any] | None) -> str | None:
+        direct = cls._first_string(payload, "image_url", "portrait_url", "photo_url", "portraitUrl", "imageUrl")
+        if direct:
+            return direct
+        image_payload = payload.get("image") if payload else None
+        if isinstance(image_payload, dict):
+            return cls._first_string(image_payload, "source_url", "url", "storage_key")
+        real_profile = payload.get("real_player_profile") if payload else None
+        if isinstance(real_profile, dict):
+            return cls._first_string(real_profile, "image_url", "photo_url", "portrait_url")
+        return None
+
+    def _player_image_payload(
+        self,
+        player: Player,
+        *,
+        summary: PlayerSummaryReadModel | None = None,
+    ) -> dict[str, Any]:
+        summary_payload = (
+            dict(summary.summary_json or {}) if summary is not None and isinstance(summary.summary_json, dict) else {}
+        )
+        image_url = self._image_url_from_payload(summary_payload)
+        if image_url is None:
+            try:
+                candidates = sorted(
+                    player.image_metadata,
+                    key=lambda image: (
+                        not image.is_primary,
+                        image.moderation_status != "approved",
+                        image.created_at,
+                        image.id,
+                    ),
+                )
+            except Exception:
+                candidates = []
+            for image in candidates:
+                if getattr(image, "moderation_status", None) == "rejected":
+                    continue
+                source_url = getattr(image, "source_url", None)
+                storage_key = getattr(image, "storage_key", None)
+                if isinstance(source_url, str) and source_url.strip():
+                    image_url = source_url.strip()
+                    break
+                if isinstance(storage_key, str) and storage_key.strip():
+                    image_url = storage_key.strip()
+                    break
+        return {
+            "image_url": image_url,
+            "portrait_url": image_url,
+            "portrait_status": "ready" if image_url else "portrait_missing",
+            "portrait_source": "real_player_provider" if bool(player.is_real_player) else "player_asset_registry",
+            "portrait_missing_reason": None if image_url else "player_image_not_available",
+        }
+
+    def _seed_portrait_payload(self, seed: NationalRegenSeed) -> dict[str, Any]:
+        metadata = dict(seed.metadata_json or {})
+        image_url = self._image_url_from_payload(metadata)
+        portrait_status = self._first_string(metadata, "portraitStatus", "portrait_status")
+        portrait_source = self._first_string(
+            metadata,
+            "portraitSourceProvider",
+            "portrait_source_provider",
+            "portraitSourceCollection",
+            "portrait_source",
+        )
+        if image_url is None:
+            try:
+                metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
+                image_url = self._image_url_from_payload(metadata)
+                portrait_status = self._first_string(metadata, "portraitStatus", "portrait_status") or portrait_status
+                portrait_source = (
+                    self._first_string(
+                        metadata,
+                        "portraitSourceProvider",
+                        "portrait_source_provider",
+                        "portraitSourceCollection",
+                        "portrait_source",
+                    )
+                    or portrait_source
+                )
+            except RegenPortraitError as error:
+                portrait_status = portrait_status or "portrait_missing"
+                return {
+                    "image_url": None,
+                    "portrait_url": None,
+                    "portrait_status": portrait_status,
+                    "portrait_source": portrait_source or "approved_newgen_bank",
+                    "portrait_missing_reason": str(error) or "portrait_assignment_failed",
+                }
+            except Exception as error:
+                portrait_status = portrait_status or "portrait_missing"
+                return {
+                    "image_url": None,
+                    "portrait_url": None,
+                    "portrait_status": portrait_status,
+                    "portrait_source": portrait_source or "approved_newgen_bank",
+                    "portrait_missing_reason": f"portrait_assignment_failed:{error.__class__.__name__}",
+                }
+        return {
+            "image_url": image_url,
+            "portrait_url": image_url,
+            "portrait_status": portrait_status or ("ready" if image_url else "portrait_missing"),
+            "portrait_source": portrait_source or "approved_newgen_bank",
+            "portrait_missing_reason": None if image_url else "approved_portrait_asset_missing",
+        }
+
+    @staticmethod
+    def _record_pool_warning(
+        warnings: list[str] | None,
+        *,
+        competition_id: str | None,
+        country_code: str | None,
+        source_bucket: str,
+        record_id: str | None,
+        reason: str,
+    ) -> None:
+        message = (
+            f"{source_bucket}:{record_id or 'unknown'} skipped for " f"{country_code or 'all-countries'} ({reason})"
+        )
+        if warnings is not None:
+            warnings.append(message)
+        logger.warning(
+            "national_rental_pool_record_skipped",
+            extra={
+                "competition_id": competition_id,
+                "country_code": country_code,
+                "source_bucket": source_bucket,
+                "record_id": record_id,
+                "reason": reason,
+            },
+        )
+
+    def _build_player_pool_item(
+        self,
+        *,
+        player: Player,
+        average_rating: Any,
+        country_name: str | None,
+        country_alpha2: str | None,
+        country_alpha3: str | None,
+        country_fifa: str | None,
+        competition_name: str | None,
+        league_name: str | None,
+        league_rank: Any,
+        summary: PlayerSummaryReadModel | None,
+        reference_date: date | None,
+    ) -> dict[str, Any]:
+        overall_rating = self._player_overall_rating(
+            player,
+            average_rating=float(average_rating) if average_rating is not None else None,
+            league_rank=int(league_rank) if league_rank is not None else None,
+        )
+        source_bucket = self._source_bucket_from_player(player)
+        gsi = self._player_gsi(player=player, summary=summary, overall_rating=overall_rating)
+        base_value_coin = self._base_value_coin(gsi=gsi)
+        country_tokens = self._country_tokens(
+            country_name=country_name,
+            alpha2_code=country_alpha2,
+            alpha3_code=country_alpha3,
+            fifa_code=country_fifa,
+        )
+        return {
+            "player": player,
+            "player_id": player.id,
+            "player_name": self._player_name(player),
+            "overall_rating": overall_rating,
+            "primary_position": self._normalize_position(player.normalized_position or player.position),
+            "current_club_name": player.real_world_club_name,
+            "current_league_name": league_name or competition_name or player.real_world_league_name,
+            "nationality": country_name,
+            "country_code": country_alpha2 or country_fifa or country_alpha3,
+            "country_tokens": country_tokens,
+            "age": _player_age(player, today=reference_date),
+            "gsi": gsi,
+            "base_value_coin": base_value_coin,
+            "loan_price_coin": self._loan_price_coin(gsi=gsi, source_bucket=source_bucket),
+            "tier_label": self._player_tier(overall_rating),
+            "source_bucket": source_bucket,
+            "is_regen": not bool(player.is_real_player),
+            **market_access_payload(player),
+            **self._player_image_payload(player, summary=summary),
+            "supply_mode": INFINITE_SUPPLY_MODE,
+        }
+
+    def _build_seed_pool_item(
+        self,
+        *,
+        seed: NationalRegenSeed,
+        country: IngestionCountry | None,
+        competition: NationalTeamCompetition | None,
+    ) -> dict[str, Any] | None:
+        seed_age = self._seed_age(seed)
+        age_limit = self._age_band_limit(competition)
+        if age_limit is not None and seed_age > age_limit:
+            return None
+        country_tokens = self._country_tokens(
+            country_name=country.name if country is not None else seed.country_name,
+            alpha2_code=country.alpha2_code if country is not None else seed.country_code,
+            alpha3_code=country.alpha3_code if country is not None else None,
+            fifa_code=country.fifa_code if country is not None else None,
+        )
+        gsi = max(55, min(95, int(round((seed.current_rating * 0.7) + (seed.potential_rating * 0.3)))))
+        return {
+            "player_id": seed.id,
+            "player_name": seed.display_name,
+            "overall_rating": int(seed.current_rating),
+            "primary_position": self._normalize_position(seed.primary_position),
+            "current_club_name": None,
+            "current_league_name": None,
+            "nationality": seed.country_name,
+            "country_code": country.alpha2_code if country is not None and country.alpha2_code else seed.country_code,
+            "country_tokens": country_tokens,
+            "age": seed_age,
+            "gsi": gsi,
+            "base_value_coin": self._base_value_coin(gsi=gsi),
+            "loan_price_coin": self._loan_price_coin(gsi=gsi, source_bucket=SOURCE_BUCKET_PRESEEDED),
+            "tier_label": self._player_tier(int(seed.current_rating)),
+            "source_bucket": SOURCE_BUCKET_PRESEEDED,
+            "is_regen": True,
+            **market_access_payload(seed),
+            **self._seed_portrait_payload(seed),
+            "supply_mode": NATIONAL_POOL_ONLY_SUPPLY_MODE,
+        }
+
     def _player_catalog(
         self,
         *,
         limit: int = 300,
         reference_date: date | None = None,
+        warnings: list[str] | None = None,
+        competition_id: str | None = None,
+        country_code: str | None = None,
     ) -> list[dict[str, Any]]:
         season_stats = (
             select(
@@ -574,43 +816,31 @@ class NationalTeamTournamentService:
             league_rank,
             summary,
         ) in self.session.execute(stmt).all():
-            overall_rating = self._player_overall_rating(
-                player,
-                average_rating=float(average_rating) if average_rating is not None else None,
-                league_rank=int(league_rank) if league_rank is not None else None,
-            )
-            source_bucket = self._source_bucket_from_player(player)
-            gsi = self._player_gsi(player=player, summary=summary, overall_rating=overall_rating)
-            base_value_coin = self._base_value_coin(gsi=gsi)
-            country_tokens = self._country_tokens(
-                country_name=country_name,
-                alpha2_code=country_alpha2,
-                alpha3_code=country_alpha3,
-                fifa_code=country_fifa,
-            )
-            rows.append(
-                {
-                    "player": player,
-                    "player_id": player.id,
-                    "player_name": self._player_name(player),
-                    "overall_rating": overall_rating,
-                    "primary_position": self._normalize_position(player.normalized_position or player.position),
-                    "current_club_name": player.real_world_club_name,
-                    "current_league_name": league_name or competition_name or player.real_world_league_name,
-                    "nationality": country_name,
-                    "country_code": country_alpha2 or country_fifa or country_alpha3,
-                    "country_tokens": country_tokens,
-                    "age": _player_age(player, today=reference_date),
-                    "gsi": gsi,
-                    "base_value_coin": base_value_coin,
-                    "loan_price_coin": self._loan_price_coin(gsi=gsi, source_bucket=source_bucket),
-                    "tier_label": self._player_tier(overall_rating),
-                    "source_bucket": source_bucket,
-                    "is_regen": not bool(player.is_real_player),
-                    **market_access_payload(player),
-                    "supply_mode": INFINITE_SUPPLY_MODE,
-                }
-            )
+            try:
+                rows.append(
+                    self._build_player_pool_item(
+                        player=player,
+                        average_rating=average_rating,
+                        country_name=country_name,
+                        country_alpha2=country_alpha2,
+                        country_alpha3=country_alpha3,
+                        country_fifa=country_fifa,
+                        competition_name=competition_name,
+                        league_name=league_name,
+                        league_rank=league_rank,
+                        summary=summary,
+                        reference_date=reference_date,
+                    )
+                )
+            except Exception as error:
+                self._record_pool_warning(
+                    warnings,
+                    competition_id=competition_id,
+                    country_code=country_code,
+                    source_bucket=SOURCE_BUCKET_REAL if bool(player.is_real_player) else SOURCE_BUCKET_CLUB,
+                    record_id=getattr(player, "id", None),
+                    reason=error.__class__.__name__,
+                )
         rows.sort(
             key=lambda item: (
                 -int(item["overall_rating"]),
@@ -655,6 +885,7 @@ class NationalTeamTournamentService:
         filters: NationalPoolFilters,
         competition: NationalTeamCompetition | None,
         limit: int,
+        warnings: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         age_band = self._competition_age_band(competition)
         stmt = (
@@ -693,44 +924,22 @@ class NationalTeamTournamentService:
                 countries_by_name.setdefault(normalized_name, country)
         items: list[dict[str, Any]] = []
         for seed in self.session.scalars(stmt).all():
-            seed_age = self._seed_age(seed)
-            age_limit = self._age_band_limit(competition)
-            if age_limit is not None and seed_age > age_limit:
-                continue
-            country = countries_by_code.get(
-                self._normalize_token(seed.country_code, upper=True) or ""
-            ) or countries_by_name.get(self._normalize_token(seed.country_name, upper=True) or "")
-            country_tokens = self._country_tokens(
-                country_name=country.name if country is not None else seed.country_name,
-                alpha2_code=country.alpha2_code if country is not None else seed.country_code,
-                alpha3_code=country.alpha3_code if country is not None else None,
-                fifa_code=country.fifa_code if country is not None else None,
-            )
-            gsi = max(55, min(95, int(round((seed.current_rating * 0.7) + (seed.potential_rating * 0.3)))))
-            items.append(
-                {
-                    "player_id": seed.id,
-                    "player_name": seed.display_name,
-                    "overall_rating": int(seed.current_rating),
-                    "primary_position": self._normalize_position(seed.primary_position),
-                    "current_club_name": None,
-                    "current_league_name": None,
-                    "nationality": seed.country_name,
-                    "country_code": (
-                        country.alpha2_code if country is not None and country.alpha2_code else seed.country_code
-                    ),
-                    "country_tokens": country_tokens,
-                    "age": seed_age,
-                    "gsi": gsi,
-                    "base_value_coin": self._base_value_coin(gsi=gsi),
-                    "loan_price_coin": self._loan_price_coin(gsi=gsi, source_bucket=SOURCE_BUCKET_PRESEEDED),
-                    "tier_label": self._player_tier(int(seed.current_rating)),
-                    "source_bucket": SOURCE_BUCKET_PRESEEDED,
-                    "is_regen": True,
-                    **market_access_payload(seed),
-                    "supply_mode": NATIONAL_POOL_ONLY_SUPPLY_MODE,
-                }
-            )
+            try:
+                country = countries_by_code.get(
+                    self._normalize_token(seed.country_code, upper=True) or ""
+                ) or countries_by_name.get(self._normalize_token(seed.country_name, upper=True) or "")
+                item = self._build_seed_pool_item(seed=seed, country=country, competition=competition)
+                if item is not None:
+                    items.append(item)
+            except Exception as error:
+                self._record_pool_warning(
+                    warnings,
+                    competition_id=getattr(competition, "id", None),
+                    country_code=filters.country_code,
+                    source_bucket=SOURCE_BUCKET_PRESEEDED,
+                    record_id=getattr(seed, "id", None),
+                    reason=error.__class__.__name__,
+                )
         return items
 
     def _normalize_pool_filters(
@@ -800,19 +1009,41 @@ class NationalTeamTournamentService:
         filters: NationalPoolFilters,
         competition: NationalTeamCompetition | None = None,
         limit: int = 300,
+        warnings: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         reference_date = self._competition_reference_date(competition)
         age_limit = self._age_band_limit(competition)
         catalog = [
-            *self._player_catalog(limit=max(limit, 300), reference_date=reference_date),
-            *self._national_seed_catalog(filters=filters, competition=competition, limit=max(limit, 300)),
+            *self._player_catalog(
+                limit=max(limit, 300),
+                reference_date=reference_date,
+                warnings=warnings,
+                competition_id=getattr(competition, "id", None),
+                country_code=filters.country_code,
+            ),
+            *self._national_seed_catalog(
+                filters=filters,
+                competition=competition,
+                limit=max(limit, 300),
+                warnings=warnings,
+            ),
         ]
-        filtered = [
-            item
-            for item in catalog
-            if (age_limit is None or (item.get("age") is not None and int(item["age"]) <= age_limit))
-            and self._pool_item_matches(item, filters=filters)
-        ]
+        filtered: list[dict[str, Any]] = []
+        for item in catalog:
+            try:
+                if (age_limit is None or (item.get("age") is not None and int(item["age"]) <= age_limit)) and (
+                    self._pool_item_matches(item, filters=filters)
+                ):
+                    filtered.append(item)
+            except Exception as error:
+                self._record_pool_warning(
+                    warnings,
+                    competition_id=getattr(competition, "id", None),
+                    country_code=filters.country_code,
+                    source_bucket=str(item.get("source_bucket") or "unknown"),
+                    record_id=str(item.get("player_id") or ""),
+                    reason=error.__class__.__name__,
+                )
         filtered.sort(
             key=lambda item: (
                 -self._source_priority(item),
@@ -828,6 +1059,11 @@ class NationalTeamTournamentService:
         return {
             "player_id": item["player_id"],
             "player_name": item["player_name"],
+            "image_url": item.get("image_url"),
+            "portrait_url": item.get("portrait_url") or item.get("image_url"),
+            "portrait_status": item.get("portrait_status"),
+            "portrait_source": item.get("portrait_source"),
+            "portrait_missing_reason": item.get("portrait_missing_reason"),
             "overall_rating": item["overall_rating"],
             "primary_position": item["primary_position"],
             "current_club_name": item["current_club_name"],
@@ -850,6 +1086,7 @@ class NationalTeamTournamentService:
             "card_mint_eligible": bool(item.get("card_mint_eligible", True)),
             "buy_cta_allowed": bool(item.get("buy_cta_allowed", True)),
             "national_pool_only": bool(item.get("national_pool_only", False)),
+            "admin_trade_enabled": bool(item.get("admin_trade_enabled", False)),
             "supply_mode": item["supply_mode"],
             "demand_multiplier": item.get("demand_multiplier", Decimal("1.0000")),
         }
@@ -878,16 +1115,38 @@ class NationalTeamTournamentService:
             positions=positions,
             tradable_only=tradable_only,
         )
-        catalog = [
-            self._priced_pool_item(item)
-            for item in self._national_pool(
-                filters=filters,
-                competition=competition,
-                limit=max(limit + offset, 1000),
-            )
-        ]
+        warnings: list[str] = []
+        catalog: list[dict[str, Any]] = []
+        for item in self._national_pool(
+            filters=filters,
+            competition=competition,
+            limit=max(limit + offset, 1000),
+            warnings=warnings,
+        ):
+            try:
+                catalog.append(self._priced_pool_item(item))
+            except Exception as error:
+                self._record_pool_warning(
+                    warnings,
+                    competition_id=competition.id,
+                    country_code=filters.country_code,
+                    source_bucket=str(item.get("source_bucket") or "unknown"),
+                    record_id=str(item.get("player_id") or ""),
+                    reason=error.__class__.__name__,
+                )
         items = catalog[offset : offset + limit]
-        return {"total": len(catalog), "items": [self._pool_item_payload(item) for item in items]}
+        source_counts: dict[str, int] = {}
+        for item in catalog:
+            source_bucket = str(item.get("source_bucket") or "unknown")
+            source_counts[source_bucket] = source_counts.get(source_bucket, 0) + 1
+        return {
+            "total": len(catalog),
+            "items": [self._pool_item_payload(item) for item in items],
+            "partial": bool(warnings),
+            "failed_count": len(warnings),
+            "warnings": warnings[:10],
+            "source_counts": source_counts,
+        }
 
     def _slot_fit_score(self, slot: str, player_position: str | None) -> int:
         normalized_slot = self._normalize_position(slot) or self._normalize_token(slot, upper=True)

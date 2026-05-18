@@ -41,6 +41,8 @@ class _GtexNationalTeamRentalScreenV2State
   bool _isLoading = false;
   bool _isSubmitting = false;
   String? _error;
+  String? _poolWarning;
+  List<String> _poolDiagnostics = const <String>[];
   int _requestSerial = 0;
 
   bool get _hasLiveDependencies =>
@@ -93,6 +95,8 @@ class _GtexNationalTeamRentalScreenV2State
       players: _players,
       isLoading: _isLoading || _isSubmitting,
       error: _error,
+      warning: _poolWarning,
+      diagnostics: _poolDiagnostics,
       isAuthenticated: widget.isAuthenticated,
       onOpenLogin: widget.onOpenLogin,
       onRefresh: _loadCurrentPool,
@@ -108,6 +112,8 @@ class _GtexNationalTeamRentalScreenV2State
     setState(() {
       _isLoading = true;
       _error = null;
+      _poolWarning = null;
+      _poolDiagnostics = const <String>[];
     });
 
     try {
@@ -180,6 +186,8 @@ class _GtexNationalTeamRentalScreenV2State
     setState(() {
       _isLoading = true;
       _error = null;
+      _poolWarning = null;
+      _poolDiagnostics = const <String>[];
     });
 
     try {
@@ -202,9 +210,19 @@ class _GtexNationalTeamRentalScreenV2State
             .map(_marketFallbackRentalPlayerView)
             .toList(growable: false);
       }
+      final List<String> diagnostics = <String>[
+        ...pool.warnings.take(3),
+        if (pool.failedCount > pool.warnings.length)
+          '${pool.failedCount - pool.warnings.length} more rental records were skipped safely.',
+      ];
 
       setState(() {
         _players = playerViews;
+        _poolWarning =
+            pool.partial || pool.failedCount > 0
+                ? 'Loaded ${playerViews.length} valid rental players. ${pool.failedCount} records need repair.'
+                : null;
+        _poolDiagnostics = diagnostics;
         _isLoading = false;
       });
     } catch (error) {
@@ -214,6 +232,8 @@ class _GtexNationalTeamRentalScreenV2State
       setState(() {
         _players = const <GtexRentalPlayerView>[];
         _error = _friendlyError(error);
+        _poolWarning = null;
+        _poolDiagnostics = const <String>[];
         _isLoading = false;
       });
     }
@@ -403,13 +423,23 @@ class _GtexNationalTeamRentalScreenV2State
           'National rental pool',
       rentalCostCredits: rentalCost,
       sourceBucket: player.sourceBucket,
-      imageUrl: marketPlayer?.imageUrl,
-      eligibilityNote:
-          player.marketEligible
-              ? 'Eligible for the selected national-team rental pool.'
-              : 'Pending market eligibility review.',
+      imageUrl: player.imageUrl ?? player.portraitUrl ?? marketPlayer?.imageUrl,
+      portraitUrl: player.portraitUrl,
+      portraitStatus: player.portraitStatus,
+      portraitMissingReason: player.portraitMissingReason,
+      eligibilityNote: _rentalEligibilityNote(player),
       isPreseededRegen: player.isPreseededNationalRegen || player.isRegen,
     );
+  }
+
+  String _rentalEligibilityNote(NationalTeamRentalPlayer player) {
+    if (!player.marketEligible) {
+      return 'Pending market eligibility review.';
+    }
+    if ((player.portraitStatus ?? '').contains('missing')) {
+      return 'Eligible for rental. Portrait asset is pending, so a football silhouette will be shown.';
+    }
+    return 'Eligible for the selected national-team rental pool.';
   }
 
   GtexRentalPlayerView _marketFallbackRentalPlayerView(

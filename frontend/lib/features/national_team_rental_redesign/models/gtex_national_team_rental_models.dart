@@ -87,6 +87,9 @@ class GtexRentalPlayerView {
     required this.rentalCostCredits,
     required this.sourceBucket,
     this.imageUrl,
+    this.portraitUrl,
+    this.portraitStatus,
+    this.portraitMissingReason,
     this.eligibilityNote,
     this.isPreseededRegen = false,
   });
@@ -102,6 +105,9 @@ class GtexRentalPlayerView {
   final double rentalCostCredits;
   final String sourceBucket;
   final String? imageUrl;
+  final String? portraitUrl;
+  final String? portraitStatus;
+  final String? portraitMissingReason;
   final String? eligibilityNote;
   final bool isPreseededRegen;
 
@@ -123,6 +129,33 @@ class GtexRentalPlayerView {
       rating == null ? 'GSI TBD' : 'GSI ${rating!.round()}';
   String get sourceLabel =>
       isPreseededRegen ? 'Pre-seeded regen' : sourceBucket;
+  String get rarityLabel {
+    final int? score = gsiScore;
+    if (isPreseededRegen) return 'National Seed';
+    if (score != null && score >= 90) return 'Legend Tier';
+    if (score != null && score >= 84) return 'Elite';
+    if (score != null && score >= 76) return 'Rare';
+    return 'Squad Depth';
+  }
+
+  String get marketHeatLabel {
+    final int? score = gsiScore;
+    if (score == null) return 'Scout watch';
+    if (score >= 88) return 'Hot demand';
+    if (score >= 78) return 'Rising';
+    return 'Value lane';
+  }
+
+  String get transferTrendLabel {
+    final int? score = gsiScore;
+    if (score == null) return 'Trend TBD';
+    if (score >= 84) return 'Up';
+    if (score < 68) return 'Sleeper';
+    return 'Stable';
+  }
+
+  String get demandLabel =>
+      isPreseededRegen ? 'Pool exclusive' : 'Live rental demand';
 }
 
 class GtexRentalBasketState {

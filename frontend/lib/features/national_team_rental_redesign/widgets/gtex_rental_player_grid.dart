@@ -11,6 +11,8 @@ class GtexRentalPlayerGrid extends StatelessWidget {
     required this.basketState,
     required this.isLoading,
     required this.error,
+    required this.warning,
+    required this.diagnostics,
     required this.selectedCountryName,
     required this.selectedTeamName,
     required this.onSelectPlayer,
@@ -23,6 +25,8 @@ class GtexRentalPlayerGrid extends StatelessWidget {
   final GtexRentalBasketState basketState;
   final bool isLoading;
   final String? error;
+  final String? warning;
+  final List<String> diagnostics;
   final String? selectedCountryName;
   final String? selectedTeamName;
   final ValueChanged<GtexRentalPlayerView> onSelectPlayer;
@@ -32,7 +36,7 @@ class GtexRentalPlayerGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const _RentalPoolSkeletonBoard();
     }
     if (error != null && error!.trim().isNotEmpty) {
       return Padding(
@@ -43,23 +47,37 @@ class GtexRentalPlayerGrid extends StatelessWidget {
           icon: Icons.cloud_off_outlined,
           actionLabel: 'Retry',
           onAction: onRefresh,
+          recommendations: const <String>[
+            'Check the selected competition',
+            'Try another country',
+            'Retry the live pool',
+          ],
         ),
       );
     }
     if (players.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(GtexSpacing.lg),
+      return Padding(
+        padding: const EdgeInsets.all(GtexSpacing.lg),
         child: GtexEmptyState(
           title: 'No eligible rental players yet',
           message:
-              'Choose a competition and country to load the live rental pool.',
+              'The current country/source filter has no valid rental players. The pool itself is healthy.',
           icon: Icons.flag_outlined,
+          actionLabel: 'Retry pool',
+          onAction: onRefresh,
+          recommendations: <String>[
+            'Broaden country filters',
+            'Switch source bucket',
+            'Pick another national competition',
+          ],
         ),
       );
     }
 
     return Column(
       children: <Widget>[
+        if (warning != null && warning!.trim().isNotEmpty)
+          _RentalPoolWarningBanner(warning: warning!, diagnostics: diagnostics),
         Padding(
           padding: const EdgeInsets.all(GtexSpacing.md),
           child: LayoutBuilder(
@@ -145,6 +163,23 @@ class GtexRentalPlayerGrid extends StatelessWidget {
                   nationality: player.nationality,
                   priceLabel: player.priceLabel,
                   imageUrl: player.imageUrl,
+                  countryCode: player.countryCode,
+                  rarityLabel: player.rarityLabel,
+                  marketHeatLabel: player.marketHeatLabel,
+                  gsiTrendLabel: player.transferTrendLabel,
+                  demandLabel: player.demandLabel,
+                  chemistryLinks: <String>[
+                    player.sourceLabel,
+                    if (player.portraitStatus != null) player.portraitStatus!,
+                  ],
+                  cardVariant:
+                      player.isPreseededRegen
+                          ? GtexPlayerCardVariant.nationalSeed
+                          : (player.gsiScore ?? 0) >= 88
+                          ? GtexPlayerCardVariant.holographic
+                          : GtexPlayerCardVariant.standard,
+                  portraitStatus: player.portraitStatus,
+                  portraitMissingReason: player.portraitMissingReason,
                   gsiLabel: player.gsiLabel,
                   gsiTierLabel: player.gsiTierLabel,
                   ageLabel: player.ageLabel,
@@ -158,6 +193,137 @@ class GtexRentalPlayerGrid extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RentalPoolWarningBanner extends StatelessWidget {
+  const _RentalPoolWarningBanner({
+    required this.warning,
+    required this.diagnostics,
+  });
+
+  final String warning;
+  final List<String> diagnostics;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        GtexSpacing.md,
+        GtexSpacing.md,
+        GtexSpacing.md,
+        0,
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(GtexSpacing.md),
+        decoration: BoxDecoration(
+          color: GtexColors.gold.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+          border: Border.all(color: GtexColors.gold.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Icon(Icons.warning_amber_rounded, color: GtexColors.gold),
+            const SizedBox(width: GtexSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    warning,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: GtexColors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (diagnostics.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: GtexSpacing.xs),
+                    Text(
+                      diagnostics.take(2).join('  |  '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: GtexColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RentalPoolSkeletonBoard extends StatelessWidget {
+  const _RentalPoolSkeletonBoard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      child: Column(
+        children: <Widget>[
+          Row(
+            children: List<Widget>.generate(
+              3,
+              (int index) => const Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: GtexSpacing.sm),
+                  child: _RentalSkeletonTile(height: 76),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          Expanded(
+            child: GridView.builder(
+              itemCount: 6,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: MediaQuery.sizeOf(context).width > 1350 ? 3 : 2,
+                childAspectRatio: 1.82,
+                mainAxisSpacing: GtexSpacing.md,
+                crossAxisSpacing: GtexSpacing.md,
+              ),
+              itemBuilder:
+                  (BuildContext context, int index) =>
+                      const _RentalSkeletonTile(height: 168),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RentalSkeletonTile extends StatelessWidget {
+  const _RentalSkeletonTile({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
+        border: Border.all(color: GtexColors.line.withValues(alpha: 0.45)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            GtexColors.pitch.withValues(alpha: 0.12),
+            GtexColors.panelStrong,
+            GtexColors.cyan.withValues(alpha: 0.08),
+          ],
+        ),
+      ),
     );
   }
 }

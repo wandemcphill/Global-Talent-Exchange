@@ -9,6 +9,7 @@ import pytest
 
 from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
 from app.ingestion.models import Country, Player
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
@@ -224,6 +225,80 @@ def test_admin_can_create_national_team_competition_and_entry(client, demo_seed,
     list_response = client.get("/api/national-team-engine/competitions")
     assert list_response.status_code == 200
     assert any(item["key"] == "gtex-world-cup-2030" for item in list_response.json())
+
+
+def test_rental_pool_returns_preseeded_regen_portrait_and_restrictions(
+    client,
+    app_session_factory,
+    national_admin_headers,
+) -> None:
+    competition = _create_competition(client, national_admin_headers, key_prefix="preseeded-portrait-pool")
+    with app_session_factory() as session:
+        session.add(
+            Country(
+                source_provider="test",
+                provider_external_id=f"country-ng-{uuid4().hex[:8]}",
+                name="Nigeria",
+                alpha2_code="NG",
+                alpha3_code="NGA",
+                fifa_code="NGA",
+            )
+        )
+        session.add(
+            NationalRegenSeed(
+                seed_key=f"ng-seed-{uuid4().hex}",
+                display_name="Ayo Okafor",
+                age=18,
+                age_band="senior",
+                country_code="NG",
+                country_name="Nigeria",
+                primary_position="ST",
+                current_rating=82,
+                potential_rating=91,
+                rarity_tier="rare",
+                status="available",
+                metadata_json={
+                    "portraitUrl": "https://media.test/generated-media/regen_newgen_faces/script_skin_hair/African/Black/African-Black-001.png",
+                    "portraitStatus": "approved",
+                    "portraitSourceProvider": "approved_newgen_bank",
+                },
+            )
+        )
+        session.commit()
+
+    response = client.get(
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-pool",
+        params={"country_code": "NG", "preseeded_only": True, "limit": 20},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["partial"] is False
+    assert payload["failed_count"] == 0
+    assert payload["source_counts"]["preseeded"] >= 1
+    seed_item = next(item for item in payload["items"] if item["player_name"] == "Ayo Okafor")
+    assert seed_item["image_url"].endswith("African-Black-001.png")
+    assert seed_item["portrait_url"] == seed_item["image_url"]
+    assert seed_item["portrait_status"] == "approved"
+    assert seed_item["is_preseeded_national_regen"] is True
+    assert seed_item["national_pool_only"] is True
+    assert seed_item["buyable"] is False
+    assert seed_item["tradable"] is False
+    assert seed_item["transferable"] is False
+
+
+def test_rental_pool_empty_country_is_valid_response(client, national_admin_headers) -> None:
+    competition = _create_competition(client, national_admin_headers, key_prefix="empty-country-pool")
+
+    response = client.get(
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-pool",
+        params={"country_code": "ZZ", "preseeded_only": True, "limit": 20},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["items"] == []
+    assert payload["total"] == 0
+    assert payload["partial"] is False
 
 
 def test_multiple_users_can_rent_same_national_team(client, demo_seed, national_admin_headers) -> None:

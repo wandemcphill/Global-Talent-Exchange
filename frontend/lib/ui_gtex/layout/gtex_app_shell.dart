@@ -59,6 +59,7 @@ class GtexAppShell extends StatelessWidget {
                         actions: actions,
                       ),
                       if (status != null) status!,
+                      _LiveFootballPulseStrip(destinations: destinations),
                       Expanded(child: child),
                     ],
                   )
@@ -74,6 +75,7 @@ class GtexAppShell extends StatelessWidget {
                               actions: actions,
                             ),
                             if (status != null) status!,
+                            _LiveFootballPulseStrip(destinations: destinations),
                             Expanded(child: child),
                           ],
                         ),
@@ -85,6 +87,79 @@ class GtexAppShell extends StatelessWidget {
             compact
                 ? _BottomNav(destinations: destinations.take(5).toList())
                 : null,
+      ),
+    );
+  }
+}
+
+class _LiveFootballPulseStrip extends StatelessWidget {
+  const _LiveFootballPulseStrip({required this.destinations});
+
+  final List<GtexShellDestination> destinations;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GtexShellDestination> selected = destinations
+        .where((GtexShellDestination destination) => destination.isSelected)
+        .toList(growable: false);
+    final GtexShellDestination? active =
+        selected.isEmpty ? null : selected.first;
+    final List<String> liveModules = destinations
+        .where(
+          (GtexShellDestination destination) => destination.badgeLabel != null,
+        )
+        .map(
+          (GtexShellDestination destination) =>
+              '${destination.label} ${destination.badgeLabel}',
+        )
+        .take(3)
+        .toList(growable: false);
+    final String modulesLabel =
+        liveModules.isEmpty ? 'Live modules armed' : liveModules.join('  |  ');
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: GtexSpacing.lg),
+      decoration: BoxDecoration(
+        color: GtexColors.stadiumBlack.withValues(alpha: 0.38),
+        border: Border(
+          bottom: BorderSide(color: GtexColors.line.withValues(alpha: 0.28)),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            Icons.sensors_rounded,
+            size: 15,
+            color: active?.accent ?? GtexColors.pitch,
+          ),
+          const SizedBox(width: GtexSpacing.xs),
+          Text(
+            active == null ? 'GTEX world pulse' : '${active.label} live',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: GtexColors.text,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Text(
+              modulesLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: GtexColors.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Text(
+            'football OS',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: GtexColors.textMuted,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }

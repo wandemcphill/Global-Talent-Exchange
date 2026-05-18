@@ -13,6 +13,7 @@ class GtexEmptyState extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.accent = GtexColors.pitch,
+    this.recommendations = const <String>[],
   });
 
   final String title;
@@ -21,6 +22,7 @@ class GtexEmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final Color accent;
+  final List<String> recommendations;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +72,41 @@ class GtexEmptyState extends StatelessWidget {
                         height: compact ? 1.3 : 1.45,
                       ),
                 ),
+                if (recommendations.isNotEmpty) ...<Widget>[
+                  SizedBox(height: compact ? GtexSpacing.sm : GtexSpacing.md),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: GtexSpacing.xs,
+                    runSpacing: GtexSpacing.xs,
+                    children: recommendations
+                        .take(4)
+                        .map(
+                          (String item) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: GtexSpacing.sm,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(
+                                GtexSpacing.radiusPill,
+                              ),
+                              border: Border.all(
+                                color: accent.withValues(alpha: 0.26),
+                              ),
+                            ),
+                            child: Text(
+                              item,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: GtexColors.textSecondary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                ],
                 if (actionLabel != null && onAction != null) ...<Widget>[
                   SizedBox(height: compact ? GtexSpacing.sm : GtexSpacing.lg),
                   GtexActionButton(
