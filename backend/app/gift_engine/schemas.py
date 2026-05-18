@@ -114,3 +114,71 @@ class GiftStatsView(BaseModel):
     total_unique_senders: int
     top_gift_code: str | None = None
     mythic_gifts_received: int
+
+
+class GiftCatalogAdminUpsertRequest(BaseModel):
+    code: str | None = Field(default=None, min_length=2, max_length=64)
+    key: str | None = Field(default=None, min_length=2, max_length=64)
+    display_name: str = Field(min_length=2, max_length=160)
+    fallback_display_name: str | None = Field(default=None, max_length=160)
+    description: str | None = Field(default=None, max_length=2000)
+    cost_amount: Decimal | None = Field(default=None, ge=0)
+    fancoin_price: Decimal | None = Field(default=None, ge=0)
+    currency: str = Field(default="credit", max_length=16)
+    rarity: str = Field(default="common", max_length=32)
+    tier: str = Field(default="standard", max_length=32)
+    animation_key: str | None = Field(default=None, max_length=64)
+    sound_key: str | None = Field(default=None, max_length=64)
+    duration_ms: int = Field(default=2500, ge=0, le=30000)
+    is_active: bool = True
+    active: bool | None = None
+    is_award_pack: bool = False
+    legal_status: str = Field(default="safe", max_length=32)
+    sort_order: int = Field(default=0, ge=0, le=100000)
+
+    @property
+    def resolved_key(self) -> str:
+        return (self.code or self.key or "").strip()
+
+    @property
+    def resolved_price(self) -> Decimal:
+        return self.cost_amount if self.cost_amount is not None else self.fancoin_price or Decimal("0.0000")
+
+    @property
+    def resolved_active(self) -> bool:
+        return self.active if self.active is not None else self.is_active
+
+
+class GiftCatalogAdminPatchRequest(BaseModel):
+    display_name: str | None = Field(default=None, min_length=2, max_length=160)
+    fallback_display_name: str | None = Field(default=None, max_length=160)
+    description: str | None = Field(default=None, max_length=2000)
+    cost_amount: Decimal | None = Field(default=None, ge=0)
+    fancoin_price: Decimal | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, max_length=16)
+    rarity: str | None = Field(default=None, max_length=32)
+    tier: str | None = Field(default=None, max_length=32)
+    animation_key: str | None = Field(default=None, max_length=64)
+    sound_key: str | None = Field(default=None, max_length=64)
+    duration_ms: int | None = Field(default=None, ge=0, le=30000)
+    is_active: bool | None = None
+    active: bool | None = None
+    is_award_pack: bool | None = None
+    legal_status: str | None = Field(default=None, max_length=32)
+    sort_order: int | None = Field(default=None, ge=0, le=100000)
+
+
+class GiftAbuseFlagView(BaseModel):
+    id: str
+    flag_key: str
+    sender_user_id: str
+    recipient_type: str
+    recipient_id: str
+    gift_transaction_id: str | None = None
+    flag_type: str
+    severity: str
+    description: str
+    status: str
+    metadata_json: dict[str, object]
+    created_at: datetime
+    updated_at: datetime

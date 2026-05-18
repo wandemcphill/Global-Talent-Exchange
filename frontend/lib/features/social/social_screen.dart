@@ -47,7 +47,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
   CommunityDigest? _digest;
   List<CommunityWatchlistItem> _watchlist = const <CommunityWatchlistItem>[];
   List<LiveThread> _liveThreads = const <LiveThread>[];
+  List<DiscussionCategory> _discussionCategories = const <DiscussionCategory>[];
+  List<LiveThread> _discussionThreads = const <LiveThread>[];
   List<PrivateMessageThread> _privateThreads = const <PrivateMessageThread>[];
+  List<GiftCatalogItem> _giftCatalog = const <GiftCatalogItem>[];
+  List<GiftCatalogItem> _awardGiftPacks = const <GiftCatalogItem>[];
   _CommunityModule _selectedModule = _CommunityModule.liveThreads;
   bool _isLoading = false;
   bool _isMutating = false;
@@ -95,7 +99,23 @@ class _CommunityScreenState extends State<CommunityScreen> {
       _loadError = null;
     });
     try {
-      final List<LiveThread> liveThreads = await _api.listLiveThreads();
+      final List<Object> publicPayload =
+          await Future.wait<Object>(<Future<Object>>[
+            _api.listLiveThreads(),
+            _api.listDiscussionCategories(),
+            _api.listDiscussionThreads(),
+            _api.listGiftCatalog(),
+            _api.listAwardGiftPacks(),
+          ]);
+      final List<LiveThread> liveThreads = publicPayload[0] as List<LiveThread>;
+      final List<DiscussionCategory> discussionCategories =
+          publicPayload[1] as List<DiscussionCategory>;
+      final List<LiveThread> discussionThreads =
+          publicPayload[2] as List<LiveThread>;
+      final List<GiftCatalogItem> giftCatalog =
+          publicPayload[3] as List<GiftCatalogItem>;
+      final List<GiftCatalogItem> awardGiftPacks =
+          publicPayload[4] as List<GiftCatalogItem>;
       CommunityDigest? digest;
       List<CommunityWatchlistItem> watchlist = const <CommunityWatchlistItem>[];
       List<PrivateMessageThread> privateThreads =
@@ -119,6 +139,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
         _digest = digest;
         _watchlist = watchlist;
         _liveThreads = liveThreads;
+        _discussionCategories = discussionCategories;
+        _discussionThreads = discussionThreads;
+        _giftCatalog = giftCatalog;
+        _awardGiftPacks = awardGiftPacks;
         _privateThreads = privateThreads;
       });
     } catch (error) {
@@ -270,6 +294,42 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
+  Future<void> _createDiscussionThread() async {
+    final _DiscussionThreadDraft? draft = await _showDiscussionThreadDialog();
+    if (draft == null) {
+      return;
+    }
+    setState(() {
+      _isMutating = true;
+    });
+    try {
+      final LiveThread thread = await _api.createDiscussionThread(
+        category: draft.category,
+        title: draft.title,
+        body: draft.body,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _discussionThreads = <LiveThread>[thread, ..._discussionThreads];
+      });
+      AppFeedback.showSuccess(context, 'Opened discussion "${draft.title}".');
+      await _openDiscussionThread(thread);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showError(context, AppFeedback.messageFor(error));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isMutating = false;
+        });
+      }
+    }
+  }
+
   Future<void> _createPrivateThread() async {
     final _PrivateThreadDraft? draft = await _showPrivateThreadDialog();
     if (draft == null) {
@@ -318,6 +378,21 @@ class _CommunityScreenState extends State<CommunityScreen> {
           (BuildContext context) => _LiveThreadSheet(
             api: _api,
             thread: thread,
+            canPost: _hasAuthenticatedCommunityAccess,
+            onOpenLogin: widget.onOpenLogin,
+          ),
+    );
+  }
+
+  Future<void> _openDiscussionThread(LiveThread thread) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (BuildContext context) => _DiscussionThreadSheet(
+            api: _api,
+            thread: thread,
+            giftCatalog: _giftCatalog,
             canPost: _hasAuthenticatedCommunityAccess,
             onOpenLogin: widget.onOpenLogin,
           ),
@@ -488,6 +563,134 @@ class _CommunityScreenState extends State<CommunityScreen> {
     return result;
   }
 
+  Future<_DiscussionThreadDraft?> _showDiscussionThreadDialog() async {
+    final BuildContext pageContext = context;
+    final TextEditingController titleController = TextEditingController();
+    final TextEditingController bodyController = TextEditingController();
+    String selectedCategory =
+        _discussionCategories.isEmpty
+            ? 'tactics_room'
+            : _discussionCategories.first.code;
+    final _DiscussionThreadDraft? result =
+        await showDialog<_DiscussionThreadDraft>(
+          context: context,
+          builder:
+              (BuildContext context) => StatefulBuilder(
+                builder:
+                    (
+                      BuildContext context,
+                      StateSetter setDialogState,
+                    ) => AlertDialog(
+                      title: const Text('Open football discussion'),
+                      content: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            DropdownButtonFormField<String>(
+                              value: selectedCategory,
+                              decoration: const InputDecoration(
+                                labelText: 'Category',
+                              ),
+                              items: (_discussionCategories.isEmpty
+                                      ? const <DiscussionCategory>[
+                                        DiscussionCategory(
+                                          code: 'tactics_room',
+                                          label: 'Tactics Room',
+                                        ),
+                                      ]
+                                      : _discussionCategories)
+                                  .map(
+                                    (DiscussionCategory item) =>
+                                        DropdownMenuItem<String>(
+                                          value: item.code,
+                                          child: Text(item.label),
+                                        ),
+                                  )
+                                  .toList(growable: false),
+                              onChanged:
+                                  (String? value) => setDialogState(() {
+                                    selectedCategory =
+                                        value ?? selectedCategory;
+                                  }),
+                            ),
+                            const SizedBox(height: spacingSM),
+                            TextField(
+                              controller: titleController,
+                              decoration: const InputDecoration(
+                                labelText: 'Title',
+                                hintText: 'Who owns the midfield this week?',
+                              ),
+                            ),
+                            const SizedBox(height: spacingSM),
+                            TextField(
+                              controller: bodyController,
+                              minLines: 4,
+                              maxLines: 7,
+                              decoration: const InputDecoration(
+                                labelText: 'Opening post',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      actions: <Widget>[
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () {
+                            final String title = titleController.text.trim();
+                            final String body = bodyController.text.trim();
+                            if (title.isEmpty || body.isEmpty) {
+                              AppFeedback.showError(
+                                pageContext,
+                                'Title and opening post are required.',
+                              );
+                              return;
+                            }
+                            Navigator.of(context).pop(
+                              _DiscussionThreadDraft(
+                                category: selectedCategory,
+                                title: title,
+                                body: body,
+                              ),
+                            );
+                          },
+                          child: const Text('Open discussion'),
+                        ),
+                      ],
+                    ),
+              ),
+        );
+    return result;
+  }
+
+  Future<void> _openGiftDrawer({
+    String? recipientUserId,
+    String? chatThreadId,
+    String? discussionThreadId,
+    String? discussionReplyId,
+  }) async {
+    if (!_hasAuthenticatedCommunityAccess) {
+      widget.onOpenLogin?.call();
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (BuildContext context) => _GiftDrawerSheet(
+            api: _api,
+            catalog: _giftCatalog,
+            recipientUserId: recipientUserId,
+            chatThreadId: chatThreadId,
+            discussionThreadId: discussionThreadId,
+            discussionReplyId: discussionReplyId,
+          ),
+    );
+  }
+
   Future<_PrivateThreadDraft?> _showPrivateThreadDialog() async {
     final BuildContext pageContext = context;
     final TextEditingController participantController = TextEditingController();
@@ -627,6 +830,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
         digest: _digest,
         isAuthenticated: _hasAuthenticatedCommunityAccess,
         liveThreadCount: _liveThreads.length,
+        discussionThreadCount: _discussionThreads.length,
+        giftCount: _giftCatalog.length,
+        awardGiftCount: _awardGiftPacks.length,
         watchlistCount: _watchlist.length,
         privateThreadCount: _privateThreads.length,
         hasClubFollow: widget.currentClubId?.trim().isNotEmpty ?? false,
@@ -646,12 +852,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
         onSignIn: widget.onOpenLogin,
         onAddWatchlist: _addWatchlist,
         onCreateLiveThread: _createLiveThread,
+        onCreateDiscussionThread: _createDiscussionThread,
         onCreatePrivateThread: _createPrivateThread,
+        onOpenGiftDrawer: () => _openGiftDrawer(),
         onOpenWatchlist:
             () => setState(() => _selectedModule = _CommunityModule.watchlist),
         onOpenLiveThreads:
             () =>
                 setState(() => _selectedModule = _CommunityModule.liveThreads),
+        onOpenDiscussions:
+            () =>
+                setState(() => _selectedModule = _CommunityModule.discussions),
+        onOpenGifts:
+            () => setState(() => _selectedModule = _CommunityModule.gifts),
         onOpenPrivateThreads:
             () => setState(
               () => _selectedModule = _CommunityModule.privateMessages,
@@ -690,6 +903,62 @@ class _CommunityScreenState extends State<CommunityScreen> {
                         accent: GtexColors.mint,
                       ),
               child: _buildLiveThreadsBody(),
+            ),
+          ],
+        );
+      case _CommunityModule.discussions:
+        return _CommunityDetailScroll(
+          children: <Widget>[
+            _CommunitySection(
+              title: 'Football discussion threads',
+              subtitle:
+                  'Open football forum categories for tactics, transfers, national teams, regens, and GTEX competition talk.',
+              action:
+                  _hasAuthenticatedCommunityAccess
+                      ? GtexActionButton(
+                        label: 'New discussion',
+                        icon: Icons.post_add_outlined,
+                        onPressed: _isMutating ? null : _createDiscussionThread,
+                        accent: GtexColors.mint,
+                        secondary: true,
+                      )
+                      : widget.onOpenLogin == null
+                      ? null
+                      : GtexActionButton(
+                        label: 'Sign in',
+                        icon: Icons.login_outlined,
+                        onPressed: widget.onOpenLogin,
+                        accent: GtexColors.mint,
+                      ),
+              child: _buildDiscussionsBody(),
+            ),
+          ],
+        );
+      case _CommunityModule.gifts:
+        return _CommunityDetailScroll(
+          children: <Widget>[
+            _CommunitySection(
+              title: 'Award gifts and fanfare',
+              subtitle:
+                  "Football-themed gifts use Fan Coin for emotion and status. They never buy competitive club ranking.",
+              action:
+                  _hasAuthenticatedCommunityAccess
+                      ? GtexActionButton(
+                        label: 'Send gift',
+                        icon: Icons.card_giftcard_outlined,
+                        onPressed: _isMutating ? null : () => _openGiftDrawer(),
+                        accent: GtexColors.gold,
+                        secondary: true,
+                      )
+                      : widget.onOpenLogin == null
+                      ? null
+                      : GtexActionButton(
+                        label: 'Sign in',
+                        icon: Icons.login_outlined,
+                        onPressed: widget.onOpenLogin,
+                        accent: GtexColors.gold,
+                      ),
+              child: _buildGiftCatalogueBody(),
             ),
           ],
         );
@@ -858,6 +1127,95 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
+  Widget _buildDiscussionsBody() {
+    if (_discussionThreads.isEmpty) {
+      return _buildReadOnlyBody(
+        'No football discussions are open yet. Start one from tactics, competitions, transfers, regens, or national-team talk.',
+      );
+    }
+    return Column(
+      children: _discussionThreads
+          .map(
+            (LiveThread thread) => Padding(
+              padding: const EdgeInsets.only(bottom: spacingSM),
+              child: _ActionRowCard(
+                title: thread.title,
+                subtitle:
+                    '${_categoryLabel(thread.category)} - ${thread.status.toUpperCase()} - trend ${thread.trendScore}',
+                detail:
+                    '${thread.body.isEmpty ? 'Football discussion' : thread.body} - Last reply ${gteFormatDateTime(thread.lastMessageAt)}',
+                action: FilledButton.tonal(
+                  onPressed: () => _openDiscussionThread(thread),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  Widget _buildGiftCatalogueBody() {
+    final List<GiftCatalogItem> awards =
+        _awardGiftPacks.isEmpty
+            ? _giftCatalog
+                .where((GiftCatalogItem item) => item.isAwardPack)
+                .toList(growable: false)
+            : _awardGiftPacks;
+    if (_giftCatalog.isEmpty && awards.isEmpty) {
+      return _buildReadOnlyBody(
+        'Gift catalogue is syncing. Awards will appear here once the live gift API responds.',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Wrap(
+          spacing: spacingSM,
+          runSpacing: spacingSM,
+          children: <Widget>[
+            _DigestChip(label: 'Catalogue', value: '${_giftCatalog.length}'),
+            _DigestChip(label: 'Award packs', value: '${awards.length}'),
+            const _DigestChip(label: 'Ranking impact', value: '0'),
+          ],
+        ),
+        const SizedBox(height: spacingMD),
+        ...awards
+            .take(8)
+            .map(
+              (GiftCatalogItem item) => Padding(
+                padding: const EdgeInsets.only(bottom: spacingSM),
+                child: _ActionRowCard(
+                  title:
+                      '${item.displayName}${item.code == 'ballon_dor' ? ' - highest pack' : ''}',
+                  subtitle:
+                      '${item.rarity.toUpperCase()} - ${item.costAmount.toStringAsFixed(item.costAmount.truncateToDouble() == item.costAmount ? 0 : 2)} ${item.currencyLabel}',
+                  detail:
+                      '${item.animationKey ?? 'gift_fanfare'} - legal ${item.legalStatus}${item.fallbackDisplayName == null ? '' : ' - fallback ${item.fallbackDisplayName}'}',
+                  action: FilledButton.tonalIcon(
+                    onPressed:
+                        _hasAuthenticatedCommunityAccess
+                            ? () => _openGiftDrawer()
+                            : widget.onOpenLogin,
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    label: const Text('Gift'),
+                  ),
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+
+  String _categoryLabel(String code) {
+    return _discussionCategories
+        .firstWhere(
+          (DiscussionCategory item) => item.code == code,
+          orElse: () => DiscussionCategory(code: code, label: code),
+        )
+        .label;
+  }
+
   Widget _buildPrivateMessagesBody() {
     if (_privateThreads.isEmpty) {
       return _buildReadOnlyBody(
@@ -929,6 +1287,8 @@ class _DigestSummary extends StatelessWidget {
 enum _CommunityModule {
   overview,
   liveThreads,
+  discussions,
+  gifts,
   watchlist,
   privateMessages,
   clubFollow,
@@ -941,6 +1301,10 @@ extension _CommunityModuleX on _CommunityModule {
         return 'Overview';
       case _CommunityModule.liveThreads:
         return 'Live threads';
+      case _CommunityModule.discussions:
+        return 'Discussions';
+      case _CommunityModule.gifts:
+        return 'Award gifts';
       case _CommunityModule.watchlist:
         return 'Watchlist';
       case _CommunityModule.privateMessages:
@@ -956,6 +1320,10 @@ extension _CommunityModuleX on _CommunityModule {
         return 'Digest and access state';
       case _CommunityModule.liveThreads:
         return 'Matchday discussion lanes';
+      case _CommunityModule.discussions:
+        return 'Open football forums';
+      case _CommunityModule.gifts:
+        return 'Fan Coin celebrations';
       case _CommunityModule.watchlist:
         return 'Pinned competitions';
       case _CommunityModule.privateMessages:
@@ -971,6 +1339,10 @@ extension _CommunityModuleX on _CommunityModule {
         return Icons.space_dashboard_outlined;
       case _CommunityModule.liveThreads:
         return Icons.forum_outlined;
+      case _CommunityModule.discussions:
+        return Icons.forum_rounded;
+      case _CommunityModule.gifts:
+        return Icons.card_giftcard_outlined;
       case _CommunityModule.watchlist:
         return Icons.playlist_add_check_outlined;
       case _CommunityModule.privateMessages:
@@ -987,6 +1359,9 @@ class _CommunityLeftPanel extends StatelessWidget {
     required this.digest,
     required this.isAuthenticated,
     required this.liveThreadCount,
+    required this.discussionThreadCount,
+    required this.giftCount,
+    required this.awardGiftCount,
     required this.watchlistCount,
     required this.privateThreadCount,
     required this.hasClubFollow,
@@ -998,6 +1373,9 @@ class _CommunityLeftPanel extends StatelessWidget {
   final CommunityDigest? digest;
   final bool isAuthenticated;
   final int liveThreadCount;
+  final int discussionThreadCount;
+  final int giftCount;
+  final int awardGiftCount;
   final int watchlistCount;
   final int privateThreadCount;
   final bool hasClubFollow;
@@ -1071,6 +1449,10 @@ class _CommunityLeftPanel extends StatelessWidget {
     switch (module) {
       case _CommunityModule.liveThreads:
         return '$liveThreadCount live';
+      case _CommunityModule.discussions:
+        return '$discussionThreadCount threads';
+      case _CommunityModule.gifts:
+        return '$awardGiftCount awards / $giftCount gifts';
       case _CommunityModule.watchlist:
         return '$watchlistCount pinned';
       case _CommunityModule.privateMessages:
@@ -1094,9 +1476,13 @@ class _CommunityRightPanel extends StatelessWidget {
     required this.onSignIn,
     required this.onAddWatchlist,
     required this.onCreateLiveThread,
+    required this.onCreateDiscussionThread,
     required this.onCreatePrivateThread,
+    required this.onOpenGiftDrawer,
     required this.onOpenWatchlist,
     required this.onOpenLiveThreads,
+    required this.onOpenDiscussions,
+    required this.onOpenGifts,
     required this.onOpenPrivateThreads,
     required this.onOpenClubFollow,
     required this.onOpenFanWars,
@@ -1111,9 +1497,13 @@ class _CommunityRightPanel extends StatelessWidget {
   final VoidCallback? onSignIn;
   final VoidCallback onAddWatchlist;
   final VoidCallback onCreateLiveThread;
+  final VoidCallback onCreateDiscussionThread;
   final VoidCallback onCreatePrivateThread;
+  final VoidCallback onOpenGiftDrawer;
   final VoidCallback onOpenWatchlist;
   final VoidCallback onOpenLiveThreads;
+  final VoidCallback onOpenDiscussions;
+  final VoidCallback onOpenGifts;
   final VoidCallback onOpenPrivateThreads;
   final VoidCallback onOpenClubFollow;
   final VoidCallback? onOpenFanWars;
@@ -1182,6 +1572,22 @@ class _CommunityRightPanel extends StatelessWidget {
                   accent: GtexColors.mint,
                   secondary: true,
                 ),
+                const SizedBox(height: GtexSpacing.sm),
+                GtexActionButton(
+                  label: 'New discussion',
+                  icon: Icons.post_add_outlined,
+                  onPressed: isMutating ? null : onCreateDiscussionThread,
+                  accent: GtexColors.mint,
+                  secondary: true,
+                ),
+                const SizedBox(height: GtexSpacing.sm),
+                GtexActionButton(
+                  label: 'Send award gift',
+                  icon: Icons.card_giftcard_outlined,
+                  onPressed: isMutating ? null : onOpenGiftDrawer,
+                  accent: GtexColors.gold,
+                  secondary: true,
+                ),
               ] else
                 GtexActionButton(
                   label: 'Sign in',
@@ -1244,6 +1650,22 @@ class _CommunityRightPanel extends StatelessWidget {
                 icon: Icons.mark_chat_unread_outlined,
                 onPressed: onOpenPrivateThreads,
                 accent: GtexColors.mint,
+                secondary: true,
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              GtexActionButton(
+                label: 'Discussions',
+                icon: Icons.forum_rounded,
+                onPressed: onOpenDiscussions,
+                accent: GtexColors.mint,
+                secondary: true,
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              GtexActionButton(
+                label: 'Award gifts',
+                icon: Icons.card_giftcard_outlined,
+                onPressed: onOpenGifts,
+                accent: GtexColors.gold,
                 secondary: true,
               ),
               if (hasCurrentClub) ...<Widget>[
@@ -1656,6 +2078,591 @@ class _LiveThreadSheetState extends State<_LiveThreadSheet> {
   }
 }
 
+class _DiscussionThreadSheet extends StatefulWidget {
+  const _DiscussionThreadSheet({
+    required this.api,
+    required this.thread,
+    required this.giftCatalog,
+    required this.canPost,
+    this.onOpenLogin,
+  });
+
+  final CommunityApi api;
+  final LiveThread thread;
+  final List<GiftCatalogItem> giftCatalog;
+  final bool canPost;
+  final VoidCallback? onOpenLogin;
+
+  @override
+  State<_DiscussionThreadSheet> createState() => _DiscussionThreadSheetState();
+}
+
+class _DiscussionThreadSheetState extends State<_DiscussionThreadSheet> {
+  final TextEditingController _replyController = TextEditingController();
+  List<LiveThreadMessage> _replies = const <LiveThreadMessage>[];
+  bool _isLoading = true;
+  bool _isSending = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _replyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final List<LiveThreadMessage> replies = await widget.api
+          .listDiscussionReplies(widget.thread.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _replies = replies;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = AppFeedback.messageFor(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _sendReply() async {
+    final String body = _replyController.text.trim();
+    if (body.isEmpty || _isSending) {
+      return;
+    }
+    setState(() {
+      _isSending = true;
+    });
+    try {
+      final LiveThreadMessage reply = await widget.api.postDiscussionReply(
+        threadId: widget.thread.id,
+        body: body,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _replies = <LiveThreadMessage>[..._replies, reply];
+        _replyController.clear();
+      });
+      AppFeedback.showSuccess(context, 'Reply posted.');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showError(context, AppFeedback.messageFor(error));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openGiftDrawer({String? replyId}) async {
+    if (!widget.canPost) {
+      widget.onOpenLogin?.call();
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (BuildContext context) => _GiftDrawerSheet(
+            api: widget.api,
+            catalog: widget.giftCatalog,
+            discussionThreadId: widget.thread.id,
+            discussionReplyId: replyId,
+          ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: spacingMD,
+          right: spacingMD,
+          top: spacingMD,
+          bottom: MediaQuery.of(context).viewInsets.bottom + spacingMD,
+        ),
+        child: SizedBox(
+          height: 620,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          widget.thread.title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${widget.thread.category} - ${widget.thread.visibility} - trend ${widget.thread.trendScore}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: spacingSM),
+                  FilledButton.tonalIcon(
+                    onPressed: widget.canPost ? () => _openGiftDrawer() : null,
+                    icon: const Icon(Icons.card_giftcard_outlined),
+                    label: const Text('Gift'),
+                  ),
+                ],
+              ),
+              if (widget.thread.body.trim().isNotEmpty) ...<Widget>[
+                const SizedBox(height: spacingSM),
+                Text(widget.thread.body),
+              ],
+              const SizedBox(height: spacingMD),
+              Expanded(child: _buildBody()),
+              const SizedBox(height: spacingSM),
+              if (widget.canPost)
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: TextField(
+                        controller: _replyController,
+                        minLines: 1,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'Reply to discussion',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: spacingSM),
+                    FilledButton(
+                      onPressed: _isSending ? null : _sendReply,
+                      child: Text(_isSending ? 'Posting...' : 'Reply'),
+                    ),
+                  ],
+                )
+              else
+                GteStatePanel(
+                  title: 'Sign in to join the discussion',
+                  message:
+                      'Football discussion threads are readable, but posting and gifting require a signed-in session.',
+                  icon: Icons.lock_outline,
+                  actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
+                  onAction: widget.onOpenLogin,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return GteStatePanel(
+        title: 'Discussion unavailable',
+        message: _error!,
+        icon: Icons.error_outline,
+        actionLabel: 'Retry',
+        onAction: _load,
+      );
+    }
+    if (_replies.isEmpty) {
+      return const Center(
+        child: Text('No replies yet. Open the football argument cleanly.'),
+      );
+    }
+    return ListView.separated(
+      itemCount: _replies.length,
+      separatorBuilder: (_, _) => const SizedBox(height: spacingSM),
+      itemBuilder: (BuildContext context, int index) {
+        final LiveThreadMessage reply = _replies[index];
+        final bool isGift = reply.messageType == 'gift';
+        return _MessageCard(
+          title: isGift ? 'Gift moment' : reply.authorUserId,
+          body: reply.body,
+          footer:
+              '${reply.moderationStatus} - ${reply.likeCount} likes - ${gteFormatDateTime(reply.createdAt)}',
+          trailing:
+              widget.canPost
+                  ? TextButton.icon(
+                    onPressed: () => _openGiftDrawer(replyId: reply.id),
+                    icon: const Icon(Icons.card_giftcard_outlined),
+                    label: const Text('Gift'),
+                  )
+                  : null,
+          accent: isGift ? GtexColors.gold : GteShellTheme.accentCommunity,
+        );
+      },
+    );
+  }
+}
+
+class _GiftDrawerSheet extends StatefulWidget {
+  const _GiftDrawerSheet({
+    required this.api,
+    required this.catalog,
+    this.recipientUserId,
+    this.chatThreadId,
+    this.discussionThreadId,
+    this.discussionReplyId,
+  });
+
+  final CommunityApi api;
+  final List<GiftCatalogItem> catalog;
+  final String? recipientUserId;
+  final String? chatThreadId;
+  final String? discussionThreadId;
+  final String? discussionReplyId;
+
+  @override
+  State<_GiftDrawerSheet> createState() => _GiftDrawerSheetState();
+}
+
+class _GiftDrawerSheetState extends State<_GiftDrawerSheet> {
+  final TextEditingController _recipientController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+  GiftCatalogItem? _selectedGift;
+  bool _confirmPremiumGift = false;
+  bool _isSending = false;
+  GiftEvent? _lastEvent;
+
+  bool get _hasContextTarget =>
+      (widget.chatThreadId?.trim().isNotEmpty ?? false) ||
+      (widget.discussionThreadId?.trim().isNotEmpty ?? false) ||
+      (widget.discussionReplyId?.trim().isNotEmpty ?? false);
+
+  @override
+  void initState() {
+    super.initState();
+    _recipientController.text = widget.recipientUserId ?? '';
+    _selectedGift = _bestInitialGift(widget.catalog);
+  }
+
+  @override
+  void dispose() {
+    _recipientController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  GiftCatalogItem? _bestInitialGift(List<GiftCatalogItem> catalog) {
+    if (catalog.isEmpty) {
+      return null;
+    }
+    final Iterable<GiftCatalogItem> awards = catalog.where(
+      (GiftCatalogItem item) => item.isAwardPack,
+    );
+    return awards.isEmpty ? catalog.first : awards.first;
+  }
+
+  Future<void> _sendGift() async {
+    final GiftCatalogItem? gift = _selectedGift;
+    if (gift == null || _isSending) {
+      return;
+    }
+    final String recipientUserId = _recipientController.text.trim();
+    if (!_hasContextTarget && recipientUserId.isEmpty) {
+      AppFeedback.showError(
+        context,
+        'Enter a recipient user ID or open gifting from a room/thread.',
+      );
+      return;
+    }
+    if (gift.costAmount >= 500 && !_confirmPremiumGift) {
+      AppFeedback.showError(
+        context,
+        'Confirm premium gift spend before sending this fanfare.',
+      );
+      return;
+    }
+    setState(() {
+      _isSending = true;
+    });
+    try {
+      final GiftEvent event = await widget.api.sendGift(
+        giftKey: gift.code,
+        quantity: 1,
+        recipientUserId: recipientUserId.isEmpty ? null : recipientUserId,
+        chatThreadId: widget.chatThreadId,
+        discussionThreadId: widget.discussionThreadId,
+        discussionReplyId: widget.discussionReplyId,
+        note: _noteController.text.trim(),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lastEvent = event;
+      });
+      AppFeedback.showSuccess(
+        context,
+        '${event.giftDisplayName} gift sent with ${event.currencyLabel}.',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showError(context, AppFeedback.messageFor(error));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GiftCatalogItem> catalog =
+        widget.catalog.isEmpty ? const <GiftCatalogItem>[] : widget.catalog;
+    final List<GiftCatalogItem> awards =
+        catalog.where((GiftCatalogItem item) => item.isAwardPack).toList();
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: spacingMD,
+          right: spacingMD,
+          top: spacingMD,
+          bottom: MediaQuery.of(context).viewInsets.bottom + spacingMD,
+        ),
+        child: SizedBox(
+          height: 650,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Football award gifts',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Fan Coin celebration only. Gift hype never adds competitive club ranking points.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: spacingMD),
+              if (!_hasContextTarget)
+                TextField(
+                  controller: _recipientController,
+                  decoration: const InputDecoration(
+                    labelText: 'Recipient user ID',
+                    prefixIcon: Icon(Icons.person_search_outlined),
+                  ),
+                ),
+              if (!_hasContextTarget) const SizedBox(height: spacingSM),
+              if (catalog.isEmpty)
+                const Expanded(
+                  child: GteStatePanel(
+                    title: 'Gift catalogue unavailable',
+                    message:
+                        'The gift API has not returned a catalogue yet. Try again after the community sync finishes.',
+                    icon: Icons.card_giftcard_outlined,
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView(
+                    children: <Widget>[
+                      if (awards.isNotEmpty) ...<Widget>[
+                        Text(
+                          'Award packs',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: spacingSM),
+                        ...awards.map(_giftOptionTile),
+                        const SizedBox(height: spacingMD),
+                      ],
+                      Text(
+                        'Full catalogue',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: spacingSM),
+                      ...catalog
+                          .where((GiftCatalogItem item) => !item.isAwardPack)
+                          .map(_giftOptionTile),
+                    ],
+                  ),
+                ),
+              TextField(
+                controller: _noteController,
+                minLines: 1,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Gift note (optional)',
+                  prefixIcon: Icon(Icons.short_text_outlined),
+                ),
+              ),
+              const SizedBox(height: spacingSM),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _confirmPremiumGift,
+                onChanged:
+                    (bool? value) => setState(() {
+                      _confirmPremiumGift = value ?? false;
+                    }),
+                title: const Text('Confirm premium Fan Coin gift spend'),
+                subtitle: const Text('Required for high-value award packs.'),
+              ),
+              if (_lastEvent != null) ...<Widget>[
+                const SizedBox(height: spacingSM),
+                _GiftFanfarePreview(event: _lastEvent!),
+              ],
+              const SizedBox(height: spacingSM),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed:
+                      _isSending || _selectedGift == null ? null : _sendGift,
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  label: Text(_isSending ? 'Sending...' : 'Send gift'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _giftOptionTile(GiftCatalogItem item) {
+    final bool isSelected = _selectedGift?.code == item.code;
+    final bool isHighest = item.code == 'ballon_dor';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: spacingSM),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap:
+            () => setState(() {
+              _selectedGift = item;
+            }),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color:
+                  isSelected
+                      ? GtexColors.gold
+                      : GteShellTheme.accentCommunity.withValues(alpha: 0.18),
+            ),
+            color:
+                isSelected
+                    ? GtexColors.gold.withValues(alpha: 0.12)
+                    : Colors.transparent,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(
+                isHighest
+                    ? Icons.workspace_premium_outlined
+                    : Icons.card_giftcard_outlined,
+                color: item.isAwardPack ? GtexColors.gold : GtexColors.mint,
+              ),
+              const SizedBox(width: spacingSM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '${item.displayName}${isHighest ? ' - highest gift pack' : ''}',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${item.rarity.toUpperCase()} - ${item.costAmount.toStringAsFixed(item.costAmount.truncateToDouble() == item.costAmount ? 0 : 2)} ${item.currencyLabel}',
+                    ),
+                    if (item.fallbackDisplayName != null)
+                      Text('Fallback name: ${item.fallbackDisplayName}'),
+                    Text(
+                      'Animation: ${item.animationKey ?? 'gift_fanfare'} - legal ${item.legalStatus}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GiftFanfarePreview extends StatelessWidget {
+  const _GiftFanfarePreview({required this.event});
+
+  final GiftEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isMythic = event.rarity == 'mythic';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: isMythic ? GtexColors.gold : GtexColors.mint),
+        gradient: LinearGradient(
+          colors: <Color>[
+            (isMythic ? GtexColors.gold : GtexColors.mint).withValues(
+              alpha: 0.20,
+            ),
+            Colors.transparent,
+          ],
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            isMythic ? Icons.emoji_events_outlined : Icons.celebration_outlined,
+            color: isMythic ? GtexColors.gold : GtexColors.mint,
+          ),
+          const SizedBox(width: spacingSM),
+          Expanded(
+            child: Text(
+              '${event.giftDisplayName} ceremony queued - ${event.animationKey ?? 'gift_fanfare'}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PrivateThreadSheet extends StatefulWidget {
   const _PrivateThreadSheet({
     required this.api,
@@ -1861,11 +2868,15 @@ class _MessageCard extends StatelessWidget {
     required this.title,
     required this.body,
     required this.footer,
+    this.trailing,
+    this.accent,
   });
 
   final String title;
   final String body;
   final String footer;
+  final Widget? trailing;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
@@ -1873,12 +2884,24 @@ class _MessageCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: GteShellTheme.accentCommunity.withValues(alpha: 0.08),
+        color: (accent ?? GteShellTheme.accentCommunity).withValues(
+          alpha: 0.08,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.titleSmall),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
           const SizedBox(height: 6),
           Text(body, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 8),
@@ -1911,6 +2934,18 @@ class _LiveThreadDraft {
   final String threadKey;
   final String title;
   final String? competitionKey;
+}
+
+class _DiscussionThreadDraft {
+  const _DiscussionThreadDraft({
+    required this.category,
+    required this.title,
+    required this.body,
+  });
+
+  final String category;
+  final String title;
+  final String body;
 }
 
 class _PrivateThreadDraft {

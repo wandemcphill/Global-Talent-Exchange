@@ -6457,6 +6457,102 @@
         "handler": "send_gift",
         "source_file": "backend/app/gift_engine/router.py",
         "response_model": "GiftTransactionView"
+      },
+      "get_api_v2_gifts_catalog": {
+        "method": "GET",
+        "canonical_path": "/api/v2/gifts/catalog",
+        "aliases": [
+          "/api/gifts/catalog",
+          "/api/v1/gifts/catalog",
+          "/api/v2/gifts/catalog"
+        ],
+        "handler": "list_gift_catalog",
+        "source_file": "backend/app/gift_engine/router.py",
+        "response_model": "list[GiftCatalogItemView]"
+      },
+      "get_api_v2_gifts_award_packs": {
+        "method": "GET",
+        "canonical_path": "/api/v2/gifts/award-packs",
+        "aliases": [
+          "/api/gifts/award-packs",
+          "/api/v1/gifts/award-packs",
+          "/api/v2/gifts/award-packs"
+        ],
+        "handler": "list_award_gift_packs",
+        "source_file": "backend/app/gift_engine/router.py",
+        "response_model": "list[GiftCatalogItemView]"
+      },
+      "post_api_v2_gifts_send": {
+        "method": "POST",
+        "canonical_path": "/api/v2/gifts/send",
+        "aliases": [
+          "/api/gifts/send",
+          "/api/v1/gifts/send",
+          "/api/v2/gifts/send"
+        ],
+        "handler": "send_public_gift",
+        "source_file": "backend/app/gift_engine/router.py",
+        "response_model": "GiftTransactionView"
+      },
+      "get_api_v2_admin_gifts_events": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/gifts/events",
+        "aliases": [
+          "/api/admin/gifts/events",
+          "/api/v1/admin/gifts/events",
+          "/api/v2/admin/gifts/events"
+        ],
+        "handler": "admin_list_gift_events",
+        "source_file": "backend/app/gift_engine/router.py",
+        "response_model": "list[GiftTransactionView]"
+      },
+      "get_api_v2_admin_gifts_abuse_flags": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/gifts/abuse-flags",
+        "aliases": [
+          "/api/admin/gifts/abuse-flags",
+          "/api/v1/admin/gifts/abuse-flags",
+          "/api/v2/admin/gifts/abuse-flags"
+        ],
+        "handler": "admin_list_gift_abuse_flags",
+        "source_file": "backend/app/gift_engine/router.py",
+        "response_model": "list[GiftAbuseFlagView]"
+      },
+      "post_api_v2_admin_gifts_catalog": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/gifts/catalog",
+        "aliases": [
+          "/api/admin/gifts/catalog",
+          "/api/v1/admin/gifts/catalog",
+          "/api/v2/admin/gifts/catalog"
+        ],
+        "handler": "admin_upsert_gift_catalog_item",
+        "source_file": "backend/app/gift_engine/router.py",
+        "response_model": "GiftCatalogItemView"
+      },
+      "patch_api_v2_admin_gifts_catalog_gift_id": {
+        "method": "PATCH",
+        "canonical_path": "/api/v2/admin/gifts/catalog/{gift_id}",
+        "aliases": [
+          "/api/admin/gifts/catalog/{gift_id}",
+          "/api/v1/admin/gifts/catalog/{gift_id}",
+          "/api/v2/admin/gifts/catalog/{gift_id}"
+        ],
+        "handler": "admin_patch_gift_catalog_item",
+        "source_file": "backend/app/gift_engine/router.py",
+        "response_model": "GiftCatalogItemView"
+      },
+      "post_api_v2_admin_gifts_events_event_id_refund": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/gifts/events/{event_id}/refund",
+        "aliases": [
+          "/api/admin/gifts/events/{event_id}/refund",
+          "/api/v1/admin/gifts/events/{event_id}/refund",
+          "/api/v2/admin/gifts/events/{event_id}/refund"
+        ],
+        "handler": "admin_refund_gift_event",
+        "source_file": "backend/app/gift_engine/router.py",
+        "response_model": "GiftTransactionView"
       }
     },
     "global": {
@@ -18660,6 +18756,68 @@
         "source_file": "backend/app/world_simulation/router.py",
         "response_model": "WorldNarrativeView"
       }
+    },
+    "discussions": {
+      "get_api_v2_discussions_categories": {
+        "method": "GET",
+        "canonical_path": "/api/v2/discussions/categories",
+        "aliases": [
+          "/api/discussions/categories",
+          "/api/v1/discussions/categories",
+          "/api/v2/discussions/categories"
+        ],
+        "handler": "list_discussion_categories",
+        "source_file": "backend/app/community_engine/social_router.py",
+        "response_model": "list[DiscussionCategoryView]"
+      },
+      "get_api_v2_discussions_threads": {
+        "method": "GET",
+        "canonical_path": "/api/v2/discussions/threads",
+        "aliases": [
+          "/api/discussions/threads",
+          "/api/v1/discussions/threads",
+          "/api/v2/discussions/threads"
+        ],
+        "handler": "list_discussion_threads",
+        "source_file": "backend/app/community_engine/social_router.py",
+        "response_model": "list[LiveThreadView]"
+      },
+      "post_api_v2_discussions_threads": {
+        "method": "POST",
+        "canonical_path": "/api/v2/discussions/threads",
+        "aliases": [
+          "/api/discussions/threads",
+          "/api/v1/discussions/threads",
+          "/api/v2/discussions/threads"
+        ],
+        "handler": "create_discussion_thread",
+        "source_file": "backend/app/community_engine/social_router.py",
+        "response_model": "LiveThreadView"
+      },
+      "get_api_v2_discussions_threads_thread_id_replies": {
+        "method": "GET",
+        "canonical_path": "/api/v2/discussions/threads/{thread_id}/replies",
+        "aliases": [
+          "/api/discussions/threads/{thread_id}/replies",
+          "/api/v1/discussions/threads/{thread_id}/replies",
+          "/api/v2/discussions/threads/{thread_id}/replies"
+        ],
+        "handler": "list_discussion_replies",
+        "source_file": "backend/app/community_engine/social_router.py",
+        "response_model": "list[LiveThreadMessageView]"
+      },
+      "post_api_v2_discussions_threads_thread_id_replies": {
+        "method": "POST",
+        "canonical_path": "/api/v2/discussions/threads/{thread_id}/replies",
+        "aliases": [
+          "/api/discussions/threads/{thread_id}/replies",
+          "/api/v1/discussions/threads/{thread_id}/replies",
+          "/api/v2/discussions/threads/{thread_id}/replies"
+        ],
+        "handler": "create_discussion_reply",
+        "source_file": "backend/app/community_engine/social_router.py",
+        "response_model": "LiveThreadMessageView"
+      }
     }
   },
   "websockets": {
@@ -20147,7 +20305,18 @@
     "/api/v2/ws/tournament/{tournament_id}": "websocket_api_v2_ws_tournament_tournament_id",
     "/health": "get_health",
     "/ready": "get_ready",
-    "/version": "get_version"
+    "/version": "get_version",
+    "/api/v2/discussions/categories": "get_api_v2_discussions_categories",
+    "/api/v2/discussions/threads": "post_api_v2_discussions_threads",
+    "/api/v2/discussions/threads/{thread_id}/replies": "post_api_v2_discussions_threads_thread_id_replies",
+    "/api/v2/gifts/catalog": "get_api_v2_gifts_catalog",
+    "/api/v2/gifts/award-packs": "get_api_v2_gifts_award_packs",
+    "/api/v2/gifts/send": "post_api_v2_gifts_send",
+    "/api/v2/admin/gifts/events": "get_api_v2_admin_gifts_events",
+    "/api/v2/admin/gifts/abuse-flags": "get_api_v2_admin_gifts_abuse_flags",
+    "/api/v2/admin/gifts/catalog": "post_api_v2_admin_gifts_catalog",
+    "/api/v2/admin/gifts/catalog/{gift_id}": "patch_api_v2_admin_gifts_catalog_gift_id",
+    "/api/v2/admin/gifts/events/{event_id}/refund": "post_api_v2_admin_gifts_events_event_id_refund"
   },
   "deprecated_aliases": {
     "/academy": "/api/v2/academy",
@@ -23890,6 +24059,28 @@
     "/world-super-cup/qualification/explanation": "/api/v2/world-super-cup/qualification/explanation",
     "/ws/match/{match_id}": "/api/v2/ws/match/{match_id}",
     "/ws/spectate/{match_id}": "/api/v2/ws/spectate/{match_id}",
-    "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}"
+    "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}",
+    "/api/discussions/categories": "/api/v2/discussions/categories",
+    "/api/v1/discussions/categories": "/api/v2/discussions/categories",
+    "/api/discussions/threads": "/api/v2/discussions/threads",
+    "/api/v1/discussions/threads": "/api/v2/discussions/threads",
+    "/api/discussions/threads/{thread_id}/replies": "/api/v2/discussions/threads/{thread_id}/replies",
+    "/api/v1/discussions/threads/{thread_id}/replies": "/api/v2/discussions/threads/{thread_id}/replies",
+    "/api/gifts/catalog": "/api/v2/gifts/catalog",
+    "/api/v1/gifts/catalog": "/api/v2/gifts/catalog",
+    "/api/gifts/award-packs": "/api/v2/gifts/award-packs",
+    "/api/v1/gifts/award-packs": "/api/v2/gifts/award-packs",
+    "/api/gifts/send": "/api/v2/gifts/send",
+    "/api/v1/gifts/send": "/api/v2/gifts/send",
+    "/api/admin/gifts/events": "/api/v2/admin/gifts/events",
+    "/api/v1/admin/gifts/events": "/api/v2/admin/gifts/events",
+    "/api/admin/gifts/abuse-flags": "/api/v2/admin/gifts/abuse-flags",
+    "/api/v1/admin/gifts/abuse-flags": "/api/v2/admin/gifts/abuse-flags",
+    "/api/admin/gifts/catalog": "/api/v2/admin/gifts/catalog",
+    "/api/v1/admin/gifts/catalog": "/api/v2/admin/gifts/catalog",
+    "/api/admin/gifts/catalog/{gift_id}": "/api/v2/admin/gifts/catalog/{gift_id}",
+    "/api/v1/admin/gifts/catalog/{gift_id}": "/api/v2/admin/gifts/catalog/{gift_id}",
+    "/api/admin/gifts/events/{event_id}/refund": "/api/v2/admin/gifts/events/{event_id}/refund",
+    "/api/v1/admin/gifts/events/{event_id}/refund": "/api/v2/admin/gifts/events/{event_id}/refund"
   }
 }

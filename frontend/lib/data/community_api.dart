@@ -273,6 +273,120 @@ class CommunityApi {
       return PrivateMessage.fromJson(payload);
     }, () async => fixtures.postPrivateMessage(threadId, body));
   }
+
+  Future<List<DiscussionCategory>> listDiscussionCategories() {
+    return client.withFallback<List<DiscussionCategory>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/api/discussions/categories',
+      );
+      return payload.map(DiscussionCategory.fromJson).toList(growable: false);
+    }, fixtures.discussionCategories);
+  }
+
+  Future<List<LiveThread>> listDiscussionThreads({String? category}) {
+    return client.withFallback<List<LiveThread>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/api/discussions/threads',
+        query: <String, Object?>{
+          if (category != null && category.isNotEmpty) 'category': category,
+        },
+      );
+      return payload.map(LiveThread.fromJson).toList(growable: false);
+    }, () async => fixtures.discussionThreads(category: category));
+  }
+
+  Future<LiveThread> createDiscussionThread({
+    required String category,
+    required String title,
+    required String body,
+  }) {
+    return client.withFallback<LiveThread>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/discussions/threads',
+        body: <String, Object?>{
+          'category': category,
+          'title': title,
+          'body': body,
+          'metadata_json': <String, Object?>{},
+        },
+      );
+      return LiveThread.fromJson(payload);
+    }, () async => fixtures.createDiscussionThread(category, title, body));
+  }
+
+  Future<List<LiveThreadMessage>> listDiscussionReplies(String threadId) {
+    return client.withFallback<List<LiveThreadMessage>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/api/discussions/threads/$threadId/replies',
+      );
+      return payload.map(LiveThreadMessage.fromJson).toList(growable: false);
+    }, () async => fixtures.liveThreadMessages(threadId));
+  }
+
+  Future<LiveThreadMessage> postDiscussionReply({
+    required String threadId,
+    required String body,
+  }) {
+    return client.withFallback<LiveThreadMessage>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/discussions/threads/$threadId/replies',
+        body: <String, Object?>{
+          'body': body,
+          'metadata_json': <String, Object?>{},
+        },
+      );
+      return LiveThreadMessage.fromJson(payload);
+    }, () async => fixtures.postLiveThreadMessage(threadId, body));
+  }
+
+  Future<List<GiftCatalogItem>> listGiftCatalog() {
+    return client.withFallback<List<GiftCatalogItem>>(() async {
+      final List<dynamic> payload = await client.getList('/api/gifts/catalog');
+      return payload.map(GiftCatalogItem.fromJson).toList(growable: false);
+    }, fixtures.giftCatalog);
+  }
+
+  Future<List<GiftCatalogItem>> listAwardGiftPacks() {
+    return client.withFallback<List<GiftCatalogItem>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/api/gifts/award-packs',
+      );
+      return payload.map(GiftCatalogItem.fromJson).toList(growable: false);
+    }, fixtures.awardGiftPacks);
+  }
+
+  Future<GiftEvent> sendGift({
+    required String giftKey,
+    required double quantity,
+    String? recipientUserId,
+    String? chatThreadId,
+    String? discussionThreadId,
+    String? discussionReplyId,
+    String? note,
+  }) {
+    return client.withFallback<GiftEvent>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/gifts/send',
+        body: <String, Object?>{
+          if (recipientUserId != null) 'recipient_user_id': recipientUserId,
+          'gift_key': giftKey,
+          'quantity': quantity.toStringAsFixed(4),
+          if (note != null && note.trim().isNotEmpty) 'note': note,
+          if (chatThreadId != null) 'chat_thread_id': chatThreadId,
+          if (discussionThreadId != null)
+            'discussion_thread_id': discussionThreadId,
+          if (discussionReplyId != null)
+            'discussion_reply_id': discussionReplyId,
+          'idempotency_key':
+              'frontend-${DateTime.now().microsecondsSinceEpoch}-$giftKey',
+        },
+      );
+      return GiftEvent.fromJson(payload);
+    }, () async => fixtures.fakeGiftEvent(giftKey: giftKey));
+  }
 }
 
 class _CommunityFixtures {
@@ -567,5 +681,126 @@ class _CommunityFixtures {
         .putIfAbsent(threadId, () => <PrivateMessage>[])
         .add(message);
     return message;
+  }
+
+  Future<List<DiscussionCategory>> discussionCategories() async {
+    return const <DiscussionCategory>[
+      DiscussionCategory(code: 'real_transfer_news', label: 'Transfer News'),
+      DiscussionCategory(code: 'gtex_competitions', label: 'GTEX Competitions'),
+      DiscussionCategory(code: 'tactics_room', label: 'Tactics Room'),
+      DiscussionCategory(code: 'national_teams', label: 'National Teams'),
+    ];
+  }
+
+  Future<List<LiveThread>> discussionThreads({String? category}) async {
+    final List<LiveThread> threads = _liveThreads
+        .map(
+          (LiveThread thread) => LiveThread(
+            id: thread.id,
+            threadKey: thread.threadKey,
+            threadType: 'discussion',
+            category: category ?? 'tactics_room',
+            competitionKey: thread.competitionKey,
+            title: thread.title,
+            body: 'Fixture talk, tactics, market debates, and fan reaction.',
+            createdByUserId: thread.createdByUserId,
+            status: thread.status,
+            pinned: thread.pinned,
+            visibility: 'public',
+            moderationStatus: 'visible',
+            trendScore: 12,
+            lastMessageAt: thread.lastMessageAt,
+            metadata: thread.metadata,
+            createdAt: thread.createdAt,
+            updatedAt: thread.updatedAt,
+          ),
+        )
+        .toList(growable: false);
+    if (category == null || category.isEmpty) {
+      return threads;
+    }
+    return threads
+        .where((LiveThread thread) => thread.category == category)
+        .toList(growable: false);
+  }
+
+  Future<LiveThread> createDiscussionThread(
+    String category,
+    String title,
+    String body,
+  ) async {
+    final DateTime now = DateTime.now().toUtc();
+    final LiveThread thread = LiveThread(
+      id: 'discussion-${_liveThreads.length + 1}',
+      threadKey: 'discussion-${_liveThreads.length + 1}',
+      threadType: 'discussion',
+      category: category,
+      competitionKey: null,
+      title: title,
+      body: body,
+      createdByUserId: 'fixture-user',
+      status: 'open',
+      pinned: false,
+      visibility: 'public',
+      moderationStatus: 'visible',
+      trendScore: 1,
+      lastMessageAt: now,
+      metadata: const <String, Object?>{},
+      createdAt: now,
+      updatedAt: now,
+    );
+    _liveThreads.insert(0, thread);
+    _threadMessages[thread.id] = <LiveThreadMessage>[];
+    return thread;
+  }
+
+  Future<List<GiftCatalogItem>> giftCatalog() async {
+    return const <GiftCatalogItem>[
+      GiftCatalogItem(
+        id: 'gift-whistle',
+        code: 'whistle_blow',
+        displayName: 'Whistle Blow',
+        costAmount: 1,
+        currencyLabel: 'Fan Coin',
+        rarity: 'common',
+        tier: 'common',
+        isAwardPack: false,
+        legalStatus: 'safe',
+        animationKey: 'common_whistle',
+      ),
+      GiftCatalogItem(
+        id: 'gift-ballon',
+        code: 'ballon_dor',
+        displayName: "Ballon d'Or",
+        fallbackDisplayName: 'Golden Ball Supreme',
+        costAmount: 10000,
+        currencyLabel: 'Fan Coin',
+        rarity: 'mythic',
+        tier: 'mythic',
+        isAwardPack: true,
+        legalStatus: 'requires_review',
+        animationKey: 'ballon_dor',
+      ),
+    ];
+  }
+
+  Future<List<GiftCatalogItem>> awardGiftPacks() async {
+    final List<GiftCatalogItem> all = await giftCatalog();
+    return all.where((GiftCatalogItem item) => item.isAwardPack).toList();
+  }
+
+  Future<GiftEvent> fakeGiftEvent({required String giftKey}) async {
+    return GiftEvent.fromJson(<String, Object?>{
+      'id': 'gift-event-${DateTime.now().microsecondsSinceEpoch}',
+      'gift_key': giftKey,
+      'gift_display_name': giftKey == 'ballon_dor' ? "Ballon d'Or" : giftKey,
+      'rarity': giftKey == 'ballon_dor' ? 'mythic' : 'common',
+      'recipient_user_id': 'fixture-recipient',
+      'currency_label': 'Fan Coin',
+      'gross_amount': giftKey == 'ballon_dor' ? 10000 : 1,
+      'animation_key': giftKey == 'ballon_dor' ? 'ballon_dor' : 'fan_chant',
+      'status': 'settled',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
   }
 }

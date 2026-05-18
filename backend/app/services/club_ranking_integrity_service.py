@@ -16,6 +16,7 @@ from app.models.competition import Competition
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_participant import CompetitionParticipant
 from app.ownership_groups.service import OwnershipGroupService
+from app.services.social_collusion_detection_service import SocialCollusionDetectionService
 
 DECIMAL_QUANTUM = Decimal("0.0001")
 MAX_POINTS_PER_EVENT = Decimal("6.0000")
@@ -400,6 +401,20 @@ class ClubRankingIntegrityService:
             reasons=reasons,
             metadata={"event_key": event_key, "final_points_delta": str(final)},
         )
+        if opponent_club_id and any(
+            reason in {"combined_play_gift_collusion", "early_play_gift_collusion_signal"} for reason in reasons
+        ):
+            assessment = SocialCollusionDetectionService(self.session).assess_club_pair(
+                club_id=club_id,
+                opponent_club_id=opponent_club_id,
+            )
+            if assessment is not None:
+                SocialCollusionDetectionService(self.session).flag_pair(
+                    assessment=assessment,
+                    competition=competition,
+                    match_id=match_id,
+                    ranking_event=event,
+                )
         return event
 
     def _anti_farm_multiplier(
@@ -431,6 +446,16 @@ class ClubRankingIntegrityService:
                 multiplier = min(multiplier, Decimal("0.5000"))
                 status = "reduced"
                 reasons.append("same_opponent_decay")
+
+            social_assessment = SocialCollusionDetectionService(self.session).assess_club_pair(
+                club_id=club_id,
+                opponent_club_id=opponent_club_id,
+            )
+            if social_assessment is not None and social_assessment.is_risky:
+                multiplier = min(multiplier, social_assessment.ranking_multiplier)
+                status = "review" if social_assessment.risk_status == "review" else "provisional"
+                if social_assessment.reason:
+                    reasons.append(social_assessment.reason)
 
         if result == "win" and result_type == "forfeit":
             multiplier = min(multiplier, Decimal("0.5000"))

@@ -66,6 +66,7 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
     await _controller.loadCatalog();
     await _controller.loadRules();
     await _controller.loadBurnEvents();
+    await _controller.loadGiftAdminEvents();
   }
 
   Future<void> _run(Future<void> Function() action, String success) async {
@@ -175,6 +176,26 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
                               label: 'Burn events',
                               value: _controller.burnEvents.length.toString(),
                             ),
+                            GteMetricChip(
+                              label: 'Award packs',
+                              value:
+                                  _controller.catalog
+                                      .where(
+                                        (GiftCatalogItem item) =>
+                                            item.isAwardPack,
+                                      )
+                                      .length
+                                      .toString(),
+                            ),
+                            GteMetricChip(
+                              label: 'Gift events',
+                              value: _controller.giftEvents.length.toString(),
+                            ),
+                            GteMetricChip(
+                              label: 'Abuse flags',
+                              value:
+                                  _controller.giftAbuseFlags.length.toString(),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -208,11 +229,35 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
                     lines: _controller.catalog
                         .map(
                           (GiftCatalogItem item) =>
-                              '${item.displayName} | ${item.tier} | ${gteFormatFanCoin(item.fancoinPrice)}',
+                              '${item.displayName} | ${item.rarity} | ${gteFormatFanCoin(item.fancoinPrice)} | ${item.isAwardPack ? 'award pack' : 'standard'} | legal ${item.legalStatus}',
                         )
                         .toList(growable: false),
                     loading: _controller.isLoadingCatalog,
                     error: _controller.catalogError,
+                  ),
+                  const SizedBox(height: 18),
+                  _GiftEventListCard(
+                    title: 'Gift events',
+                    events: _controller.giftEvents,
+                    flags: const <GiftAbuseFlag>[],
+                    loading: _controller.isLoadingGiftEvents,
+                    error: _controller.giftEventsError,
+                    onRefund:
+                        _controller.isRefundingGiftEvent
+                            ? null
+                            : (GiftEvent event) => _run(
+                              () => _controller.refundGiftEvent(event.id),
+                              'Gift event refunded.',
+                            ),
+                  ),
+                  const SizedBox(height: 18),
+                  _GiftEventListCard(
+                    title: 'Gift abuse flags',
+                    events: const <GiftEvent>[],
+                    flags: _controller.giftAbuseFlags,
+                    loading: _controller.isLoadingGiftEvents,
+                    error: _controller.giftEventsError,
+                    onRefund: null,
                   ),
                   const SizedBox(height: 18),
                   _SimpleListCard(
@@ -254,8 +299,13 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
       fields: const <GteFormFieldSpec>[
         GteFormFieldSpec(key: 'key', label: 'Key'),
         GteFormFieldSpec(key: 'name', label: 'Display name'),
+        GteFormFieldSpec(key: 'fallback', label: 'Fallback display name'),
         GteFormFieldSpec(key: 'tier', label: 'Tier'),
+        GteFormFieldSpec(key: 'rarity', label: 'Rarity'),
         GteFormFieldSpec(key: 'price', label: 'Fancoin price'),
+        GteFormFieldSpec(key: 'animation', label: 'Animation key'),
+        GteFormFieldSpec(key: 'legal', label: 'Legal status'),
+        GteFormFieldSpec(key: 'award', label: 'Award pack? true/false'),
       ],
       onSubmit: (Map<String, String> values) async {
         final double? price = double.tryParse(values['price'] ?? '');
@@ -271,8 +321,26 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
             GiftCatalogItemUpsertRequest(
               key: values['key']!,
               displayName: values['name']!,
+              fallbackDisplayName:
+                  (values['fallback'] ?? '').trim().isEmpty
+                      ? null
+                      : values['fallback']!.trim(),
               tier: values['tier']!,
+              rarity:
+                  (values['rarity'] ?? '').trim().isEmpty
+                      ? values['tier']!
+                      : values['rarity']!.trim(),
               fancoinPrice: price,
+              animationKey:
+                  (values['animation'] ?? '').trim().isEmpty
+                      ? null
+                      : values['animation']!.trim(),
+              legalStatus:
+                  (values['legal'] ?? '').trim().isEmpty
+                      ? 'safe'
+                      : values['legal']!.trim(),
+              isAwardPack:
+                  (values['award'] ?? '').trim().toLowerCase() == 'true',
             ),
           ),
           'Catalog item saved.',
@@ -371,6 +439,89 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
 
 String _formatBps(int bps) {
   return '${(bps / 100).toStringAsFixed(bps % 100 == 0 ? 0 : 2)}%';
+}
+
+class _GiftEventListCard extends StatelessWidget {
+  const _GiftEventListCard({
+    required this.title,
+    required this.events,
+    required this.flags,
+    required this.loading,
+    required this.error,
+    required this.onRefund,
+  });
+
+  final String title;
+  final List<GiftEvent> events;
+  final List<GiftAbuseFlag> flags;
+  final bool loading;
+  final String? error;
+  final ValueChanged<GiftEvent>? onRefund;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 10),
+          if (loading && events.isEmpty && flags.isEmpty)
+            const GteStatePanel(
+              title: 'Loading',
+              message: 'Gift moderation data is syncing.',
+              icon: Icons.hourglass_bottom_outlined,
+              isLoading: true,
+            )
+          else if (error != null && events.isEmpty && flags.isEmpty)
+            GteStatePanel(
+              title: 'Unavailable',
+              message: error!,
+              icon: Icons.error_outline,
+            )
+          else if (events.isEmpty && flags.isEmpty)
+            const Text('No records available.')
+          else ...<Widget>[
+            ...events
+                .take(6)
+                .map(
+                  (GiftEvent event) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            '${event.giftDisplayName} | ${event.rarity} | ${gteFormatFanCoin(event.grossAmount)} | ${event.status} | abuse ${event.abuseStatus}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                        if (onRefund != null && event.status != 'refunded')
+                          TextButton.icon(
+                            onPressed: () => onRefund!(event),
+                            icon: const Icon(Icons.undo_outlined),
+                            label: const Text('Refund'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+            ...flags
+                .take(6)
+                .map(
+                  (GiftAbuseFlag flag) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      '${flag.flagType} | ${flag.severity} | ${flag.status} | ${flag.description}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _SimpleListCard extends StatelessWidget {

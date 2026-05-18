@@ -6,9 +6,8 @@ import '../data/gift_economy_admin_models.dart';
 import '../data/gift_economy_admin_repository.dart';
 
 class GiftEconomyAdminController extends ChangeNotifier {
-  GiftEconomyAdminController({
-    required GiftEconomyAdminRepository repository,
-  }) : _repository = repository;
+  GiftEconomyAdminController({required GiftEconomyAdminRepository repository})
+    : _repository = repository;
 
   factory GiftEconomyAdminController.standard({
     required String baseUrl,
@@ -28,6 +27,7 @@ class GiftEconomyAdminController extends ChangeNotifier {
   final GteRequestGate _catalogGate = GteRequestGate();
   final GteRequestGate _rulesGate = GteRequestGate();
   final GteRequestGate _burnGate = GteRequestGate();
+  final GteRequestGate _adminGiftGate = GteRequestGate();
 
   GiftEconomyRuleListQuery currentRulesQuery = const GiftEconomyRuleListQuery();
   GiftEconomyBurnEventsQuery currentBurnEventsQuery =
@@ -37,17 +37,22 @@ class GiftEconomyAdminController extends ChangeNotifier {
   List<RevenueShareRule> revenueShareRules = const <RevenueShareRule>[];
   List<GiftComboRule> comboRules = const <GiftComboRule>[];
   List<EconomyBurnEvent> burnEvents = const <EconomyBurnEvent>[];
+  List<GiftEvent> giftEvents = const <GiftEvent>[];
+  List<GiftAbuseFlag> giftAbuseFlags = const <GiftAbuseFlag>[];
 
   bool isLoadingCatalog = false;
   bool isLoadingRules = false;
   bool isLoadingBurnEvents = false;
+  bool isLoadingGiftEvents = false;
   bool isUpsertingCatalogItem = false;
   bool isUpsertingRevenueShareRule = false;
   bool isUpsertingComboRule = false;
+  bool isRefundingGiftEvent = false;
 
   String? catalogError;
   String? rulesError;
   String? burnEventsError;
+  String? giftEventsError;
   String? actionError;
 
   Future<void> loadCatalog() async {
@@ -86,9 +91,9 @@ class GiftEconomyAdminController extends ChangeNotifier {
     try {
       final List<Object?> payload =
           await Future.wait<Object?>(<Future<Object?>>[
-        _repository.listRevenueShareRules(query),
-        _repository.listGiftComboRules(query),
-      ]);
+            _repository.listRevenueShareRules(query),
+            _repository.listGiftComboRules(query),
+          ]);
       if (!_rulesGate.isActive(requestId)) {
         return;
       }
@@ -116,8 +121,9 @@ class GiftEconomyAdminController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<EconomyBurnEvent> result =
-          await _repository.listBurnEvents(query);
+      final List<EconomyBurnEvent> result = await _repository.listBurnEvents(
+        query,
+      );
       if (!_burnGate.isActive(requestId)) {
         return;
       }
@@ -129,6 +135,36 @@ class GiftEconomyAdminController extends ChangeNotifier {
     } finally {
       if (_burnGate.isActive(requestId)) {
         isLoadingBurnEvents = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadGiftAdminEvents() async {
+    final int requestId = _adminGiftGate.begin();
+    giftEventsError = null;
+    isLoadingGiftEvents = true;
+    notifyListeners();
+
+    try {
+      final List<Object?> payload = await Future.wait<Object?>(
+        <Future<Object?>>[
+          _repository.listGiftEvents(),
+          _repository.listGiftAbuseFlags(),
+        ],
+      );
+      if (!_adminGiftGate.isActive(requestId)) {
+        return;
+      }
+      giftEvents = payload[0] as List<GiftEvent>;
+      giftAbuseFlags = payload[1] as List<GiftAbuseFlag>;
+    } catch (error) {
+      if (_adminGiftGate.isActive(requestId)) {
+        giftEventsError = AppFeedback.messageFor(error);
+      }
+    } finally {
+      if (_adminGiftGate.isActive(requestId)) {
+        isLoadingGiftEvents = false;
         notifyListeners();
       }
     }
@@ -186,6 +222,24 @@ class GiftEconomyAdminController extends ChangeNotifier {
       actionError = AppFeedback.messageFor(error);
     } finally {
       isUpsertingComboRule = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refundGiftEvent(String eventId) async {
+    if (isRefundingGiftEvent) {
+      return;
+    }
+    isRefundingGiftEvent = true;
+    actionError = null;
+    notifyListeners();
+    try {
+      await _repository.refundGiftEvent(eventId);
+      await loadGiftAdminEvents();
+    } catch (error) {
+      actionError = AppFeedback.messageFor(error);
+    } finally {
+      isRefundingGiftEvent = false;
       notifyListeners();
     }
   }

@@ -10,6 +10,12 @@ abstract class GiftEconomyAdminRepository {
     GiftCatalogItemUpsertRequest request,
   );
 
+  Future<List<GiftEvent>> listGiftEvents({int limit = 100});
+
+  Future<List<GiftAbuseFlag>> listGiftAbuseFlags({int limit = 100});
+
+  Future<GiftEvent> refundGiftEvent(String eventId);
+
   Future<List<RevenueShareRule>> listRevenueShareRules(
     GiftEconomyRuleListQuery query,
   );
@@ -22,9 +28,7 @@ abstract class GiftEconomyAdminRepository {
     GiftEconomyRuleListQuery query,
   );
 
-  Future<GiftComboRule> upsertGiftComboRule(
-    GiftComboRuleUpsertRequest request,
-  );
+  Future<GiftComboRule> upsertGiftComboRule(GiftComboRuleUpsertRequest request);
 
   Future<List<EconomyBurnEvent>> listBurnEvents(
     GiftEconomyBurnEventsQuery query,
@@ -32,9 +36,8 @@ abstract class GiftEconomyAdminRepository {
 }
 
 class GiftEconomyAdminApiRepository implements GiftEconomyAdminRepository {
-  GiftEconomyAdminApiRepository({
-    required GteAuthedApi client,
-  }) : _client = client;
+  GiftEconomyAdminApiRepository({required GteAuthedApi client})
+    : _client = client;
 
   factory GiftEconomyAdminApiRepository.standard({
     required String baseUrl,
@@ -55,7 +58,7 @@ class GiftEconomyAdminApiRepository implements GiftEconomyAdminRepository {
   @override
   Future<List<GiftCatalogItem>> listGiftCatalog() async {
     return parseList(
-      await _client.getList('/economy/gift-catalog', auth: false),
+      await _client.getList('/api/gifts/catalog', auth: false),
       GiftCatalogItem.fromJson,
       label: 'gift catalog',
     );
@@ -68,9 +71,40 @@ class GiftEconomyAdminApiRepository implements GiftEconomyAdminRepository {
     return GiftCatalogItem.fromJson(
       await _client.request(
         'POST',
-        '/admin/economy/gift-catalog',
+        '/api/admin/gifts/catalog',
         body: request.toJson(),
       ),
+    );
+  }
+
+  @override
+  Future<List<GiftEvent>> listGiftEvents({int limit = 100}) async {
+    return parseList(
+      await _client.getList(
+        '/api/admin/gifts/events',
+        query: <String, Object?>{'limit': limit},
+      ),
+      GiftEvent.fromJson,
+      label: 'gift events',
+    );
+  }
+
+  @override
+  Future<List<GiftAbuseFlag>> listGiftAbuseFlags({int limit = 100}) async {
+    return parseList(
+      await _client.getList(
+        '/api/admin/gifts/abuse-flags',
+        query: <String, Object?>{'limit': limit},
+      ),
+      GiftAbuseFlag.fromJson,
+      label: 'gift abuse flags',
+    );
+  }
+
+  @override
+  Future<GiftEvent> refundGiftEvent(String eventId) async {
+    return GiftEvent.fromJson(
+      await _client.request('POST', '/api/admin/gifts/events/$eventId/refund'),
     );
   }
 

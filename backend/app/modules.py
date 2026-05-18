@@ -499,6 +499,7 @@ DOMAIN_MODULES = (
     _module("gift_engine", router_path="app.gift_engine.router:router", api_only=True),
     _module("football_gifts_phase3", router_path="app.gift_engine.router:gifts_router", api_only=True),
     _module("gift_stats_phase3", router_path="app.gift_engine.router:gift_stats_router", api_only=True),
+    _module("admin_gifts_phase5", router_path="app.gift_engine.router:admin_gifts_router", api_only=True),
     _module("reward_engine", router_path="app.reward_engine.router:router", api_only=True),
     _module(
         "reward_engine_admin",

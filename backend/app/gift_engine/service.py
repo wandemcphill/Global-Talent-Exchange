@@ -24,6 +24,7 @@ from app.models.notification_record import NotificationRecord
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.services.spending_control_service import SpendingControlService, SpendingControlViolation
+from app.services.social_collusion_detection_service import SocialCollusionDetectionService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -389,6 +390,7 @@ class GiftEngineService:
         self.session.flush()
         self._update_gift_stats(transaction=transaction, gift=gift, sender=sender)
         self._flag_reciprocal_gifting(transaction=transaction)
+        SocialCollusionDetectionService(self.session).apply_after_gift(transaction=transaction)
         self._create_context_message(
             transaction=transaction,
             gift=gift,
