@@ -204,9 +204,11 @@ class MarketPlayerListItemView(BaseModel):
     current_club_name: str | None
     current_competition_id: str | None
     current_competition_name: str | None
+    current_competition_country_name: str | None = None
     current_division_id: str | None
     current_division_name: str | None
     age: int | None
+    market_value_eur: float | None = None
     current_value_credits: float | None
     movement_pct: float | None
     trend_score: float | None

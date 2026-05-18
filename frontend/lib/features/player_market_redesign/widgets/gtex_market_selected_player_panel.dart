@@ -57,7 +57,7 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
                   (GtexMarketPlayerView player) => GtexBasketLineItem(
                     id: player.playerId,
                     title: player.name,
-                    subtitle: '${player.clubName} · ${player.position}',
+                    subtitle: '${player.clubName} - ${player.position}',
                     priceLabel: player.priceLabel,
                     onRemove: () => onRemoveFromBasket(player.playerId),
                   ),
@@ -256,7 +256,7 @@ class _SelectedPlayerDetail extends StatelessWidget {
                 color: GtexColors.red,
               ),
             GtexStatusChip(
-              label: player.leagueLabel,
+              label: player.leagueDetailLabel,
               icon: Icons.public_outlined,
               color: GtexColors.pitch,
             ),

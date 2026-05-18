@@ -547,12 +547,14 @@ def test_market_real_player_metadata_uses_summary_and_eur_value_fallback(session
     assert item.current_club_name == "Summary FC"
     assert item.current_competition_id == "competition-summary-only"
     assert item.current_competition_name == "Summary League"
+    assert item.market_value_eur == 12_500_000.0
     assert item.current_value_credits is not None
     assert item.current_value_credits > 0
 
     detail = _build_market_query_service(session).get_player_detail(player.id)
     assert detail.identity.current_club_name == "Summary FC"
     assert detail.identity.current_competition_name == "Summary League"
+    assert detail.market_profile.market_value_eur == item.market_value_eur
     assert detail.value.current_value_credits == item.current_value_credits
     assert _build_market_query_service(session).get_player_ticker(player.id).player_id == player.id
 

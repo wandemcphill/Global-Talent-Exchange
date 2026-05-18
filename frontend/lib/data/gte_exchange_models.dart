@@ -221,9 +221,11 @@ class GteMarketPlayerListItem {
     required this.currentClubName,
     this.currentCompetitionId,
     this.currentCompetitionName,
+    this.currentCompetitionCountryName,
     this.currentDivisionId,
     this.currentDivisionName,
     this.age,
+    this.marketValueEur,
     required this.currentValueCredits,
     required this.movementPct,
     required this.trendScore,
@@ -261,9 +263,11 @@ class GteMarketPlayerListItem {
   final String? currentClubName;
   final String? currentCompetitionId;
   final String? currentCompetitionName;
+  final String? currentCompetitionCountryName;
   final String? currentDivisionId;
   final String? currentDivisionName;
   final int? age;
+  final double? marketValueEur;
   final double? currentValueCredits;
   final double? movementPct;
   final double? trendScore;
@@ -323,6 +327,10 @@ class GteMarketPlayerListItem {
         'current_competition_name',
         'currentCompetitionName',
       ]),
+      currentCompetitionCountryName: GteJson.stringOrNull(json, <String>[
+        'current_competition_country_name',
+        'currentCompetitionCountryName',
+      ]),
       currentDivisionId: GteJson.stringOrNull(json, <String>[
         'current_division_id',
         'currentDivisionId',
@@ -332,6 +340,10 @@ class GteMarketPlayerListItem {
         'currentDivisionName',
       ]),
       age: _nullableInteger(json, <String>['age']),
+      marketValueEur: _nullableNumber(json, <String>[
+        'market_value_eur',
+        'marketValueEur',
+      ]),
       currentValueCredits: _nullableNumber(json, <String>[
         'current_value_credits',
         'currentValueCredits',

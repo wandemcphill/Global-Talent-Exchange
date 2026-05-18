@@ -747,9 +747,11 @@ class MarketPlayerListItem:
     current_club_name: str | None
     current_competition_id: str | None
     current_competition_name: str | None
+    current_competition_country_name: str | None
     current_division_id: str | None
     current_division_name: str | None
     age: int | None
+    market_value_eur: float | None
     current_value_credits: float | None
     movement_pct: float | None
     trend_score: float | None
@@ -1415,7 +1417,9 @@ class MarketPlayerQueryService:
         ]
 
     def _catalog_country_id(self, record: MarketPlayerRecord) -> str | None:
-        return self._nationality_code(record) or (record.player.country.id if record.player.country is not None else None)
+        return self._nationality_code(record) or (
+            record.player.country.id if record.player.country is not None else None
+        )
 
     def _catalog_country(self, record: MarketPlayerRecord) -> Any | None:
         competition = record.player.current_competition
@@ -1484,6 +1488,12 @@ class MarketPlayerQueryService:
             return internal_league.name
         return None
 
+    def _current_competition_country_name(self, record: MarketPlayerRecord) -> str | None:
+        competition = record.player.current_competition
+        if competition is not None and competition.country is not None:
+            return competition.country.name
+        return None
+
     def _bump_catalog_option(
         self,
         groups: dict[str, dict[str, Any]],
@@ -1538,9 +1548,11 @@ class MarketPlayerQueryService:
             current_club_name=self._catalog_club_label(record),
             current_competition_id=self._catalog_league_id(record),
             current_competition_name=self._catalog_league_label(record),
+            current_competition_country_name=self._current_competition_country_name(record),
             current_division_id=self._current_division_id(record),
             current_division_name=self._current_division_name(record),
             age=self._player_age(record.player.date_of_birth),
+            market_value_eur=self._real_world_market_value_eur(record),
             current_value_credits=self._current_value_credits(record),
             movement_pct=self._movement_pct(record),
             trend_score=self._trend_score(record),
@@ -2197,6 +2209,13 @@ class MarketPlayerQueryService:
             if value is None or value <= 0:
                 continue
             return self._positive_display_value(credits_from_real_world_value(value))
+        return None
+
+    def _real_world_market_value_eur(self, record: MarketPlayerRecord) -> float | None:
+        for value in (record.player.current_market_reference_value, record.player.market_value_eur):
+            if value is None or value <= 0:
+                continue
+            return float(value)
         return None
 
     @staticmethod

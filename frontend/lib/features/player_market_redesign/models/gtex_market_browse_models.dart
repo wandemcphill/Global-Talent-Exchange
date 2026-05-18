@@ -14,6 +14,7 @@ class GtexMarketPlayerView {
     required this.nationality,
     required this.clubName,
     required this.age,
+    required this.marketValueEur,
     required this.price,
     required this.movementPct,
     required this.interestScore,
@@ -28,6 +29,7 @@ class GtexMarketPlayerView {
     this.sellingClubId,
     this.imageUrl,
     this.leagueName,
+    this.leagueCountryName,
     this.divisionName,
     this.countryCode,
     this.clubId,
@@ -46,6 +48,7 @@ class GtexMarketPlayerView {
   final String nationality;
   final String clubName;
   final int? age;
+  final double? marketValueEur;
   final double? price;
   final double? movementPct;
   final int? interestScore;
@@ -60,6 +63,7 @@ class GtexMarketPlayerView {
   final String? sellingClubId;
   final String? imageUrl;
   final String? leagueName;
+  final String? leagueCountryName;
   final String? divisionName;
   final String? countryCode;
   final String? clubId;
@@ -88,6 +92,7 @@ class GtexMarketPlayerView {
               ? player.currentClubName!.trim()
               : 'Unattached / unknown club',
       age: player.age,
+      marketValueEur: player.marketValueEur,
       price: player.currentValueCredits,
       movementPct: player.movementPct,
       interestScore: player.marketInterestScore,
@@ -102,6 +107,7 @@ class GtexMarketPlayerView {
       sellingClubId: player.sellingClubId,
       imageUrl: player.imageUrl,
       leagueName: player.currentCompetitionName,
+      leagueCountryName: player.currentCompetitionCountryName,
       divisionName: player.currentDivisionName,
       countryCode: player.nationalityCode,
       clubId: player.currentClubId,
@@ -119,7 +125,11 @@ class GtexMarketPlayerView {
       transferListingId != null && transferListingId!.trim().isNotEmpty;
   bool get isRising => (movementPct ?? 0) > 0;
 
-  String get priceLabel => GtexMarketFormatters.credits(price);
+  String get priceLabel =>
+      marketValueEur == null
+          ? GtexMarketFormatters.credits(price)
+          : GtexMarketFormatters.euros(marketValueEur);
+  String get internalPriceLabel => GtexMarketFormatters.credits(price);
   String get ageLabel => age == null || age! <= 0 ? 'Age TBC' : 'Age $age';
   int? get gsiScore => globalScoutingIndex?.round();
   String? get gsiLabel =>
@@ -169,6 +179,17 @@ class GtexMarketPlayerView {
       leagueName?.trim().isNotEmpty == true
           ? leagueName!.trim()
           : 'League metadata pending';
+  String get leagueDetailLabel {
+    final String league = leagueLabel;
+    final String? country = leagueCountryName?.trim();
+    if (country == null ||
+        country.isEmpty ||
+        league.toLowerCase().contains(country.toLowerCase())) {
+      return league;
+    }
+    return '$league ($country)';
+  }
+
   String get divisionLabel =>
       divisionName?.trim().isNotEmpty == true
           ? divisionName!.trim()
@@ -333,16 +354,28 @@ class GtexMarketFormatters {
     if (value == null) {
       return 'TBD';
     }
-    if (value >= 1000000000) {
-      return 'â‚µ${(value / 1000000000).toStringAsFixed(1)}B';
+    return 'GTEX ${compactNumber(value)}';
+  }
+
+  static String euros(double? value) {
+    if (value == null) {
+      return 'Market value TBD';
     }
-    if (value >= 1000000) {
-      return 'â‚µ${(value / 1000000).toStringAsFixed(1)}M';
+    return 'EUR ${compactNumber(value)}';
+  }
+
+  static String compactNumber(double value) {
+    final double absValue = value.abs();
+    if (absValue >= 1000000000) {
+      return '${(value / 1000000000).toStringAsFixed(1)}B';
     }
-    if (value >= 1000) {
-      return 'â‚µ${(value / 1000).toStringAsFixed(1)}K';
+    if (absValue >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(1)}M';
     }
-    return 'â‚µ${value.toStringAsFixed(0)}';
+    if (absValue >= 1000) {
+      return '${(value / 1000).toStringAsFixed(1)}K';
+    }
+    return value.toStringAsFixed(0);
   }
 
   static String labelFromToken(String value) {

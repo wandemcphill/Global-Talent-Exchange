@@ -149,6 +149,12 @@ class GtexMarketPlayerGrid extends StatelessWidget {
                           color: GtexColors.gold,
                           compact: true,
                         ),
+                        GtexStatusChip(
+                          label: player.leagueDetailLabel,
+                          icon: Icons.public_outlined,
+                          color: GtexColors.pitch,
+                          compact: true,
+                        ),
                         if (player.loanTerms.isNotEmpty)
                           const GtexStatusChip(
                             label: 'Loan',

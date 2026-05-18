@@ -89,9 +89,11 @@ void main() {
           club: 'Arsenal',
           imageUrl: 'https://cdn.gtex.test/saka.png',
           leagueName: 'Premier League',
+          leagueCountryName: 'England',
           divisionName: 'Division 1',
           countryCode: 'ENG',
           clubId: 'arsenal',
+          marketValueEur: 120000000,
           transferListingId: 'listing-saka',
           transferListingStatus: 'open',
           sellingClubId: 'club-arsenal',
@@ -104,6 +106,7 @@ void main() {
 
       expect(player.imageUrl, 'https://cdn.gtex.test/saka.png');
       expect(player.leagueName, 'Premier League');
+      expect(player.leagueDetailLabel, 'Premier League (England)');
       expect(player.divisionName, 'Division 1');
       expect(player.countryCode, 'ENG');
       expect(player.clubId, 'arsenal');
@@ -116,6 +119,8 @@ void main() {
       expect(player.gsiTierLabel, 'High-grade GSI');
       expect(player.gsiTrendLabel, 'GSI +3.4%');
       expect(player.gsiDetailLabel, 'GSI 88 - High-grade GSI');
+      expect(player.priceLabel, 'EUR 120.0M');
+      expect(player.internalPriceLabel, 'GTEX 50.0M');
     });
 
     test('does not coerce missing real-player age to zero', () {
@@ -141,7 +146,7 @@ void main() {
       expect(player.age, isNull);
       expect(player.ageLabel, 'Age TBC');
       expect(player.clubName, 'Summary FC');
-      expect(player.priceLabel, isNot('GTX —'));
+      expect(player.priceLabel, 'GTEX 125');
     });
   });
 
@@ -172,6 +177,7 @@ void main() {
 
       expect(basket.items.length, 2);
       expect(basket.totalCredits, 175000000);
+      expect(basket.totalLabel, 'GTEX 175.0M');
       expect(basket.contains('saka'), isTrue);
       expect(basket.removed('saka').contains('saka'), isFalse);
     });
@@ -189,7 +195,7 @@ void main() {
               position: 'RW',
               clubName: 'Arsenal',
               nationality: 'England',
-              priceLabel: 'GTX 100M',
+              priceLabel: 'EUR 100.0M',
               gsiLabel: 'GSI 88',
               imageUrl: 'https://cdn.gtex.test/saka.png',
             ),
@@ -213,9 +219,11 @@ GteMarketPlayerListItem _player({
   double price = 50000000,
   String? imageUrl,
   String? leagueName,
+  String? leagueCountryName,
   String? divisionName,
   String? countryCode,
   String? clubId,
+  double? marketValueEur,
   String? transferListingId,
   String? transferListingStatus,
   String? sellingClubId,
@@ -233,8 +241,10 @@ GteMarketPlayerListItem _player({
     currentClubId: clubId,
     currentClubName: club,
     currentCompetitionName: leagueName,
+    currentCompetitionCountryName: leagueCountryName,
     currentDivisionName: divisionName,
     age: 24,
+    marketValueEur: marketValueEur,
     currentValueCredits: price,
     movementPct: 2.5,
     trendScore: 85,
