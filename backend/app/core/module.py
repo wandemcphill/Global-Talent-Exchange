@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from importlib import import_module
+import logging
+from time import perf_counter
 from typing import Any, Callable
 
 from fastapi import APIRouter, FastAPI
@@ -14,6 +16,8 @@ from app.core.container import ApplicationContext
 ModuleHook = Callable[[FastAPI, ApplicationContext], None]
 HookReference = ModuleHook | str
 RouterTransform = Callable[[APIRouter], APIRouter]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,13 +48,15 @@ class DomainModule:
     def load_hooks(self, *, phase: str) -> tuple[ModuleHook, ...]:
         hook_refs = self.on_startup if phase == "startup" else self.on_shutdown
         return tuple(
-            _resolve_attribute(
-                hook_ref,
-                expected_type=None,
-                label=f"{phase} hook for module '{self.name}'",
+            (
+                _resolve_attribute(
+                    hook_ref,
+                    expected_type=None,
+                    label=f"{phase} hook for module '{self.name}'",
+                )
+                if isinstance(hook_ref, str)
+                else hook_ref
             )
-            if isinstance(hook_ref, str)
-            else hook_ref
             for hook_ref in hook_refs
         )
 
@@ -103,7 +109,120 @@ def run_module_hooks(
 
     for module in modules:
         for hook in module.load_hooks(phase=phase):
-            hook(app, context)
+            hook_label = _hook_label(hook)
+            hook_stage = _classify_hook_stage(hook_label)
+            if phase == "startup" and _should_skip_startup_hook(context, hook_label, hook_stage):
+                _record_hook_profile(
+                    app,
+                    module_name=module.name,
+                    hook_name=hook_label,
+                    phase=phase,
+                    stage=hook_stage,
+                    duration_seconds=0.0,
+                    status="skipped",
+                )
+                logger.info(
+                    "app.startup.hook.skipped module=%s hook=%s stage=%s profile=%s",
+                    module.name,
+                    hook_label,
+                    hook_stage,
+                    getattr(context.settings, "startup_profile", "production"),
+                )
+                continue
+            started_at = perf_counter()
+            status = "complete"
+            try:
+                hook(app, context)
+            except Exception:
+                status = "failed"
+                raise
+            finally:
+                duration_seconds = perf_counter() - started_at
+                _record_hook_profile(
+                    app,
+                    module_name=module.name,
+                    hook_name=hook_label,
+                    phase=phase,
+                    stage=hook_stage,
+                    duration_seconds=duration_seconds,
+                    status=status,
+                )
+                if phase == "startup":
+                    logger.info(
+                        "app.startup.hook.%s module=%s hook=%s stage=%s duration_ms=%.2f",
+                        status,
+                        module.name,
+                        hook_label,
+                        hook_stage,
+                        duration_seconds * 1000,
+                    )
+
+
+def _hook_label(hook: ModuleHook) -> str:
+    module_name = getattr(hook, "__module__", "")
+    hook_name = getattr(hook, "__name__", repr(hook))
+    return f"{module_name}:{hook_name}" if module_name else hook_name
+
+
+def _classify_hook_stage(hook_label: str) -> str:
+    normalized = hook_label.lower()
+    if "preseeded_national" in normalized or "preload" in normalized or "portrait" in normalized:
+        return "preload"
+    if (
+        ".worker" in normalized
+        or "scheduler" in normalized
+        or "runtime" in normalized
+        or ":bind_" in normalized
+        or "install_broadcast_runtime" in normalized
+    ):
+        return "worker"
+    if "seed" in normalized or "defaults" in normalized or "catalog" in normalized:
+        return "seed"
+    return "critical"
+
+
+def _should_skip_startup_hook(
+    context: ApplicationContext,
+    hook_label: str,
+    hook_stage: str,
+) -> bool:
+    settings = context.settings
+    normalized = hook_label.lower()
+    if hook_stage == "seed" and not getattr(settings, "run_startup_seeding", True):
+        return True
+    if "regen" in normalized and hook_stage == "preload" and not getattr(settings, "regen_preload_enabled", True):
+        return True
+    if "portrait" in normalized and not getattr(settings, "portrait_preload_enabled", True):
+        return True
+    if getattr(settings, "fast_test_startup_enabled", False) and hook_stage in {"seed", "preload", "worker"}:
+        return True
+    return False
+
+
+def _record_hook_profile(
+    app: FastAPI,
+    *,
+    module_name: str,
+    hook_name: str,
+    phase: str,
+    stage: str,
+    duration_seconds: float,
+    status: str,
+) -> None:
+    records = getattr(app.state, "startup_hook_records", None)
+    if records is None:
+        records = []
+        app.state.startup_hook_records = records
+    records.append(
+        {
+            "module": module_name,
+            "hook": hook_name,
+            "phase": phase,
+            "stage": stage,
+            "duration_ms": round(duration_seconds * 1000, 3),
+            "status": status,
+        }
+    )
 
 
 def _route_fingerprints(routes: Iterable[object]) -> set[tuple[str, tuple[str, ...]]]:

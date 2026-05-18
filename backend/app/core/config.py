@@ -122,6 +122,12 @@ class SettingsSource(BaseModel):
         default=True,
         validation_alias=AliasChoices("RUN_STARTUP_SEEDING", "GTE_RUN_STARTUP_SEEDING"),
     )
+    startup_profile: str = Field(default="production", validation_alias="GTE_STARTUP_PROFILE")
+    deferred_startup_enabled: bool = Field(default=True, validation_alias="GTE_DEFERRED_STARTUP_ENABLED")
+    startup_profiling_enabled: bool = Field(default=True, validation_alias="GTE_STARTUP_PROFILING_ENABLED")
+    regen_preload_enabled: bool = Field(default=True, validation_alias="GTE_REGEN_PRELOAD_ENABLED")
+    portrait_preload_enabled: bool = Field(default=True, validation_alias="GTE_PORTRAIT_PRELOAD_ENABLED")
+    test_auth_fixture_mode: bool = Field(default=False, validation_alias="GTE_TEST_AUTH_FIXTURE_MODE")
     bootstrap_admin_enabled: bool = Field(
         default=False,
         validation_alias="GTE_BOOTSTRAP_ADMIN_ENABLED",
@@ -779,6 +785,12 @@ class Settings:
     crypto_provider_key: str
     run_migration_check: bool
     run_startup_seeding: bool
+    startup_profile: str
+    deferred_startup_enabled: bool
+    startup_profiling_enabled: bool
+    regen_preload_enabled: bool
+    portrait_preload_enabled: bool
+    test_auth_fixture_mode: bool
     bootstrap_admin_enabled: bool
     bootstrap_admin_email: str | None
     bootstrap_admin_password: str | None
@@ -851,6 +863,10 @@ class Settings:
     @property
     def environment(self) -> str:
         return self.app_env
+
+    @property
+    def fast_test_startup_enabled(self) -> bool:
+        return self.startup_profile in {"test", "minimal", "fast_test"} or self.test_auth_fixture_mode
 
     @property
     def kafka_enabled(self) -> bool:
@@ -1937,6 +1953,17 @@ def _normalized_optional_setting(value: str | None) -> str | None:
     return candidate or None
 
 
+def _normalize_startup_profile(value: str | None) -> str:
+    candidate = (value or "production").strip().lower().replace("-", "_")
+    if candidate in {"prod", "production"}:
+        return "production"
+    if candidate in {"test", "tests", "pytest", "fast", "fast_test"}:
+        return "test"
+    if candidate in {"minimal", "lite"}:
+        return "minimal"
+    return "production"
+
+
 def _require_secret(name: str, value: str | None) -> str:
     candidate = _normalized_optional_setting(value)
     if candidate is None:
@@ -2051,6 +2078,12 @@ def load_settings(
         crypto_provider_key=source.crypto_provider_key,
         run_migration_check=source.run_migration_check,
         run_startup_seeding=source.run_startup_seeding,
+        startup_profile=_normalize_startup_profile(source.startup_profile),
+        deferred_startup_enabled=source.deferred_startup_enabled,
+        startup_profiling_enabled=source.startup_profiling_enabled,
+        regen_preload_enabled=source.regen_preload_enabled,
+        portrait_preload_enabled=source.portrait_preload_enabled,
+        test_auth_fixture_mode=source.test_auth_fixture_mode,
         bootstrap_admin_enabled=source.bootstrap_admin_enabled,
         bootstrap_admin_email=_normalized_optional_setting(source.bootstrap_admin_email),
         bootstrap_admin_password=_normalized_optional_setting(source.bootstrap_admin_password),

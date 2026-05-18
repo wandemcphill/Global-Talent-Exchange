@@ -29,14 +29,19 @@ os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_EMAIL", "admin@test.gtex.local")
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_PASSWORD", BOOTSTRAP_TEST_ADMIN_PASSWORD)
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_USERNAME", "gtex_test_admin")
 os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME", "GTEX Test Admin")
+os.environ.setdefault("GTE_DEFERRED_STARTUP_ENABLED", "0")
 os.environ.setdefault("GTE_COMPETITIVE_INTEGRITY_WORKER_ENABLED", "0")
 os.environ.setdefault("GTE_FEDERATION_WORKER_ENABLED", "0")
 os.environ.setdefault("GTE_HISTORY_ENGAGEMENT_WORKER_ENABLED", "0")
 os.environ.setdefault("GTE_OUTBOX_RELAY_ENABLED", "0")
+os.environ.setdefault("GTE_PORTRAIT_PRELOAD_ENABLED", "0")
 os.environ.setdefault("GTE_PROJECTION_WORKERS_ENABLED", "0")
+os.environ.setdefault("GTE_REGEN_PRELOAD_ENABLED", "0")
 os.environ.setdefault("GTE_REAL_WORLD_SYNC_ENABLED", "0")
 os.environ.setdefault("GTE_RUN_STARTUP_SEEDING", "0")
+os.environ.setdefault("GTE_STARTUP_PROFILE", "test")
 os.environ.setdefault("GTE_TASK_QUEUE_ENABLED", "0")
+os.environ.setdefault("GTE_TEST_AUTH_FIXTURE_MODE", "1")
 os.environ.setdefault("GTE_VIRAL_RANKING_WORKER_ENABLED", "0")
 
 
@@ -127,11 +132,6 @@ def demo_auth_headers(client, demo_seed, demo_user_credentials):
 
 @pytest.fixture
 def bootstrap_admin_headers(client, app_session_factory):
-    startup_thread = getattr(client.app.state, "deferred_startup_thread", None)
-    if startup_thread is not None and startup_thread.is_alive():
-        startup_thread.join(timeout=30)
-    assert startup_thread is None or not startup_thread.is_alive(), "Deferred startup did not finish in time."
-
     from app.auth.service import AuthService
     from app.models.user import UserRole
 

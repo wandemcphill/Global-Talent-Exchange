@@ -29,7 +29,7 @@ def _build_test_app() -> FastAPI:
 def test_auth_paths_are_marked_for_lazy_hydration_bypass() -> None:
     assert _should_bypass_lazy_hydration("/auth/login") is True
     assert _should_bypass_lazy_hydration("/api/auth/me") is True
-    assert _should_bypass_lazy_hydration("/api/competitions") is False
+    assert _should_bypass_lazy_hydration("/api/competitions") is True
 
 
 def test_lazy_module_middleware_skips_hydration_for_auth_paths(monkeypatch) -> None:

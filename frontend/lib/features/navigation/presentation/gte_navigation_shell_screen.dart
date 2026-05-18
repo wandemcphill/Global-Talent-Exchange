@@ -26,6 +26,7 @@ import 'package:gte_frontend/features/launch_control_redesign/launch_control_fea
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/social/social_screen.dart';
+import 'package:gte_frontend/features/world/widgets/football_world_pulse_widgets.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_exchange_player_detail_screen.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
@@ -231,6 +232,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                     child: _buildModeSyncCard(context),
                   )
                   : null,
+          livePulseStrip: const FootballWorldPulseTicker(),
+          worldPulseRail:
+              compactViewport ? null : const FootballWorldPulseRail(),
           child: workspace,
         );
       },

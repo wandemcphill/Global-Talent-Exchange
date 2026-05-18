@@ -115,6 +115,17 @@ class _LivingFootballOSBackgroundState extends State<LivingFootballOSBackground>
                 Positioned.fill(
                   child: IgnorePointer(
                     child: CustomPaint(
+                      key: const Key('living-football-os-stadium-lights'),
+                      painter: _StadiumLightSweepPainter(
+                        progress: progress,
+                        motionEnabled: _isAnimating,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
                       key: const Key('living-football-os-tactics'),
                       painter: _TacticalPitchPainter(
                         progress: progress,
@@ -232,6 +243,70 @@ class _FootballOSDensity {
           activityDotCount: 14,
         );
     }
+  }
+}
+
+class _StadiumLightSweepPainter extends CustomPainter {
+  const _StadiumLightSweepPainter({
+    required this.progress,
+    required this.motionEnabled,
+  });
+
+  final double progress;
+  final bool motionEnabled;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) {
+      return;
+    }
+    final double phase = motionEnabled ? progress : 0.32;
+    final double sweep = math.sin(phase * math.pi * 2) * size.width * 0.08;
+    final Rect leftBeam = Rect.fromLTWH(
+      -size.width * 0.22 + sweep,
+      -size.height * 0.08,
+      size.width * 0.72,
+      size.height * 0.84,
+    );
+    final Rect rightBeam = Rect.fromLTWH(
+      size.width * 0.54 - sweep,
+      -size.height * 0.06,
+      size.width * 0.68,
+      size.height * 0.82,
+    );
+    final Paint beamPaint =
+        Paint()
+          ..blendMode = BlendMode.plus
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 38);
+    beamPaint.shader = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[
+        GtexColors.gold.withValues(alpha: 0.045),
+        GtexColors.cyan.withValues(alpha: 0.018),
+        Colors.transparent,
+      ],
+      stops: const <double>[0, 0.44, 1],
+    ).createShader(leftBeam);
+    canvas.drawOval(leftBeam, beamPaint);
+
+    beamPaint.shader = LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: <Color>[
+        GtexColors.pitch.withValues(alpha: 0.040),
+        GtexColors.gold.withValues(alpha: 0.018),
+        Colors.transparent,
+      ],
+      stops: const <double>[0, 0.46, 1],
+    ).createShader(rightBeam);
+    canvas.drawOval(rightBeam, beamPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _StadiumLightSweepPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.motionEnabled != motionEnabled;
   }
 }
 

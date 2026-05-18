@@ -42,6 +42,10 @@ void main() {
       find.byKey(const Key('living-football-os-atmosphere')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const Key('living-football-os-stadium-lights')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('living-football-os-tactics')), findsOneWidget);
     expect(
       find.byKey(const Key('living-football-os-particles')),

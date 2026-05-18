@@ -6,6 +6,7 @@ import logging
 import os
 from pathlib import Path
 from threading import Thread
+from time import perf_counter
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -103,6 +104,9 @@ def create_app(
     app.state.domain_modules = tuple(module.name for module in modules)
     app.state.run_migration_check = run_migration_check
     app.state.deferred_startup_thread = None
+    app.state.deferred_startup_skipped = False
+    app.state.startup_profile_records = []
+    app.state.startup_hook_records = []
     app.state.real_player_bulk_publish_jobs = RealPlayerBulkPublishJobRegistry(
         session_factory=context.database.session_factory,
         settings=resolved_settings,
@@ -207,15 +211,49 @@ async def _startup_app(app: FastAPI) -> None:
             app.state.run_migration_check,
             app.state.settings.run_migration_check,
         )
-        runtime_context.initialize(run_migration_check=app.state.run_migration_check)
-        bind_application_state(app, context=runtime_context, modules=module_specs)
+        _run_startup_step(
+            app,
+            "runtime.initialize",
+            lambda: runtime_context.initialize(run_migration_check=app.state.run_migration_check),
+        )
+        _run_startup_step(
+            app,
+            "application_state.bind",
+            lambda: bind_application_state(app, context=runtime_context, modules=module_specs),
+        )
         if getattr(app.state, "realtime", None) is not None:
             app.state.realtime.bind_loop(asyncio.get_running_loop())
-        check_db(app)
-        check_redis(app)
-        runtime_context.start_outbox_relay()
-        runtime_context.metrics.refresh_from_database()
-        _start_deferred_startup(app, context=runtime_context, modules=module_specs)
+        _run_startup_step(app, "health.database", lambda: check_db(app))
+        if _should_skip_redis_check(app.state.settings):
+            _record_startup_step(app, "health.redis", 0.0, status="skipped")
+            logger.info("app.startup.health.redis.skipped profile=%s", app.state.settings.startup_profile)
+        else:
+            _run_startup_step(app, "health.redis", lambda: check_redis(app))
+        if _should_skip_background_start(app.state.settings):
+            _record_startup_step(app, "outbox_relay.start", 0.0, status="skipped")
+            logger.info("app.startup.outbox_relay.skipped profile=%s", app.state.settings.startup_profile)
+        else:
+            _run_startup_step(app, "outbox_relay.start", runtime_context.start_outbox_relay)
+        if _should_skip_metrics_refresh(app.state.settings):
+            _record_startup_step(app, "metrics.refresh", 0.0, status="skipped")
+            logger.info("app.startup.metrics.refresh.skipped profile=%s", app.state.settings.startup_profile)
+        else:
+            _run_startup_step(app, "metrics.refresh", runtime_context.metrics.refresh_from_database)
+        if not app.state.settings.deferred_startup_enabled or app.state.settings.fast_test_startup_enabled:
+            app.state.deferred_startup_thread = None
+            app.state.deferred_startup_skipped = True
+            _record_startup_step(app, "deferred_startup.thread", 0.0, status="skipped")
+            logger.info(
+                "app.startup.deferred_startup.skipped enabled=%s profile=%s",
+                app.state.settings.deferred_startup_enabled,
+                app.state.settings.startup_profile,
+            )
+        else:
+            _run_startup_step(
+                app,
+                "deferred_startup.thread",
+                lambda: _start_deferred_startup(app, context=runtime_context, modules=module_specs),
+            )
         logger.info("app.startup.complete")
     except Exception:
         logger.exception(
@@ -242,6 +280,51 @@ async def _shutdown_app(app: FastAPI) -> None:
     run_module_hooks(app, runtime_context, module_specs, phase="shutdown")
     runtime_context.shutdown()
     logger.info("app.shutdown.complete")
+
+
+def _run_startup_step(app: FastAPI, name: str, action):
+    started_at = perf_counter()
+    status = "complete"
+    try:
+        return action()
+    except Exception:
+        status = "failed"
+        raise
+    finally:
+        _record_startup_step(app, name, perf_counter() - started_at, status=status)
+
+
+def _record_startup_step(
+    app: FastAPI,
+    name: str,
+    duration_seconds: float,
+    *,
+    status: str,
+) -> None:
+    records = getattr(app.state, "startup_profile_records", None)
+    if records is None:
+        records = []
+        app.state.startup_profile_records = records
+    records.append(
+        {
+            "name": name,
+            "duration_ms": round(duration_seconds * 1000, 3),
+            "status": status,
+        }
+    )
+    logger.info("app.startup.step.%s name=%s duration_ms=%.2f", status, name, duration_seconds * 1000)
+
+
+def _should_skip_redis_check(settings: Settings) -> bool:
+    return settings.fast_test_startup_enabled and not settings.redis_url
+
+
+def _should_skip_background_start(settings: Settings) -> bool:
+    return settings.fast_test_startup_enabled or not settings.outbox_relay_enabled
+
+
+def _should_skip_metrics_refresh(settings: Settings) -> bool:
+    return settings.fast_test_startup_enabled
 
 
 def check_db(app: FastAPI) -> None:

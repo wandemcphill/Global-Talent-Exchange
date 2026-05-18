@@ -33,6 +33,8 @@ class GtexAppShell extends StatelessWidget {
     this.subtitle = 'Global Talent Exchange',
     this.actions = const <Widget>[],
     this.status,
+    this.livePulseStrip,
+    this.worldPulseRail,
   });
 
   final List<GtexShellDestination> destinations;
@@ -41,10 +43,14 @@ class GtexAppShell extends StatelessWidget {
   final String subtitle;
   final List<Widget> actions;
   final Widget? status;
+  final Widget? livePulseStrip;
+  final Widget? worldPulseRail;
 
   @override
   Widget build(BuildContext context) {
     final bool compact = GtexBreakpoints.isCompact(context);
+    final Widget pulseStrip =
+        livePulseStrip ?? _LiveFootballPulseStrip(destinations: destinations);
     return LivingFootballOSBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -59,7 +65,7 @@ class GtexAppShell extends StatelessWidget {
                         actions: actions,
                       ),
                       if (status != null) status!,
-                      _LiveFootballPulseStrip(destinations: destinations),
+                      pulseStrip,
                       Expanded(child: child),
                     ],
                   )
@@ -75,8 +81,16 @@ class GtexAppShell extends StatelessWidget {
                               actions: actions,
                             ),
                             if (status != null) status!,
-                            _LiveFootballPulseStrip(destinations: destinations),
-                            Expanded(child: child),
+                            pulseStrip,
+                            Expanded(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: <Widget>[
+                                  Expanded(child: child),
+                                  if (worldPulseRail != null) worldPulseRail!,
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
