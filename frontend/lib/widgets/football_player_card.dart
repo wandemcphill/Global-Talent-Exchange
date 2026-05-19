@@ -14,6 +14,7 @@ class FootballPlayerCard extends StatelessWidget {
     this.clubName,
     this.nationalityCode,
     this.rating,
+    this.ratingLabel = 'Overall rating',
     this.valueLabel,
     this.wageLabel,
     this.ageLabel,
@@ -31,6 +32,7 @@ class FootballPlayerCard extends StatelessWidget {
   final String? clubName;
   final String? nationalityCode;
   final int? rating;
+  final String ratingLabel;
   final String? valueLabel;
   final String? wageLabel;
   final String? ageLabel;
@@ -44,6 +46,7 @@ class FootballPlayerCard extends StatelessWidget {
     return PlayerCard(
       name: playerName,
       rating: rating ?? 0,
+      ratingLabel: ratingLabel,
       showRating: rating != null,
       image: imageUrl ?? '',
       playerAvatar: avatar,

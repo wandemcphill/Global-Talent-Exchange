@@ -28,6 +28,7 @@ class PlayerCard extends StatefulWidget {
     this.position,
     this.country,
     this.subtitle,
+    this.ratingLabel = 'Overall rating',
     this.valueInMillions,
     this.heroTag,
     this.highlighted = false,
@@ -50,6 +51,7 @@ class PlayerCard extends StatefulWidget {
   final String? position;
   final String? country;
   final String? subtitle;
+  final String ratingLabel;
   final double? valueInMillions;
   final String? heroTag;
   final bool highlighted;
@@ -166,7 +168,7 @@ class _CompactPlayerCardContent extends StatelessWidget {
             Expanded(
               child: Text(
                 widget.valueInMillions == null
-                    ? 'Overall rating'
+                    ? widget.ratingLabel
                     : AppFormatters.money(widget.valueInMillions!),
                 style: Theme.of(context).textTheme.bodySmall,
               ),

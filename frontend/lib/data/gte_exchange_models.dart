@@ -297,6 +297,32 @@ class GteMarketPlayerListItem {
 
   bool get isRising => (movementPct ?? 0) > 0;
 
+  int get displayRating {
+    final double? dynamicGsi = globalScoutingIndex;
+    if (dynamicGsi != null) {
+      return dynamicGsi.round().clamp(0, 100).toInt();
+    }
+    final double? rating = averageRating;
+    if (rating != null) {
+      return (rating * 10).round().clamp(0, 100).toInt();
+    }
+    final double? trend = trendScore;
+    if (trend != null) {
+      return trend.round().clamp(0, 100).toInt();
+    }
+    return (marketInterestScore ?? 0).clamp(0, 100).toInt();
+  }
+
+  String get gsiBand {
+    final int score = displayRating;
+    if (score >= 90) return 'World Class';
+    if (score >= 84) return 'Elite';
+    if (score >= 75) return 'Professional';
+    if (score >= 65) return 'Average';
+    if (score >= 50) return 'Developing';
+    return 'Youth';
+  }
+
   factory GteMarketPlayerListItem.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
       value,

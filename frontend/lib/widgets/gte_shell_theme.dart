@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/gte_theme_extensions.dart';
@@ -45,27 +46,26 @@ class GteShellTheme {
     final GteThemeVisuals visuals = resolvedDefinition.visuals;
     final GteThemeButtonSpec button = resolvedDefinition.button;
     final GteThemeMotion motion = resolvedDefinition.motion;
-    final ColorScheme colorScheme =
-        ColorScheme.fromSeed(
-          seedColor: resolvedDefinition.primaryColor,
-          brightness: Brightness.dark,
-        ).copyWith(
-          primary: resolvedDefinition.primaryColor,
-          onPrimary: resolvedDefinition.onPrimaryColor,
-          secondary: resolvedDefinition.secondaryColor,
-          onSecondary: resolvedDefinition.onSecondaryColor,
-          tertiary: resolvedDefinition.accentColor,
-          onTertiary: resolvedDefinition.onAccentColor,
-          surface: tokens.panel,
-          onSurface: tokens.textPrimary,
-          error: tokens.negative,
-          onError: _foregroundOn(tokens.negative, tokens),
-          outline: tokens.stroke,
-          shadow: tokens.shadow,
-          surfaceTint: Colors.transparent,
-          inverseSurface: tokens.surfaceHighlight,
-          inversePrimary: tokens.accentCapital,
-        );
+    final ColorScheme colorScheme = ColorScheme.fromSeed(
+      seedColor: resolvedDefinition.primaryColor,
+      brightness: Brightness.dark,
+    ).copyWith(
+      primary: resolvedDefinition.primaryColor,
+      onPrimary: resolvedDefinition.onPrimaryColor,
+      secondary: resolvedDefinition.secondaryColor,
+      onSecondary: resolvedDefinition.onSecondaryColor,
+      tertiary: resolvedDefinition.accentColor,
+      onTertiary: resolvedDefinition.onAccentColor,
+      surface: tokens.panel,
+      onSurface: tokens.textPrimary,
+      error: tokens.negative,
+      onError: _foregroundOn(tokens.negative, tokens),
+      outline: tokens.stroke,
+      shadow: tokens.shadow,
+      surfaceTint: Colors.transparent,
+      inverseSurface: tokens.surfaceHighlight,
+      inversePrimary: tokens.accentCapital,
+    );
 
     final TextTheme textTheme = resolvedDefinition.typography.buildTextTheme(
       primary: tokens.textPrimary,
@@ -293,9 +293,8 @@ class GteShellTheme {
         ) {
           final bool selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected
-                ? resolvedDefinition.primaryColor
-                : tokens.textMuted,
+            color:
+                selected ? resolvedDefinition.primaryColor : tokens.textMuted,
             size: selected ? 24 : 22,
           );
         }),
@@ -377,23 +376,20 @@ class GteShellTheme {
   }
 
   static GteThemeTokens tokensOf(BuildContext context) {
-    final GteThemeTokens? tokens = Theme.of(
-      context,
-    ).extension<GteThemeTokens>();
+    final GteThemeTokens? tokens =
+        Theme.of(context).extension<GteThemeTokens>();
     return tokens ?? activeTokens;
   }
 
   static GteThemeMotion motionOf(BuildContext context) {
-    final GteThemeMotion? motion = Theme.of(
-      context,
-    ).extension<GteThemeMotion>();
+    final GteThemeMotion? motion =
+        Theme.of(context).extension<GteThemeMotion>();
     return motion ?? activeDefinition.motion;
   }
 
   static GteThemeVisuals visualsOf(BuildContext context) {
-    final GteThemeVisuals? visuals = Theme.of(
-      context,
-    ).extension<GteThemeVisuals>();
+    final GteThemeVisuals? visuals =
+        Theme.of(context).extension<GteThemeVisuals>();
     return visuals ?? activeVisuals;
   }
 
