@@ -5,7 +5,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 
 ## Shared Source of Truth
 
-- Shared Flutter client files with API calls discovered: **113**
+- Shared Flutter client files with API calls discovered: **117**
 - Web and mobile therefore inherit the same endpoint usage and the same stale/legacy risks.
 
 ## Divergence Risks
@@ -172,6 +172,13 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/story_feed_api.dart -> /api/story-feed`
 - `frontend/lib/data/story_feed_api.dart -> /api/story-feed/digest`
 - `frontend/lib/data/story_feed_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/data/trader_api.dart -> /api/v2/trader/markets`
+- `frontend/lib/data/trader_api.dart -> /api/v2/trader/orders`
+- `frontend/lib/data/trader_api.dart -> /api/v2/trader/overview`
+- `frontend/lib/data/trader_api.dart -> /api/v2/trader/p2p`
+- `frontend/lib/data/trader_api.dart -> /api/v2/trader/security/totp/setup`
+- `frontend/lib/data/trader_api.dart -> /api/v2/trader/watchlist`
+- `frontend/lib/data/trader_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> /api/awards/categories`
 - `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> /api/awards/ceremony`
 - `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> /api/awards/nominees`

@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../models/player_avatar.dart';
-import '../player_avatar_widget.dart';
+import '../player_card_avatar.dart';
 
 class PlayerMarketAvatar extends StatelessWidget {
   const PlayerMarketAvatar({
@@ -17,11 +17,11 @@ class PlayerMarketAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PlayerAvatarWidget(
+    return PlayerCardAvatar(
       avatar: avatar,
+      imageUrl: null,
       size: size,
       mode: mode,
-      withShadow: true,
     );
   }
 }

@@ -92,6 +92,18 @@ class GteExchangeApiClient {
     );
   }
 
+  Future<GteAuthSession> signupUser(GteUserSignupRequest request) {
+    return repository.signupUser(request);
+  }
+
+  Future<GteAuthSession> signupCreator(GteCreatorSignupRequest request) {
+    return repository.signupCreator(request);
+  }
+
+  Future<GteAuthSession> signupTrader(GteTraderSignupRequest request) {
+    return repository.signupTrader(request);
+  }
+
   Future<void> logout() => repository.logout();
 
   Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({

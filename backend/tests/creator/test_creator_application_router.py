@@ -13,6 +13,7 @@ from app.models.club_infra import ClubStadium
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
+from backend.tests.support.signup_payloads import creator_signup_payload
 
 
 @pytest.fixture()
@@ -26,16 +27,14 @@ def app_client(tmp_path):
 
 def _register_creator_user(client: TestClient, *, email: str, username: str) -> str:
     response = client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "username": username,
-            "password": "SuperSecret1",
-            "full_name": "Creator User",
-            "phone_number": "1234567890",
-            "is_over_18": True,
-            "region_code": "US",
-        },
+        "/auth/signup/creator",
+        json=creator_signup_payload(
+            email=email,
+            username=username,
+            creator_name="Creator User",
+            password="SuperSecret1",
+            country="US",
+        ),
     )
     assert response.status_code == 201, response.text
     return response.json()["access_token"]

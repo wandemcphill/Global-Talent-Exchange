@@ -15,6 +15,7 @@ from backend.tests.support.secrets import (
     TEST_AUTH_SECRET,
     TEST_PASSWORD,
 )
+from backend.tests.support.signup_payloads import user_signup_payload
 
 SMOKE_DEMO_PLAYER_COUNT = 12
 DEFAULT_TEST_DATABASE_URL = (
@@ -212,16 +213,13 @@ def auth_user_factory(client, app_session_factory):
         username = unique_suffix.replace("-", "_")
         password = TEST_PASSWORD
         response = client.post(
-            "/auth/register",
-            json={
-                "email": email,
-                "username": username,
-                "password": password,
-                "full_name": f"User {unique_suffix}",
-                "phone_number": "1234567890",
-                "is_over_18": True,
-                "region_code": "NG",
-            },
+            "/auth/signup/user",
+            json=user_signup_payload(
+                email=email,
+                username=username,
+                password=password,
+                full_name=f"User {unique_suffix}",
+            ),
         )
         assert response.status_code == 201, response.text
         payload = response.json()

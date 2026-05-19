@@ -2,11 +2,25 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, String, Text, UniqueConstraint
+from enum import StrEnum
+
+from sqlalchemy import Date, Enum, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.enums.club_identity_visibility import ClubIdentityVisibility
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+
+class ClubType(StrEnum):
+    ACADEMY = "academy"
+    PROFESSIONAL = "professional"
+    COMMUNITY = "community"
+    STREET_TEAM = "street_team"
+
+
+class ClubLifecycleStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED_GENERATED = "archived_generated"
 
 
 class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -23,6 +37,29 @@ class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     club_name: Mapped[str] = mapped_column(String(120), nullable=False)
     short_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    club_type: Mapped[ClubType] = mapped_column(
+        Enum(
+            ClubType,
+            name="club_type",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=ClubType.COMMUNITY,
+        server_default=ClubType.COMMUNITY.value,
+    )
+    lifecycle_status: Mapped[ClubLifecycleStatus] = mapped_column(
+        Enum(
+            ClubLifecycleStatus,
+            name="club_lifecycle_status",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=ClubLifecycleStatus.ACTIVE,
+        server_default=ClubLifecycleStatus.ACTIVE.value,
+        index=True,
+    )
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     crest_asset_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     primary_color: Mapped[str] = mapped_column(String(16), nullable=False)

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/player_card.dart';
 import '../../../widgets/gte_shell_theme.dart';
 import '../../../widgets/gte_surface_panel.dart';
 import '../data/gtex_ui_demo_data.dart';
@@ -154,8 +155,8 @@ class GtexTransferAlertTile extends StatelessWidget {
   }
 }
 
-class GtexPlayerCard extends StatelessWidget {
-  const GtexPlayerCard({
+class GtexPlayerTile extends StatelessWidget {
+  const GtexPlayerTile({
     super.key,
     required this.player,
     required this.onOpen,
@@ -175,127 +176,48 @@ class GtexPlayerCard extends StatelessWidget {
             : player.rating >= 84
             ? tokens.accentClub
             : tokens.accent;
-    return GteSurfacePanel(
+    return PlayerCard(
+      name: player.name,
+      rating: player.rating,
+      image: '',
+      position: player.position,
+      subtitle: '${player.clubName} | ${player.country}',
       accentColor: accent,
+      avatarSize: 64,
+      layout: PlayerCardLayout.horizontal,
       onTap: onOpen,
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                GtexAnimatedAvatar(
-                  label: player.name,
-                  accent: accent,
-                  badges: player.badges,
-                  rating: player.rating,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        player.name,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${player.position} - ${player.country}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: player.badges
-                            .map(
-                              (String badge) =>
-                                  GtexBadgeIcon(label: badge, color: accent),
-                            )
-                            .toList(growable: false),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _PlayerMetaTile(
-                    label: 'GSI',
-                    value: '${player.gsi}',
-                    accent: accent,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _PlayerMetaTile(
-                    label: 'Value',
-                    value: gtexCompactCurrency(player.price),
-                    accent: tokens.accentCapital,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _PlayerMetaTile(
-                    label: 'Potential',
-                    value: '${player.potential}',
-                    accent: tokens.accentCommunity,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              player.bidStatus,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                Text(
-                  player.timerLabel,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: accent,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                GtexBadgeIcon(
-                  label: 'Liquidity: ${player.liquidityLabel}',
-                  color: tokens.accentCapital,
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: onOpen,
-                    child: const Text('Details'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: onBid ?? onOpen,
-                    child: const Text('Bid'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+      badgeLabels: <String>[
+        player.position,
+        player.country,
+        ...player.badges.take(2),
+      ],
+      metrics: <PlayerCardMetric>[
+        PlayerCardMetric(
+          label: 'Value',
+          value: gtexCompactCurrency(player.price),
         ),
+        PlayerCardMetric(label: 'Potential', value: '${player.potential}'),
+        PlayerCardMetric(label: 'Age', value: '${player.age}'),
+        PlayerCardMetric(label: 'Liquidity', value: player.liquidityLabel),
+      ],
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(player.bidStatus, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 6),
+          Text(
+            player.timerLabel,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
+      actions: <Widget>[
+        OutlinedButton(onPressed: onOpen, child: const Text('Details')),
+        FilledButton(onPressed: onBid ?? onOpen, child: const Text('Bid')),
+      ],
     );
   }
 }
@@ -311,82 +233,35 @@ class GtexRegenCard extends StatelessWidget {
     final tokens = GteShellTheme.tokensOf(context);
     final Color accent =
         player.potential >= 90 ? tokens.accentArena : tokens.accentCommunity;
-    return GteSurfacePanel(
+    return PlayerCard(
+      name: player.name,
+      rating: player.rating,
+      image: '',
+      position: player.position,
+      subtitle: '${player.country} | ${player.clubName}',
       accentColor: accent,
+      avatarSize: 72,
       onTap: onOpen,
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'Regen',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelLarge?.copyWith(color: accent),
-                      ),
-                      Text(
-                        player.gsiTierLabel,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: accent,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  player.gsiLabel,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: accent),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Center(
-              child: GtexAnimatedAvatar(
-                label: player.name,
-                size: 72,
-                accent: accent,
-                badges: player.badges,
-                rating: player.rating,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(player.name, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              '${player.position} - ${player.country}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${player.potential} POT',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: player.badges
-                  .map(
-                    (String badge) =>
-                        GtexBadgeIcon(label: badge, color: accent),
-                  )
-                  .toList(growable: false),
-            ),
-          ],
+      badgeLabels: <String>[
+        player.position,
+        '${player.potential} POT',
+        ...player.badges.take(2),
+      ],
+      metrics: <PlayerCardMetric>[
+        PlayerCardMetric(label: 'Potential', value: '${player.potential}'),
+        PlayerCardMetric(label: 'Age', value: '${player.age}'),
+        PlayerCardMetric(
+          label: 'Value',
+          value: gtexCompactCurrency(player.price),
         ),
+      ],
+      footer: Text(
+        player.bidStatus,
+        style: Theme.of(context).textTheme.bodyMedium,
       ),
+      actions: <Widget>[
+        FilledButton.tonal(onPressed: onOpen, child: const Text('Open')),
+      ],
     );
   }
 }
@@ -554,44 +429,6 @@ class GtexRecordCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(record.context, style: Theme.of(context).textTheme.bodySmall),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlayerMetaTile extends StatelessWidget {
-  const _PlayerMetaTile({
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  final String label;
-  final String value;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = GteShellTheme.tokensOf(context);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: tokens.surfaceHighlight.withValues(alpha: 0.06),
-        border: Border.all(color: tokens.stroke.withValues(alpha: 0.64)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(color: accent),
-          ),
         ],
       ),
     );

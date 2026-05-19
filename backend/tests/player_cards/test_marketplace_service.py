@@ -806,6 +806,15 @@ def test_marketplace_search_preserves_avatar_seed_and_latest_value(session) -> N
     player = _create_player(
         session, player_id="seed-player", name="Seed Player", position="forward", value_eur=2_000_000
     )
+    player.dna_profile = {
+        "finishing": 91,
+        "shooting": 89,
+        "movement": 88,
+        "pace": 87,
+        "composure": 90,
+        "physical": 77,
+        "mentality": 83,
+    }
     _create_summary(
         session,
         player=player,
@@ -813,6 +822,7 @@ def test_marketplace_search_preserves_avatar_seed_and_latest_value(session) -> N
         summary_json={
             "avatar_seed_token": "canonical-market-seed",
             "avatar_dna_seed": "440044",
+            "global_scouting_index": 75,
         },
     )
     tier = _create_tier(session, tier_id="tier-seed", code="elite")
@@ -842,6 +852,51 @@ def test_marketplace_search_preserves_avatar_seed_and_latest_value(session) -> N
     assert item["listing_id"] == created["listing_id"]
     assert item["latest_value_credits"] == 44.0
     assert item["avatar"]["seed_token"] == "canonical-market-seed"
+    assert created["global_scouting_index"] == item["global_scouting_index"]
+    assert item["global_scouting_index"] not in {65, 75, 85}
+    assert item["gsi_band"] in {"Elite", "World Class"}
+
+
+def test_marketplace_search_canonicalizes_legacy_position_buckets(session) -> None:
+    seller = _create_user(
+        session,
+        user_id="position-seller",
+        email="position-seller@example.com",
+        username="position-seller",
+    )
+    player = _create_player(
+        session,
+        player_id="position-player",
+        name="Loose Forward",
+        position="forward",
+        value_eur=2_000_000,
+    )
+    _create_summary(session, player=player, club_name="Red City", rating=8.2, value_credits=31.0)
+    tier = _create_tier(session, tier_id="tier-position", code="gold")
+    card = _create_card(session, card_id="position-card", player=player, tier=tier)
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id,
+            owner_user_id=seller.id,
+            quantity_total=1,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
+    session.flush()
+
+    service = PlayerCardMarketplaceService(session=session, wallet_service=WalletService())
+    service.create_sale_listing(
+        actor=seller,
+        player_card_id=card.id,
+        quantity=1,
+        price_per_card_credits=Decimal("31.0000"),
+    )
+
+    payload = service.search_marketplace(listing_type="sale", position="ST", limit=10, offset=0)
+
+    assert payload["total"] == 1
+    assert payload["items"][0]["position"] == "ST"
 
 
 def test_marketplace_search_applies_player_price_engine_signals(session) -> None:

@@ -50,6 +50,7 @@ from app.models.user import User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.notifications.service import NotificationEventMatrixService
 from app.player_cards.service import PlayerCardNotFoundError, PlayerCardPermissionError, PlayerCardValidationError
+from app.players.football_integrity import FootballPosition, calculate_gsi, gsi_band, normalize_position
 from app.players.read_models import PlayerSummaryReadModel
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.avatar_service import AvatarIdentityInput, AvatarService
@@ -407,6 +408,7 @@ class PlayerCardMarketplaceService:
         if row is None:
             raise PlayerCardNotFoundError("Player card was not found.")
         card, tier, player, current_club_name, average_rating, summary_payload = row
+        global_scouting_index = self._global_scouting_index(player, summary_payload=summary_payload)
         is_regen = (
             card.card_variant.lower().startswith("regen")
             or self.session.scalar(
@@ -429,6 +431,8 @@ class PlayerCardMarketplaceService:
             "player": player,
             "club_name": current_club_name,
             "average_rating": average_rating,
+            "global_scouting_index": global_scouting_index,
+            "gsi_band": gsi_band(global_scouting_index),
             "is_regen_newgen": is_regen,
             "is_creator_linked": is_creator_linked,
             "asset_origin": asset_origin,
@@ -1547,11 +1551,11 @@ class PlayerCardMarketplaceService:
                 )
             )
         if position:
-            normalized_position = position.strip().lower()
+            position_terms = self._position_match_terms(position)
             filters.append(
                 or_(
-                    func.lower(func.coalesce(Player.normalized_position, "")) == normalized_position,
-                    func.lower(func.coalesce(Player.position, "")) == normalized_position,
+                    func.lower(func.coalesce(Player.normalized_position, "")).in_(position_terms),
+                    func.lower(func.coalesce(Player.position, "")).in_(position_terms),
                 )
             )
         if rating_min is not None:
@@ -1635,6 +1639,8 @@ class PlayerCardMarketplaceService:
                 PlayerSummaryReadModel.average_rating.label("average_rating"),
                 PlayerSummaryReadModel.current_value_credits.label("latest_value_credits"),
                 PlayerSummaryReadModel.summary_json.label("player_summary_json"),
+                Player.dna_profile.label("player_dna_profile"),
+                Player.market_value_eur.label("player_market_value_eur"),
                 self._player_image_url_expr().label("image_url"),
                 PlayerCardTier.code.label("tier_code"),
                 PlayerCardTier.name.label("tier_name"),
@@ -1734,6 +1740,8 @@ class PlayerCardMarketplaceService:
                 PlayerSummaryReadModel.average_rating.label("average_rating"),
                 PlayerSummaryReadModel.current_value_credits.label("latest_value_credits"),
                 PlayerSummaryReadModel.summary_json.label("player_summary_json"),
+                Player.dna_profile.label("player_dna_profile"),
+                Player.market_value_eur.label("player_market_value_eur"),
                 self._player_image_url_expr().label("image_url"),
                 PlayerCardTier.code.label("tier_code"),
                 PlayerCardTier.name.label("tier_name"),
@@ -1820,6 +1828,8 @@ class PlayerCardMarketplaceService:
                 PlayerSummaryReadModel.average_rating.label("average_rating"),
                 PlayerSummaryReadModel.current_value_credits.label("latest_value_credits"),
                 PlayerSummaryReadModel.summary_json.label("player_summary_json"),
+                Player.dna_profile.label("player_dna_profile"),
+                Player.market_value_eur.label("player_market_value_eur"),
                 self._player_image_url_expr().label("image_url"),
                 PlayerCardTier.code.label("tier_code"),
                 PlayerCardTier.name.label("tier_name"),
@@ -1860,6 +1870,8 @@ class PlayerCardMarketplaceService:
     ) -> dict[str, Any]:
         requested_filters = payload.pop("requested_filters_json", None)
         summary_payload = payload.pop("player_summary_json", None)
+        dna_payload = payload.pop("player_dna_profile", None)
+        market_value_eur = payload.pop("player_market_value_eur", None)
         if requested_filters in {None, "", "null"}:
             payload["requested_filters_json"] = {}
         elif isinstance(requested_filters, str):
@@ -1878,6 +1890,22 @@ class PlayerCardMarketplaceService:
                 summary_payload = {}
         if not isinstance(summary_payload, dict):
             summary_payload = {}
+        if isinstance(dna_payload, str):
+            try:
+                dna_payload = json.loads(dna_payload)
+            except json.JSONDecodeError:
+                dna_payload = {}
+        if not isinstance(dna_payload, dict):
+            dna_payload = {}
+        payload["position"] = self._position_code_from_value(payload.get("position"))
+        global_scouting_index = self._global_scouting_index_from_payload(
+            payload,
+            summary_payload=summary_payload,
+            dna_payload=dna_payload,
+            market_value_eur=market_value_eur,
+        )
+        payload["global_scouting_index"] = global_scouting_index
+        payload["gsi_band"] = gsi_band(global_scouting_index)
         if payload.get("latest_value_credits") is not None:
             payload["latest_value_credits"] = float(payload["latest_value_credits"])
         payload["image_url"] = payload.get("image_url") or self._image_url_from_payload(summary_payload)
@@ -1894,6 +1922,77 @@ class PlayerCardMarketplaceService:
             payload,
             price_engine_cache=price_engine_cache,
         )
+
+    def _global_scouting_index(
+        self,
+        player: Player,
+        *,
+        summary_payload: Any | None = None,
+    ) -> int:
+        return self._global_scouting_index_from_payload(
+            {
+                "player_id": player.id,
+                "player_name": player.full_name,
+                "position": self._position_code(player),
+            },
+            summary_payload=summary_payload,
+            dna_payload=player.dna_profile,
+            market_value_eur=player.market_value_eur,
+        )
+
+    def _global_scouting_index_from_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        summary_payload: dict[str, Any] | None = None,
+        dna_payload: dict[str, Any] | None = None,
+        market_value_eur: Any | None = None,
+    ) -> int:
+        gsi_payload: dict[str, Any] = {}
+        if isinstance(summary_payload, dict):
+            gsi_payload.update(summary_payload)
+        if isinstance(dna_payload, dict):
+            gsi_payload.update(dna_payload)
+        gsi_payload.setdefault("id", payload.get("player_id"))
+        gsi_payload.setdefault("player_id", payload.get("player_id"))
+        gsi_payload.setdefault("name", payload.get("player_name"))
+        gsi_payload.setdefault("position", payload.get("position"))
+        gsi_payload.setdefault("normalized_position", payload.get("position"))
+        gsi_payload.setdefault("market_value_eur", market_value_eur)
+        return calculate_gsi(gsi_payload, position=payload.get("position"))
+
+    @staticmethod
+    def _position_code(player: Player) -> str | None:
+        return PlayerCardMarketplaceService._position_code_from_value(
+            player.normalized_position or player.position
+        )
+
+    @staticmethod
+    def _position_code_from_value(value: Any) -> str | None:
+        resolved = normalize_position(str(value) if value is not None else None)
+        if resolved is not None:
+            return resolved.name
+        cleaned = str(value or "").strip()
+        return cleaned or None
+
+    @staticmethod
+    def _position_match_terms(value: str) -> tuple[str, ...]:
+        cleaned = value.strip().lower()
+        terms = {cleaned} if cleaned else set()
+        resolved = normalize_position(value)
+        if resolved is not None:
+            terms.update({resolved.name.lower(), resolved.value.lower()})
+            if resolved == FootballPosition.GK:
+                terms.add("goalkeeper")
+            elif resolved in {FootballPosition.CB, FootballPosition.LB, FootballPosition.RB}:
+                terms.add("defender")
+            elif resolved in {FootballPosition.CDM, FootballPosition.CM, FootballPosition.CAM}:
+                terms.add("midfielder")
+            elif resolved in {FootballPosition.LW, FootballPosition.RW, FootballPosition.ST}:
+                terms.add("forward")
+                if resolved in {FootballPosition.LW, FootballPosition.RW}:
+                    terms.add("winger")
+        return tuple(sorted(term for term in terms if term))
 
     def search_marketplace(
         self,
@@ -2047,8 +2146,10 @@ class PlayerCardMarketplaceService:
             "player_id": context["player"].id,
             "player_name": context["player"].full_name,
             "club_name": context["club_name"],
-            "position": context["player"].normalized_position or context["player"].position,
+            "position": self._position_code(context["player"]),
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
+            "global_scouting_index": context["global_scouting_index"],
+            "gsi_band": context["gsi_band"],
             "avatar": context["avatar"],
             "image_url": context["image_url"],
             "tier_code": context["tier"].code,
@@ -2297,8 +2398,10 @@ class PlayerCardMarketplaceService:
             "player_id": context["player"].id,
             "player_name": context["player"].full_name,
             "club_name": context["club_name"],
-            "position": context["player"].normalized_position or context["player"].position,
+            "position": self._position_code(context["player"]),
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
+            "global_scouting_index": context["global_scouting_index"],
+            "gsi_band": context["gsi_band"],
             "avatar": context["avatar"],
             "image_url": context["image_url"],
             "tier_code": context["tier"].code,
@@ -2353,8 +2456,10 @@ class PlayerCardMarketplaceService:
             "player_id": context["player"].id,
             "player_name": context["player"].full_name,
             "club_name": context["club_name"],
-            "position": context["player"].normalized_position or context["player"].position,
+            "position": self._position_code(context["player"]),
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
+            "global_scouting_index": context["global_scouting_index"],
+            "gsi_band": context["gsi_band"],
             "avatar": context["avatar"],
             "image_url": context["image_url"],
             "tier_code": context["tier"].code,
@@ -2846,8 +2951,10 @@ class PlayerCardMarketplaceService:
             "player_id": context["player"].id,
             "player_name": context["player"].full_name,
             "club_name": context["club_name"],
-            "position": context["player"].normalized_position or context["player"].position,
+            "position": self._position_code(context["player"]),
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
+            "global_scouting_index": context["global_scouting_index"],
+            "gsi_band": context["gsi_band"],
             "avatar": context["avatar"],
             "image_url": context["image_url"],
             "tier_code": context["tier"].code,
@@ -2893,8 +3000,9 @@ class PlayerCardMarketplaceService:
         if desired_club and desired_club.strip().lower() not in (context["club_name"] or "").lower():
             raise PlayerCardValidationError("Counterparty card does not match the requested club.")
         desired_position = desired_filters.get("position")
-        actual_position = (context["player"].normalized_position or context["player"].position or "").lower()
-        if desired_position and desired_position.strip().lower() != actual_position:
+        actual_position = self._position_code(context["player"])
+        desired_position_code = self._position_code_from_value(desired_position)
+        if desired_position and desired_position_code != actual_position:
             raise PlayerCardValidationError("Counterparty card does not match the requested position.")
         desired_tier = desired_filters.get("tier_code")
         if desired_tier and desired_tier.strip().lower() != context["tier"].code.lower():

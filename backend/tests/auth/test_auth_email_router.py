@@ -15,6 +15,7 @@ from app.models.user import User
 from app.services.email.email_service import EmailService
 from app.services.email.providers.base import EmailProvider
 from app.services.email.schemas import EmailMessage, EmailSendResult
+from backend.tests.support.signup_payloads import user_signup_payload
 
 
 def _email_config() -> EmailConfig:
@@ -82,22 +83,19 @@ def _extract_code(message: EmailMessage) -> str:
     raise AssertionError("Expected code line in email body.")
 
 
-def test_register_route_triggers_confirmation_email_and_preserves_signup_response(app_client) -> None:
+def test_user_signup_route_triggers_confirmation_email_and_preserves_signup_response(app_client) -> None:
     app, client = app_client
     provider = RecordingEmailProvider()
     app.state.email_service = _build_email_service(provider)
 
     response = client.post(
-        "/auth/register",
-        json={
-            "email": "fan.confirm@example.com",
-            "username": "fanconfirm",
-            "password": TEST_PASSWORD,
-            "full_name": "Fan User",
-            "phone_number": "1234567890",
-            "is_over_18": True,
-            "region_code": "NG",
-        },
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email="fan.confirm@example.com",
+            username="fanconfirm",
+            full_name="Fan User",
+            password=TEST_PASSWORD,
+        ),
     )
 
     assert response.status_code == 201, response.text
@@ -123,16 +121,13 @@ def test_recovery_request_triggers_email_and_reset_route_updates_password(app_cl
     app.state.email_service = _build_email_service(provider)
 
     register_response = client.post(
-        "/auth/register",
-        json={
-            "email": "fan.recover@example.com",
-            "username": "fanrecover",
-            "password": TEST_PASSWORD,
-            "full_name": "Fan User",
-            "phone_number": "1234567890",
-            "is_over_18": True,
-            "region_code": "NG",
-        },
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email="fan.recover@example.com",
+            username="fanrecover",
+            full_name="Fan User",
+            password=TEST_PASSWORD,
+        ),
     )
     assert register_response.status_code == 201, register_response.text
     provider.messages.clear()
@@ -166,21 +161,18 @@ def test_recovery_request_triggers_email_and_reset_route_updates_password(app_cl
     assert login_response.status_code == 200, login_response.text
 
 
-def test_register_route_does_not_fail_when_email_delivery_fails(app_client) -> None:
+def test_user_signup_route_does_not_fail_when_email_delivery_fails(app_client) -> None:
     app, client = app_client
     app.state.email_service = _build_email_service(FailingEmailProvider())
 
     response = client.post(
-        "/auth/register",
-        json={
-            "email": "fan.failure@example.com",
-            "username": "fanfailure",
-            "password": TEST_PASSWORD,
-            "full_name": "Fan User",
-            "phone_number": "1234567890",
-            "is_over_18": True,
-            "region_code": "NG",
-        },
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email="fan.failure@example.com",
+            username="fanfailure",
+            full_name="Fan User",
+            password=TEST_PASSWORD,
+        ),
     )
 
     assert response.status_code == 201, response.text

@@ -1136,10 +1136,58 @@
         "response_model": "TokenResponse"
       },
       {
+        "method": "POST",
+        "path": "/api/auth/register",
+        "handler": "register_user",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/signup/creator",
+        "handler": "signup_creator",
+        "response_model": "TokenResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/signup/trader",
+        "handler": "signup_trader",
+        "response_model": "TokenResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/signup/user",
+        "handler": "signup_user",
+        "response_model": "TokenResponse"
+      },
+      {
         "method": "GET",
         "path": "/api/session/bootstrap",
         "handler": "get_session_bootstrap",
         "response_model": "SessionBootstrapResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/register",
+        "handler": "register_user",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/signup/creator",
+        "handler": "signup_creator",
+        "response_model": "TokenResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/signup/trader",
+        "handler": "signup_trader",
+        "response_model": "TokenResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/signup/user",
+        "handler": "signup_user",
+        "response_model": "TokenResponse"
       },
       {
         "method": "POST",
@@ -1181,6 +1229,24 @@
         "method": "POST",
         "path": "/auth/register",
         "handler": "register_user",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/auth/signup/creator",
+        "handler": "signup_creator",
+        "response_model": "TokenResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/auth/signup/trader",
+        "handler": "signup_trader",
+        "response_model": "TokenResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/auth/signup/user",
+        "handler": "signup_user",
         "response_model": "TokenResponse"
       }
     ],
@@ -10134,6 +10200,50 @@
         "path": "/api/tournaments/{tournament_id}/matches/{match_id}/result",
         "handler": "report_match_result",
         "response_model": "TournamentView"
+      }
+    ],
+    "trader": [
+      {
+        "method": "GET",
+        "path": "/api/v2/trader/markets",
+        "handler": "list_markets",
+        "response_model": "list[TraderMarketView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/trader/orders",
+        "handler": "place_order",
+        "response_model": "TraderOrderView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/trader/overview",
+        "handler": "trader_overview",
+        "response_model": "TraderOverviewView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/trader/p2p",
+        "handler": "create_p2p_offer",
+        "response_model": "TraderP2POfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/trader/security/totp/setup",
+        "handler": "setup_totp",
+        "response_model": "TotpSetupView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/trader/watchlist",
+        "handler": "list_watchlist",
+        "response_model": "list[TraderWatchlistView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/trader/watchlist",
+        "handler": "add_watchlist",
+        "response_model": "TraderWatchlistView"
       }
     ],
     "transfer": [

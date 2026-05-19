@@ -54,13 +54,31 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
           data: (NationalTeamsHubData data) {
             final Iterable<dynamic> managedEntries =
                 data.history?.managedEntries ?? const <dynamic>[];
+            final List<NationalRegenSeed> youthProspects = data.youthProspects
+                .take(12)
+                .toList(growable: false);
+            final List<NationalRegenSeed> futureStars = data.futureStars
+                .take(12)
+                .toList(growable: false);
+            final List<RegenScoutingFeedItem> regenScoutingFeed = data
+                .regenScoutingFeed
+                .take(8)
+                .toList(growable: false);
+            final List<NationalTeamCountryPipeline> countryPipelines = data
+                .countryPipelines
+                .take(10)
+                .toList(growable: false);
+            final List<NationalTeamAcademySignal> academySignals = data
+                .internationalAcademies
+                .take(8)
+                .toList(growable: false);
             return Column(
               children: <Widget>[
                 GtexHeroPanel(
                   eyebrow: 'COUNTRY PROGRAMS',
                   title: 'National team operations board',
                   description:
-                      'Live competitions, ranking ladders, and authenticated draft-squad history from the national-team engine.',
+                      'Live competitions, ranking ladders, youth prospects, country pipelines, and authenticated draft-squad history from the national-team engine.',
                   metrics: <Widget>[
                     _MetricChip(
                       label: 'Competitions',
@@ -71,6 +89,21 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                       label: 'Rankings',
                       value: '${data.rankings.length}',
                       tone: GtexSurfaceTone.info,
+                    ),
+                    _MetricChip(
+                      label: 'Pipelines',
+                      value: '${countryPipelines.length}',
+                      tone: GtexSurfaceTone.warning,
+                    ),
+                    _MetricChip(
+                      label: 'Scouting',
+                      value: '${regenScoutingFeed.length}',
+                      tone: GtexSurfaceTone.neutral,
+                    ),
+                    _MetricChip(
+                      label: 'Future stars',
+                      value: '${futureStars.length}',
+                      tone: GtexSurfaceTone.live,
                     ),
                     _MetricChip(
                       label: 'My entries',
@@ -151,18 +184,17 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                 ),
                 const SizedBox(height: spacingMD),
                 _SectionCard(
-                  title: 'U17 national regen pool',
+                  title: 'Youth prospects',
                   subtitle:
-                      'Live `/regen-universe/national-regens` feed filtered to the 14-17 preseeded batch.',
+                      'Live `/regen-universe/national-regens` feed filtered to the youth window.',
                   child:
-                      data.nationalRegens.isEmpty
+                      youthProspects.isEmpty
                           ? const _EmptyState(
                             message:
-                                'No preseeded 14-17 national regens are published yet.',
+                                'No youth national regens are published yet.',
                           )
                           : Column(
-                            children: data.nationalRegens
-                                .take(12)
+                            children: youthProspects
                                 .map(
                                   (NationalRegenSeed item) => Padding(
                                     padding: const EdgeInsets.only(
@@ -179,6 +211,171 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                                         width: 220,
                                         child: _NationalRegenBadgeWrap(
                                           labels: item.badgeLabels,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                ),
+                const SizedBox(height: spacingMD),
+                _SectionCard(
+                  title: 'Regen scouting',
+                  subtitle:
+                      'Live `/regen-universe/scouting-feed` alerts for national-pool discoveries, hidden gems, and potential spikes.',
+                  child:
+                      regenScoutingFeed.isEmpty
+                          ? const _EmptyState(
+                            message:
+                                'No national regen scouting alerts are live yet.',
+                          )
+                          : Column(
+                            children: regenScoutingFeed
+                                .map(
+                                  (RegenScoutingFeedItem item) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: item.title,
+                                      subtitle: item.summary,
+                                      leadingIcon: Icons.travel_explore_rounded,
+                                      tone: GtexSurfaceTone.neutral,
+                                      trailing: SizedBox(
+                                        width: 220,
+                                        child: _NationalRegenBadgeWrap(
+                                          labels: item.displayBadges
+                                              .take(3)
+                                              .toList(growable: false),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                ),
+                const SizedBox(height: spacingMD),
+                _SectionCard(
+                  title: 'Country pipelines',
+                  subtitle:
+                      'Live country grouping from national regen seeds plus ranking context.',
+                  child:
+                      countryPipelines.isEmpty
+                          ? const _EmptyState(
+                            message:
+                                'No country pipeline signals are available yet.',
+                          )
+                          : Column(
+                            children: countryPipelines
+                                .map(
+                                  (
+                                    NationalTeamCountryPipeline pipeline,
+                                  ) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: pipeline.countryName,
+                                      subtitle:
+                                          '${pipeline.prospectCount} prospects | ${pipeline.eliteProspects} elite | Avg POT ${pipeline.averagePotential.toStringAsFixed(1)} | Top ${pipeline.topPotential} ${pipeline.topProspectName}',
+                                      leadingIcon: Icons.account_tree_rounded,
+                                      tone: GtexSurfaceTone.success,
+                                      trailing: SizedBox(
+                                        width: 220,
+                                        child: _NationalRegenBadgeWrap(
+                                          labels: <String>[
+                                            pipeline.confederationCode,
+                                            if (pipeline.rankingElo != null)
+                                              'ELO ${pipeline.rankingElo!.toStringAsFixed(0)}',
+                                            _positionsLabel(
+                                              pipeline.focusPositions,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                ),
+                const SizedBox(height: spacingMD),
+                _SectionCard(
+                  title: 'International academies',
+                  subtitle:
+                      'Confederation-level academy circuits built from the live national regen pool.',
+                  child:
+                      academySignals.isEmpty
+                          ? const _EmptyState(
+                            message:
+                                'No international academy signals are available yet.',
+                          )
+                          : Column(
+                            children: academySignals
+                                .map(
+                                  (NationalTeamAcademySignal signal) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: signal.label,
+                                      subtitle:
+                                          '${signal.countryCount} countries | ${signal.prospectCount} prospects | Avg POT ${signal.averagePotential.toStringAsFixed(1)} | Peak ${signal.topPotential}',
+                                      leadingIcon: Icons.school_rounded,
+                                      tone: GtexSurfaceTone.warning,
+                                      trailing: SizedBox(
+                                        width: 190,
+                                        child: _NationalRegenBadgeWrap(
+                                          labels: <String>[
+                                            signal.confederationCode,
+                                            _positionsLabel(
+                                              signal.focusPositions,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                ),
+                const SizedBox(height: spacingMD),
+                _SectionCard(
+                  title: 'Future stars',
+                  subtitle:
+                      'Top national-pool regens ranked by potential, current rating, and growth curve.',
+                  child:
+                      futureStars.isEmpty
+                          ? const _EmptyState(
+                            message:
+                                'No future-star national regens are published yet.',
+                          )
+                          : Column(
+                            children: futureStars
+                                .map(
+                                  (NationalRegenSeed item) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: item.displayName,
+                                      subtitle:
+                                          '${item.countryName} | ${item.primaryPosition} | Age ${item.age ?? '--'} | OVR ${item.currentRating} | POT ${item.potentialRating} | Growth ${item.growthCurve.toStringAsFixed(2)}',
+                                      leadingIcon: Icons.auto_awesome_rounded,
+                                      tone: GtexSurfaceTone.live,
+                                      trailing: SizedBox(
+                                        width: 220,
+                                        child: _NationalRegenBadgeWrap(
+                                          labels: <String>[
+                                            item.rarityTier.toUpperCase(),
+                                            _positionsLabel(<String>[
+                                              item.primaryPosition,
+                                              ...item.secondaryPositions,
+                                            ]),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -1288,4 +1485,14 @@ class _NationalRegenBadgeChip extends StatelessWidget {
       ),
     );
   }
+}
+
+String _positionsLabel(List<String> positions) {
+  final List<String> cleaned = positions
+      .map((String item) => item.trim().toUpperCase())
+      .where((String item) => item.isNotEmpty)
+      .toSet()
+      .take(3)
+      .toList(growable: false);
+  return cleaned.isEmpty ? 'MIXED' : cleaned.join(', ');
 }

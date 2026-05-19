@@ -15,6 +15,7 @@ from app.auth.schemas import (
     ActionStatusResponse,
     ChangePasswordRequest,
     ConfirmEmailRequest,
+    CreatorSignupRequest,
     CurrentUserResponse,
     CurrentUserUpdateRequest,
     LoginRequest,
@@ -22,6 +23,8 @@ from app.auth.schemas import (
     RegisterRequest,
     SessionBootstrapResponse,
     TokenResponse,
+    TraderSignupRequest,
+    UserClubSignupRequest,
 )
 from app.auth.service import (
     AuthError,
@@ -33,9 +36,14 @@ from app.auth.service import (
     IssuedAuthSession,
 )
 from app.core.request_security import extract_client_ip
-from app.models.user import User
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.models.creator_profile import CreatorProfile
+from app.models.user import KycStatus, PublicAccountType, User
 from app.policies.schemas import PolicyRequirementSummary, UserComplianceStatus
 from app.policies.service import PolicyService
+from app.schemas.club_identity_core import ClubProfileCore
+from app.trader.service import TraderAccessError, TraderService
+from app.treasury.service import TreasuryService
 from app.wallets.funding_service import WalletFundingService
 from app.wallets.schemas import WalletAdaptiveOverviewView
 from app.wallets.service import WalletService
@@ -45,6 +53,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["auth"])
 legacy_router = APIRouter(prefix="/auth")
 api_router = APIRouter(prefix="/api/auth")
+api_v2_router = APIRouter(prefix="/api/v2/auth")
 
 
 class _AuthRouteTelemetry:
@@ -256,98 +265,145 @@ def _build_session_bootstrap_response(
     bootstrap = service.build_session_bootstrap_state(session, user, app=request.app)
     wallet = _build_wallet_bootstrap(service, session, user)
     compliance = _build_compliance_status(session, user)
-    from app.schemas.club_identity_core import ClubProfileCore
-
     return SessionBootstrapResponse(
         user=bootstrap.user,
-        club=ClubProfileCore.model_validate(bootstrap.club),
+        club=None if bootstrap.club is None else ClubProfileCore.model_validate(bootstrap.club),
         wallet=wallet,
         compliance=compliance,
         permissions=bootstrap.permissions,
     )
 
 
-@legacy_router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@legacy_router.post("/register", status_code=status.HTTP_410_GONE, include_in_schema=False)
+@api_router.post("/register", status_code=status.HTTP_410_GONE, include_in_schema=False)
+@api_v2_router.post("/register", status_code=status.HTTP_410_GONE, include_in_schema=False)
 def register_user(
-    payload: RegisterRequest,
+    payload: RegisterRequest | None = None,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> None:
+    del payload, session, request
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Public signup moved to /auth/signup/user, /auth/signup/creator, or /auth/signup/trader.",
+    )
+
+
+def _issue_signup_session(
+    *,
+    service: AuthService,
+    session: Session,
+    request: Request,
+    user: User,
+    telemetry: _AuthRouteTelemetry,
+) -> tuple[IssuedAuthSession, str | None]:
+    confirmation_code = service.prepare_signup_confirmation(session, user=user)
+    issued_session = service.issue_session_tokens(
+        user,
+        session=session,
+        **_request_client_context(request),
+        timing_recorder=telemetry.capture,
+    )
+    return issued_session, confirmation_code
+
+
+def _submit_signup_compliance(
+    session: Session,
+    user: User,
+    *,
+    government_id_attachment_id: str,
+    selfie_attachment_id: str,
+    proof_of_address_attachment_id: str | None,
+    country_confirmation: str,
+) -> None:
+    TreasuryService().submit_kyc(
+        session,
+        user=user,
+        nin=None,
+        bvn=None,
+        address_line1="Signup compliance submission",
+        address_line2=None,
+        city=None,
+        state=None,
+        country=country_confirmation,
+        id_document_attachment_id=None,
+        government_id_attachment_id=government_id_attachment_id,
+        selfie_attachment_id=selfie_attachment_id,
+        proof_of_address_attachment_id=proof_of_address_attachment_id,
+        country_confirmation=country_confirmation,
+    )
+
+
+@legacy_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@api_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@api_v2_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup_user(
+    payload: UserClubSignupRequest,
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
     service = _build_auth_service(request)
     analytics = AnalyticsService()
-    confirmation_code: str | None = None
     issued_session: IssuedAuthSession | None = None
-    telemetry = _AuthRouteTelemetry("register")
+    confirmation_code: str | None = None
+    telemetry = _AuthRouteTelemetry("signup_user")
     user: User | None = None
-    telemetry.log_entry(
-        method=request.method if request is not None else "POST",
-        path=str(request.url.path) if request is not None else "/auth/register",
-        modules_hydrated=getattr(request.app.state, "modules_hydrated", None) if request is not None else None,
-    )
     try:
-        analytics_started_at = perf_counter()
-        analytics.track_event(session, name="signup_started", user_id=None, metadata={"email": payload.email})
-        telemetry.mark("analytics.signup_started_ms", analytics_started_at)
-        if not payload.is_over_18:
-            underage_started_at = perf_counter()
-            analytics.track_event(
-                session, name="underage_signup_blocked", user_id=None, metadata={"email": payload.email}
-            )
-            telemetry.mark("analytics.underage_signup_blocked_ms", underage_started_at)
-            raise AuthError("You must be at least 18 years old to sign up.")
-        register_started_at = perf_counter()
+        analytics.track_event(session, name="signup_started", user_id=None, metadata={"email": payload.email, "account_type": "user"})
         user = service.register_user(
             session,
             email=payload.email,
             full_name=payload.full_name,
-            phone_number=payload.phone_number,
-            is_over_18=payload.is_over_18,
-            region_code=payload.region_code,
+            phone_number=None,
+            is_over_18=True,
+            region_code=payload.country[:8],
             username=payload.username,
             password=payload.password,
             display_name=payload.full_name,
+            account_type=PublicAccountType.USER,
             timing_recorder=telemetry.capture,
         )
-        telemetry.mark("service.register_user_ms", register_started_at)
-        confirmation_started_at = perf_counter()
-        confirmation_code = service.prepare_signup_confirmation(session, user=user)
-        telemetry.mark("service.prepare_signup_confirmation_ms", confirmation_started_at)
-        analytics_completed_started_at = perf_counter()
-        analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={})
-        telemetry.mark("analytics.signup_completed_ms", analytics_completed_started_at)
-        token_started_at = perf_counter()
-        issued_session = service.issue_session_tokens(
+        service.create_explicit_club_profile(
+            session,
             user,
-            session=session,
-            **_request_client_context(request),
-            timing_recorder=telemetry.capture,
+            club_name=payload.club_name,
+            short_name=payload.club_short_tag,
+            club_type=payload.club_type,
+            country_code=payload.club_country,
+            region_name=payload.club_state,
+            city_name=payload.club_locality,
+            crest_asset_ref=payload.crest_asset_ref,
+            primary_color=payload.primary_color,
+            secondary_color=payload.secondary_color,
         )
-        telemetry.mark("service.issue_access_token_ms", token_started_at)
-        commit_started_at = perf_counter()
+        user.preferred_position = payload.position
+        user.nationality = payload.country
+        _submit_signup_compliance(
+            session,
+            user,
+            government_id_attachment_id=payload.compliance.government_id_attachment_id,
+            selfie_attachment_id=payload.compliance.selfie_attachment_id,
+            proof_of_address_attachment_id=payload.compliance.proof_of_address_attachment_id,
+            country_confirmation=payload.compliance.country_confirmation,
+        )
+        issued_session, confirmation_code = _issue_signup_session(
+            service=service,
+            session=session,
+            request=request,
+            user=user,
+            telemetry=telemetry,
+        )
+        analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={"account_type": "user"})
         session.commit()
-        telemetry.mark("db.commit_ms", commit_started_at)
-        refresh_started_at = perf_counter()
         session.refresh(user)
-        telemetry.mark("db.refresh_user_ms", refresh_started_at)
     except DuplicateUserError as exc:
         _rollback_with_telemetry(session, telemetry)
-        telemetry.log_failure(
-            status_code=status.HTTP_409_CONFLICT, user_id=user.id if user is not None else None, error=str(exc)
-        )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AuthError as exc:
         _rollback_with_telemetry(session, telemetry)
-        telemetry.log_failure(
-            status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc)
-        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         _rollback_with_telemetry(session, telemetry)
-        telemetry.log_failure(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            user_id=user.id if user is not None else None,
-            error=str(exc),
-        )
         raise
     else:
         if confirmation_code is not None:
@@ -357,8 +413,165 @@ def register_user(
                 telemetry.mark("email.signup_confirmation_ms", email_started_at)
             except Exception as exc:
                 _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
-        telemetry.log_success(status_code=status.HTTP_201_CREATED, user_id=user.id)
+    return _build_token_response(
+        service=service,
+        session=session,
+        request=request,
+        telemetry=telemetry,
+        user=user,
+        issued_session=issued_session,
+    )
 
+
+@legacy_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@api_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@api_v2_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup_creator(
+    payload: CreatorSignupRequest,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> TokenResponse:
+    service = _build_auth_service(request)
+    telemetry = _AuthRouteTelemetry("signup_creator")
+    user: User | None = None
+    issued_session: IssuedAuthSession | None = None
+    confirmation_code: str | None = None
+    try:
+        user = service.register_user(
+            session,
+            email=payload.email,
+            full_name=payload.creator_name,
+            phone_number=None,
+            is_over_18=True,
+            region_code=payload.country[:8],
+            username=payload.username,
+            password=payload.password,
+            display_name=payload.creator_name,
+            account_type=PublicAccountType.CREATOR,
+            timing_recorder=telemetry.capture,
+        )
+        session.add(
+            CreatorProfile(
+                user_id=user.id,
+                handle=payload.username,
+                display_name=payload.creator_name,
+                tier="community",
+                status=CreatorProfileStatus.ACTIVE,
+                payout_config_json={
+                    "category": payload.category,
+                    "country": payload.country,
+                    "main_club_supported": payload.main_club_supported,
+                    "primary_language": payload.primary_language,
+                    "avatar_asset_ref": payload.avatar_asset_ref,
+                    "banner_asset_ref": payload.banner_asset_ref,
+                    "monetization": payload.monetization,
+                },
+            )
+        )
+        issued_session, confirmation_code = _issue_signup_session(
+            service=service,
+            session=session,
+            request=request,
+            user=user,
+            telemetry=telemetry,
+        )
+        session.commit()
+        session.refresh(user)
+    except DuplicateUserError as exc:
+        _rollback_with_telemetry(session, telemetry)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except AuthError as exc:
+        _rollback_with_telemetry(session, telemetry)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    else:
+        if confirmation_code is not None:
+            try:
+                service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)
+            except Exception as exc:
+                _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
+    return _build_token_response(
+        service=service,
+        session=session,
+        request=request,
+        telemetry=telemetry,
+        user=user,
+        issued_session=issued_session,
+    )
+
+
+@legacy_router.post("/signup/trader", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@api_router.post("/signup/trader", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@api_v2_router.post("/signup/trader", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup_trader(
+    payload: TraderSignupRequest,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> TokenResponse:
+    service = _build_auth_service(request)
+    telemetry = _AuthRouteTelemetry("signup_trader")
+    user: User | None = None
+    issued_session: IssuedAuthSession | None = None
+    confirmation_code: str | None = None
+    try:
+        user = service.register_user(
+            session,
+            email=payload.email,
+            full_name=payload.full_name,
+            phone_number=payload.phone_number,
+            is_over_18=True,
+            region_code=payload.country[:8],
+            username=payload.trading_alias,
+            password=payload.password,
+            display_name=payload.trading_alias,
+            account_type=PublicAccountType.COIN_TRADER,
+            timing_recorder=telemetry.capture,
+        )
+        trader_service = TraderService(session)
+        trader_service.ensure_profile(
+            user,
+            trading_alias=payload.trading_alias,
+            preferred_currency=payload.preferred_currency,
+            trading_experience=payload.trading_experience,
+            interests=payload.interests,
+            wallet_label=payload.wallet_label,
+        )
+        trader_service.ensure_security(
+            user,
+            totp_secret=payload.totp_secret,
+            totp_code=payload.totp_code,
+            recovery_phrase_hash=payload.recovery_phrase_hash,
+            security_pin_hash=payload.security_pin_hash,
+        )
+        _submit_signup_compliance(
+            session,
+            user,
+            government_id_attachment_id=payload.compliance.government_id_attachment_id,
+            selfie_attachment_id=payload.compliance.selfie_attachment_id,
+            proof_of_address_attachment_id=payload.compliance.proof_of_address_attachment_id,
+            country_confirmation=payload.compliance.country_confirmation,
+        )
+        issued_session, confirmation_code = _issue_signup_session(
+            service=service,
+            session=session,
+            request=request,
+            user=user,
+            telemetry=telemetry,
+        )
+        session.commit()
+        session.refresh(user)
+    except (DuplicateUserError, TraderAccessError) as exc:
+        _rollback_with_telemetry(session, telemetry)
+        status_code = status.HTTP_409_CONFLICT if isinstance(exc, DuplicateUserError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except AuthError as exc:
+        _rollback_with_telemetry(session, telemetry)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    else:
+        if confirmation_code is not None:
+            try:
+                service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)
+            except Exception as exc:
+                _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
     return _build_token_response(
         service=service,
         session=session,
@@ -713,3 +926,4 @@ def change_current_user_password(
 
 router.include_router(legacy_router)
 router.include_router(api_router)
+router.include_router(api_v2_router)

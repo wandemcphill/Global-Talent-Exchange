@@ -82,6 +82,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
     expect(find.text('Transfer Hub'), findsWidgets);
     expect(find.text('Matchday'), findsWidgets);

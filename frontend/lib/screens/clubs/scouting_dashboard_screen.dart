@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/club_ops_controller.dart';
 import 'package:gte_frontend/data/club_ops_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/core/widgets/player_card.dart';
 import 'package:gte_frontend/models/scouting_models.dart';
 import 'package:gte_frontend/screens/clubs/club_ops_screen_host.dart';
 import 'package:gte_frontend/screens/clubs/scouting_prospect_detail_screen.dart';
@@ -614,39 +615,27 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
         _stageForProspect(prospect).index <
         _RecruiterPipelineStage.contacted.index;
     final List<String> reasons = _fitReasonsFor(prospect);
-    return GteSurfacePanel(
+    return PlayerCard(
+      name: prospect.name,
+      image: '',
+      showRating: false,
+      subtitle: '${prospect.position} | ${prospect.currentClub}',
       onTap: () => _openProspectProfile(prospect),
-      child: Column(
+      accentColor: _stageColor(context, _stageForProspect(prospect)),
+      avatarSize: 46,
+      layout: PlayerCardLayout.horizontal,
+      badgeLabels: <String>[prospect.position],
+      trailing: _ScoreBadge(score: prospect.readinessScore),
+      metrics: <PlayerCardMetric>[
+        PlayerCardMetric(label: 'Score', value: '${prospect.readinessScore}'),
+        PlayerCardMetric(
+          label: 'Stage',
+          value: _stageForProspect(prospect).label,
+        ),
+      ],
+      footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _PlayerAvatar(
-                label: prospect.name,
-                accent: _stageColor(context, _stageForProspect(prospect)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      prospect.name,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${prospect.position} | ${prospect.currentClub}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              _ScoreBadge(score: prospect.readinessScore),
-            ],
-          ),
-          const SizedBox(height: 14),
           Text(
             'Why this match looks strong',
             style: Theme.of(context).textTheme.titleMedium,
@@ -675,25 +664,20 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
             ),
             if (index != reasons.take(3).length - 1) const SizedBox(height: 8),
           ],
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              OutlinedButton.icon(
-                onPressed: () => _openProspectProfile(prospect),
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('View profile'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: canMove ? () => _moveIntoPipeline(prospect) : null,
-                icon: const Icon(Icons.swap_horiz),
-                label: Text(canMove ? 'Queue on board' : 'On board'),
-              ),
-            ],
-          ),
         ],
       ),
+      actions: <Widget>[
+        OutlinedButton.icon(
+          onPressed: () => _openProspectProfile(prospect),
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('View profile'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: canMove ? () => _moveIntoPipeline(prospect) : null,
+          icon: const Icon(Icons.swap_horiz),
+          label: Text(canMove ? 'Queue on board' : 'On board'),
+        ),
+      ],
     );
   }
 
@@ -702,54 +686,35 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
     final _RecruiterPipelineStage stage = _stageForProspect(prospect);
     final bool canMove = stage.index < _RecruiterPipelineStage.contacted.index;
     final List<String> notes = _notesForProspect(prospect);
-    return GteSurfacePanel(
+    return PlayerCard(
+      name: prospect.name,
+      image: '',
+      showRating: false,
+      subtitle:
+          '${prospect.position} | ${prospect.region} | ${prospect.currentClub}',
       onTap: () => _openProspectProfile(prospect),
-      child: Column(
+      accentColor: _statusColor(context, status),
+      avatarSize: 46,
+      layout: PlayerCardLayout.horizontal,
+      badgeLabels: <String>[prospect.position, status.label],
+      trailing: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: <Widget>[
+          _ScoreBadge(score: prospect.readinessScore),
+          const SizedBox(height: 8),
+          _StatusBadge(
+            label: status.label,
+            color: _statusColor(context, status),
+          ),
+        ],
+      ),
+      metrics: <PlayerCardMetric>[
+        PlayerCardMetric(label: 'Score', value: '${prospect.readinessScore}'),
+        PlayerCardMetric(label: 'Stage', value: stage.label),
+      ],
+      footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _PlayerAvatar(
-                label: prospect.name,
-                accent: _statusColor(context, status),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      prospect.name,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${prospect.position} | ${prospect.region}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      prospect.currentClub,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  _ScoreBadge(score: prospect.readinessScore),
-                  const SizedBox(height: 8),
-                  _StatusBadge(
-                    label: status.label,
-                    color: _statusColor(context, status),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
           Text(
             notes.isEmpty ? prospect.developmentProjection : notes.first,
             style: Theme.of(context).textTheme.bodyMedium,
@@ -762,35 +727,30 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                 .map((String reminder) => _ReminderChip(label: reminder))
                 .toList(growable: false),
           ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              OutlinedButton.icon(
-                onPressed: () => _openProspectProfile(prospect),
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('View profile'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: canMove ? () => _moveIntoPipeline(prospect) : null,
-                icon: const Icon(Icons.swap_horiz),
-                label: Text(canMove ? 'Queue on board' : 'On board'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _openNoteComposer(prospect),
-                icon: const Icon(Icons.note_add_outlined),
-                label: const Text('Add local note'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _removeFromShortlist(prospect),
-                icon: const Icon(Icons.remove_circle_outline),
-                label: const Text('Hide from board'),
-              ),
-            ],
-          ),
         ],
       ),
+      actions: <Widget>[
+        OutlinedButton.icon(
+          onPressed: () => _openProspectProfile(prospect),
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('View profile'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: canMove ? () => _moveIntoPipeline(prospect) : null,
+          icon: const Icon(Icons.swap_horiz),
+          label: Text(canMove ? 'Queue on board' : 'On board'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => _openNoteComposer(prospect),
+          icon: const Icon(Icons.note_add_outlined),
+          label: const Text('Add local note'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => _removeFromShortlist(prospect),
+          icon: const Icon(Icons.remove_circle_outline),
+          label: const Text('Hide from board'),
+        ),
+      ],
     );
   }
 
@@ -959,30 +919,24 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
     bool isFeedback = false,
   }) {
     final List<String> notes = _notesForProspect(prospect);
-    return GteSurfacePanel(
+    return PlayerCard(
+      name: prospect.name,
+      image: '',
+      showRating: false,
+      subtitle: '${prospect.position} | ${prospect.currentClub}',
       onTap: isFeedback ? null : () => _openProspectProfile(prospect),
-      padding: const EdgeInsets.all(16),
       accentColor: _stageColor(context, stage),
-      child: Column(
+      avatarSize: 46,
+      layout: PlayerCardLayout.horizontal,
+      badgeLabels: <String>[prospect.position, stage.label],
+      trailing: _ScoreBadge(score: prospect.readinessScore),
+      metrics: <PlayerCardMetric>[
+        PlayerCardMetric(label: 'Score', value: '${prospect.readinessScore}'),
+        PlayerCardMetric(label: 'Stage', value: stage.label),
+      ],
+      footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  prospect.name,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              _ScoreBadge(score: prospect.readinessScore),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${prospect.position} | ${prospect.currentClub}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 12),
           Text(
             notes.isEmpty ? prospect.pathwayFitLabel : notes.first,
             style: Theme.of(context).textTheme.bodyMedium,
@@ -1003,12 +957,12 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                 .map((String reminder) => _ReminderChip(label: reminder))
                 .toList(growable: false),
           ),
-          if (!isFeedback) ...<Widget>[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
+        ],
+      ),
+      actions:
+          isFeedback
+              ? const <Widget>[]
+              : <Widget>[
                 OutlinedButton.icon(
                   onPressed: () => _openProspectProfile(prospect),
                   icon: const Icon(Icons.open_in_new),
@@ -1020,10 +974,6 @@ class _RecruiterDashboardTabsState extends State<_RecruiterDashboardTabs> {
                   label: const Text('Add local note'),
                 ),
               ],
-            ),
-          ],
-        ],
-      ),
     );
   }
 
@@ -1852,36 +1802,6 @@ class _ReminderChip extends StatelessWidget {
         border: Border.all(color: tokens.stroke),
       ),
       child: Text(label, style: Theme.of(context).textTheme.bodySmall),
-    );
-  }
-}
-
-class _PlayerAvatar extends StatelessWidget {
-  const _PlayerAvatar({required this.label, required this.accent});
-
-  final String label;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<String> parts = label
-        .split(' ')
-        .where((String item) => item.trim().isNotEmpty)
-        .toList(growable: false);
-    final String initials = parts.take(2).map((String item) => item[0]).join();
-    return Container(
-      width: 46,
-      height: 46,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: accent.withValues(alpha: 0.16),
-        border: Border.all(color: accent.withValues(alpha: 0.5)),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initials.toUpperCase(),
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
     );
   }
 }

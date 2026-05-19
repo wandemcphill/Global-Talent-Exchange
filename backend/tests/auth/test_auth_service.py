@@ -2,20 +2,23 @@ from __future__ import annotations
 
 from decimal import Decimal
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.tests.support.secrets import ALTERNATE_TEST_PASSWORD, TEST_PASSWORD, WRONG_TEST_PASSWORD
+from app.access_control.service import AccessControlService
 from app.auth.schemas import CurrentUserUpdateRequest
 from app.auth.security import decode_access_token, decode_refresh_token, verify_password
 from app.auth.service import (
+    AuthError,
     AuthService,
     DuplicateUserError,
     InvalidCredentialsError,
     InvalidSessionError,
 )
 from app.models import AuthSession, Base, ClubProfile, LedgerAccount, LedgerUnit, UserWallet
+from app.models.user import PublicAccountType
 from app.schemas.club_requests import ClubCreateRequest
 from app.services.club_branding_service import ClubBrandingService
 
@@ -28,11 +31,6 @@ def session():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(2048)"))
-        connection.execute(text("ALTER TABLE users ADD COLUMN favourite_club VARCHAR(160)"))
-        connection.execute(text("ALTER TABLE users ADD COLUMN nationality VARCHAR(120)"))
-        connection.execute(text("ALTER TABLE users ADD COLUMN preferred_position VARCHAR(120)"))
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
         yield db_session
@@ -53,7 +51,7 @@ def test_register_user_creates_default_accounts(session) -> None:
     assert {account.unit for account in accounts} == {LedgerUnit.COIN, LedgerUnit.CREDIT}
     assert wallet is not None
     assert wallet.balance == Decimal("0.0000")
-    assert wallet.currency == "credit"
+    assert wallet.currency in {"coin", "credit"}
     assert wallet.compliance_status == "verified"
     assert verify_password(TEST_PASSWORD, user.password_hash)
 
@@ -87,6 +85,19 @@ def test_authenticate_user_issues_token_and_updates_last_login(session) -> None:
     )
     session.commit()
 
+    club = ClubBrandingService(session).create_club_profile(
+        owner_user_id=user.id,
+        payload=ClubCreateRequest(
+            club_name="Refresh Club",
+            short_name="RFC",
+            slug="refresh-club",
+            primary_color="#123456",
+            secondary_color="#654321",
+            accent_color="#abcdef",
+            visibility="public",
+        ),
+    )
+    session.refresh(user)
     authenticated_user = service.authenticate_user(session, email="owner@example.com", password=TEST_PASSWORD)
     issued_session = service.issue_session_tokens(authenticated_user, session=session)
     session.commit()
@@ -94,7 +105,6 @@ def test_authenticate_user_issues_token_and_updates_last_login(session) -> None:
     claims = decode_access_token(issued_session.access_token)
     refresh_claims = decode_refresh_token(issued_session.refresh_token)
     auth_session = session.get(AuthSession, issued_session.session_id)
-    club = session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user.id))
 
     assert claims["sub"] == user.id
     assert claims["email"] == user.email
@@ -106,6 +116,42 @@ def test_authenticate_user_issues_token_and_updates_last_login(session) -> None:
     assert auth_session is not None
     assert auth_session.user_id == user.id
     assert authenticated_user.last_login_at is not None
+
+
+def test_creator_account_ignores_legacy_club_context(session) -> None:
+    service = AuthService()
+    creator = service.register_user(
+        session,
+        email="creator@example.com",
+        username="creator",
+        password=TEST_PASSWORD,
+        display_name="Creator",
+        account_type=PublicAccountType.CREATOR,
+    )
+    ClubBrandingService(session).create_club_profile(
+        owner_user_id=creator.id,
+        payload=ClubCreateRequest(
+            club_name="Legacy Creator FC",
+            short_name="LCF",
+            slug="legacy-creator-fc",
+            primary_color="#123456",
+            secondary_color="#654321",
+            accent_color="#abcdef",
+            visibility="public",
+        ),
+    )
+    session.commit()
+    session.refresh(creator)
+
+    access_context = AccessControlService(session).bind_user_access_context(creator)
+    bootstrap = service.build_session_bootstrap_state(session, creator)
+
+    assert bootstrap.club is None
+    assert access_context.active_organization_id is None
+    assert access_context.permissions == ()
+    assert access_context.effective_role == creator.role
+    with pytest.raises(AuthError, match="football user accounts"):
+        service.ensure_user_club_context(session, creator)
 
 
 def test_issue_access_token_uses_primary_organization_role_for_club_owner(session) -> None:

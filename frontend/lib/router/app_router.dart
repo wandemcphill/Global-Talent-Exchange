@@ -11,6 +11,7 @@ import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
 import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
 import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
@@ -24,6 +25,7 @@ import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
 import 'package:gte_frontend/screens/support/gte_support_dispute_screens.dart';
+import 'package:gte_frontend/screens/trader/trader_dashboard_screen.dart';
 import 'package:gte_frontend/screens/wallet/gte_kyc_screen.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
@@ -72,6 +74,68 @@ GoRouter buildGtexAppRouter({
         redirect:
             (BuildContext context, GoRouterState state) =>
                 const GteNavigationRoute.home().path,
+      ),
+      GoRoute(
+        path: '/auth',
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                '/auth/select-account',
+      ),
+      GoRoute(
+        path: '/auth/select-account',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                const NoTransitionPage<void>(
+                  child: GtexAccountSelectorScreen(),
+                ),
+      ),
+      GoRoute(
+        path: '/auth/signup/user',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: GtexUserSignupScreen(
+                    controller: controller,
+                    config: config,
+                  ),
+                ),
+      ),
+      GoRoute(
+        path: '/auth/signup/creator',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: GtexCreatorSignupScreen(
+                    controller: controller,
+                    config: config,
+                  ),
+                ),
+      ),
+      GoRoute(
+        path: '/auth/signup/trader',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: GtexTraderSignupScreen(
+                    controller: controller,
+                    config: config,
+                  ),
+                ),
+      ),
+      GoRoute(
+        path: '/trader',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: TraderDashboardScreen(
+                    controller: controller,
+                    config: config,
+                  ),
+                ),
       ),
       GoRoute(
         path: '/app/transfer-hub',

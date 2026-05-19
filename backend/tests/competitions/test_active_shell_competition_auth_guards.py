@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from backend.tests.support.secrets import TEST_PASSWORD
+from backend.tests.support.signup_payloads import user_signup_payload
 
 
 def _create_competition(client, *, host: dict[str, str], name: str) -> str:
@@ -31,16 +32,13 @@ def _error_message(response) -> str:
 
 def _register_user(client, *, suffix: str) -> tuple[dict[str, str], str]:
     response = client.post(
-        "/auth/register",
-        json={
-            "email": f"{suffix}@example.com",
-            "username": suffix.replace("-", "_"),
-            "password": TEST_PASSWORD,
-            "full_name": f"User {suffix}",
-            "phone_number": "1234567890",
-            "is_over_18": True,
-            "region_code": "NG",
-        },
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email=f"{suffix}@example.com",
+            username=suffix.replace("-", "_"),
+            password=TEST_PASSWORD,
+            full_name=f"User {suffix}",
+        ),
     )
     assert response.status_code == 201, response.text
     payload = response.json()

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.auth.security import TokenError, decode_access_token
 from app.db import get_session as get_database_session
 from app.models.auth_session import AuthSession
-from app.models.user import User, UserRole
+from app.models.user import PublicAccountType, User, UserRole
 from app.services.runtime_control_service import RuntimeControlService
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -198,12 +198,43 @@ def get_current_wallet_user(
     )
 
 
+def _enforce_account_type(user: User, allowed: set[PublicAccountType], detail: str) -> User:
+    if user.account_type not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    return user
+
+
+def get_current_trader_user(
+    current_user: User = Depends(get_current_wallet_user),
+) -> User:
+    return _enforce_account_type(
+        current_user,
+        {PublicAccountType.COIN_TRADER},
+        "Coin trader account access is required for this action.",
+    )
+
+
+def get_current_football_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    return _enforce_account_type(
+        current_user,
+        {PublicAccountType.USER},
+        "Football user account access is required for this action.",
+    )
+
+
 def get_current_trading_user(
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_wallet_user),
 ) -> User:
     del request
+    _enforce_account_type(
+        current_user,
+        {PublicAccountType.USER},
+        "Football player trading is only available to football user accounts.",
+    )
     from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
     from app.wallets.funding_service import WalletFundingError, WalletFundingService
 

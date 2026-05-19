@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1600,
+  "route_count": 1618,
   "routes": [
     {
       "method": "POST",
@@ -4955,6 +4955,222 @@
     },
     {
       "method": "POST",
+      "path": "/api/auth/register",
+      "effective_paths": [
+        "/api/auth/register"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "register_user",
+      "router_variable": "api_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/signup/creator",
+      "effective_paths": [
+        "/api/auth/signup/creator"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_creator",
+      "router_variable": "api_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/signup/trader",
+      "effective_paths": [
+        "/api/auth/signup/trader"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_trader",
+      "router_variable": "api_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/signup/user",
+      "effective_paths": [
+        "/api/auth/signup/user"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_user",
+      "router_variable": "api_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/register",
+      "effective_paths": [
+        "/api/v2/auth/register"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "register_user",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/signup/creator",
+      "effective_paths": [
+        "/api/v2/auth/signup/creator"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_creator",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/signup/trader",
+      "effective_paths": [
+        "/api/v2/auth/signup/trader"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_trader",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/signup/user",
+      "effective_paths": [
+        "/api/v2/auth/signup/user"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_user",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
       "path": "/auth/confirm-email",
       "effective_paths": [
         "/auth/confirm-email"
@@ -5127,6 +5343,87 @@
       ],
       "file": "backend/app/auth/router.py",
       "handler": "register_user",
+      "router_variable": "legacy_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/signup/creator",
+      "effective_paths": [
+        "/auth/signup/creator"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_creator",
+      "router_variable": "legacy_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/signup/trader",
+      "effective_paths": [
+        "/auth/signup/trader"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_trader",
+      "router_variable": "legacy_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/signup/user",
+      "effective_paths": [
+        "/auth/signup/user"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_user",
       "router_variable": "legacy_router",
       "module_path": "app.auth.router",
       "module_mounts": [
@@ -39320,6 +39617,191 @@
       },
       "version": "canonical",
       "domain": "tournaments"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/trader/markets",
+      "effective_paths": [
+        "/api/v2/trader/markets"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "list_markets",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "_"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[TraderMarketView]",
+        "returns": "list[TraderMarketView]"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/trader/overview",
+      "effective_paths": [
+        "/api/v2/trader/overview"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "trader_overview",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderOverviewView",
+        "returns": "TraderOverviewView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/trader/watchlist",
+      "effective_paths": [
+        "/api/v2/trader/watchlist"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "list_watchlist",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[TraderWatchlistView]",
+        "returns": "list[TraderWatchlistView]"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/trader/orders",
+      "effective_paths": [
+        "/api/v2/trader/orders"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "place_order",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderOrderView",
+        "returns": "TraderOrderView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/trader/p2p",
+      "effective_paths": [
+        "/api/v2/trader/p2p"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "create_p2p_offer",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderP2POfferView",
+        "returns": "TraderP2POfferView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/trader/security/totp/setup",
+      "effective_paths": [
+        "/api/v2/trader/security/totp/setup"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "setup_totp",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TotpSetupView",
+        "returns": "TotpSetupView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/trader/watchlist",
+      "effective_paths": [
+        "/api/v2/trader/watchlist"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "add_watchlist",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderWatchlistView",
+        "returns": "TraderWatchlistView"
+      },
+      "version": "canonical",
+      "domain": "trader"
     },
     {
       "method": "GET",

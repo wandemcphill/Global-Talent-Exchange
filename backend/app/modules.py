@@ -597,6 +597,7 @@ DOMAIN_MODULES = (
     _module("wallets", router_path="app.wallets.router:router"),
     _module("coin_traders", router_path="app.coin_traders.router:router"),
     _module("admin_coin_traders", router_path="app.coin_traders.router:admin_router"),
+    _module("trader", router_path="app.trader.router:router"),
     _module("paystack_webhooks", router_path="app.admin_finance.router:webhook_router"),
     _module("payments", router_path="app.integrations.payments.router:router"),
     _module("media_engine", router_path="app.media_engine.router:router"),

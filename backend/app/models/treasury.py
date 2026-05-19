@@ -238,7 +238,12 @@ class KycProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     status: Mapped[KycStatus] = mapped_column(
-        Enum(KycStatus, name="kyc_status", native_enum=False),
+        Enum(
+            KycStatus,
+            name="kyc_status",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
         nullable=False,
         default=KycStatus.UNVERIFIED,
         index=True,
@@ -255,6 +260,10 @@ class KycProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("attachments.id", ondelete="SET NULL"),
         nullable=True,
     )
+    government_id_attachment_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    selfie_attachment_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    proof_of_address_attachment_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    country_confirmation: Mapped[str | None] = mapped_column(String(120), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewer_user_id: Mapped[str | None] = mapped_column(

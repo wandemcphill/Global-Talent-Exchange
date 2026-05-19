@@ -38,6 +38,8 @@ void main() {
                     'available_quantity': 2,
                     'sale_price_credits': 84,
                     'average_rating': 86,
+                    'global_scouting_index': 91,
+                    'gsi_band': 'World Class',
                     'tier_code': 'ST',
                     'tier_name': 'Elite Striker',
                     'rarity_rank': 5,
@@ -88,6 +90,8 @@ void main() {
                 'quantity_total': 2,
                 'quantity_reserved': 0,
                 'quantity_available': 2,
+                'global_scouting_index': 88,
+                'gsi_band': 'Elite',
                 'image_url': 'https://example.test/players/saka.png',
               }),
             ],
@@ -103,6 +107,8 @@ void main() {
                 'seller_user_id': 'user-1',
                 'quantity': 1,
                 'price_per_card_credits': 96,
+                'global_scouting_index': 85,
+                'gsi_band': 'Elite',
                 'status': 'open',
                 'image_url': 'https://example.test/players/saliba.png',
               }),
@@ -130,6 +136,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Victor Osimhen'), findsOneWidget);
+    expect(find.text('91'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'View Player'), findsOneWidget);
     expect(find.text('Buy Now'), findsOneWidget);
     expect(find.text('Latest transfer'), findsOneWidget);

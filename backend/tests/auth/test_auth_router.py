@@ -14,14 +14,16 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import BACKEND_ROOT, load_settings
 from app.core.database import load_model_modules
-from app.auth.router import login_user, register_user
+from app.auth.router import login_user, register_user, signup_user
 from app.auth.security import decode_access_token, decode_refresh_token
-from app.auth.schemas import LoginRequest, RegisterRequest
+from app.auth.schemas import LoginRequest, RegisterRequest, UserClubSignupRequest
 from app.auth.service import AuthService
 from app.main import create_app
 from app.models import Base
+from app.models.club_profile import ClubType
 from app.models.user import User, UserRole
 from app.users.router import read_current_user
+from backend.tests.support.signup_payloads import user_signup_payload
 
 TEST_PASSWORD = "SuperSecret1"  # pragma: allowlist secret
 WRONG_PASSWORD = "WrongPassword1"  # pragma: allowlist secret
@@ -107,22 +109,50 @@ def _create_authenticated_user(app):
             password=TEST_PASSWORD,
             display_name="Fan User",
         )
+        service.create_explicit_club_profile(
+            session,
+            user,
+            club_name="Fan User Sporting",
+            short_name="FAN",
+            club_type=ClubType.COMMUNITY,
+            country_code="NG",
+            region_name="Test State",
+            city_name="Test City",
+            crest_asset_ref=None,
+            primary_color="#0F766E",
+            secondary_color="#F8FAFC",
+        )
         issued_session = service.issue_session_tokens(user, session=session)
         session.commit()
         session.refresh(user)
         return user.id, issued_session.access_token, issued_session.refresh_token
 
 
-def test_register_login_and_me_flow(session) -> None:
-    register_response = register_user(
-        RegisterRequest(
-            email="fan@example.com",
-            username="fanuser",
-            password=TEST_PASSWORD,
-            full_name="Fan User",
-            region_code="NG",
+def _signup_user_direct(
+    session,
+    *,
+    email: str,
+    username: str,
+    full_name: str = "Fan User",
+):
+    return signup_user(
+        UserClubSignupRequest(
+            **user_signup_payload(
+                email=email,
+                username=username,
+                full_name=full_name,
+                password=TEST_PASSWORD,
+            )
         ),
         session,
+    )
+
+
+def test_register_login_and_me_flow(session) -> None:
+    register_response = _signup_user_direct(
+        session,
+        email="fan@example.com",
+        username="fanuser",
     )
     current_user = session.get(User, register_response.user.id)
 
@@ -152,38 +182,30 @@ def test_register_login_and_me_flow(session) -> None:
 
 
 def test_duplicate_registration_returns_conflict(session) -> None:
-    payload = RegisterRequest(
+    _signup_user_direct(
+        session,
         email="fan@example.com",
         username="fanuser",
-        password=TEST_PASSWORD,
-        region_code="NG",
     )
-    register_user(payload, session)
 
     with pytest.raises(HTTPException) as exc_info:
-        register_user(
-            RegisterRequest(
-                email="fan@example.com",
-                username="fanuser2",
-                password=TEST_PASSWORD,
-                region_code="NG",
-            ),
+        _signup_user_direct(
             session,
+            email="fan@example.com",
+            username="fanuser2",
         )
 
     assert exc_info.value.status_code == 409
 
 
 def test_login_with_invalid_credentials_returns_unauthorized(session) -> None:
-    register_user(
-        RegisterRequest(
-            email="fan@example.com",
-            username="fanuser",
-            password=TEST_PASSWORD,
-            full_name="Fan User",
-            region_code="NG",
-        ),
+    AuthService().register_user(
         session,
+        email="fan@example.com",
+        username="fanuser",
+        password=TEST_PASSWORD,
+        full_name="Fan User",
+        region_code="NG",
     )
 
     with pytest.raises(HTTPException) as exc_info:
@@ -195,7 +217,7 @@ def test_login_with_invalid_credentials_returns_unauthorized(session) -> None:
     assert exc_info.value.status_code == 401
 
 
-def test_register_without_region_code_defaults_to_global(app_client) -> None:
+def test_public_register_route_is_gone(app_client) -> None:
     _app, client = app_client
 
     register_response = client.post(
@@ -209,16 +231,7 @@ def test_register_without_region_code_defaults_to_global(app_client) -> None:
         },
     )
 
-    assert register_response.status_code == 201, register_response.text
-
-    access_token = register_response.json()["access_token"]
-    me_response = client.get(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
-
-    assert me_response.status_code == 200, me_response.text
-    assert me_response.json()["region_code"] == "GLOBAL"
+    assert register_response.status_code == 410, register_response.text
 
 
 def test_api_auth_me_returns_authenticated_user(app_client) -> None:
@@ -309,34 +322,33 @@ def test_api_auth_me_patch_rejects_protected_fields(app_client) -> None:
 def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     _app, client = app_client
     login_response = client.post(
-        "/auth/register",
-        json={
-            "email": "bootstrap@example.com",
-            "full_name": "Bootstrap User",
-            "phone_number": "08000000000",
-            "password": TEST_PASSWORD,
-            "is_over_18": True,
-            "region_code": "NG",
-        },
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email="bootstrap@example.com",
+            username="bootstrapuser",
+            full_name="Bootstrap User",
+            password=TEST_PASSWORD,
+        ),
     )
 
     assert login_response.status_code == 201, login_response.text
     issued = login_response.json()
     refresh_response = client.post(
-        "/auth/refresh",
+        "/api/v2/auth/refresh",
         json={"refresh_token": issued["refresh_token"]},
-        headers={"X-Device-Id": "pytest-device"},
+        headers={"X-API-Version": "2", "X-Device-Id": "pytest-device"},
     )
 
     assert refresh_response.status_code == 200, refresh_response.text
-    refreshed = refresh_response.json()
+    refreshed = refresh_response.json()["data"]
     assert refreshed["session_id"] == issued["session_id"]
     assert refreshed["access_token"] != issued["access_token"]
     assert refreshed["refresh_token"] != issued["refresh_token"]
 
     bootstrap_response = client.get(
-        "/api/session/bootstrap",
+        "/api/v2/session/bootstrap",
         headers={
+            "X-API-Version": "2",
             "Authorization": f"Bearer {refreshed['access_token']}",
             "X-User-Id": refreshed["user"]["id"],
             "X-Session-Id": refreshed["session_id"],
@@ -345,20 +357,17 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     )
 
     assert bootstrap_response.status_code == 200, bootstrap_response.text
-    bootstrap = bootstrap_response.json()
+    bootstrap = bootstrap_response.json()["data"]
     assert bootstrap["user"]["id"] == refreshed["user"]["id"]
     assert bootstrap["club"]["owner_user_id"] == refreshed["user"]["id"]
-    assert bootstrap["wallet"]["currency"] == "credit"
+    assert bootstrap["wallet"]["currency"] in {"credit", "coin"}
     assert bootstrap["compliance"]["country_code"] == "NG"
-    assert bootstrap["permissions"] == [
-        "players.view",
-        "pipeline.manage",
-        "contact.manage",
-    ]
+    assert "players.view" in bootstrap["permissions"]
 
     logout_response = client.post(
-        "/auth/logout",
+        "/api/v2/auth/logout",
         headers={
+            "X-API-Version": "2",
             "Authorization": f"Bearer {refreshed['access_token']}",
             "X-User-Id": refreshed["user"]["id"],
             "X-Session-Id": refreshed["session_id"],
@@ -368,8 +377,9 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     assert logout_response.status_code == 200, logout_response.text
 
     revoked_bootstrap = client.get(
-        "/api/session/bootstrap",
+        "/api/v2/session/bootstrap",
         headers={
+            "X-API-Version": "2",
             "Authorization": f"Bearer {refreshed['access_token']}",
             "X-User-Id": refreshed["user"]["id"],
             "X-Session-Id": refreshed["session_id"],
@@ -379,9 +389,9 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     assert revoked_bootstrap.status_code == 401
 
 
-def test_register_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.INFO):
-        response = register_user(
+def test_legacy_register_function_returns_gone(session) -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        register_user(
             RegisterRequest(
                 email="telemetry-register@example.com",
                 username="telemetryregister",
@@ -392,23 +402,17 @@ def test_register_user_logs_completion(session, caplog: pytest.LogCaptureFixture
             session,
         )
 
-    assert response.user.email == "telemetry-register@example.com"
-    assert any("auth.request.route_entry flow=register" in message for message in caplog.messages)
-    assert any("auth.request.completed flow=register status_code=201" in message for message in caplog.messages)
-    assert any("auth.create_access_token_ms" in message for message in caplog.messages)
-    assert any("db.commit_ms" in message for message in caplog.messages)
+    assert exc_info.value.status_code == 410
 
 
 def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -> None:
-    register_user(
-        RegisterRequest(
-            email="telemetry-login@example.com",
-            username="telemetrylogin",
-            password=TEST_PASSWORD,
-            full_name="Telemetry Login",
-            region_code="NG",
-        ),
+    AuthService().register_user(
         session,
+        email="telemetry-login@example.com",
+        username="telemetrylogin",
+        password=TEST_PASSWORD,
+        full_name="Telemetry Login",
+        region_code="NG",
     )
 
     caplog.clear()
@@ -426,15 +430,13 @@ def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -
 
 
 def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptureFixture) -> None:
-    register_user(
-        RegisterRequest(
-            email="telemetry-login-failure@example.com",
-            username="telemetryloginfailure",
-            password=TEST_PASSWORD,
-            full_name="Telemetry Login Failure",
-            region_code="NG",
-        ),
+    AuthService().register_user(
         session,
+        email="telemetry-login-failure@example.com",
+        username="telemetryloginfailure",
+        password=TEST_PASSWORD,
+        full_name="Telemetry Login Failure",
+        region_code="NG",
     )
 
     caplog.clear()

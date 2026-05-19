@@ -97,7 +97,19 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
     openapi = app.openapi()
 
     assert "/api/v2/orders" in openapi["paths"]
-    assert "/api/v2/auth/register" in openapi["paths"]
+    assert "/api/v2/auth/signup/user" in openapi["paths"]
+    assert "/api/v2/auth/signup/creator" in openapi["paths"]
+    assert "/api/v2/auth/signup/trader" in openapi["paths"]
+    assert "/api/v2/auth/register" not in openapi["paths"]
+    assert "/api/v2/trader/overview" in openapi["paths"]
+    assert "/api/v2/trader/markets" in openapi["paths"]
+    assert "/api/v2/trader/orders" in openapi["paths"]
+    assert "/api/v2/trader/p2p" in openapi["paths"]
+    assert "/api/v2/trader/watchlist" in openapi["paths"]
+    assert "/api/v2/trader/security/totp/setup" in openapi["paths"]
+    assert "/api/v2/national-team-engine/competitions" in openapi["paths"]
+    assert "/api/v2/national-team-engine/rankings" in openapi["paths"]
+    assert "/api/v2/regen-universe/national-regens" in openapi["paths"]
     assert "/api/v2/wallets/accounts" in openapi["paths"]
 
     list_orders = openapi["paths"]["/api/v2/orders"]["get"]
@@ -118,10 +130,10 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
     assert "$ref" in request_schema
 
 
-def test_versioned_aliases_wrap_legacy_handlers_in_standard_success_envelope(contract_app) -> None:
+def test_old_public_register_is_removed_from_contract_and_returns_gone(contract_app) -> None:
     _app, client = contract_app
     response = client.post(
-        "/api/v2/auth/register",
+        "/auth/register",
         json={
             "email": "contract-user@example.com",
             "full_name": "Contract User",
@@ -129,6 +141,37 @@ def test_versioned_aliases_wrap_legacy_handlers_in_standard_success_envelope(con
             "is_over_18": True,
             "region_code": "NG",
             "password": "SuperSecret1",
+        },
+    )
+
+    assert response.status_code == 410, response.text
+
+
+def test_versioned_signup_user_wraps_success_envelope(contract_app) -> None:
+    _app, client = contract_app
+    response = client.post(
+        "/api/v2/auth/signup/user",
+        headers={"X-API-Version": "2"},
+        json={
+            "email": "contract-user@example.com",
+            "full_name": "Contract User",
+            "username": "contract_user",
+            "country": "NG",
+            "state": "Lagos",
+            "city": "Lagos",
+            "password": "SuperSecret1",
+            "club_name": "Contract Sporting",
+            "club_short_tag": "CSP",
+            "club_country": "NG",
+            "club_state": "Lagos",
+            "club_locality": "Yaba",
+            "club_type": "academy",
+            "football_identity": "club_owner",
+            "compliance": {
+                "government_id_attachment_id": "gov-contract",
+                "selfie_attachment_id": "selfie-contract",
+                "country_confirmation": "NG",
+            },
         },
     )
 

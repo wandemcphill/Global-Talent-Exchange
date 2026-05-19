@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from importlib import import_module
 
-__all__ = ["PlayerSummaryProjector", "PlayerSummaryQueryService", "PlayerSummaryReadModel"]
+__all__ = [
+    "FootballPosition",
+    "PlayerSummaryProjector",
+    "PlayerSummaryQueryService",
+    "PlayerSummaryReadModel",
+    "calculate_gsi",
+    "repairPlayerPositions",
+    "repair_gsi_clusters",
+]
 
 
 def __getattr__(name: str):
@@ -11,5 +19,13 @@ def __getattr__(name: str):
         return getattr(module, name)
     if name in {"PlayerSummaryProjector", "PlayerSummaryQueryService"}:
         module = import_module("app.players.service")
+        return getattr(module, name)
+    if name in {
+        "FootballPosition",
+        "calculate_gsi",
+        "repairPlayerPositions",
+        "repair_gsi_clusters",
+    }:
+        module = import_module("app.players.football_integrity")
         return getattr(module, name)
     raise AttributeError(name)

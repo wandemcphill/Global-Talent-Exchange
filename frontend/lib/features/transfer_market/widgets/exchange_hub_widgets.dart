@@ -6,11 +6,12 @@ import '../../../core/constants/app_breakpoints.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_formatters.dart';
-import '../../../core/widgets/app_hover_lift.dart';
 import '../../../core/widgets/app_press_scale.dart';
 import '../../../core/widgets/gtex_surface_card.dart';
+import '../../../core/widgets/player_card.dart';
 import '../../../shared/providers/exchange_hub_provider.dart';
 import '../../../shared/widgets/metric_pill.dart';
+import '../../../widgets/player_card_avatar.dart';
 
 class ExchangeWalletDashboardCard extends StatelessWidget {
   const ExchangeWalletDashboardCard({
@@ -528,126 +529,116 @@ class TradingPlayerCard extends StatelessWidget {
             ? AppColors.primary
             : AppColors.divider;
 
-    return AppHoverLift(
-      child: GtexSurfaceCard(
-        key: Key('trading-card-${player.id}'),
-        glowColor: accent,
+    return KeyedSubtree(
+      key: Key('trading-card-${player.id}'),
+      child: PlayerCard(
+        name: player.name,
+        image: '',
+        showRating: false,
+        subtitle: '${player.club} | ${player.position}',
+        highlighted: player.userShares > 0 || player.trendPercent >= 3,
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        accentColor: accent,
+        avatarSize: 56,
+        layout: PlayerCardLayout.horizontal,
+        badgeLabels: <String>[player.position],
+        trailing: _TrendBadge(trendPercent: player.trendPercent),
+        metrics: <PlayerCardMetric>[
+          PlayerCardMetric(
+            label: 'Volume',
+            value: AppFormatters.compact(player.volume),
+          ),
+          PlayerCardMetric(
+            label: 'Available',
+            value: '${player.sharesAvailable}',
+          ),
+          PlayerCardMetric(label: 'Owned', value: '${player.userShares}'),
+        ],
+        footer: _TradingPlayerFooter(
+          player: player,
+          accent: accent,
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+class _TradingPlayerFooter extends StatelessWidget {
+  const _TradingPlayerFooter({
+    required this.player,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final PlayerShareListing player;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color chartColor =
+        accent == AppColors.divider ? AppColors.primary : accent;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.all(spacingMD),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(cardRadius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                accent.withValues(alpha: 0.12),
+                AppColors.surfaceMuted.withValues(alpha: 0.86),
+                AppColors.card,
+              ],
+            ),
+            border: Border.all(color: accent.withValues(alpha: 0.22)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('Price', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: spacingXS),
+              Text(
+                AppFormatters.gtex(player.priceGtex),
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: spacingSM),
+              SizedBox(
+                height: 54,
+                child: MiniPriceChart(
+                  points: player.chartPoints,
+                  color: chartColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: spacingMD),
+        Row(
           children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _InitialsAvatar(label: player.name, accent: accent),
-                const SizedBox(width: spacingMD),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        player.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: spacingXS),
-                      Text(
-                        '${player.club} • ${player.position}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+            Expanded(
+              child: Text(
+                player.performanceLabel,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
                 ),
-                _TrendBadge(trendPercent: player.trendPercent),
-              ],
-            ),
-            const SizedBox(height: spacingLG),
-            Container(
-              padding: const EdgeInsets.all(spacingMD),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(cardRadius),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[
-                    accent.withValues(alpha: 0.12),
-                    AppColors.surfaceMuted.withValues(alpha: 0.86),
-                    AppColors.card,
-                  ],
-                ),
-                border: Border.all(color: accent.withValues(alpha: 0.22)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text('Price', style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: spacingXS),
-                  Text(
-                    AppFormatters.gtex(player.priceGtex),
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: spacingSM),
-                  SizedBox(
-                    height: 54,
-                    child: MiniPriceChart(
-                      points: player.chartPoints,
-                      color:
-                          accent == AppColors.divider
-                              ? AppColors.primary
-                              : accent,
-                    ),
-                  ),
-                ],
               ),
             ),
-            const SizedBox(height: spacingMD),
-            Wrap(
-              spacing: spacingSM,
-              runSpacing: spacingSM,
-              children: <Widget>[
-                MetricPill(
-                  label: 'Volume',
-                  value: AppFormatters.compact(player.volume),
-                ),
-                MetricPill(
-                  label: 'Available',
-                  value: '${player.sharesAvailable}',
-                ),
-                MetricPill(
-                  label: 'Owned',
-                  value: '${player.userShares}',
-                  highlight: player.userShares > 0,
-                ),
-              ],
-            ),
-            const Spacer(),
-            const SizedBox(height: spacingMD),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    player.performanceLabel,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: spacingSM),
-                AppPressScale(
-                  child: FilledButton.tonalIcon(
-                    onPressed: onTap,
-                    icon: const Icon(Icons.candlestick_chart_rounded),
-                    label: const Text('Buy Shares'),
-                  ),
-                ),
-              ],
+            const SizedBox(width: spacingSM),
+            AppPressScale(
+              child: FilledButton.tonalIcon(
+                onPressed: onTap,
+                icon: const Icon(Icons.candlestick_chart_rounded),
+                label: const Text('Buy Shares'),
+              ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -1218,11 +1209,7 @@ class _PlayerTradeSheetState extends State<PlayerTradeSheet> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _InitialsAvatar(
-                label: player.name,
-                accent: AppColors.primary,
-                size: 72,
-              ),
+              const _InitialsAvatar(size: 72),
               const SizedBox(width: spacingMD),
               Expanded(
                 child: Column(
@@ -1945,48 +1932,13 @@ class _PillLabel extends StatelessWidget {
 }
 
 class _InitialsAvatar extends StatelessWidget {
-  const _InitialsAvatar({
-    required this.label,
-    required this.accent,
-    this.size = 56,
-  });
+  const _InitialsAvatar({this.size = 56});
 
-  final String label;
-  final Color accent;
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final String initials =
-        label
-            .split(' ')
-            .where((String part) => part.isNotEmpty)
-            .take(2)
-            .map((String part) => part[0].toUpperCase())
-            .join();
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            accent.withValues(alpha: 0.24),
-            AppColors.surfaceMuted,
-          ],
-        ),
-        border: Border.all(color: accent.withValues(alpha: 0.32)),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-      ),
-    );
+    return PlayerCardAvatar(avatar: null, size: size);
   }
 }
 

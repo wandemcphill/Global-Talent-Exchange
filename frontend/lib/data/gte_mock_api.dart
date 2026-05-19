@@ -122,33 +122,74 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteAuthSession> register(GteAuthRegisterRequest request) async {
+    throw UnsupportedError(
+      'Generic signup was removed. Use the account-specific signup flows.',
+    );
+  }
+
+  @override
+  Future<GteAuthSession> signupUser(GteUserSignupRequest request) async {
     await _delay();
-    if (!request.isOver18) {
-      throw const GteApiException(
-        type: GteApiErrorType.validation,
-        message: 'You must be 18 or older to create an account.',
-      );
-    }
-    final String fallbackUsername =
-        request.username ?? request.email.split('@').first;
+    return _signupSession(
+      email: request.email,
+      username: request.username,
+      fullName: request.fullName,
+      accountType: 'user',
+      landingRoute: '/app/home',
+    );
+  }
+
+  @override
+  Future<GteAuthSession> signupCreator(GteCreatorSignupRequest request) async {
+    await _delay();
+    return _signupSession(
+      email: request.email,
+      username: request.username,
+      fullName: request.creatorName,
+      accountType: 'creator',
+      landingRoute: '/app/hub',
+    );
+  }
+
+  @override
+  Future<GteAuthSession> signupTrader(GteTraderSignupRequest request) async {
+    await _delay();
+    return _signupSession(
+      email: request.email,
+      username: request.tradingAlias,
+      fullName: request.fullName,
+      accountType: 'coin_trader',
+      landingRoute: '/trader',
+    );
+  }
+
+  GteAuthSession _signupSession({
+    required String email,
+    required String username,
+    required String fullName,
+    required String accountType,
+    required String landingRoute,
+  }) {
     final DateTime now = _nextTimestamp();
     return GteAuthSession(
-      accessToken: 'fixture-$fallbackUsername-token',
-      refreshToken: 'fixture-$fallbackUsername-refresh-token',
-      sessionId: 'fixture-$fallbackUsername-session',
+      accessToken: 'fixture-$username-token',
+      refreshToken: 'fixture-$username-refresh-token',
+      sessionId: 'fixture-$username-session',
       tokenType: 'bearer',
       expiresIn: 3600,
       refreshExpiresIn: 2592000,
       user: GteCurrentUser(
-        id: 'fixture-$fallbackUsername',
-        email: request.email,
-        username: fallbackUsername,
-        fullName: request.fullName,
-        phoneNumber: request.phoneNumber,
-        displayName: request.fullName,
+        id: 'fixture-$username',
+        email: email,
+        username: username,
+        fullName: fullName,
+        phoneNumber: null,
+        displayName: fullName,
         role: 'user',
+        accountType: accountType,
         ageConfirmedAt: now,
       ),
+      landingRoute: landingRoute,
     );
   }
 

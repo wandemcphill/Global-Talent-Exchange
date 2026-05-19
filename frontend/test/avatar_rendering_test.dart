@@ -6,7 +6,6 @@ import 'package:gte_frontend/features/player_card_marketplace/data/player_card_m
 import 'package:gte_frontend/models/academy_models.dart';
 import 'package:gte_frontend/models/player_avatar.dart';
 import 'package:gte_frontend/services/avatar_mapper.dart';
-import 'package:gte_frontend/widgets/player_avatar_widget.dart';
 import 'package:gte_frontend/widgets/player_card_avatar.dart';
 
 void main() {
@@ -151,7 +150,7 @@ void main() {
     expect(academyAvatar.beardStyle, equals(lineupAvatar.beardStyle));
   });
 
-  testWidgets('shared avatar widget paints without image dependencies', (
+  testWidgets('shared card avatar renders the premium fallback silhouette', (
     WidgetTester tester,
   ) async {
     const PlayerAvatar avatar = PlayerAvatar(
@@ -178,7 +177,7 @@ void main() {
       const MaterialApp(
         home: Scaffold(
           body: Center(
-            child: PlayerAvatarWidget(
+            child: PlayerCardAvatar(
               avatar: avatar,
               size: 72,
               mode: AvatarMode.card,
@@ -188,143 +187,12 @@ void main() {
       ),
     );
 
-    expect(find.byType(PlayerAvatarWidget), findsOneWidget);
-    expect(find.byType(CustomPaint), findsWidgets);
+    expect(find.byType(PlayerCardAvatar), findsOneWidget);
+    expect(find.byIcon(Icons.person), findsOneWidget);
+    expect(find.byKey(PlayerCardAvatar.fallbackKey), findsOneWidget);
   });
 
-  testWidgets('player card avatar uses real raster image before any avatar', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: PlayerCardAvatar(
-            avatar: null,
-            imageUrl: 'https://cdn.example.test/players/real-player.webp',
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byKey(const Key('player-card-real-image')), findsOneWidget);
-    expect(find.byType(PlayerAvatarWidget), findsNothing);
-    expect(
-      find.byKey(const Key('player-card-fallback-silhouette')),
-      findsNothing,
-    );
-  });
-
-  testWidgets('player card avatar rejects svg portrait fallbacks', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: PlayerCardAvatar(
-            avatar: null,
-            imageUrl: 'https://cdn.example.test/players/generated.svg',
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byKey(const Key('player-card-real-image')), findsNothing);
-    expect(
-      find.byKey(const Key('player-card-fallback-silhouette')),
-      findsOneWidget,
-    );
-    expect(find.byType(PlayerAvatarWidget), findsNothing);
-  });
-
-  testWidgets('player card avatar accepts approved regen face-bank images', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: PlayerCardAvatar(
-            avatar: null,
-            imageUrl:
-                'https://media.test/generated-media/regen_newgen_faces/script_skin_hair/African/Light Brown/africa-lightbrown-6.png',
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byKey(const Key('player-card-real-image')), findsOneWidget);
-    expect(
-      find.byKey(const Key('player-card-fallback-silhouette')),
-      findsNothing,
-    );
-  });
-
-  testWidgets('player card avatar rejects legacy regen portrait folders', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: PlayerCardAvatar(
-            avatar: null,
-            imageUrl:
-                'https://media.test/generated-media/regen_portraits/legacy.png',
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byKey(const Key('player-card-real-image')), findsNothing);
-    expect(
-      find.byKey(const Key('player-card-fallback-silhouette')),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('player card avatar rejects FM-AI generated regen portraits', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: PlayerCardAvatar(
-            avatar: null,
-            imageUrl:
-                'https://media.test/generated-media/regen_newgen_faces/fm_ai/Caucasian1.png',
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byKey(const Key('player-card-real-image')), findsNothing);
-    expect(
-      find.byKey(const Key('player-card-fallback-silhouette')),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('player card avatar rejects regen portrait overrides', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: PlayerCardAvatar(
-            avatar: null,
-            imageUrl:
-                'https://media.test/generated-media/regen_portrait_overrides/player-1.png',
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byKey(const Key('player-card-real-image')), findsNothing);
-    expect(
-      find.byKey(const Key('player-card-fallback-silhouette')),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('hud minimal avatar mode renders for match overlays', (
+  testWidgets('hud minimal avatar mode uses the same card avatar fallback', (
     WidgetTester tester,
   ) async {
     const PlayerAvatar avatar = PlayerAvatar(
@@ -351,7 +219,7 @@ void main() {
       const MaterialApp(
         home: Scaffold(
           body: Center(
-            child: PlayerAvatarWidget(
+            child: PlayerCardAvatar(
               avatar: avatar,
               size: 36,
               mode: AvatarMode.hudMinimal,
@@ -361,7 +229,50 @@ void main() {
       ),
     );
 
-    expect(find.byType(PlayerAvatarWidget), findsOneWidget);
-    expect(find.byType(CustomPaint), findsWidgets);
+    expect(find.byType(PlayerCardAvatar), findsOneWidget);
+    expect(find.byIcon(Icons.person), findsOneWidget);
+    expect(find.byKey(PlayerCardAvatar.fallbackKey), findsOneWidget);
+  });
+
+  test('player portrait resolver rejects legacy placeholder sources', () {
+    expect(resolvePlayerCardImageUrl(null), isNull);
+    expect(resolvePlayerCardImageUrl(''), isNull);
+    expect(resolvePlayerCardImageUrl('assets/branding/gtex_icon.png'), isNull);
+    expect(resolvePlayerCardImageUrl('not-a-player-image'), isNull);
+    expect(
+      resolvePlayerCardImageUrl('/generated-media/player-42.png'),
+      equals('/generated-media/player-42.png'),
+    );
+    expect(
+      resolvePlayerCardImageUrl('https://cdn.gtex.test/player-42.png'),
+      equals('https://cdn.gtex.test/player-42.png'),
+    );
+  });
+
+  testWidgets('shared card avatar renders a real portrait as the portrait state', (
+    WidgetTester tester,
+  ) async {
+    const String transparentPixel =
+        'data:image/png;base64,'
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: PlayerCardAvatar(
+              avatar: null,
+              imageUrl: transparentPixel,
+              size: 72,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(PlayerCardAvatar), findsOneWidget);
+    expect(find.byKey(PlayerCardAvatar.portraitKey), findsOneWidget);
+    expect(find.byKey(PlayerCardAvatar.fallbackKey), findsNothing);
+    expect(find.byIcon(Icons.person), findsNothing);
   });
 }

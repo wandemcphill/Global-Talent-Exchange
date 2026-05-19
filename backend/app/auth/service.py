@@ -29,14 +29,13 @@ from app.models.access_control import Organization, OrganizationMembership
 from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
 from app.models.auth_session import AuthSession
 from app.models.base import generate_uuid, utcnow
-from app.models.club_profile import ClubProfile
-from app.models.user import User, UserRole
+from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
+from app.models.user import PublicAccountType, User, UserRole
 from app.policies.service import PolicyService
 from app.services.club_dynasty_service import ClubDynastyService
 from app.services.club_reputation_service import ClubReputationService
 from app.services.club_trophy_service import ClubTrophyService
 from app.services.email import EmailSendResult, EmailService
-from app.services.regen_bootstrap_service import RegenBootstrapService
 from app.users.schemas import UserPublic
 from app.wallets.funding_service import WalletFundingService
 from app.wallets.service import WalletService
@@ -95,7 +94,7 @@ class IssuedAuthSession:
 @dataclass(frozen=True, slots=True)
 class SessionBootstrapState:
     user: CurrentUserResponse
-    club: ClubProfile
+    club: ClubProfile | None
     permissions: list[str]
 
 
@@ -127,6 +126,7 @@ class AuthService:
         password: str,
         display_name: str | None = None,
         role: UserRole = UserRole.USER,
+        account_type: PublicAccountType = PublicAccountType.USER,
         timing_recorder: AuthTimingRecorder | None = None,
     ) -> User:
         normalize_started_at = perf_counter()
@@ -174,6 +174,7 @@ class AuthService:
             display_name=display_name or resolved_full_name or normalized_username,
             password_hash=password_hash,
             role=role,
+            account_type=account_type,
             age_confirmed_at=utcnow(),
         )
         session.add(user)
@@ -260,6 +261,7 @@ class AuthService:
                 claims={
                     "email": user.email,
                     "role": user.role.value,
+                    "account_type": user.account_type.value,
                     "sid": resolved_session_id,
                 },
             )
@@ -284,7 +286,6 @@ class AuthService:
         ip_address: str | None = None,
         timing_recorder: AuthTimingRecorder | None = None,
     ) -> IssuedAuthSession:
-        club = self.ensure_user_club_context(session, user)
         effective_role = user.role
         active_org_id: str | None = None
         access_context_started_at = perf_counter()
@@ -302,9 +303,10 @@ class AuthService:
             claims={
                 "email": user.email,
                 "role": effective_role.value,
+                "account_type": user.account_type.value,
                 "org_id": active_org_id,
                 "sid": resolved_session_id,
-                "club_id": club.id,
+                "club_id": active_org_id,
             },
         )
         refresh_token = create_refresh_token(
@@ -451,7 +453,11 @@ class AuthService:
             if normalized_permissions & GOD_MODE_LANDING_PERMISSIONS:
                 return PROFILE_GOD_MODE_ROUTE
             return PROFILE_ADMIN_ROUTE
-        return "/"
+        if user.account_type == PublicAccountType.CREATOR:
+            return "/app/hub"
+        if user.account_type == PublicAccountType.COIN_TRADER:
+            return "/trader"
+        return "/app/home"
 
     def build_user_public(self, session: Session, user: User) -> UserPublic:
         access_context = AccessControlService(session).bind_user_access_context(user)
@@ -463,6 +469,7 @@ class AuthService:
             phone_number=user.phone_number,
             display_name=user.display_name,
             role=access_context.effective_role,
+            account_type=user.account_type,
             kyc_status=user.kyc_status,
             is_active=user.is_active,
             created_at=user.created_at,
@@ -491,6 +498,7 @@ class AuthService:
             region_code=region_code,
             preferred_position=profile_fields["preferred_position"],
             role=access_context.effective_role,
+            account_type=user.account_type,
             kyc_status=user.kyc_status,
             is_active=user.is_active,
             created_at=user.created_at,
@@ -509,7 +517,10 @@ class AuthService:
         *,
         app=None,
     ) -> SessionBootstrapState:
-        club = self.ensure_user_club_context(session, user)
+        club = self.resolve_user_club(session, user)
+        if club is not None and club.lifecycle_status != ClubLifecycleStatus.ARCHIVED_GENERATED:
+            owner_user_id = user.id if club.owner_user_id == user.id else None
+            AccessControlService(session).ensure_club_organization(club, owner_user_id=owner_user_id)
         profile = self.get_current_user_profile(session, user, app=app)
         return SessionBootstrapState(
             user=profile,
@@ -518,18 +529,23 @@ class AuthService:
         )
 
     def ensure_user_club_context(self, session: Session, user: User) -> ClubProfile:
+        if user.account_type != PublicAccountType.USER:
+            raise AuthError("Club context is only available to football user accounts.")
         club = self.resolve_user_club(session, user)
         if club is None:
-            club = self._create_default_club_profile(session, user)
+            raise AuthError("Club context is unavailable until an explicit club is created.")
         owner_user_id = user.id if club.owner_user_id == user.id else None
         AccessControlService(session).ensure_club_organization(club, owner_user_id=owner_user_id)
         session.flush()
         return club
 
     def resolve_user_club(self, session: Session, user: User) -> ClubProfile | None:
+        if user.account_type != PublicAccountType.USER:
+            return None
         owned_club = session.scalar(
             select(ClubProfile)
             .where(ClubProfile.owner_user_id == user.id)
+            .where(ClubProfile.lifecycle_status != ClubLifecycleStatus.ARCHIVED_GENERATED)
             .order_by(ClubProfile.created_at.asc())
         )
         if owned_club is not None:
@@ -539,12 +555,58 @@ class AuthService:
             .join(Organization, Organization.club_profile_id == ClubProfile.id)
             .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
             .where(OrganizationMembership.user_id == user.id)
+            .where(ClubProfile.lifecycle_status != ClubLifecycleStatus.ARCHIVED_GENERATED)
             .order_by(
                 OrganizationMembership.is_primary.desc(),
                 OrganizationMembership.created_at.asc(),
                 ClubProfile.created_at.asc(),
             )
         )
+
+    def create_explicit_club_profile(
+        self,
+        session: Session,
+        user: User,
+        *,
+        club_name: str,
+        short_name: str,
+        club_type: ClubType,
+        country_code: str | None,
+        region_name: str | None,
+        city_name: str | None,
+        crest_asset_ref: str | None,
+        primary_color: str,
+        secondary_color: str,
+    ) -> ClubProfile:
+        if user.account_type != PublicAccountType.USER:
+            raise AuthError("Only football user accounts can create clubs.")
+        normalized_name = club_name.strip()
+        if not normalized_name:
+            raise AuthError("Club name is required.")
+        club = ClubProfile(
+            owner_user_id=user.id,
+            club_name=normalized_name,
+            short_name=short_name.strip().upper()[:40] or normalized_name[:4].upper(),
+            club_type=club_type,
+            lifecycle_status=ClubLifecycleStatus.ACTIVE,
+            slug=self._generate_unique_club_slug(session, normalized_name),
+            crest_asset_ref=crest_asset_ref,
+            primary_color=primary_color.strip() or "#0F766E",
+            secondary_color=secondary_color.strip() or "#F8FAFC",
+            accent_color="#EA580C",
+            country_code=((country_code or "").strip().upper()[:8]) or None,
+            region_name=(region_name or "").strip() or None,
+            city_name=(city_name or "").strip() or None,
+            visibility="public",
+        )
+        session.add(club)
+        session.flush()
+        ClubReputationService(session).ensure_profile(club.id)
+        ClubDynastyService(session).ensure_progress(club.id)
+        ClubTrophyService(session).ensure_cabinet(club.id)
+        AccessControlService(session).ensure_club_organization(club, owner_user_id=user.id)
+        session.flush()
+        return club
 
     def get_auth_session_record(
         self,
@@ -574,42 +636,6 @@ class AuthService:
             expected_hash = AuthService._hash_refresh_token(expected_refresh_token)
             if auth_session.refresh_token_hash != expected_hash:
                 raise InvalidRefreshTokenError("Refresh token is invalid or expired.")
-
-    def _create_default_club_profile(self, session: Session, user: User) -> ClubProfile:
-        display_seed = (
-            user.display_name
-            or user.full_name
-            or user.username
-            or user.email.split("@", maxsplit=1)[0]
-        ).strip()
-        normalized_seed = display_seed or f"user-{user.id[:8]}"
-        club_name = f"{normalized_seed} FC"
-        compact_seed = re.sub(r"[^A-Za-z0-9]+", "", normalized_seed.upper())
-        short_name = (compact_seed[:4] or "FC")[:40]
-        slug = self._generate_unique_club_slug(session, normalized_seed)
-        country_code = PolicyService(session).resolve_country_code_for_user(user=user)
-        club = ClubProfile(
-            owner_user_id=user.id,
-            club_name=club_name,
-            short_name=short_name,
-            slug=slug,
-            primary_color="#0F766E",
-            secondary_color="#F8FAFC",
-            accent_color="#EA580C",
-            home_venue_name=f"{normalized_seed} Arena",
-            country_code=country_code,
-            visibility="public",
-        )
-        session.add(club)
-        session.flush()
-        ClubReputationService(session).ensure_profile(club.id)
-        ClubDynastyService(session).ensure_progress(club.id)
-        ClubTrophyService(session).ensure_cabinet(club.id)
-        session.flush()
-        RegenBootstrapService(session).bootstrap_for_new_club(club)
-        AccessControlService(session).ensure_club_organization(club, owner_user_id=user.id)
-        session.flush()
-        return club
 
     def _generate_unique_club_slug(self, session: Session, seed: str) -> str:
         base = re.sub(r"[^a-z0-9]+", "-", seed.strip().lower()).strip("-")

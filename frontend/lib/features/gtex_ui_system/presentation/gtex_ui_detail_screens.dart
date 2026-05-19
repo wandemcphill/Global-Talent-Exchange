@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../widgets/gte_shell_theme.dart';
 import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/gtex_branding.dart';
+import '../../../widgets/player_card_avatar.dart';
 import '../data/gtex_ui_demo_data.dart';
 import '../widgets/gtex_ui_primitives.dart';
 
@@ -281,13 +282,7 @@ class GtexPlayerDetailScreen extends StatelessWidget {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
-                            GtexAnimatedAvatar(
-                              label: player.name,
-                              size: 90,
-                              accent: tokens.accentArena,
-                              badges: player.badges,
-                              rating: player.rating,
-                            ),
+                            const PlayerCardAvatar(avatar: null, size: 90),
                             const SizedBox(width: 18),
                             Expanded(
                               child: Column(
@@ -600,14 +595,7 @@ class _GtexNationalTeamScreenState extends State<GtexNationalTeamScreen> {
                       padding: const EdgeInsets.all(14),
                       child: Row(
                         children: <Widget>[
-                          GtexAnimatedAvatar(
-                            label: player.name,
-                            size: 58,
-                            accent: isSelected
-                                ? tokens.accentCommunity
-                                : tokens.accentCapital,
-                            rating: player.rating,
-                          ),
+                          const PlayerCardAvatar(avatar: null, size: 58),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -1216,11 +1204,21 @@ class _ClubSquadTab extends StatelessWidget {
                   top: position.dy,
                   child: Column(
                     children: <Widget>[
-                      CircleAvatar(
-                        radius: 22,
-                        backgroundColor:
-                            tokens.accentClub.withValues(alpha: 0.22),
-                        child: Text(labels[index]),
+                      Stack(
+                        alignment: Alignment.center,
+                        children: <Widget>[
+                          const PlayerCardAvatar(avatar: null, size: 44),
+                          Text(
+                            labels[index],
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: tokens.accentClub,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 6),
                       SizedBox(
@@ -1254,12 +1252,7 @@ class _ClubSquadTab extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               child: Row(
                 children: <Widget>[
-                  GtexAnimatedAvatar(
-                    label: player.name,
-                    size: 54,
-                    accent: tokens.accentClub,
-                    rating: player.rating,
-                  ),
+                  const PlayerCardAvatar(avatar: null, size: 54),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

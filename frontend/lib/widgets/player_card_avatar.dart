@@ -19,15 +19,49 @@ class PlayerCardAvatar extends StatelessWidget {
   final double size;
   final AvatarMode mode;
 
+  static const Key portraitKey = ValueKey<String>('player-card-portrait');
+  static const Key fallbackKey = ValueKey<String>(
+    'player-card-premium-silhouette',
+  );
+
   @override
   Widget build(BuildContext context) {
-    final String? resolvedImage = imageUrl?.trim();
-    if (resolvedImage != null && resolvedImage.isNotEmpty) {
+    final String? resolvedImage = resolvePlayerCardImageUrl(imageUrl);
+    if (resolvedImage != null) {
       return _PortraitImage(url: resolvedImage, size: size);
     }
     return _FootballSilhouette(size: size);
   }
 }
+
+String? resolvePlayerCardImageUrl(String? imageUrl) {
+  final String? candidate = imageUrl?.trim();
+  if (candidate == null || candidate.isEmpty) {
+    return null;
+  }
+  final String normalized = candidate.toLowerCase();
+  if (_blockedPlayerImagePlaceholders.any(normalized.contains)) {
+    return null;
+  }
+  final bool isRemote =
+      normalized.startsWith('http://') || normalized.startsWith('https://');
+  final bool isAsset = normalized.startsWith('assets/');
+  final bool isDataImage = normalized.startsWith('data:image/');
+  final bool isRelativeMedia = normalized.startsWith('/generated-media/');
+  if (!isRemote && !isAsset && !isDataImage && !isRelativeMedia) {
+    return null;
+  }
+  return candidate;
+}
+
+const List<String> _blockedPlayerImagePlaceholders = <String>[
+  'assets/branding/',
+  'placeholder',
+  'default-avatar',
+  'default_avatar',
+  'random-avatar',
+  'random_avatar',
+];
 
 class _PortraitImage extends StatelessWidget {
   const _PortraitImage({required this.url, required this.size});
@@ -94,6 +128,7 @@ class _PortraitImage extends StatelessWidget {
       );
     }
     return ClipRRect(
+      key: PlayerCardAvatar.portraitKey,
       borderRadius: radius,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -154,7 +189,7 @@ class _FootballSilhouette extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
     return Container(
-      key: const Key('player-card-fallback-silhouette'),
+      key: PlayerCardAvatar.fallbackKey,
       width: size,
       height: size,
       decoration: BoxDecoration(

@@ -44,18 +44,181 @@ class NationalTeamCountryRankingRecord {
   }
 }
 
+class NationalTeamCountryPipeline {
+  const NationalTeamCountryPipeline({
+    required this.countryCode,
+    required this.countryName,
+    required this.confederationCode,
+    required this.prospectCount,
+    required this.eliteProspects,
+    required this.averagePotential,
+    required this.topPotential,
+    required this.topProspectName,
+    required this.focusPositions,
+    this.rankingElo,
+  });
+
+  final String countryCode;
+  final String countryName;
+  final String confederationCode;
+  final int prospectCount;
+  final int eliteProspects;
+  final double averagePotential;
+  final int topPotential;
+  final String topProspectName;
+  final List<String> focusPositions;
+  final double? rankingElo;
+}
+
+class NationalTeamAcademySignal {
+  const NationalTeamAcademySignal({
+    required this.confederationCode,
+    required this.label,
+    required this.countryCount,
+    required this.prospectCount,
+    required this.averagePotential,
+    required this.topPotential,
+    required this.focusPositions,
+  });
+
+  final String confederationCode;
+  final String label;
+  final int countryCount;
+  final int prospectCount;
+  final double averagePotential;
+  final int topPotential;
+  final List<String> focusPositions;
+}
+
 class NationalTeamsHubData {
   const NationalTeamsHubData({
     required this.competitions,
     required this.rankings,
     required this.nationalRegens,
+    required this.regenScoutingFeed,
     required this.history,
   });
 
   final List<NationalTeamCompetition> competitions;
   final List<NationalTeamCountryRankingRecord> rankings;
   final List<NationalRegenSeed> nationalRegens;
+  final List<RegenScoutingFeedItem> regenScoutingFeed;
   final NationalTeamUserHistory? history;
+
+  List<NationalRegenSeed> get youthProspects {
+    return _sortedRegens(
+      nationalRegens
+          .where(
+            (NationalRegenSeed seed) =>
+                (seed.age ?? 99) <= 20 ||
+                seed.ageBand.toLowerCase().contains('u17') ||
+                seed.ageBand.toLowerCase().contains('u20') ||
+                seed.ageBand.toLowerCase().contains('youth'),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  List<NationalRegenSeed> get futureStars => _sortedRegens(nationalRegens);
+
+  List<NationalTeamCountryPipeline> get countryPipelines {
+    final Map<String, NationalTeamCountryRankingRecord> rankingByCountry =
+        <String, NationalTeamCountryRankingRecord>{
+          for (final NationalTeamCountryRankingRecord ranking in rankings)
+            ranking.countryCode.toUpperCase(): ranking,
+        };
+    final Map<String, List<NationalRegenSeed>> byCountry =
+        <String, List<NationalRegenSeed>>{};
+    for (final NationalRegenSeed seed in nationalRegens) {
+      byCountry
+          .putIfAbsent(
+            seed.countryCode.toUpperCase(),
+            () => <NationalRegenSeed>[],
+          )
+          .add(seed);
+    }
+    final List<NationalTeamCountryPipeline> pipelines = byCountry.entries
+        .map((MapEntry<String, List<NationalRegenSeed>> entry) {
+          final List<NationalRegenSeed> seeds = _sortedRegens(entry.value);
+          final NationalRegenSeed topSeed = seeds.first;
+          final NationalTeamCountryRankingRecord? ranking =
+              rankingByCountry[entry.key];
+          return NationalTeamCountryPipeline(
+            countryCode: topSeed.countryCode,
+            countryName: topSeed.countryName,
+            confederationCode: _confederationCode(topSeed),
+            prospectCount: seeds.length,
+            eliteProspects:
+                seeds
+                    .where(
+                      (NationalRegenSeed seed) => seed.potentialRating >= 84,
+                    )
+                    .length,
+            averagePotential: _averagePotential(seeds),
+            topPotential: topSeed.potentialRating,
+            topProspectName: topSeed.displayName,
+            focusPositions: _focusPositions(seeds),
+            rankingElo: ranking?.eloRating,
+          );
+        })
+        .toList(growable: false);
+    pipelines.sort((
+      NationalTeamCountryPipeline left,
+      NationalTeamCountryPipeline right,
+    ) {
+      final int potentialCompare = right.topPotential.compareTo(
+        left.topPotential,
+      );
+      if (potentialCompare != 0) {
+        return potentialCompare;
+      }
+      return right.prospectCount.compareTo(left.prospectCount);
+    });
+    return pipelines;
+  }
+
+  List<NationalTeamAcademySignal> get internationalAcademies {
+    final Map<String, List<NationalRegenSeed>> byConfederation =
+        <String, List<NationalRegenSeed>>{};
+    for (final NationalRegenSeed seed in nationalRegens) {
+      byConfederation
+          .putIfAbsent(_confederationCode(seed), () => <NationalRegenSeed>[])
+          .add(seed);
+    }
+    final List<NationalTeamAcademySignal> signals = byConfederation.entries
+        .map((MapEntry<String, List<NationalRegenSeed>> entry) {
+          final List<NationalRegenSeed> seeds = _sortedRegens(entry.value);
+          final Set<String> countryCodes =
+              seeds
+                  .map(
+                    (NationalRegenSeed seed) => seed.countryCode.toUpperCase(),
+                  )
+                  .toSet();
+          return NationalTeamAcademySignal(
+            confederationCode: entry.key,
+            label: _confederationLabel(entry.key),
+            countryCount: countryCodes.length,
+            prospectCount: seeds.length,
+            averagePotential: _averagePotential(seeds),
+            topPotential: seeds.isEmpty ? 0 : seeds.first.potentialRating,
+            focusPositions: _focusPositions(seeds),
+          );
+        })
+        .toList(growable: false);
+    signals.sort((
+      NationalTeamAcademySignal left,
+      NationalTeamAcademySignal right,
+    ) {
+      final int potentialCompare = right.topPotential.compareTo(
+        left.topPotential,
+      );
+      if (potentialCompare != 0) {
+        return potentialCompare;
+      }
+      return right.prospectCount.compareTo(left.prospectCount);
+    });
+    return signals;
+  }
 }
 
 class NationalTeamCompetitionDetailData {
@@ -236,6 +399,20 @@ class NationalTeamsApi {
     return items.map(NationalRegenSeed.fromJson).toList(growable: false);
   }
 
+  Future<List<RegenScoutingFeedItem>> listRegenScoutingFeed({
+    int limit = 8,
+  }) async {
+    final JsonMap payload = await client.getMap(
+      '/regen-universe/scouting-feed',
+      auth: false,
+      query: compactQuery(<String, Object?>{'limit': limit}),
+    );
+    final List<Object?> items = GteJson.list(
+      payload['items'] ?? const <Object?>[],
+    );
+    return items.map(RegenScoutingFeedItem.fromJson).toList(growable: false);
+  }
+
   Future<JsonMap> buildAutoSquad({
     required String competitionId,
     required String countryCode,
@@ -292,6 +469,8 @@ final FutureProvider<NationalTeamsHubData> nationalTeamsHubProvider =
           api.listRankings();
       final Future<List<NationalRegenSeed>> nationalRegensFuture =
           api.listNationalRegens();
+      final Future<List<RegenScoutingFeedItem>> scoutingFeedFuture = api
+          .listRegenScoutingFeed(limit: 8);
       NationalTeamUserHistory? history;
       if (authenticated) {
         try {
@@ -300,10 +479,18 @@ final FutureProvider<NationalTeamsHubData> nationalTeamsHubProvider =
           history = null;
         }
       }
+      List<RegenScoutingFeedItem> regenScoutingFeed =
+          const <RegenScoutingFeedItem>[];
+      try {
+        regenScoutingFeed = await scoutingFeedFuture;
+      } catch (_) {
+        regenScoutingFeed = const <RegenScoutingFeedItem>[];
+      }
       return NationalTeamsHubData(
         competitions: await competitionsFuture,
         rankings: await rankingsFuture,
         nationalRegens: await nationalRegensFuture,
+        regenScoutingFeed: regenScoutingFeed,
         history: history,
       );
     });
@@ -313,6 +500,94 @@ int? _optionalInt(Object? value) {
     return null;
   }
   return intValue(value);
+}
+
+List<NationalRegenSeed> _sortedRegens(List<NationalRegenSeed> seeds) {
+  return List<NationalRegenSeed>.of(seeds)
+    ..sort((NationalRegenSeed left, NationalRegenSeed right) {
+      final int potentialCompare = right.potentialRating.compareTo(
+        left.potentialRating,
+      );
+      if (potentialCompare != 0) {
+        return potentialCompare;
+      }
+      final int currentCompare = right.currentRating.compareTo(
+        left.currentRating,
+      );
+      if (currentCompare != 0) {
+        return currentCompare;
+      }
+      return right.growthCurve.compareTo(left.growthCurve);
+    });
+}
+
+String _confederationCode(NationalRegenSeed seed) {
+  final String? rawCode =
+      seed.confederationCode ??
+      stringOrNullValue(seed.metadata['confederation_code']) ??
+      stringOrNullValue(seed.metadata['confederationCode']);
+  final String normalized = rawCode?.trim().toUpperCase() ?? '';
+  return normalized.isEmpty ? 'GLOBAL' : normalized;
+}
+
+String _confederationLabel(String code) {
+  switch (code.trim().toUpperCase()) {
+    case 'AFC':
+      return 'AFC academy circuit';
+    case 'CAF':
+      return 'CAF academy circuit';
+    case 'CONCACAF':
+      return 'CONCACAF academy circuit';
+    case 'CONMEBOL':
+      return 'CONMEBOL academy circuit';
+    case 'OFC':
+      return 'OFC academy circuit';
+    case 'UEFA':
+      return 'UEFA academy circuit';
+    default:
+      return 'International academy circuit';
+  }
+}
+
+double _averagePotential(List<NationalRegenSeed> seeds) {
+  if (seeds.isEmpty) {
+    return 0;
+  }
+  final int total = seeds.fold<int>(
+    0,
+    (int sum, NationalRegenSeed seed) => sum + seed.potentialRating,
+  );
+  return total / seeds.length;
+}
+
+List<String> _focusPositions(List<NationalRegenSeed> seeds) {
+  final Map<String, int> counts = <String, int>{};
+  for (final NationalRegenSeed seed in seeds) {
+    final List<String> positions = <String>[
+      seed.primaryPosition,
+      ...seed.secondaryPositions,
+    ];
+    for (final String position in positions) {
+      final String normalized = position.trim().toUpperCase();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      counts[normalized] = (counts[normalized] ?? 0) + 1;
+    }
+  }
+  final List<MapEntry<String, int>> entries =
+      counts.entries.toList()
+        ..sort((MapEntry<String, int> left, MapEntry<String, int> right) {
+          final int countCompare = right.value.compareTo(left.value);
+          if (countCompare != 0) {
+            return countCompare;
+          }
+          return left.key.compareTo(right.key);
+        });
+  return entries
+      .take(3)
+      .map((MapEntry<String, int> entry) => entry.key)
+      .toList(growable: false);
 }
 
 final dynamic nationalTeamCompetitionDetailProvider =

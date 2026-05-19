@@ -106,6 +106,10 @@ def submit_kyc_profile(
             state=payload.state,
             country=payload.country,
             id_document_attachment_id=payload.id_document_attachment_id,
+            government_id_attachment_id=payload.government_id_attachment_id,
+            selfie_attachment_id=payload.selfie_attachment_id,
+            proof_of_address_attachment_id=payload.proof_of_address_attachment_id,
+            country_confirmation=payload.country_confirmation,
         )
         session.commit()
     except TreasuryConflictError as exc:
@@ -457,7 +461,7 @@ def treasury_dashboard(
         )
     )
     pending_kyc = session.scalar(
-        select(func.count(KycProfile.id)).where(KycProfile.status == KycStatus.PENDING)
+        select(func.count(KycProfile.id)).where(KycProfile.status.in_([KycStatus.PENDING, KycStatus.UNDER_REVIEW]))
     )
     open_disputes = session.scalar(
         select(func.count(Dispute.id)).where(

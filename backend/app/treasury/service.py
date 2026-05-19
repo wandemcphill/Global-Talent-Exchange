@@ -469,10 +469,10 @@ class TreasuryService:
 
     @staticmethod
     def resolve_kyc_tier(kyc_status: KycStatus) -> str:
-        if kyc_status == KycStatus.PARTIAL_VERIFIED_NO_ID:
-            return "basic"
-        if kyc_status == KycStatus.FULLY_VERIFIED:
+        if kyc_status == KycStatus.VERIFIED:
             return "verified"
+        if kyc_status == KycStatus.UNDER_REVIEW:
+            return "review"
         return "unverified"
 
     @classmethod
@@ -527,7 +527,7 @@ class TreasuryService:
             country_code, country_withdrawals_enabled, missing_required_policies = self._resolve_user_policy_state(
                 session, user
             )
-        requires_kyc = kyc_status in {KycStatus.UNVERIFIED, KycStatus.PENDING, KycStatus.REJECTED}
+        requires_kyc = kyc_status in {KycStatus.UNVERIFIED, KycStatus.PENDING, KycStatus.UNDER_REVIEW, KycStatus.REJECTED}
         requires_bank = (
             self.ensure_user_bank_account(session, user) is None
             if has_active_bank_account is None
@@ -995,6 +995,10 @@ class TreasuryService:
         state: str | None,
         country: str | None,
         id_document_attachment_id: str | None,
+        government_id_attachment_id: str | None = None,
+        selfie_attachment_id: str | None = None,
+        proof_of_address_attachment_id: str | None = None,
+        country_confirmation: str | None = None,
     ) -> KycProfile:
         profile = self.get_or_create_kyc_profile(session, user)
         profile.nin = nin
@@ -1005,9 +1009,13 @@ class TreasuryService:
         profile.state = state
         profile.country = country
         profile.id_document_attachment_id = id_document_attachment_id
-        profile.status = KycStatus.PENDING
+        profile.government_id_attachment_id = government_id_attachment_id or id_document_attachment_id
+        profile.selfie_attachment_id = selfie_attachment_id
+        profile.proof_of_address_attachment_id = proof_of_address_attachment_id
+        profile.country_confirmation = country_confirmation or country
+        profile.status = KycStatus.UNDER_REVIEW
         profile.submitted_at = utcnow()
-        user.kyc_status = KycStatus.PENDING
+        user.kyc_status = KycStatus.UNDER_REVIEW
         session.flush()
         self.track_event(session, "kyc_submitted", user=user, metadata={"kyc_profile_id": profile.id})
         self.create_notification(
@@ -1053,7 +1061,7 @@ class TreasuryService:
         if user is not None:
             event_name = (
                 "kyc_approved"
-                if status in {KycStatus.PARTIAL_VERIFIED_NO_ID, KycStatus.FULLY_VERIFIED}
+                if status == KycStatus.VERIFIED
                 else "kyc_rejected"
             )
             self.track_event(session, event_name, user=user, metadata={"kyc_profile_id": profile.id})

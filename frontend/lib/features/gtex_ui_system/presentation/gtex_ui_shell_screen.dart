@@ -811,7 +811,7 @@ class _TransferMarketTabState extends State<_TransferMarketTab> {
                 ),
                 itemBuilder: (BuildContext context, int index) {
                   final GtexPlayerCardData player = players[index];
-                  return GtexPlayerCard(
+                  return GtexPlayerTile(
                     player: player,
                     onOpen: () => widget.onOpenPlayer(player),
                     onBid: () => widget.onBid(player),

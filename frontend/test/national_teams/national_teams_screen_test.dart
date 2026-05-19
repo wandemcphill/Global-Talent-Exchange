@@ -73,6 +73,17 @@ void main() {
                   nationalPoolOnly: true,
                 ),
               ],
+              regenScoutingFeed: <RegenScoutingFeedItem>[
+                RegenScoutingFeedItem(
+                  feedId: 'feed-1',
+                  feedType: 'hidden_gem',
+                  title: 'Scouts found a Lagos winger',
+                  summary: 'National scouts flagged elite winger upside.',
+                  occurredAt: DateTime.utc(2031, 1, 3),
+                  importance: 0.88,
+                  badges: const <String>['hidden_gem', 'national_pool'],
+                ),
+              ],
               history: null,
             ),
           ),
@@ -85,10 +96,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Azeez Salisu'), findsOneWidget);
+    expect(find.text('Azeez Salisu'), findsWidgets);
     expect(find.text('National Pool'), findsOneWidget);
     expect(find.text('Rental Only'), findsOneWidget);
     expect(find.text('Not Tradable'), findsOneWidget);
+    expect(find.text('Regen scouting'), findsOneWidget);
+    expect(find.text('Scouts found a Lagos winger'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Buy'), findsNothing);
   });
 }

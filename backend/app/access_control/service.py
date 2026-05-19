@@ -18,7 +18,7 @@ from app.models.access_control import (
 )
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
-from app.models.user import User, UserRole
+from app.models.user import PublicAccountType, User, UserRole
 
 ACCESS_CONTEXT_ATTR = "_access_control_context"
 ACCESS_ROLE_MAP_ATTR = "_access_control_roles_by_org"
@@ -188,14 +188,14 @@ class AccessControlService:
     ) -> UserRole:
         if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
             return user.role
-        resolved_memberships = memberships or self.list_memberships_for_user(user.id)
+        resolved_memberships = memberships if memberships is not None else self.list_memberships_for_user(user.id)
         primary_membership = self._primary_membership(resolved_memberships)
         if primary_membership is not None:
             return MEMBERSHIP_TO_USER_ROLE[primary_membership.role]
         return user.role
 
     def build_user_access_context(self, user: User) -> UserAccessContext:
-        memberships = self.list_memberships_for_user(user.id)
+        memberships = self._memberships_allowed_for_account(user, self.list_memberships_for_user(user.id))
         primary_membership = self._primary_membership(memberships)
         effective_role = self.resolve_effective_role(user, memberships)
         permissions: tuple[str, ...] = tuple()
@@ -300,6 +300,9 @@ class AccessControlService:
         if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
             return club
 
+        if self._public_account_type(user) != PublicAccountType.USER:
+            raise PermissionError(forbidden_detail)
+
         membership = self._membership_for_user(user.id, club_id)
         if membership is None and club.owner_user_id == user.id:
             self.ensure_club_organization(club, owner_user_id=user.id)
@@ -308,6 +311,42 @@ class AccessControlService:
         if membership is None or membership.role not in allowed_roles:
             raise PermissionError(forbidden_detail)
         return club
+
+    def _memberships_allowed_for_account(
+        self,
+        user: User,
+        memberships: tuple[MembershipAccessContext, ...],
+    ) -> tuple[MembershipAccessContext, ...]:
+        if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            return memberships
+        if self._public_account_type(user) == PublicAccountType.USER:
+            return memberships
+        return tuple(
+            membership
+            for membership in memberships
+            if not self._is_club_membership(membership)
+        )
+
+    @staticmethod
+    def _public_account_type(user: User) -> PublicAccountType:
+        raw_account_type = getattr(user, "account_type", PublicAccountType.USER)
+        if isinstance(raw_account_type, PublicAccountType):
+            return raw_account_type
+        candidate = str(raw_account_type).strip().lower()
+        for account_type in PublicAccountType:
+            if candidate in {account_type.value, account_type.name.lower()}:
+                return account_type
+        try:
+            return PublicAccountType(candidate)
+        except ValueError:
+            return PublicAccountType.USER
+
+    @staticmethod
+    def _is_club_membership(membership: MembershipAccessContext) -> bool:
+        organization_type = membership.organization_type
+        if isinstance(organization_type, OrganizationType):
+            return organization_type == OrganizationType.CLUB
+        return str(organization_type).strip().lower() == OrganizationType.CLUB.value
 
     def invite_user_to_organization(
         self,

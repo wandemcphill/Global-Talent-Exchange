@@ -363,6 +363,8 @@ class NationalRegenSeed {
     this.globalScoutingIndex,
     this.age,
     this.ageBand = 'senior',
+    this.confederationCode,
+    this.secondaryPositions = const <String>[],
     this.growthCurve = 0.5,
     this.status = 'active',
     this.preseedBatch,
@@ -385,8 +387,10 @@ class NationalRegenSeed {
   final String ageBand;
   final String countryCode;
   final String countryName;
+  final String? confederationCode;
   final String seedType;
   final String primaryPosition;
+  final List<String> secondaryPositions;
   final int currentRating;
   final int potentialRating;
   final int? globalScoutingIndex;
@@ -459,6 +463,15 @@ class NationalRegenSeed {
         'country_name',
         'countryName',
       ]),
+      confederationCode:
+          GteJson.stringOrNull(json, <String>[
+            'confederation_code',
+            'confederationCode',
+          ]) ??
+          GteJson.stringOrNull(metadata, <String>[
+            'confederation_code',
+            'confederationCode',
+          ]),
       seedType: GteJson.string(json, <String>[
         'seed_type',
         'seedType',
@@ -467,6 +480,11 @@ class NationalRegenSeed {
         'primary_position',
         'primaryPosition',
       ], fallback: 'CM'),
+      secondaryPositions: GteJson.typedList<String>(
+        json,
+        <String>['secondary_positions', 'secondaryPositions'],
+        (Object? item) => item?.toString() ?? '',
+      ).where((String item) => item.trim().isNotEmpty).toList(growable: false),
       currentRating: GteJson.integer(json, <String>[
         'current_rating',
         'currentRating',

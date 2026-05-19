@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 589,
+  "call_count": 607,
   "calls": [
     {
       "file": "frontend/lib/data/admin_command_center_api.dart",
@@ -2310,7 +2310,31 @@
       "file": "frontend/lib/data/gte_api_repository.dart",
       "transport_call": "string_reference",
       "method": "POST",
-      "endpoint": "/auth/register",
+      "endpoint": "/auth/signup/creator",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/auth/signup/trader",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/auth/signup/user",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [
@@ -3604,6 +3628,90 @@
     },
     {
       "file": "frontend/lib/data/story_feed_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v2/trader/markets",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v2/trader/orders",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v2/trader/overview",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v2/trader/p2p",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v2/trader/security/totp/setup",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v2/trader/watchlist",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
       "transport_call": "hardcoded_url",
       "method": "N/A",
       "endpoint": "http://127.0.0.1:8000",
@@ -6507,6 +6615,66 @@
       ]
     },
     {
+      "file": "frontend/lib/router/app_router.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/router/app_router.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/select-account",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/router/app_router.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/signup/creator",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/router/app_router.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/signup/trader",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/router/app_router.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/signup/user",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/screens/admin/academy_analytics_screen.dart",
       "transport_call": "hardcoded_url",
       "method": "N/A",
@@ -6657,6 +6825,42 @@
       "endpoint": "http://127.0.0.1:8000",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/auth/gtex_account_signup_screens.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/signup/creator",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/auth/gtex_account_signup_screens.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/signup/trader",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/screens/auth/gtex_account_signup_screens.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/signup/user",
+      "expected_shape": null,
+      "base_url_source": "injected",
       "platforms": [
         "web",
         "mobile"
@@ -6927,6 +7131,18 @@
       ]
     },
     {
+      "file": "frontend/lib/screens/trader/trader_dashboard_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/select-account",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/screens/wallet/gtex_wallet_overview_screen_v2.dart",
       "transport_call": "hardcoded_url",
       "method": "N/A",
@@ -7051,7 +7267,7 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/generated-media/",
-      "expected_shape": null,
+      "expected_shape": "list",
       "base_url_source": "runtime_env",
       "platforms": [
         "web",

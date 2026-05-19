@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.tests.support.secrets import TEST_PASSWORD
+from backend.tests.support.signup_payloads import user_signup_payload
 from app.auth.security import create_access_token
 from app.ingestion.models import Player
 from app.models.auth_session import AuthSession
@@ -47,15 +48,13 @@ def _error_message(response) -> str:
 def _register_user(client, *, prefix: str) -> dict[str, object]:
     email = f"{_suffix(prefix)}@example.com"
     response = client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "full_name": f"{prefix.title()} User",
-            "phone_number": "08000000000",
-            "password": TEST_PASSWORD,
-            "is_over_18": True,
-            "region_code": "NG",
-        },
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email=email,
+            username=email.split("@", maxsplit=1)[0].replace("-", "_"),
+            full_name=f"{prefix.title()} User",
+            password=TEST_PASSWORD,
+        ),
     )
     assert response.status_code == 201, response.text
     payload = response.json()

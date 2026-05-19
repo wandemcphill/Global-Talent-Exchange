@@ -480,8 +480,22 @@ from app.models.treasury import (
     TreasuryWithdrawalStatus,
     UserBankAccount,
 )
+from app.models.trader import (
+    TraderExperience,
+    TraderMarket,
+    TraderOrder,
+    TraderOrderSide,
+    TraderOrderStatus,
+    TraderP2POffer,
+    TraderP2PStatus,
+    TraderPriceTick,
+    TraderProfile,
+    TraderSecurity,
+    TraderSecurityEvent,
+    TraderWatchlist,
+)
 from app.models.follow import Follow
-from app.models.user import KycStatus, User, UserRole
+from app.models.user import KycStatus, PublicAccountType, User, UserRole
 from app.models.user_wallet import UserWallet, WalletTransactionRecord
 from app.models.user_affinity_profile import UserAffinityProfile
 from app.models.user_region import UserRegionProfile
@@ -998,6 +1012,7 @@ __all__ = [
     "GiftTransaction",
     "GiftTransactionStatus",
     "KycStatus",
+    "PublicAccountType",
     "LedgerAccount",
     "LedgerAccountKind",
     "LedgerBalanceProjection",
@@ -1014,6 +1029,18 @@ __all__ = [
     "PayoutStatus",
     "UserWallet",
     "WalletTransactionRecord",
+    "TraderExperience",
+    "TraderMarket",
+    "TraderOrder",
+    "TraderOrderSide",
+    "TraderOrderStatus",
+    "TraderP2POffer",
+    "TraderP2PStatus",
+    "TraderPriceTick",
+    "TraderProfile",
+    "TraderSecurity",
+    "TraderSecurityEvent",
+    "TraderWatchlist",
     "MarketTopup",
     "MarketTopupStatus",
     "WithdrawalReview",
