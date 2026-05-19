@@ -51,7 +51,7 @@ void main() {
         const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
-            'secret': 'JBSWY3DPEHPK3PXP',
+            'secret': 'JBSWY3DPEHPK3PXP', // pragma: allowlist secret
             'issuer': 'GTEX',
             'account_label': 'Atlas Desk',
           },
@@ -112,7 +112,7 @@ void main() {
     final TraderSecurityStatus security = await api.security();
     final TraderSecurityStatus verified = await api.verifyTotp(
       const TraderTotpVerify(
-        secret: 'JBSWY3DPEHPK3PXP',
+        secret: 'JBSWY3DPEHPK3PXP', // pragma: allowlist secret
         code: '123456',
         recoveryPhraseHash: 'recovery-hash',
         securityPinHash: 'pin-hash',
@@ -161,7 +161,7 @@ void main() {
       containsPair('market_id', 'market-lagfc'),
     );
     expect(transport.requests[8].body, <String, Object?>{
-      'secret': 'JBSWY3DPEHPK3PXP',
+      'secret': 'JBSWY3DPEHPK3PXP', // pragma: allowlist secret
       'code': '123456',
       'recovery_phrase_hash': 'recovery-hash',
       'security_pin_hash': 'pin-hash',

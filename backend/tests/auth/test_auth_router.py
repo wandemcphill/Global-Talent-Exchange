@@ -397,7 +397,7 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
 
 def test_user_creator_and_trader_signup_sessions_include_public_account_type(app_client) -> None:
     app, client = app_client
-    trader_secret = "JBSWY3DPEHPK3PXP"
+    trader_secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
     signups = [
         (
             "/auth/signup/user",
@@ -465,7 +465,7 @@ def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
 
 def test_trader_signup_requires_proof_of_address(app_client) -> None:
     _app, client = app_client
-    secret = "JBSWY3DPEHPK3PXP"
+    secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
     payload = trader_signup_payload(
         email="missing-address-trader@example.com",
         trading_alias="missing_address_trader",

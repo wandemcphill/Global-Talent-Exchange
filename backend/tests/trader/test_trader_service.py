@@ -119,7 +119,7 @@ def test_trader_security_rejects_invalid_totp(session) -> None:
     with pytest.raises(TraderAccessError, match="Invalid authenticator code"):
         TraderService(session).verify_totp_setup(
             trader,
-            totp_secret="JBSWY3DPEHPK3PXP",
+            totp_secret="JBSWY3DPEHPK3PXP",  # pragma: allowlist secret
             totp_code="000000",
             recovery_phrase_hash="recovery-hash-value",
             security_pin_hash="security-pin-hash",
@@ -130,7 +130,7 @@ def test_trader_security_rejects_invalid_totp(session) -> None:
 
 def test_trader_security_verification_returns_backup_codes_once(session) -> None:
     trader = _create_trader(session)
-    secret = "JBSWY3DPEHPK3PXP"
+    secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
     service = TraderService(session)
 
     first = service.verify_totp_setup(
@@ -157,7 +157,7 @@ def test_trader_security_verification_returns_backup_codes_once(session) -> None
 
 def test_trader_security_does_not_persist_raw_totp_secret(session) -> None:
     trader = _create_trader(session)
-    secret = "JBSWY3DPEHPK3PXP"
+    secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
 
     TraderService(session).verify_totp_setup(
         trader,
@@ -176,7 +176,7 @@ def test_trader_security_does_not_persist_raw_totp_secret(session) -> None:
 
 def test_trader_security_read_hides_backup_codes(session) -> None:
     trader = _create_trader(session)
-    secret = "JBSWY3DPEHPK3PXP"
+    secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
     service = TraderService(session)
     service.verify_totp_setup(
         trader,

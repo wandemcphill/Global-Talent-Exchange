@@ -230,7 +230,9 @@ class TraderService:
         self.session.flush()
         return list(self.session.scalars(select(TraderMarket).order_by(TraderMarket.symbol.asc())).all())
 
-    def place_order(self, user: User, *, market_id: str, side: TraderOrderSide, quantity: Decimal, limit_price: Decimal | None) -> TraderOrder:
+    def place_order(
+        self, user: User, *, market_id: str, side: TraderOrderSide, quantity: Decimal, limit_price: Decimal | None
+    ) -> TraderOrder:
         self.assert_trader(user)
         self._require_market(market_id)
         order = TraderOrder(user_id=user.id, market_id=market_id, side=side, quantity=quantity, limit_price=limit_price)

@@ -750,7 +750,7 @@ class _TraderFixtures {
 
   Future<TraderTotpSetup> totpSetup() async {
     return const TraderTotpSetup(
-      secret: 'JBSWY3DPEHPK3PXP',
+      secret: 'JBSWY3DPEHPK3PXP', // pragma: allowlist secret
       issuer: 'GTEX',
       accountLabel: 'Atlas Desk',
     );

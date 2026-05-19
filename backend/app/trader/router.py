@@ -43,7 +43,9 @@ def trader_overview(
 
 
 @api_router.get("/markets", response_model=list[TraderMarketView])
-def list_markets(session: Session = Depends(get_session), _: User = Depends(get_current_trader_user)) -> list[TraderMarketView]:
+def list_markets(
+    session: Session = Depends(get_session), _: User = Depends(get_current_trader_user)
+) -> list[TraderMarketView]:
     return [TraderMarketView.model_validate(item) for item in _service(session).list_markets()]
 
 
@@ -99,10 +101,7 @@ def list_watchlist(
         .where(TraderWatchlist.user_id == current_user.id)
         .order_by(TraderWatchlist.created_at.desc())
     ).all()
-    return [
-        TraderWatchlistView(id=watch.id, market=TraderMarketView.model_validate(market))
-        for watch, market in rows
-    ]
+    return [TraderWatchlistView(id=watch.id, market=TraderMarketView.model_validate(market)) for watch, market in rows]
 
 
 @api_router.post("/watchlist", response_model=TraderWatchlistView, status_code=status.HTTP_201_CREATED)
