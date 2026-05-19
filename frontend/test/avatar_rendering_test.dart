@@ -6,7 +6,7 @@ import 'package:gte_frontend/features/player_card_marketplace/data/player_card_m
 import 'package:gte_frontend/models/academy_models.dart';
 import 'package:gte_frontend/models/player_avatar.dart';
 import 'package:gte_frontend/services/avatar_mapper.dart';
-import 'package:gte_frontend/widgets/player_avatar_widget.dart';
+import 'package:gte_frontend/widgets/player_card_avatar.dart';
 
 void main() {
   test('same player maps to the same avatar across market surfaces', () {
@@ -60,50 +60,50 @@ void main() {
   test('provided avatar payload wins over fallback generation', () {
     final PlayerCardMarketplaceListing listing =
         PlayerCardMarketplaceListing.fromJson(<String, Object?>{
-      'listing_id': 'listing-1',
-      'listing_type': 'sale',
-      'player_card_id': 'card-1',
-      'player_id': 'player-9',
-      'player_name': 'Injected Avatar',
-      'club_name': 'Abuja Athletic',
-      'position': 'ST',
-      'average_rating': 7.9,
-      'tier_code': 'elite',
-      'tier_name': 'Elite',
-      'rarity_rank': 1,
-      'edition_code': '2026',
-      'listing_owner_user_id': 'user-1',
-      'status': 'open',
-      'availability': 'available',
-      'is_negotiable': false,
-      'asset_origin': 'standard',
-      'is_regen_newgen': false,
-      'is_creator_linked': false,
-      'quantity': 1,
-      'available_quantity': 1,
-      'sale_price_credits': 3400,
-      'requested_filters_json': <String, Object?>{},
-      'created_at': '2026-03-21T10:00:00Z',
-      'avatar': <String, Object?>{
-        'avatar_version': 1,
-        'version': 'fm_v1',
-        'seed_token': 'thread-a-token',
-        'dna_seed': 123456,
-        'skin_tone': 5,
-        'hair_style': 8,
-        'hair_color': 0,
-        'face_shape': 3,
-        'eyebrow_style': 2,
-        'eye_type': 1,
-        'nose_type': 2,
-        'mouth_type': 0,
-        'beard_style': 4,
-        'has_accessory': true,
-        'accessory_type': 1,
-        'jersey_style': 3,
-        'accent_tone': 2,
-      },
-    });
+          'listing_id': 'listing-1',
+          'listing_type': 'sale',
+          'player_card_id': 'card-1',
+          'player_id': 'player-9',
+          'player_name': 'Injected Avatar',
+          'club_name': 'Abuja Athletic',
+          'position': 'ST',
+          'average_rating': 7.9,
+          'tier_code': 'elite',
+          'tier_name': 'Elite',
+          'rarity_rank': 1,
+          'edition_code': '2026',
+          'listing_owner_user_id': 'user-1',
+          'status': 'open',
+          'availability': 'available',
+          'is_negotiable': false,
+          'asset_origin': 'standard',
+          'is_regen_newgen': false,
+          'is_creator_linked': false,
+          'quantity': 1,
+          'available_quantity': 1,
+          'sale_price_credits': 3400,
+          'requested_filters_json': <String, Object?>{},
+          'created_at': '2026-03-21T10:00:00Z',
+          'avatar': <String, Object?>{
+            'avatar_version': 1,
+            'version': 'fm_v1',
+            'seed_token': 'thread-a-token',
+            'dna_seed': 123456,
+            'skin_tone': 5,
+            'hair_style': 8,
+            'hair_color': 0,
+            'face_shape': 3,
+            'eyebrow_style': 2,
+            'eye_type': 1,
+            'nose_type': 2,
+            'mouth_type': 0,
+            'beard_style': 4,
+            'has_accessory': true,
+            'accessory_type': 1,
+            'jersey_style': 3,
+            'accent_tone': 2,
+          },
+        });
 
     final PlayerAvatar avatar = AvatarMapper.fromMarketplaceListing(listing);
 
@@ -136,8 +136,9 @@ void main() {
       captain: false,
     );
 
-    final PlayerAvatar academyAvatar =
-        AvatarMapper.fromAcademyPlayer(academyPlayer);
+    final PlayerAvatar academyAvatar = AvatarMapper.fromAcademyPlayer(
+      academyPlayer,
+    );
     final PlayerAvatar lineupAvatar = AvatarMapper.fromLiveLineupPlayer(
       lineupPlayer,
       teamName: 'GTEX B',
@@ -149,8 +150,9 @@ void main() {
     expect(academyAvatar.beardStyle, equals(lineupAvatar.beardStyle));
   });
 
-  testWidgets('shared avatar widget paints without image dependencies',
-      (WidgetTester tester) async {
+  testWidgets('shared card avatar renders the premium fallback silhouette', (
+    WidgetTester tester,
+  ) async {
     const PlayerAvatar avatar = PlayerAvatar(
       avatarVersion: 1,
       version: 'fm_v1',
@@ -175,7 +177,7 @@ void main() {
       const MaterialApp(
         home: Scaffold(
           body: Center(
-            child: PlayerAvatarWidget(
+            child: PlayerCardAvatar(
               avatar: avatar,
               size: 72,
               mode: AvatarMode.card,
@@ -185,12 +187,14 @@ void main() {
       ),
     );
 
-    expect(find.byType(PlayerAvatarWidget), findsOneWidget);
-    expect(find.byType(CustomPaint), findsWidgets);
+    expect(find.byType(PlayerCardAvatar), findsOneWidget);
+    expect(find.byIcon(Icons.person), findsOneWidget);
+    expect(find.byKey(PlayerCardAvatar.fallbackKey), findsOneWidget);
   });
 
-  testWidgets('hud minimal avatar mode renders for match overlays',
-      (WidgetTester tester) async {
+  testWidgets('hud minimal avatar mode uses the same card avatar fallback', (
+    WidgetTester tester,
+  ) async {
     const PlayerAvatar avatar = PlayerAvatar(
       avatarVersion: 1,
       version: 'fm_v1',
@@ -215,7 +219,7 @@ void main() {
       const MaterialApp(
         home: Scaffold(
           body: Center(
-            child: PlayerAvatarWidget(
+            child: PlayerCardAvatar(
               avatar: avatar,
               size: 36,
               mode: AvatarMode.hudMinimal,
@@ -225,7 +229,50 @@ void main() {
       ),
     );
 
-    expect(find.byType(PlayerAvatarWidget), findsOneWidget);
-    expect(find.byType(CustomPaint), findsWidgets);
+    expect(find.byType(PlayerCardAvatar), findsOneWidget);
+    expect(find.byIcon(Icons.person), findsOneWidget);
+    expect(find.byKey(PlayerCardAvatar.fallbackKey), findsOneWidget);
+  });
+
+  test('player portrait resolver rejects legacy placeholder sources', () {
+    expect(resolvePlayerCardImageUrl(null), isNull);
+    expect(resolvePlayerCardImageUrl(''), isNull);
+    expect(resolvePlayerCardImageUrl('assets/branding/gtex_icon.png'), isNull);
+    expect(resolvePlayerCardImageUrl('not-a-player-image'), isNull);
+    expect(
+      resolvePlayerCardImageUrl('/generated-media/player-42.png'),
+      equals('/generated-media/player-42.png'),
+    );
+    expect(
+      resolvePlayerCardImageUrl('https://cdn.gtex.test/player-42.png'),
+      equals('https://cdn.gtex.test/player-42.png'),
+    );
+  });
+
+  testWidgets('shared card avatar renders a real portrait as the portrait state', (
+    WidgetTester tester,
+  ) async {
+    const String transparentPixel =
+        'data:image/png;base64,'
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: PlayerCardAvatar(
+              avatar: null,
+              imageUrl: transparentPixel,
+              size: 72,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(PlayerCardAvatar), findsOneWidget);
+    expect(find.byKey(PlayerCardAvatar.portraitKey), findsOneWidget);
+    expect(find.byKey(PlayerCardAvatar.fallbackKey), findsNothing);
+    expect(find.byIcon(Icons.person), findsNothing);
   });
 }

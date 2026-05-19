@@ -745,6 +745,9 @@ def test_market_player_list_supports_mixed_real_and_regen_with_nullable_rows(ses
 
     assert payload.total == 4
     assert by_id["player-1"].current_value_credits == 220.0
+    assert by_id["player-1"].global_scouting_index == 84.0
+    assert by_id["player-1"].previous_global_scouting_index == 79.0
+    assert by_id["player-1"].global_scouting_index_movement_pct == 6.33
     assert by_id["player-2"].current_value_credits == 180.0
     assert by_id["player-4"].current_value_credits is None
     assert by_id["player-4"].movement_pct is None

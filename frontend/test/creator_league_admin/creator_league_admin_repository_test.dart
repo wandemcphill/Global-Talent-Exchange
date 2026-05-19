@@ -50,9 +50,9 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/competitions/creator-league',
-        '/api/v1/competitions/creator-league/financial-report',
-        '/api/v1/competitions/creator-league/financial-settlements',
+        '/api/v2/competitions/creator-league',
+        '/api/v2/competitions/creator-league/financial-report',
+        '/api/v2/competitions/creator-league/financial-settlements',
       ],
     );
     expect(
@@ -132,3 +132,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

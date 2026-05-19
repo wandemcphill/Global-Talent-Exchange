@@ -81,11 +81,11 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/auth/me',
-        '/api/v1/creator/verify-email',
-        '/api/v1/creator/verify-phone',
-        '/api/v1/creator/application',
-        '/api/v1/creator/apply',
+        '/api/v2/auth/me',
+        '/api/v2/creator/verify-email',
+        '/api/v2/creator/verify-phone',
+        '/api/v2/creator/application',
+        '/api/v2/creator/apply',
       ],
     );
   });
@@ -103,3 +103,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

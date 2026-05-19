@@ -1,0 +1,2 @@
+"""Coin trader domain."""
+

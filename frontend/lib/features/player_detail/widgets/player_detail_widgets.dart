@@ -7,6 +7,7 @@ import '../../../core/utils/app_formatters.dart';
 import '../../../core/widgets/gtex_surface_card.dart';
 import '../../../shared/models/player.dart';
 import '../../../shared/widgets/metric_pill.dart';
+import '../../../widgets/player_card_avatar.dart';
 
 String playerDetailHeroTag(Player player) => 'player-detail-${player.id}';
 
@@ -673,12 +674,10 @@ class _HeroAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ImageProvider<Object>? imageProvider = _resolveImage(player.image);
     final Widget avatar = AnimatedContainer(
       duration: const Duration(milliseconds: 280),
       width: 128,
       height: 128,
-      padding: const EdgeInsets.all(spacingMD),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
@@ -707,25 +706,12 @@ class _HeroAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipOval(
-        child:
-            imageProvider == null
-                ? Container(
-                  color: AppColors.background,
-                  alignment: Alignment.center,
-                  child: Text(
-                    player.name
-                        .split(' ')
-                        .where((String part) => part.isNotEmpty)
-                        .take(2)
-                        .map((String part) => part.substring(0, 1))
-                        .join(),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: elite ? AppColors.gold : AppColors.primary,
-                    ),
-                  ),
-                )
-                : Image(image: imageProvider, fit: BoxFit.cover),
+      child: Center(
+        child: PlayerCardAvatar(
+          avatar: null,
+          imageUrl: player.image,
+          size: 112,
+        ),
       ),
     );
 
@@ -897,12 +883,3 @@ class _AnimatedAttributeRow extends StatelessWidget {
   }
 }
 
-ImageProvider<Object>? _resolveImage(String source) {
-  if (source.startsWith('http')) {
-    return NetworkImage(source);
-  }
-  if (source.isNotEmpty) {
-    return AssetImage(source);
-  }
-  return null;
-}

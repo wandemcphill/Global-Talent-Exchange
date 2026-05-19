@@ -58,12 +58,12 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/moderation/reports',
-        '/api/v1/moderation/me/reports',
-        '/api/v1/admin/moderation/reports',
-        '/api/v1/admin/moderation/reports/summary',
-        '/api/v1/admin/moderation/reports/report-1/assign',
-        '/api/v1/admin/moderation/reports/report-1/resolve',
+        '/api/v2/moderation/reports',
+        '/api/v2/moderation/me/reports',
+        '/api/v2/admin/moderation/reports',
+        '/api/v2/admin/moderation/reports/summary',
+        '/api/v2/admin/moderation/reports/report-1/assign',
+        '/api/v2/admin/moderation/reports/report-1/resolve',
       ],
     );
     expect(transport.requests[2].uri.queryParameters['status'], 'open');
@@ -102,3 +102,4 @@ Map<String, Object?> _reportJson(String id) => <String, Object?>{
   'created_at': '2026-04-18T10:00:00Z',
   'updated_at': '2026-04-18T10:00:00Z',
 };
+

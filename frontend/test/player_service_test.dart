@@ -64,7 +64,7 @@ void main() {
     expect(player.name, 'Victor Osimhen');
     expect(
       transport.requests.single.uri.path,
-      '/api/v1/players/real-universe/player-osimhen',
+      '/api/v2/players/real-universe/player-osimhen',
     );
     expect(
       transport.requests.single.headers.containsKey('Authorization'),
@@ -113,7 +113,7 @@ void main() {
 
       expect(players, hasLength(1));
       expect(players.single.id, 'player-saliba');
-      expect(transport.requests.single.uri.path, '/api/v1/players');
+      expect(transport.requests.single.uri.path, '/api/v2/players');
       expect(transport.requests.single.uri.queryParameters['search'], 'Saliba');
     },
   );
@@ -291,7 +291,7 @@ void main() {
       availability: 'free_agent',
     );
 
-    expect(transport.requests.single.uri.path, '/api/v1/players');
+    expect(transport.requests.single.uri.path, '/api/v2/players');
     expect(
       transport.requests.single.uri.queryParameters,
       containsPair('search', 'ronaldo'),
@@ -348,7 +348,7 @@ void main() {
 
       await service.listPlayers(offset: 20);
 
-      expect(transport.requests.single.uri.path, '/api/v1/players');
+      expect(transport.requests.single.uri.path, '/api/v2/players');
       expect(transport.requests.single.uri.queryParameters['offset'], '20');
       expect(
         transport.requests.single.uri.queryParameters.containsKey('cursor'),
@@ -461,3 +461,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

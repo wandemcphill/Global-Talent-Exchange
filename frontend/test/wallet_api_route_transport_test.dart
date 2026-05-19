@@ -87,10 +87,10 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/wallets',
-        '/api/v1/wallets/transactions',
-        '/api/v1/wallets/top-up/initiate',
-        '/api/v1/wallets/top-up/verify',
+        '/api/v2/wallets',
+        '/api/v2/wallets/transactions',
+        '/api/v2/wallets/top-up/initiate',
+        '/api/v2/wallets/top-up/verify',
       ],
     );
     expect(transport.requests[1].uri.queryParameters['limit'], '25');
@@ -156,7 +156,7 @@ void main() {
         transport.requests.map(
           (GteTransportRequest request) => request.uri.path,
         ),
-        <String>['/api/v1/wallets/transactions', '/api/v1/wallets/ledger'],
+        <String>['/api/v2/wallets/transactions', '/api/v2/wallets/ledger'],
       );
       expect(transport.requests[1].uri.queryParameters, <String, String>{
         'page': '1',
@@ -183,3 +183,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

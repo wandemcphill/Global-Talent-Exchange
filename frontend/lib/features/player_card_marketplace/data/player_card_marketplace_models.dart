@@ -290,6 +290,13 @@ String? _playerImageUrl(JsonMap raw) =>
     stringOrNullValue(raw['portraitUrl']) ??
     stringOrNullValue(raw['photo_url']);
 
+int? _nullableInt(Object? value) =>
+    value == null ? null : numberValue(value).round();
+
+String? _gsiBand(JsonMap raw) =>
+    stringOrNullValue(raw['gsi_band']) ??
+    stringOrNullValue(raw['global_scouting_index_band']);
+
 class PlayerCardMarketplaceListing {
   const PlayerCardMarketplaceListing._(this.raw);
 
@@ -320,6 +327,9 @@ class PlayerCardMarketplaceListing {
   String? get position => stringOrNullValue(raw['position']);
   double? get averageRating =>
       raw['average_rating'] == null ? null : numberValue(raw['average_rating']);
+  int? get globalScoutingIndex =>
+      _nullableInt(raw['global_scouting_index'] ?? raw['gsi']);
+  String? get gsiBand => _gsiBand(raw);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   int get rarityRank => intValue(raw['rarity_rank']);
@@ -455,6 +465,9 @@ class PlayerCardMarketplaceLoanListing {
   PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get imageUrl => _playerImageUrl(raw);
   String? get position => stringOrNullValue(raw['position']);
+  int? get globalScoutingIndex =>
+      _nullableInt(raw['global_scouting_index'] ?? raw['gsi']);
+  String? get gsiBand => _gsiBand(raw);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   String get editionCode => stringValue(raw['edition_code']);
@@ -530,6 +543,9 @@ class PlayerCardMarketplaceLoanContract {
   String? get position => stringOrNullValue(raw['position']);
   double? get averageRating =>
       raw['average_rating'] == null ? null : numberValue(raw['average_rating']);
+  int? get globalScoutingIndex =>
+      _nullableInt(raw['global_scouting_index'] ?? raw['gsi']);
+  String? get gsiBand => _gsiBand(raw);
   String get ownerUserId => stringValue(raw['owner_user_id']);
   String get borrowerUserId => stringValue(raw['borrower_user_id']);
   String get tierCode => stringValue(raw['tier_code']);
@@ -597,6 +613,9 @@ class PlayerCardMarketplaceSwapListing {
   String? get imageUrl => _playerImageUrl(raw);
   String? get clubName => stringOrNullValue(raw['club_name']);
   String? get position => stringOrNullValue(raw['position']);
+  int? get globalScoutingIndex =>
+      _nullableInt(raw['global_scouting_index'] ?? raw['gsi']);
+  String? get gsiBand => _gsiBand(raw);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   String get editionCode => stringValue(raw['edition_code']);
@@ -656,6 +675,9 @@ class PlayerCardPlayerSummary {
   String? get nationalityCode => stringOrNullValue(raw['nationality_code']);
   String? get currentClubName => stringOrNullValue(raw['current_club_name']);
   int get cardSupplyTotal => intValue(raw['card_supply_total']);
+  int? get globalScoutingIndex =>
+      _nullableInt(raw['global_scouting_index'] ?? raw['gsi']);
+  String? get gsiBand => _gsiBand(raw);
   double? get latestValueCredits =>
       raw['latest_value_credits'] == null
           ? null
@@ -678,6 +700,9 @@ class PlayerCardPlayerDetail {
   PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get imageUrl => _playerImageUrl(raw);
   String? get position => stringOrNullValue(raw['position']);
+  int? get globalScoutingIndex =>
+      _nullableInt(raw['global_scouting_index'] ?? raw['gsi']);
+  String? get gsiBand => _gsiBand(raw);
   String? get nationalityCode => stringOrNullValue(raw['nationality_code']);
   String? get currentClubName => stringOrNullValue(raw['current_club_name']);
   List<String> get aliases => stringListValue(raw['aliases']);
@@ -720,6 +745,9 @@ class PlayerCardHolding {
   String get playerName => stringValue(raw['player_name']);
   PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get imageUrl => _playerImageUrl(raw);
+  int? get globalScoutingIndex =>
+      _nullableInt(raw['global_scouting_index'] ?? raw['gsi']);
+  String? get gsiBand => _gsiBand(raw);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   String get editionCode => stringValue(raw['edition_code']);
@@ -744,6 +772,9 @@ class PlayerCardListing {
   String get playerName => stringValue(raw['player_name']);
   PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get imageUrl => _playerImageUrl(raw);
+  int? get globalScoutingIndex =>
+      _nullableInt(raw['global_scouting_index'] ?? raw['gsi']);
+  String? get gsiBand => _gsiBand(raw);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   String get editionCode => stringValue(raw['edition_code']);

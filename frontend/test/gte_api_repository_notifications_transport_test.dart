@@ -43,9 +43,9 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/notifications/me',
-          '/api/v1/notifications/notif-1/read',
-          '/api/v1/notifications/read-all',
+          '/api/v2/notifications/me',
+          '/api/v2/notifications/notif-1/read',
+          '/api/v2/notifications/read-all',
         ],
       );
       expect(transport.requests.first.uri.queryParameters['limit'], '5');
@@ -65,3 +65,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

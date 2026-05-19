@@ -2069,16 +2069,42 @@
         "source_file": "backend/app/auth/router.py",
         "response_model": "TokenResponse"
       },
-      "post_api_v2_auth_register": {
+      "post_api_v2_auth_signup_creator": {
         "method": "POST",
-        "canonical_path": "/api/v2/auth/register",
+        "canonical_path": "/api/v2/auth/signup/creator",
         "aliases": [
-          "/api/auth/register",
-          "/api/v1/auth/register",
-          "/api/v2/auth/register",
-          "/auth/register"
+          "/api/auth/signup/creator",
+          "/api/v1/auth/signup/creator",
+          "/api/v2/auth/signup/creator",
+          "/auth/signup/creator"
         ],
-        "handler": "register_user",
+        "handler": "signup_creator",
+        "source_file": "backend/app/auth/router.py",
+        "response_model": "TokenResponse"
+      },
+      "post_api_v2_auth_signup_trader": {
+        "method": "POST",
+        "canonical_path": "/api/v2/auth/signup/trader",
+        "aliases": [
+          "/api/auth/signup/trader",
+          "/api/v1/auth/signup/trader",
+          "/api/v2/auth/signup/trader",
+          "/auth/signup/trader"
+        ],
+        "handler": "signup_trader",
+        "source_file": "backend/app/auth/router.py",
+        "response_model": "TokenResponse"
+      },
+      "post_api_v2_auth_signup_user": {
+        "method": "POST",
+        "canonical_path": "/api/v2/auth/signup/user",
+        "aliases": [
+          "/api/auth/signup/user",
+          "/api/v1/auth/signup/user",
+          "/api/v2/auth/signup/user",
+          "/auth/signup/user"
+        ],
+        "handler": "signup_user",
         "source_file": "backend/app/auth/router.py",
         "response_model": "TokenResponse"
       }
@@ -15635,6 +15661,92 @@
         "response_model": "TournamentView"
       }
     },
+    "trader": {
+      "get_api_v2_trader_overview": {
+        "method": "GET",
+        "canonical_path": "/api/v2/trader/overview",
+        "aliases": [
+          "/api/trader/overview",
+          "/api/v1/trader/overview",
+          "/api/v2/trader/overview"
+        ],
+        "handler": "trader_overview",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "TraderOverviewView"
+      },
+      "get_api_v2_trader_markets": {
+        "method": "GET",
+        "canonical_path": "/api/v2/trader/markets",
+        "aliases": [
+          "/api/trader/markets",
+          "/api/v1/trader/markets",
+          "/api/v2/trader/markets"
+        ],
+        "handler": "list_markets",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "list[TraderMarketView]"
+      },
+      "post_api_v2_trader_orders": {
+        "method": "POST",
+        "canonical_path": "/api/v2/trader/orders",
+        "aliases": [
+          "/api/trader/orders",
+          "/api/v1/trader/orders",
+          "/api/v2/trader/orders"
+        ],
+        "handler": "place_order",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "TraderOrderView"
+      },
+      "post_api_v2_trader_p2p": {
+        "method": "POST",
+        "canonical_path": "/api/v2/trader/p2p",
+        "aliases": [
+          "/api/trader/p2p",
+          "/api/v1/trader/p2p",
+          "/api/v2/trader/p2p"
+        ],
+        "handler": "create_p2p_offer",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "TraderP2POfferView"
+      },
+      "get_api_v2_trader_watchlist": {
+        "method": "GET",
+        "canonical_path": "/api/v2/trader/watchlist",
+        "aliases": [
+          "/api/trader/watchlist",
+          "/api/v1/trader/watchlist",
+          "/api/v2/trader/watchlist"
+        ],
+        "handler": "list_watchlist",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "list[TraderWatchlistView]"
+      },
+      "post_api_v2_trader_watchlist": {
+        "method": "POST",
+        "canonical_path": "/api/v2/trader/watchlist",
+        "aliases": [
+          "/api/trader/watchlist",
+          "/api/v1/trader/watchlist",
+          "/api/v2/trader/watchlist"
+        ],
+        "handler": "add_watchlist",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "TraderWatchlistView"
+      },
+      "post_api_v2_trader_security_totp_setup": {
+        "method": "POST",
+        "canonical_path": "/api/v2/trader/security/totp/setup",
+        "aliases": [
+          "/api/trader/security/totp/setup",
+          "/api/v1/trader/security/totp/setup",
+          "/api/v2/trader/security/totp/setup"
+        ],
+        "handler": "setup_totp",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "TotpSetupView"
+      }
+    },
     "transfer": {
       "get_api_v2_transfer_market_listings": {
         "method": "GET",
@@ -17812,7 +17924,9 @@
     "/api/v2/auth/recovery/request": "post_api_v2_auth_recovery_request",
     "/api/v2/auth/recovery/reset": "post_api_v2_auth_recovery_reset",
     "/api/v2/auth/refresh": "post_api_v2_auth_refresh",
-    "/api/v2/auth/register": "post_api_v2_auth_register",
+    "/api/v2/auth/signup/creator": "post_api_v2_auth_signup_creator",
+    "/api/v2/auth/signup/trader": "post_api_v2_auth_signup_trader",
+    "/api/v2/auth/signup/user": "post_api_v2_auth_signup_user",
     "/api/v2/awards/categories": "get_api_v2_awards_categories",
     "/api/v2/awards/ceremony": "get_api_v2_awards_ceremony",
     "/api/v2/awards/ceremony/tickets": "post_api_v2_awards_ceremony_tickets",
@@ -18623,6 +18737,12 @@
     "/api/v2/tournaments/{tournament_id}/matches/{match_id}/result": "post_api_v2_tournaments_tournament_id_matches_match_id_result",
     "/api/v2/tournaments/{tournament_id}/rent": "post_api_v2_tournaments_tournament_id_rent",
     "/api/v2/tournaments/{tournament_id}/squad": "post_api_v2_tournaments_tournament_id_squad",
+    "/api/v2/trader/markets": "get_api_v2_trader_markets",
+    "/api/v2/trader/orders": "post_api_v2_trader_orders",
+    "/api/v2/trader/overview": "get_api_v2_trader_overview",
+    "/api/v2/trader/p2p": "post_api_v2_trader_p2p",
+    "/api/v2/trader/security/totp/setup": "post_api_v2_trader_security_totp_setup",
+    "/api/v2/trader/watchlist": "post_api_v2_trader_watchlist",
     "/api/v2/transfer-market/clubs/{club_id}/team-dynamics": "put_api_v2_transfer_market_clubs_club_id_team_dynamics",
     "/api/v2/transfer-market/coaches/{club_id}/demands": "post_api_v2_transfer_market_coaches_club_id_demands",
     "/api/v2/transfer-market/coaches/{club_id}/profile": "put_api_v2_transfer_market_coaches_club_id_profile",
@@ -19226,7 +19346,9 @@
     "/api/auth/recovery/request": "/api/v2/auth/recovery/request",
     "/api/auth/recovery/reset": "/api/v2/auth/recovery/reset",
     "/api/auth/refresh": "/api/v2/auth/refresh",
-    "/api/auth/register": "/api/v2/auth/register",
+    "/api/auth/signup/creator": "/api/v2/auth/signup/creator",
+    "/api/auth/signup/trader": "/api/v2/auth/signup/trader",
+    "/api/auth/signup/user": "/api/v2/auth/signup/user",
     "/api/awards/categories": "/api/v2/awards/categories",
     "/api/awards/ceremony": "/api/v2/awards/ceremony",
     "/api/awards/ceremony/tickets": "/api/v2/awards/ceremony/tickets",
@@ -20021,6 +20143,12 @@
     "/api/tournaments/{tournament_id}/advance": "/api/v2/tournaments/{tournament_id}/advance",
     "/api/tournaments/{tournament_id}/join": "/api/v2/tournaments/{tournament_id}/join",
     "/api/tournaments/{tournament_id}/matches/{match_id}/result": "/api/v2/tournaments/{tournament_id}/matches/{match_id}/result",
+    "/api/trader/markets": "/api/v2/trader/markets",
+    "/api/trader/orders": "/api/v2/trader/orders",
+    "/api/trader/overview": "/api/v2/trader/overview",
+    "/api/trader/p2p": "/api/v2/trader/p2p",
+    "/api/trader/security/totp/setup": "/api/v2/trader/security/totp/setup",
+    "/api/trader/watchlist": "/api/v2/trader/watchlist",
     "/api/transfer-market/clubs/{club_id}/team-dynamics": "/api/v2/transfer-market/clubs/{club_id}/team-dynamics",
     "/api/transfer-market/coaches/{club_id}/demands": "/api/v2/transfer-market/coaches/{club_id}/demands",
     "/api/transfer-market/coaches/{club_id}/profile": "/api/v2/transfer-market/coaches/{club_id}/profile",
@@ -20362,7 +20490,9 @@
     "/api/v1/auth/recovery/request": "/api/v2/auth/recovery/request",
     "/api/v1/auth/recovery/reset": "/api/v2/auth/recovery/reset",
     "/api/v1/auth/refresh": "/api/v2/auth/refresh",
-    "/api/v1/auth/register": "/api/v2/auth/register",
+    "/api/v1/auth/signup/creator": "/api/v2/auth/signup/creator",
+    "/api/v1/auth/signup/trader": "/api/v2/auth/signup/trader",
+    "/api/v1/auth/signup/user": "/api/v2/auth/signup/user",
     "/api/v1/awards/categories": "/api/v2/awards/categories",
     "/api/v1/awards/ceremony": "/api/v2/awards/ceremony",
     "/api/v1/awards/ceremony/tickets": "/api/v2/awards/ceremony/tickets",
@@ -21157,6 +21287,12 @@
     "/api/v1/tournaments/{tournament_id}/advance": "/api/v2/tournaments/{tournament_id}/advance",
     "/api/v1/tournaments/{tournament_id}/join": "/api/v2/tournaments/{tournament_id}/join",
     "/api/v1/tournaments/{tournament_id}/matches/{match_id}/result": "/api/v2/tournaments/{tournament_id}/matches/{match_id}/result",
+    "/api/v1/trader/markets": "/api/v2/trader/markets",
+    "/api/v1/trader/orders": "/api/v2/trader/orders",
+    "/api/v1/trader/overview": "/api/v2/trader/overview",
+    "/api/v1/trader/p2p": "/api/v2/trader/p2p",
+    "/api/v1/trader/security/totp/setup": "/api/v2/trader/security/totp/setup",
+    "/api/v1/trader/watchlist": "/api/v2/trader/watchlist",
     "/api/v1/transfer-market/clubs/{club_id}/team-dynamics": "/api/v2/transfer-market/clubs/{club_id}/team-dynamics",
     "/api/v1/transfer-market/coaches/{club_id}/demands": "/api/v2/transfer-market/coaches/{club_id}/demands",
     "/api/v1/transfer-market/coaches/{club_id}/profile": "/api/v2/transfer-market/coaches/{club_id}/profile",
@@ -22145,7 +22281,9 @@
     "/auth/recovery/request": "/api/v2/auth/recovery/request",
     "/auth/recovery/reset": "/api/v2/auth/recovery/reset",
     "/auth/refresh": "/api/v2/auth/refresh",
-    "/auth/register": "/api/v2/auth/register",
+    "/auth/signup/creator": "/api/v2/auth/signup/creator",
+    "/auth/signup/trader": "/api/v2/auth/signup/trader",
+    "/auth/signup/user": "/api/v2/auth/signup/user",
     "/awards/categories": "/api/v2/awards/categories",
     "/awards/ceremony": "/api/v2/awards/ceremony",
     "/awards/ceremony/tickets": "/api/v2/awards/ceremony/tickets",

@@ -36,7 +36,7 @@ void main() {
       expect(transport.requests, hasLength(1));
       expect(
         transport.requests.single.uri.path,
-        '/api/v1/match-viewer/match-001',
+        '/api/v2/match-viewer/match-001',
       );
     },
   );
@@ -72,7 +72,7 @@ void main() {
       expect(transport.requests, hasLength(1));
       expect(
         transport.requests.single.uri.path,
-        '/api/v1/match-viewer/match-001/session',
+        '/api/v2/match-viewer/match-001/session',
       );
       expect(
         transport.requests.single.uri.queryParameters['token'],
@@ -94,3 +94,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

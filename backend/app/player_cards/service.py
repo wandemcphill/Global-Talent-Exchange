@@ -40,6 +40,7 @@ from app.models.risk_ops import SystemEventSeverity
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.players.read_models import PlayerSummaryReadModel
+from app.players.football_integrity import calculate_gsi, gsi_band, normalize_position
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.avatar_service import AvatarService
 from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
@@ -84,6 +85,7 @@ class PlayerCardMarketService:
                 supply_subq.c.supply_total,
                 PlayerSummaryReadModel.current_value_credits,
                 PlayerSummaryReadModel.current_club_name,
+                PlayerSummaryReadModel.summary_json,
             )
             .outerjoin(supply_subq, supply_subq.c.player_id == Player.id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
@@ -108,12 +110,15 @@ class PlayerCardMarketService:
         stmt = stmt.order_by(Player.full_name.asc()).offset(offset).limit(limit)
         rows = self.session.execute(stmt).all()
         results: list[dict[str, object]] = []
-        for player, supply_total, current_value_credits, current_club_name in rows:
+        for player, supply_total, current_value_credits, current_club_name, summary_json in rows:
+            global_scouting_index = self._global_scouting_index(player, summary_payload=summary_json)
             results.append(
                 {
                     "player_id": player.id,
                     "player_name": player.full_name,
-                    "position": player.normalized_position or player.position,
+                    "position": self._position_code(player),
+                    "global_scouting_index": global_scouting_index,
+                    "gsi_band": gsi_band(global_scouting_index),
                     "nationality_code": player.country.alpha2_code if player.country is not None else None,
                     "current_club_name": current_club_name
                     or (player.current_club.name if player.current_club is not None else None),
@@ -191,10 +196,13 @@ class PlayerCardMarketService:
                 }
             )
 
+        global_scouting_index = self._global_scouting_index(player)
         return {
             "player_id": player.id,
             "player_name": player.full_name,
-            "position": player.normalized_position or player.position,
+            "position": self._position_code(player),
+            "global_scouting_index": global_scouting_index,
+            "gsi_band": gsi_band(global_scouting_index),
             "nationality_code": player.country.alpha2_code if player.country is not None else None,
             "current_club_name": player.current_club.name if player.current_club is not None else None,
             "avatar": self._avatar_payload(player),
@@ -234,12 +242,15 @@ class PlayerCardMarketService:
             if holding.quantity_total <= 0:
                 continue
             summary = self._player_summary(player.id)
+            global_scouting_index = self._global_scouting_index(player, summary=summary)
             inventory.append(
                 {
                     "holding_id": holding.id,
                     "player_card_id": card.id,
                     "player_id": player.id,
                     "player_name": player.full_name,
+                    "global_scouting_index": global_scouting_index,
+                    "gsi_band": gsi_band(global_scouting_index),
                     "avatar": self._avatar_payload(player, summary=summary),
                     "image_url": self._image_url(player, summary=summary),
                     "latest_value_credits": self._latest_value_credits(
@@ -1077,8 +1088,9 @@ class PlayerCardMarketService:
         player.first_name = first_name
         player.last_name = last_name
         player.short_name = seed.display_name
-        player.position = seed.primary_position
-        player.normalized_position = self._normalize_position(seed.primary_position)
+        resolved_position = normalize_position(seed.primary_position)
+        player.position = resolved_position.value if resolved_position is not None else seed.primary_position
+        player.normalized_position = resolved_position.name if resolved_position is not None else None
         player.date_of_birth = self._birth_date_from_age(seed.age)
         player.country_id = country.id if country is not None else player.country_id
         player.market_value_eur = self._market_value_from_seed(seed)
@@ -1189,29 +1201,14 @@ class PlayerCardMarketService:
 
     @staticmethod
     def _normalize_position(position: str | None) -> str | None:
-        value = (position or "").strip().upper()
-        if not value:
-            return None
-        aliases = {
-            "GK": "goalkeeper",
-            "CB": "defender",
-            "LB": "defender",
-            "RB": "defender",
-            "LWB": "defender",
-            "RWB": "defender",
-            "DM": "midfielder",
-            "CDM": "midfielder",
-            "CM": "midfielder",
-            "AM": "midfielder",
-            "CAM": "midfielder",
-            "LM": "midfielder",
-            "RM": "midfielder",
-            "LW": "forward",
-            "RW": "forward",
-            "ST": "forward",
-            "CF": "forward",
-        }
-        return aliases.get(value, value.lower())
+        resolved = normalize_position(position)
+        if resolved is not None:
+            return resolved.name
+        value = (position or "").strip()
+        return value or None
+
+    def _position_code(self, player: Player) -> str | None:
+        return self._normalize_position(player.normalized_position or player.position)
 
     @staticmethod
     def _market_value_from_seed(seed: NationalRegenSeed) -> float:
@@ -1394,11 +1391,14 @@ class PlayerCardMarketService:
         self, listing: PlayerCardListing, card: PlayerCard, tier: PlayerCardTier, player: Player
     ) -> dict[str, object]:
         summary = self._player_summary(player.id)
+        global_scouting_index = self._global_scouting_index(player, summary=summary)
         return {
             "listing_id": listing.listing_id,
             "player_card_id": listing.player_card_id,
             "player_id": player.id,
             "player_name": player.full_name,
+            "global_scouting_index": global_scouting_index,
+            "gsi_band": gsi_band(global_scouting_index),
             "avatar": self._avatar_payload(player, summary=summary),
             "image_url": self._image_url(player, summary=summary),
             "latest_value_credits": self._latest_value_credits(
@@ -1414,6 +1414,28 @@ class PlayerCardMarketService:
             "status": listing.status,
             "created_at": listing.created_at,
         }
+
+    def _global_scouting_index(
+        self,
+        player: Player,
+        *,
+        summary: PlayerSummaryReadModel | None = None,
+        summary_payload: Any | None = None,
+    ) -> int:
+        payload: dict[str, Any] = {}
+        if isinstance(summary_payload, dict):
+            payload.update(summary_payload)
+        elif isinstance(summary, PlayerSummaryReadModel) and isinstance(summary.summary_json, dict):
+            payload.update(summary.summary_json)
+        if isinstance(player.dna_profile, dict):
+            payload.update(player.dna_profile)
+        payload.setdefault("id", player.id)
+        payload.setdefault("player_id", player.id)
+        payload.setdefault("name", player.full_name)
+        payload.setdefault("position", player.position)
+        payload.setdefault("normalized_position", player.normalized_position)
+        payload.setdefault("market_value_eur", player.market_value_eur)
+        return calculate_gsi(payload, position=self._position_code(player))
 
     def _player_summary(self, player_id: str) -> PlayerSummaryReadModel | None:
         return self.session.get(PlayerSummaryReadModel, player_id)

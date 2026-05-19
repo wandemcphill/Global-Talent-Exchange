@@ -35,9 +35,9 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/admin/sponsorship/packages',
-        '/api/v1/sponsorship/clubs/club-1/contracts',
-        '/api/v1/admin/sponsorship/contracts/contract-1/review',
+        '/api/v2/admin/sponsorship/packages',
+        '/api/v2/sponsorship/clubs/club-1/contracts',
+        '/api/v2/admin/sponsorship/contracts/contract-1/review',
       ],
     );
   });
@@ -93,3 +93,4 @@ Map<String, Object?> _contractJson(String id, String clubId) =>
       'created_at': '2026-03-12T00:00:00Z',
       'updated_at': '2026-03-12T00:00:00Z',
     };
+

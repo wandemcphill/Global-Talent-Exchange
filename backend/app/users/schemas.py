@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.access_control.schemas import OrganizationMembershipView
 from app.models.access_control import OrganizationType
-from app.models.user import KycStatus, UserRole
+from app.models.user import KycStatus, PublicAccountType, UserRole
 
 
 class UserPublic(BaseModel):
@@ -19,6 +19,7 @@ class UserPublic(BaseModel):
     phone_number: str | None
     display_name: str | None
     role: UserRole
+    account_type: PublicAccountType = PublicAccountType.USER
     kyc_status: KycStatus
     is_active: bool
     created_at: datetime

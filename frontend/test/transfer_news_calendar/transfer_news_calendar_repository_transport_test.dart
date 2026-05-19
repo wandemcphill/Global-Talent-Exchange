@@ -86,15 +86,15 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/calendar-engine/dashboard',
-        '/api/v1/calendar-engine/seasons',
-        '/api/v1/calendar-engine/events',
-        '/api/v1/calendar-engine/pause-status',
-        '/api/v1/calendar-engine/lifecycle-runs',
-        '/api/v1/admin/calendar-engine/seasons',
-        '/api/v1/admin/calendar-engine/events',
-        '/api/v1/admin/calendar-engine/hosted-competitions/comp-1/launch',
-        '/api/v1/admin/calendar-engine/national-competitions/nation-1/launch',
+        '/api/v2/calendar-engine/dashboard',
+        '/api/v2/calendar-engine/seasons',
+        '/api/v2/calendar-engine/events',
+        '/api/v2/calendar-engine/pause-status',
+        '/api/v2/calendar-engine/lifecycle-runs',
+        '/api/v2/admin/calendar-engine/seasons',
+        '/api/v2/admin/calendar-engine/events',
+        '/api/v2/admin/calendar-engine/hosted-competitions/comp-1/launch',
+        '/api/v2/admin/calendar-engine/national-competitions/nation-1/launch',
       ],
     );
     expect(transport.requests[1].uri.queryParameters['active_only'], 'true');
@@ -169,3 +169,4 @@ const Map<String, Object?> _runJson = <String, Object?>{
   'summary_text': 'Lifecycle scheduled.',
   'metadata_json': <String, Object?>{},
 };
+

@@ -6,12 +6,13 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/utils/app_formatters.dart';
-import '../../../core/widgets/app_hover_lift.dart';
 import '../../../core/widgets/app_press_scale.dart';
 import '../../../core/widgets/app_shake.dart';
+import '../../../core/widgets/player_card.dart';
 import '../../../core/widgets/gtex_surface_card.dart';
 import '../../../shared/providers/transfer_provider.dart';
 import '../../../shared/widgets/metric_pill.dart';
+import '../../../widgets/player_card_avatar.dart';
 
 String formatBidCountdown(int seconds) {
   final int minutes = seconds ~/ 60;
@@ -80,251 +81,231 @@ class TransferPlayerCard extends StatelessWidget {
             ? AppColors.gold
             : AppColors.divider;
 
-    return AppHoverLift(
-      child: GtexSurfaceCard(
-        key: Key('transfer-card-${listing.player.id}'),
-        glowColor: glowColor,
+    return KeyedSubtree(
+      key: Key('transfer-card-${listing.player.id}'),
+      child: PlayerCard(
+        name: listing.player.name,
+        rating: listing.player.rating,
+        image: listing.player.image,
+        position: listing.player.position,
+        subtitle: listing.player.country,
+        highlighted: userLeading || listing.player.isHot,
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        accentColor: glowColor,
+        avatarSize: 64,
+        layout: PlayerCardLayout.horizontal,
+        badgeLabels: <String>[listing.player.position],
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                _LiveStatusPill(
-                  label: userLeading ? 'Leading' : 'Live Bid',
-                  color: userLeading ? AppColors.primary : AppColors.gold,
-                  icon:
-                      userLeading
-                          ? Icons.workspace_premium_rounded
-                          : Icons.bolt_rounded,
-                ),
-                const Spacer(),
-                AppPressScale(
-                  child: IconButton(
-                    tooltip:
-                        shortlisted
-                            ? 'Remove from shortlist'
-                            : 'Add to shortlist',
-                    onPressed: onShortlist,
-                    style: IconButton.styleFrom(
-                      backgroundColor: AppColors.background.withValues(
-                        alpha: 0.55,
-                      ),
-                      foregroundColor:
-                          shortlisted
-                              ? AppColors.gold
-                              : AppColors.textSecondary,
-                      side: const BorderSide(color: AppColors.divider),
-                    ),
-                    icon: Icon(
-                      shortlisted
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_add_outlined,
-                    ),
-                  ),
-                ),
-              ],
+            _LiveStatusPill(
+              label: userLeading ? 'Leading' : 'Live Bid',
+              color: userLeading ? AppColors.primary : AppColors.gold,
+              icon:
+                  userLeading
+                      ? Icons.workspace_premium_rounded
+                      : Icons.bolt_rounded,
             ),
-            const SizedBox(height: spacingMD),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _PlayerAvatar(imageAsset: listing.player.image),
-                const SizedBox(width: spacingMD),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        listing.player.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: spacingSM),
-                      Wrap(
-                        spacing: spacingSM,
-                        runSpacing: spacingSM,
-                        children: <Widget>[
-                          MetricPill(
-                            label: 'Role',
-                            value: listing.player.position,
-                          ),
-                          MetricPill(
-                            label: 'Age',
-                            value: '${listing.player.age}',
-                          ),
-                          MetricPill(
-                            label: 'OVR',
-                            value: '${listing.player.rating}',
-                            highlight: true,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+            const SizedBox(width: spacingSM),
+            AppPressScale(
+              child: IconButton(
+                tooltip:
+                    shortlisted ? 'Remove from shortlist' : 'Add to shortlist',
+                onPressed: onShortlist,
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.background.withValues(alpha: 0.55),
+                  foregroundColor:
+                      shortlisted ? AppColors.gold : AppColors.textSecondary,
+                  side: const BorderSide(color: AppColors.divider),
                 ),
-              ],
-            ),
-            const SizedBox(height: spacingMD),
-            AnimatedContainer(
-              duration: AppMotion.medium,
-              curve: AppMotion.easeOut,
-              padding: const EdgeInsets.all(spacingMD),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(cardRadius),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[
-                    glowColor.withValues(alpha: 0.14),
-                    AppColors.surfaceMuted.withValues(alpha: 0.82),
-                    AppColors.card.withValues(alpha: 0.92),
-                  ],
+                icon: Icon(
+                  shortlisted
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_add_outlined,
                 ),
-                border: Border.all(color: glowColor.withValues(alpha: 0.22)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Current Bid',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: spacingXS),
-                  _AnimatedValueText(
-                    keyValue:
-                        'bid-${listing.player.id}-${listing.currentBidInMillions}',
-                    text: AppFormatters.money(listing.currentBidInMillions),
-                    flashColor: AppColors.success,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: spacingMD),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: _MetaBlock(
-                          label: 'Timer',
-                          child: Row(
-                            children: <Widget>[
-                              Icon(
-                                Icons.schedule_rounded,
-                                size: 16,
-                                color:
-                                    listing.secondsRemaining <= 15
-                                        ? AppColors.gold
-                                        : AppColors.textSecondary,
-                              ),
-                              const SizedBox(width: spacingXS),
-                              Expanded(
-                                child: _AnimatedValueText(
-                                  keyValue:
-                                      'timer-${listing.player.id}-${listing.secondsRemaining}',
-                                  text: formatBidCountdown(
-                                    listing.secondsRemaining,
-                                  ),
-                                  flashColor:
-                                      listing.secondsRemaining <= 15
-                                          ? AppColors.gold
-                                          : null,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleLarge?.copyWith(
-                                    color:
-                                        listing.secondsRemaining <= 15
-                                            ? AppColors.gold
-                                            : AppColors.textPrimary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: spacingSM),
-                      Expanded(
-                        child: _MetaBlock(
-                          label: 'Watchers',
-                          child: Text(
-                            AppFormatters.compact(listing.watcherCount),
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: spacingMD),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.all(spacingMD),
-              decoration: BoxDecoration(
-                color:
-                    userLeading
-                        ? AppColors.primary.withValues(alpha: 0.12)
-                        : AppColors.gold.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(cardRadius),
-                border: Border.all(
-                  color:
-                      userLeading
-                          ? AppColors.primary.withValues(alpha: 0.45)
-                          : AppColors.gold.withValues(alpha: 0.28),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Icon(
-                    userLeading
-                        ? Icons.verified_rounded
-                        : Icons.local_fire_department_rounded,
-                    color: userLeading ? AppColors.primary : AppColors.gold,
-                    size: 18,
-                  ),
-                  const SizedBox(width: spacingSM),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          userLeading
-                              ? 'GTEX holds the highest bid'
-                              : 'Highest bidder',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: spacingXS),
-                        Text(
-                          listing.leadingBidder.clubName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(
-                            color:
-                                userLeading
-                                    ? AppColors.primary
-                                    : AppColors.gold,
-                          ),
-                        ),
-                        const SizedBox(height: spacingXS),
-                        Text(
-                          '${listing.player.country} | Potential ${listing.player.potential}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
         ),
+        metrics: <PlayerCardMetric>[
+          PlayerCardMetric(label: 'Role', value: listing.player.position),
+          PlayerCardMetric(label: 'Age', value: '${listing.player.age}'),
+          PlayerCardMetric(label: 'OVR', value: '${listing.player.rating}'),
+        ],
+        footer: _TransferAuctionFooter(
+          listing: listing,
+          accent: glowColor,
+          userLeading: userLeading,
+        ),
       ),
+    );
+  }
+}
+
+class _TransferAuctionFooter extends StatelessWidget {
+  const _TransferAuctionFooter({
+    required this.listing,
+    required this.accent,
+    required this.userLeading,
+  });
+
+  final TransferMarketListing listing;
+  final Color accent;
+  final bool userLeading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        AnimatedContainer(
+          duration: AppMotion.medium,
+          curve: AppMotion.easeOut,
+          padding: const EdgeInsets.all(spacingMD),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(cardRadius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                accent.withValues(alpha: 0.14),
+                AppColors.surfaceMuted.withValues(alpha: 0.82),
+                AppColors.card.withValues(alpha: 0.92),
+              ],
+            ),
+            border: Border.all(color: accent.withValues(alpha: 0.22)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('Current Bid', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: spacingXS),
+              _AnimatedValueText(
+                keyValue:
+                    'bid-${listing.player.id}-${listing.currentBidInMillions}',
+                text: AppFormatters.money(listing.currentBidInMillions),
+                flashColor: AppColors.success,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: spacingMD),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _MetaBlock(
+                      label: 'Timer',
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.schedule_rounded,
+                            size: 16,
+                            color:
+                                listing.secondsRemaining <= 15
+                                    ? AppColors.gold
+                                    : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: spacingXS),
+                          Expanded(
+                            child: _AnimatedValueText(
+                              keyValue:
+                                  'timer-${listing.player.id}-${listing.secondsRemaining}',
+                              text: formatBidCountdown(
+                                listing.secondsRemaining,
+                              ),
+                              flashColor:
+                                  listing.secondsRemaining <= 15
+                                      ? AppColors.gold
+                                      : null,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleLarge?.copyWith(
+                                color:
+                                    listing.secondsRemaining <= 15
+                                        ? AppColors.gold
+                                        : AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: spacingSM),
+                  Expanded(
+                    child: _MetaBlock(
+                      label: 'Watchers',
+                      child: Text(
+                        AppFormatters.compact(listing.watcherCount),
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: spacingMD),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(spacingMD),
+          decoration: BoxDecoration(
+            color:
+                userLeading
+                    ? AppColors.primary.withValues(alpha: 0.12)
+                    : AppColors.gold.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(cardRadius),
+            border: Border.all(
+              color:
+                  userLeading
+                      ? AppColors.primary.withValues(alpha: 0.45)
+                      : AppColors.gold.withValues(alpha: 0.28),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(
+                userLeading
+                    ? Icons.verified_rounded
+                    : Icons.local_fire_department_rounded,
+                color: userLeading ? AppColors.primary : AppColors.gold,
+                size: 18,
+              ),
+              const SizedBox(width: spacingSM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      userLeading
+                          ? 'GTEX holds the highest bid'
+                          : 'Highest bidder',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: spacingXS),
+                    Text(
+                      listing.leadingBidder.clubName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: userLeading ? AppColors.primary : AppColors.gold,
+                      ),
+                    ),
+                    const SizedBox(height: spacingXS),
+                    Text(
+                      '${listing.player.country} | Potential ${listing.player.potential}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -810,24 +791,7 @@ class _PlayerAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      padding: const EdgeInsets.all(spacingSM),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            AppColors.primary.withValues(alpha: 0.12),
-            AppColors.gold.withValues(alpha: 0.08),
-          ],
-        ),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Image.asset(imageAsset, fit: BoxFit.contain),
-    );
+    return PlayerCardAvatar(avatar: null, imageUrl: imageAsset, size: size);
   }
 }
 

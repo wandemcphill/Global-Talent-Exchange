@@ -579,6 +579,7 @@ DOMAIN_MODULES = (
     _module("jobs_api", router_path="app.jobs.router:router"),
     _module("organizations", router_path="app.access_control.router:router"),
     _module("wallets", router_path="app.wallets.router:router"),
+    _module("trader", router_path="app.trader.router:router"),
     _module("paystack_webhooks", router_path="app.admin_finance.router:webhook_router"),
     _module("payments", router_path="app.integrations.payments.router:router"),
     _module("media_engine", router_path="app.media_engine.router:router"),

@@ -98,7 +98,7 @@ Color _routeAccentFor(BuildContext context, GtePrimaryDestination destination) {
   }
 }
 
-const List<GtePrimaryDestination> _shellPrimaryDestinations =
+const List<GtePrimaryDestination> _footballPrimaryDestinations =
     <GtePrimaryDestination>[
       GtePrimaryDestination.home,
       GtePrimaryDestination.market,
@@ -106,6 +106,16 @@ const List<GtePrimaryDestination> _shellPrimaryDestinations =
       GtePrimaryDestination.club,
       GtePrimaryDestination.hub,
     ];
+
+const List<GtePrimaryDestination> _creatorPrimaryDestinations =
+    <GtePrimaryDestination>[
+      GtePrimaryDestination.home,
+      GtePrimaryDestination.hub,
+      GtePrimaryDestination.community,
+    ];
+
+const List<GtePrimaryDestination> _traderPrimaryDestinations =
+    <GtePrimaryDestination>[GtePrimaryDestination.home];
 
 class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late GteNavigationRoute _route;
@@ -419,6 +429,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           ),
           child: _ShellBottomNav(
             currentDestination: _route.primaryDestination,
+            destinations: _visiblePrimaryDestinations,
+            showWallet: _showWalletDestination,
             onOpenPrimaryDestination: _openPrimaryDestination,
           ),
         ),
@@ -427,6 +439,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildClubDestination() {
+    if (!_canUseClubOperations) {
+      return _buildAccountLaneBlockedPanel(
+        eyebrow: 'CLUB',
+        title: 'Club operations belong to Football User accounts',
+        message:
+            'Creator and Coin Trader accounts cannot create clubs, manage squads, operate academies, or enter club operations from this lane.',
+        icon: Icons.shield_outlined,
+        actionLabel: 'Open Home',
+        onAction: () => _openPrimaryDestination(GtePrimaryDestination.home),
+      );
+    }
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
       return GteNoClubOnboardingView(
@@ -473,25 +496,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       }
     }
-    final String? canonicalClubId = _canonicalClubId()?.trim();
-    if (canonicalClubId == null || canonicalClubId.isEmpty) {
-      if (!widget.controller.isAuthenticated) {
-        return _buildScrollableShellStatePanel(
-          GteStatePanel(
-            eyebrow: 'CLUB SCOPE',
-            title: 'Sign in to open Club HQ',
-            message:
-                'Preview mode does not expose a canonical club yet. Sign in to continue with a real badge, club funds, scouting lane, and world state.',
-            icon: Icons.login_outlined,
-            accentColor: _routeAccentFor(context, GtePrimaryDestination.home),
-            actionLabel: 'Sign in',
-            onAction: () {
-              _openLogin(targetRoute: const GteNavigationRoute.home());
-            },
-          ),
-        );
-      }
-    }
     return HomeDashboardScreen(
       key: const PageStorageKey<String>('home-dashboard'),
       exchangeController: widget.controller,
@@ -518,6 +522,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   void _handleExchangeControllerChanged() {
+    final GtePrimaryDestination resolvedLane = _resolvePrimaryLane(
+      _route.primaryDestination,
+    );
+    if (resolvedLane != _route.primaryDestination) {
+      _route = _route.withPrimaryDestination(resolvedLane);
+      _selectedPrimaryLane = resolvedLane;
+      widget.onRouteChanged?.call(_route);
+      if (mounted) {
+        setState(() {});
+      }
+    }
     final String? nextAccessToken = widget.controller.accessToken;
     if (nextAccessToken != _creatorAccessToken) {
       _creatorAccessToken = nextAccessToken;
@@ -587,7 +602,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   bool get _canHostCompetitions {
-    return widget.controller.isAuthenticated;
+    return widget.controller.isAuthenticated && _canUseClubCompetitions;
   }
 
   bool get _isReferralRuntimeAvailable {
@@ -606,6 +621,36 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       'god_mode',
       'scoped_admin',
     }.contains(role);
+  }
+
+  String get _accountType {
+    return widget.controller.session?.user.accountType.trim().toLowerCase() ??
+        'user';
+  }
+
+  bool get _isCreatorAccount => _accountType == 'creator';
+
+  bool get _isTraderAccount => _accountType == 'coin_trader';
+
+  bool get _isFootballAccount =>
+      !_isCreatorAccount && !_isTraderAccount || _isAdminSession;
+
+  bool get _canUseClubOperations => _isFootballAccount;
+
+  bool get _canUseFootballMarket => _isFootballAccount;
+
+  bool get _canUseClubCompetitions => _isFootballAccount;
+
+  bool get _showWalletDestination => !_isTraderAccount;
+
+  List<GtePrimaryDestination> get _visiblePrimaryDestinations {
+    if (_isTraderAccount) {
+      return _traderPrimaryDestinations;
+    }
+    if (_isCreatorAccount) {
+      return _creatorPrimaryDestinations;
+    }
+    return _footballPrimaryDestinations;
   }
 
   CompetitionController _buildCompetitionController() {
@@ -697,6 +742,27 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
+  Widget _buildAccountLaneBlockedPanel({
+    required String eyebrow,
+    required String title,
+    required String message,
+    required IconData icon,
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
+    return _buildScrollableShellStatePanel(
+      GteStatePanel(
+        eyebrow: eyebrow,
+        title: title,
+        message: message,
+        icon: icon,
+        accentColor: _routeAccentFor(context, GtePrimaryDestination.home),
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ),
+    );
+  }
+
   Widget _buildHubDestination() {
     if (!widget.controller.isAuthenticated) {
       return _buildScrollableShellStatePanel(
@@ -762,6 +828,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildCompetitionsDestination() {
+    if (!_canUseClubCompetitions) {
+      return _buildAccountLaneBlockedPanel(
+        eyebrow: 'MATCHDAY',
+        title: 'Club tournaments require a Football User account',
+        message:
+            'Creator and Coin Trader accounts cannot host, join, or manage tournaments as clubs from this lane.',
+        icon: Icons.play_circle_outline,
+        actionLabel: 'Open Home',
+        onAction: () => _openPrimaryDestination(GtePrimaryDestination.home),
+      );
+    }
     return GteCompetitionsHubScreen(
       key: const PageStorageKey<String>('competitions-hub'),
       controller: _competitionController,
@@ -794,6 +871,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildMarketDestination() {
+    if (!_canUseFootballMarket) {
+      return _buildAccountLaneBlockedPanel(
+        eyebrow: 'PLAYER MARKET',
+        title: 'Player trading is a Football User lane',
+        message:
+            'Creators and Coin Traders cannot buy or sell football players. Coin trading lives in the dedicated Trader dashboard.',
+        icon: Icons.storefront_outlined,
+        actionLabel: 'Open Home',
+        onAction: () => _openPrimaryDestination(GtePrimaryDestination.home),
+      );
+    }
     return GteMarketPlayersScreen(
       key: const PageStorageKey<String>('market-screen'),
       controller: widget.controller,
@@ -815,7 +903,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   GtePrimaryDestination _resolvePrimaryLane(GtePrimaryDestination destination) {
-    return _shellPrimaryDestinations.contains(destination)
+    return _visiblePrimaryDestinations.contains(destination) ||
+            destination == GtePrimaryDestination.wallet &&
+                _showWalletDestination
         ? destination
         : GtePrimaryDestination.home;
   }
@@ -889,6 +979,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   void _openPrimaryDestination(GtePrimaryDestination destination) {
+    if (!_visiblePrimaryDestinations.contains(destination) &&
+        !(destination == GtePrimaryDestination.wallet &&
+            _showWalletDestination)) {
+      _setRoute(const GteNavigationRoute.home());
+      return;
+    }
     _setRoute(_route.withPrimaryDestination(destination));
   }
 
@@ -1080,12 +1176,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildCapitalAction() {
+    if (!_showWalletDestination) {
+      return const SizedBox.shrink();
+    }
     final bool isActive =
         _route.primaryDestination == GtePrimaryDestination.wallet;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: IconButton(
-        tooltip: 'Club funds',
+        tooltip: _isCreatorAccount ? 'Creator wallet' : 'Club funds',
         onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
         icon: Icon(
           isActive
@@ -1316,10 +1415,14 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 class _ShellBottomNav extends StatelessWidget {
   const _ShellBottomNav({
     required this.currentDestination,
+    required this.destinations,
+    required this.showWallet,
     required this.onOpenPrimaryDestination,
   });
 
   final GtePrimaryDestination currentDestination;
+  final List<GtePrimaryDestination> destinations;
+  final bool showWallet;
   final ValueChanged<GtePrimaryDestination> onOpenPrimaryDestination;
 
   @override
@@ -1332,7 +1435,7 @@ class _ShellBottomNav extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
         child: Row(
           children: <Widget>[
-            ..._shellPrimaryDestinations.map(
+            ...destinations.map(
               (GtePrimaryDestination destination) => Padding(
                 padding: const EdgeInsets.only(right: 10),
                 child: _ShellNavChip(
@@ -1342,18 +1445,21 @@ class _ShellBottomNav extends StatelessWidget {
                 ),
               ),
             ),
-            Container(
-              width: 1,
-              height: 26,
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              color: tokens.stroke.withValues(alpha: 0.5),
-            ),
-            _ShellNavChip(
-              destination: GtePrimaryDestination.wallet,
-              isActive: currentDestination == GtePrimaryDestination.wallet,
-              onTap:
-                  () => onOpenPrimaryDestination(GtePrimaryDestination.wallet),
-            ),
+            if (showWallet) ...<Widget>[
+              Container(
+                width: 1,
+                height: 26,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                color: tokens.stroke.withValues(alpha: 0.5),
+              ),
+              _ShellNavChip(
+                destination: GtePrimaryDestination.wallet,
+                isActive: currentDestination == GtePrimaryDestination.wallet,
+                onTap:
+                    () =>
+                        onOpenPrimaryDestination(GtePrimaryDestination.wallet),
+              ),
+            ],
           ],
         ),
       ),

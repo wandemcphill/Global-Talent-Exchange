@@ -92,6 +92,18 @@ class GteExchangeApiClient {
     );
   }
 
+  Future<GteAuthSession> signupUser(GteUserSignupRequest request) {
+    return repository.signupUser(request);
+  }
+
+  Future<GteAuthSession> signupCreator(GteCreatorSignupRequest request) {
+    return repository.signupCreator(request);
+  }
+
+  Future<GteAuthSession> signupTrader(GteTraderSignupRequest request) {
+    return repository.signupTrader(request);
+  }
+
   Future<void> logout() => repository.logout();
 
   Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
@@ -399,30 +411,33 @@ class GteExchangeApiClient {
     GteMarketPlayersQuery query = const GteMarketPlayersQuery(),
   }) async {
     return _loadPublicWithFallback<GteMarketPlayerListView>(
-      liveCall: () async => GteMarketPlayerListView.fromJson(
-        await _sendPublicGet(
-          '/api/market/players',
-          query: query.toQueryParameters(),
-        ),
-      ),
+      liveCall:
+          () async => GteMarketPlayerListView.fromJson(
+            await _sendPublicGet(
+              '/api/market/players',
+              query: query.toQueryParameters(),
+            ),
+          ),
       fallbackCall: () => _fallbackPlayers(query),
     );
   }
 
   Future<GteMarketPlayerDetailView> fetchPlayerDetail(String playerId) async {
     return _loadPublicWithFallback<GteMarketPlayerDetailView>(
-      liveCall: () async => GteMarketPlayerDetailView.fromJson(
-        await _sendPublicGet('/api/market/players/$playerId'),
-      ),
+      liveCall:
+          () async => GteMarketPlayerDetailView.fromJson(
+            await _sendPublicGet('/api/market/players/$playerId'),
+          ),
       fallbackCall: () => _fallbackPlayerDetail(playerId),
     );
   }
 
   Future<GtePlayerOverview> fetchPlayerOverview(String playerId) async {
     return _loadPublicWithFallback<GtePlayerOverview>(
-      liveCall: () async => GtePlayerOverview.fromJson(
-        await _sendPublicGet('/api/players/$playerId/overview'),
-      ),
+      liveCall:
+          () async => GtePlayerOverview.fromJson(
+            await _sendPublicGet('/api/players/$playerId/overview'),
+          ),
       fallbackCall: () => _fallbackPlayerOverview(playerId),
     );
   }
@@ -471,9 +486,10 @@ class GteExchangeApiClient {
     String playerId,
   ) async {
     return _loadPublicWithFallback<GtePlayerLifecycleSnapshot?>(
-      liveCall: () async => GtePlayerLifecycleSnapshot.fromJson(
-        await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
-      ),
+      liveCall:
+          () async => GtePlayerLifecycleSnapshot.fromJson(
+            await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
+          ),
       fallbackCall: () async {
         final GtePlayerOverview overview = await _fallbackPlayerOverview(
           playerId,
@@ -775,12 +791,13 @@ class GteExchangeApiClient {
     final List<PlayerSnapshot> filtered = base
         .where((PlayerSnapshot player) {
           if (searchTerm.isNotEmpty) {
-            final String haystack = <String>[
-              player.name,
-              player.club,
-              player.nation,
-              player.position,
-            ].join(' ').toLowerCase();
+            final String haystack =
+                <String>[
+                  player.name,
+                  player.club,
+                  player.nation,
+                  player.position,
+                ].join(' ').toLowerCase();
             if (!haystack.contains(searchTerm)) {
               return false;
             }
@@ -822,9 +839,8 @@ class GteExchangeApiClient {
       items: page.map(_mapSnapshotToListItem).toList(growable: false),
       limit: query.limit,
       hasMore: hasMore,
-      nextCursor: hasMore
-          ? _encodeFallbackCursor(startOffset + page.length)
-          : null,
+      nextCursor:
+          hasMore ? _encodeFallbackCursor(startOffset + page.length) : null,
       offset: startOffset,
       total: filtered.length,
     );
@@ -837,9 +853,10 @@ class GteExchangeApiClient {
     final double normalizedMovement = _normalizeMovement(
       profile.snapshot.valueDeltaPct,
     );
-    final double previousValue = normalizedMovement.abs() < 0.0001
-        ? profile.snapshot.marketCredits.toDouble()
-        : profile.snapshot.marketCredits / (1 + normalizedMovement);
+    final double previousValue =
+        normalizedMovement.abs() < 0.0001
+            ? profile.snapshot.marketCredits.toDouble()
+            : profile.snapshot.marketCredits / (1 + normalizedMovement);
     return GteMarketPlayerDetailView(
       playerId: profile.snapshot.id,
       identity: GteMarketPlayerIdentity(
@@ -891,11 +908,12 @@ class GteExchangeApiClient {
         confidenceTier: null,
         trend7dPct: normalizedMovement,
         trend30dPct: null,
-        trendDirection: normalizedMovement > 0
-            ? 'up'
-            : normalizedMovement < 0
-            ? 'down'
-            : 'flat',
+        trendDirection:
+            normalizedMovement > 0
+                ? 'up'
+                : normalizedMovement < 0
+                ? 'down'
+                : 'flat',
         trendConfidence: null,
         movementTags: const <String>[],
       ),
@@ -909,11 +927,12 @@ class GteExchangeApiClient {
         drivers: List<String>.from(profile.snapshot.recentHighlights),
         trend7dPct: normalizedMovement,
         trend30dPct: null,
-        trendDirection: normalizedMovement > 0
-            ? 'up'
-            : normalizedMovement < 0
-            ? 'down'
-            : 'flat',
+        trendDirection:
+            normalizedMovement > 0
+                ? 'up'
+                : normalizedMovement < 0
+                ? 'down'
+                : 'flat',
         trendConfidence: null,
         confidenceTier: null,
         movementTags: const <String>[],
@@ -1013,10 +1032,11 @@ class GteExchangeApiClient {
             goals: season.goals,
             assists: season.assists,
             averageRating: season.averageRating?.round(),
-            notes: snapshot.recentHighlights.isEmpty
-                ? null
-                : snapshot.recentHighlights[entry.key %
-                      snapshot.recentHighlights.length],
+            notes:
+                snapshot.recentHighlights.isEmpty
+                    ? null
+                    : snapshot.recentHighlights[entry.key %
+                        snapshot.recentHighlights.length],
             startOn: DateTime.utc(now.year - (2 - entry.key), 7, 1),
             endOn: DateTime.utc(now.year - (1 - entry.key), 6, 30),
             updatedAt: now,
@@ -1043,14 +1063,16 @@ class GteExchangeApiClient {
       trendScore: player.gsi.toDouble(),
       marketInterestScore: player.recentHighlights.length * 10,
       averageRating: player.formRating,
+      globalScoutingIndex: player.gsi.toDouble(),
       isAvailable: true,
       availabilityLabel: 'Available now',
       askingType: player.inTransferRoom ? 'transfer' : 'trial',
       agentUserId: 'fixture-agent-${player.id}',
       agentName: '${player.club} representation',
-      marketplaceNote: player.recentHighlights.isEmpty
-          ? null
-          : player.recentHighlights.first,
+      marketplaceNote:
+          player.recentHighlights.isEmpty
+              ? null
+              : player.recentHighlights.first,
     );
   }
 
@@ -1070,13 +1092,13 @@ class GteExchangeApiClient {
         (24 + (snapshot.gsi / 5).round() + (snapshot.age % 6))
             .clamp(18, 48)
             .toInt();
-    final int starts = (appearances * (0.72 + (snapshot.formRating / 25)))
-        .round()
-        .clamp(12, appearances)
-        .toInt();
-    final int minutes = (starts * (position == 'GK' ? 90 : 79))
-        .clamp(1200, 4320)
-        .toInt();
+    final int starts =
+        (appearances * (0.72 + (snapshot.formRating / 25)))
+            .round()
+            .clamp(12, appearances)
+            .toInt();
+    final int minutes =
+        (starts * (position == 'GK' ? 90 : 79)).clamp(1200, 4320).toInt();
     if (_isGoalkeeper(position)) {
       return GteCareerTotals(
         appearances: appearances,
@@ -1149,9 +1171,10 @@ class GteExchangeApiClient {
         cleanSheets: cleanSheets[index],
         saves: saves[index],
         minutes: minutes[index],
-        averageRating: (snapshot.formRating - (0.4 - (index * 0.2)))
-            .clamp(6.4, 9.2)
-            .toDouble(),
+        averageRating:
+            (snapshot.formRating - (0.4 - (index * 0.2)))
+                .clamp(6.4, 9.2)
+                .toDouble(),
       );
     }).reversed.toList(growable: false);
   }
@@ -1160,9 +1183,8 @@ class GteExchangeApiClient {
     if (total <= 0) {
       return List<int>.filled(weights.length, 0, growable: false);
     }
-    final List<int> values = weights
-        .map((double weight) => (total * weight).floor())
-        .toList();
+    final List<int> values =
+        weights.map((double weight) => (total * weight).floor()).toList();
     int assigned = values.fold<int>(0, (int sum, int value) => sum + value);
     int cursor = values.length - 1;
     while (assigned < total) {

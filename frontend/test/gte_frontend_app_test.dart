@@ -39,6 +39,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsWidgets);
     expect(find.textContaining('matchday'), findsWidgets);
@@ -77,6 +79,8 @@ void main() {
         initialPath: '/player-cards',
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
     expect(find.text('Market'), findsWidgets);

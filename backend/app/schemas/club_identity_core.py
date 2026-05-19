@@ -8,6 +8,7 @@ from pydantic import ConfigDict, Field
 from app.common.enums.club_brand_asset_type import ClubBrandAssetType
 from app.common.enums.club_identity_visibility import ClubIdentityVisibility
 from app.common.schemas.base import CommonSchema
+from app.models.club_profile import ClubLifecycleStatus, ClubType
 
 
 class _ClubOrmSchema(CommonSchema):
@@ -19,6 +20,8 @@ class ClubProfileCore(_ClubOrmSchema):
     owner_user_id: str
     club_name: str
     short_name: str | None = None
+    club_type: ClubType = ClubType.COMMUNITY
+    lifecycle_status: ClubLifecycleStatus = ClubLifecycleStatus.ACTIVE
     slug: str
     crest_asset_ref: str | None = None
     primary_color: str

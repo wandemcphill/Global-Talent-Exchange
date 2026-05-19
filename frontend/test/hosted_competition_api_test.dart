@@ -113,20 +113,20 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/hosted-competitions/templates',
-        '/api/v1/hosted-competitions',
-        '/api/v1/hosted-competitions/mine',
-        '/api/v1/hosted-competitions/comp-1',
-        '/api/v1/hosted-competitions',
-        '/api/v1/hosted-competitions/comp-1/join',
-        '/api/v1/hosted-competitions/comp-1/invites',
-        '/api/v1/hosted-competitions/comp-1/invites',
-        '/api/v1/hosted-competitions/comp-1/invites/accept',
-        '/api/v1/hosted-competitions/comp-1/standings',
-        '/api/v1/hosted-competitions/comp-1/finance',
-        '/api/v1/hosted-competitions/comp-1/launch',
-        '/api/v1/admin/hosted-competitions/seed',
-        '/api/v1/admin/hosted-competitions/comp-1/finalize',
+        '/api/v2/hosted-competitions/templates',
+        '/api/v2/hosted-competitions',
+        '/api/v2/hosted-competitions/mine',
+        '/api/v2/hosted-competitions/comp-1',
+        '/api/v2/hosted-competitions',
+        '/api/v2/hosted-competitions/comp-1/join',
+        '/api/v2/hosted-competitions/comp-1/invites',
+        '/api/v2/hosted-competitions/comp-1/invites',
+        '/api/v2/hosted-competitions/comp-1/invites/accept',
+        '/api/v2/hosted-competitions/comp-1/standings',
+        '/api/v2/hosted-competitions/comp-1/finance',
+        '/api/v2/hosted-competitions/comp-1/launch',
+        '/api/v2/admin/hosted-competitions/seed',
+        '/api/v2/admin/hosted-competitions/comp-1/finalize',
       ],
     );
   });
@@ -146,7 +146,7 @@ void main() {
     expect(transport.requests.single.method, 'POST');
     expect(
       transport.requests.single.uri.path,
-      '/api/v1/admin/hosted-competitions/seed',
+      '/api/v2/admin/hosted-competitions/seed',
     );
   });
 
@@ -189,14 +189,14 @@ void main() {
 
     expect(
       transport.requests.first.uri.path,
-      '/api/v1/hosted-competitions/comp-1/join',
+      '/api/v2/hosted-competitions/comp-1/join',
     );
     expect(transport.requests.first.body, <String, Object?>{
       'passcode': 'cup-123',
     });
     expect(
       transport.requests.last.uri.path,
-      '/api/v1/admin/hosted-competitions',
+      '/api/v2/admin/hosted-competitions',
     );
     expect(transport.requests.last.body, containsPair('gtex_hosted', true));
     expect(transport.requests.last.body, containsPair('join_passcode', 'vip'));
@@ -290,3 +290,4 @@ Map<String, Object?> _standingJson(String id, String competitionId) =>
       'created_at': '2026-03-10T12:00:00Z',
       'updated_at': '2026-03-10T12:00:00Z',
     };
+

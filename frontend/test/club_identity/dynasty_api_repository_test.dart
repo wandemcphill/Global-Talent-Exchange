@@ -35,9 +35,9 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/clubs/atlas-fc/dynasty',
-        '/api/v1/clubs/atlas-fc/dynasty/history',
-        '/api/v1/clubs/atlas-fc/eras',
+        '/api/v2/clubs/atlas-fc/dynasty',
+        '/api/v2/clubs/atlas-fc/dynasty/history',
+        '/api/v2/clubs/atlas-fc/eras',
       ],
     );
     expect(profile.clubId, 'atlas-fc');
@@ -503,3 +503,4 @@ Map<String, Object?> _seasonPayload({
     'elite_finish': leagueFinish != null && leagueFinish <= 2,
   };
 }
+

@@ -853,7 +853,9 @@ class AdminFinanceService:
         return int(count or 0)
 
     def _count_pending_kyc(self) -> int:
-        count = self.session.scalar(select(func.count(KycProfile.id)).where(KycProfile.status == KycStatus.PENDING))
+        count = self.session.scalar(
+            select(func.count(KycProfile.id)).where(KycProfile.status.in_([KycStatus.PENDING, KycStatus.UNDER_REVIEW]))
+        )
         return int(count or 0)
 
     def _liquidity_status(self) -> str:

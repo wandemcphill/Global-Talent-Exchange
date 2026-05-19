@@ -151,16 +151,16 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/fan-wars/leaderboards/global',
-        '/api/v1/fan-wars/rivalries/global',
-        '/api/v1/fan-wars/profiles/profile-1/dashboard',
-        '/api/v1/fan-wars/nations-cup/cup-1',
-        '/api/v1/admin/fan-wars/profiles',
-        '/api/v1/admin/fan-wars/profiles/profile-1/rivals/profile-2',
-        '/api/v1/admin/fan-wars/points',
-        '/api/v1/admin/fan-wars/creator-country-assignments',
-        '/api/v1/admin/fan-wars/nations-cup',
-        '/api/v1/admin/fan-wars/nations-cup/cup-2/advance',
+        '/api/v2/fan-wars/leaderboards/global',
+        '/api/v2/fan-wars/rivalries/global',
+        '/api/v2/fan-wars/profiles/profile-1/dashboard',
+        '/api/v2/fan-wars/nations-cup/cup-1',
+        '/api/v2/admin/fan-wars/profiles',
+        '/api/v2/admin/fan-wars/profiles/profile-1/rivals/profile-2',
+        '/api/v2/admin/fan-wars/points',
+        '/api/v2/admin/fan-wars/creator-country-assignments',
+        '/api/v2/admin/fan-wars/nations-cup',
+        '/api/v2/admin/fan-wars/nations-cup/cup-2/advance',
       ],
     );
   });
@@ -189,3 +189,4 @@ const Map<String, Object?> _fanWarProfileJson = <String, Object?>{
   'scoring_config_json': <String, Object?>{},
   'metadata_json': <String, Object?>{},
 };
+

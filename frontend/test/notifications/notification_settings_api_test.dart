@@ -158,14 +158,14 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/notifications/preferences',
-          '/api/v1/notifications/preferences',
-          '/api/v1/notifications/subscriptions',
-          '/api/v1/notifications/subscriptions',
-          '/api/v1/notifications/subscriptions/sub-2',
-          '/api/v1/notifications/announcements',
-          '/api/v1/admin/notifications/announcements',
-          '/api/v1/admin/notifications/announcements',
+          '/api/v2/notifications/preferences',
+          '/api/v2/notifications/preferences',
+          '/api/v2/notifications/subscriptions',
+          '/api/v2/notifications/subscriptions',
+          '/api/v2/notifications/subscriptions/sub-2',
+          '/api/v2/notifications/announcements',
+          '/api/v2/admin/notifications/announcements',
+          '/api/v2/admin/notifications/announcements',
         ],
       );
     },
@@ -184,3 +184,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

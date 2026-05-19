@@ -7,7 +7,9 @@ import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
+import 'package:gte_frontend/screens/trader/trader_dashboard_screen.dart';
 import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
 
 const String gteShellHomeRouteName = 'shell.home';
@@ -38,18 +40,77 @@ GoRouter buildGtexAppRouter({
                 const GteNavigationRoute.home().path,
       ),
       GoRoute(
+        path: '/auth',
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                '/auth/select-account',
+      ),
+      GoRoute(
+        path: '/auth/select-account',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                const NoTransitionPage<void>(
+                  child: GtexAccountSelectorScreen(),
+                ),
+      ),
+      GoRoute(
+        path: '/auth/signup/user',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  child: GtexUserSignupScreen(
+                    controller: controller,
+                    config: config,
+                  ),
+                ),
+      ),
+      GoRoute(
+        path: '/auth/signup/creator',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  child: GtexCreatorSignupScreen(
+                    controller: controller,
+                    config: config,
+                  ),
+                ),
+      ),
+      GoRoute(
+        path: '/auth/signup/trader',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  child: GtexTraderSignupScreen(
+                    controller: controller,
+                    config: config,
+                  ),
+                ),
+      ),
+      GoRoute(
+        path: '/trader',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  child: TraderDashboardScreen(
+                    controller: controller,
+                    config: config,
+                  ),
+                ),
+      ),
+      GoRoute(
         path: '/app/:section',
         name: gteShellLaneRouteName,
         pageBuilder:
-            (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
-              key: state.pageKey,
-              child: GteExchangeShellScreen.fromPath(
-                controller: controller,
-                apiBaseUrl: config.apiBaseUrl,
-                backendMode: config.activeShellBackendMode,
-                initialPath: state.uri.toString(),
-              ),
-            ),
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: GteExchangeShellScreen.fromPath(
+                    controller: controller,
+                    apiBaseUrl: config.apiBaseUrl,
+                    backendMode: config.activeShellBackendMode,
+                    initialPath: state.uri.toString(),
+                  ),
+                ),
         routes: <RouteBase>[
           GoRoute(
             path: ':subsection',
@@ -69,9 +130,7 @@ GoRouter buildGtexAppRouter({
         ],
       ),
       ..._buildLegacyAliasRoutes(),
-      ..._buildFeatureRoutes(
-        dependenciesBuilder: dependenciesBuilder,
-      ),
+      ..._buildFeatureRoutes(dependenciesBuilder: dependenciesBuilder),
     ],
     errorBuilder:
         (BuildContext context, GoRouterState state) =>
@@ -184,30 +243,35 @@ List<RouteBase> _buildFeatureRoutes({
     '/streamer-tournaments',
   };
   return GteAppRouteCatalog.registrations
-      .where((GteAppRouteRegistration route) => !shellOwnedPaths.contains(route.path))
+      .where(
+        (GteAppRouteRegistration route) =>
+            !shellOwnedPaths.contains(route.path),
+      )
       .map((GteAppRouteRegistration route) {
-    return GoRoute(
-      path: route.path,
-      name: route.name,
-      pageBuilder: (BuildContext context, GoRouterState state) {
-        final GteNavigationDependencies dependencies = dependenciesBuilder(
-          context,
+        return GoRoute(
+          path: route.path,
+          name: route.name,
+          pageBuilder: (BuildContext context, GoRouterState state) {
+            final GteNavigationDependencies dependencies = dependenciesBuilder(
+              context,
+            );
+            final GteAppRouteRegistry registry = GteAppRouteRegistry(
+              dependencies: dependencies,
+            );
+            final GteAppRouteData featureRoute =
+                GteNavigationHelpers.requireNamedRoute(
+                  route.name,
+                  pathParameters: state.pathParameters,
+                  queryParameters: state.uri.queryParameters,
+                );
+            return MaterialPage<void>(
+              key: state.pageKey,
+              child: registry.buildScreen(context, featureRoute),
+            );
+          },
         );
-        final GteAppRouteRegistry registry = GteAppRouteRegistry(
-          dependencies: dependencies,
-        );
-        final GteAppRouteData featureRoute = GteNavigationHelpers.requireNamedRoute(
-          route.name,
-          pathParameters: state.pathParameters,
-          queryParameters: state.uri.queryParameters,
-        );
-        return MaterialPage<void>(
-          key: state.pageKey,
-          child: registry.buildScreen(context, featureRoute),
-        );
-      },
-    );
-  }).toList(growable: false);
+      })
+      .toList(growable: false);
 }
 
 String _normalizeInitialLocation(String location) {

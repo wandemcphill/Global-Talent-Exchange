@@ -18,6 +18,8 @@ class PlayerCardMarketplaceListingView(BaseModel):
     club_name: str | None
     position: str | None
     average_rating: float | None
+    global_scouting_index: int | None = None
+    gsi_band: str | None = None
     latest_value_credits: float | None = None
     avatar: PlayerAvatarView
     image_url: str | None = None
@@ -120,6 +122,8 @@ class PlayerCardMarketplaceLoanListingView(BaseModel):
     club_name: str | None
     position: str | None
     average_rating: float | None
+    global_scouting_index: int | None = None
+    gsi_band: str | None = None
     avatar: PlayerAvatarView
     image_url: str | None = None
     tier_code: str
@@ -181,6 +185,8 @@ class PlayerCardMarketplaceLoanContractView(BaseModel):
     club_name: str | None
     position: str | None
     average_rating: float | None
+    global_scouting_index: int | None = None
+    gsi_band: str | None = None
     avatar: PlayerAvatarView
     image_url: str | None = None
     tier_code: str
@@ -239,6 +245,8 @@ class PlayerCardMarketplaceSwapListingView(BaseModel):
     club_name: str | None
     position: str | None
     average_rating: float | None
+    global_scouting_index: int | None = None
+    gsi_band: str | None = None
     avatar: PlayerAvatarView
     image_url: str | None = None
     tier_code: str

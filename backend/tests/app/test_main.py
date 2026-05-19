@@ -17,9 +17,13 @@ APP_MAIN_SYSTEM_OPENAPI_PATHS = [
     "/health",
     "/ready",
     "/version",
-    "/auth/register",
+    "/auth/signup/user",
+    "/auth/signup/creator",
+    "/auth/signup/trader",
     "/auth/login",
-    "/api/v2/auth/register",
+    "/api/v2/auth/signup/user",
+    "/api/v2/auth/signup/creator",
+    "/api/v2/auth/signup/trader",
     "/api/v2/auth/login",
     "/api/auth/me",
     "/admin/config/supply-tiers",
@@ -445,28 +449,25 @@ def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(app_and_engine
 @pytest.mark.anyio
 async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and_engine) -> None:
     app, _engine = app_and_engine
-    from app.auth.router import register_user
-    from app.auth.schemas import RegisterRequest
+    from app.auth.service import AuthService
     from app.cache.redis_helpers import NullCacheBackend
     from app.ingestion.service import IngestionService
     from app.market.router import create_listing
     from app.market.schemas import ListingCreate
-    from app.models.user import User
     from app.wallets.router import list_wallet_accounts
 
     async with app.router.lifespan_context(app):
         session, session_generator = _resolve_session(app)
         try:
-            register_response = register_user(
-                RegisterRequest(
-                    email="fan@example.com",
-                    username="fanuser",
-                    password="SuperSecret1",  # pragma: allowlist secret
-                    full_name="Fan User",
-                ),
+            current_user = AuthService().register_user(
                 session,
+                email="fan@example.com",
+                username="fanuser",
+                password="SuperSecret1",  # pragma: allowlist secret
+                full_name="Fan User",
             )
-            current_user = session.get(User, register_response.user.id)
+            session.commit()
+            session.refresh(current_user)
 
             wallet_accounts = list_wallet_accounts(session=session, current_user=current_user)
             listing_response = create_listing(
@@ -496,7 +497,7 @@ async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and
             _close_session(session_generator)
 
     assert {account.unit.value for account in wallet_accounts} == {"coin", "credit"}
-    assert listing_response.seller_user_id == register_response.user.id
+    assert listing_response.seller_user_id == current_user.id
     assert len(snapshots) >= 1
     assert len(later_snapshots) >= 1
     assert all(snapshot.target_credits > 0 for snapshot in snapshots)

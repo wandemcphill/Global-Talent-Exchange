@@ -23,13 +23,20 @@ class UserRole(StrEnum):
     CLUB = "club"
 
 
+class PublicAccountType(StrEnum):
+    USER = "user"
+    CREATOR = "creator"
+    COIN_TRADER = "coin_trader"
+
+
 class KycStatus(StrEnum):
-    UNVERIFIED = "unverified"
     PENDING = "pending"
-    PARTIAL_VERIFIED_NO_ID = "partial_verified_no_id"
-    FULLY_VERIFIED = "fully_verified"
-    VERIFIED = "fully_verified"
+    UNDER_REVIEW = "under_review"
+    VERIFIED = "verified"
     REJECTED = "rejected"
+    UNVERIFIED = "pending"
+    PARTIAL_VERIFIED_NO_ID = "verified"
+    FULLY_VERIFIED = "verified"
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -50,8 +57,25 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=UserRole.USER,
     )
+    account_type: Mapped[PublicAccountType] = mapped_column(
+        Enum(
+            PublicAccountType,
+            name="public_account_type",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=PublicAccountType.USER,
+        server_default=PublicAccountType.USER.value,
+        index=True,
+    )
     kyc_status: Mapped[KycStatus] = mapped_column(
-        Enum(KycStatus, name="kyc_status", native_enum=False),
+        Enum(
+            KycStatus,
+            name="kyc_status",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
         nullable=False,
         default=KycStatus.UNVERIFIED,
     )

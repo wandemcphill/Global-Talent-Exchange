@@ -793,6 +793,292 @@ class _SurfaceRuntimeTransport implements GteTransport {
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) async {
     final String path = request.uri.path;
+    if (request.method == 'GET' && path.endsWith('/federations')) {
+      return GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[_surfaceFederationJson()],
+      );
+    }
+    if (request.method == 'GET' && path.endsWith('/federations/rankings')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'federation_id': 'fed-west-africa',
+            'name': 'West Africa Federation',
+            'ranking_score': 94.2,
+            'reputation_score': 91.4,
+            'audience_size': 420000,
+            'activity_score': 88.0,
+            'competitiveness_score': 86.0,
+          },
+        ],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/federations/regional-tournaments')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'region_code': 'west_africa',
+            'region_label': 'West Africa',
+            'federation_count': 1,
+            'active_league_count': 2,
+            'total_member_clubs': 12,
+          },
+        ],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/federations/fed-west-africa')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'leagues': <Map<String, Object?>>[
+            <String, Object?>{
+              'name': 'WAF Nations League',
+              'competition_type': 'league',
+              'status': 'active',
+              'season_label': '2030',
+            },
+          ],
+          'rules': <String, Object?>{
+            'salary_cap': 'enabled',
+            'foreign_limit': 5,
+          },
+          'members': <Map<String, Object?>>[
+            <String, Object?>{'club_id': 'ibadan-lions', 'status': 'active'},
+          ],
+          'reputation': <String, Object?>{
+            'score': 91.4,
+            'ranking_score': 94.2,
+            'audience_size': 420000,
+          },
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/federations/fed-west-africa/governance')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'proposals': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'proposal-1',
+              'title': 'Expand regional qualifiers',
+              'summary':
+                  'Increase the federation qualifier slots for the next cycle.',
+              'status': 'open',
+              'yes_votes': 7,
+              'no_votes': 2,
+              'abstain_votes': 1,
+            },
+          ],
+          'votes': <Map<String, Object?>>[],
+          'sanctions': <Map<String, Object?>>[
+            <String, Object?>{
+              'sanction_type': 'fine',
+              'target_club_name': 'Accra Meteors',
+              'status': 'resolved',
+            },
+          ],
+          'treasury': <String, Object?>{'balance': 1250000},
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/federations/fed-west-africa/narratives')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'headline': 'West Africa race tightens',
+            'body': 'Three clubs are separated by two points.',
+          },
+        ],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/national-team-engine/competitions')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'id': 'nations-live-1',
+            'key': 'nations-live',
+            'title': 'Nations Cup Live',
+            'season_label': '2031',
+            'region_type': 'global',
+            'age_band': 'senior',
+            'format_type': 'cup',
+            'status': 'open',
+            'notes': 'Active competition',
+            'active': true,
+            'created_at': '2026-01-01T00:00:00.000Z',
+            'updated_at': '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/national-team-engine/rankings')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[
+          <String, Object?>{
+            'country_code': 'NG',
+            'country_name': 'Nigeria',
+            'elo_rating': 1884.0,
+            'matches_played': 18,
+            'wins': 12,
+            'draws': 4,
+            'losses': 2,
+            'titles': 1,
+          },
+        ],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/regen-universe/national-regens')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'items': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'seed-ng-14',
+              'seed_key': 'seed:ng:14',
+              'display_name': 'Sodiq Adebayo',
+              'age': 14,
+              'age_band': 'u17',
+              'country_code': 'NG',
+              'country_name': 'Nigeria',
+              'seed_type': 'national_seed',
+              'primary_position': 'AM',
+              'current_rating': 66,
+              'potential_rating': 89,
+              'growth_curve': 0.78,
+              'rarity_tier': 'elite',
+              'status': 'active',
+              'preseed_batch': 'u17_batch',
+              'metadata_json': <String, Object?>{},
+              'market_eligible': false,
+              'share_market_eligible': false,
+              'tradable': false,
+              'buyable': false,
+              'transferable': false,
+              'card_mint_eligible': false,
+              'buy_cta_allowed': false,
+              'is_preseeded_national_regen': true,
+              'national_pool_only': true,
+            },
+          ],
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/national-team-engine/me/history')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'managed_entries': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'entry-2030-ng',
+              'competition_id': 'nations-2030',
+              'country_code': 'NG',
+              'country_name': 'Nigeria',
+              'manager_user_id': 'user-1',
+              'squad_size': 23,
+              'metadata_json': <String, Object?>{},
+              'created_at': '2025-01-01T00:00:00.000Z',
+              'updated_at': '2025-12-31T00:00:00.000Z',
+            },
+          ],
+          'squad_memberships': <Map<String, Object?>>[],
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/national-team-engine/competitions/nations-2030')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'id': 'nations-2030',
+          'key': 'nations-2030',
+          'title': 'Nations Cup 2030',
+          'season_label': '2030',
+          'region_type': 'global',
+          'age_band': 'senior',
+          'format_type': 'cup',
+          'status': 'completed',
+          'notes': 'Archived competition used for deep-link fallback.',
+          'active': false,
+          'created_at': '2025-01-01T00:00:00.000Z',
+          'updated_at': '2025-12-31T00:00:00.000Z',
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith(
+          '/national-team-engine/competitions/nations-2030/lifecycle',
+        )) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'current_stage': 'qualifiers',
+          'representative_entries': <Map<String, Object?>>[
+            <String, Object?>{
+              'country_name': 'Nigeria',
+              'status': 'qualified',
+              'strength_rating': 91.0,
+            },
+          ],
+          'qualified_entries': <Map<String, Object?>>[
+            <String, Object?>{
+              'country_name': 'Nigeria',
+              'status': 'qualified',
+              'strength_rating': 91.0,
+            },
+          ],
+          'submitted_entries': <Map<String, Object?>>[
+            <String, Object?>{
+              'country_name': 'Nigeria',
+              'status': 'submitted',
+              'strength_rating': 89.5,
+            },
+          ],
+          'stage_history': <Map<String, Object?>>[
+            <String, Object?>{
+              'stage': 'entries_open',
+              'summary': 'Country submissions opened worldwide.',
+            },
+          ],
+        },
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith(
+          '/national-team-engine/competitions/nations-2030/presentation',
+        )) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'active_theme': <String, Object?>{'visual_style': 'continental'},
+          'active_ads': <Map<String, Object?>>[
+            <String, Object?>{
+              'placement': 'touchline_led',
+              'asset_url': 'https://example.test/ad-1.png',
+            },
+          ],
+          'story_events': <Map<String, Object?>>[
+            <String, Object?>{
+              'type': 'headline',
+              'narrative_text': 'Nigeria opens as one of the title favorites.',
+            },
+          ],
+        },
+      );
+    }
     if (request.method == 'GET' &&
         path.contains('/national-team-engine/competitions/') &&
         path.endsWith('/rental-pool')) {
@@ -816,6 +1102,42 @@ class _SurfaceRuntimeTransport implements GteTransport {
             },
           ],
           'total': 2,
+        },
+      );
+    }
+    if (request.method == 'GET' && path.endsWith('/transfer-market/listings')) {
+      return GteTransportResponse(
+        statusCode: 200,
+        body: <Map<String, Object?>>[_surfaceTransferListingJson()],
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/transfer-market/listings/listing-1')) {
+      return GteTransportResponse(
+        statusCode: 200,
+        body: _surfaceTransferListingJson(),
+      );
+    }
+    if (request.method == 'GET' &&
+        path.endsWith('/transfer-market/listings/listing-1/negotiation')) {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'status': 'counter_offer',
+          'contract_years': 4,
+          'wage_offer_amount': 350000,
+          'player_decision': <String, Object?>{
+            'action': 'delay',
+            'decision_score': 62.0,
+          },
+          'coach_opinion': <String, Object?>{
+            'stance': 'approve',
+            'reason': 'Fits the press-first attack.',
+          },
+          'agent_negotiation': <String, Object?>{
+            'action': 'counter_offer',
+            'notes': 'Higher loyalty bonus requested.',
+          },
         },
       );
     }
@@ -885,6 +1207,50 @@ class _SurfaceRuntimeTransport implements GteTransport {
       'Unexpected transport call: ${request.method} ${request.uri}',
     );
   }
+}
+
+Map<String, Object?> _surfaceFederationJson() {
+  return <String, Object?>{
+    'id': 'fed-west-africa',
+    'name': 'West Africa Federation',
+    'ranking_score': 94.2,
+    'reputation_score': 91.4,
+    'audience_size': 420000,
+    'treasury_balance': 1250000,
+    'member_count': 12,
+    'is_public': true,
+    'default_reality_mode': 'hybrid',
+  };
+}
+
+Map<String, Object?> _surfaceTransferListingJson() {
+  return <String, Object?>{
+    'id': 'listing-1',
+    'player_id': 'player-osimhen',
+    'selling_club_id': 'napoli',
+    'status': 'open',
+    'base_price': 90000000,
+    'current_highest_bid': 97000000,
+    'highest_bidder_id': 'ibadan-lions',
+    'time_remaining': 5400,
+    'channel': 'transfer:listing-1',
+    'market_signal': 'Premier clubs are circling.',
+    'watchlist_count': 14,
+    'bid_count': 3,
+    'negotiation_id': 'negotiation-1',
+    'player': <String, Object?>{
+      'full_name': 'Victor Osimhen',
+      'current_club_name': 'Napoli',
+    },
+    'bidders': <Map<String, Object?>>[
+      <String, Object?>{
+        'club_id': 'ibadan-lions',
+        'club_name': 'Ibadan Lions FC',
+        'amount': 97000000,
+        'is_highest': true,
+      },
+    ],
+  };
 }
 
 Map<String, Object?> _competitionSummaryJson(String competitionId) {
@@ -1895,6 +2261,23 @@ class _FakeNationalTeamsApi extends NationalTeamsApi {
         nationalPoolOnly: true,
       ),
     ];
+  }
+
+  @override
+  Future<List<RegenScoutingFeedItem>> listRegenScoutingFeed({
+    int limit = 8,
+  }) async {
+    return <RegenScoutingFeedItem>[
+      RegenScoutingFeedItem(
+        feedId: 'national-scouting-1',
+        feedType: 'hidden_gem',
+        title: 'Sodiq Adebayo drawing national scouts',
+        summary: 'A U17 midfielder is tracking as a national-pool hidden gem.',
+        occurredAt: DateTime.utc(2026, 5, 1),
+        importance: 0.84,
+        badges: const <String>['hidden_gem', 'u17_batch'],
+      ),
+    ].take(limit).toList(growable: false);
   }
 
   @override

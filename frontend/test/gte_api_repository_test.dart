@@ -126,7 +126,7 @@ void main() {
     },
   );
 
-  test('register sends region code in auth payload', () async {
+  test('signupUser sends hard-cutover auth payload', () async {
     final _RecordingTransport transport = _RecordingTransport(
       <GteTransportResponse>[
         GteTransportResponse(
@@ -159,48 +159,65 @@ void main() {
       fixtures: GteMockApi(latency: Duration.zero),
     );
 
-    await repository.register(
-      const GteAuthRegisterRequest(
+    await repository.signupUser(
+      const GteUserSignupRequest(
         email: 'qa@example.com',
         fullName: 'QA User',
-        phoneNumber: '08000000000',
-        isOver18: true,
-        regionCode: 'ng',
+        username: 'qa_user',
         password: testPassword,
+        country: 'NG',
+        state: 'Lagos',
+        city: 'Lagos',
+        clubName: 'QA Sporting',
+        clubShortTag: 'QAS',
+        clubCountry: 'NG',
+        clubState: 'Lagos',
+        clubLocality: 'Yaba',
+        clubType: 'academy',
+        footballIdentity: 'club_owner',
+        compliance: GteComplianceSignupPayload(
+          governmentIdAttachmentId: 'gov-qa',
+          selfieAttachmentId: 'selfie-qa',
+          countryConfirmation: 'NG',
+        ),
       ),
     );
 
     expect(transport.requests, hasLength(1));
-    expect(transport.requests.single.uri.path, '/api/v1/auth/register');
+    expect(transport.requests.single.uri.path, '/api/v2/auth/signup/user');
     expect(transport.requests.single.body, <String, Object?>{
       'email': 'qa@example.com',
       'full_name': 'QA User',
-      'phone_number': '08000000000',
-      'is_over_18': true,
-      'region_code': 'NG',
+      'username': 'qa_user',
       'password': testPassword,
+      'country': 'NG',
+      'state': 'Lagos',
+      'city': 'Lagos',
+      'club_name': 'QA Sporting',
+      'club_short_tag': 'QAS',
+      'club_country': 'NG',
+      'club_state': 'Lagos',
+      'club_locality': 'Yaba',
+      'club_type': 'academy',
+      'football_identity': 'club_owner',
+      'compliance': <String, Object?>{
+        'government_id_attachment_id': 'gov-qa',
+        'selfie_attachment_id': 'selfie-qa',
+        'country_confirmation': 'NG',
+      },
     });
   });
 
-  test('register surfaces FastAPI validation detail lists', () async {
+  test('register is rejected locally after hard cutover', () async {
+    final _RecordingTransport transport = _RecordingTransport(
+      const <GteTransportResponse>[],
+    );
     final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
       config: const GteRepositoryConfig(
         baseUrl: 'http://127.0.0.1:8000',
         mode: GteBackendMode.live,
       ),
-      transport: _RecordingTransport(<GteTransportResponse>[
-        const GteTransportResponse(
-          statusCode: 422,
-          body: <String, Object?>{
-            'detail': <Map<String, Object?>>[
-              <String, Object?>{
-                'loc': <Object?>['body', 'region_code'],
-                'msg': 'Field required',
-              },
-            ],
-          },
-        ),
-      ]),
+      transport: transport,
       fixtures: GteMockApi(latency: Duration.zero),
     );
 
@@ -215,20 +232,9 @@ void main() {
           password: testPassword,
         ),
       ),
-      throwsA(
-        isA<GteApiException>()
-            .having(
-              (GteApiException error) => error.type,
-              'type',
-              GteApiErrorType.validation,
-            )
-            .having(
-              (GteApiException error) => error.message,
-              'message',
-              'region code: Field required',
-            ),
-      ),
+      throwsA(isA<UnsupportedError>()),
     );
+    expect(transport.requests, isEmpty);
   });
 
   test(
@@ -729,7 +735,7 @@ void main() {
       expect((await authSessionStore.readSession())?.sessionId, 'live-session');
       expect((await authSessionStore.readSession())?.clubId, 'ibadan-lions');
       expect(user.username, 'qa_user');
-      expect(transport.requests[1].uri.path, '/api/v1/session/bootstrap');
+      expect(transport.requests[1].uri.path, '/api/v2/session/bootstrap');
       expect(
         transport.requests.last.headers['Authorization'],
         'Bearer live-token',

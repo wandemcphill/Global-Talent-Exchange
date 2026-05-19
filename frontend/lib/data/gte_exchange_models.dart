@@ -152,6 +152,7 @@ class GteMarketPlayersQuery {
     final String? trimmedNationalTeam = _trimOrNull(nationalTeam);
     final String? trimmedClub = _trimOrNull(club);
     final String? trimmedLeague = _trimOrNull(league);
+    final String? trimmedAvailability = _trimOrNull(availability);
     return <String, Object?>{
       'limit': limit,
       if (trimmedCursor != null && trimmedCursor.isNotEmpty)
@@ -167,6 +168,7 @@ class GteMarketPlayersQuery {
       if (trimmedLeague != null) 'league': trimmedLeague,
       if (minAge != null) 'min_age': minAge,
       if (maxAge != null) 'max_age': maxAge,
+      if (trimmedAvailability != null) 'availability': trimmedAvailability,
     };
   }
 }
@@ -184,6 +186,9 @@ class GteMarketPlayerListItem {
     required this.trendScore,
     required this.marketInterestScore,
     required this.averageRating,
+    this.globalScoutingIndex,
+    this.previousGlobalScoutingIndex,
+    this.globalScoutingIndexMovementPct,
     this.isAvailable = true,
     this.availabilityLabel = 'Available now',
     this.askingType = 'transfer',
@@ -204,6 +209,9 @@ class GteMarketPlayerListItem {
   final double? trendScore;
   final int? marketInterestScore;
   final double? averageRating;
+  final double? globalScoutingIndex;
+  final double? previousGlobalScoutingIndex;
+  final double? globalScoutingIndexMovementPct;
   final bool isAvailable;
   final String availabilityLabel;
   final String askingType;
@@ -213,6 +221,32 @@ class GteMarketPlayerListItem {
   final PlayerAvatar? avatar;
 
   bool get isRising => (movementPct ?? 0) > 0;
+
+  int? get displayRating =>
+      globalScoutingIndex?.round() ?? averageRating?.round();
+
+  String? get gsiBand {
+    final double? score = globalScoutingIndex;
+    if (score == null) {
+      return null;
+    }
+    if (score >= 90) {
+      return 'World Class';
+    }
+    if (score >= 84) {
+      return 'Elite';
+    }
+    if (score >= 75) {
+      return 'Professional';
+    }
+    if (score >= 65) {
+      return 'Average';
+    }
+    if (score >= 50) {
+      return 'Developing';
+    }
+    return 'Youth';
+  }
 
   factory GteMarketPlayerListItem.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -245,6 +279,19 @@ class GteMarketPlayerListItem {
       averageRating: _nullableNumber(json, <String>[
         'average_rating',
         'averageRating',
+      ]),
+      globalScoutingIndex: _nullableNumber(json, <String>[
+        'global_scouting_index',
+        'globalScoutingIndex',
+        'gsi',
+      ]),
+      previousGlobalScoutingIndex: _nullableNumber(json, <String>[
+        'previous_global_scouting_index',
+        'previousGlobalScoutingIndex',
+      ]),
+      globalScoutingIndexMovementPct: _nullableNumber(json, <String>[
+        'global_scouting_index_movement_pct',
+        'globalScoutingIndexMovementPct',
       ]),
       isAvailable: GteJson.boolean(json, <String>[
         'is_available',

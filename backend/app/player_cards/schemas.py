@@ -99,6 +99,8 @@ class PlayerCardPlayerSummaryView(BaseModel):
     player_id: str
     player_name: str
     position: str | None
+    global_scouting_index: int | None = None
+    gsi_band: str | None = None
     nationality_code: str | None
     current_club_name: str | None
     card_supply_total: int
@@ -111,6 +113,8 @@ class PlayerCardPlayerDetailView(BaseModel):
     player_id: str
     player_name: str
     position: str | None
+    global_scouting_index: int | None = None
+    gsi_band: str | None = None
     nationality_code: str | None
     current_club_name: str | None
     avatar: PlayerAvatarView
@@ -135,6 +139,8 @@ class PlayerCardHoldingView(BaseModel):
     player_card_id: str
     player_id: str
     player_name: str
+    global_scouting_index: int | None = None
+    gsi_band: str | None = None
     avatar: PlayerAvatarView
     image_url: str | None = None
     latest_value_credits: float | None = None
@@ -152,6 +158,8 @@ class PlayerCardListingView(BaseModel):
     player_card_id: str
     player_id: str
     player_name: str
+    global_scouting_index: int | None = None
+    gsi_band: str | None = None
     avatar: PlayerAvatarView
     image_url: str | None = None
     latest_value_credits: float | None = None

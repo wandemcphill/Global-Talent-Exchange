@@ -99,7 +99,7 @@ class ClubHubScreen extends StatelessWidget {
         decoration: gteBackdropDecoration(),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(title: const Text('Club hub')),
+          appBar: AppBar(title: const Text('Club command')),
           body: Padding(
             padding: const EdgeInsets.all(20),
             child: GteStatePanel(
@@ -125,7 +125,7 @@ class ClubHubScreen extends StatelessWidget {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const Text('Club hub'),
+              const Text('Club command'),
               Text(
                 _resolvedClubName,
                 style: Theme.of(context).textTheme.bodyMedium,
@@ -371,7 +371,7 @@ class ClubHubScreen extends StatelessWidget {
                   const SizedBox(height: 14),
                   Text(
                     _ownsWorkspace
-                        ? 'Owner offer review is armed for this club workspace.'
+                        ? 'Owner offer review is live for this club workspace.'
                         : 'Switch into this club owner workspace before opening owner offer review.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),

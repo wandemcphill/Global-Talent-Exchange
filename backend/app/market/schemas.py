@@ -206,6 +206,9 @@ class MarketPlayerListItemView(BaseModel):
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    global_scouting_index: float | None
+    previous_global_scouting_index: float | None
+    global_scouting_index_movement_pct: float | None
     avatar: PlayerAvatarView
 
 

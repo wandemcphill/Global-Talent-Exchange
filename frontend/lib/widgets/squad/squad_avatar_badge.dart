@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../models/player_avatar.dart';
-import '../player_avatar_widget.dart';
+import '../player_card_avatar.dart';
 
 class SquadAvatarBadge extends StatelessWidget {
   const SquadAvatarBadge({
@@ -17,10 +17,6 @@ class SquadAvatarBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PlayerAvatarWidget(
-      avatar: avatar,
-      size: size,
-      mode: mode,
-    );
+    return PlayerCardAvatar(avatar: avatar, size: size, mode: mode);
   }
 }

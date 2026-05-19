@@ -63,10 +63,10 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/media-engine/creator-league/broadcast-modes',
-          '/api/v1/media-engine/creator-league/matches/match-1/access',
-          '/api/v1/admin/media-engine/creator-league/matches/match-1/analytics',
-          '/api/v1/admin/media-engine/creator-league/stadium-controls',
+          '/api/v2/media-engine/creator-league/broadcast-modes',
+          '/api/v2/media-engine/creator-league/matches/match-1/access',
+          '/api/v2/admin/media-engine/creator-league/matches/match-1/analytics',
+          '/api/v2/admin/media-engine/creator-league/stadium-controls',
         ],
       );
       expect(
@@ -90,3 +90,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

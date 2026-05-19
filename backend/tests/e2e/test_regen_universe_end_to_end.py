@@ -22,20 +22,18 @@ from app.regen_universe.service import RegenUniverseService
 from app.services.player_agency_service import PlayerAgencyService
 from app.wallets.service import WalletService
 from backend.tests.support.secrets import TEST_PASSWORD
+from backend.tests.support.signup_payloads import user_signup_payload
 
 
 def _register_user(client, *, suffix: str) -> dict[str, object]:
     response = client.post(
-        "/auth/register",
-        json={
-            "email": f"{suffix}@example.com",
-            "username": suffix.replace("-", "_"),
-            "password": TEST_PASSWORD,
-            "full_name": f"Regen E2E {suffix}",
-            "phone_number": "1234567890",
-            "is_over_18": True,
-            "region_code": "NG",
-        },
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email=f"{suffix}@example.com",
+            username=suffix.replace("-", "_"),
+            password=TEST_PASSWORD,
+            full_name=f"Regen E2E {suffix}",
+        ),
     )
     assert response.status_code == 201, response.text
     payload = response.json()

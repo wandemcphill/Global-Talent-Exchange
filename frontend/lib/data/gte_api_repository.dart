@@ -160,6 +160,12 @@ abstract class GteApiRepository {
 
   Future<GteAuthSession> register(GteAuthRegisterRequest request);
 
+  Future<GteAuthSession> signupUser(GteUserSignupRequest request);
+
+  Future<GteAuthSession> signupCreator(GteCreatorSignupRequest request);
+
+  Future<GteAuthSession> signupTrader(GteTraderSignupRequest request);
+
   Future<GteCurrentUser> fetchCurrentUser();
 
   Future<void> logout();
@@ -438,11 +444,50 @@ class GteModeAwareApiRepository implements GteApiRepository {
 
   @override
   Future<GteAuthSession> register(GteAuthRegisterRequest request) async {
+    throw UnsupportedError(
+      'Generic signup was removed. Use /auth/signup/user, /auth/signup/creator, or /auth/signup/trader.',
+    );
+  }
+
+  @override
+  Future<GteAuthSession> signupUser(GteUserSignupRequest request) async {
     final GteAuthSession session = await _withFallback<GteAuthSession>(
       () async => GteAuthSession.fromJson(
-        await _request('POST', '/auth/register', body: request.toJson()),
+        await _request('POST', '/auth/signup/user', body: request.toJson()),
       ),
-      () => fixtures.register(request),
+      () => fixtures.signupUser(request),
+      allowFixtureFallback: false,
+    );
+    return _persistAuthSession(
+      session,
+      bootstrap:
+          config.mode != GteBackendMode.fixture && _authSessionStore != null,
+    );
+  }
+
+  @override
+  Future<GteAuthSession> signupCreator(GteCreatorSignupRequest request) async {
+    final GteAuthSession session = await _withFallback<GteAuthSession>(
+      () async => GteAuthSession.fromJson(
+        await _request('POST', '/auth/signup/creator', body: request.toJson()),
+      ),
+      () => fixtures.signupCreator(request),
+      allowFixtureFallback: false,
+    );
+    return _persistAuthSession(
+      session,
+      bootstrap:
+          config.mode != GteBackendMode.fixture && _authSessionStore != null,
+    );
+  }
+
+  @override
+  Future<GteAuthSession> signupTrader(GteTraderSignupRequest request) async {
+    final GteAuthSession session = await _withFallback<GteAuthSession>(
+      () async => GteAuthSession.fromJson(
+        await _request('POST', '/auth/signup/trader', body: request.toJson()),
+      ),
+      () => fixtures.signupTrader(request),
       allowFixtureFallback: false,
     );
     return _persistAuthSession(
@@ -1757,7 +1802,9 @@ class GteModeAwareApiRepository implements GteApiRepository {
     try {
       final http.MultipartRequest request = http.MultipartRequest('POST', uri)
         ..headers.addAll(
-          gteVersionedApiHeaders(<String, String>{'Accept': 'application/json'}),
+          gteVersionedApiHeaders(<String, String>{
+            'Accept': 'application/json',
+          }),
         );
       final String? token = await tokenStore.readToken();
       if (token != null && token.isNotEmpty) {

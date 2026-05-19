@@ -8,7 +8,7 @@ void main() {
   test('regen universe awards use the live awards endpoint', () async {
     final _PathTransport transport = _PathTransport(
       <String, GteTransportResponse>{
-        '/api/v1/regen-universe/awards': const GteTransportResponse(
+        '/api/v2/regen-universe/awards': const GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
             'items': <Object?>[
@@ -60,7 +60,7 @@ void main() {
     final awards = await api.listAwards(limit: 3);
 
     expect(transport.requests, hasLength(1));
-    expect(transport.requests.single.uri.path, '/api/v1/regen-universe/awards');
+    expect(transport.requests.single.uri.path, '/api/v2/regen-universe/awards');
     expect(transport.requests.single.uri.queryParameters['limit'], '3');
     expect(awards, hasLength(1));
     expect(awards.single.award.name, 'GTEX World Player of the Year');
@@ -77,7 +77,7 @@ void main() {
             mode: GteBackendMode.live,
           ),
           transport: _PathTransport(<String, GteTransportResponse>{
-            '/api/v1/regen-universe/awards': const GteTransportResponse(
+            '/api/v2/regen-universe/awards': const GteTransportResponse(
               statusCode: 503,
               body: <String, Object?>{'detail': 'Backend unavailable.'},
             ),
@@ -107,3 +107,4 @@ class _PathTransport implements GteTransport {
         );
   }
 }
+

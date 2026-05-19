@@ -42,9 +42,9 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/story-feed',
-        '/api/v1/story-feed/digest',
-        '/api/v1/admin/story-feed',
+        '/api/v2/story-feed',
+        '/api/v2/story-feed/digest',
+        '/api/v2/admin/story-feed',
       ],
     );
     expect(transport.requests.first.uri.queryParameters['limit'], '25');
@@ -77,3 +77,4 @@ Map<String, Object?> _storyJson(String id) => <String, Object?>{
   'created_at': '2026-03-12T08:00:00Z',
   'metadata_json': const <String, Object?>{},
 };
+

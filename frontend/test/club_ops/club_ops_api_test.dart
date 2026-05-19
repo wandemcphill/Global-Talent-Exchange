@@ -25,7 +25,7 @@ void main() {
     GteHttpTransport.clientFactory =
         () => MockClient((http.Request request) async {
           if (request.method == 'GET' &&
-              request.url.path == '/api/v1/clubs/club-live/sponsorships') {
+              request.url.path == '/api/v2/clubs/club-live/sponsorships') {
             return http.Response(
               jsonEncode(<String, Object?>{
                 'club_id': 'club-live',
@@ -64,7 +64,7 @@ void main() {
           }
           if (request.method == 'GET' &&
               request.url.path ==
-                  '/api/v1/clubs/club-live/sponsorships/catalog') {
+                  '/api/v2/clubs/club-live/sponsorships/catalog') {
             return http.Response(
               jsonEncode(<String, Object?>{
                 'packages': <Object?>[
@@ -87,7 +87,7 @@ void main() {
           }
           if (request.method == 'POST' &&
               request.url.path ==
-                  '/api/v1/clubs/club-live/sponsorships/contracts') {
+                  '/api/v2/clubs/club-live/sponsorships/contracts') {
             postBodies.add(
               Map<String, Object?>.from(
                 jsonDecode(request.body) as Map<String, dynamic>,
@@ -114,7 +114,7 @@ void main() {
           }
           if (request.method == 'PATCH' &&
               request.url.path ==
-                  '/api/v1/clubs/club-live/sponsorships/contracts/contract-created') {
+                  '/api/v2/clubs/club-live/sponsorships/contracts/contract-created') {
             patchBodies.add(
               Map<String, Object?>.from(
                 jsonDecode(request.body) as Map<String, dynamic>,
@@ -207,3 +207,4 @@ void main() {
     expect(updated.outstandingValue, 4200);
   });
 }
+

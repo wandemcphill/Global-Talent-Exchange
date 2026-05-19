@@ -3,18 +3,17 @@ import 'package:flutter/material.dart';
 import '../features/app_routes/gte_navigation_helpers.dart';
 import '../features/app_routes/gte_route_data.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
+import '../core/widgets/player_card.dart';
 import '../shared/widgets/gtex_premium_panels.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/player_match_service.dart';
 import '../providers/gte_exchange_controller.dart';
-import '../services/avatar_mapper.dart';
 import '../widgets/gte_formatters.dart';
 import '../widgets/gte_metric_chip.dart';
 import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_sync_status_card.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
-import '../widgets/market/player_market_avatar.dart';
 import '../widgets/gtex_branding.dart';
 
 class GteMarketPlayersScreen extends StatefulWidget {
@@ -45,6 +44,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
   late final TextEditingController _leagueController;
   late final TextEditingController _nationalTeamController;
   _MarketLens _selectedLens = _MarketLens.all;
+  bool _autoPagingQueued = false;
 
   @override
   void initState() {
@@ -104,6 +104,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _queueFullBoardLoad();
     return RefreshIndicator(
       onRefresh: _refresh,
       child: SingleChildScrollView(
@@ -567,7 +568,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               ..._filteredPlayers.map(
                 (GteMarketPlayerListItem player) => Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: _PlayerCard(
+                  child: _MarketPlayerTile(
                     player: player,
                     onTap: () => widget.onOpenPlayer(player.playerId),
                   ),
@@ -575,7 +576,20 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               ),
             if (widget.controller.isLoadingMoreMarket) ...<Widget>[
               const SizedBox(height: 12),
-              const Center(child: CircularProgressIndicator()),
+              Center(
+                child: Column(
+                  children: <Widget>[
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Bringing more players onto the live board...',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: GteShellTheme.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ] else if (widget.controller.hasMorePlayers) ...<Widget>[
               const SizedBox(height: 4),
               Center(
@@ -640,6 +654,31 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _queueFullBoardLoad() {
+    if (_autoPagingQueued ||
+        widget.controller.isLoadingMarket ||
+        widget.controller.isLoadingMoreMarket ||
+        !widget.controller.hasMorePlayers) {
+      return;
+    }
+    _autoPagingQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      _autoPagingQueued = false;
+      if (!widget.controller.hasMorePlayers ||
+          widget.controller.isLoadingMarket ||
+          widget.controller.isLoadingMoreMarket) {
+        return;
+      }
+      await widget.controller.loadMarket(
+        search: _searchController.text,
+        reset: false,
+      );
+    });
   }
 
   bool get _hasActiveStructuredFilters {
@@ -976,8 +1015,8 @@ class _MarketLensCounts {
   }
 }
 
-class _PlayerCard extends StatelessWidget {
-  const _PlayerCard({required this.player, required this.onTap});
+class _MarketPlayerTile extends StatelessWidget {
+  const _MarketPlayerTile({required this.player, required this.onTap});
 
   final GteMarketPlayerListItem player;
   final VoidCallback onTap;
@@ -988,9 +1027,9 @@ class _PlayerCard extends StatelessWidget {
     final double movementPct = player.movementPct ?? 0;
     final double trendScore = player.trendScore ?? 0;
     final int marketInterestScore = player.marketInterestScore ?? 0;
+    final int? displayRating = player.displayRating;
     final Color movementColor =
         player.isRising ? GteShellTheme.positive : GteShellTheme.negative;
-    final avatar = AvatarMapper.fromMarketListItem(player);
     final String demandLabel =
         marketInterestScore >= 80
             ? 'HEAVY FLOW'
@@ -1004,201 +1043,56 @@ class _PlayerCard extends StatelessWidget {
             : trendScore >= 4
             ? 'Building'
             : 'Quiet';
-    return GteSurfacePanel(
-      onTap: onTap,
+    final String detailCopy =
+        looksIlliquid
+            ? 'Liquidity looks light. Inspect quote quality, spreads, and timing before you commit.'
+            : player.isRising
+            ? 'Momentum is tilting upward. Inspect quote depth and order entry.'
+            : 'Price is cooling. Inspect quote quality and timing.';
+    return PlayerCard(
+      name: player.playerName,
+      rating: displayRating ?? 0,
+      showRating: displayRating != null,
+      image: '',
+      playerAvatar: player.avatar,
+      position: player.position,
+      subtitle: <String>[
+        if (player.currentClubName != null) player.currentClubName!,
+        if (player.nationality != null) player.nationality!,
+        if (player.position != null) player.position!,
+        'Age ${player.age}',
+      ].join(' | '),
       accentColor: movementColor,
-      child: Column(
+      avatarSize: 72,
+      layout: PlayerCardLayout.horizontal,
+      onTap: onTap,
+      badgeLabels: <String>[
+        player.isRising ? 'Rising' : 'Cooling',
+        demandLabel,
+        momentumLabel,
+      ],
+      metrics: <PlayerCardMetric>[
+        PlayerCardMetric(
+          label: 'Live quote',
+          value: gteFormatCredits(currentValueCredits),
+        ),
+        PlayerCardMetric(label: 'Move', value: gteFormatMovement(movementPct)),
+        if (player.globalScoutingIndex != null)
+          PlayerCardMetric(
+            label: 'GSI',
+            value:
+                player.gsiBand ??
+                player.globalScoutingIndex!.toStringAsFixed(0),
+          ),
+        PlayerCardMetric(label: 'Trend', value: trendScore.toStringAsFixed(1)),
+        PlayerCardMetric(
+          label: 'Interest',
+          value: marketInterestScore.toString(),
+        ),
+      ],
+      footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              _MarketTickerPill(
-                label: player.isRising ? 'Rising' : 'Cooling',
-                color: movementColor,
-              ),
-              _MarketTickerPill(
-                label: demandLabel,
-                color:
-                    looksIlliquid
-                        ? GteShellTheme.accentWarm
-                        : GteShellTheme.accent,
-              ),
-              _MarketTickerPill(
-                label: momentumLabel,
-                color: GteShellTheme.accentCapital,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final Widget identityBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    player.playerName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    <String>[
-                      if (player.currentClubName != null)
-                        player.currentClubName!,
-                      if (player.nationality != null) player.nationality!,
-                      if (player.position != null) player.position!,
-                      'Age ${player.age}',
-                    ].join(' - '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              );
-              final Widget quoteBlock = Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      color:
-                          looksIlliquid
-                              ? GteShellTheme.accentWarm.withValues(alpha: 0.12)
-                              : movementColor.withValues(alpha: 0.1),
-                    ),
-                    child: Text(
-                      looksIlliquid ? 'THIN BOOK' : demandLabel,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color:
-                            looksIlliquid
-                                ? GteShellTheme.accentWarm
-                                : movementColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      color: Colors.white.withValues(alpha: 0.04),
-                      border: Border.all(
-                        color: movementColor.withValues(alpha: 0.18),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: <Widget>[
-                        Text(
-                          'LIVE QUOTE',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: GteShellTheme.textMuted,
-                            letterSpacing: 0.8,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          gteFormatCredits(currentValueCredits),
-                          textAlign: TextAlign.end,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      color: movementColor.withValues(alpha: 0.12),
-                    ),
-                    child: Text(
-                      gteFormatMovement(movementPct),
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelLarge?.copyWith(color: movementColor),
-                    ),
-                  ),
-                ],
-              );
-              if (constraints.maxWidth < 360) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        PlayerMarketAvatar(avatar: avatar),
-                        const SizedBox(width: 16),
-                        Expanded(child: identityBlock),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Align(alignment: Alignment.centerRight, child: quoteBlock),
-                  ],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  PlayerMarketAvatar(avatar: avatar),
-                  const SizedBox(width: 16),
-                  Expanded(child: identityBlock),
-                  const SizedBox(width: 16),
-                  Flexible(
-                    fit: FlexFit.loose,
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: quoteBlock,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _MicroBookStat(
-                  label: 'Trend pressure',
-                  value: momentumLabel.toUpperCase(),
-                  color: movementColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _MicroBookStat(
-                  label: 'Scout demand',
-                  value:
-                      marketInterestScore >= 70
-                          ? 'HEAVY'
-                          : marketInterestScore >= 40
-                          ? 'ACTIVE'
-                          : 'LIGHT',
-                  color: GteShellTheme.accentWarm,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
           Row(
             children: List<Widget>.generate(
               5,
@@ -1219,98 +1113,17 @@ class _PlayerCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              color: Colors.white.withValues(alpha: 0.03),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: <Widget>[
-                GteMetricChip(
-                  label: 'Trend score',
-                  value: trendScore.toStringAsFixed(1),
-                ),
-                GteMetricChip(
-                  label: 'Interest',
-                  value: marketInterestScore.toString(),
-                ),
-                GteMetricChip(label: 'Flow', value: demandLabel),
-                GteMetricChip(
-                  label: 'Rating',
-                  value: player.averageRating?.toStringAsFixed(1) ?? '--',
-                ),
-                GteMetricChip(
-                  label: 'Market state',
-                  value: player.isRising ? 'BID UP' : 'CHECK OFFER',
-                  positive: player.isRising,
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 14),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  looksIlliquid
-                      ? 'Liquidity looks light. Open the detail view to inspect quote quality, spreads, and timing before you commit.'
-                      : player.isRising
-                      ? 'Momentum is tilting upward. Open the detail view for quote depth and order entry.'
-                      : 'Price is cooling. Open the detail view to inspect quote quality and timing.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    'Open dossier',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelLarge?.copyWith(color: movementColor),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.arrow_forward, size: 18, color: movementColor),
-                ],
-              ),
-            ],
-          ),
+          Text(detailCopy, style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
-    );
-  }
-}
-
-class _MarketTickerPill extends StatelessWidget {
-  const _MarketTickerPill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: color.withValues(alpha: 0.14),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
-      ),
-      child: Text(
-        label.toUpperCase(),
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: color,
-          letterSpacing: 0.9,
-          fontWeight: FontWeight.w800,
+      actions: <Widget>[
+        TextButton.icon(
+          onPressed: onTap,
+          icon: const Icon(Icons.arrow_forward, size: 18),
+          label: const Text('Open dossier'),
         ),
-      ),
+      ],
     );
   }
 }
@@ -1335,43 +1148,6 @@ class _DeskSignalCard extends StatelessWidget {
             Text(body, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _MicroBookStat extends StatelessWidget {
-  const _MicroBookStat({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: color.withValues(alpha: 0.08),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(color: color),
-          ),
-        ],
       ),
     );
   }

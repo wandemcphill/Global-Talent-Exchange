@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from backend.tests.support.secrets import TEST_PASSWORD
+from backend.tests.support.signup_payloads import user_signup_payload
 from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.models.admin_runtime_state import AdminRuntimeState
 
@@ -14,15 +15,13 @@ def _suffix(prefix: str) -> str:
 def _register_user(client, *, prefix: str) -> dict[str, object]:
     email = f"{_suffix(prefix)}@example.com"
     response = client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "full_name": f"{prefix.title()} User",
-            "phone_number": "08000000000",
-            "password": TEST_PASSWORD,
-            "is_over_18": True,
-            "region_code": "NG",
-        },
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email=email,
+            username=email.split("@", maxsplit=1)[0].replace("-", "_"),
+            full_name=f"{prefix.title()} User",
+            password=TEST_PASSWORD,
+        ),
     )
     assert response.status_code == 201, response.text
     payload = response.json()

@@ -38,7 +38,7 @@ void main() {
     await client.post('/feed/for-you');
 
     final GteTransportRequest request = transport.requests.single;
-    expect(request.uri.path, '/api/v1/feed/for-you');
+    expect(request.uri.path, '/api/v2/feed/for-you');
     expect(request.headers['Authorization'], 'Bearer session-token');
     expect(request.headers['X-User-Id'], 'user-123');
     expect(request.headers['X-Session-Id'], 'session-abc');
@@ -224,7 +224,7 @@ void main() {
         transport.requests.first.headers['Authorization'],
         'Bearer expired-token',
       );
-      expect(transport.requests[1].uri.path, '/api/v1/auth/refresh');
+      expect(transport.requests[1].uri.path, '/api/v2/auth/refresh');
       expect(
         transport.requests[2].headers['Authorization'],
         'Bearer fresh-token',
@@ -329,3 +329,4 @@ class _QueuedTransport implements GteTransport {
     return responses.removeAt(0);
   }
 }
+

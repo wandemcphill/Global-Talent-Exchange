@@ -337,6 +337,10 @@ class KycProfileView(BaseModel):
     state: str | None
     country: str | None
     id_document_attachment_id: str | None
+    government_id_attachment_id: str | None = None
+    selfie_attachment_id: str | None = None
+    proof_of_address_attachment_id: str | None = None
+    country_confirmation: str | None = None
     submitted_at: datetime | None
     reviewed_at: datetime | None
     rejection_reason: str | None
@@ -353,11 +357,19 @@ class KycSubmitRequest(BaseModel):
     state: str | None = Field(default=None, max_length=120)
     country: str | None = Field(default="Nigeria", max_length=120)
     id_document_attachment_id: str | None = None
+    government_id_attachment_id: str | None = Field(default=None, max_length=255)
+    selfie_attachment_id: str | None = Field(default=None, max_length=255)
+    proof_of_address_attachment_id: str | None = Field(default=None, max_length=255)
+    country_confirmation: str | None = Field(default=None, max_length=120)
 
     @model_validator(mode="after")
     def require_nin_or_bvn(self) -> "KycSubmitRequest":
-        if not (self.nin or self.bvn):
-            raise ValueError("Either NIN or BVN is required.")
+        if not (self.nin or self.bvn or self.government_id_attachment_id or self.id_document_attachment_id):
+            raise ValueError("Government ID, NIN, or BVN is required.")
+        if not self.selfie_attachment_id:
+            raise ValueError("Selfie verification is required.")
+        if not (self.country_confirmation or self.country):
+            raise ValueError("Country confirmation is required.")
         return self
 
 
@@ -368,8 +380,8 @@ class KycReviewRequest(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, value: KycStatus) -> KycStatus:
-        if value not in {KycStatus.PARTIAL_VERIFIED_NO_ID, KycStatus.FULLY_VERIFIED, KycStatus.REJECTED}:
-            raise ValueError("status must be partial_verified_no_id, fully_verified, or rejected")
+        if value not in {KycStatus.UNDER_REVIEW, KycStatus.VERIFIED, KycStatus.REJECTED}:
+            raise ValueError("status must be under_review, verified, or rejected")
         return value
 
 

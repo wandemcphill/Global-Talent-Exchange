@@ -165,11 +165,11 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/governance/proposals',
-        '/api/v1/governance/proposals/gov-1',
-        '/api/v1/governance/me/overview',
-        '/api/v1/governance/proposals/gov-1/vote',
-        '/api/v1/admin/governance/proposals/gov-1/status',
+        '/api/v2/governance/proposals',
+        '/api/v2/governance/proposals/gov-1',
+        '/api/v2/governance/me/overview',
+        '/api/v2/governance/proposals/gov-1/vote',
+        '/api/v2/admin/governance/proposals/gov-1/status',
       ],
     );
     expect(transport.requests.first.uri.queryParameters['club_id'], 'club-1');
@@ -196,3 +196,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

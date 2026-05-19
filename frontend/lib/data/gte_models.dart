@@ -533,6 +533,184 @@ class GteAuthRegisterRequest {
   };
 }
 
+class GteComplianceSignupPayload {
+  const GteComplianceSignupPayload({
+    required this.governmentIdAttachmentId,
+    required this.selfieAttachmentId,
+    required this.countryConfirmation,
+    this.proofOfAddressAttachmentId,
+  });
+
+  final String governmentIdAttachmentId;
+  final String selfieAttachmentId;
+  final String countryConfirmation;
+  final String? proofOfAddressAttachmentId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'government_id_attachment_id': governmentIdAttachmentId,
+    'selfie_attachment_id': selfieAttachmentId,
+    'country_confirmation': countryConfirmation,
+    if (proofOfAddressAttachmentId != null)
+      'proof_of_address_attachment_id': proofOfAddressAttachmentId,
+  };
+}
+
+class GteUserSignupRequest {
+  const GteUserSignupRequest({
+    required this.fullName,
+    required this.username,
+    required this.email,
+    required this.password,
+    required this.country,
+    required this.state,
+    required this.city,
+    required this.clubName,
+    required this.clubShortTag,
+    required this.clubCountry,
+    required this.clubState,
+    required this.clubLocality,
+    required this.clubType,
+    required this.footballIdentity,
+    required this.compliance,
+    this.position,
+    this.dominantFoot,
+    this.heightCm,
+    this.jerseyNumber,
+    this.preferredRole,
+  });
+
+  final String fullName;
+  final String username;
+  final String email;
+  final String password;
+  final String country;
+  final String state;
+  final String city;
+  final String clubName;
+  final String clubShortTag;
+  final String clubCountry;
+  final String clubState;
+  final String clubLocality;
+  final String clubType;
+  final String footballIdentity;
+  final GteComplianceSignupPayload compliance;
+  final String? position;
+  final String? dominantFoot;
+  final int? heightCm;
+  final int? jerseyNumber;
+  final String? preferredRole;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'full_name': fullName,
+    'username': username,
+    'email': email,
+    'password': password,
+    'country': country,
+    'state': state,
+    'city': city,
+    'club_name': clubName,
+    'club_short_tag': clubShortTag,
+    'club_country': clubCountry,
+    'club_state': clubState,
+    'club_locality': clubLocality,
+    'club_type': clubType,
+    'football_identity': footballIdentity,
+    if (position != null) 'position': position,
+    if (dominantFoot != null) 'dominant_foot': dominantFoot,
+    if (heightCm != null) 'height_cm': heightCm,
+    if (jerseyNumber != null) 'jersey_number': jerseyNumber,
+    if (preferredRole != null) 'preferred_role': preferredRole,
+    'compliance': compliance.toJson(),
+  };
+}
+
+class GteCreatorSignupRequest {
+  const GteCreatorSignupRequest({
+    required this.creatorName,
+    required this.username,
+    required this.email,
+    required this.password,
+    required this.country,
+    required this.category,
+    required this.mainClubSupported,
+    required this.primaryLanguage,
+    required this.monetization,
+  });
+
+  final String creatorName;
+  final String username;
+  final String email;
+  final String password;
+  final String country;
+  final String category;
+  final String mainClubSupported;
+  final String primaryLanguage;
+  final List<String> monetization;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'creator_name': creatorName,
+    'username': username,
+    'email': email,
+    'password': password,
+    'country': country,
+    'category': category,
+    'main_club_supported': mainClubSupported,
+    'primary_language': primaryLanguage,
+    'monetization': monetization,
+  };
+}
+
+class GteTraderSignupRequest {
+  const GteTraderSignupRequest({
+    required this.fullName,
+    required this.tradingAlias,
+    required this.email,
+    required this.password,
+    required this.phoneNumber,
+    required this.country,
+    required this.preferredCurrency,
+    required this.tradingExperience,
+    required this.interests,
+    required this.totpSecret,
+    required this.totpCode,
+    required this.recoveryPhraseHash,
+    required this.securityPinHash,
+    required this.compliance,
+  });
+
+  final String fullName;
+  final String tradingAlias;
+  final String email;
+  final String password;
+  final String phoneNumber;
+  final String country;
+  final String preferredCurrency;
+  final String tradingExperience;
+  final List<String> interests;
+  final String totpSecret;
+  final String totpCode;
+  final String recoveryPhraseHash;
+  final String securityPinHash;
+  final GteComplianceSignupPayload compliance;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'full_name': fullName,
+    'trading_alias': tradingAlias,
+    'email': email,
+    'password': password,
+    'phone_number': phoneNumber,
+    'country': country,
+    'preferred_currency': preferredCurrency,
+    'trading_experience': tradingExperience,
+    'interests': interests,
+    'totp_secret': totpSecret,
+    'totp_code': totpCode,
+    'recovery_phrase_hash': recoveryPhraseHash,
+    'security_pin_hash': securityPinHash,
+    'compliance': compliance.toJson(),
+  };
+}
+
 class GteCurrentUser {
   const GteCurrentUser({
     required this.id,
@@ -542,6 +720,7 @@ class GteCurrentUser {
     required this.phoneNumber,
     required this.displayName,
     required this.role,
+    this.accountType = 'user',
     this.kycStatus,
     this.isActive = true,
     this.ageConfirmedAt,
@@ -555,6 +734,7 @@ class GteCurrentUser {
   final String? phoneNumber;
   final String? displayName;
   final String role;
+  final String accountType;
   final String? kycStatus;
   final bool isActive;
   final DateTime? ageConfirmedAt;
@@ -576,6 +756,10 @@ class GteCurrentUser {
         'displayName',
       ]),
       role: GteJson.string(json, <String>['role'], fallback: 'user'),
+      accountType: GteJson.string(json, <String>[
+        'account_type',
+        'accountType',
+      ], fallback: 'user'),
       kycStatus: GteJson.stringOrNull(json, <String>[
         'kyc_status',
         'kycStatus',

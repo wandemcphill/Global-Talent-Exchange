@@ -133,7 +133,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         clubId.isEmpty ||
         clubName == null ||
         clubName.isEmpty) {
-      return _buildNoClubState();
+      return _buildGlobalDiscoveryState();
     }
     final CompetitionController competitionController = _competitionController;
     return AnimatedBuilder(
@@ -895,6 +895,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   VoidCallback? _createClubOnboardingAction() {
+    if (!_canUseFootballClubActions) {
+      return null;
+    }
     if (!widget.exchangeController.isAuthenticated) {
       return widget.onOpenLogin;
     }
@@ -918,6 +921,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   VoidCallback? _playerUniverseOnboardingAction() {
+    if (!_canUseFootballClubActions) {
+      return null;
+    }
     if (widget.navigationDependencies != null) {
       return () {
         _openFeatureRoute(const PlayerCardsBrowseRouteData());
@@ -939,6 +945,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   VoidCallback? _walletOnboardingAction() {
     return widget.onOpenWalletTab ??
         (widget.exchangeController.isAuthenticated ? null : widget.onOpenLogin);
+  }
+
+  bool get _canUseFootballClubActions {
+    final dynamic session = widget.exchangeController.session;
+    final String accountType =
+        session?.user.accountType.trim().toLowerCase() ?? 'user';
+    final String role = session?.user.role.trim().toLowerCase() ?? '';
+    final bool isAdmin = <String>{
+      'admin',
+      'super_admin',
+      'god_mode',
+      'scoped_admin',
+    }.contains(role);
+    return accountType == 'user' || isAdmin;
   }
 
   VoidCallback? _matchdayOnboardingAction() {
@@ -971,6 +991,172 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       onOpenPlayerUniverse: _playerUniverseOnboardingAction(),
       onOpenWorld: _worldOnboardingAction(),
       onOpenWallet: _walletOnboardingAction(),
+    );
+  }
+
+  Widget _buildGlobalDiscoveryState() {
+    final bool isAuthenticated = widget.exchangeController.isAuthenticated;
+    final List<_GlobalDiscoveryItem> items = <_GlobalDiscoveryItem>[
+      _GlobalDiscoveryItem(
+        title: 'Transfer news',
+        summary: 'Rumours, completed deals, market pressure, and club demand.',
+        icon: Icons.newspaper_outlined,
+        accent: const Color(0xFFFFB85C),
+        actionLabel: 'Open market',
+        onTap: widget.onOpenMarketTab,
+      ),
+      _GlobalDiscoveryItem(
+        title: 'Live matches',
+        summary: 'Matchday channels, broadcast desks, and competition traffic.',
+        icon: Icons.live_tv_outlined,
+        accent: const Color(0xFFB26DFF),
+        actionLabel: 'Open matchday',
+        onTap: widget.onOpenCompetitionsTab,
+      ),
+      _GlobalDiscoveryItem(
+        title: 'Creators',
+        summary:
+            'Watchalongs, tactical voices, news creators, and communities.',
+        icon: Icons.video_camera_front_outlined,
+        accent: const Color(0xFF5FE3A1),
+        actionLabel: 'Open studio',
+        onTap: widget.onOpenHubTab,
+      ),
+      _GlobalDiscoveryItem(
+        title: 'Trending clubs',
+        summary:
+            'Rising badges, sale-market movement, finance, and reputation.',
+        icon: Icons.shield_outlined,
+        accent: const Color(0xFF85B8FF),
+        actionLabel: 'Browse clubs',
+        onTap: _browseClubMarketOnboardingAction(),
+      ),
+      _GlobalDiscoveryItem(
+        title: 'Market overview',
+        summary:
+            'Featured player cards, price movement, and liquidity signals.',
+        icon: Icons.storefront_outlined,
+        accent: const Color(0xFF72F0D8),
+        actionLabel: 'Open players',
+        onTap: _playerUniverseOnboardingAction(),
+      ),
+      _GlobalDiscoveryItem(
+        title: 'Regen discoveries',
+        summary:
+            'Youth prospects, national pools, pipelines, and future stars.',
+        icon: Icons.auto_awesome_outlined,
+        accent: const Color(0xFFFFD66B),
+        actionLabel: 'National teams',
+        onTap:
+            widget.navigationDependencies == null
+                ? null
+                : () => _openFeatureRoute(
+                  const NationalTeamCompetitionsRouteData(),
+                ),
+      ),
+    ];
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            GteSurfacePanel(
+              accentColor: GteShellTheme.accent,
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final bool wide = constraints.maxWidth >= 860;
+                  final Widget intro = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'GTEX global discovery',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        isAuthenticated
+                            ? 'Your account is active. Home now stays global until you enter a dedicated club, creator, or trader lane.'
+                            : 'Browse the live football economy before choosing a dedicated account lane.',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  );
+                  final Widget metrics = Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: const <Widget>[
+                      _DiscoveryMetric(label: 'Live matches', value: '24'),
+                      _DiscoveryMetric(label: 'Creators', value: '1.8K'),
+                      _DiscoveryMetric(label: 'Market cap', value: '412M'),
+                      _DiscoveryMetric(label: 'Prospects', value: 'U23'),
+                    ],
+                  );
+                  if (!wide) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        intro,
+                        const SizedBox(height: 18),
+                        metrics,
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(flex: 2, child: intro),
+                      const SizedBox(width: 24),
+                      Expanded(child: metrics),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 18),
+            GtexLiveTickerBar(
+              accentColor: GteShellTheme.accent,
+              items: const <String>[
+                'Transfer news, live matches, creators, clubs, and markets are separated from Club HQ.',
+                'Club operations now open only from explicit club context.',
+                'National-team regens and country pipelines are visible from discovery.',
+              ],
+            ),
+            const SizedBox(height: 18),
+            LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final int columns =
+                    constraints.maxWidth >= 1120
+                        ? 3
+                        : constraints.maxWidth >= 720
+                        ? 2
+                        : 1;
+                final double gap = 14;
+                final double width =
+                    (constraints.maxWidth - (gap * (columns - 1))) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: items
+                      .map(
+                        (_GlobalDiscoveryItem item) => SizedBox(
+                          width: width,
+                          child: _GlobalDiscoveryTile(item: item),
+                        ),
+                      )
+                      .toList(growable: false),
+                );
+              },
+            ),
+            const SizedBox(height: 18),
+            if (isAuthenticated && _createClubOnboardingAction() != null)
+              _buildNoClubState(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1230,6 +1416,107 @@ class _HomeHeroPanel extends StatelessWidget {
                   child: const Text('Sign in for alerts'),
                 ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlobalDiscoveryItem {
+  const _GlobalDiscoveryItem({
+    required this.title,
+    required this.summary,
+    required this.icon,
+    required this.accent,
+    required this.actionLabel,
+    required this.onTap,
+  });
+
+  final String title;
+  final String summary;
+  final IconData icon;
+  final Color accent;
+  final String actionLabel;
+  final VoidCallback? onTap;
+}
+
+class _GlobalDiscoveryTile extends StatelessWidget {
+  const _GlobalDiscoveryTile({required this.item});
+
+  final _GlobalDiscoveryItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: item.accent,
+      child: SizedBox(
+        height: 196,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(item.icon, color: item.accent, size: 30),
+            const Spacer(),
+            Text(
+              item.title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              item.summary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                onPressed: item.onTap,
+                icon: const Icon(Icons.arrow_forward),
+                label: Text(item.actionLabel),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DiscoveryMetric extends StatelessWidget {
+  const _DiscoveryMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 128,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.white.withValues(alpha: 0.06),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelMedium,
           ),
         ],
       ),

@@ -146,8 +146,8 @@ void main() {
       await _pumpUntilText(tester, 'Club funds');
       expect(find.text('Club Wallet'), findsOneWidget);
       expect(find.text('Club funds'), findsOneWidget);
-      expect(find.text('TRANSFER BALANCE'), findsOneWidget);
-      expect(find.text('CLUB CREDIT'), findsOneWidget);
+      expect(find.text('GTEX COIN'), findsWidgets);
+      expect(find.text('FAN COIN'), findsWidgets);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');

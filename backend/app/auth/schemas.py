@@ -7,7 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.access_control.schemas import OrganizationMembershipView
 from app.models.access_control import OrganizationType
-from app.models.user import KycStatus, UserRole
+from app.models.club_profile import ClubType
+from app.models.user import KycStatus, PublicAccountType, UserRole
 from app.policies.schemas import UserComplianceStatus
 from app.schemas.club_identity_core import ClubProfileCore
 from app.users.schemas import UserPublic
@@ -88,6 +89,166 @@ class RegisterRequest(BaseModel):
         candidate = value.strip().upper()
         if not candidate:
             return None
+        return candidate
+
+
+class ComplianceSubmissionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    government_id_attachment_id: str = Field(min_length=1, max_length=255)
+    selfie_attachment_id: str = Field(min_length=1, max_length=255)
+    country_confirmation: str = Field(min_length=2, max_length=120)
+    proof_of_address_attachment_id: str | None = Field(default=None, max_length=255)
+
+    @field_validator(
+        "government_id_attachment_id",
+        "selfie_attachment_id",
+        "country_confirmation",
+        "proof_of_address_attachment_id",
+    )
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+
+class UserClubSignupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(min_length=2, max_length=160)
+    username: str = Field(min_length=3, max_length=64)
+    email: str = Field(min_length=5, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+    country: str = Field(min_length=2, max_length=120)
+    state: str | None = Field(default=None, max_length=120)
+    city: str | None = Field(default=None, max_length=120)
+    club_name: str = Field(min_length=2, max_length=120)
+    club_short_tag: str = Field(min_length=2, max_length=40)
+    club_country: str = Field(min_length=2, max_length=120)
+    club_state: str | None = Field(default=None, max_length=120)
+    club_locality: str | None = Field(default=None, max_length=120)
+    club_type: ClubType
+    crest_asset_ref: str | None = Field(default=None, max_length=255)
+    primary_color: str = Field(default="#0F766E", max_length=16)
+    secondary_color: str = Field(default="#F8FAFC", max_length=16)
+    football_identity: str = Field(default="club_owner", max_length=32)
+    position: str | None = Field(default=None, max_length=40)
+    dominant_foot: str | None = Field(default=None, max_length=16)
+    height_cm: int | None = Field(default=None, ge=120, le=230)
+    jersey_number: int | None = Field(default=None, ge=1, le=99)
+    preferred_role: str | None = Field(default=None, max_length=80)
+    compliance: ComplianceSubmissionRequest
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return RegisterRequest.validate_email(value)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        resolved = RegisterRequest.normalize_username(value)
+        if resolved is None:
+            raise ValueError("Username is required.")
+        return resolved
+
+    @field_validator(
+        "full_name",
+        "country",
+        "state",
+        "city",
+        "club_name",
+        "club_short_tag",
+        "club_country",
+        "club_state",
+        "club_locality",
+        "crest_asset_ref",
+        "primary_color",
+        "secondary_color",
+        "football_identity",
+        "position",
+        "dominant_foot",
+        "preferred_role",
+    )
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @model_validator(mode="after")
+    def validate_player_fields(self) -> "UserClubSignupRequest":
+        identity = self.football_identity.strip().lower().replace(" ", "_")
+        if identity not in {"club_owner", "player", "both"}:
+            raise ValueError("football_identity must be club_owner, player, or both.")
+        self.football_identity = identity
+        if identity in {"player", "both"} and not self.position:
+            raise ValueError("position is required when football_identity includes player.")
+        return self
+
+
+class CreatorSignupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    creator_name: str = Field(min_length=2, max_length=120)
+    username: str = Field(min_length=3, max_length=64)
+    email: str = Field(min_length=5, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+    country: str = Field(min_length=2, max_length=120)
+    category: str = Field(min_length=2, max_length=80)
+    main_club_supported: str | None = Field(default=None, max_length=120)
+    primary_language: str = Field(min_length=2, max_length=80)
+    avatar_asset_ref: str | None = Field(default=None, max_length=255)
+    banner_asset_ref: str | None = Field(default=None, max_length=255)
+    monetization: list[str] = Field(default_factory=list, max_length=4)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return RegisterRequest.validate_email(value)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        resolved = RegisterRequest.normalize_username(value)
+        if resolved is None:
+            raise ValueError("Username is required.")
+        return resolved
+
+
+class TraderSignupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(min_length=2, max_length=160)
+    trading_alias: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+    phone_number: str = Field(min_length=6, max_length=32)
+    country: str = Field(min_length=2, max_length=120)
+    preferred_currency: str = Field(min_length=2, max_length=12)
+    trading_experience: str = Field(min_length=2, max_length=32)
+    interests: list[str] = Field(default_factory=list, max_length=4)
+    wallet_label: str = Field(default="GTEX Trading Wallet", max_length=120)
+    totp_secret: str = Field(min_length=16, max_length=128)
+    recovery_phrase_hash: str = Field(min_length=16, max_length=255)
+    security_pin_hash: str = Field(min_length=16, max_length=255)
+    totp_code: str = Field(min_length=6, max_length=12)
+    compliance: ComplianceSubmissionRequest
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return RegisterRequest.validate_email(value)
+
+    @field_validator("trading_experience")
+    @classmethod
+    def validate_experience(cls, value: str) -> str:
+        candidate = value.strip().lower()
+        if candidate not in {"beginner", "intermediate", "professional"}:
+            raise ValueError("trading_experience must be beginner, intermediate, or professional.")
         return candidate
 
 
@@ -208,6 +369,7 @@ class CurrentUserResponse(BaseModel):
     region_code: str | None = None
     preferred_position: str | None
     role: UserRole
+    account_type: PublicAccountType = PublicAccountType.USER
     kyc_status: KycStatus
     is_active: bool
     created_at: datetime
@@ -221,7 +383,7 @@ class CurrentUserResponse(BaseModel):
 
 class SessionBootstrapResponse(BaseModel):
     user: CurrentUserResponse
-    club: ClubProfileCore
+    club: ClubProfileCore | None = None
     wallet: WalletAdaptiveOverviewView
     compliance: UserComplianceStatus
     permissions: list[str] = Field(default_factory=list)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/app_feedback.dart';
+import '../../../core/widgets/player_card.dart';
 import '../../../data/gte_api_repository.dart';
 import '../../../services/avatar_mapper.dart';
 import '../../../widgets/gte_formatters.dart';
@@ -192,6 +193,11 @@ class _PlayerCardMarketplaceScreenState
                       ),
                     ],
                     actions: <Widget>[
+                      OutlinedButton.icon(
+                        onPressed: _reload,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Refresh desk'),
+                      ),
                       if (!_hasAuth && widget.onOpenLogin != null)
                         FilledButton.icon(
                           onPressed: widget.onOpenLogin,
@@ -421,6 +427,8 @@ class _PlayerCardMarketplaceScreenState
                         ? '${player.cardSupplyTotal} cards'
                         : 'Tradable player',
                 position: player.position,
+                rating: player.globalScoutingIndex,
+                scoutingBandLabel: player.gsiBand,
                 clubName: player.currentClubName,
                 nationalityCode: player.nationalityCode,
                 valueLabel:
@@ -521,6 +529,8 @@ class _PlayerCardMarketplaceScreenState
                 imageUrl: listing.imageUrl,
                 tierLabel: listing.tierName,
                 position: listing.tierCode,
+                rating: listing.globalScoutingIndex,
+                scoutingBandLabel: listing.gsiBand,
                 valueLabel: gteFormatCredits(listing.pricePerCardCredits),
                 attributes: <String>[
                   '${listing.quantity} listed',
@@ -1189,80 +1199,45 @@ class _MarketplaceListingTile extends StatelessWidget {
             : listing.loanFeeCredits != null
             ? gteFormatCredits(listing.loanFeeCredits!)
             : 'Negotiated';
-    return GteSurfacePanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              PlayerCardAvatar(avatar: avatar, imageUrl: listing.imageUrl),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      listing.playerName,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${listing.tierName} | ${listing.clubName ?? 'Unknown club'} | ${listing.position ?? 'n/a'}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              GteMetricChip(
-                label: listing.listingType.toUpperCase(),
-                value: listing.status.toUpperCase(),
-                positive: listing.status.toLowerCase() == 'open',
-              ),
-            ],
+    final int? rating =
+        listing.globalScoutingIndex ?? listing.averageRating?.round();
+    return PlayerCard(
+      name: listing.playerName,
+      rating: rating ?? 0,
+      showRating: rating != null,
+      image: listing.imageUrl ?? '',
+      playerAvatar: avatar,
+      position: listing.position,
+      subtitle: '${listing.tierName} | ${listing.clubName ?? 'Unknown club'}',
+      avatarSize: 64,
+      layout: PlayerCardLayout.horizontal,
+      badgeLabels: <String>[
+        listing.listingType.toUpperCase(),
+        listing.status.toUpperCase(),
+        if (listing.position != null) listing.position!,
+      ],
+      metrics: <PlayerCardMetric>[
+        PlayerCardMetric(label: 'Price', value: priceLabel),
+        if (listing.globalScoutingIndex != null)
+          PlayerCardMetric(
+            label: 'GSI',
+            value: listing.gsiBand ?? listing.globalScoutingIndex.toString(),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              GteMetricChip(label: 'Price', value: priceLabel),
-              if (listing.availableQuantity != null)
-                GteMetricChip(
-                  label: 'Available',
-                  value: listing.availableQuantity.toString(),
-                ),
-              if (listing.averageRating != null)
-                GteMetricChip(
-                  label: 'Rating',
-                  value: listing.averageRating!.round().toString(),
-                ),
-              if (listing.position != null)
-                GteMetricChip(label: 'Position', value: listing.position!),
-              if (listing.loanDurationDays != null)
-                GteMetricChip(
-                  label: 'Duration',
-                  value: '${listing.loanDurationDays}d',
-                ),
-            ],
+        if (listing.availableQuantity != null)
+          PlayerCardMetric(
+            label: 'Available',
+            value: listing.availableQuantity.toString(),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              FilledButton.tonal(
-                onPressed: onPrimary,
-                child: Text(primaryLabel),
-              ),
-              OutlinedButton(
-                onPressed: onSecondary,
-                child: Text(secondaryLabel),
-              ),
-            ],
+        if (listing.loanDurationDays != null)
+          PlayerCardMetric(
+            label: 'Duration',
+            value: '${listing.loanDurationDays}d',
           ),
-        ],
-      ),
+      ],
+      actions: <Widget>[
+        FilledButton.tonal(onPressed: onPrimary, child: Text(primaryLabel)),
+        OutlinedButton(onPressed: onSecondary, child: Text(secondaryLabel)),
+      ],
     );
   }
 }
@@ -1281,54 +1256,39 @@ class _HoldingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final avatar = AvatarMapper.fromHolding(holding);
-    return GteSurfacePanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              PlayerCardAvatar(
-                avatar: avatar,
-                size: 52,
-                imageUrl: holding.imageUrl,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      holding.playerName,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${holding.tierName} | ${holding.quantityAvailable}/${holding.quantityTotal} available',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    return PlayerCard(
+      name: holding.playerName,
+      rating: holding.globalScoutingIndex ?? 0,
+      showRating: holding.globalScoutingIndex != null,
+      image: holding.imageUrl ?? '',
+      playerAvatar: avatar,
+      subtitle:
+          '${holding.tierName} | ${holding.quantityAvailable}/${holding.quantityTotal} available',
+      avatarSize: 56,
+      layout: PlayerCardLayout.horizontal,
+      badgeLabels: <String>[holding.tierName, holding.editionCode],
+      metrics: <PlayerCardMetric>[
+        if (holding.globalScoutingIndex != null)
+          PlayerCardMetric(
+            label: 'GSI',
+            value: holding.gsiBand ?? holding.globalScoutingIndex.toString(),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              FilledButton.tonal(
-                onPressed: onSale,
-                child: const Text('List for Transfer'),
-              ),
-              OutlinedButton(
-                onPressed: onLoan,
-                child: const Text('List for Loan'),
-              ),
-            ],
-          ),
-        ],
-      ),
+        PlayerCardMetric(
+          label: 'Available',
+          value: holding.quantityAvailable.toString(),
+        ),
+        PlayerCardMetric(
+          label: 'Total',
+          value: holding.quantityTotal.toString(),
+        ),
+      ],
+      actions: <Widget>[
+        FilledButton.tonal(
+          onPressed: onSale,
+          child: const Text('List for Transfer'),
+        ),
+        OutlinedButton(onPressed: onLoan, child: const Text('List for Loan')),
+      ],
     );
   }
 }

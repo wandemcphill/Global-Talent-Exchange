@@ -15,7 +15,7 @@ void main() {
     () async {
       final _RecordingTransport
       transport = _RecordingTransport(<String, GteTransportResponse>{
-        'GET /api/v1/replays/public/featured': const GteTransportResponse(
+        'GET /api/v2/replays/public/featured': const GteTransportResponse(
           statusCode: 200,
           body: <Object?>[
             <String, Object?>{
@@ -50,7 +50,7 @@ void main() {
             },
           ],
         ),
-        'GET /api/v1/replays/me': const GteTransportResponse(
+        'GET /api/v2/replays/me': const GteTransportResponse(
           statusCode: 200,
           body: <Object?>[
             <String, Object?>{
@@ -112,8 +112,8 @@ void main() {
       expect(overview.publicFeatured, hasLength(1));
       expect(overview.myReplays, hasLength(1));
       expect(transport.requestLog, <String>[
-        'GET /api/v1/replays/public/featured',
-        'GET /api/v1/replays/me',
+        'GET /api/v2/replays/public/featured',
+        'GET /api/v2/replays/me',
       ]);
     },
   );
@@ -178,3 +178,4 @@ class _RecordingTransport implements GteTransport {
     );
   }
 }
+

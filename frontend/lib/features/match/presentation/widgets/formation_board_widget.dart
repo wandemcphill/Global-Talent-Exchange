@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../widgets/player_card_avatar.dart';
 import '../broadcast_package_models.dart';
 import 'match_header_widget.dart';
 
@@ -262,14 +263,10 @@ class _FormationPlayerMarker extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (player.hasPortrait) ...<Widget>[
-            ClipOval(
-              child: Image.network(
-                player.portraitUrl!,
-                width: 28,
-                height: 28,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-              ),
+            PlayerCardAvatar(
+              avatar: null,
+              imageUrl: player.portraitUrl,
+              size: 28,
             ),
             const SizedBox(height: 4),
           ],

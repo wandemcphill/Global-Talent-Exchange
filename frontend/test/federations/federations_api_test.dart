@@ -128,15 +128,15 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/federations',
-        '/api/v1/federations/rankings',
-        '/api/v1/federations/regional-tournaments',
-        '/api/v1/federations/west-africa',
-        '/api/v1/federations/west-africa/governance',
-        '/api/v1/federations/west-africa/narratives',
-        '/api/v1/federations/west-africa/memberships',
-        '/api/v1/federations/west-africa/proposals',
-        '/api/v1/federations/proposals/proposal-1/votes',
+        '/api/v2/federations',
+        '/api/v2/federations/rankings',
+        '/api/v2/federations/regional-tournaments',
+        '/api/v2/federations/west-africa',
+        '/api/v2/federations/west-africa/governance',
+        '/api/v2/federations/west-africa/narratives',
+        '/api/v2/federations/west-africa/memberships',
+        '/api/v2/federations/west-africa/proposals',
+        '/api/v2/federations/proposals/proposal-1/votes',
       ],
     );
   });
@@ -154,3 +154,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

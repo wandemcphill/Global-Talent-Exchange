@@ -747,6 +747,9 @@ class MarketPlayerListItem:
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    global_scouting_index: float | None
+    previous_global_scouting_index: float | None
+    global_scouting_index_movement_pct: float | None
     avatar: PlayerAvatarView
 
 
@@ -1165,6 +1168,9 @@ class MarketPlayerQueryService:
             trend_score=self._trend_score(record),
             market_interest_score=(record.summary.market_interest_score if record.summary is not None else None),
             average_rating=record.summary.average_rating if record.summary is not None else None,
+            global_scouting_index=self._global_scouting_index(record),
+            previous_global_scouting_index=self._previous_global_scouting_index(record),
+            global_scouting_index_movement_pct=self._global_scouting_index_movement_pct(record),
             avatar=self._avatar(record),
         )
 

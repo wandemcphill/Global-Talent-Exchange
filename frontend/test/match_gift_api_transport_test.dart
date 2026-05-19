@@ -41,7 +41,7 @@ void main() {
 
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
-      <String>['/api/v1/gift-engine/send'],
+      <String>['/api/v2/gift-engine/send'],
     );
   });
 }
@@ -58,3 +58,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

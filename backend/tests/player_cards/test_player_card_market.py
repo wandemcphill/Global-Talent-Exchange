@@ -49,12 +49,21 @@ def _create_user(session, *, user_id: str, email: str, username: str, role: User
     return user
 
 
-def _create_player(session, *, player_id: str, name: str) -> Player:
+def _create_player(
+    session,
+    *,
+    player_id: str,
+    name: str,
+    position: str | None = None,
+    normalized_position: str | None = None,
+) -> Player:
     player = Player(
         id=player_id,
         source_provider="test",
         provider_external_id=player_id,
         full_name=name,
+        position=position,
+        normalized_position=normalized_position,
         is_tradable=True,
     )
     session.add(player)
@@ -99,7 +108,13 @@ def _create_card(session, *, player: Player, tier: PlayerCardTier) -> PlayerCard
     return card
 
 
-def _create_summary(session, *, player: Player, value_credits: float = 20.0) -> None:
+def _create_summary(
+    session,
+    *,
+    player: Player,
+    value_credits: float = 20.0,
+    summary_json: dict[str, object] | None = None,
+) -> None:
     session.add(
         PlayerSummaryReadModel(
             player_id=player.id,
@@ -111,7 +126,7 @@ def _create_summary(session, *, player: Player, value_credits: float = 20.0) -> 
             movement_pct=0.0,
             average_rating=7.0,
             market_interest_score=0,
-            summary_json={},
+            summary_json=summary_json or {},
         )
     )
     session.flush()
@@ -218,6 +233,34 @@ def test_watchlist_add_remove(session):
     assert service.list_watchlist(actor=user) == []
 
 
+def test_player_payloads_expose_dynamic_gsi(session):
+    player = _create_player(
+        session,
+        player_id="player-gsi",
+        name="GSI Striker",
+        position="Striker",
+        normalized_position="ST",
+    )
+    player.dna_profile = {
+        "finishing": 92,
+        "shooting": 88,
+        "movement": 90,
+        "pace": 86,
+        "composure": 91,
+        "physical": 78,
+        "mentality": 84,
+    }
+    _create_summary(session, player=player, summary_json={"global_scouting_index": 75})
+
+    service = PlayerCardMarketService(session=session)
+    summary = service.list_players()[0]
+    detail = service.get_player_detail(player_id=player.id)
+
+    assert summary["global_scouting_index"] == detail["global_scouting_index"]
+    assert summary["global_scouting_index"] not in {65, 75, 85}
+    assert summary["gsi_band"] in {"Elite", "World Class"}
+
+
 def test_import_validation(session):
     admin = _create_user(session, user_id="admin", email="admin@example.com", username="admin", role=UserRole.ADMIN)
     service = PlayerImportService(session)
@@ -285,3 +328,22 @@ def test_inventory_and_listing_views_include_latest_value(session):
 
     assert inventory[0]["latest_value_credits"] == 33.0
     assert listings[0]["latest_value_credits"] == 33.0
+
+
+def test_player_card_player_views_emit_canonical_position_code(session):
+    player = _create_player(
+        session,
+        player_id="position-player",
+        name="Loose Forward",
+        position="FORWARD",
+        normalized_position="forward",
+    )
+    _create_summary(session, player=player, value_credits=25.0)
+
+    service = PlayerCardMarketService(session=session)
+
+    players = service.list_players()
+    detail = service.get_player_detail(player_id=player.id)
+
+    assert players[0]["position"] == "ST"
+    assert detail["position"] == "ST"

@@ -100,11 +100,11 @@ void main() {
           (GteTransportRequest request) => request.uri.path,
         ),
         <String>[
-          '/api/v1/federations',
-          '/api/v1/admin/world/cultures/lagos',
-          '/api/v1/admin/world/clubs/ibadan-lions/context',
-          '/api/v1/federations/west-africa/memberships',
-          '/api/v1/admin/world/narratives/title-race',
+          '/api/v2/federations',
+          '/api/v2/admin/world/cultures/lagos',
+          '/api/v2/admin/world/clubs/ibadan-lions/context',
+          '/api/v2/federations/west-africa/memberships',
+          '/api/v2/admin/world/narratives/title-race',
         ],
       );
     },
@@ -123,3 +123,4 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
+

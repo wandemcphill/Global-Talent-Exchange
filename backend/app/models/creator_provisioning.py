@@ -85,25 +85,25 @@ class CreatorClubProvisioning(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("creator_profiles.id", ondelete="CASCADE"),
         nullable=False,
     )
-    club_id: Mapped[str] = mapped_column(
+    club_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("club_profiles.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
-    stadium_id: Mapped[str] = mapped_column(
+    stadium_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("club_stadiums.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
-    creator_squad_id: Mapped[str] = mapped_column(
+    creator_squad_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("creator_squads.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
-    creator_regen_id: Mapped[str] = mapped_column(
+    creator_regen_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("creator_regens.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
     provision_status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", server_default="active")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

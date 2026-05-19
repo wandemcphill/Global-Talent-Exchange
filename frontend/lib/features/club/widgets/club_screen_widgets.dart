@@ -10,6 +10,7 @@ import '../../../core/widgets/gtex_surface_card.dart';
 import '../../../shared/models/club.dart';
 import '../../../shared/models/player.dart';
 import '../../../shared/widgets/metric_pill.dart';
+import '../../../widgets/player_card_avatar.dart';
 
 class ClubFormationSlot {
   const ClubFormationSlot({
@@ -675,7 +676,7 @@ class _ReserveTile extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          CircleAvatar(radius: 22, backgroundImage: AssetImage(player.image)),
+          PlayerCardAvatar(avatar: null, imageUrl: player.image, size: 44),
           const SizedBox(width: spacingMD),
           Expanded(
             child: Column(

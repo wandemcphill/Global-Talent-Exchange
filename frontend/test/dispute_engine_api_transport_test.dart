@@ -77,13 +77,13 @@ void main() {
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v1/disputes/me',
-        '/api/v1/disputes',
-        '/api/v1/disputes/case-1',
-        '/api/v1/disputes/case-1/messages',
-        '/api/v1/admin/disputes',
-        '/api/v1/admin/disputes/case-1/assign',
-        '/api/v1/admin/disputes/case-1/status',
+        '/api/v2/disputes/me',
+        '/api/v2/disputes',
+        '/api/v2/disputes/case-1',
+        '/api/v2/disputes/case-1/messages',
+        '/api/v2/admin/disputes',
+        '/api/v2/admin/disputes/case-1/assign',
+        '/api/v2/admin/disputes/case-1/status',
       ],
     );
   });
@@ -129,3 +129,4 @@ Map<String, Object?> _messageJson(String id, String disputeId) =>
       'attachment_id': null,
       'created_at': '2026-04-18T10:00:00Z',
     };
+

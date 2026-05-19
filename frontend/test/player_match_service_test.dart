@@ -205,7 +205,7 @@ void main() {
     );
 
     expect(transport.lastRequest, isNotNull);
-    expect(transport.lastRequest!.uri.path, '/api/v1/players/match');
+    expect(transport.lastRequest!.uri.path, '/api/v2/players/match');
 
     final Map<String, Object?> body =
         Map<String, Object?>.from(transport.lastRequest!.body! as Map);
@@ -313,3 +313,4 @@ class _RecordingMatchTransport implements GteTransport {
     );
   }
 }
+
