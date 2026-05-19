@@ -109,6 +109,25 @@ class TraderApi {
     }, fixtures.totpSetup);
   }
 
+  Future<TraderSecurityStatus> security() {
+    return client.withFallback<TraderSecurityStatus>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/api/v2/trader/security',
+      );
+      return TraderSecurityStatus.fromJson(payload);
+    }, fixtures.security);
+  }
+
+  Future<TraderSecurityStatus> verifyTotp(TraderTotpVerify request) {
+    return client.withFallback<TraderSecurityStatus>(() async {
+      final Map<String, dynamic> payload = await _postMap(
+        '/api/v2/trader/security/totp/verify',
+        request.toJson(),
+      );
+      return TraderSecurityStatus.fromJson(payload);
+    }, () => fixtures.verifyTotp(request));
+  }
+
   Future<Map<String, dynamic>> _postMap(String path, Object? body) async {
     final Object? payload = await client.post(path, body: body);
     if (payload is Map) {
@@ -475,6 +494,119 @@ class TraderTotpSetup {
   }
 }
 
+class TraderTotpVerify {
+  const TraderTotpVerify({
+    required this.secret,
+    required this.code,
+    this.recoveryPhraseHash,
+    this.securityPinHash,
+  });
+
+  final String secret;
+  final String code;
+  final String? recoveryPhraseHash;
+  final String? securityPinHash;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'secret': secret,
+    'code': code,
+    if (recoveryPhraseHash != null) 'recovery_phrase_hash': recoveryPhraseHash,
+    if (securityPinHash != null) 'security_pin_hash': securityPinHash,
+  };
+}
+
+class TraderSecurityStatus {
+  const TraderSecurityStatus({
+    required this.totpEnabled,
+    required this.backupCodeCount,
+    required this.recentEvents,
+    this.lastVerifiedAt,
+  });
+
+  final bool totpEnabled;
+  final int backupCodeCount;
+  final List<TraderSecurityEvent> recentEvents;
+  final DateTime? lastVerifiedAt;
+
+  factory TraderSecurityStatus.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'trader security status',
+    );
+    return TraderSecurityStatus(
+      totpEnabled: GteJson.boolean(json, <String>[
+        'totp_enabled',
+        'totpEnabled',
+        'two_factor_enabled',
+        'twoFactorEnabled',
+      ]),
+      backupCodeCount: GteJson.integer(json, <String>[
+        'backup_code_count',
+        'backupCodeCount',
+        'recovery_code_count',
+        'recoveryCodeCount',
+      ]),
+      recentEvents: GteJson.typedList<TraderSecurityEvent>(json, <String>[
+        'recent_events',
+        'recentEvents',
+        'events',
+      ], TraderSecurityEvent.fromJson),
+      lastVerifiedAt: GteJson.dateTimeOrNull(json, <String>[
+        'last_verified_at',
+        'lastVerifiedAt',
+      ]),
+    );
+  }
+}
+
+class TraderSecurityEvent {
+  const TraderSecurityEvent({
+    required this.type,
+    required this.summary,
+    required this.createdAt,
+    this.ipAddress,
+    this.deviceLabel,
+  });
+
+  final String type;
+  final String summary;
+  final DateTime createdAt;
+  final String? ipAddress;
+  final String? deviceLabel;
+
+  factory TraderSecurityEvent.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'trader security event',
+    );
+    final String type = GteJson.string(json, <String>[
+      'type',
+      'event_type',
+      'eventType',
+    ], fallback: 'security_event');
+    return TraderSecurityEvent(
+      type: type,
+      summary: GteJson.string(json, <String>[
+        'summary',
+        'message',
+        'label',
+      ], fallback: _securityEventLabel(type)),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      ipAddress: GteJson.stringOrNull(json, <String>[
+        'ip_address',
+        'ipAddress',
+      ]),
+      deviceLabel: GteJson.stringOrNull(json, <String>[
+        'device_label',
+        'deviceLabel',
+        'device',
+      ]),
+    );
+  }
+}
+
 List<TraderMarket> _marketList(Map<String, Object?> json, List<String> keys) {
   return GteJson.typedList<TraderMarket>(json, keys, TraderMarket.fromJson);
 }
@@ -622,5 +754,47 @@ class _TraderFixtures {
       issuer: 'GTEX',
       accountLabel: 'Atlas Desk',
     );
+  }
+
+  Future<TraderSecurityStatus> security() async {
+    return TraderSecurityStatus(
+      totpEnabled: true,
+      backupCodeCount: 8,
+      lastVerifiedAt: DateTime.parse('2026-05-18T11:48:00Z'),
+      recentEvents: <TraderSecurityEvent>[
+        TraderSecurityEvent(
+          type: 'totp_verified',
+          summary: 'Authenticator confirmed',
+          createdAt: DateTime.parse('2026-05-18T11:48:00Z'),
+          ipAddress: '127.0.0.1',
+          deviceLabel: 'Fixture device',
+        ),
+        TraderSecurityEvent(
+          type: 'session_created',
+          summary: 'Trader session opened',
+          createdAt: DateTime.parse('2026-05-18T10:15:00Z'),
+          deviceLabel: 'Fixture browser',
+        ),
+      ],
+    );
+  }
+
+  Future<TraderSecurityStatus> verifyTotp(TraderTotpVerify request) async {
+    return security();
+  }
+}
+
+String _securityEventLabel(String type) {
+  switch (type) {
+    case 'totp_verified':
+      return 'Authenticator confirmed';
+    case 'totp_enabled':
+      return '2FA enabled';
+    case 'backup_codes_rotated':
+      return 'Backup codes rotated';
+    case 'session_created':
+      return 'Trader session opened';
+    default:
+      return 'Security event';
   }
 }

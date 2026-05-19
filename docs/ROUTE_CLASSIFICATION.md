@@ -209,7 +209,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/clubs/admin/club-lifecycle`: `/api/clubs/admin/club-lifecycle` in `backend/app/club_lifecycle/router.py` (list_admin_club_lifecycle) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/clubs/catalog`: `/api/clubs/catalog` in `backend/app/segments/clubs/segment_clubs.py` (get_catalog) - Highest-ranked non-v1 route for this signature.
 - `GET /api/clubs/sale-market/listings`: `/api/clubs/sale-market/listings` in `backend/app/club_sale_market/router.py` (list_public_club_sale_market_listings) - Highest-ranked non-v1 route for this signature.
-- ... and 1682 more
+- ... and 1684 more
 
 ## MIGRATE_TO
 

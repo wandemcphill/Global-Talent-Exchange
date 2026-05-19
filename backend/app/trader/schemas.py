@@ -115,8 +115,24 @@ class TotpSetupView(BaseModel):
 class TotpVerifyRequest(BaseModel):
     secret: str = Field(min_length=16, max_length=128)
     code: str = Field(min_length=6, max_length=12)
+    recovery_phrase_hash: str = Field(min_length=16, max_length=255)
+    security_pin_hash: str = Field(min_length=16, max_length=255)
+
+
+class TraderSecurityEventView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_type: str
+    metadata_json: dict[str, object]
+    created_at: datetime
 
 
 class TraderSecurityView(BaseModel):
     two_factor_enabled: bool
+    backup_code_count: int
+    recent_events: list[TraderSecurityEventView] = Field(default_factory=list)
+
+
+class TotpVerifyView(TraderSecurityView):
     backup_codes: list[str] = Field(default_factory=list)

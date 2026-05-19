@@ -176,7 +176,9 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/trader_api.dart -> /api/v2/trader/orders`
 - `frontend/lib/data/trader_api.dart -> /api/v2/trader/overview`
 - `frontend/lib/data/trader_api.dart -> /api/v2/trader/p2p`
+- `frontend/lib/data/trader_api.dart -> /api/v2/trader/security`
 - `frontend/lib/data/trader_api.dart -> /api/v2/trader/security/totp/setup`
+- `frontend/lib/data/trader_api.dart -> /api/v2/trader/security/totp/verify`
 - `frontend/lib/data/trader_api.dart -> /api/v2/trader/watchlist`
 - `frontend/lib/data/trader_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/awards/gtex_awards_screen_v2.dart -> /api/awards/categories`

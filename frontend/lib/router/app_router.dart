@@ -97,7 +97,7 @@ GoRouter buildGtexAppRouter({
                 gtexAccountSelectRoute,
       ),
       GoRoute(
-        path: '/auth/signup/user',
+        path: gtexUserSignupRoute,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -109,7 +109,7 @@ GoRouter buildGtexAppRouter({
                 ),
       ),
       GoRoute(
-        path: '/auth/signup/creator',
+        path: gtexCreatorSignupRoute,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -121,7 +121,7 @@ GoRouter buildGtexAppRouter({
                 ),
       ),
       GoRoute(
-        path: '/auth/signup/trader',
+        path: gtexTraderSignupRoute,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(

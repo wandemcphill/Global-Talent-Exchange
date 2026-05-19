@@ -96,11 +96,13 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
     app, _client = contract_app
     openapi = app.openapi()
 
+    assert "/auth/register" not in openapi["paths"]
+    assert "/api/auth/register" not in openapi["paths"]
+    assert "/api/v2/auth/register" not in openapi["paths"]
     assert "/api/v2/orders" in openapi["paths"]
     assert "/api/v2/auth/signup/user" in openapi["paths"]
     assert "/api/v2/auth/signup/creator" in openapi["paths"]
     assert "/api/v2/auth/signup/trader" in openapi["paths"]
-    assert "/api/v2/auth/register" not in openapi["paths"]
     assert "/api/v2/trader/overview" in openapi["paths"]
     assert "/api/v2/trader/markets" in openapi["paths"]
     assert "/api/v2/trader/orders" in openapi["paths"]
@@ -129,11 +131,17 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
     request_schema = place_order["requestBody"]["content"]["application/json"]["schema"]
     assert "$ref" in request_schema
 
+    public_account_type = openapi["components"]["schemas"]["PublicAccountType"]
+    assert public_account_type["enum"] == ["user", "creator", "coin_trader"]
+    assert "admin" not in public_account_type["enum"]
+    assert "super_admin" not in public_account_type["enum"]
 
-def test_old_public_register_is_removed_from_contract_and_returns_gone(contract_app) -> None:
+
+@pytest.mark.parametrize("path", ["/auth/register", "/api/auth/register", "/api/v2/auth/register"])
+def test_old_public_register_is_removed_from_contract_and_returns_gone(contract_app, path: str) -> None:
     _app, client = contract_app
     response = client.post(
-        "/auth/register",
+        path,
         json={
             "email": "contract-user@example.com",
             "full_name": "Contract User",

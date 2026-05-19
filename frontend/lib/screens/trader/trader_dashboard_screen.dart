@@ -115,6 +115,7 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
   String _selectedTimeframe = '1D';
   String _tradeTab = 'Buy';
   late Future<TraderOverview> _overviewFuture;
+  late Future<TraderSecurityStatus> _securityFuture;
 
   static const List<String> _sections = <String>[
     'Markets',
@@ -133,6 +134,7 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
   void initState() {
     super.initState();
     _overviewFuture = widget.api.overview();
+    _securityFuture = widget.api.security();
   }
 
   @override
@@ -140,14 +142,17 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.accessToken != widget.accessToken) {
       _overviewFuture = widget.api.overview();
+      _securityFuture = widget.api.security();
     }
   }
 
   Future<void> _refreshOverview() async {
     final Future<TraderOverview> nextOverview = widget.api.overview();
+    final Future<TraderSecurityStatus> nextSecurity = widget.api.security();
     setState(() => _overviewFuture = nextOverview);
+    setState(() => _securityFuture = nextSecurity);
     try {
-      await nextOverview;
+      await Future.wait<Object>(<Future<Object>>[nextOverview, nextSecurity]);
     } catch (_) {
       // FutureBuilder renders the actionable error panel.
     }
@@ -182,7 +187,11 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
                       42,
                     ),
                     children: <Widget>[
-                      _TraderHeader(selectedSection: _selectedSection),
+                      _TraderHeader(
+                        selectedSection: _selectedSection,
+                        onSecurityPressed:
+                            () => setState(() => _selectedSection = 'Security'),
+                      ),
                       if (!wide) ...<Widget>[
                         const SizedBox(height: 14),
                         _TraderSectionBar(
@@ -218,6 +227,13 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
                           }
                           return _TraderOverviewBody(
                             overview: overview,
+                            selectedSection: _selectedSection,
+                            securityFuture: _securityFuture,
+                            onSecurityRetry: () {
+                              setState(
+                                () => _securityFuture = widget.api.security(),
+                              );
+                            },
                             selectedTimeframe: _selectedTimeframe,
                             onTimeframeChanged:
                                 (String value) =>
@@ -244,6 +260,9 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
 class _TraderOverviewBody extends StatelessWidget {
   const _TraderOverviewBody({
     required this.overview,
+    required this.selectedSection,
+    required this.securityFuture,
+    required this.onSecurityRetry,
     required this.selectedTimeframe,
     required this.onTimeframeChanged,
     required this.tradeTab,
@@ -251,6 +270,9 @@ class _TraderOverviewBody extends StatelessWidget {
   });
 
   final TraderOverview overview;
+  final String selectedSection;
+  final Future<TraderSecurityStatus> securityFuture;
+  final VoidCallback onSecurityRetry;
   final String selectedTimeframe;
   final ValueChanged<String> onTimeframeChanged;
   final String tradeTab;
@@ -260,6 +282,33 @@ class _TraderOverviewBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final TraderMarket? primaryMarket =
         overview.trending.isEmpty ? null : overview.trending.first;
+    if (selectedSection == 'Security') {
+      return FutureBuilder<TraderSecurityStatus>(
+        future: securityFuture,
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<TraderSecurityStatus> snapshot,
+        ) {
+          if (snapshot.hasError && !snapshot.hasData) {
+            return GteStatePanel(
+              eyebrow: 'TRADER SECURITY',
+              title: 'Security center unavailable',
+              message:
+                  'The trader security endpoint could not load. Check the session or backend route registration.',
+              icon: Icons.security_outlined,
+              accentColor: const Color(0xFFFFD66B),
+              actionLabel: 'Retry',
+              onAction: onSecurityRetry,
+            );
+          }
+          final TraderSecurityStatus? security = snapshot.data;
+          if (security == null) {
+            return const _TraderLoadingPanel();
+          }
+          return _SecurityPanel(security: security);
+        },
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -358,11 +407,15 @@ class _TraderSidebar extends StatelessWidget {
             children: <Widget>[
               const Icon(Icons.candlestick_chart_outlined),
               const SizedBox(width: 10),
-              Text(
-                'GTEX Trader',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              Expanded(
+                child: Text(
+                  'GTEX Trader',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
             ],
           ),
@@ -474,9 +527,13 @@ class _TraderSectionBar extends StatelessWidget {
 }
 
 class _TraderHeader extends StatelessWidget {
-  const _TraderHeader({required this.selectedSection});
+  const _TraderHeader({
+    required this.selectedSection,
+    required this.onSecurityPressed,
+  });
 
   final String selectedSection;
+  final VoidCallback onSecurityPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -501,7 +558,7 @@ class _TraderHeader extends StatelessWidget {
           ),
         ),
         FilledButton.icon(
-          onPressed: () {},
+          onPressed: onSecurityPressed,
           icon: const Icon(Icons.lock_outline),
           label: const Text('Security'),
         ),
@@ -564,7 +621,7 @@ class _MetricPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = GteShellTheme.tokensOf(context);
     return Container(
-      height: 96,
+      height: 124,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: tokens.panelElevated.withValues(alpha: 0.84),
@@ -668,7 +725,7 @@ class _MarketBucketPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = GteShellTheme.tokensOf(context);
     return Container(
-      height: 118,
+      height: 136,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
@@ -939,6 +996,224 @@ class _BookPanel extends StatelessWidget {
   }
 }
 
+class _SecurityPanel extends StatelessWidget {
+  const _SecurityPanel({required this.security});
+
+  final TraderSecurityStatus security;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool split = constraints.maxWidth >= 900;
+        final Widget status = Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: tokens.panel.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: tokens.stroke.withValues(alpha: 0.55)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(
+                    security.totpEnabled
+                        ? Icons.verified_user_outlined
+                        : Icons.gpp_maybe_outlined,
+                    color:
+                        security.totpEnabled
+                            ? const Color(0xFF5FE3A1)
+                            : const Color(0xFFFFD66B),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Trader security',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: <Widget>[
+                  _SecurityMetric(
+                    label: '2FA',
+                    value: security.totpEnabled ? 'Enabled' : 'Disabled',
+                    detail:
+                        security.totpEnabled
+                            ? 'Authenticator required'
+                            : 'Setup required',
+                  ),
+                  _SecurityMetric(
+                    label: 'Backup Codes',
+                    value: security.backupCodeCount.toString(),
+                    detail:
+                        security.backupCodeCount > 0
+                            ? 'available'
+                            : 'rotate after setup',
+                  ),
+                  _SecurityMetric(
+                    label: 'Recent Events',
+                    value: security.recentEvents.length.toString(),
+                    detail: 'audit trail',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _BookPanel(
+                title: 'Trade gate',
+                rows: <String>[
+                  security.totpEnabled
+                      ? '2FA enabled for orders and withdrawals'
+                      : 'Enable 2FA before high-risk actions',
+                  '${security.backupCodeCount} backup codes remaining',
+                  'Secrets stay inside setup and verification only',
+                ],
+              ),
+            ],
+          ),
+        );
+        final Widget events = _SecurityEventsPanel(
+          events: security.recentEvents,
+        );
+        if (!split) {
+          return Column(
+            children: <Widget>[status, const SizedBox(height: 18), events],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(child: status),
+            const SizedBox(width: 18),
+            Expanded(child: events),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SecurityMetric extends StatelessWidget {
+  const _SecurityMetric({
+    required this.label,
+    required this.value,
+    required this.detail,
+  });
+
+  final String label;
+  final String value;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 154,
+      child: _MetricPanel(metric: _Metric(label, value, detail)),
+    );
+  }
+}
+
+class _SecurityEventsPanel extends StatelessWidget {
+  const _SecurityEventsPanel({required this.events});
+
+  final List<TraderSecurityEvent> events;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: tokens.panel.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.stroke.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Recent security events',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
+          if (events.isEmpty)
+            const _BookPanel(
+              title: 'Audit trail',
+              rows: <String>['No recent trader security events'],
+            )
+          else
+            for (final TraderSecurityEvent event in events.take(4)) ...<Widget>[
+              _SecurityEventRow(event: event),
+              const SizedBox(height: 10),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SecurityEventRow extends StatelessWidget {
+  const _SecurityEventRow({required this.event});
+
+  final TraderSecurityEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final String detail = <String>[
+      _shortDate(event.createdAt),
+      if (event.deviceLabel != null) event.deviceLabel!,
+      if (event.ipAddress != null) event.ipAddress!,
+    ].join(' | ');
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: tokens.panelElevated.withValues(alpha: 0.74),
+        border: Border.all(color: tokens.stroke.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.shield_outlined, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  event.summary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CandlestickPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -1032,6 +1307,13 @@ String _signedAmount(double value) {
 String _signedPercent(double value) {
   final String sign = value >= 0 ? '+' : '';
   return '$sign${value.toStringAsFixed(1)}%';
+}
+
+String _shortDate(DateTime value) {
+  final DateTime local = value.toLocal();
+  String twoDigits(int number) => number.toString().padLeft(2, '0');
+  return '${twoDigits(local.month)}/${twoDigits(local.day)} '
+      '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
 }
 
 String _symbols(List<TraderMarket> markets) {

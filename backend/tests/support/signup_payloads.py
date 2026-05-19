@@ -55,3 +55,38 @@ def creator_signup_payload(
         "primary_language": "English",
         "monetization": ["donations", "fan_coin_revenue"],
     }
+
+
+def trader_signup_payload(
+    *,
+    email: str,
+    trading_alias: str,
+    full_name: str = "Trader User",
+    password: str = TEST_PASSWORD,
+    country: str = "NG",
+    totp_secret: str = "JBSWY3DPEHPK3PXP",
+    totp_code: str,
+) -> dict[str, object]:
+    trader_token = trading_alias.replace("_", "-")[:32] or "trader"
+    return {
+        "full_name": full_name,
+        "trading_alias": trading_alias,
+        "email": email,
+        "password": password,
+        "phone_number": "08000000000",
+        "country": country,
+        "preferred_currency": "coin",
+        "trading_experience": "intermediate",
+        "interests": ["p2p", "escrow"],
+        "wallet_label": "GTEX Trading Wallet",
+        "totp_secret": totp_secret,
+        "recovery_phrase_hash": f"recovery-hash-{trader_token}",
+        "security_pin_hash": f"security-pin-hash-{trader_token}",
+        "totp_code": totp_code,
+        "compliance": {
+            "government_id_attachment_id": f"gov-{trader_token}",
+            "selfie_attachment_id": f"selfie-{trader_token}",
+            "proof_of_address_attachment_id": f"address-{trader_token}",
+            "country_confirmation": country,
+        },
+    }

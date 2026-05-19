@@ -10228,10 +10228,22 @@
         "response_model": "TraderP2POfferView"
       },
       {
+        "method": "GET",
+        "path": "/api/v2/trader/security",
+        "handler": "read_security",
+        "response_model": "TraderSecurityView"
+      },
+      {
         "method": "POST",
         "path": "/api/v2/trader/security/totp/setup",
         "handler": "setup_totp",
         "response_model": "TotpSetupView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/trader/security/totp/verify",
+        "handler": "verify_totp_setup",
+        "response_model": "TotpVerifyView"
       },
       {
         "method": "GET",

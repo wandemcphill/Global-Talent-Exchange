@@ -1,6 +1,6 @@
 # Mismatch Report
 
-- Total mismatches detected: **999**
+- Total mismatches detected: **1001**
 
 ## HIGH
 
@@ -408,7 +408,7 @@
 - `frontend/lib/data/governance_api.dart` POST `/api/admin/governance/proposals/$proposalId/status` -> `/api/v2/admin/governance/proposals/$proposalId/status`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
 - `frontend/lib/data/governance_api.dart` POST `/api/admin/governance/proposals/$proposalId/status` -> `/api/v2/admin/governance/proposals/$proposalId/status`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
 - `frontend/lib/data/gte_api_repository.dart` GET `/api/auth/me` -> `/api/v2/auth/me`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
-- ... and 532 more
+- ... and 534 more
 
 ## LOW
 

@@ -17305,6 +17305,17 @@
         "source_file": "backend/app/trader/router.py",
         "response_model": "TraderOverviewView"
       },
+      "get_api_v2_trader_security": {
+        "method": "GET",
+        "canonical_path": "/api/v2/trader/security",
+        "aliases": [
+          "/api/v1/v2/trader/security",
+          "/api/v2/trader/security"
+        ],
+        "handler": "read_security",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "TraderSecurityView"
+      },
       "get_api_v2_trader_watchlist": {
         "method": "GET",
         "canonical_path": "/api/v2/trader/watchlist",
@@ -17348,6 +17359,17 @@
         "handler": "setup_totp",
         "source_file": "backend/app/trader/router.py",
         "response_model": "TotpSetupView"
+      },
+      "post_api_v2_trader_security_totp_verify": {
+        "method": "POST",
+        "canonical_path": "/api/v2/trader/security/totp/verify",
+        "aliases": [
+          "/api/v1/v2/trader/security/totp/verify",
+          "/api/v2/trader/security/totp/verify"
+        ],
+        "handler": "verify_totp_setup",
+        "source_file": "backend/app/trader/router.py",
+        "response_model": "TotpVerifyView"
       },
       "post_api_v2_trader_watchlist": {
         "method": "POST",
@@ -20715,7 +20737,9 @@
     "/api/v2/trader/orders": "post_api_v2_trader_orders",
     "/api/v2/trader/overview": "get_api_v2_trader_overview",
     "/api/v2/trader/p2p": "post_api_v2_trader_p2p",
+    "/api/v2/trader/security": "get_api_v2_trader_security",
     "/api/v2/trader/security/totp/setup": "post_api_v2_trader_security_totp_setup",
+    "/api/v2/trader/security/totp/verify": "post_api_v2_trader_security_totp_verify",
     "/api/v2/trader/watchlist": "post_api_v2_trader_watchlist",
     "/api/v2/transfer-hub/listings": "post_api_v2_transfer_hub_listings",
     "/api/v2/transfer-hub/listings/{listing_id}": "get_api_v2_transfer_hub_listings_listing_id",
@@ -23670,7 +23694,9 @@
     "/api/v1/v2/trader/orders": "/api/v2/trader/orders",
     "/api/v1/v2/trader/overview": "/api/v2/trader/overview",
     "/api/v1/v2/trader/p2p": "/api/v2/trader/p2p",
+    "/api/v1/v2/trader/security": "/api/v2/trader/security",
     "/api/v1/v2/trader/security/totp/setup": "/api/v2/trader/security/totp/setup",
+    "/api/v1/v2/trader/security/totp/verify": "/api/v2/trader/security/totp/verify",
     "/api/v1/v2/trader/watchlist": "/api/v2/trader/watchlist",
     "/api/v1/v2/users/{user_id}": "/api/v2/users/{user_id}",
     "/api/v1/v2/users/{user_id}/follow": "/api/v2/users/{user_id}/follow",

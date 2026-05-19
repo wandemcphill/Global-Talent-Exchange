@@ -3690,7 +3690,31 @@
       "file": "frontend/lib/data/trader_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
+      "endpoint": "/api/v2/trader/security",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
       "endpoint": "/api/v2/trader/security/totp/setup",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/v2/trader/security/totp/verify",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -6627,19 +6651,7 @@
       ]
     },
     {
-      "file": "frontend/lib/router/app_router.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/auth/select-account",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/router/app_router.dart",
+      "file": "frontend/lib/router/gtex_auth_routes.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/auth/signup/creator",
@@ -6651,7 +6663,7 @@
       ]
     },
     {
-      "file": "frontend/lib/router/app_router.dart",
+      "file": "frontend/lib/router/gtex_auth_routes.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/auth/signup/trader",
@@ -6663,7 +6675,7 @@
       ]
     },
     {
-      "file": "frontend/lib/router/app_router.dart",
+      "file": "frontend/lib/router/gtex_auth_routes.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/auth/signup/user",
@@ -7123,18 +7135,6 @@
       "transport_call": "hardcoded_url",
       "method": "N/A",
       "endpoint": "https://wa.me/$digits?text=${Uri.encodeComponent(message)}",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/screens/trader/trader_dashboard_screen.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/auth/select-account",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [

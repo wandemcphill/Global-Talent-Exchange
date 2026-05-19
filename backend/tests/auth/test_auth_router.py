@@ -19,11 +19,12 @@ from app.auth.security import decode_access_token, decode_refresh_token
 from app.auth.schemas import LoginRequest, RegisterRequest, UserClubSignupRequest
 from app.auth.service import AuthService
 from app.main import create_app
-from app.models import Base
+from app.models import Base, ClubProfile, CreatorProfile
 from app.models.club_profile import ClubType
 from app.models.user import User, UserRole
+from app.trader.service import _totp
 from app.users.router import read_current_user
-from backend.tests.support.signup_payloads import user_signup_payload
+from backend.tests.support.signup_payloads import creator_signup_payload, trader_signup_payload, user_signup_payload
 
 TEST_PASSWORD = "SuperSecret1"  # pragma: allowlist secret
 WRONG_PASSWORD = "WrongPassword1"  # pragma: allowlist secret
@@ -148,6 +149,10 @@ def _signup_user_direct(
     )
 
 
+def _current_totp(secret: str) -> str:
+    return _totp(secret, int(time.time()) // 30)
+
+
 def test_register_login_and_me_flow(session) -> None:
     register_response = _signup_user_direct(
         session,
@@ -220,18 +225,19 @@ def test_login_with_invalid_credentials_returns_unauthorized(session) -> None:
 def test_public_register_route_is_gone(app_client) -> None:
     _app, client = app_client
 
-    register_response = client.post(
-        "/auth/register",
-        json={
-            "email": "noregion@example.com",
-            "full_name": "No Region",
-            "phone_number": "08000000000",
-            "password": TEST_PASSWORD,
-            "is_over_18": True,
-        },
-    )
+    for path in ("/auth/register", "/api/auth/register", "/api/v2/auth/register"):
+        register_response = client.post(
+            path,
+            json={
+                "email": "noregion@example.com",
+                "full_name": "No Region",
+                "phone_number": "08000000000",
+                "password": TEST_PASSWORD,
+                "is_over_18": True,
+            },
+        )
 
-    assert register_response.status_code == 410, register_response.text
+        assert register_response.status_code == 410, register_response.text
 
 
 def test_api_auth_me_returns_authenticated_user(app_client) -> None:
@@ -387,6 +393,93 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
         },
     )
     assert revoked_bootstrap.status_code == 401
+
+
+def test_user_creator_and_trader_signup_sessions_include_public_account_type(app_client) -> None:
+    app, client = app_client
+    trader_secret = "JBSWY3DPEHPK3PXP"
+    signups = [
+        (
+            "/auth/signup/user",
+            user_signup_payload(
+                email="account-type-user@example.com",
+                username="account_type_user",
+                full_name="Account Type User",
+                password=TEST_PASSWORD,
+            ),
+            "user",
+        ),
+        (
+            "/auth/signup/creator",
+            creator_signup_payload(
+                email="account-type-creator@example.com",
+                username="account_type_creator",
+                creator_name="Account Type Creator",
+                password=TEST_PASSWORD,
+            ),
+            "creator",
+        ),
+        (
+            "/auth/signup/trader",
+            trader_signup_payload(
+                email="account-type-trader@example.com",
+                trading_alias="account_type_trader",
+                full_name="Account Type Trader",
+                password=TEST_PASSWORD,
+                totp_secret=trader_secret,
+                totp_code=_current_totp(trader_secret),
+            ),
+            "coin_trader",
+        ),
+    ]
+
+    for path, payload, expected_account_type in signups:
+        response = client.post(path, json=payload)
+        assert response.status_code == 201, response.text
+        issued = response.json()
+        assert issued["user"]["account_type"] == expected_account_type
+        assert decode_access_token(issued["access_token"])["account_type"] == expected_account_type
+
+    with app.state.session_factory() as session:
+        creator = session.scalar(select(User).where(User.email == "account-type-creator@example.com"))
+        assert creator is not None
+        assert session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == creator.id)) is not None
+        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == creator.id)) is None
+
+
+def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
+    _app, client = app_client
+    payload = user_signup_payload(
+        email="external-admin@example.com",
+        username="external_admin",
+        full_name="External Admin",
+        password=TEST_PASSWORD,
+    )
+    payload["account_type"] = "admin"
+
+    response = client.post("/auth/signup/user", json=payload)
+
+    assert response.status_code == 422, response.text
+    assert "account_type" in response.text
+
+
+def test_trader_signup_requires_proof_of_address(app_client) -> None:
+    _app, client = app_client
+    secret = "JBSWY3DPEHPK3PXP"
+    payload = trader_signup_payload(
+        email="missing-address-trader@example.com",
+        trading_alias="missing_address_trader",
+        full_name="Missing Address Trader",
+        password=TEST_PASSWORD,
+        totp_secret=secret,
+        totp_code=_current_totp(secret),
+    )
+    payload["compliance"].pop("proof_of_address_attachment_id")
+
+    response = client.post("/auth/signup/trader", json=payload)
+
+    assert response.status_code == 422, response.text
+    assert "proof_of_address_attachment_id" in response.text
 
 
 def test_legacy_register_function_returns_gone(session) -> None:

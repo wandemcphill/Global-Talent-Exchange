@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1618,
+  "route_count": 1620,
   "routes": [
     {
       "method": "POST",
@@ -39672,6 +39672,32 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/trader/security",
+      "effective_paths": [
+        "/api/v2/trader/security"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "read_security",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderSecurityView",
+        "returns": "TraderSecurityView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/trader/watchlist",
       "effective_paths": [
         "/api/v2/trader/watchlist"
@@ -39772,6 +39798,33 @@
       "response_shape": {
         "response_model": "TotpSetupView",
         "returns": "TotpSetupView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/trader/security/totp/verify",
+      "effective_paths": [
+        "/api/v2/trader/security/totp/verify"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "verify_totp_setup",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TotpVerifyView",
+        "returns": "TotpVerifyView"
       },
       "version": "canonical",
       "domain": "trader"

@@ -42,7 +42,65 @@ void main() {
       ),
     );
 
-    expect(find.text('Coin trading is a separate account lane'), findsOneWidget);
+    expect(
+      find.text('Coin trading is a separate account lane'),
+      findsOneWidget,
+    );
     expect(find.text('Trader command center'), findsNothing);
+  });
+
+  testWidgets('coin trader can view security-gated dashboard state', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+    controller.syncSession(
+      GteAuthSession.fromJson(<String, Object?>{
+        'access_token': 'trader-token',
+        'session_id': 'session-trader',
+        'token_type': 'bearer',
+        'expires_in': 3600,
+        'user': <String, Object?>{
+          'id': 'trader-1',
+          'email': 'trader@gtex.test',
+          'username': 'trader',
+          'role': 'user',
+          'account_type': 'coin_trader',
+        },
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TraderDashboardScreen(
+          controller: controller,
+          config: const GteAppConfig(
+            apiBaseUrl: gteFixtureApiBaseUrl,
+            backendMode: GteBackendMode.fixture,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Trader command center'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Security'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Trader security'), findsOneWidget);
+    expect(find.text('2FA'), findsOneWidget);
+    expect(find.text('Enabled'), findsOneWidget);
+    expect(find.text('Backup Codes'), findsOneWidget);
+    expect(find.text('8'), findsOneWidget);
+    expect(find.text('Recent security events'), findsOneWidget);
+    expect(find.text('Authenticator confirmed'), findsOneWidget);
+    expect(find.text('JBSWY3DPEHPK3PXP'), findsNothing);
   });
 }

@@ -56,6 +56,28 @@ void main() {
             'account_label': 'Atlas Desk',
           },
         ),
+        const GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{
+            'totp_enabled': false,
+            'backup_code_count': 0,
+            'recent_events': <Object?>[],
+          },
+        ),
+        const GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{
+            'totp_enabled': true,
+            'backup_code_count': 10,
+            'recent_events': <Object?>[
+              <String, Object?>{
+                'type': 'totp_verified',
+                'summary': 'Authenticator confirmed',
+                'created_at': '2026-05-18T12:10:00Z',
+              },
+            ],
+          },
+        ),
       ],
     );
     final TraderApi api = TraderApi.standard(
@@ -87,12 +109,34 @@ void main() {
     await api.listWatchlist();
     await api.addWatchlist('market-lagfc');
     await api.setupTotp();
+    final TraderSecurityStatus security = await api.security();
+    final TraderSecurityStatus verified = await api.verifyTotp(
+      const TraderTotpVerify(
+        secret: 'JBSWY3DPEHPK3PXP',
+        code: '123456',
+        recoveryPhraseHash: 'recovery-hash',
+        securityPinHash: 'pin-hash',
+      ),
+    );
 
     expect(overview.profile.tradingAlias, 'Atlas Desk');
     expect(markets.single.symbol, 'GTEX');
+    expect(security.totpEnabled, isFalse);
+    expect(verified.totpEnabled, isTrue);
+    expect(verified.recentEvents.single.summary, 'Authenticator confirmed');
     expect(
       transport.requests.map((GteTransportRequest request) => request.method),
-      <String>['GET', 'GET', 'POST', 'POST', 'GET', 'POST', 'POST'],
+      <String>[
+        'GET',
+        'GET',
+        'POST',
+        'POST',
+        'GET',
+        'POST',
+        'POST',
+        'GET',
+        'POST',
+      ],
     );
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
@@ -104,6 +148,8 @@ void main() {
         '/api/v2/trader/watchlist',
         '/api/v2/trader/watchlist',
         '/api/v2/trader/security/totp/setup',
+        '/api/v2/trader/security',
+        '/api/v2/trader/security/totp/verify',
       ],
     );
     expect(
@@ -114,6 +160,12 @@ void main() {
       transport.requests[5].body,
       containsPair('market_id', 'market-lagfc'),
     );
+    expect(transport.requests[8].body, <String, Object?>{
+      'secret': 'JBSWY3DPEHPK3PXP',
+      'code': '123456',
+      'recovery_phrase_hash': 'recovery-hash',
+      'security_pin_hash': 'pin-hash',
+    });
   });
 }
 

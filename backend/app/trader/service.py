@@ -83,15 +83,29 @@ class TraderService:
         if not verify_totp(totp_secret, totp_code):
             raise TraderAccessError("Invalid authenticator code.")
         existing = self.session.scalar(select(TraderSecurity).where(TraderSecurity.user_id == user.id))
-        backup_codes = _generate_backup_codes()
         if existing is not None:
+            was_enabled = existing.two_factor_enabled
             existing.totp_secret_hash = _hash_secret(totp_secret)
-            existing.backup_codes_json = [_hash_secret(code) for code in backup_codes]
             existing.recovery_phrase_hash = recovery_phrase_hash
             existing.security_pin_hash = security_pin_hash
             existing.two_factor_enabled = True
+            if not was_enabled:
+                backup_codes = _generate_backup_codes()
+                existing.backup_codes_json = [_hash_secret(code) for code in backup_codes]
+                existing._plain_backup_codes = backup_codes  # type: ignore[attr-defined]
+            elif hasattr(existing, "_plain_backup_codes"):
+                delattr(existing, "_plain_backup_codes")
+            event_type = "totp_updated" if was_enabled else "totp_enabled"
+            self.session.add(
+                TraderSecurityEvent(
+                    user_id=user.id,
+                    event_type=event_type,
+                    metadata_json={"backup_code_count": len(existing.backup_codes_json or [])},
+                )
+            )
             self.session.flush()
             return existing
+        backup_codes = _generate_backup_codes()
         security = TraderSecurity(
             user_id=user.id,
             totp_secret_hash=_hash_secret(totp_secret),
@@ -111,6 +125,55 @@ class TraderService:
         self.session.flush()
         security._plain_backup_codes = backup_codes  # type: ignore[attr-defined]
         return security
+
+    def security_summary(self, user: User) -> dict[str, object]:
+        self.assert_trader(user)
+        security = self.session.scalar(select(TraderSecurity).where(TraderSecurity.user_id == user.id))
+        events = list(
+            self.session.scalars(
+                select(TraderSecurityEvent)
+                .where(TraderSecurityEvent.user_id == user.id)
+                .order_by(TraderSecurityEvent.created_at.desc())
+                .limit(10)
+            ).all()
+        )
+        return {
+            "two_factor_enabled": bool(security.two_factor_enabled) if security is not None else False,
+            "backup_code_count": len(security.backup_codes_json or []) if security is not None else 0,
+            "recent_events": events,
+        }
+
+    def verify_totp_setup(
+        self,
+        user: User,
+        *,
+        totp_secret: str,
+        totp_code: str,
+        recovery_phrase_hash: str,
+        security_pin_hash: str,
+    ) -> dict[str, object]:
+        self.assert_trader(user)
+        security = self.ensure_security(
+            user,
+            totp_secret=totp_secret,
+            totp_code=totp_code,
+            recovery_phrase_hash=recovery_phrase_hash,
+            security_pin_hash=security_pin_hash,
+        )
+        events = list(
+            self.session.scalars(
+                select(TraderSecurityEvent)
+                .where(TraderSecurityEvent.user_id == user.id)
+                .order_by(TraderSecurityEvent.created_at.desc())
+                .limit(10)
+            ).all()
+        )
+        return {
+            "two_factor_enabled": bool(security.two_factor_enabled),
+            "backup_code_count": len(security.backup_codes_json or []),
+            "backup_codes": list(getattr(security, "_plain_backup_codes", [])),
+            "recent_events": events,
+        }
 
     def totp_setup(self, user: User) -> dict[str, str]:
         self.assert_trader(user)

@@ -9,12 +9,15 @@ from app.models.trader import TraderMarket, TraderWatchlist
 from app.models.user import User
 from app.trader.schemas import (
     TotpSetupView,
+    TotpVerifyRequest,
+    TotpVerifyView,
     TraderMarketView,
     TraderOrderCreateRequest,
     TraderOrderView,
     TraderOverviewView,
     TraderP2POfferCreateRequest,
     TraderP2POfferView,
+    TraderSecurityView,
     TraderWatchlistCreateRequest,
     TraderWatchlistView,
 )
@@ -125,6 +128,37 @@ def setup_totp(
     current_user: User = Depends(get_current_trader_user),
 ) -> TotpSetupView:
     return TotpSetupView.model_validate(_service(session).totp_setup(current_user))
+
+
+@api_router.get("/security", response_model=TraderSecurityView)
+def read_security(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_trader_user),
+) -> TraderSecurityView:
+    try:
+        return TraderSecurityView.model_validate(_service(session).security_summary(current_user))
+    except TraderAccessError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+@api_router.post("/security/totp/verify", response_model=TotpVerifyView)
+def verify_totp_setup(
+    payload: TotpVerifyRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_trader_user),
+) -> TotpVerifyView:
+    try:
+        view = _service(session).verify_totp_setup(
+            current_user,
+            totp_secret=payload.secret,
+            totp_code=payload.code,
+            recovery_phrase_hash=payload.recovery_phrase_hash,
+            security_pin_hash=payload.security_pin_hash,
+        )
+    except TraderAccessError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    session.commit()
+    return TotpVerifyView.model_validate(view)
 
 
 router.include_router(api_router)

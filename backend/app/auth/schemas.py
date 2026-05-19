@@ -251,6 +251,12 @@ class TraderSignupRequest(BaseModel):
             raise ValueError("trading_experience must be beginner, intermediate, or professional.")
         return candidate
 
+    @model_validator(mode="after")
+    def require_trader_proof_of_address(self) -> "TraderSignupRequest":
+        if not self.compliance.proof_of_address_attachment_id:
+            raise ValueError("proof_of_address_attachment_id is required for coin trader signup.")
+        return self
+
 
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
