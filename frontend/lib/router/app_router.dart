@@ -11,6 +11,7 @@ import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
 import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
 import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
@@ -79,15 +80,21 @@ GoRouter buildGtexAppRouter({
         path: '/auth',
         redirect:
             (BuildContext context, GoRouterState state) =>
-                '/auth/select-account',
+                gtexAccountSelectRoute,
       ),
       GoRoute(
-        path: '/auth/select-account',
+        path: gtexAccountSelectRoute,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 const NoTransitionPage<void>(
                   child: GtexAccountSelectorScreen(),
                 ),
+      ),
+      GoRoute(
+        path: gtexLegacyAccountSelectRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                gtexAccountSelectRoute,
       ),
       GoRoute(
         path: '/auth/signup/user',

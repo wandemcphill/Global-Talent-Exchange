@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/trader_api.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 
@@ -31,7 +32,7 @@ class TraderDashboardScreen extends StatelessWidget {
             message:
                 'Choose Coin Trader during signup to open markets, orders, P2P, watchlists, wallet security, and analytics.',
             actionLabel: 'Choose account type',
-            onAction: () => context.go('/auth/select-account'),
+            onAction: () => context.go(gtexAccountSelectRoute),
           );
         }
         if (accountType != 'coin_trader') {
