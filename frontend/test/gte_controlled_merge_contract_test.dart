@@ -137,7 +137,7 @@ void main() {
       );
       expect(
         GteNavigationRoute.parse('/app/community').primaryDestination,
-        GtePrimaryDestination.hub,
+        GtePrimaryDestination.community,
       );
       expect(
         GteNavigationRoute.parse('/app/capital').primaryDestination,

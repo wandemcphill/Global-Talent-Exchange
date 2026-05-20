@@ -74,8 +74,8 @@ void main() {
 
       router.go(AppRoutes.profileAdmin);
       await tester.pumpAndSettle();
-      expect(find.text('Profile > Admin'), findsOneWidget);
-      expect(find.text('Open Admin Controls'), findsOneWidget);
+      expect(find.text('Admin command center'), findsOneWidget);
+      expect(find.text('Open command center'), findsOneWidget);
       expect(find.text('Regenerate Portrait'), findsOneWidget);
     },
   );

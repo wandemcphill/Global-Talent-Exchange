@@ -209,6 +209,9 @@ final FutureProvider<void> sessionHydrationProvider = FutureProvider<void>((
   if (session == null || !session.isAuthenticated) {
     return;
   }
+  if (ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture) {
+    return;
+  }
   final bool alreadyHydrated =
       session.rawJson.containsKey('user') &&
       session.rawJson.containsKey('club') &&

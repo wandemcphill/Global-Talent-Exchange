@@ -2328,6 +2328,12 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/conversations/{conversation_id}/messages',
   '/api/conversations/{conversation_id}/status':
       '/api/v2/conversations/{conversation_id}/status',
+  '/api/competitions/creator-league/financial-report':
+      '/api/v2/competitions/creator-league/financial-report',
+  '/api/competitions/creator-league/financial-settlements':
+      '/api/v2/competitions/creator-league/financial-settlements',
+  '/api/competitions/creator-league/financial-settlements/{settlement_id}/approve':
+      '/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve',
   '/api/creator-campaigns': '/api/v2/creator-campaigns',
   '/api/creator-campaigns/me': '/api/v2/creator-campaigns/me',
   '/api/creator-campaigns/{campaign_id}':
@@ -5938,6 +5944,12 @@ const Map<String, String> gteApiCanonicalPathByAlias = <String, String>{
       '/api/v2/conversations/{conversation_id}/messages',
   '/api/v2/conversations/{conversation_id}/status':
       '/api/v2/conversations/{conversation_id}/status',
+  '/api/v2/competitions/creator-league/financial-report':
+      '/api/v2/competitions/creator-league/financial-report',
+  '/api/v2/competitions/creator-league/financial-settlements':
+      '/api/v2/competitions/creator-league/financial-settlements',
+  '/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve':
+      '/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve',
   '/api/v2/creator-campaigns': '/api/v2/creator-campaigns',
   '/api/v2/creator-campaigns/me': '/api/v2/creator-campaigns/me',
   '/api/v2/creator-campaigns/{campaign_id}':

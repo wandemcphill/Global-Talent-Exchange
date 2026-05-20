@@ -193,6 +193,11 @@ class _PlayerCardMarketplaceScreenState
                       ),
                     ],
                     actions: <Widget>[
+                      FilledButton.tonalIcon(
+                        onPressed: _reload,
+                        icon: const Icon(Icons.manage_search_outlined),
+                        label: const Text('Scout'),
+                      ),
                       OutlinedButton.icon(
                         onPressed: _reload,
                         icon: const Icon(Icons.refresh),
@@ -249,7 +254,7 @@ class _PlayerCardMarketplaceScreenState
                       tabs: const <Tab>[
                         Tab(text: 'Transfer Market'),
                         Tab(text: 'Loan Market'),
-                        Tab(text: 'Scout Players'),
+                        Tab(text: 'Scout players'),
                         Tab(text: 'Squad'),
                         Tab(text: 'My Listings'),
                       ],

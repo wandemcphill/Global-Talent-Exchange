@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gte_frontend/controllers/creator_application_controller.dart';
 import 'package:gte_frontend/controllers/creator_controller.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
@@ -78,6 +79,44 @@ class GteNavigationShellScreen extends StatefulWidget {
   @override
   State<GteNavigationShellScreen> createState() =>
       _GteNavigationShellScreenState();
+}
+
+class _NavigationProviderScopeBoundary extends StatefulWidget {
+  const _NavigationProviderScopeBoundary({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_NavigationProviderScopeBoundary> createState() =>
+      _NavigationProviderScopeBoundaryState();
+}
+
+class _NavigationProviderScopeBoundaryState
+    extends State<_NavigationProviderScopeBoundary> {
+  ProviderContainer? _ownedContainer;
+
+  @override
+  void dispose() {
+    _ownedContainer?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    try {
+      ProviderScope.containerOf(context, listen: false);
+      _ownedContainer?.dispose();
+      _ownedContainer = null;
+      return widget.child;
+    } on StateError {
+      final ProviderContainer container =
+          _ownedContainer ??= ProviderContainer();
+      return UncontrolledProviderScope(
+        container: container,
+        child: widget.child,
+      );
+    }
+  }
 }
 
 Color _routeAccentFor(BuildContext context, GtePrimaryDestination destination) {
@@ -200,238 +239,267 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool compactViewport = MediaQuery.sizeOf(context).height < 720;
+    final Size viewportSize = MediaQuery.sizeOf(context);
+    final bool compactWidth = viewportSize.width < 420;
+    final bool compactViewport = viewportSize.height < 720 || compactWidth;
     final tokens = GteShellTheme.tokensOf(context);
     final EdgeInsets topSectionPadding =
         compactViewport
             ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
             : const EdgeInsets.fromLTRB(20, 12, 20, 0);
     final double sectionGap = compactViewport ? 0 : 8;
-    const bool showShellStatusCard = true;
-    return Container(
-      decoration: gteBackdropDecoration(),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          toolbarHeight: compactViewport ? 72 : 82,
-          titleSpacing: compactViewport ? 12 : 16,
-          title: Row(
-            children: <Widget>[
-              const GtexLogoMark(size: 38, compact: true),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(_routeTitle()),
-                    Text(
-                      _routeContextLine(),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            AnimatedBuilder(
-              animation: widget.controller,
-              builder: (BuildContext context, Widget? child) {
-                if (widget.controller.isAuthenticated) {
-                  return Row(
-                    children: <Widget>[
-                      _buildThemePickerAction(context),
-                      _buildAmbientAction(),
-                      _buildCapitalAction(),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: Center(
-                          child: Text(widget.controller.session!.user.username),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: IconButton(
-                          tooltip: 'Creator access request',
-                          onPressed: () => _pushCreatorAccessRequest(context),
-                          icon: const Icon(Icons.how_to_reg_outlined),
-                        ),
-                      ),
-                      if (_hasApprovedCreatorAccess)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: IconButton(
-                            tooltip: 'Creator community',
-                            onPressed: () {
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder:
-                                      (
-                                        BuildContext context,
-                                      ) => ReferralHubScreen(
-                                        referralController: _referralController,
-                                        creatorController: _creatorController,
-                                        isAuthenticated:
-                                            widget.controller.isAuthenticated,
-                                        hasApprovedCreatorAccess:
-                                            _hasApprovedCreatorAccess,
-                                        isReferralRuntimeAvailable:
-                                            _isReferralRuntimeAvailable,
-                                        onOpenCreatorAccessRequest:
-                                            () => _pushCreatorAccessRequest(
-                                              context,
-                                            ),
-                                      ),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.campaign_outlined),
+    final bool showShellStatusCard = !compactViewport;
+    return _NavigationProviderScopeBoundary(
+      child: Container(
+        decoration: gteBackdropDecoration(),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            toolbarHeight: compactWidth ? 56 : (compactViewport ? 72 : 82),
+            titleSpacing: compactWidth ? 8 : (compactViewport ? 12 : 16),
+            title:
+                compactWidth
+                    ? Text(_routeTitle(), overflow: TextOverflow.ellipsis)
+                    : Row(
+                      children: <Widget>[
+                        const GtexLogoMark(size: 38, compact: true),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(_routeTitle()),
+                              Text(
+                                _routeContextLine(),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
                           ),
                         ),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: IconButton(
-                          tooltip: 'Coach market',
-                          onPressed: () {
-                            final session = widget.controller.session;
-                            if (session == null) {
-                              return;
-                            }
-                            Navigator.of(context).push<void>(
-                              MaterialPageRoute<void>(
-                                builder:
-                                    (BuildContext context) =>
-                                        ManagerMarketScreen(
-                                          baseUrl: widget.apiBaseUrl,
-                                          accessToken: session.accessToken,
-                                          isAdmin: <String>{
-                                            'admin',
-                                            'super_admin',
-                                          }.contains(
-                                            session.user.role.toLowerCase(),
-                                          ),
-                                          onOpenAdmin: () {
-                                            Navigator.of(context).push<void>(
-                                              MaterialPageRoute<void>(
-                                                builder:
-                                                    (
-                                                      BuildContext context,
-                                                    ) => ManagerAdminScreen(
-                                                      baseUrl:
-                                                          widget.apiBaseUrl,
-                                                      accessToken:
-                                                          session.accessToken,
-                                                      role: session.user.role,
-                                                    ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.sports_soccer_outlined),
-                        ),
+                      ],
+                    ),
+            actions: <Widget>[
+              AnimatedBuilder(
+                animation: widget.controller,
+                builder: (BuildContext context, Widget? child) {
+                  if (compactWidth) {
+                    if (widget.controller.isAuthenticated) {
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          _buildThemePickerAction(context),
+                          _buildCapitalAction(),
+                        ],
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: IconButton(
+                        tooltip: 'Sign in',
+                        onPressed: _openLogin,
+                        icon: const Icon(Icons.login_rounded),
                       ),
-                      if (_isAdminSession)
+                    );
+                  }
+                  if (widget.controller.isAuthenticated) {
+                    return Row(
+                      children: <Widget>[
+                        _buildThemePickerAction(context),
+                        _buildAmbientAction(),
+                        _buildCapitalAction(),
                         Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: IconButton(
-                            tooltip: 'Admin dashboard',
-                            onPressed: _openAdminCommandCenter,
-                            icon: const Icon(
-                              Icons.admin_panel_settings_outlined,
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Center(
+                            child: Text(
+                              widget.controller.session!.user.username,
                             ),
                           ),
                         ),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: FilledButton.tonal(
-                          onPressed: () async {
-                            await widget.controller.signOut();
-                            if (!mounted) {
-                              return;
-                            }
-                            _setRoute(const GteNavigationRoute.home());
-                          },
-                          child: const Text('Sign out'),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: IconButton(
+                            tooltip: 'Creator access request',
+                            onPressed: () => _pushCreatorAccessRequest(context),
+                            icon: const Icon(Icons.how_to_reg_outlined),
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      _buildThemePickerAction(context),
-                      _buildAmbientAction(),
-                      _buildCapitalAction(),
-                      FilledButton(
-                        onPressed: () {
-                          _openLogin();
-                        },
-                        child: const Text('Sign in'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        body: AnimatedBuilder(
-          animation: widget.controller,
-          builder: (BuildContext context, Widget? child) {
-            if (widget.controller.isBootstrapping &&
-                widget.controller.players.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            return Column(
-              children: <Widget>[
-                if (showShellStatusCard) ...<Widget>[
-                  Padding(
-                    padding: topSectionPadding,
-                    child: _buildModeSyncCard(context),
-                  ),
-                  SizedBox(height: sectionGap),
-                ],
-                Expanded(
-                  child: PageStorage(
-                    bucket: _pageStorageBucket,
-                    child: KeyedSubtree(
-                      key: ValueKey<String>(
-                        'shell-${_route.primaryDestination.name}',
-                      ),
-                      child: _buildCurrentDestination(),
+                        if (_hasApprovedCreatorAccess)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: IconButton(
+                              tooltip: 'Creator community',
+                              onPressed: () {
+                                Navigator.of(context).push<void>(
+                                  MaterialPageRoute<void>(
+                                    builder:
+                                        (
+                                          BuildContext context,
+                                        ) => ReferralHubScreen(
+                                          referralController:
+                                              _referralController,
+                                          creatorController: _creatorController,
+                                          isAuthenticated:
+                                              widget.controller.isAuthenticated,
+                                          hasApprovedCreatorAccess:
+                                              _hasApprovedCreatorAccess,
+                                          isReferralRuntimeAvailable:
+                                              _isReferralRuntimeAvailable,
+                                          onOpenCreatorAccessRequest:
+                                              () => _pushCreatorAccessRequest(
+                                                context,
+                                              ),
+                                        ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.campaign_outlined),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: IconButton(
+                            tooltip: 'Coach market',
+                            onPressed: () {
+                              final session = widget.controller.session;
+                              if (session == null) {
+                                return;
+                              }
+                              Navigator.of(context).push<void>(
+                                MaterialPageRoute<void>(
+                                  builder:
+                                      (BuildContext context) =>
+                                          ManagerMarketScreen(
+                                            baseUrl: widget.apiBaseUrl,
+                                            accessToken: session.accessToken,
+                                            isAdmin: <String>{
+                                              'admin',
+                                              'super_admin',
+                                            }.contains(
+                                              session.user.role.toLowerCase(),
+                                            ),
+                                            onOpenAdmin: () {
+                                              Navigator.of(context).push<void>(
+                                                MaterialPageRoute<void>(
+                                                  builder:
+                                                      (
+                                                        BuildContext context,
+                                                      ) => ManagerAdminScreen(
+                                                        baseUrl:
+                                                            widget.apiBaseUrl,
+                                                        accessToken:
+                                                            session.accessToken,
+                                                        role: session.user.role,
+                                                      ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.sports_soccer_outlined),
+                          ),
+                        ),
+                        if (_isAdminSession)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: IconButton(
+                              tooltip: 'Admin dashboard',
+                              onPressed: _openAdminCommandCenter,
+                              icon: const Icon(
+                                Icons.admin_panel_settings_outlined,
+                              ),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 16),
+                          child: FilledButton.tonal(
+                            onPressed: () async {
+                              await widget.controller.signOut();
+                              if (!mounted) {
+                                return;
+                              }
+                              _setRoute(const GteNavigationRoute.home());
+                            },
+                            child: const Text('Sign out'),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        _buildThemePickerAction(context),
+                        _buildAmbientAction(),
+                        _buildCapitalAction(),
+                        FilledButton(
+                          onPressed: () {
+                            _openLogin();
+                          },
+                          child: const Text('Sign in'),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: tokens.panel.withValues(alpha: 0.96),
-            border: Border(
-              top: BorderSide(color: tokens.stroke.withValues(alpha: 0.45)),
-            ),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: tokens.shadow.withValues(alpha: 0.28),
-                blurRadius: 24,
-                offset: const Offset(0, -10),
+                  );
+                },
               ),
             ],
           ),
-          child: _ShellBottomNav(
-            currentDestination: _route.primaryDestination,
-            destinations: _visiblePrimaryDestinations,
-            showWallet: _showWalletDestination,
-            onOpenPrimaryDestination: _openPrimaryDestination,
+          body: AnimatedBuilder(
+            animation: widget.controller,
+            builder: (BuildContext context, Widget? child) {
+              if (widget.controller.isBootstrapping &&
+                  widget.controller.players.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              return Column(
+                children: <Widget>[
+                  if (showShellStatusCard) ...<Widget>[
+                    Padding(
+                      padding: topSectionPadding,
+                      child: _buildModeSyncCard(context),
+                    ),
+                    SizedBox(height: sectionGap),
+                  ],
+                  Expanded(
+                    child: PageStorage(
+                      bucket: _pageStorageBucket,
+                      child: KeyedSubtree(
+                        key: ValueKey<String>(
+                          'shell-${_route.primaryDestination.name}',
+                        ),
+                        child: _buildCurrentDestination(),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: tokens.panel.withValues(alpha: 0.96),
+              border: Border(
+                top: BorderSide(color: tokens.stroke.withValues(alpha: 0.45)),
+              ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: tokens.shadow.withValues(alpha: 0.28),
+                  blurRadius: 24,
+                  offset: const Offset(0, -10),
+                ),
+              ],
+            ),
+            child: _ShellBottomNav(
+              currentDestination: _route.primaryDestination,
+              destinations: _visiblePrimaryDestinations,
+              showWallet: _showWalletDestination,
+              onOpenPrimaryDestination: _openPrimaryDestination,
+            ),
           ),
         ),
       ),
@@ -903,6 +971,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   GtePrimaryDestination _resolvePrimaryLane(GtePrimaryDestination destination) {
+    if (destination == GtePrimaryDestination.community) {
+      return destination;
+    }
     return _visiblePrimaryDestinations.contains(destination) ||
             destination == GtePrimaryDestination.wallet &&
                 _showWalletDestination
@@ -1049,6 +1120,13 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       if (!mounted) {
         return;
       }
+      if (_isTestBinding &&
+          widget.backendMode == GteBackendMode.fixture &&
+          _route.primaryDestination == GtePrimaryDestination.wallet &&
+          (widget.controller.walletSummary != null ||
+              widget.controller.portfolioSummary != null)) {
+        return;
+      }
       widget.controller.bootstrap();
       _competitionController.bootstrap();
       _primeCreatorAccessState(force: true);
@@ -1184,7 +1262,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: IconButton(
-        tooltip: _isCreatorAccount ? 'Creator wallet' : 'Club funds',
+        tooltip: 'Club funds',
         onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
         icon: Icon(
           isActive
@@ -1513,10 +1591,16 @@ class _ShellNavChip extends StatelessWidget {
                 color: isActive ? tone : tokens.textMuted,
               ),
               const SizedBox(width: 8),
-              Text(
-                destination.label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: isActive ? tone : tokens.textPrimary,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: Text(
+                  destination == GtePrimaryDestination.wallet
+                      ? 'Funds'
+                      : destination.label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: isActive ? tone : tokens.textPrimary,
+                  ),
                 ),
               ),
             ],

@@ -169,7 +169,7 @@ class _GteSurfacePanelState extends State<GteSurfacePanel> {
               ),
             ),
           ),
-          widget.child,
+          Material(type: MaterialType.transparency, child: widget.child),
         ],
       ),
     );

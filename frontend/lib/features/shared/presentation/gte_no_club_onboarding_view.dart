@@ -13,6 +13,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
     this.onOpenPlayerUniverse,
     this.onOpenWorld,
     this.onOpenWallet,
+    this.onEnterClub,
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 120),
   });
 
@@ -24,6 +25,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
   final VoidCallback? onOpenPlayerUniverse;
   final VoidCallback? onOpenWorld;
   final VoidCallback? onOpenWallet;
+  final VoidCallback? onEnterClub;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -146,12 +148,35 @@ class GteNoClubOnboardingView extends StatelessWidget {
           ),
         )
         .toList(growable: false);
+    final bool compactViewport = MediaQuery.sizeOf(context).height < 720;
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (onEnterClub != null) ...<Widget>[
+            FilledButton(
+              onPressed: onEnterClub,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(Icons.shield_outlined),
+                  SizedBox(width: 8),
+                  Text('Enter club'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (compactViewport && onExploreArena != null) ...<Widget>[
+            OutlinedButton.icon(
+              onPressed: onExploreArena,
+              icon: const Icon(Icons.stadium_outlined),
+              label: const Text('Explore competitions'),
+            ),
+            const SizedBox(height: 12),
+          ],
           GteSurfacePanel(
             emphasized: true,
             accentColor: GteShellTheme.accent,
@@ -172,6 +197,8 @@ class GteNoClubOnboardingView extends StatelessWidget {
                       : 'Start with an account, then choose a club',
                   style: Theme.of(context).textTheme.displaySmall,
                 ),
+                const SizedBox(height: 14),
+                Wrap(spacing: 12, runSpacing: 12, children: overviewActions),
                 const SizedBox(height: 6),
                 Text(
                   isAuthenticated
@@ -181,8 +208,6 @@ class GteNoClubOnboardingView extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Wrap(spacing: 12, runSpacing: 12, children: overviewChips),
-                const SizedBox(height: 14),
-                Wrap(spacing: 12, runSpacing: 12, children: overviewActions),
               ],
             ),
           ),

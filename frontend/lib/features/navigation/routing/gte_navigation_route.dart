@@ -23,7 +23,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.hub:
         return 'Studio';
       case GtePrimaryDestination.community:
-        return 'Social';
+        return 'Community';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
@@ -220,8 +220,9 @@ class GteNavigationRoute {
       case 'market':
         return const GteNavigationRoute.market();
       case 'hub':
-      case 'community':
         return const GteNavigationRoute.hub();
+      case 'community':
+        return const GteNavigationRoute.community();
       case 'club':
         return const GteNavigationRoute.club();
       case 'capital':

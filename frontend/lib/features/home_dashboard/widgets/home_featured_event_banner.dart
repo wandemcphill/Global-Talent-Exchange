@@ -307,11 +307,16 @@ class _BannerSignalRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: GteShellTheme.textPrimary,
-            fontWeight: FontWeight.w800,
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: GteShellTheme.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ],

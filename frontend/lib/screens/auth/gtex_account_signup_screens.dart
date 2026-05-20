@@ -7,7 +7,9 @@ import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 class GtexAccountSelectorScreen extends StatelessWidget {
-  const GtexAccountSelectorScreen({super.key});
+  const GtexAccountSelectorScreen({super.key, this.onOpenCreatorAccessRequest});
+
+  final VoidCallback? onOpenCreatorAccessRequest;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +90,17 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                                       )
                                       .toList(),
                             ),
+                        if (onOpenCreatorAccessRequest != null) ...<Widget>[
+                          const SizedBox(height: 18),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: onOpenCreatorAccessRequest,
+                              icon: const Icon(Icons.how_to_reg_outlined),
+                              label: const Text('Apply for creator access'),
+                            ),
+                          ),
+                        ],
                       ],
                     );
                   },
@@ -583,10 +596,11 @@ class _AccountTypeCard extends StatelessWidget {
           color: const Color(0xFF101820).withValues(alpha: 0.78),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Icon(icon, color: accent, size: 36),
-            const Spacer(),
+            const SizedBox(height: 34),
             Text(
               title,
               style: Theme.of(

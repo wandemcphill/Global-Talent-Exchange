@@ -85,7 +85,6 @@ void main() {
 
     expect(find.text('Market'), findsWidgets);
     expect(find.text('Matchday'), findsWidgets);
-    expect(find.text('Transfer desk'), findsNothing);
   });
 }
 

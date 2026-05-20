@@ -145,15 +145,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       ]),
       builder: (BuildContext context, Widget? child) {
         final ClubDashboardData? clubData = clubController.data;
-        final bool waitingForFirstFrame =
-            clubData == null &&
-            competitionController.competitions.isEmpty &&
-            (clubController.isLoading ||
-                competitionController.isLoadingDiscovery);
-        if (waitingForFirstFrame) {
-          return const _HomeLoadingView();
-        }
-
         if (clubData == null &&
             competitionController.competitions.isEmpty &&
             clubController.errorMessage != null &&
@@ -991,6 +982,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       onOpenPlayerUniverse: _playerUniverseOnboardingAction(),
       onOpenWorld: _worldOnboardingAction(),
       onOpenWallet: _walletOnboardingAction(),
+      onEnterClub: widget.onOpenClubTab,
     );
   }
 
@@ -1063,6 +1055,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            if (isAuthenticated &&
+                _createClubOnboardingAction() != null) ...<Widget>[
+              _buildNoClubState(),
+              const SizedBox(height: 18),
+            ],
             GteSurfacePanel(
               accentColor: GteShellTheme.accent,
               child: LayoutBuilder(
@@ -1151,9 +1148,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 );
               },
             ),
-            const SizedBox(height: 18),
-            if (isAuthenticated && _createClubOnboardingAction() != null)
-              _buildNoClubState(),
           ],
         ),
       ),
@@ -1394,10 +1388,16 @@ class _HomeHeroPanel extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              FilledButton.icon(
+              FilledButton(
                 onPressed: onOpenClub,
-                icon: const Icon(Icons.shield_outlined),
-                label: const Text('Enter club'),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(Icons.shield_outlined),
+                    SizedBox(width: 8),
+                    Text('Enter club'),
+                  ],
+                ),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenCompetitions,
@@ -1648,10 +1648,16 @@ class _HomeHeroPanelV2 extends StatelessWidget {
                         spacing: 12,
                         runSpacing: 12,
                         children: <Widget>[
-                          FilledButton.icon(
+                          FilledButton(
                             onPressed: onOpenClub,
-                            icon: const Icon(Icons.shield_outlined),
-                            label: const Text('Club HQ'),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(Icons.shield_outlined),
+                                SizedBox(width: 8),
+                                Text('Enter club'),
+                              ],
+                            ),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: onOpenCompetitions,

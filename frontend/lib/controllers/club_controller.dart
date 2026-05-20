@@ -36,6 +36,7 @@ class ClubController extends ChangeNotifier {
   final ClubApi api;
   final String clubId;
   Future<void>? _loadFuture;
+  bool _isDisposed = false;
   DateTime? dataSyncedAt;
   final String? clubName;
 
@@ -109,6 +110,20 @@ class ClubController extends ChangeNotifier {
 
   String get displayClubName =>
       _data?.clubName ?? clubName ?? prettifyClubId(clubId);
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_isDisposed) {
+      return;
+    }
+    super.notifyListeners();
+  }
 
   Future<void> ensureLoaded() async {
     if (isLoading || hasData) {
