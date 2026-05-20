@@ -63,7 +63,7 @@ class GtexPageSurface extends StatelessWidget {
                 if (isSelected) GtexColors.glow(accent, opacity: 0.18),
               ],
             ),
-            child: child,
+            child: Material(type: MaterialType.transparency, child: child),
           ),
         ),
       ),
