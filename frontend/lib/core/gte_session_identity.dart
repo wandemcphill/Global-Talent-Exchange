@@ -16,14 +16,14 @@ class GteSessionIdentity {
 
   static GteSessionIdentity fromExchangeController(
     GteExchangeController controller, {
-    String guestUserId = 'unauthenticated-user',
+    String guestUserId = 'guest-user',
   }) {
     final GteAuthSession? session = controller.session;
     final String? trimmedSessionUserId = controller.session?.user.id.trim();
     final String resolvedUserId =
         trimmedSessionUserId != null && trimmedSessionUserId.isNotEmpty
-            ? trimmedSessionUserId
-            : guestUserId;
+        ? trimmedSessionUserId
+        : guestUserId;
     final String? resolvedName = _resolvedUserName(controller);
     final _ResolvedClub? resolvedClub = _resolvedClub(session);
     return GteSessionIdentity(

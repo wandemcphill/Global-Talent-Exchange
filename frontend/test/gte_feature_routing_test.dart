@@ -455,6 +455,8 @@ void main() {
         isNotNull,
       );
 
+      await tester.ensureVisible(exploreCompetitionsButton);
+      await tester.pumpAndSettle();
       await tester.tap(exploreCompetitionsButton);
       await tester.pumpAndSettle();
 

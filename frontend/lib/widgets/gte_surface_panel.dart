@@ -38,10 +38,9 @@ class _GteSurfacePanelState extends State<GteSurfacePanel> {
       decoration: BoxDecoration(
         borderRadius: radius,
         border: Border.all(
-          color:
-              _hovered
-                  ? glow.withValues(alpha: 0.62)
-                  : GtexColors.line.withValues(alpha: 0.82),
+          color: _hovered
+              ? glow.withValues(alpha: 0.62)
+              : GtexColors.line.withValues(alpha: 0.82),
         ),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -115,7 +114,7 @@ class _GteSurfacePanelState extends State<GteSurfacePanel> {
               ),
             ),
           ),
-          widget.child,
+          Material(type: MaterialType.transparency, child: widget.child),
         ],
       ),
     );
@@ -123,10 +122,9 @@ class _GteSurfacePanelState extends State<GteSurfacePanel> {
     final Widget animatedBody = AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
-      transform:
-          Matrix4.identity()
-            ..translate(0.0, _hovered ? -4.0 : 0.0)
-            ..scale(_hovered ? 1.006 : 1.0),
+      transform: Matrix4.identity()
+        ..translate(0.0, _hovered ? -4.0 : 0.0)
+        ..scale(_hovered ? 1.006 : 1.0),
       transformAlignment: Alignment.center,
       child: content,
     );

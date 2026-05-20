@@ -126,7 +126,7 @@ void main() {
     },
   );
 
-  test('register sends region code in auth payload', () async {
+  test('register rejects removed generic signup without transport', () async {
     final _RecordingTransport transport = _RecordingTransport(
       <GteTransportResponse>[
         GteTransportResponse(
@@ -159,77 +159,66 @@ void main() {
       fixtures: GteMockApi(latency: Duration.zero),
     );
 
-    await repository.register(
-      const GteAuthRegisterRequest(
-        email: 'qa@example.com',
-        fullName: 'QA User',
-        phoneNumber: '08000000000',
-        isOver18: true,
-        regionCode: 'ng',
-        password: testPassword,
-      ),
-    );
-
-    expect(transport.requests, hasLength(1));
-    expect(transport.requests.single.uri.path, '/api/v2/auth/register');
-    expect(transport.requests.single.body, <String, Object?>{
-      'email': 'qa@example.com',
-      'full_name': 'QA User',
-      'phone_number': '08000000000',
-      'is_over_18': true,
-      'region_code': 'NG',
-      'password': testPassword,
-    });
-  });
-
-  test('register surfaces FastAPI validation detail lists', () async {
-    final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
-      config: const GteRepositoryConfig(
-        baseUrl: 'http://127.0.0.1:8000',
-        mode: GteBackendMode.live,
-      ),
-      transport: _RecordingTransport(<GteTransportResponse>[
-        const GteTransportResponse(
-          statusCode: 422,
-          body: <String, Object?>{
-            'detail': <Map<String, Object?>>[
-              <String, Object?>{
-                'loc': <Object?>['body', 'region_code'],
-                'msg': 'Field required',
-              },
-            ],
-          },
-        ),
-      ]),
-      fixtures: GteMockApi(latency: Duration.zero),
-    );
-
-    expect(
+    await expectLater(
       () => repository.register(
         const GteAuthRegisterRequest(
           email: 'qa@example.com',
           fullName: 'QA User',
           phoneNumber: '08000000000',
           isOver18: true,
-          regionCode: 'NG',
+          regionCode: 'ng',
           password: testPassword,
         ),
       ),
-      throwsA(
-        isA<GteApiException>()
-            .having(
-              (GteApiException error) => error.type,
-              'type',
-              GteApiErrorType.validation,
-            )
-            .having(
-              (GteApiException error) => error.message,
-              'message',
-              'region code: Field required',
-            ),
-      ),
+      throwsA(isA<UnsupportedError>()),
     );
+
+    expect(transport.requests, isEmpty);
   });
+
+  test(
+    'register ignores queued validation responses for removed endpoint',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          const GteTransportResponse(
+            statusCode: 422,
+            body: <String, Object?>{
+              'detail': <Map<String, Object?>>[
+                <String, Object?>{
+                  'loc': <Object?>['body', 'region_code'],
+                  'msg': 'Field required',
+                },
+              ],
+            },
+          ),
+        ],
+      );
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        fixtures: GteMockApi(latency: Duration.zero),
+      );
+
+      await expectLater(
+        () => repository.register(
+          const GteAuthRegisterRequest(
+            email: 'qa@example.com',
+            fullName: 'QA User',
+            phoneNumber: '08000000000',
+            isOver18: true,
+            regionCode: 'NG',
+            password: testPassword,
+          ),
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+      expect(transport.requests, isEmpty);
+    },
+  );
 
   test(
     'fetch current user does not fall back to fixture auth on transport failure',

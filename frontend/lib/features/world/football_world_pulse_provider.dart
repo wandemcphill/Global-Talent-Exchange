@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/community_api.dart';
+import '../../data/gte_api_repository.dart';
 import '../../features/competitions/live_competitions_provider.dart';
 import '../../features/shared/data/gte_feature_support.dart';
 import '../../features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
@@ -102,6 +103,9 @@ class FootballPulseRoute {
 
 final FutureProvider<FootballWorldPulseData> footballWorldPulseProvider =
     FutureProvider<FootballWorldPulseData>((Ref ref) async {
+      if (ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture) {
+        return FootballWorldPulseData.empty;
+      }
       final Future<MarketDashboardData?> marketFuture = ref
           .watch(marketDashboardProvider.future)
           .then((MarketDashboardData data) => data, onError: (_, _) => null);

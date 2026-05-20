@@ -48,7 +48,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.hub:
         return 'Studio';
       case GtePrimaryDestination.community:
-        return 'Social';
+        return 'Community';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
@@ -238,16 +238,17 @@ class GteNavigationRoute {
     if (uri == null) {
       return const GteNavigationRoute.home();
     }
-    final List<String> segments =
-        uri.pathSegments.where((String item) => item.isNotEmpty).toList();
+    final List<String> segments = uri.pathSegments
+        .where((String item) => item.isNotEmpty)
+        .toList();
     if (segments.isEmpty) {
       return const GteNavigationRoute.home();
     }
 
     final List<String> normalizedSegments =
         segments.isNotEmpty && segments.first.toLowerCase() == 'app'
-            ? segments.sublist(1)
-            : segments;
+        ? segments.sublist(1)
+        : segments;
     if (normalizedSegments.isEmpty) {
       return const GteNavigationRoute.home();
     }

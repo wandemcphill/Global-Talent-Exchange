@@ -195,8 +195,9 @@ final Provider<GteAuthedApi> authedApiProvider = Provider<GteAuthedApi>(
     transport: createModeAwareTransport(ref.watch(criticalBackendModeProvider)),
     authSession: ref.watch(authProvider),
     authSessionStore: ref.watch(authSessionStoreProvider),
-    onSessionChanged:
-        ref.read(appSessionControllerProvider.notifier).updateSession,
+    onSessionChanged: ref
+        .read(appSessionControllerProvider.notifier)
+        .updateSession,
     deviceId: ref.watch(deviceIdProvider),
     mode: ref.watch(criticalBackendModeProvider),
   ),
@@ -207,6 +208,9 @@ final FutureProvider<void> sessionHydrationProvider = FutureProvider<void>((
 ) async {
   final AuthSession? session = ref.watch(authProvider);
   if (session == null || !session.isAuthenticated) {
+    return;
+  }
+  if (ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture) {
     return;
   }
   final bool alreadyHydrated =
@@ -236,10 +240,9 @@ final Provider<AuthPresentation> authPresentationProvider =
       return AuthPresentation(
         userName: session?.resolvedUserName ?? 'Not signed in',
         role: session?.role ?? 'Unauthenticated',
-        clubName:
-            session == null || !session.isAuthenticated
-                ? 'Sign in to access club features'
-                : (session.clubName ?? 'Syncing club context'),
+        clubName: session == null || !session.isAuthenticated
+            ? 'Sign in to access club features'
+            : (session.clubName ?? 'Syncing club context'),
         avatarAsset: 'assets/branding/gtex_icon.png',
         notifications: 0,
       );

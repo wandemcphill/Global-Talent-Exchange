@@ -123,6 +123,14 @@ class ClubController extends ChangeNotifier {
     super.dispose();
   }
 
+  @override
+  void notifyListeners() {
+    if (_isDisposed) {
+      return;
+    }
+    super.notifyListeners();
+  }
+
   Future<void> ensureLoaded() async {
     if (isLoading || hasData) {
       return;
@@ -357,10 +365,9 @@ class ClubController extends ChangeNotifier {
     try {
       await api.updateBrandingReview(reviewId: reviewId, approved: approved);
       await loadAdmin();
-      noticeMessage =
-          approved
-              ? 'Branding review approved for showcase publication.'
-              : 'Branding review sent back for identity refinements.';
+      noticeMessage = approved
+          ? 'Branding review approved for showcase publication.'
+          : 'Branding review sent back for identity refinements.';
     } catch (error) {
       errorMessage = 'Unable to update branding review. $error';
       _notifyIfActive();

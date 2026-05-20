@@ -74,6 +74,239 @@ class GtexPlayerCard extends StatelessWidget {
     final Color accent = _variantAccent(cardVariant);
     final bool reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool microLayout =
+            (constraints.hasBoundedWidth && constraints.maxWidth < 120) ||
+            (constraints.hasBoundedHeight && constraints.maxHeight < 120);
+        if (microLayout) {
+          return _GtexPlayerCardMicroShell(
+            accent: accent,
+            cardVariant: cardVariant,
+            isSelected: isSelected,
+            onTap: onTap,
+            position: position,
+            priceLabel: priceLabel,
+            reduceMotion: reduceMotion,
+          );
+        }
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration:
+                  reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+              padding: const EdgeInsets.all(GtexSpacing.md),
+              decoration: BoxDecoration(
+                gradient: _cardGradient(accent),
+                borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
+                border: Border.all(
+                  color:
+                      isSelected
+                          ? GtexColors.pitch.withValues(alpha: 0.75)
+                          : accent.withValues(
+                            alpha: _variantBorderOpacity(cardVariant),
+                          ),
+                ),
+                boxShadow: <BoxShadow>[
+                  if (!reduceMotion && isSelected)
+                    GtexColors.glow(GtexColors.pitch, opacity: 0.18),
+                  if (!reduceMotion &&
+                      cardVariant != GtexPlayerCardVariant.standard)
+                    GtexColors.glow(accent, opacity: 0.12),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _PlayerImage(
+                        imageUrl: imageUrl,
+                        name: name,
+                        position: position,
+                        countryCode: countryCode ?? nationality,
+                        accent: accent,
+                        portraitMissingReason: portraitMissingReason,
+                      ),
+                      const SizedBox(width: GtexSpacing.sm),
+                      if (gsiLabel != null) ...<Widget>[
+                        _GsiPlate(label: gsiLabel!),
+                        const SizedBox(width: GtexSpacing.sm),
+                      ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleMedium?.copyWith(
+                                color: GtexColors.text,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '$clubName - $nationality',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: GtexColors.textMuted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: GtexSpacing.xs),
+                            _PlayerCardChipRail(
+                              chips: <Widget>[
+                                GtexStatusChip(
+                                  label: position,
+                                  color: GtexColors.pitch,
+                                  compact: true,
+                                ),
+                                if (rarityLabel != null)
+                                  GtexStatusChip(
+                                    label: rarityLabel!,
+                                    color: accent,
+                                    compact: true,
+                                  ),
+                                if (ratingLabel != null)
+                                  GtexStatusChip(
+                                    label: ratingLabel!,
+                                    color: GtexColors.gold,
+                                    compact: true,
+                                  ),
+                                if (gsiTierLabel != null)
+                                  GtexStatusChip(
+                                    label: gsiTierLabel!,
+                                    color: GtexColors.cyan,
+                                    compact: true,
+                                  ),
+                                if (gsiTrendLabel != null)
+                                  GtexStatusChip(
+                                    label: gsiTrendLabel!,
+                                    color: GtexColors.mint,
+                                    compact: true,
+                                  ),
+                                if (marketHeatLabel != null)
+                                  GtexStatusChip(
+                                    label: marketHeatLabel!,
+                                    color: GtexColors.gold,
+                                    compact: true,
+                                  ),
+                                if (ageLabel != null)
+                                  GtexStatusChip(
+                                    label: ageLabel!,
+                                    color: GtexColors.cyan,
+                                    compact: true,
+                                  ),
+                                ...badges,
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: GtexSpacing.md),
+                  if (chemistryLinks.isNotEmpty ||
+                      demandLabel != null) ...<Widget>[
+                    _PlayerCardSignalRail(
+                      accent: accent,
+                      demandLabel: demandLabel,
+                      links: chemistryLinks,
+                    ),
+                    const SizedBox(height: GtexSpacing.sm),
+                  ],
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              demandLabel == null
+                                  ? 'MARKET VALUE'
+                                  : 'LIVE VALUE',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                color: GtexColors.textMuted,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.9,
+                              ),
+                            ),
+                            Text(
+                              priceLabel,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleMedium?.copyWith(
+                                color: GtexColors.gold,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (onAddToShortlist != null)
+                        IconButton.filledTonal(
+                          tooltip: 'Add to shortlist',
+                          onPressed: onAddToShortlist,
+                          icon: const Icon(Icons.playlist_add),
+                        ),
+                      if (onBuyNow != null) ...<Widget>[
+                        const SizedBox(width: GtexSpacing.xs),
+                        GtexActionButton(
+                          label: buyNowLabel,
+                          onPressed: onBuyNow,
+                          compact: true,
+                          accent: GtexColors.gold,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GtexPlayerCardMicroShell extends StatelessWidget {
+  const _GtexPlayerCardMicroShell({
+    required this.accent,
+    required this.cardVariant,
+    required this.isSelected,
+    required this.onTap,
+    required this.position,
+    required this.priceLabel,
+    required this.reduceMotion,
+  });
+
+  final Color accent;
+  final GtexPlayerCardVariant cardVariant;
+  final bool isSelected;
+  final VoidCallback? onTap;
+  final String position;
+  final String priceLabel;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -82,7 +315,7 @@ class GtexPlayerCard extends StatelessWidget {
         child: AnimatedContainer(
           duration:
               reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(GtexSpacing.md),
+          padding: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             gradient: _cardGradient(accent),
             borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
@@ -102,159 +335,28 @@ class GtexPlayerCard extends StatelessWidget {
                 GtexColors.glow(accent, opacity: 0.12),
             ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  _PlayerImage(
-                    imageUrl: imageUrl,
-                    name: name,
-                    position: position,
-                    countryCode: countryCode ?? nationality,
-                    accent: accent,
-                    portraitMissingReason: portraitMissingReason,
-                  ),
-                  const SizedBox(width: GtexSpacing.sm),
-                  if (gsiLabel != null) ...<Widget>[
-                    _GsiPlate(label: gsiLabel!),
-                    const SizedBox(width: GtexSpacing.sm),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleMedium?.copyWith(
-                            color: GtexColors.text,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '$clubName - $nationality',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: GtexColors.textMuted,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: GtexSpacing.xs),
-                        _PlayerCardChipRail(
-                          chips: <Widget>[
-                            GtexStatusChip(
-                              label: position,
-                              color: GtexColors.pitch,
-                              compact: true,
-                            ),
-                            if (rarityLabel != null)
-                              GtexStatusChip(
-                                label: rarityLabel!,
-                                color: accent,
-                                compact: true,
-                              ),
-                            if (ratingLabel != null)
-                              GtexStatusChip(
-                                label: ratingLabel!,
-                                color: GtexColors.gold,
-                                compact: true,
-                              ),
-                            if (gsiTierLabel != null)
-                              GtexStatusChip(
-                                label: gsiTierLabel!,
-                                color: GtexColors.cyan,
-                                compact: true,
-                              ),
-                            if (gsiTrendLabel != null)
-                              GtexStatusChip(
-                                label: gsiTrendLabel!,
-                                color: GtexColors.mint,
-                                compact: true,
-                              ),
-                            if (marketHeatLabel != null)
-                              GtexStatusChip(
-                                label: marketHeatLabel!,
-                                color: GtexColors.gold,
-                                compact: true,
-                              ),
-                            if (ageLabel != null)
-                              GtexStatusChip(
-                                label: ageLabel!,
-                                color: GtexColors.cyan,
-                                compact: true,
-                              ),
-                            ...badges,
-                          ],
-                        ),
-                      ],
+          child: ClipRect(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(Icons.person, size: 16, color: accent),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$position $priceLabel',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: GtexColors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: GtexSpacing.md),
-              if (chemistryLinks.isNotEmpty || demandLabel != null) ...<Widget>[
-                _PlayerCardSignalRail(
-                  accent: accent,
-                  demandLabel: demandLabel,
-                  links: chemistryLinks,
+                  ],
                 ),
-                const SizedBox(height: GtexSpacing.sm),
-              ],
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          demandLabel == null ? 'MARKET VALUE' : 'LIVE VALUE',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelSmall?.copyWith(
-                            color: GtexColors.textMuted,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.9,
-                          ),
-                        ),
-                        Text(
-                          priceLabel,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleMedium?.copyWith(
-                            color: GtexColors.gold,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (onAddToShortlist != null)
-                    IconButton.filledTonal(
-                      tooltip: 'Add to shortlist',
-                      onPressed: onAddToShortlist,
-                      icon: const Icon(Icons.playlist_add),
-                    ),
-                  if (onBuyNow != null) ...<Widget>[
-                    const SizedBox(width: GtexSpacing.xs),
-                    GtexActionButton(
-                      label: buyNowLabel,
-                      onPressed: onBuyNow,
-                      compact: true,
-                      accent: GtexColors.gold,
-                    ),
-                  ],
-                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

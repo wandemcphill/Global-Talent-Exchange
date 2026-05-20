@@ -984,6 +984,39 @@ class _WalletActionPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder:
+                          (BuildContext context) =>
+                              GteNotificationsScreen(controller: controller),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.notifications_outlined),
+                label: const Text('Notifications'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder:
+                          (BuildContext context) =>
+                              GteDisputeHubScreen(controller: controller),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.support_agent_outlined),
+                label: const Text('Support'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               final bool stacked = constraints.maxWidth < 720;
@@ -1070,8 +1103,8 @@ class _WalletActionPanel extends StatelessWidget {
                     child: _WalletActionTile(
                       title: 'History and support',
                       detail:
-                          'Inspect deposits, notifications, and disputes without leaving the capital desk.',
-                      icon: Icons.support_agent_outlined,
+                          'Inspect deposits and wallet activity without leaving the capital desk.',
+                      icon: Icons.receipt_long_outlined,
                       accent: GteShellTheme.accentCommunity,
                       onTap: () {
                         Navigator.of(context).push<void>(
@@ -1089,39 +1122,6 @@ class _WalletActionPanel extends StatelessWidget {
                 ],
               );
             },
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder:
-                          (BuildContext context) =>
-                              GteNotificationsScreen(controller: controller),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.notifications_outlined),
-                label: const Text('Notifications'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder:
-                          (BuildContext context) =>
-                              GteDisputeHubScreen(controller: controller),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.support_agent_outlined),
-                label: const Text('Support'),
-              ),
-            ],
           ),
         ],
       ),
@@ -1150,6 +1150,18 @@ class _WalletActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ButtonStyleButton actionButton =
+        emphasized
+            ? FilledButton.icon(
+              onPressed: enabled ? onTap : null,
+              icon: Icon(icon),
+              label: Text(title),
+            )
+            : OutlinedButton.icon(
+              onPressed: enabled ? onTap : null,
+              icon: Icon(icon),
+              label: Text(title),
+            );
     return Opacity(
       opacity: enabled ? 1 : 0.58,
       child: GteSurfacePanel(
@@ -1170,9 +1182,9 @@ class _WalletActionTile extends StatelessWidget {
               child: Icon(icon, color: accent, size: 18),
             ),
             const SizedBox(height: 14),
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
             Text(detail, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 14),
+            Align(alignment: Alignment.centerLeft, child: actionButton),
           ],
         ),
       ),

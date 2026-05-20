@@ -30,6 +30,12 @@ void main() {
         deviceIdentityStoreProvider.overrideWithValue(
           MemoryDeviceIdentityStore(),
         ),
+        appConfigProvider.overrideWithValue(
+          const GteAppConfig(
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+          ),
+        ),
         initialAuthSessionProvider.overrideWithValue(null),
       ],
     );

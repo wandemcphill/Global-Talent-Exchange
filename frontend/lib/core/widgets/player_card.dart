@@ -84,25 +84,45 @@ class _PlayerCardState extends State<PlayerCard> {
     final Color accent = widget.accentColor ?? AppColors.primary;
     final Widget card = GtexSurfaceCard(
       glowColor: widget.highlighted || _hovered ? accent : null,
-      onTap:
-          widget.onTap == null
-              ? null
-              : () async {
-                await FeedbackService.tap();
-                widget.onTap?.call();
-              },
-      child:
-          widget.layout == PlayerCardLayout.horizontal
-              ? _HorizontalPlayerCardContent(
-                widget: widget,
-                avatar: avatar,
-                accent: accent,
-              )
-              : _CompactPlayerCardContent(
-                widget: widget,
-                avatar: avatar,
-                accent: accent,
-              ),
+      onTap: widget.onTap == null
+          ? null
+          : () async {
+              await FeedbackService.tap();
+              widget.onTap?.call();
+            },
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final bool narrow =
+              constraints.hasBoundedWidth && constraints.maxWidth < 220;
+          final bool veryNarrow =
+              constraints.hasBoundedWidth && constraints.maxWidth < 120;
+          final bool short =
+              constraints.hasBoundedHeight && constraints.maxHeight < 160;
+          final Widget compactContent = _CompactPlayerCardContent(
+            widget: widget,
+            avatar: avatar,
+            accent: accent,
+          );
+          if (short) {
+            return FittedBox(
+              alignment: Alignment.topLeft,
+              fit: BoxFit.scaleDown,
+              child: SizedBox(width: 220, child: compactContent),
+            );
+          }
+          if (veryNarrow) {
+            return _MicroPlayerCardContent(widget: widget, accent: accent);
+          }
+          if (narrow || widget.layout == PlayerCardLayout.compact) {
+            return compactContent;
+          }
+          return _HorizontalPlayerCardContent(
+            widget: widget,
+            avatar: avatar,
+            accent: accent,
+          );
+        },
+      ),
     );
 
     return MouseRegion(
@@ -209,10 +229,9 @@ class _HorizontalPlayerCardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget resolvedAvatar =
-        widget.heroTag == null
-            ? avatar
-            : Hero(tag: widget.heroTag!, child: avatar);
+    final Widget resolvedAvatar = widget.heroTag == null
+        ? avatar
+        : Hero(tag: widget.heroTag!, child: avatar);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -295,6 +314,59 @@ class _HorizontalPlayerCardContent extends StatelessWidget {
             spacing: spacingSM,
             runSpacing: spacingSM,
             children: widget.actions,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MicroPlayerCardContent extends StatelessWidget {
+  const _MicroPlayerCardContent({required this.widget, required this.accent});
+
+  final PlayerCard widget;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (widget.showRating) ...<Widget>[
+          Text(
+            widget.rating.toString(),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w800,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: spacingXS),
+        ],
+        _PlayerCardName(name: widget.name, maxLines: 2, onTap: widget.onTap),
+        if (_subtitleFor(widget) case final String subtitle) ...<Widget>[
+          const SizedBox(height: spacingXS),
+          _PlayerCardSubtitle(subtitle: subtitle),
+        ],
+        if (widget.actions.isNotEmpty) ...<Widget>[
+          const SizedBox(height: spacingSM),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: widget.actions
+                .map(
+                  (Widget action) => Padding(
+                    padding: const EdgeInsets.only(bottom: spacingXS),
+                    child: FittedBox(
+                      alignment: Alignment.centerLeft,
+                      fit: BoxFit.scaleDown,
+                      child: action,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
           ),
         ],
       ],

@@ -25,6 +25,10 @@ class GteSyncStatusCard extends StatelessWidget {
   final FutureOr<void> Function()? onRefresh;
   final bool isRefreshing;
 
+  Future<void> _runRefresh() async {
+    await onRefresh?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -35,10 +39,9 @@ class GteSyncStatusCard extends StatelessWidget {
       curve: Curves.easeOutCubic,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color:
-            isRefreshing
-                ? resolvedAccent.withValues(alpha: 0.22)
-                : resolvedAccent.withValues(alpha: 0.14),
+        color: isRefreshing
+            ? resolvedAccent.withValues(alpha: 0.22)
+            : resolvedAccent.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(18),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -102,6 +105,17 @@ class GteSyncStatusCard extends StatelessWidget {
                 : 'Auto-refresh is active. Pull down if you want to force a re-check.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: tokens.textMuted.withValues(alpha: 0.92),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onRefresh == null || isRefreshing ? null : _runRefresh,
+              icon: Icon(
+                isRefreshing ? Icons.sync_rounded : Icons.refresh_rounded,
+              ),
+              label: const Text('Refresh'),
             ),
           ),
         ],
