@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/app/gte_app_config.dart';
@@ -5,6 +7,23 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
+
+final String _totpSetupAlphabet = String.fromCharCodes(<int>[
+  for (var code = 65; code <= 90; code += 1) code,
+  for (var code = 50; code <= 55; code += 1) code,
+]);
+
+String _generateTotpSetupSecret({int length = 32}) {
+  final random = math.Random.secure();
+  return String.fromCharCodes(
+    List<int>.generate(
+      length,
+      (_) => _totpSetupAlphabet.codeUnitAt(
+        random.nextInt(_totpSetupAlphabet.length),
+      ),
+    ),
+  );
+}
 
 class GtexAccountSelectorScreen extends StatelessWidget {
   const GtexAccountSelectorScreen({super.key, this.onOpenCreatorAccessRequest});
@@ -63,31 +82,33 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                         const SizedBox(height: 18),
                         narrow
                             ? Column(
-                                children: cards
-                                    .map(
-                                      (Widget child) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 14,
-                                        ),
-                                        child: child,
-                                      ),
-                                    )
-                                    .toList(),
-                              )
-                            : Row(
-                                children: cards
-                                    .map(
-                                      (Widget child) => Expanded(
-                                        child: Padding(
+                              children:
+                                  cards
+                                      .map(
+                                        (Widget child) => Padding(
                                           padding: const EdgeInsets.only(
-                                            right: 14,
+                                            bottom: 14,
                                           ),
                                           child: child,
                                         ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
+                                      )
+                                      .toList(),
+                            )
+                            : Row(
+                              children:
+                                  cards
+                                      .map(
+                                        (Widget child) => Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              right: 14,
+                                            ),
+                                            child: child,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
                         if (onOpenCreatorAccessRequest != null) ...<Widget>[
                           const SizedBox(height: 18),
                           Align(
@@ -229,24 +250,26 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
           clubLocality: _clubLocality.text,
           clubType: _clubType,
           footballIdentity: _footballIdentity,
-          position: _footballIdentity == 'player' || _footballIdentity == 'both'
-              ? _position.text
-              : null,
+          position:
+              _footballIdentity == 'player' || _footballIdentity == 'both'
+                  ? _position.text
+                  : null,
           dominantFoot:
               _footballIdentity == 'player' || _footballIdentity == 'both'
-              ? _dominantFoot.text
-              : null,
-          heightCm: _footballIdentity == 'player' || _footballIdentity == 'both'
-              ? int.tryParse(_height.text)
-              : null,
+                  ? _dominantFoot.text
+                  : null,
+          heightCm:
+              _footballIdentity == 'player' || _footballIdentity == 'both'
+                  ? int.tryParse(_height.text)
+                  : null,
           jerseyNumber:
               _footballIdentity == 'player' || _footballIdentity == 'both'
-              ? int.tryParse(_jersey.text)
-              : null,
+                  ? int.tryParse(_jersey.text)
+                  : null,
           preferredRole:
               _footballIdentity == 'player' || _footballIdentity == 'both'
-              ? _preferredRole.text
-              : null,
+                  ? _preferredRole.text
+                  : null,
           compliance: GteComplianceSignupPayload(
             governmentIdAttachmentId: _govId.text,
             selfieAttachmentId: _selfie.text,
@@ -396,7 +419,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   String _experience = 'beginner';
   bool _submitting = false;
   String? _error;
-  static const String _setupSecret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+  late final String _setupSecret = _generateTotpSetupSecret();
 
   @override
   Widget build(BuildContext context) {
@@ -535,13 +558,16 @@ class _SignupScaffold extends StatelessWidget {
                     ),
                     FilledButton.icon(
                       onPressed: submitting ? null : onSubmit,
-                      icon: submitting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.arrow_forward),
+                      icon:
+                          submitting
+                              ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(Icons.arrow_forward),
                       label: Text(
                         submitting ? 'Creating account' : 'Create account',
                       ),
@@ -623,8 +649,11 @@ Widget _field(
       labelText: label,
       border: const OutlineInputBorder(),
     ),
-    validator: (String? value) =>
-        (value == null || value.trim().isEmpty) ? '$label is required' : null,
+    validator:
+        (String? value) =>
+            (value == null || value.trim().isEmpty)
+                ? '$label is required'
+                : null,
   );
 }
 
@@ -668,12 +697,13 @@ Widget _dropdown(
       labelText: label,
       border: const OutlineInputBorder(),
     ),
-    items: options
-        .map(
-          (String item) =>
-              DropdownMenuItem<String>(value: item, child: Text(item)),
-        )
-        .toList(),
+    items:
+        options
+            .map(
+              (String item) =>
+                  DropdownMenuItem<String>(value: item, child: Text(item)),
+            )
+            .toList(),
     onChanged: (String? next) {
       if (next != null) onChanged(next);
     },
